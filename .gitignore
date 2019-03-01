@@ -1,0 +1,23 @@
+
+# Created by https://www.gitignore.io/api/sbt,scala
+# Edit at https://www.gitignore.io/?templates=sbt,scala
+
+### SBT ###
+# Simple Build Tool
+# http://www.scala-sbt.org/release/docs/Getting-Started/Directories.html#configuring-version-control
+
+dist/*
+target/
+lib_managed/
+src_managed/
+project/boot/
+project/plugins/project/
+.history
+.cache
+.lib/
+
+### Scala ###
+*.class
+*.log
+
+# End of https://www.gitignore.io/api/sbt,scala
