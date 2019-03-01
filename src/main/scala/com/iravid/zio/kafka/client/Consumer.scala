@@ -1,6 +1,5 @@
 package com.iravid.zio.kafka.client
 
-import java.time.{ Duration => JDuration }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
@@ -55,7 +54,7 @@ object Consumer {
 
       def poll(pollTimeout: Duration): BlockingTask[Map[TopicPartition, Chunk[ByteRecord]]] =
         blocking {
-          ZIO(adaptConsumerRecords(c.poll(JDuration.ofMillis(pollTimeout.fold(Long.MaxValue, _.toMillis))))).fork.bracketExit {
+          ZIO(adaptConsumerRecords(c.poll(pollTimeout.asJava))).fork.bracketExit {
             (_, e: Exit[Throwable, Map[TopicPartition, Chunk[ByteRecord]]]) =>
               if (e.interrupted) ZIO.effect(c.wakeup()).either
               else ZIO.unit
@@ -117,7 +116,7 @@ object Consumer {
       }
     }
 
-    c.managed(c => UIO(c.close(JDuration.ofMillis(settings.closeTimeout.toMillis))))
+    c.managed(c => UIO(c.close(settings.closeTimeout.asJava)))
       .map(unsafeMake)
   }
 }
