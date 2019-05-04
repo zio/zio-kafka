@@ -3,11 +3,12 @@ package com.iravid.zio.kafka.client
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
-import scalaz.zio.{ Chunk, Exit, Managed, UIO, ZIO }
+import scalaz.zio.{ Chunk, UIO, ZIO, ZManaged }
 import scalaz.zio.blocking._
 import scalaz.zio.duration._
 
 import scala.collection.JavaConverters._
+import org.apache.kafka.common.errors.WakeupException
 
 trait Consumer {
   def commit(data: OffsetMap): BlockingTask[Unit]
@@ -32,9 +33,19 @@ trait Consumer {
 }
 
 object Consumer {
+  def withConsumer[A](c: ByteConsumer)(f: ByteConsumer => A): BlockingTask[A] =
+    ZIO.effectAsyncInterrupt[Blocking, Throwable, A] { cb =>
+      cb(blocking(ZIO.effect(f(c))).catchSome {
+        case _: WakeupException => ZIO.interrupt
+      })
+
+      Left(UIO(c.wakeup()))
+    }
+
   def unsafeMake(c: ByteConsumer): Consumer =
     new Consumer {
-      def commit(data: OffsetMap) = blocking(ZIO(c.commitSync(data.asJava)))
+      def commit(data: OffsetMap) =
+        withConsumer(c)(_.commitSync(data.asJava))
 
       def adaptConsumerRecords(records: ByteRecords): Map[TopicPartition, Chunk[ByteRecord]] = {
         val tps          = records.partitions()
@@ -53,15 +64,8 @@ object Consumer {
       }
 
       def poll(pollTimeout: Duration): BlockingTask[Map[TopicPartition, Chunk[ByteRecord]]] =
-        blocking {
-          ZIO(adaptConsumerRecords(c.poll(pollTimeout.asJava))).fork.bracketExit {
-            (_, e: Exit[Throwable, Map[TopicPartition, Chunk[ByteRecord]]]) =>
-              if (e.interrupted) ZIO.effect(c.wakeup()).either
-              else ZIO.unit
-          }(_.join).catchSome {
-            case _: org.apache.kafka.common.errors.WakeupException =>
-              ZIO.succeed(Map.empty)
-          }
+        withConsumer(c) { c =>
+          adaptConsumerRecords(c.poll(pollTimeout.asJava))
         }
 
       def subscribeWith(subscription: Subscription)(listener: Rebalance => UIO[Unit]): BlockingTask[Unit] =
@@ -75,35 +79,35 @@ object Consumer {
           }
           _ <- subscription match {
                 case Subscription.Topics(topics) =>
-                  ZIO(c.subscribe(topics.asJava, jlistener))
+                  withConsumer(c)(_.subscribe(topics.asJava, jlistener))
                 case Subscription.Pattern(pattern) =>
                   for {
                     p <- ZIO(java.util.regex.Pattern.compile(pattern))
-                    _ <- ZIO(c.subscribe(p, jlistener))
+                    _ <- withConsumer(c)(_.subscribe(p, jlistener))
                   } yield ()
               }
         } yield ()
 
       def unsubscribe: BlockingTask[Unit] =
-        blocking(ZIO(c.unsubscribe()))
+        withConsumer(c)(_.unsubscribe())
 
       def pause(partitions: Set[TopicPartition]): BlockingTask[Unit] =
-        blocking(ZIO(c.pause(partitions.asJava)))
+        withConsumer(c)(_.pause(partitions.asJava))
 
       def resume(partitions: Set[TopicPartition]): BlockingTask[Unit] =
-        blocking(ZIO(c.resume(partitions.asJava)))
+        withConsumer(c)(_.resume(partitions.asJava))
 
       def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
-        blocking(ZIO(c.seek(partition, offset)))
+        withConsumer(c)(_.seek(partition, offset))
 
       def seekToBeginning(partitions: Set[TopicPartition]): BlockingTask[Unit] =
-        blocking(ZIO(c.seekToBeginning(partitions.asJava)))
+        withConsumer(c)(_.seekToBeginning(partitions.asJava))
 
       def seekToEnd(partitions: Set[TopicPartition]): BlockingTask[Unit] =
-        blocking(ZIO(c.seekToEnd(partitions.asJava)))
+        withConsumer(c)(_.seekToEnd(partitions.asJava))
     }
 
-  def make(settings: ConsumerSettings): Managed[Blocking, Throwable, Consumer] = {
+  def make(settings: ConsumerSettings): ZManaged[Blocking, Throwable, Consumer] = {
     val c = blocking {
       ZIO {
         val props = new java.util.Properties
@@ -116,7 +120,7 @@ object Consumer {
       }
     }
 
-    c.managed(c => UIO(c.close(settings.closeTimeout.asJava)))
+    c.toManaged(c => UIO(c.close(settings.closeTimeout.asJava)))
       .map(unsafeMake)
   }
 }
