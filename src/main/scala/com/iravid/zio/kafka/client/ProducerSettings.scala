@@ -1,4 +1,4 @@
-package com.iravid.zio.kafka.client
+package zio.kafka.client
 
 import scalaz.zio.duration.Duration
 import org.apache.kafka.clients.producer.ProducerConfig

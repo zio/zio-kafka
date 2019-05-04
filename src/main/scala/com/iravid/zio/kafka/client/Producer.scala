@@ -1,4 +1,4 @@
-package com.iravid.zio.kafka.client
+package zio.kafka.client
 
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.clients.producer.Callback

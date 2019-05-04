@@ -1,4 +1,4 @@
-package com.iravid.zio.kafka.client
+package zio.kafka.client
 
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer

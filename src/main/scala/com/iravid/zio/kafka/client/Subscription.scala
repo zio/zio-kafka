@@ -1,4 +1,4 @@
-package com.iravid.zio.kafka.client
+package zio.kafka.client
 
 sealed trait Subscription
 object Subscription {

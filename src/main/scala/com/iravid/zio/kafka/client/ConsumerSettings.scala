@@ -1,4 +1,4 @@
-package com.iravid.zio.kafka.client
+package zio.kafka.client
 
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import scalaz.zio.duration._
@@ -8,13 +8,13 @@ case class ConsumerSettings(
   groupId: String,
   clientId: String,
   closeTimeout: Duration,
-  extraDriverSettings: Map[String, String],
+  extraDriverSettings: Map[String, String]
 ) {
   def driverSettings: Map[String, String] =
     Map(
       ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers.mkString(","),
       ConsumerConfig.GROUP_ID_CONFIG          -> groupId,
-      ConsumerConfig.CLIENT_ID_CONFIG         -> clientId,
+      ConsumerConfig.CLIENT_ID_CONFIG         -> clientId
     ) ++
       extraDriverSettings
 

@@ -1,4 +1,4 @@
-package com.iravid.zio.kafka
+package zio.kafka
 
 import java.util.{ Map => JMap }
 import org.apache.kafka.clients.consumer.{
