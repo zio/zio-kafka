@@ -1,19 +1,20 @@
 package zio.kafka.client
 
+import scala.collection.JavaConverters._
+
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
+import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.serialization.Serde
+import org.apache.kafka.clients.consumer.{ ConsumerRebalanceListener, ConsumerRecord, ConsumerRecords, KafkaConsumer }
+
 import scalaz.zio.{ Chunk, UIO, ZIO, ZManaged }
 import scalaz.zio.blocking._
 import scalaz.zio.duration._
 
-import scala.collection.JavaConverters._
-import org.apache.kafka.common.errors.WakeupException
-
-trait Consumer {
+trait Consumer[K, V] {
   def commit(data: OffsetMap): BlockingTask[Unit]
 
-  def poll(pollTimeout: Duration): BlockingTask[Map[TopicPartition, Chunk[ByteRecord]]]
+  def poll(pollTimeout: Duration): BlockingTask[Map[TopicPartition, Chunk[ConsumerRecord[K, V]]]]
 
   def subscribe(subscription: Subscription): BlockingTask[Unit] = subscribeWith(subscription)(_ => UIO.unit)
 
@@ -33,7 +34,7 @@ trait Consumer {
 }
 
 object Consumer {
-  def withConsumer[A](c: ByteConsumer)(f: ByteConsumer => A): BlockingTask[A] =
+  def withConsumer[A, K, V](c: KafkaConsumer[K, V])(f: KafkaConsumer[K, V] => A): BlockingTask[A] =
     ZIO.effectAsyncInterrupt[Blocking, Throwable, A] { cb =>
       cb(blocking(ZIO.effect(f(c))).catchSome {
         case _: WakeupException => ZIO.interrupt
@@ -42,20 +43,20 @@ object Consumer {
       Left(UIO(c.wakeup()))
     }
 
-  def unsafeMake(c: ByteConsumer): Consumer =
-    new Consumer {
+  def unsafeMake[K, V](c: KafkaConsumer[K, V]): Consumer[K, V] =
+    new Consumer[K, V] {
       def commit(data: OffsetMap) =
         withConsumer(c)(_.commitSync(data.asJava))
 
-      def adaptConsumerRecords(records: ByteRecords): Map[TopicPartition, Chunk[ByteRecord]] = {
+      def adaptConsumerRecords(records: ConsumerRecords[K, V]): Map[TopicPartition, Chunk[ConsumerRecord[K, V]]] = {
         val tps          = records.partitions()
-        val partitionMap = Map.newBuilder[TopicPartition, Chunk[ByteRecord]]
+        val partitionMap = Map.newBuilder[TopicPartition, Chunk[ConsumerRecord[K, V]]]
         partitionMap.sizeHint(tps.size)
 
         val tpsIt = tps.iterator()
         while (tpsIt.hasNext) {
           val tp   = tpsIt.next
-          val recs = Chunk.fromArray(records.records(tp).toArray().asInstanceOf[Array[ByteRecord]])
+          val recs = Chunk.fromIterable(records.records(tp).asScala)
 
           partitionMap += tp -> recs
         }
@@ -63,7 +64,7 @@ object Consumer {
         partitionMap.result()
       }
 
-      def poll(pollTimeout: Duration): BlockingTask[Map[TopicPartition, Chunk[ByteRecord]]] =
+      def poll(pollTimeout: Duration): BlockingTask[Map[TopicPartition, Chunk[ConsumerRecord[K, V]]]] =
         withConsumer(c) { c =>
           adaptConsumerRecords(c.poll(pollTimeout.asJava))
         }
@@ -107,16 +108,14 @@ object Consumer {
         withConsumer(c)(_.seekToEnd(partitions.asJava))
     }
 
-  def make(settings: ConsumerSettings): ZManaged[Blocking, Throwable, Consumer] = {
+  def make[K, V](
+    settings: ConsumerSettings
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): ZManaged[Blocking, Throwable, Consumer[K, V]] = {
     val c = blocking {
       ZIO {
-        val props = new java.util.Properties
+        val props = settings.driverSettings.asJava
 
-        settings.driverSettings.foreach {
-          case (k, v) => props.put(k, v)
-        }
-
-        new ByteConsumer(props, new ByteArrayDeserializer, new ByteArrayDeserializer)
+        new KafkaConsumer[K, V](props, keySerde.deserializer, valueSerde.deserializer)
       }
     }
 

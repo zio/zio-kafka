@@ -8,7 +8,7 @@ case class ProducerSettings(
   closeTimeout: Duration,
   extraDriverSettings: Map[String, String]
 ) {
-  def driverSettings: Map[String, String] =
+  def driverSettings: Map[String, AnyRef] =
     Map(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers.mkString(",")) ++
       extraDriverSettings
 }
