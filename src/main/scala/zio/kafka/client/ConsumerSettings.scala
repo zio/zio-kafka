@@ -10,7 +10,7 @@ case class ConsumerSettings(
   closeTimeout: Duration,
   extraDriverSettings: Map[String, String]
 ) {
-  def driverSettings: Map[String, String] =
+  def driverSettings: Map[String, AnyRef] =
     Map(
       ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers.mkString(","),
       ConsumerConfig.GROUP_ID_CONFIG          -> groupId,

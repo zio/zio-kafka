@@ -1,22 +1,23 @@
 package zio.kafka.client
 
-import org.apache.kafka.clients.producer.RecordMetadata
-import org.apache.kafka.clients.producer.Callback
-import org.apache.kafka.common.serialization.ByteArraySerializer
-import scalaz.zio.blocking._
-import scalaz.zio.{ UIO, ZIO, ZManaged }
-import scalaz.zio.Promise
+import scala.collection.JavaConverters._
 
-trait Producer {
-  def produce(record: ByteProducerRecord): BlockingTask[RecordMetadata]
+import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
+import org.apache.kafka.common.serialization.Serde
+
+import scalaz.zio.{ Promise, UIO, ZIO, ZManaged }
+import scalaz.zio.blocking._
+
+trait Producer[K, V] {
+  def produce(record: ProducerRecord[K, V]): BlockingTask[RecordMetadata]
 
   def flush: BlockingTask[Unit]
 }
 
 object Producer {
-  def unsafeMake(p: ByteProducer) =
-    new Producer {
-      def produce(record: ByteProducerRecord): BlockingTask[RecordMetadata] =
+  def unsafeMake[K, V](p: KafkaProducer[K, V]) =
+    new Producer[K, V] {
+      def produce(record: ProducerRecord[K, V]): BlockingTask[RecordMetadata] =
         for {
           done    <- Promise.make[Throwable, RecordMetadata]
           runtime <- ZIO.runtime[Blocking]
@@ -40,15 +41,13 @@ object Producer {
         effectBlocking(p.flush())
     }
 
-  def make(settings: ProducerSettings): ZManaged[Blocking, Throwable, Producer] = {
+  def make[K, V](
+    settings: ProducerSettings
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): ZManaged[Blocking, Throwable, Producer[K, V]] = {
     val p = ZIO {
-      val props = new java.util.Properties
+      val props = settings.driverSettings.asJava
 
-      settings.driverSettings.foreach {
-        case (k, v) => props.put(k, v)
-      }
-
-      new ByteProducer(props, new ByteArraySerializer, new ByteArraySerializer)
+      new KafkaProducer(props, keySerde.serializer, valueSerde.serializer)
     }
 
     p.toManaged(p => UIO(p.close(settings.closeTimeout.asJava)))
