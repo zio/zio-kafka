@@ -25,8 +25,11 @@ developers := List(
 )
 
 libraryDependencies ++= Seq(
-  "org.scalaz"       %% "scalaz-zio"   % "1.0-RC4",
-  "org.apache.kafka" % "kafka-clients" % "2.2.0",
+  "org.scalaz"              %% "scalaz-zio"     % "1.0-RC5",
+  "org.apache.kafka"        % "kafka-clients"   % "2.2.0",
+  "org.scalatest"           %% "scalatest"      % "3.0.5",
+  "io.github.embeddedkafka" %% "embedded-kafka" % "2.2.0" % "test",
+  "ch.qos.logback"          % "logback-classic" % "1.2.3" % "test",
   compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
 )
 
