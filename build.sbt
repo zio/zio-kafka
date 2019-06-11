@@ -4,6 +4,7 @@ val allScala  = Seq("2.11.12", mainScala)
 organization := "dev.zio"
 homepage := Some(url("https://github.com/zio/zio-kafka"))
 name := "zio-kafka"
+maxErrors := 3
 licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0"))
 scalaVersion := mainScala
 parallelExecution in Test := false
@@ -33,47 +34,82 @@ libraryDependencies ++= Seq(
   compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
 )
 
-scalacOptions ++= Seq(
+//scalacOptions ++= Seq(
+  //"-deprecation",
+  //"-encoding",
+  //"UTF-8",
+  //"-explaintypes",
+  //"-Yrangepos",
+  //"-feature",
+  //"-Xfuture",
+  //"-language:higherKinds",
+  //"-language:existentials",
+  //"-unchecked",
+  //"-Xlint:_,-type-parameter-shadow",
+  //"-Ywarn-numeric-widen",
+  //"-Ywarn-unused",
+  //"-Ywarn-value-discard"
+//) //++ (CrossVersion.partialVersion(scalaVersion.value) match {
+  //case Some((2, 11)) =>
+  //  Seq(
+  //    "-Yno-adapted-args",
+  //    "-Ypartial-unification",
+  //    "-Ywarn-inaccessible",
+  //    "-Ywarn-infer-any",
+  //    "-Ywarn-nullary-override",
+  //    "-Ywarn-nullary-unit"
+  //  )
+  //case Some((2, 12)) =>
+  //  Seq(
+  //    "-Xsource:2.13",
+  //    "-Yno-adapted-args",
+  //    "-Ypartial-unification",
+  //    "-Ywarn-extra-implicit",
+  //    "-Ywarn-inaccessible",
+  //    "-Ywarn-infer-any",
+  //    "-Ywarn-nullary-override",
+  //    "-Ywarn-nullary-unit",
+  //    "-opt-inline-from:<source>",
+  //    "-opt-warnings",
+  //    "-opt:l:inline"
+  //  )
+  //case _ => Nil
+//})
+
+
+scalacOptions := Seq(
+  "-Xsource:2.13",
+  //"-Xlint",
+  "-Xverify",
+  "-feature",
   "-deprecation",
+  "-explaintypes",
+  "-unchecked",
+  "-Xfuture",
   "-encoding",
   "UTF-8",
-  "-explaintypes",
   "-Yrangepos",
-  "-feature",
-  "-Xfuture",
-  "-language:higherKinds",
-  "-language:existentials",
-  "-unchecked",
   "-Xlint:_,-type-parameter-shadow",
   "-Ywarn-numeric-widen",
   "-Ywarn-unused",
-  "-Ywarn-value-discard"
-) ++ (CrossVersion.partialVersion(scalaVersion.value) match {
-  case Some((2, 11)) =>
-    Seq(
-      "-Yno-adapted-args",
-      "-Ypartial-unification",
-      "-Ywarn-inaccessible",
-      "-Ywarn-infer-any",
-      "-Ywarn-nullary-override",
-      "-Ywarn-nullary-unit"
-    )
-  case Some((2, 12)) =>
-    Seq(
-      "-Xsource:2.13",
-      "-Yno-adapted-args",
-      "-Ypartial-unification",
-      "-Ywarn-extra-implicit",
-      "-Ywarn-inaccessible",
-      "-Ywarn-infer-any",
-      "-Ywarn-nullary-override",
-      "-Ywarn-nullary-unit",
-      "-opt-inline-from:<source>",
-      "-opt-warnings",
-      "-opt:l:inline"
-    )
-  case _ => Nil
-})
+  "-Ywarn-value-discard",
+  "-language:higherKinds",
+  "-language:existentials",
+  "-Yno-adapted-args",
+  "-Ypartial-unification",
+  //"-Xfatal-warnings",
+  "-Xlint:-infer-any,_",
+  "-Ywarn-value-discard",
+  "-Ywarn-numeric-widen",
+  "-Ywarn-extra-implicit",
+  //"-Ywarn-unused:_",
+  "-Ywarn-inaccessible",
+  "-Ywarn-nullary-override",
+  "-Ywarn-nullary-unit",
+  "-opt-inline-from:<source>",
+  "-opt-warnings",
+  "-opt:l:inline"
+)
 
 fork in run := true
 
