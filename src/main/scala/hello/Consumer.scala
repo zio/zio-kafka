@@ -7,7 +7,7 @@ import scala.collection.JavaConverters._
 
 object SimpleConsumer extends App {
 
-  val TOPIC = "topic0"
+  val TOPIC = "testTopic"
 
   val props = new Properties()
   props.put("bootstrap.servers", "localhost:9092")
