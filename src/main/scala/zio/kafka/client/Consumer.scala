@@ -7,9 +7,9 @@ import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.clients.consumer.{ ConsumerRebalanceListener, ConsumerRecord, ConsumerRecords, KafkaConsumer }
 
-import scalaz.zio.{ Chunk, UIO, ZIO, ZManaged }
-import scalaz.zio.blocking._
-import scalaz.zio.duration._
+import zio.{ Chunk, UIO, ZIO, ZManaged }
+import zio.blocking._
+import zio.duration._
 
 trait Consumer[K, V] {
   def commit(data: OffsetMap): BlockingTask[Unit]

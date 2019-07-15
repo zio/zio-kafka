@@ -1,7 +1,8 @@
 package zio.kafka.client
 
-import scalaz.zio.duration.Duration
 import org.apache.kafka.clients.producer.ProducerConfig
+
+import zio.duration.Duration
 
 case class ProducerSettings(
   bootstrapServers: List[String],

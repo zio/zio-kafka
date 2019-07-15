@@ -1,7 +1,8 @@
 package zio.kafka.client
 
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import scalaz.zio.duration._
+
+import zio.duration._
 
 case class ConsumerSettings(
   bootstrapServers: List[String],

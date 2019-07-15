@@ -5,8 +5,8 @@ import scala.collection.JavaConverters._
 import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization.Serde
 
-import scalaz.zio.{ Promise, UIO, ZIO, ZManaged }
-import scalaz.zio.blocking._
+import zio.{ Promise, UIO, ZIO, ZManaged }
+import zio.blocking._
 
 trait Producer[K, V] {
   def produce(record: ProducerRecord[K, V]): BlockingTask[RecordMetadata]

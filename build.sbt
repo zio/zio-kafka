@@ -25,12 +25,12 @@ developers := List(
 )
 
 libraryDependencies ++= Seq(
-  "org.scalaz"              %% "scalaz-zio"     % "1.0-RC5",
-  "org.apache.kafka"        % "kafka-clients"   % "2.2.0",
-  "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
-  "io.github.embeddedkafka" %% "embedded-kafka" % "2.2.0" % "test",
+  "dev.zio"                 %% "zio"            % "1.0.0-RC10-1",
+  "org.apache.kafka"        % "kafka-clients"   % "2.3.0",
+  "org.scalatest"           %% "scalatest"      % "3.0.8" % "test",
+  "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.0" % "test",
   "ch.qos.logback"          % "logback-classic" % "1.2.3" % "test",
-  compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
+  compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.3")
 )
 
 scalacOptions ++= Seq(
