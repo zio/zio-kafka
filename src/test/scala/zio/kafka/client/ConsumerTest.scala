@@ -1,19 +1,23 @@
 package zio.kafka.client
 
 import com.typesafe.scalalogging.LazyLogging
+
 import net.manub.embeddedkafka.EmbeddedKafka
+
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{ Serde, Serdes }
+
 import org.scalatest.{ Matchers, WordSpecLike }
-import scalaz.zio.{ Chunk, DefaultRuntime, Ref, Schedule, TaskR, UIO, ZIO }
-import scalaz.zio.blocking.Blocking
-import scalaz.zio.clock.Clock
-import scalaz.zio.duration._
-import zio.kafka.client.Rebalance.{ Assign, Revoke }
+
+import zio.{ Chunk, DefaultRuntime, Ref, Schedule, TaskR, UIO, ZIO }
+import zio.blocking.Blocking
+import zio.clock.Clock
+import zio.duration._
 
 class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime {
   import KafkaTestUtils._
+  import Rebalance.{ Assign, Revoke }
 
   def pause(): ZIO[Clock, Nothing, Unit] = UIO(()).delay(2.seconds).forever
 
