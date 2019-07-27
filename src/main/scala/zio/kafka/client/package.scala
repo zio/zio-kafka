@@ -5,8 +5,8 @@ import java.util.{ Map => JMap }
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 
-import scalaz.zio.ZIO
-import scalaz.zio.blocking.Blocking
+import zio.ZIO
+import zio.blocking.Blocking
 
 package object client {
   type BlockingTask[A] = ZIO[Blocking, Throwable, A]

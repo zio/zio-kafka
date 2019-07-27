@@ -3,9 +3,9 @@ package zio.kafka.client
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
-import scalaz.zio.{ Chunk, UIO, ZIO }
-import scalaz.zio.blocking.Blocking
-import scalaz.zio.duration._
+import zio.{ Chunk, UIO, ZIO }
+import zio.blocking.Blocking
+import zio.duration._
 
 object KafkaTestUtils {
 

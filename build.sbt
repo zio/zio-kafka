@@ -25,7 +25,7 @@ developers := List(
 )
 
 libraryDependencies ++= Seq(
-  "org.scalaz"              %% "scalaz-zio"     % "1.0-RC5",
+  "dev.zio"                 %% "zio"            % "1.0.0-RC10-1",
   "org.apache.kafka"        % "kafka-clients"   % "2.3.0",
   "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
   "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.0" % "test",
