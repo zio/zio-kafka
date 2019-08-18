@@ -25,9 +25,9 @@ developers := List(
 )
 
 libraryDependencies ++= Seq(
-  "dev.zio"                 %% "zio"            % "1.0.0-RC10-1",
+  "dev.zio"                 %% "zio"            % "1.0.0-RC11-1",
   "org.apache.kafka"        % "kafka-clients"   % "2.3.0",
-  "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
+  "org.scalatest"           %% "scalatest"      % "3.0.8" % "test",
   "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.0" % "test",
   "ch.qos.logback"          % "logback-classic" % "1.2.3" % "test",
   compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
@@ -80,4 +80,4 @@ fork in run := true
 crossScalaVersions := allScala
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
-addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
+addCommandAlias("chk", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
