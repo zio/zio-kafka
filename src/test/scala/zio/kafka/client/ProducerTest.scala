@@ -10,7 +10,7 @@ import org.apache.kafka.common.serialization.{ Serde, Serdes }
 
 import org.scalatest.{ Matchers, WordSpecLike }
 
-import zio.{ Chunk, DefaultRuntime, TaskR, UIO, ZIO }
+import zio.{ Chunk, DefaultRuntime, RIO, UIO, ZIO }
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
@@ -34,7 +34,7 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
     )
 
   def runWithProducer[A](
-    r: Producer[String, String] => TaskR[Blocking with Clock, A]
+    r: Producer[String, String] => RIO[Blocking with Clock, A]
   ): A =
     unsafeRun(
       Producer.make[String, String](settings).use(r)
