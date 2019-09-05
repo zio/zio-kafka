@@ -4,8 +4,7 @@ import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import zio.{ Chunk, UIO, ZIO }
-import zio.blocking.Blocking
-import zio.duration._
+import org.apache.kafka.clients.producer.ProducerRecord
 
 object KafkaTestUtils {
 
@@ -16,6 +15,16 @@ object KafkaTestUtils {
 
   def produceMany(t: String, kvs: List[(String, String)]): UIO[Unit] =
     UIO.foreach(kvs)(i => produceOne(t, i._1, i._2)).unit
+
+  def produceMany(topic: String, partition: Int, kvs: List[(String, String)]) =
+    ZIO.effectTotal {
+      import net.manub.embeddedkafka.Codecs._
+      val records = kvs.map {
+        case (k, v) => new ProducerRecord[String, String](topic, partition, null, k, v)
+      }
+
+      records.foreach(rec => EmbeddedKafka.publishToKafka[String](rec))
+    }
 
   def recordsFromAllTopics[K, V](
     pollResult: Map[TopicPartition, Chunk[ConsumerRecord[K, V]]]
@@ -28,9 +37,6 @@ object KafkaTestUtils {
     res.foldLeft[Chunk[ConsumerRecord[K, V]]](Chunk.empty)(
       (acc, pollResult) => acc ++ recordsFromAllTopics[K, V](pollResult)
     )
-
-  def pollNtimes[K, V](n: Int, consumer: Consumer[K, V]): ZIO[Blocking, Throwable, Chunk[ConsumerRecord[K, V]]] =
-    ZIO.foreach(List.fill(n)(()))(_ => consumer.poll(1.second)).map(getAllRecordsFromMultiplePolls)
 
   def tp(topic: String, partition: Int): TopicPartition = new TopicPartition(topic, partition)
 }

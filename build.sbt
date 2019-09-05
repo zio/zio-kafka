@@ -1,4 +1,4 @@
-val mainScala = "2.12.8"
+val mainScala = "2.12.9"
 val allScala  = Seq("2.11.12", mainScala)
 
 organization := "dev.zio"
@@ -24,9 +24,12 @@ developers := List(
   )
 )
 
+testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
+
 libraryDependencies ++= Seq(
-  "dev.zio"                 %% "zio"            % "1.0.0-RC11-1",
-  "dev.zio"                 %% "zio-streams"    % "1.0.0-RC11-1",
+  "dev.zio"                 %% "zio-streams"    % "1.0.0-RC12-1",
+  "dev.zio"                 %% "zio-test"       % "1.0.0-RC12-1" % "test",
+  "dev.zio"                 %% "zio-test-sbt"   % "1.0.0-RC12-1" % "test",
   "org.apache.kafka"        % "kafka-clients"   % "2.3.0",
   "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
   "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.0" % "test",

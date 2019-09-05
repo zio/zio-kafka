@@ -1,125 +1,50 @@
 package zio.kafka.client
 
+import org.apache.kafka.common.serialization.Serde
+import org.apache.kafka.common.TopicPartition
+import zio.blocking.Blocking
+import zio._
+import zio.stream._
+import zio.clock.Clock
+
 import scala.collection.JavaConverters._
 
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.WakeupException
-import org.apache.kafka.common.serialization.Serde
-import org.apache.kafka.clients.consumer.{ ConsumerRebalanceListener, ConsumerRecord, ConsumerRecords, KafkaConsumer }
+class Consumer[K, V] private (
+  private val consumer: ConsumerAccess[K, V],
+  private val settings: ConsumerSettings,
+  private val runloop: Runloop[K, V]
+) {
+  def partitioned
+    : ZStream[Clock with Blocking, Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, CommittableRecord[K, V]])] =
+    ZStream
+      .fromQueue(runloop.deps.partitions)
+      .unTake
+      .map {
+        case (tp, partition) =>
+          tp -> ZStreamChunk(partition.chunks.buffer(settings.perPartitionChunkPrefetch))
+      }
 
-import zio.{ Chunk, UIO, ZIO, ZManaged }
-import zio.blocking._
-import zio.duration._
+  def plain: ZStreamChunk[Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+    ZStreamChunk(partitioned.flatMapPar(Int.MaxValue)(_._2.chunks))
 
-trait Consumer[K, V] {
-  def commit(data: OffsetMap): BlockingTask[Unit]
-
-  def poll(pollTimeout: Duration): BlockingTask[Map[TopicPartition, Chunk[ConsumerRecord[K, V]]]]
-
-  def subscribe(subscription: Subscription): BlockingTask[Unit] = subscribeWith(subscription)(_ => UIO.unit)
-
-  def subscribeWith(subscription: Subscription)(listener: Rebalance => UIO[Unit]): BlockingTask[Unit]
-
-  def unsubscribe: BlockingTask[Unit]
-
-  def pause(partitions: Set[TopicPartition]): BlockingTask[Unit]
-
-  def resume(partitions: Set[TopicPartition]): BlockingTask[Unit]
-
-  def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit]
-
-  def seekToBeginning(partitions: Set[TopicPartition]): BlockingTask[Unit]
-
-  def seekToEnd(partitions: Set[TopicPartition]): BlockingTask[Unit]
+  def subscribe(subscription: Subscription) =
+    consumer.withConsumer { c =>
+      subscription match {
+        case Subscription.Pattern(pattern) => c.subscribe(pattern.pattern, runloop.deps.rebalanceListener)
+        case Subscription.Topics(topics)   => c.subscribe(topics.asJava, runloop.deps.rebalanceListener)
+      }
+    }
 }
 
 object Consumer {
-  def withConsumer[A, K, V](c: KafkaConsumer[K, V])(f: KafkaConsumer[K, V] => A): BlockingTask[A] =
-    ZIO.effectAsyncInterrupt[Blocking, Throwable, A] { cb =>
-      cb(blocking(ZIO.effect(f(c))).catchSome {
-        case _: WakeupException => ZIO.interrupt
-      })
-
-      Left(UIO(c.wakeup()))
-    }
-
-  def unsafeMake[K, V](c: KafkaConsumer[K, V]): Consumer[K, V] =
-    new Consumer[K, V] {
-      def commit(data: OffsetMap) =
-        withConsumer(c)(_.commitSync(data.asJava))
-
-      def adaptConsumerRecords(records: ConsumerRecords[K, V]): Map[TopicPartition, Chunk[ConsumerRecord[K, V]]] = {
-        val tps          = records.partitions()
-        val partitionMap = Map.newBuilder[TopicPartition, Chunk[ConsumerRecord[K, V]]]
-        partitionMap.sizeHint(tps.size)
-
-        val tpsIt = tps.iterator()
-        while (tpsIt.hasNext) {
-          val tp   = tpsIt.next
-          val recs = Chunk.fromIterable(records.records(tp).asScala)
-
-          partitionMap += tp -> recs
-        }
-
-        partitionMap.result()
-      }
-
-      def poll(pollTimeout: Duration): BlockingTask[Map[TopicPartition, Chunk[ConsumerRecord[K, V]]]] =
-        withConsumer(c) { c =>
-          adaptConsumerRecords(c.poll(pollTimeout.asJava))
-        }
-
-      def subscribeWith(subscription: Subscription)(listener: Rebalance => UIO[Unit]): BlockingTask[Unit] =
-        for {
-          runtime <- ZIO.runtime[Blocking]
-          jlistener = new ConsumerRebalanceListener {
-            def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit =
-              runtime.unsafeRun(listener(Rebalance.Revoke(partitions.asScala.toList)))
-            def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit =
-              runtime.unsafeRun(listener(Rebalance.Assign(partitions.asScala.toList)))
-          }
-          _ <- subscription match {
-                case Subscription.Topics(topics) =>
-                  withConsumer(c)(_.subscribe(topics.asJava, jlistener))
-                case Subscription.Pattern(pattern) =>
-                  for {
-                    p <- ZIO(java.util.regex.Pattern.compile(pattern))
-                    _ <- withConsumer(c)(_.subscribe(p, jlistener))
-                  } yield ()
-              }
-        } yield ()
-
-      def unsubscribe: BlockingTask[Unit] =
-        withConsumer(c)(_.unsubscribe())
-
-      def pause(partitions: Set[TopicPartition]): BlockingTask[Unit] =
-        withConsumer(c)(_.pause(partitions.asJava))
-
-      def resume(partitions: Set[TopicPartition]): BlockingTask[Unit] =
-        withConsumer(c)(_.resume(partitions.asJava))
-
-      def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
-        withConsumer(c)(_.seek(partition, offset))
-
-      def seekToBeginning(partitions: Set[TopicPartition]): BlockingTask[Unit] =
-        withConsumer(c)(_.seekToBeginning(partitions.asJava))
-
-      def seekToEnd(partitions: Set[TopicPartition]): BlockingTask[Unit] =
-        withConsumer(c)(_.seekToEnd(partitions.asJava))
-    }
-
-  def make[K, V](
-    settings: ConsumerSettings
-  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): ZManaged[Blocking, Throwable, Consumer[K, V]] = {
-    val c = blocking {
-      ZIO {
-        val props = settings.driverSettings.asJava
-
-        new KafkaConsumer[K, V](props, keySerde.deserializer, valueSerde.deserializer)
-      }
-    }
-
-    c.toManaged(c => UIO(c.close(settings.closeTimeout.asJava)))
-      .map(unsafeMake)
-  }
+  def make[K: Serde, V: Serde](settings: ConsumerSettings): ZManaged[Clock with Blocking, Throwable, Consumer[K, V]] =
+    for {
+      wrapper <- ConsumerAccess.make[K, V](settings)
+      deps <- Runloop.deps(
+               wrapper,
+               settings.pollInterval,
+               settings.pollTimeout
+             )
+      runloop <- Runloop(deps)
+    } yield new Consumer(wrapper, settings, runloop)
 }
