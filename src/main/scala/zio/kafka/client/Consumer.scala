@@ -48,7 +48,11 @@ class Consumer[K, V] private (
       .unTake
       .map {
         case (tp, partition) =>
-          tp -> ZStreamChunk(partition.chunks.buffer(settings.perPartitionChunkPrefetch))
+          val partitionStream =
+            if (settings.perPartitionChunkPrefetch <= 0) partition
+            else ZStreamChunk(partition.chunks.buffer(settings.perPartitionChunkPrefetch))
+
+          tp -> partitionStream
       }
 
   def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): BlockingTask[List[PartitionInfo]] =
