@@ -6,6 +6,7 @@ import zio.blocking.Blocking
 import zio._
 import zio.stream._
 import zio.clock.Clock
+import zio.console._
 
 import scala.collection.JavaConverters._
 
@@ -47,4 +48,52 @@ object Consumer {
              )
       runloop <- Runloop(deps)
     } yield new Consumer(wrapper, settings, runloop)
+
+  /**
+   * Execute an effect for each record and commit the offset after processing
+   *
+   * This method is the easiest way of processing messages on a Kafka topic.
+   *
+   * Messages on a single partition are processed sequentially, while the processing of
+   * multiple partitions happens in parallel.
+   *
+   * Offsets are batched and committed after execution of the effect.
+   *
+   * The effect should not fail. Failures should be handled by retries or ignoring the
+   * error to skip the Kafka message.
+   *
+   * Usage example:
+   *
+   * @param settings Settings for creating a [[Consumer]]
+   * @param subscription Topic subscription parameters
+   * @param f Function that returns the effect to execute for each message. It is passed the key and value
+   * @tparam K Type of keys (an implicit [[Serde]] should be in scope)
+   * @tparam V Type of values (an implicit [[Serde]] should be in scope)
+   * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
+   *
+   *         TODO guarantee that all processed effects get a commit
+   */
+  def consumeM[R, K: Serde, V: Serde](
+    subscription: Subscription,
+    settings: ConsumerSettings
+  )(f: (K, V) => ZIO[R, Nothing, Unit]): ZIO[R with Clock with Blocking with Console, Throwable, Unit] =
+    ZStream
+      .managed(Consumer.make[K, V](settings))
+      .flatMap { consumer =>
+        ZStream
+          .fromEffect(consumer.subscribe(subscription))
+          .flatMap { _ =>
+            consumer.partitioned.flatMapPar(Int.MaxValue, outputBuffer = settings.perPartitionChunkPrefetch) {
+              case (partition @ _, partitionStream) =>
+                partitionStream.mapM {
+                  case CommittableRecord(record, offset) =>
+                    f(record.key(), record.value()).as(offset)
+                }.flattenChunks
+            }
+          }
+      }
+      .aggregate(ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _))
+      .mapM(_.commit)
+      .tap(_ => putStrLn(s"Commit done"))
+      .run(ZSink.drain)
 }
