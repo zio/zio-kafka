@@ -27,9 +27,9 @@ developers := List(
 testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
 
 libraryDependencies ++= Seq(
-  "dev.zio"                 %% "zio-streams"    % "1.0.0-RC12-1",
-  "dev.zio"                 %% "zio-test"       % "1.0.0-RC12-1" % "test",
-  "dev.zio"                 %% "zio-test-sbt"   % "1.0.0-RC12-1" % "test",
+  "dev.zio"                 %% "zio-streams"    % "1.0.0-RC13",
+  "dev.zio"                 %% "zio-test"       % "1.0.0-RC13" % "test",
+  "dev.zio"                 %% "zio-test-sbt"   % "1.0.0-RC13" % "test",
   "org.apache.kafka"        % "kafka-clients"   % "2.3.0",
   "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
   "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.0" % "test",

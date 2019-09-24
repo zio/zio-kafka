@@ -161,7 +161,7 @@ object Runloop {
         deps.requests,
         deps.commits
       )
-      .fold(State.initial[K, V])(_ => true) { (state, cmd) =>
+      .foldWhileM(State.initial[K, V])(_ => true) { (state, cmd) =>
         def doCommit(cmds: List[Command.Commit[K, V]]) =
           for {
             runtime <- ZIO.runtime[Any]
