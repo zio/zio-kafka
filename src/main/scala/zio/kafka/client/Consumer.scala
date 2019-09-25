@@ -59,12 +59,23 @@ object Consumer {
    * Messages are processed with 'at least once' consistency: it is not guaranteed that every message
    * that is processed by the effect has a corresponding offset commit before stream termination.
    *
-   * Offsets are batched and committed after execution of the effect.
+   * Offsets are committed after execution of the effect. They are batched when a commit action is in progress
+   * to avoid backpressuring the stream.
    *
    * The effect should must absorb any failures. Failures should be handled by retries or ignoring the
    * error, which will result in the Kafka message being skipped.
    *
    * Usage example:
+   *
+   * {{{
+   * val settings: ConsumerSettings = ???
+   * val subscription = Subscription.Topics(Set("my-kafka-topic"))
+   *
+   * val consumerIO = Consumer.consumeWith[Environment, String, String](settings, subscription) { case (key, value) =>
+   *   // Process the received record here
+   *   putStrLn(s"Received record: ${key}: ${value}")
+   * }
+   * }}}
    *
    * @param settings Settings for creating a [[Consumer]]
    * @param subscription Topic subscription parameters
