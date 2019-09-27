@@ -273,7 +273,7 @@ object Runloop {
         deps.requests,
         deps.commits
       )
-      .fold(State.initial[K, V])(_ => true) { (state, cmd) =>
+      .foldM(State.initial[K, V]) { (state, cmd) =>
         cmd match {
           case Command.Poll()              => handlePoll(state)
           case req @ Command.Request(_, _) => handleRequest(state, req)
