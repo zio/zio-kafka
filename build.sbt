@@ -12,7 +12,6 @@ scalafmtOnCompile := true
 fork in Test := true
 pgpPublicRing := file("/tmp/public.asc")
 pgpSecretRing := file("/tmp/secret.asc")
-releaseEarlyWith := SonatypePublisher
 scmInfo := Some(
   ScmInfo(url("https://github.com/zio/zio-kafka/"), "scm:git:git@github.com:zio/zio-kafka.git")
 )
@@ -37,48 +36,6 @@ libraryDependencies ++= Seq(
   "ch.qos.logback"          % "logback-classic" % "1.2.3" % "test",
   compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
 )
-
-scalacOptions ++= Seq(
-  "-deprecation",
-  "-encoding",
-  "UTF-8",
-  "-explaintypes",
-  "-Yrangepos",
-  "-feature",
-  "-Xfuture",
-  "-language:higherKinds",
-  "-language:existentials",
-  "-unchecked",
-  "-Xlint:_,-type-parameter-shadow",
-  "-Ywarn-numeric-widen",
-  "-Ywarn-unused",
-  "-Ywarn-value-discard"
-) ++ (CrossVersion.partialVersion(scalaVersion.value) match {
-  case Some((2, 11)) =>
-    Seq(
-      "-Yno-adapted-args",
-      "-Ypartial-unification",
-      "-Ywarn-inaccessible",
-      "-Ywarn-infer-any",
-      "-Ywarn-nullary-override",
-      "-Ywarn-nullary-unit"
-    )
-  case Some((2, 12)) =>
-    Seq(
-      "-Xsource:2.13",
-      "-Yno-adapted-args",
-      "-Ypartial-unification",
-      "-Ywarn-extra-implicit",
-      "-Ywarn-inaccessible",
-      "-Ywarn-infer-any",
-      "-Ywarn-nullary-override",
-      "-Ywarn-nullary-unit",
-      "-opt-inline-from:<source>",
-      "-opt-warnings",
-      "-opt:l:inline"
-    )
-  case _ => Nil
-})
 
 fork in run := true
 
