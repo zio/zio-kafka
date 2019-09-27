@@ -92,7 +92,7 @@ object Consumer {
   def make[K: Serde, V: Serde](settings: ConsumerSettings): ZManaged[Clock with Blocking, Throwable, Consumer[K, V]] =
     for {
       wrapper <- ConsumerAccess.make[K, V](settings)
-      deps <- Runloop.deps(
+      deps <- Runloop.Deps.make(
                wrapper,
                settings.pollInterval,
                settings.pollTimeout

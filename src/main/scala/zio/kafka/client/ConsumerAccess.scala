@@ -18,7 +18,7 @@ class ConsumerAccess[K, V](private[client] val consumer: KafkaConsumer[K, V], ac
   private[client] def withConsumerNoPermit[R, A](
     f: KafkaConsumer[K, V] => ZIO[R, Throwable, A]
   ): ZIO[R with Blocking, Throwable, A] =
-    blocking(f(consumer)).catchSome {
+    blocking(ZIO.effectSuspend(f(consumer))).catchSome {
       case _: WakeupException => ZIO.interrupt
     }.fork.flatMap { fib =>
       fib.join.onInterrupt(ZIO.effectTotal(consumer.wakeup()) *> fib.interrupt)
