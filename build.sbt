@@ -1,30 +1,43 @@
 val mainScala = "2.12.10"
 val allScala  = Seq("2.11.12", mainScala)
 
-ThisBuild / useCoursier := false
-organization := "dev.zio"
-homepage := Some(url("https://github.com/zio/zio-kafka"))
-name := "zio-kafka"
-licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0"))
-scalaVersion := mainScala
-parallelExecution in Test := false
-scalafmtOnCompile := true
-fork in Test := true
-pgpPublicRing := file("/tmp/public.asc")
-pgpSecretRing := file("/tmp/secret.asc")
-scmInfo := Some(
-  ScmInfo(url("https://github.com/zio/zio-kafka/"), "scm:git:git@github.com:zio/zio-kafka.git")
-)
-developers := List(
-  Developer(
-    "iravid",
-    "Itamar Ravid",
-    "iravid@iravid.com",
-    url("https://github.com/iravid")
+inThisBuild(
+  List(
+    organization := "dev.zio",
+    homepage := Some(url("https://github.com/zio/zio-kafka")),
+    licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
+    useCoursier := false,
+    scalaVersion := mainScala,
+    crossScalaVersions := allScala,
+    parallelExecution in Test := false,
+    fork in Test := true,
+    fork in run := true,
+    pgpPublicRing := file("/tmp/public.asc"),
+    pgpSecretRing := file("/tmp/secret.asc"),
+    pgpPassphrase := sys.env.get("PGP_PASSWORD").map(_.toArray),
+    scmInfo := Some(
+      ScmInfo(url("https://github.com/zio/zio-kafka/"), "scm:git:git@github.com:zio/zio-kafka.git")
+    ),
+    developers := List(
+      Developer(
+        "iravid",
+        "Itamar Ravid",
+        "iravid@iravid.com",
+        url("https://github.com/iravid")
+      )
+    )
   )
 )
 
-testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
+ThisBuild / publishTo := sonatypePublishToBundle.value
+
+name := "zio-kafka"
+scalafmtOnCompile := true
+
+enablePlugins(BuildInfoPlugin)
+buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, isSnapshot)
+buildInfoPackage := "zio.kafka"
+buildInfoObject := "BuildInfo"
 
 libraryDependencies ++= Seq(
   "dev.zio"                 %% "zio-streams"    % "1.0.0-RC13",
@@ -37,9 +50,7 @@ libraryDependencies ++= Seq(
   compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
 )
 
-fork in run := true
-
-crossScalaVersions := allScala
+testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
