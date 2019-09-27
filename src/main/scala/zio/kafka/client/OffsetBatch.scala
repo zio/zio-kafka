@@ -41,7 +41,7 @@ final case class OffsetBatchImpl(
 }
 
 case object EmptyOffsetBatch extends OffsetBatch {
-  val offsets                                  = Map()
+  val offsets: Map[TopicPartition, Long]       = Map()
   val commit                                   = Task.unit
   def merge(offset: Offset): OffsetBatch       = offset.batch
   def merge(offsets: OffsetBatch): OffsetBatch = offsets
