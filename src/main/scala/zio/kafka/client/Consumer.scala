@@ -99,4 +99,64 @@ object Consumer {
              )
       runloop <- Runloop(deps)
     } yield new Consumer(wrapper, settings, runloop)
+
+  /**
+   * Execute an effect for each record and commit the offset after processing
+   *
+   * This method is the easiest way of processing messages on a Kafka topic.
+   *
+   * Messages on a single partition are processed sequentially, while the processing of
+   * multiple partitions happens in parallel.
+   *
+   * Messages are processed with 'at least once' consistency: it is not guaranteed that every message
+   * that is processed by the effect has a corresponding offset commit before stream termination.
+   *
+   * Offsets are committed after execution of the effect. They are batched when a commit action is in progress
+   * to avoid backpressuring the stream.
+   *
+   * The effect should must absorb any failures. Failures should be handled by retries or ignoring the
+   * error, which will result in the Kafka message being skipped.
+   *
+   * Usage example:
+   *
+   * {{{
+   * val settings: ConsumerSettings = ???
+   * val subscription = Subscription.Topics(Set("my-kafka-topic"))
+   *
+   * val consumerIO = Consumer.consumeWith[Environment, String, String](settings, subscription) { case (key, value) =>
+   *   // Process the received record here
+   *   putStrLn(s"Received record: ${key}: ${value}")
+   * }
+   * }}}
+   *
+   * @param settings Settings for creating a [[Consumer]]
+   * @param subscription Topic subscription parameters
+   * @param f Function that returns the effect to execute for each message. It is passed the key and value
+   * @tparam K Type of keys (an implicit [[Serde]] should be in scope)
+   * @tparam V Type of values (an implicit [[Serde]] should be in scope)
+   * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
+   */
+  def consumeWith[R, K: Serde, V: Serde](
+    subscription: Subscription,
+    settings: ConsumerSettings
+  )(f: (K, V) => ZIO[R, Nothing, Unit]): ZIO[R with Clock with Blocking, Throwable, Unit] =
+    ZStream
+      .managed(Consumer.make[K, V](settings))
+      .flatMap { consumer =>
+        ZStream
+          .fromEffect(consumer.subscribe(subscription))
+          .flatMap { _ =>
+            consumer.partitionedStream
+              .flatMapPar(Int.MaxValue, outputBuffer = settings.perPartitionChunkPrefetch) {
+                case (_, partitionStream) =>
+                  partitionStream.mapM {
+                    case CommittableRecord(record, offset) =>
+                      f(record.key(), record.value()).as(offset)
+                  }.flattenChunks
+              }
+          }
+      }
+      .aggregate(ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _))
+      .mapM(_.commit)
+      .runDrain
 }
