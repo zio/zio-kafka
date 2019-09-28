@@ -5,15 +5,14 @@ import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{ Serde, Serdes }
-import org.scalatest.{ Matchers, WordSpecLike }
+import org.scalatest.{ EitherValues, Matchers, WordSpecLike }
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
-import zio.console._
 import zio.duration._
 import zio.stream.ZSink
 
-class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime {
+class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime with EitherValues {
   import KafkaTestUtils._
 
   def pause(): ZIO[Clock, Nothing, Unit] = UIO(()).delay(2.seconds).forever
@@ -104,17 +103,23 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
       }
     }
 
-    "consuming with an effect" should {
+    "consuming using consumeWith" should {
       "consume all the messages on a topic" in unsafeRun {
-        val topic        = "consumeWith1"
+        val topic        = "consumeWith"
         val subscription = Subscription.Topics(Set(topic))
         val nrMessages   = 50
-        val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+        val nrPartitions = 5
 
         for {
+          // Produce messages on several partitions
+          _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = 5))
+          _ <- ZIO.traverse(1 to nrMessages) { i =>
+                produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+              }
+
+          // Consume messages
           done             <- Promise.make[Nothing, Unit]
           messagesReceived <- Ref.make(List.empty[(String, String)])
-          _                <- produceMany(topic, messages)
           fib <- Consumer
                   .consumeWith[Environment, String, String](
                     subscription,
@@ -133,7 +138,7 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
       }
 
       "commit offsets for all consumed messages" in unsafeRun {
-        val topic        = "consumeWith1"
+        val topic        = "consumeWith2"
         val subscription = Subscription.Topics(Set(topic))
         val nrMessages   = 50
         val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
@@ -141,7 +146,6 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
         for {
           done             <- Promise.make[Nothing, Unit]
           messagesReceived <- Ref.make(List.empty[(String, String)])
-          _                = println("Producing")
           _                <- produceMany(topic, messages)
           fib <- Consumer
                   .consumeWith[Environment, String, String](
@@ -170,38 +174,30 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
         } yield consumedMessages shouldNot contain(newMessage)
       }
 
-      "consume with parallelism of the number of partitions" in unsafeRun {
-        val topic        = "consumeWith2"
+      "fail when the consuming effect produces a failure" in unsafeRun {
+        val topic        = "consumeWith3"
         val subscription = Subscription.Topics(Set(topic))
-        val nrMessages   = 50
-        val nrPartitions = 5
+        val nrMessages   = 10
+        val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
 
         for {
-          // Produce messages on several partitions
-          _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic("consumeWith2", partitions = 5))
-          _ <- ZIO.traverse(1 to nrMessages)(
-                i => produceMany(topic, i % nrPartitions, List(s"key$i" -> s"msg$i"))
-              )
-
-          // Consume messages
-          done             <- Promise.make[Nothing, Unit]
           messagesReceived <- Ref.make(List.empty[(String, String)])
+          _                <- produceMany(topic, messages)
           fib <- Consumer
                   .consumeWith[Environment, String, String](
                     subscription,
                     settings("group3", "client3")
                   ) { (key, value) =>
                     (for {
-                      _             <- putStrLn(s"Got (${key},${value})")
                       messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
-                      _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
+                      _ <- Task.when(messagesSoFar.size == 3)(
+                            ZIO.die(new IllegalArgumentException("consumeWith failure"))
+                          )
                     } yield ()).orDie
                   }
                   .fork
-          _ <- done.await *> ZIO.sleep(3.seconds) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
-          _ <- fib.interrupt
-          _ <- fib.join.ignore
-        } yield succeed
+          testResult <- fib.map(_ => fail("Expected consumeWith to fail")).orElse(Fiber.succeed(succeed)).join
+        } yield testResult
       }
     }
   }
