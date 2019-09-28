@@ -90,7 +90,7 @@ channel for any and all questions you may have.
 
 ## Credits
 
-This library is heavily inspired and made possible by the research and implementation done in [Alpakka Kafka](https://github.com/akka/alpakka-kafka), a library maintained by Lightbend and originally written as Reactive Kafka by SoftwareMill.
+This library is heavily inspired and made possible by the research and implementation done in [Alpakka Kafka](https://github.com/akka/alpakka-kafka), a library maintained by the Akka team and originally written as Reactive Kafka by SoftwareMill.
 
 ## Legal
 
