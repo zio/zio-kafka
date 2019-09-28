@@ -1,10 +1,11 @@
 package zio.kafka.client.serde
 import java.nio.ByteBuffer
 import java.util.UUID
-import org.apache.kafka.common.serialization.{ Serde => KafkaSerde, Serdes => KafkaSerdes }
-import syntax._
 
+import org.apache.kafka.common.serialization.{ Serde => KafkaSerde, Serdes => KafkaSerdes }
 import zio.Task
+
+import scala.util.Try
 
 trait Serdes {
   private val dummyTopic = "noTopic"
@@ -24,8 +25,8 @@ trait Serdes {
   implicit val byteBufferSerde: Serde[ByteBuffer] = fromKafkaSerde(KafkaSerdes.ByteBuffer())
   implicit val uuidSerde: Serde[UUID]             = fromKafkaSerde(KafkaSerdes.UUID())
 
-  implicit def deserializerWithError[T](implicit deser: Deserializer[T]): Deserializer[Either[Throwable, T]] =
-    deser.either
+  implicit def deserializerWithError[T](implicit deser: Deserializer[T]): Deserializer[Try[T]] =
+    deser.asTry
 }
 
 object Serdes extends Serdes
