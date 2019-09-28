@@ -97,33 +97,14 @@ object Producer {
   }
 
   /**
-   * Sink that produces records to Kafka
-   *
-   * Se
-   *
-   * @param settings Producer settings
-   * @tparam K
-   * @tparam V
-   * @return Managed sink
-   */
-  def sink[K: Serde, V: Serde](
-    settings: ProducerSettings
-  ): ZManaged[Blocking, Throwable, ZSink[Blocking, Throwable, Nothing, ProducerRecord[K, V], Unit]] =
-    make[K, V](settings).map { producer =>
-      ZSink.drain.contramapM(producer.produce)
-    }
-
-  /**
    * Sink that produces records to Kafka in chunks
-   *
-   * This is a somewhat more efficient version of [[sink]]
    *
    * @param settings
    * @tparam K
    * @tparam V
    * @return
    */
-  def chunkSink[K: Serde, V: Serde](
+  def sink[K: Serde, V: Serde](
     settings: ProducerSettings
   ): ZManaged[Blocking, Throwable, ZSink[Blocking, Throwable, Nothing, Chunk[ProducerRecord[K, V]], Unit]] =
     make[K, V](settings).map { producer =>
