@@ -3,16 +3,16 @@ package zio.kafka.client
 import com.typesafe.scalalogging.LazyLogging
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{ Serde, Serdes }
-import org.scalatest.{ Matchers, WordSpecLike }
+import org.scalatest.{ EitherValues, Matchers, WordSpecLike }
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
-import org.apache.kafka.common.TopicPartition
 import zio.stream.ZSink
 
-class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime {
+class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime with EitherValues {
   import KafkaTestUtils._
 
   def pause(): ZIO[Clock, Nothing, Unit] = UIO(()).delay(2.seconds).forever
@@ -100,6 +100,104 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                             } yield results
                           }
         } yield (firstResults ++ secondResults).map(rec => rec.key() -> rec.value()) shouldEqual data
+      }
+    }
+
+    "consuming using consumeWith" should {
+      "consume all the messages on a topic" in unsafeRun {
+        val topic        = "consumeWith"
+        val subscription = Subscription.Topics(Set(topic))
+        val nrMessages   = 50
+        val nrPartitions = 5
+
+        for {
+          // Produce messages on several partitions
+          _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = 5))
+          _ <- ZIO.traverse(1 to nrMessages) { i =>
+                produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+              }
+
+          // Consume messages
+          done             <- Promise.make[Nothing, Unit]
+          messagesReceived <- Ref.make(List.empty[(String, String)])
+          fib <- Consumer
+                  .consumeWith[Environment, String, String](
+                    subscription,
+                    settings("group3", "client3")
+                  ) { (key, value) =>
+                    (for {
+                      messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
+                      _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
+                    } yield ()).orDie
+                  }
+                  .fork
+          _ <- done.await
+          _ <- fib.interrupt
+          _ <- fib.join.ignore
+        } yield succeed
+      }
+
+      "commit offsets for all consumed messages" in unsafeRun {
+        val topic        = "consumeWith2"
+        val subscription = Subscription.Topics(Set(topic))
+        val nrMessages   = 50
+        val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+
+        for {
+          done             <- Promise.make[Nothing, Unit]
+          messagesReceived <- Ref.make(List.empty[(String, String)])
+          _                <- produceMany(topic, messages)
+          fib <- Consumer
+                  .consumeWith[Environment, String, String](
+                    subscription,
+                    settings("group3", "client3")
+                  ) { (key, value) =>
+                    (for {
+                      messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
+                      _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
+                    } yield ()).orDie
+                  }
+                  .fork
+          _ <- done.await *> ZIO.sleep(3.seconds) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
+          _ <- fib.interrupt
+          _ <- fib.join.ignore
+          _ <- produceOne(topic, "key-new", "msg-new")
+          newMessage <- Consumer.make[String, String](settings("group3", "client3")).use { c =>
+                         c.subscribe(subscription) *> c.plainStream
+                           .take(1)
+                           .flattenChunks
+                           .map(r => (r.record.key(), r.record.value()))
+                           .run(ZSink.collectAll[(String, String)])
+                           .map(_.head)
+                       }
+          consumedMessages <- messagesReceived.get
+        } yield consumedMessages shouldNot contain(newMessage)
+      }
+
+      "fail when the consuming effect produces a failure" in unsafeRun {
+        val topic        = "consumeWith3"
+        val subscription = Subscription.Topics(Set(topic))
+        val nrMessages   = 10
+        val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+
+        for {
+          messagesReceived <- Ref.make(List.empty[(String, String)])
+          _                <- produceMany(topic, messages)
+          fib <- Consumer
+                  .consumeWith[Environment, String, String](
+                    subscription,
+                    settings("group3", "client3")
+                  ) { (key, value) =>
+                    (for {
+                      messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
+                      _ <- Task.when(messagesSoFar.size == 3)(
+                            ZIO.die(new IllegalArgumentException("consumeWith failure"))
+                          )
+                    } yield ()).orDie
+                  }
+                  .fork
+          testResult <- fib.map(_ => fail("Expected consumeWith to fail")).orElse(Fiber.succeed(succeed)).join
+        } yield testResult
       }
     }
   }

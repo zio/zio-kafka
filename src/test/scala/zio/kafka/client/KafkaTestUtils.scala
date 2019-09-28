@@ -13,8 +13,10 @@ object KafkaTestUtils {
     EmbeddedKafka.publishToKafka(t, k, m)
   }
 
-  def produceMany(t: String, kvs: List[(String, String)]): UIO[Unit] =
-    UIO.foreach(kvs)(i => produceOne(t, i._1, i._2)).unit
+  def produceMany(t: String, kvs: List[(String, String)]): UIO[Unit] = ZIO.effectTotal {
+    import net.manub.embeddedkafka.Codecs._
+    EmbeddedKafka.publishToKafka(t, kvs)
+  }
 
   def produceMany(topic: String, partition: Int, kvs: List[(String, String)]) =
     ZIO.effectTotal {
