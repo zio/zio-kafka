@@ -163,7 +163,7 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
           _ <- fib.join.ignore
           _ <- produceOne(topic, "key-new", "msg-new")
           newMessage <- Consumer.make[String, String](settings("group3", "client3")).use { c =>
-                         c.subscribe(subscription) *> c.plain
+                         c.subscribe(subscription) *> c.plainStream
                            .take(1)
                            .flattenChunks
                            .map(r => (r.record.key(), r.record.value()))

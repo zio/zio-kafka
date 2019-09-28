@@ -146,7 +146,7 @@ object Consumer {
         ZStream
           .fromEffect(consumer.subscribe(subscription))
           .flatMap { _ =>
-            consumer.partitioned
+            consumer.partitionedStream
               .flatMapPar(Int.MaxValue, outputBuffer = settings.perPartitionChunkPrefetch) {
                 case (_, partitionStream) =>
                   partitionStream.mapM {
