@@ -5,9 +5,9 @@ import java.util.concurrent.atomic.AtomicLong
 
 import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization.Serde
+import zio._
 import zio.blocking._
 import zio.stream.{ Sink, ZSink }
-import zio._
 
 import scala.collection.JavaConverters._
 
