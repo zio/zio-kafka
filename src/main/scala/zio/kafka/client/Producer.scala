@@ -7,7 +7,7 @@ import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerReco
 import org.apache.kafka.common.serialization.Serde
 import zio._
 import zio.blocking._
-import zio.stream.{ Sink, ZSink }
+import zio.stream.ZSink
 
 import scala.collection.JavaConverters._
 
@@ -97,66 +97,36 @@ object Producer {
   }
 
   /**
-   * [[Sink]] that produces records to Kafka
+   * Sink that produces records to Kafka
    *
-   * @param settings
+   * Se
+   *
+   * @param settings Producer settings
    * @tparam K
    * @tparam V
-   * @return
+   * @return Managed sink
    */
   def sink[K: Serde, V: Serde](
     settings: ProducerSettings
-  ): ZManaged[Blocking, Throwable, ZSink[Blocking, Any, Nothing, ProducerRecord[K, V], RecordMetadata]] =
-    sinkWithPassThrough[K, V, Unit](settings).map { sink =>
-      sink.contramap[ProducerRecord[K, V]]((_, ())).map(_._1)
+  ): ZManaged[Blocking, Throwable, ZSink[Blocking, Throwable, Nothing, ProducerRecord[K, V], Unit]] =
+    make[K, V](settings).map { producer =>
+      ZSink.drain.contramapM(producer.produce)
     }
 
   /**
-   * [[Sink]] that produces records to Kafka while passing through
+   * Sink that produces records to Kafka in chunks
    *
-   * The sink takes tuples of [[ProducerRecord]]s and a passthrough, which will be returned
-   * in the remainder of this Sink along with the [[RecordMetadata]] of the produced record.
-   * A particular use of this is a consume-produce-commit stream, where the [[Offset]] can be
-   * placed in the passthrough.
-   *
-   * See also [[sink]] for a version of this method without passthrough parameter.
-   *
-   * The created producer is closed automatically when the stream completes.
-   *
-   * @param settings
-   * @tparam K
-   * @tparam V
-   * @tparam PassThrough
-   * @return A managed Sink that closes the Kafka producer after use
-   */
-  def sinkWithPassThrough[K: Serde, V: Serde, PassThrough](
-    settings: ProducerSettings
-  ): ZManaged[Blocking, Throwable, ZSink[
-    Blocking,
-    Any,
-    Nothing,
-    (ProducerRecord[K, V], PassThrough),
-    (RecordMetadata, PassThrough)
-  ]] =
-    for {
-      producer <- make[K, V](settings)
-      // TODO here I'd like to aggregate and use produceChunk
-      sink = ZSink.identity[(ProducerRecord[K, V], PassThrough)].mapM {
-        case (record, passThrough) => producer.produce(record).map((_, passThrough))
-      }
-    } yield sink
-
-  /**
-   * [[Sink]] that produces records to Kafka and executes a commit afterwards
+   * This is a somewhat more efficient version of [[sink]]
    *
    * @param settings
    * @tparam K
    * @tparam V
    * @return
    */
-  def produceAndCommitSink[K: Serde, V: Serde](
+  def chunkSink[K: Serde, V: Serde](
     settings: ProducerSettings
-  ): ZManaged[Blocking, Throwable, ZSink[Blocking, Any, Nothing, (ProducerRecord[K, V], Offset), Unit]] =
-    sinkWithPassThrough[K, V, Offset](settings).map(_.mapM(_._2.commit))
-
+  ): ZManaged[Blocking, Throwable, ZSink[Blocking, Throwable, Nothing, Chunk[ProducerRecord[K, V]], Unit]] =
+    make[K, V](settings).map { producer =>
+      ZSink.drain.contramapM(producer.produceChunk)
+    }
 }
