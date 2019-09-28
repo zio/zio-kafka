@@ -4,7 +4,6 @@ import com.typesafe.scalalogging.LazyLogging
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.serialization.{ Serde, Serdes }
 import org.scalatest.{ EitherValues, Matchers, WordSpecLike }
 import zio._
 import zio.blocking.Blocking
@@ -19,9 +18,8 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
 
   def log(s: String): UIO[Unit] = ZIO.effectTotal(logger.info(s))
 
-  val embeddedKafka                       = EmbeddedKafka.start()
-  val bootstrapServer                     = s"localhost:${embeddedKafka.config.kafkaPort}"
-  implicit val stringSerde: Serde[String] = Serdes.String()
+  val embeddedKafka   = EmbeddedKafka.start()
+  val bootstrapServer = s"localhost:${embeddedKafka.config.kafkaPort}"
 
   def settings(groupId: String, clientId: String) =
     ConsumerSettings(

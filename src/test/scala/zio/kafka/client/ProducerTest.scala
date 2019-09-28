@@ -1,15 +1,10 @@
 package zio.kafka.client
 
 import com.typesafe.scalalogging.LazyLogging
-
 import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
-
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.serialization.{ Serde, Serdes }
-
 import org.scalatest.{ Matchers, WordSpecLike }
-
 import zio.{ Chunk, DefaultRuntime, RIO, UIO, ZIO }
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -22,10 +17,9 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
 
   def log(s: String): UIO[Unit] = ZIO.effectTotal(logger.info(s))
 
-  implicit val config                     = EmbeddedKafkaConfig(kafkaPort = 0, zooKeeperPort = 0)
-  val embeddedKafka                       = EmbeddedKafka.start()
-  val bootstrapServer                     = s"localhost:${embeddedKafka.config.kafkaPort}"
-  implicit val stringSerde: Serde[String] = Serdes.String()
+  implicit val config = EmbeddedKafkaConfig(kafkaPort = 0, zooKeeperPort = 0)
+  val embeddedKafka   = EmbeddedKafka.start()
+  val bootstrapServer = s"localhost:${embeddedKafka.config.kafkaPort}"
 
   val settings =
     ProducerSettings(
