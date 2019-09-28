@@ -41,7 +41,7 @@ class Consumer[K, V] private (
   ): BlockingTask[Map[TopicPartition, OffsetAndTimestamp]] =
     consumer.withConsumer(_.offsetsForTimes(timestamps.mapValues(Long.box).asJava, timeout.asJava).asScala.toMap)
 
-  def partitioned
+  def partitionedStream
     : ZStream[Clock with Blocking, Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, CommittableRecord[K, V]])] =
     ZStream
       .fromQueue(runloop.deps.partitions)
@@ -61,8 +61,8 @@ class Consumer[K, V] private (
   def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): BlockingTask[Long] =
     consumer.withConsumer(_.position(partition, timeout.asJava))
 
-  def plain: ZStreamChunk[Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-    ZStreamChunk(partitioned.flatMapPar(Int.MaxValue)(_._2.chunks))
+  def plainStream: ZStreamChunk[Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+    ZStreamChunk(partitionedStream.flatMapPar(Int.MaxValue)(_._2.chunks))
 
   def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
     consumer.withConsumer(_.seek(partition, offset))

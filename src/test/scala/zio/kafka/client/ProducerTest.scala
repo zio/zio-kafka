@@ -72,7 +72,7 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                 1
               )
             )
-            .flatMap(c => c.subscribe(subscription).toManaged_ *> c.plain.toQueue())
+            .flatMap(c => c.subscribe(subscription).toManaged_ *> c.plainStream.toQueue())
 
         for {
           outcome <- producer.produceChunk(chunks).either
