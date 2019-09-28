@@ -6,8 +6,10 @@ trait Deserializer[+T] {
 }
 
 object Deserializer {
-  def of[T: Deserializer]: Deserializer[T]                     = implicitly
-  def apply[T](deser: Array[Byte] => Task[T]): Deserializer[T] = deser(_)
+  def of[T: Deserializer]: Deserializer[T] = implicitly
+  def apply[T](deser: Array[Byte] => Task[T]): Deserializer[T] = new Deserializer[T] {
+    override def deserialize(data: Array[Byte]): Task[T] = deser(data)
+  }
 }
 
 trait Serializer[-T] {
@@ -15,8 +17,10 @@ trait Serializer[-T] {
 }
 
 object Serializer {
-  def of[T: Serializer]: Serializer[T]                     = implicitly
-  def apply[T](ser: T => Task[Array[Byte]]): Serializer[T] = ser(_)
+  def of[T: Serializer]: Serializer[T] = implicitly
+  def apply[T](ser: T => Task[Array[Byte]]): Serializer[T] = new Serializer[T] {
+    override def serialize(value: T): Task[Array[Byte]] = ser(value)
+  }
 }
 
 trait Serde[T] extends Deserializer[T] with Serializer[T]
