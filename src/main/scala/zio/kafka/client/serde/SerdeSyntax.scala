@@ -1,51 +1,51 @@
 package zio.kafka.client.serde
 
-import zio.Task
+import zio.RIO
 
 import scala.util.{ Failure, Success, Try }
 
 trait SerdeSyntax {
-  implicit final def deserializerSyntax[T](deserializer: Deserializer[T]): DeserializerOps[T] =
-    new DeserializerOps[T](deserializer)
+  implicit final def deserializerSyntax[R, T](deserializer: Deserializer[R, T]): DeserializerOps[R, T] =
+    new DeserializerOps[R, T](deserializer)
 
-  implicit final def serializerSyntax[T](serializer: Serializer[T]): SerializerOps[T] =
-    new SerializerOps[T](serializer)
+  implicit final def serializerSyntax[R, T](serializer: Serializer[R, T]): SerializerOps[R, T] =
+    new SerializerOps[R, T](serializer)
 
-  implicit final def serdeSyntax[T](serde: Serde[T]): SerdeOps[T] =
-    new SerdeOps[T](serde)
+  implicit final def serdeSyntax[R, T](serde: Serde[R, T]): SerdeOps[R, T] =
+    new SerdeOps[R, T](serde)
 }
 
-final class DeserializerOps[T](private val deserializer: Deserializer[T]) extends AnyVal {
-  def map[U](f: T => U): Deserializer[U] = Deserializer(deserializer.deserialize(_).map(f))
+final class DeserializerOps[R, T](private val deserializer: Deserializer[R, T]) extends AnyVal {
+  def map[U](f: T => U): Deserializer[R, U] = Deserializer(deserializer.deserialize(_).map(f))
 
-  def mapM[U](f: T => Task[U]): Deserializer[U] = Deserializer(deserializer.deserialize(_).flatMap(f))
+  def mapM[R1 <: R, U](f: T => RIO[R1, U]): Deserializer[R1, U] = Deserializer(deserializer.deserialize(_).flatMap(f))
 
   /**
    * Serde that handles deserialization failures by returning a Task
    *
    * This is useful for explicitly handling deserialization failures.
    */
-  def asTry: Deserializer[Try[T]] =
+  def asTry: Deserializer[R, Try[T]] =
     Deserializer(deserializer.deserialize(_).fold(e => Failure(e), v => Success(v)))
 }
 
-final class SerializerOps[T](private val serializer: Serializer[T]) extends AnyVal {
-  def contramap[U](f: U => T): Serializer[U] = Serializer(f andThen serializer.serialize)
+final class SerializerOps[R, T](private val serializer: Serializer[R, T]) extends AnyVal {
+  def contramap[U](f: U => T): Serializer[R, U] = Serializer(f andThen serializer.serialize)
 
-  def contramapM[U](f: U => Task[T]): Serializer[U] = Serializer(f(_).flatMap(serializer.serialize))
+  def contramapM[R1 <: R, U](f: U => RIO[R1, T]): Serializer[R1, U] = Serializer(f(_).flatMap(serializer.serialize))
 }
 
-final class SerdeOps[T](private val serde: Serde[T]) extends AnyVal {
+final class SerdeOps[R, T](private val serde: Serde[R, T]) extends AnyVal {
 
   /**
    * Converts to a Serde of type U with pure transformations
    */
-  def inmap[U](f: T => U)(g: U => T): Serde[U] =
+  def inmap[U](f: T => U)(g: U => T): Serde[R, U] =
     Serde(serde.map(f))(serde.contramap(g))
 
   /**
    * Convert to a Serde of type U with an effectful transformation
    */
-  def inmapM[U](f: T => Task[U])(g: U => Task[T]): Serde[U] =
+  def inmapM[R1 <: R, U](f: T => RIO[R1, U])(g: U => RIO[R1, T]): Serde[R1, U] =
     Serde(serde.mapM(f))(serde.contramapM(g))
 }

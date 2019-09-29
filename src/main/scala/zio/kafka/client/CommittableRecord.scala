@@ -2,7 +2,7 @@ package zio.kafka.client
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
-import zio.Task
+import zio.{ RIO, Task }
 import zio.kafka.client.serde.Deserializer
 
 final case class CommittableRecord[K, V](record: ConsumerRecord[K, V], offset: Offset)
@@ -16,12 +16,15 @@ object CommittableRecord {
       OffsetImpl(new TopicPartition(record.topic(), record.partition()), record.offset(), commitHandle)
     )
 
-  def deserialize[K: Deserializer, V: Deserializer](
+  def deserialize[R, K, V](
     record: CommittableRecord[Array[Byte], Array[Byte]]
-  ): Task[CommittableRecord[K, V]] =
+  )(
+    implicit keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): RIO[R, CommittableRecord[K, V]] =
     for {
-      key   <- implicitly[Deserializer[K]].deserialize(record.record.key())
-      value <- implicitly[Deserializer[V]].deserialize(record.record.value())
+      key   <- implicitly[Deserializer[R, K]].deserialize(record.record.key())
+      value <- implicitly[Deserializer[R, V]].deserialize(record.record.value())
     } yield {
       val r = record.record
       record.copy(

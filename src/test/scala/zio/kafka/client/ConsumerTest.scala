@@ -9,6 +9,7 @@ import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
+import zio.kafka.client.serde.Serde
 import zio.stream.ZSink
 
 class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime with EitherValues {
@@ -34,10 +35,10 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
     )
 
   def runWithConsumer[A](groupId: String, clientId: String)(
-    r: Consumer[String, String] => RIO[Blocking with Clock, A]
+    r: Consumer[Any, String, String] => RIO[Blocking with Clock, A]
   ): A =
     unsafeRun(
-      Consumer.make[String, String](settings(groupId, clientId)).use(r)
+      Consumer.make[Any, String, String](settings(groupId, clientId)).use(r)
     )
 
   "A string consumer" when {
@@ -55,12 +56,46 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
       }
     }
 
+    "using a serializer with an environment" should {
+      "get access to the environment" in unsafeRun {
+        val topic        = "consumeWith5"
+        val subscription = Subscription.Topics(Set(topic))
+        val nrMessages   = 50
+        val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+
+        import zio.console._
+        implicit val loggingStringSerde: Serde[Console, String] = Serde
+          .of[String]
+          .inmapM(s => putStrLn(s"Deserialized ${s}").as(s))(s => putStrLn(s"Serializing ${s}").as(s))
+
+        for {
+          done             <- Promise.make[Nothing, Unit]
+          messagesReceived <- Ref.make(List.empty[(String, String)])
+          _                <- produceMany(topic, messages)
+          fib <- Consumer
+                  .consumeWith[Environment, String, String](
+                    subscription,
+                    settings("group3", "client3")
+                  ) { (key, value) =>
+                    (for {
+                      messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
+                      _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
+                    } yield ()).orDie
+                  }
+                  .fork
+          _ <- done.await
+          _ <- fib.interrupt
+          _ <- fib.join.ignore
+        } yield succeed
+      }
+    }
+
     "committing" should {
       "restart from the committed position" in unsafeRun {
         val data = (1 to 10).toList.map(i => s"key$i" -> s"msg$i")
         for {
           _ <- produceMany("topic1", 0, data)
-          firstResults <- Consumer.make[String, String](settings("group1", "first")).use { consumer =>
+          firstResults <- Consumer.make[Any, String, String](settings("group1", "first")).use { consumer =>
                            for {
                              _ <- consumer.subscribe(Subscription.Topics(Set("topic1")))
                              results <- consumer.partitionedStream
@@ -79,7 +114,7 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                                          .runCollect
                            } yield results
                          }
-          secondResults <- Consumer.make[String, String](settings("group1", "second")).use { consumer =>
+          secondResults <- Consumer.make[Any, String, String](settings("group1", "second")).use { consumer =>
                             for {
                               _ <- consumer.subscribe(Subscription.Topics(Set("topic1")))
                               results <- consumer.partitionedStream
@@ -160,14 +195,16 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
           _ <- fib.interrupt
           _ <- fib.join.ignore
           _ <- produceOne(topic, "key-new", "msg-new")
-          newMessage <- Consumer.make[String, String](settings("group3", "client3")).use { c =>
-                         c.subscribe(subscription) *> c.plainStream
-                           .take(1)
-                           .flattenChunks
-                           .map(r => (r.record.key(), r.record.value()))
-                           .run(ZSink.collectAll[(String, String)])
-                           .map(_.head)
-                       }
+          newMessage <- Consumer
+                         .make[Environment, String, String](settings("group3", "client3"))
+                         .use { c =>
+                           c.subscribe(subscription) *> c.plainStream
+                             .take(1)
+                             .flattenChunks
+                             .map(r => (r.record.key(), r.record.value()))
+                             .run(ZSink.collectAll[(String, String)])
+                             .map(_.head)
+                         }
           consumedMessages <- messagesReceived.get
         } yield consumedMessages shouldNot contain(newMessage)
       }

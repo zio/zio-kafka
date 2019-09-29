@@ -11,10 +11,10 @@ import zio._
 
 import scala.collection.JavaConverters._
 
-trait Producer[K, V] {
-  def produce(record: ProducerRecord[K, V]): BlockingTask[RecordMetadata]
+trait Producer[R, K, V] {
+  def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, RecordMetadata]
 
-  def produceChunk(records: Chunk[ProducerRecord[K, V]]): BlockingTask[Array[RecordMetadata]]
+  def produceChunk(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Array[RecordMetadata]]
 
   def flush: BlockingTask[Unit]
 }
@@ -23,9 +23,11 @@ object Producer {
   type ByteArrayProducer       = KafkaProducer[Array[Byte], Array[Byte]]
   type ByteArrayProducerRecord = ProducerRecord[Array[Byte], Array[Byte]]
 
-  def unsafeMake[K: Serializer, V: Serializer](p: ByteArrayProducer) =
-    new Producer[K, V] {
-      def produce(record: ProducerRecord[K, V]): BlockingTask[RecordMetadata] =
+  def unsafeMake[R, K, V](
+    p: ByteArrayProducer
+  )(implicit keySerializer: Serializer[R, K], valueSerializer: Serializer[R, V]) =
+    new Producer[R, K, V] {
+      def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, RecordMetadata] =
         for {
           done             <- Promise.make[Throwable, RecordMetadata]
           serializedRecord <- serialize(record)
@@ -49,7 +51,7 @@ object Producer {
       def flush: BlockingTask[Unit] =
         effectBlocking(p.flush())
 
-      def produceChunk(records: Chunk[ProducerRecord[K, V]]): BlockingTask[Array[RecordMetadata]] =
+      def produceChunk(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Array[RecordMetadata]] =
         if (records.isEmpty) {
           ZIO.succeed(Array.empty[RecordMetadata])
         } else {
@@ -90,16 +92,19 @@ object Producer {
 
       private def serialize(
         r: ProducerRecord[K, V]
-      ): Task[ByteArrayProducerRecord] =
+      ): RIO[R, ByteArrayProducerRecord] =
         for {
-          key   <- implicitly[Serializer[K]].serialize(r.key())
-          value <- implicitly[Serializer[V]].serialize(r.value())
+          key   <- keySerializer.serialize(r.key())
+          value <- valueSerializer.serialize(r.value())
         } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
     }
 
-  def make[K: Serializer, V: Serializer](
+  def make[R, K, V](
     settings: ProducerSettings
-  ): ZManaged[Blocking, Throwable, Producer[K, V]] = {
+  )(
+    implicit keySerializer: Serializer[R, K],
+    valueSerializer: Serializer[R, V]
+  ): ZManaged[Blocking, Throwable, Producer[R, K, V]] = {
     val p = ZIO {
       val props = settings.driverSettings.asJava
       new KafkaProducer[Array[Byte], Array[Byte]](
@@ -110,7 +115,7 @@ object Producer {
     }
 
     p.toManaged(p => UIO(p.close(settings.closeTimeout.asJava)))
-      .map(unsafeMake[K, V])
+      .map(unsafeMake[R, K, V])
   }
 
 }

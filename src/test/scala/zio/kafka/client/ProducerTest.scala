@@ -29,10 +29,10 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
     )
 
   def runWithProducer[A](
-    r: Producer[String, String] => RIO[Blocking with Clock, A]
+    r: Producer[Any, String, String] => RIO[Any with Blocking with Clock, A]
   ): A =
     unsafeRun(
-      Producer.make[String, String](settings).use(r)
+      Producer.make[Any, String, String](settings).use(r)
     )
 
   "A string producer" can {
@@ -54,7 +54,7 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
         )
         def withConsumer(subscription: Subscription) =
           Consumer
-            .make[String, String](
+            .make[Any, String, String](
               ConsumerSettings(
                 List(bootstrapServer),
                 "testGroup",
