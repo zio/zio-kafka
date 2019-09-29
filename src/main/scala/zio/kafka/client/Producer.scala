@@ -3,13 +3,13 @@ package zio.kafka.client
 import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicLong
 
-import scala.collection.JavaConverters._
-
 import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization.Serde
-
-import zio.{ Chunk, Promise, UIO, ZIO, ZManaged }
+import zio._
 import zio.blocking._
+import zio.stream.ZSink
+
+import scala.collection.JavaConverters._
 
 trait Producer[K, V] {
   def produce(record: ProducerRecord[K, V]): BlockingTask[RecordMetadata]
@@ -96,4 +96,18 @@ object Producer {
       .map(unsafeMake)
   }
 
+  /**
+   * Sink that produces records to Kafka in chunks
+   *
+   * @param settings
+   * @tparam K
+   * @tparam V
+   * @return
+   */
+  def sink[K: Serde, V: Serde](
+    settings: ProducerSettings
+  ): ZManaged[Blocking, Throwable, ZSink[Blocking, Throwable, Nothing, Chunk[ProducerRecord[K, V]], Unit]] =
+    make[K, V](settings).map { producer =>
+      ZSink.drain.contramapM(producer.produceChunk)
+    }
 }
