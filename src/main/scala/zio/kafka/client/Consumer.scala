@@ -14,8 +14,10 @@ import scala.collection.JavaConverters._
 class Consumer[R, K, V] private (
   private val consumer: ConsumerAccess,
   private val settings: ConsumerSettings,
-  private val runloop: Runloop
-)(implicit keyDeserializer: Deserializer[R, K], valueDeserializer: Deserializer[R, V]) {
+  private val runloop: Runloop,
+  keyDeserializer: Deserializer[R, K],
+  valueDeserializer: Deserializer[R, V]
+) {
   def assignment: BlockingTask[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
 
@@ -54,7 +56,7 @@ class Consumer[R, K, V] private (
             if (settings.perPartitionChunkPrefetch <= 0) partition
             else ZStreamChunk(partition.chunks.buffer(settings.perPartitionChunkPrefetch))
 
-          tp -> partitionStream.mapM(CommittableRecord.deserialize[R, K, V](_))
+          tp -> partitionStream.mapM(CommittableRecord.deserialize(_, keyDeserializer, valueDeserializer))
       }
 
   def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): BlockingTask[List[PartitionInfo]] =
@@ -92,9 +94,8 @@ class Consumer[R, K, V] private (
 
 object Consumer {
   def make[R, K, V](
-    settings: ConsumerSettings
-  )(
-    implicit keyDeserializer: Deserializer[R, K],
+    settings: ConsumerSettings,
+    keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): ZManaged[Clock with Blocking, Throwable, Consumer[R, K, V]] =
     for {
@@ -105,7 +106,7 @@ object Consumer {
                settings.pollTimeout
              )
       runloop <- Runloop(deps)
-    } yield new Consumer(wrapper, settings, runloop)
+    } yield new Consumer(wrapper, settings, runloop, keyDeserializer, valueDeserializer)
 
   /**
    * Execute an effect for each record and commit the offset after processing
@@ -130,7 +131,7 @@ object Consumer {
    * val settings: ConsumerSettings = ???
    * val subscription = Subscription.Topics(Set("my-kafka-topic"))
    *
-   * val consumerIO = Consumer.consumeWith[Environment, String, String](settings, subscription) { case (key, value) =>
+   * val consumerIO = Consumer.consumeWith(settings, subscription, Serdes.string, Serdes.string) { case (key, value) =>
    *   // Process the received record here
    *   putStrLn(s"Received record: ${key}: ${value}")
    * }
@@ -138,21 +139,24 @@ object Consumer {
    *
    * @param settings Settings for creating a [[Consumer]]
    * @param subscription Topic subscription parameters
+   * @param keyDeserializer Deserializer for the key of the messages
+   * @param valueDeserializer Deserializer for the value of the messages
    * @param f Function that returns the effect to execute for each message. It is passed the key and value
    * @tparam R Environment
    * @tparam K Type of keys (an implicit [[Deserializer]] should be in scope)
    * @tparam V Type of values (an implicit [[Deserializer]] should be in scope)
    * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
    */
-  def consumeWith[R, K, V](
+  def consumeWith[R, R1, K, V](
+    settings: ConsumerSettings,
     subscription: Subscription,
-    settings: ConsumerSettings
-  )(f: (K, V) => ZIO[R, Nothing, Unit])(
-    implicit keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
-  ): ZIO[R with Clock with Blocking, Throwable, Unit] =
+    keyDeserializer: Deserializer[R1, K],
+    valueDeserializer: Deserializer[R1, V]
+  )(
+    f: (K, V) => ZIO[R, Nothing, Unit]
+  ): ZIO[R with R1 with Blocking with Clock, Throwable, Unit] =
     ZStream
-      .managed(Consumer.make[R, K, V](settings))
+      .managed(Consumer.make[R1, K, V](settings, keyDeserializer, valueDeserializer))
       .flatMap { consumer =>
         ZStream
           .fromEffect(consumer.subscribe(subscription))

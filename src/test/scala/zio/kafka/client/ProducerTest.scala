@@ -9,6 +9,7 @@ import zio.{ Chunk, DefaultRuntime, RIO, UIO, ZIO }
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
+import zio.kafka.client.serde.Serdes
 import zio.stream.Take
 
 class ProducerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime {
@@ -54,7 +55,7 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
         )
         def withConsumer(subscription: Subscription) =
           Consumer
-            .make[Any, String, String](
+            .make(
               ConsumerSettings(
                 List(bootstrapServer),
                 "testGroup",
@@ -64,7 +65,9 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                 250.millis,
                 250.millis,
                 1
-              )
+              ),
+              Serdes.string,
+              Serdes.string
             )
             .flatMap(c => c.subscribe(subscription).toManaged_ *> c.plainStream.toQueue())
 

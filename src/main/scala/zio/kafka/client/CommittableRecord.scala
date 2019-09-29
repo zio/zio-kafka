@@ -17,14 +17,13 @@ object CommittableRecord {
     )
 
   def deserialize[R, K, V](
-    record: CommittableRecord[Array[Byte], Array[Byte]]
-  )(
-    implicit keyDeserializer: Deserializer[R, K],
+    record: CommittableRecord[Array[Byte], Array[Byte]],
+    keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): RIO[R, CommittableRecord[K, V]] =
     for {
-      key   <- implicitly[Deserializer[R, K]].deserialize(record.record.key())
-      value <- implicitly[Deserializer[R, V]].deserialize(record.record.value())
+      key   <- keyDeserializer.deserialize(record.record.key())
+      value <- valueDeserializer.deserialize(record.record.value())
     } yield {
       val r = record.record
       record.copy(
