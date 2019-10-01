@@ -125,15 +125,15 @@ object Consumer {
    *
    * val consumerIO = Consumer.consumeWith[Environment, String, String](settings, subscription) { case (key, value) =>
    *   // Process the received record here
-   *   putStrLn(s"Received record: ${key}: ${value}")
+   *   putStrLn(s"Received record: \${key}: \${value}")
    * }
    * }}}
    *
    * @param settings Settings for creating a [[Consumer]]
    * @param subscription Topic subscription parameters
    * @param f Function that returns the effect to execute for each message. It is passed the key and value
-   * @tparam K Type of keys (an implicit [[Serde]] should be in scope)
-   * @tparam V Type of values (an implicit [[Serde]] should be in scope)
+   * @tparam K Type of keys (an implicit `Serde` should be in scope)
+   * @tparam V Type of values (an implicit `Serde` should be in scope)
    * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
    */
   def consumeWith[R, K: Serde, V: Serde](
