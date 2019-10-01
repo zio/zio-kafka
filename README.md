@@ -37,17 +37,10 @@ val consumerSettings: ConsumerSettings =
 And use it to create a consumer:
 ```scala
 import zio.blocking.Blocking, zio.clock.Clock
-import org.apache.kafka.common.serialization.Serdes.ByteArraySerde
 
-val consumer: ZManaged[Clock with Blocking, Throwable, Consumer[Array[Byte], Array[Byte]]] = 
-  Consumer.make(consumerSettings)(new ByteArraySerde, new ByteArraySerde)
+val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = 
+  Consumer.make(consumerSettings)
 ```
-
-ZIO Kafka currently relies on an implicit
-`org.apache.kafka.common.serialization.Serde` being available for both
-the key type and value type of the messages consumed. This will change
-in future relies in favour of a more explicit approach that does not
-rely on the Kafka client's built-in de/serialization mechanism.
 
 The consumer returned from `Consumer.make` is wrapped in a `ZManaged`
 to ensure its proper release. To get access to it, use the `ZManaged#use` method:
@@ -58,16 +51,18 @@ consumer.use { c =>
 ```
 
 You may stream data from Kafka using the `subscribe` and
-`plainStream` methods:
+`plainStream` methods. `plainStream` takes as parameters deserializers for the key and values of the Kafka messages. Serializers and deserializers (Serdes) for common data types are available in scope and can be used via `Serde.of[T]`:
+
 ```scala
 import zio.console.putStrLn
 import zio.stream._
+import zio.kafka.client.serde._
 
 consumer.use { c =>
   val records = 
     ZStream.unwrap(
       c.subscribe(Subscription.Topics(Set("topic")))
-        .as(c.plainStream.tap(record => putStrLn(record.toString)).chunks)
+        .as(c.plainStream(Serde.of[String], Serde.of[String]).tap(record => putStrLn(record.toString)).chunks)
     )
      
   records.runDrain
@@ -78,9 +73,21 @@ If you need to distinguish between the different partitions assigned
 to the consumer, you may use the `Consumer#partitionedStream` method,
 which creates a nested stream of partitions:
 ``` scala
-def partitionedStream: ZStream[Clock with Blocking, 
-                               Throwable, 
-                               (TopicPartition, ZStreamChunk[Any, Throwable, CommittableRecord[K, V]])]
+  def partitionedStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStream[ Clock with Blocking, Throwable, (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]]) ]
+```
+
+## Custom data type serdes
+Serializers and deserializers (serdes) for custom data types can be constructed from scratch or by converting existing serdes. For example, to create a serde for an `Instant`:
+
+```scala
+import java.time.Instant
+import zio.kafka.client.serde._
+
+implicit val instantSerde: Serde[Any, Instant] = Serde.of[Long].inmap(java.time.Instant.ofEpochMilli)(_.toEpochMilli)
+
 ```
 
 ## Getting help
