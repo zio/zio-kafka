@@ -33,7 +33,7 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
     r: Producer[Any, String, String] => RIO[Any with Blocking with Clock, A]
   ): A =
     unsafeRun(
-      Producer.make[Any, String, String](settings).use(r)
+      Producer.make(settings, Serde.of[String], Serde.of[String]).use(r)
     )
 
   "A string producer" can {

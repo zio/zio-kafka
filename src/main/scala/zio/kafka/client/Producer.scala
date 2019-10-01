@@ -5,9 +5,10 @@ import java.util.concurrent.atomic.AtomicLong
 
 import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization.ByteArraySerializer
+import zio._
 import zio.blocking._
 import zio.kafka.client.serde.Serializer
-import zio._
+import zio.stream.ZSink
 
 import scala.collection.JavaConverters._
 
@@ -23,9 +24,7 @@ object Producer {
   type ByteArrayProducer       = KafkaProducer[Array[Byte], Array[Byte]]
   type ByteArrayProducerRecord = ProducerRecord[Array[Byte], Array[Byte]]
 
-  def unsafeMake[R, K, V](
-    p: ByteArrayProducer
-  )(implicit keySerializer: Serializer[R, K], valueSerializer: Serializer[R, V]) =
+  def unsafeMake[R, K, V](p: ByteArrayProducer, keySerializer: Serializer[R, K], valueSerializer: Serializer[R, V]) =
     new Producer[R, K, V] {
       def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, RecordMetadata] =
         for {
@@ -100,9 +99,8 @@ object Producer {
     }
 
   def make[R, K, V](
-    settings: ProducerSettings
-  )(
-    implicit keySerializer: Serializer[R, K],
+    settings: ProducerSettings,
+    keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
   ): ZManaged[Blocking, Throwable, Producer[R, K, V]] = {
     val p = ZIO {
@@ -115,7 +113,23 @@ object Producer {
     }
 
     p.toManaged(p => UIO(p.close(settings.closeTimeout.asJava)))
-      .map(unsafeMake[R, K, V])
+      .map(unsafeMake[R, K, V](_, keySerializer, valueSerializer))
   }
 
+  /**
+   * Sink that produces records to Kafka in chunks
+   *
+   * @param settings
+   * @tparam K
+   * @tparam V
+   * @return
+   */
+  def sink[R, K, V](
+    settings: ProducerSettings,
+    keySerializer: Serializer[R, K],
+    valueSerializer: Serializer[R, V]
+  ): ZManaged[Blocking, Throwable, ZSink[R with Blocking, Throwable, Nothing, Chunk[ProducerRecord[K, V]], Unit]] =
+    make[R, K, V](settings, keySerializer, valueSerializer).map { producer =>
+      ZSink.drain.contramapM(producer.produceChunk)
+    }
 }
