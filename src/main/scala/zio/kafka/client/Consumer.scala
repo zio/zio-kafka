@@ -11,12 +11,10 @@ import zio.stream._
 
 import scala.collection.JavaConverters._
 
-class Consumer[R, K, V] private (
+class Consumer private (
   private val consumer: ConsumerAccess,
   private val settings: ConsumerSettings,
-  private val runloop: Runloop,
-  keyDeserializer: Deserializer[R, K],
-  valueDeserializer: Deserializer[R, V]
+  private val runloop: Runloop
 ) {
   def assignment: BlockingTask[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
@@ -42,7 +40,10 @@ class Consumer[R, K, V] private (
   ): BlockingTask[Map[TopicPartition, OffsetAndTimestamp]] =
     consumer.withConsumer(_.offsetsForTimes(timestamps.mapValues(Long.box).asJava, timeout.asJava).asScala.toMap)
 
-  def partitionedStream: ZStream[
+  def partitionedStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStream[
     Clock with Blocking,
     Throwable,
     (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
@@ -65,8 +66,11 @@ class Consumer[R, K, V] private (
   def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): BlockingTask[Long] =
     consumer.withConsumer(_.position(partition, timeout.asJava))
 
-  def plainStream: ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-    ZStreamChunk(partitionedStream.flatMapPar(Int.MaxValue)(_._2.chunks))
+  def plainStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+    ZStreamChunk(partitionedStream[R, K, V](keyDeserializer, valueDeserializer).flatMapPar(Int.MaxValue)(_._2.chunks))
 
   def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
     consumer.withConsumer(_.seek(partition, offset))
@@ -93,11 +97,7 @@ class Consumer[R, K, V] private (
 }
 
 object Consumer {
-  def make[R, K, V](
-    settings: ConsumerSettings,
-    keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
-  ): ZManaged[Clock with Blocking, Throwable, Consumer[R, K, V]] =
+  def make(settings: ConsumerSettings): ZManaged[Clock with Blocking, Throwable, Consumer] =
     for {
       wrapper <- ConsumerAccess.make(settings)
       deps <- Runloop.Deps.make(
@@ -106,7 +106,7 @@ object Consumer {
                settings.pollTimeout
              )
       runloop <- Runloop(deps)
-    } yield new Consumer(wrapper, settings, runloop, keyDeserializer, valueDeserializer)
+    } yield new Consumer(wrapper, settings, runloop)
 
   /**
    * Execute an effect for each record and commit the offset after processing
@@ -156,12 +156,13 @@ object Consumer {
     f: (K, V) => ZIO[R, Nothing, Unit]
   ): ZIO[R with R1 with Blocking with Clock, Throwable, Unit] =
     ZStream
-      .managed(Consumer.make[R1, K, V](settings, keyDeserializer, valueDeserializer))
+      .managed(Consumer.make(settings))
       .flatMap { consumer =>
         ZStream
           .fromEffect(consumer.subscribe(subscription))
           .flatMap { _ =>
-            consumer.partitionedStream
+            consumer
+              .partitionedStream[R1, K, V](keyDeserializer, valueDeserializer)
               .flatMapPar(Int.MaxValue, outputBuffer = settings.perPartitionChunkPrefetch) {
                 case (_, partitionStream) =>
                   partitionStream.mapM {

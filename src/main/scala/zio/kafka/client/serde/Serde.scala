@@ -28,12 +28,6 @@ trait Serde[-R, T] extends Deserializer[R, T] with Serializer[R, T]
 object Serde {
   def of[T](implicit serde: Serde[Any, T]): Serde[Any, T] = serde
 
-//  def apply[R, T](deser: Array[Byte] => RIO[R, T])(ser: T => RIO[R, Array[Byte]]): Serde[R, T] =
-//    new Serde[R, T] {
-//      override def serialize(value: T): RIO[R, Array[Byte]]  = ser(value)
-//      override def deserialize(data: Array[Byte]): RIO[R, T] = deser(data)
-//    }
-
   def apply[R, T](deser: Deserializer[R, T])(ser: Serializer[R, T]): Serde[R, T] = new Serde[R, T] {
     override def serialize(value: T): RIO[R, Array[Byte]]  = ser.serialize(value)
     override def deserialize(data: Array[Byte]): RIO[R, T] = deser.deserialize(data)

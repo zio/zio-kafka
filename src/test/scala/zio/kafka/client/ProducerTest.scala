@@ -5,12 +5,12 @@ import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.scalatest.{ Matchers, WordSpecLike }
-import zio.{ Chunk, DefaultRuntime, RIO, UIO, ZIO }
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
-import zio.kafka.client.serde.Serdes
+import zio.kafka.client.serde.Serde
 import zio.stream.Take
+import zio._
 
 class ProducerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime {
 
@@ -65,11 +65,11 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                 250.millis,
                 250.millis,
                 1
-              ),
-              Serdes.string,
-              Serdes.string
+              )
             )
-            .flatMap(c => c.subscribe(subscription).toManaged_ *> c.plainStream.toQueue())
+            .flatMap(
+              c => c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.of[String], Serde.of[String]).toQueue()
+            )
 
         for {
           outcome <- producer.produceChunk(chunks).either
