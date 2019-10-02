@@ -1,5 +1,6 @@
 package zio.kafka.client.serde
-import zio.RIO
+import org.apache.kafka.common.serialization.{ Serde => KafkaSerde }
+import zio.{ RIO, Task }
 
 /**
  * Deserializer from byte array to a value of some type T
@@ -79,5 +80,15 @@ object Serde {
   def apply[R, T](deser: Deserializer[R, T])(ser: Serializer[R, T]): Serde[R, T] = new Serde[R, T] {
     override def serialize(value: T): RIO[R, Array[Byte]]  = ser.serialize(value)
     override def deserialize(data: Array[Byte]): RIO[R, T] = deser.deserialize(data)
+  }
+
+  /**
+   * Create a Serde from a Kafka Serde
+   */
+  def apply[T](serde: KafkaSerde[T]): Serde[Any, T] = new Serde[Any, T] {
+    private val dummyTopic = "noTopic"
+
+    override def serialize(value: T): Task[Array[Byte]]  = Task(serde.serializer().serialize(dummyTopic, value))
+    override def deserialize(data: Array[Byte]): Task[T] = Task(serde.deserializer().deserialize(dummyTopic, data))
   }
 }
