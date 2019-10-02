@@ -72,11 +72,46 @@ consumer.use { c =>
 If you need to distinguish between the different partitions assigned
 to the consumer, you may use the `Consumer#partitionedStream` method,
 which creates a nested stream of partitions:
-``` scala
+```scala
   def partitionedStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): ZStream[ Clock with Blocking, Throwable, (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]]) ]
+```
+
+## Example: consuming, producing and committing offset
+This example shows how to consume messages from topic `topic_a` and produce transformed messages to `topic_b`, after which consumer offsets are committed. Processing is done in chunks using `ZStreamChunk` for more efficiency.
+
+```scala
+import zio.kafka.client._
+import zio.kafka.client.serde._
+import org.apache.kafka.clients.producer.ProducerRecord
+
+val consumerSettings: ConsumerSettings = ???
+val producerSettings: ProducerSettings = ???
+
+(Consumer.make(consumerSettings) zip Producer.make(producerSettings, Serde.of[Int], Serde.of[String])).use {
+case (consumer, producer) =>
+  consumer.subscribe(Subscription.topics("my-input-topic")) *>
+    consumer
+      .plainStream(Serde.of[Int], Serde.of[Long])
+      .map { record =>
+        val key: Int    = record.record.key()
+        val value: Long = record.record.value()
+        val newValue: String = value.toString
+
+        val producerRecord: ProducerRecord[Int, String] = new ProducerRecord("my-output-topic", key, newValue)
+        (producerRecord, record.offset)
+      }
+      .chunks
+      .mapM { chunk =>
+        val records     = chunk.map(_._1)
+        val offsetBatch = OffsetBatch(chunk.map(_._2).toSeq)
+
+        producer.produceChunk(records) *> offsetBatch.commit
+      }
+      .runDrain
+}
 ```
 
 ## Custom data type serdes
