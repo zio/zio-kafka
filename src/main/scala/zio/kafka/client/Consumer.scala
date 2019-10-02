@@ -133,7 +133,7 @@ object Consumer {
    *
    * val consumerIO = Consumer.consumeWith(settings, subscription, Serdes.string, Serdes.string) { case (key, value) =>
    *   // Process the received record here
-   *   putStrLn(s"Received record: ${key}: ${value}")
+   *   putStrLn(s"Received record: \${key}: \${value}")
    * }
    * }}}
    *
@@ -143,8 +143,8 @@ object Consumer {
    * @param valueDeserializer Deserializer for the value of the messages
    * @param f Function that returns the effect to execute for each message. It is passed the key and value
    * @tparam R Environment
-   * @tparam K Type of keys (an implicit [[Deserializer]] should be in scope)
-   * @tparam V Type of values (an implicit [[Deserializer]] should be in scope)
+   * @tparam K Type of keys (an implicit `Deserializer` should be in scope)
+   * @tparam V Type of values (an implicit `Deserializer` should be in scope)
    * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
    */
   def consumeWith[R, R1, K, V](

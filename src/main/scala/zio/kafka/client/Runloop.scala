@@ -13,12 +13,14 @@ import zio.stream._
 import zio.blocking.Blocking
 import zio.clock.Clock
 
+import scala.collection.mutable
 import scala.collection.JavaConverters._
 import org.apache.kafka.clients.consumer.ConsumerRecords
 
 case class Runloop(fiber: Fiber[Throwable, Unit], deps: Runloop.Deps)
 object Runloop {
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
+  type ByteArrayConsumerRecord    = ConsumerRecord[Array[Byte], Array[Byte]]
 
   sealed abstract class Command
   object Command {
@@ -106,7 +108,8 @@ object Runloop {
 
   case class State(
     pendingRequests: List[Command.Request],
-    pendingCommits: List[Command.Commit]
+    pendingCommits: List[Command.Commit],
+    bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]
   ) {
     def addCommit(c: Command.Commit)             = copy(pendingCommits = c :: pendingCommits)
     def setCommits(reqs: List[Command.Commit])   = copy(pendingCommits = reqs)
@@ -114,10 +117,26 @@ object Runloop {
     def setRequests(reqs: List[Command.Request]) = copy(pendingRequests = reqs)
     def clearCommits                             = copy(pendingCommits = Nil)
     def clearRequests                            = copy(pendingRequests = Nil)
+    def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
+      copy(
+        bufferedRecords = recs.foldLeft(bufferedRecords) {
+          case (acc, (tp, recs)) =>
+            acc.get(tp) match {
+              case Some(existingRecs) => acc + (tp -> (existingRecs ++ recs))
+              case None               => acc + (tp -> recs)
+            }
+        }
+      )
+
+    def removeBufferedRecordsFor(tp: TopicPartition) =
+      copy(bufferedRecords = bufferedRecords - tp)
+
+    def setBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
+      copy(bufferedRecords = recs)
   }
 
   object State {
-    def initial: State = State(Nil, Nil)
+    def initial: State = State(Nil, Nil, Map())
   }
 
   def apply(deps: Deps): ZManaged[Clock with Blocking, Throwable, Runloop] = {
@@ -146,7 +165,7 @@ object Runloop {
       for {
         runtime <- ZIO.runtime[Any]
         offsets = {
-          val offsets = scala.collection.mutable.Map[TopicPartition, OffsetAndMetadata]()
+          val offsets = mutable.Map[TopicPartition, OffsetAndMetadata]()
 
           cmds.foreach { commit =>
             commit.offsets.foreach {
@@ -180,33 +199,88 @@ object Runloop {
     def handlePoll(state: State): BlockingTask[State] =
       for {
         pollResult <- deps.consumer.withConsumerM { c =>
-                       def endRevoked(reqs: List[Command.Request], revoked: TopicPartition => Boolean) =
-                         UIO.foldLeft(reqs)(List[Command.Request]()) { (acc, req) =>
-                           if (revoked(req.tp)) req.cont.fail(None).as(acc)
-                           else ZIO.succeed(req :: acc)
+                       def endRevoked(
+                         reqs: List[Command.Request],
+                         bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
+                         revoked: TopicPartition => Boolean
+                       ): UIO[
+                         (List[Command.Request], Map[TopicPartition, Chunk[ByteArrayConsumerRecord]])
+                       ] = {
+                         var acc = List[Command.Request]()
+                         val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
+                         buf ++= bufferedRecords
+
+                         var revokeAction: UIO[_] = UIO.unit
+
+                         val reqsIt = reqs.iterator
+                         while (reqsIt.hasNext) {
+                           val req = reqsIt.next
+                           if (revoked(req.tp)) {
+                             revokeAction = revokeAction *> req.cont.fail(None)
+                             buf -= req.tp
+                           } else acc ::= req
                          }
+
+                         revokeAction.as((acc.reverse, buf.toMap))
+                       }
 
                        def fulfillRequests(
                          pendingRequests: List[Command.Request],
+                         bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
                          records: ConsumerRecords[Array[Byte], Array[Byte]]
-                       ) =
-                         UIO
-                           .foldLeft(pendingRequests)(List[Command.Request]()) { (acc, req) =>
-                             val reqRecs = records.records(req.tp)
+                       ): UIO[
+                         (List[Command.Request], Map[TopicPartition, Chunk[ByteArrayConsumerRecord]])
+                       ] = {
+                         var acc = List[Command.Request]()
+                         val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
+                         buf ++= bufferedRecords
 
-                             if (reqRecs.size == 0) ZIO.succeed(req :: acc)
-                             else
-                               req.cont
-                                 .succeed(
-                                   Chunk
-                                     .fromArray(
-                                       reqRecs
-                                         .toArray(Array.ofDim[ConsumerRecord[Array[Byte], Array[Byte]]](reqRecs.size))
-                                     )
-                                     .map(CommittableRecord(_, commit(_)))
-                                 )
-                                 .as(acc)
+                         var fulfillAction: UIO[_] = UIO.unit
+
+                         val reqsIt = pendingRequests.iterator
+                         while (reqsIt.hasNext) {
+                           val req           = reqsIt.next
+                           val bufferedChunk = buf.getOrElse(req.tp, Chunk.empty)
+                           val reqRecs       = records.records(req.tp)
+
+                           if ((bufferedChunk.length + reqRecs.size) == 0)
+                             acc ::= req
+                           else {
+                             val concatenatedChunk = bufferedChunk ++
+                               Chunk.fromArray(
+                                 reqRecs.toArray(Array.ofDim[ByteArrayConsumerRecord](reqRecs.size))
+                               )
+
+                             fulfillAction = fulfillAction *> req.cont.succeed(
+                               concatenatedChunk.map(CommittableRecord(_, commit(_)))
+                             )
+                             buf -= req.tp
                            }
+                         }
+
+                         fulfillAction.as((acc, buf.toMap))
+                       }
+
+                       def bufferUnrequestedPartitions(
+                         records: ConsumerRecords[Array[Byte], Array[Byte]],
+                         unrequestedTps: Iterable[TopicPartition]
+                       ): Map[TopicPartition, Chunk[ByteArrayConsumerRecord]] = {
+                         val builder = Map.newBuilder[TopicPartition, Chunk[ByteArrayConsumerRecord]]
+                         builder.sizeHint(unrequestedTps.size)
+
+                         val tpsIt = unrequestedTps.iterator
+                         while (tpsIt.hasNext) {
+                           val tp   = tpsIt.next
+                           val recs = records.records(tp)
+
+                           if (recs.size > 0)
+                             builder += (tp -> Chunk.fromArray(
+                               recs.toArray(Array.ofDim[ByteArrayConsumerRecord](recs.size))
+                             ))
+                         }
+
+                         builder.result()
+                       }
 
                        def actualPoll = Task.effectSuspend {
                          val prevAssigned = c.assignment().asScala
@@ -217,37 +291,47 @@ object Runloop {
                          val pollTimeout =
                            if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
                            else 0.millis.asJava
-                         val records       = c.poll(pollTimeout)
-                         val tpsInResponse = records.partitions.asScala
-                         val unexpectedTps = tpsInResponse -- requestedPartitions
+                         val records = c.poll(pollTimeout)
 
-                         if (unexpectedTps.nonEmpty)
-                           ZIO.dieMessage(s"Received unexpected records from Kafka for partitions: $unexpectedTps")
-                         else {
-                           val currentAssigned = c.assignment().asScala
-                           val newlyAssigned   = currentAssigned -- prevAssigned
-                           val revoked         = prevAssigned -- currentAssigned
+                         val tpsInResponse   = records.partitions.asScala
+                         val currentAssigned = c.assignment().asScala
+                         val newlyAssigned   = currentAssigned -- prevAssigned
+                         val revoked         = prevAssigned -- currentAssigned
+                         val unrequestedRecords =
+                           bufferUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
 
-                           endRevoked(state.pendingRequests, revoked(_))
-                             .flatMap(fulfillRequests(_, records))
-                             .map((newlyAssigned.toSet, _))
-                         }
+                         endRevoked(
+                           state.pendingRequests,
+                           state.addBufferedRecords(unrequestedRecords).bufferedRecords,
+                           revoked(_)
+                         ).flatMap {
+                           case (pendingRequests, bufferedRecords) =>
+                             fulfillRequests(pendingRequests, bufferedRecords, records)
+                         }.map((newlyAssigned.toSet, _))
                        }
 
                        ZIO(!c.subscription().isEmpty())
                          .flatMap(
                            if (_) actualPoll
-                           else ZIO.succeed((Set(), state.pendingRequests))
+                           else
+                             ZIO.succeed(
+                               (
+                                 Set(),
+                                 (
+                                   state.pendingRequests,
+                                   Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
+                                 )
+                               )
+                             )
                          )
                      }
-        (newlyAssigned, pendingRequests) = pollResult
-        _                                <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, partition(tp)))
-        stillRebalancing                 <- deps.isRebalancing
-        newState <- if (!stillRebalancing && state.pendingCommits.nonEmpty)
-                     doCommit(state.pendingCommits)
-                       .as(state.setRequests(pendingRequests).clearCommits)
-                   else ZIO.succeed(state.setRequests(pendingRequests))
-      } yield newState
+        (newlyAssigned, (pendingRequests, bufferedRecords)) = pollResult
+        _                                                   <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, partition(tp)))
+        stillRebalancing                                    <- deps.isRebalancing
+        newPendingCommits <- if (!stillRebalancing && state.pendingCommits.nonEmpty)
+                              doCommit(state.pendingCommits).as(Nil)
+                            else ZIO.succeed(state.pendingCommits)
+      } yield State(pendingRequests, newPendingCommits, bufferedRecords)
 
     def handleRequest(state: State, req: Command.Request): URIO[Blocking, State] =
       deps.consumer
