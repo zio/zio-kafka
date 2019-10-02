@@ -34,6 +34,7 @@ val consumerSettings: ConsumerSettings =
   )
 ```
 
+
 And use it to create a consumer:
 ```scala
 import zio.blocking.Blocking, zio.clock.Clock
@@ -81,6 +82,22 @@ which creates a nested stream of partitions:
 def partitionedStream: ZStream[Clock with Blocking, 
                                Throwable, 
                                (TopicPartition, ZStreamChunk[Any, Throwable, CommittableRecord[K, V]])]
+```
+
+For a lot of use cases where you just want to do something with all messages on a Kafka topic, ZIO Kafka provides the convenience method `Consumer.consumeWith`. This method lets you execute a ZIO effect for each message. Topic partitions will be processed in parallel and offsets are committed after running the effect automatically. 
+
+```scala
+import org.apache.kafka.common.serialization.Serdes
+import zio._, zio.duration._
+import zio.kafka.client._
+import zio.console._
+
+implicit val stringSerde = Serdes.String()
+
+Consumer.consumeWith[Console, String, String](subscription, settings) { case (key, value) =>
+  putStrLn(s"Received message ${key}: ${value}")
+  // Perform an effect with the received message
+}
 ```
 
 ## Getting help
