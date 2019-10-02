@@ -28,6 +28,15 @@ final class DeserializerOps[R, T](private val deserializer: Deserializer[R, T]) 
   def mapM[R1 <: R, U](f: T => RIO[R1, U]): Deserializer[R1, U] = Deserializer(deserializer.deserialize(_).flatMap(f))
 
   /**
+   * When this serializer fails, attempt to deserialize with the alternative
+   *
+   * If both deserializers fail, the error will be the last deserializer's exception, however both
+   */
+  def orElse[R1 <: R, U >: T](alternative: Deserializer[R1, U]): Deserializer[R1, U] = Deserializer { data =>
+    deserializer.deserialize(data) orElse alternative.deserialize(data)
+  }
+
+  /**
    * Serde that handles deserialization failures by returning a Task
    *
    * This is useful for explicitly handling deserialization failures.
