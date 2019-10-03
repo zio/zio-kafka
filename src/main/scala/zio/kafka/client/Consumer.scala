@@ -1,21 +1,20 @@
 package zio.kafka.client
 
-import org.apache.kafka.common.serialization.Serde
-import org.apache.kafka.common.TopicPartition
-import zio.blocking.Blocking
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp
+import org.apache.kafka.common.{ PartitionInfo, TopicPartition }
 import zio._
-import zio.duration._
-import zio.stream._
+import zio.blocking.Blocking
 import zio.clock.Clock
+import zio.duration._
+import zio.kafka.client.serde.Deserializer
+import zio.stream._
 
 import scala.collection.JavaConverters._
-import org.apache.kafka.common.PartitionInfo
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp
 
-class Consumer[K, V] private (
-  private val consumer: ConsumerAccess[K, V],
+class Consumer private (
+  private val consumer: ConsumerAccess,
   private val settings: ConsumerSettings,
-  private val runloop: Runloop[K, V]
+  private val runloop: Runloop
 ) {
   def assignment: BlockingTask[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
@@ -41,8 +40,14 @@ class Consumer[K, V] private (
   ): BlockingTask[Map[TopicPartition, OffsetAndTimestamp]] =
     consumer.withConsumer(_.offsetsForTimes(timestamps.mapValues(Long.box).asJava, timeout.asJava).asScala.toMap)
 
-  def partitionedStream
-    : ZStream[Clock with Blocking, Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, CommittableRecord[K, V]])] =
+  def partitionedStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStream[
+    Clock with Blocking,
+    Throwable,
+    (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
+  ] =
     ZStream
       .fromQueue(runloop.deps.partitions)
       .unTake
@@ -52,7 +57,7 @@ class Consumer[K, V] private (
             if (settings.perPartitionChunkPrefetch <= 0) partition
             else ZStreamChunk(partition.chunks.buffer(settings.perPartitionChunkPrefetch))
 
-          tp -> partitionStream
+          tp -> partitionStream.mapM(CommittableRecord.deserialize(_, keyDeserializer, valueDeserializer))
       }
 
   def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): BlockingTask[List[PartitionInfo]] =
@@ -61,8 +66,11 @@ class Consumer[K, V] private (
   def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): BlockingTask[Long] =
     consumer.withConsumer(_.position(partition, timeout.asJava))
 
-  def plainStream: ZStreamChunk[Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-    ZStreamChunk(partitionedStream.flatMapPar(Int.MaxValue)(_._2.chunks))
+  def plainStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+    ZStreamChunk(partitionedStream[R, K, V](keyDeserializer, valueDeserializer).flatMapPar(Int.MaxValue)(_._2.chunks))
 
   def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
     consumer.withConsumer(_.seek(partition, offset))
@@ -89,9 +97,9 @@ class Consumer[K, V] private (
 }
 
 object Consumer {
-  def make[K: Serde, V: Serde](settings: ConsumerSettings): ZManaged[Clock with Blocking, Throwable, Consumer[K, V]] =
+  def make(settings: ConsumerSettings): ZManaged[Clock with Blocking, Throwable, Consumer] =
     for {
-      wrapper <- ConsumerAccess.make[K, V](settings)
+      wrapper <- ConsumerAccess.make(settings)
       deps <- Runloop.Deps.make(
                wrapper,
                settings.pollInterval,
@@ -123,7 +131,7 @@ object Consumer {
    * val settings: ConsumerSettings = ???
    * val subscription = Subscription.Topics(Set("my-kafka-topic"))
    *
-   * val consumerIO = Consumer.consumeWith[Environment, String, String](settings, subscription) { case (key, value) =>
+   * val consumerIO = Consumer.consumeWith(settings, subscription, Serdes.string, Serdes.string) { case (key, value) =>
    *   // Process the received record here
    *   putStrLn(s"Received record: \${key}: \${value}")
    * }
@@ -131,22 +139,30 @@ object Consumer {
    *
    * @param settings Settings for creating a [[Consumer]]
    * @param subscription Topic subscription parameters
+   * @param keyDeserializer Deserializer for the key of the messages
+   * @param valueDeserializer Deserializer for the value of the messages
    * @param f Function that returns the effect to execute for each message. It is passed the key and value
-   * @tparam K Type of keys (an implicit `Serde` should be in scope)
-   * @tparam V Type of values (an implicit `Serde` should be in scope)
+   * @tparam R Environment
+   * @tparam K Type of keys (an implicit `Deserializer` should be in scope)
+   * @tparam V Type of values (an implicit `Deserializer` should be in scope)
    * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
    */
-  def consumeWith[R, K: Serde, V: Serde](
+  def consumeWith[R, R1, K, V](
+    settings: ConsumerSettings,
     subscription: Subscription,
-    settings: ConsumerSettings
-  )(f: (K, V) => ZIO[R, Nothing, Unit]): ZIO[R with Clock with Blocking, Throwable, Unit] =
+    keyDeserializer: Deserializer[R1, K],
+    valueDeserializer: Deserializer[R1, V]
+  )(
+    f: (K, V) => ZIO[R, Nothing, Unit]
+  ): ZIO[R with R1 with Blocking with Clock, Throwable, Unit] =
     ZStream
-      .managed(Consumer.make[K, V](settings))
+      .managed(Consumer.make(settings))
       .flatMap { consumer =>
         ZStream
           .fromEffect(consumer.subscribe(subscription))
           .flatMap { _ =>
-            consumer.partitionedStream
+            consumer
+              .partitionedStream[R1, K, V](keyDeserializer, valueDeserializer)
               .flatMapPar(Int.MaxValue, outputBuffer = settings.perPartitionChunkPrefetch) {
                 case (_, partitionStream) =>
                   partitionStream.mapM {

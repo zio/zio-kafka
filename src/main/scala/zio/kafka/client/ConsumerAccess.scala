@@ -2,21 +2,22 @@ package zio.kafka.client
 
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.errors.WakeupException
-import org.apache.kafka.common.serialization.Serde
+import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio._
 import zio.blocking.{ blocking, Blocking }
+import zio.kafka.client.ConsumerAccess.ByteArrayKafkaConsumer
 
 import scala.collection.JavaConverters._
 
-class ConsumerAccess[K, V](private[client] val consumer: KafkaConsumer[K, V], access: Semaphore) {
-  def withConsumer[A](f: KafkaConsumer[K, V] => A): BlockingTask[A] =
+class ConsumerAccess(private[client] val consumer: ByteArrayKafkaConsumer, access: Semaphore) {
+  def withConsumer[A](f: ByteArrayKafkaConsumer => A): BlockingTask[A] =
     withConsumerM[Any, A](c => ZIO(f(c)))
 
-  def withConsumerM[R, A](f: KafkaConsumer[K, V] => ZIO[R, Throwable, A]): ZIO[R with Blocking, Throwable, A] =
+  def withConsumerM[R, A](f: ByteArrayKafkaConsumer => ZIO[R, Throwable, A]): ZIO[R with Blocking, Throwable, A] =
     access.withPermit(withConsumerNoPermit(f))
 
   private[client] def withConsumerNoPermit[R, A](
-    f: KafkaConsumer[K, V] => ZIO[R, Throwable, A]
+    f: ByteArrayKafkaConsumer => ZIO[R, Throwable, A]
   ): ZIO[R with Blocking, Throwable, A] =
     blocking(ZIO.effectSuspend(f(consumer))).catchSome {
       case _: WakeupException => ZIO.interrupt
@@ -26,15 +27,17 @@ class ConsumerAccess[K, V](private[client] val consumer: KafkaConsumer[K, V], ac
 }
 
 object ConsumerAccess {
-  def make[K, V](settings: ConsumerSettings)(implicit K: Serde[K], V: Serde[V]) =
+  type ByteArrayKafkaConsumer = KafkaConsumer[Array[Byte], Array[Byte]]
+
+  def make(settings: ConsumerSettings) =
     for {
       access <- Semaphore.make(1).toManaged_
       consumer <- blocking {
                    ZIO {
-                     new KafkaConsumer[K, V](
+                     new KafkaConsumer[Array[Byte], Array[Byte]](
                        settings.driverSettings.asJava,
-                       K.deserializer,
-                       V.deserializer
+                       new ByteArrayDeserializer(),
+                       new ByteArrayDeserializer()
                      )
                    }
                  }.toManaged { c =>

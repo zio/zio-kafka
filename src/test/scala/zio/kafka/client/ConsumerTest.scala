@@ -4,12 +4,12 @@ import com.typesafe.scalalogging.LazyLogging
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.serialization.{ Serde, Serdes }
 import org.scalatest.{ EitherValues, Matchers, WordSpecLike }
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
+import zio.kafka.client.serde.Serde
 import zio.stream.ZSink
 
 class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime with EitherValues {
@@ -19,9 +19,8 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
 
   def log(s: String): UIO[Unit] = ZIO.effectTotal(logger.info(s))
 
-  val embeddedKafka                       = EmbeddedKafka.start()
-  val bootstrapServer                     = s"localhost:${embeddedKafka.config.kafkaPort}"
-  implicit val stringSerde: Serde[String] = Serdes.String()
+  val embeddedKafka   = EmbeddedKafka.start()
+  val bootstrapServer = s"localhost:${embeddedKafka.config.kafkaPort}"
 
   def settings(groupId: String, clientId: String) =
     ConsumerSettings(
@@ -36,10 +35,10 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
     )
 
   def runWithConsumer[A](groupId: String, clientId: String)(
-    r: Consumer[String, String] => RIO[Blocking with Clock, A]
+    r: Consumer => RIO[Blocking with Clock, A]
   ): A =
     unsafeRun(
-      Consumer.make[String, String](settings(groupId, clientId)).use(r)
+      Consumer.make(settings(groupId, clientId)).use(r)
     )
 
   "A string consumer" when {
@@ -49,11 +48,43 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
           _       <- consumer.subscribe(Subscription.Topics(Set("topic150")))
           kvs     <- ZIO((1 to 5).toList.map(i => (s"key$i", s"msg$i")))
           _       <- produceMany("topic150", kvs)
-          records <- consumer.plainStream.flattenChunks.take(5).runCollect
+          records <- consumer.plainStream(Serde.of[String], Serde.of[String]).flattenChunks.take(5).runCollect
           _ <- ZIO.effectTotal(records.map { r =>
                 (r.record.key, r.record.value)
               } shouldEqual kvs)
         } yield ()
+      }
+    }
+
+    "using a serializer with an environment" should {
+      "get access to the environment" in unsafeRun {
+        val topic        = "consumeWith5"
+        val subscription = Subscription.Topics(Set(topic))
+        val nrMessages   = 50
+        val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+
+        import zio.console._
+        implicit val loggingStringSerde: Serde[Console, String] = Serde
+          .of[String]
+          .inmapM(s => putStrLn(s"Deserialized ${s}").as(s))(s => putStrLn(s"Serializing ${s}").as(s))
+
+        for {
+          done             <- Promise.make[Nothing, Unit]
+          messagesReceived <- Ref.make(List.empty[(String, String)])
+          _                <- produceMany(topic, messages)
+          fib <- Consumer
+                  .consumeWith(settings("group3", "client3"), subscription, loggingStringSerde, loggingStringSerde) {
+                    (key, value) =>
+                      (for {
+                        messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
+                        _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
+                      } yield ()).orDie
+                  }
+                  .fork
+          _ <- done.await
+          _ <- fib.interrupt
+          _ <- fib.join.ignore
+        } yield succeed
       }
     }
 
@@ -62,10 +93,11 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
         val data = (1 to 10).toList.map(i => s"key$i" -> s"msg$i")
         for {
           _ <- produceMany("topic1", 0, data)
-          firstResults <- Consumer.make[String, String](settings("group1", "first")).use { consumer =>
+          firstResults <- Consumer.make(settings("group1", "first")).use { consumer =>
                            for {
                              _ <- consumer.subscribe(Subscription.Topics(Set("topic1")))
-                             results <- consumer.partitionedStream
+                             results <- consumer
+                                         .partitionedStream(Serde.of[String], Serde.of[String])
                                          .filter(_._1 == new TopicPartition("topic1", 0))
                                          .flatMap(_._2.flattenChunks)
                                          .take(5)
@@ -81,10 +113,11 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                                          .runCollect
                            } yield results
                          }
-          secondResults <- Consumer.make[String, String](settings("group1", "second")).use { consumer =>
+          secondResults <- Consumer.make(settings("group1", "second")).use { consumer =>
                             for {
                               _ <- consumer.subscribe(Subscription.Topics(Set("topic1")))
-                              results <- consumer.partitionedStream
+                              results <- consumer
+                                          .partitionedStream(Serde.of[String], Serde.of[String])
                                           .flatMap(_._2.flattenChunks)
                                           .take(5)
                                           .transduce(ZSink.collectAll[CommittableRecord[String, String]])
@@ -121,9 +154,11 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
           done             <- Promise.make[Nothing, Unit]
           messagesReceived <- Ref.make(List.empty[(String, String)])
           fib <- Consumer
-                  .consumeWith[Environment, String, String](
+                  .consumeWith(
+                    settings("group3", "client3"),
                     subscription,
-                    settings("group3", "client3")
+                    Serde.of[String],
+                    Serde.of[String]
                   ) { (key, value) =>
                     (for {
                       messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
@@ -148,28 +183,30 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
           messagesReceived <- Ref.make(List.empty[(String, String)])
           _                <- produceMany(topic, messages)
           fib <- Consumer
-                  .consumeWith[Environment, String, String](
-                    subscription,
-                    settings("group3", "client3")
-                  ) { (key, value) =>
-                    (for {
-                      messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
-                      _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
-                    } yield ()).orDie
-                  }
+                  .consumeWith(settings("group3", "client3"), subscription, Serde.of[String], Serde.of[String])({
+                    (key, value) =>
+                      (for {
+                        messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
+                        _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
+                      } yield ()).orDie
+                  })
                   .fork
           _ <- done.await *> ZIO.sleep(3.seconds) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
           _ <- fib.interrupt
           _ <- fib.join.ignore
           _ <- produceOne(topic, "key-new", "msg-new")
-          newMessage <- Consumer.make[String, String](settings("group3", "client3")).use { c =>
-                         c.subscribe(subscription) *> c.plainStream
-                           .take(1)
-                           .flattenChunks
-                           .map(r => (r.record.key(), r.record.value()))
-                           .run(ZSink.collectAll[(String, String)])
-                           .map(_.head)
-                       }
+          newMessage <- Consumer
+                         .make(settings("group3", "client3"))
+                         .use { c =>
+                           c.subscribe(subscription) *> c
+                             .plainStream(Serde.of[String], Serde.of[String])
+                             .take(1)
+                             .flattenChunks
+                             .map(r => (r.record.key(), r.record.value()))
+                             .run(ZSink.collectAll[(String, String)])
+                             .map(_.head)
+                         }
+                         .orDie
           consumedMessages <- messagesReceived.get
         } yield consumedMessages shouldNot contain(newMessage)
       }
@@ -184,9 +221,11 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
           messagesReceived <- Ref.make(List.empty[(String, String)])
           _                <- produceMany(topic, messages)
           fib <- Consumer
-                  .consumeWith[Environment, String, String](
+                  .consumeWith(
+                    settings("group3", "client3"),
                     subscription,
-                    settings("group3", "client3")
+                    Serde.of[String],
+                    Serde.of[String]
                   ) { (key, value) =>
                     (for {
                       messagesSoFar <- messagesReceived.update(_ :+ (key -> value))

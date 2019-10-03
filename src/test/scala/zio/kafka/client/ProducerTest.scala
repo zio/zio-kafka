@@ -1,20 +1,16 @@
 package zio.kafka.client
 
 import com.typesafe.scalalogging.LazyLogging
-
 import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
-
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.serialization.{ Serde, Serdes }
-
 import org.scalatest.{ Matchers, WordSpecLike }
-
-import zio.{ Chunk, DefaultRuntime, RIO, UIO, ZIO }
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
+import zio.kafka.client.serde.Serde
 import zio.stream.Take
+import zio._
 
 class ProducerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime {
 
@@ -22,10 +18,9 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
 
   def log(s: String): UIO[Unit] = ZIO.effectTotal(logger.info(s))
 
-  implicit val config                     = EmbeddedKafkaConfig(kafkaPort = 0, zooKeeperPort = 0)
-  val embeddedKafka                       = EmbeddedKafka.start()
-  val bootstrapServer                     = s"localhost:${embeddedKafka.config.kafkaPort}"
-  implicit val stringSerde: Serde[String] = Serdes.String()
+  implicit val config = EmbeddedKafkaConfig(kafkaPort = 0, zooKeeperPort = 0)
+  val embeddedKafka   = EmbeddedKafka.start()
+  val bootstrapServer = s"localhost:${embeddedKafka.config.kafkaPort}"
 
   val settings =
     ProducerSettings(
@@ -35,10 +30,10 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
     )
 
   def runWithProducer[A](
-    r: Producer[String, String] => RIO[Blocking with Clock, A]
+    r: Producer[Any, String, String] => RIO[Any with Blocking with Clock, A]
   ): A =
     unsafeRun(
-      Producer.make[String, String](settings).use(r)
+      Producer.make(settings, Serde.of[String], Serde.of[String]).use(r)
     )
 
   "A string producer" can {
@@ -60,7 +55,7 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
         )
         def withConsumer(subscription: Subscription) =
           Consumer
-            .make[String, String](
+            .make(
               ConsumerSettings(
                 List(bootstrapServer),
                 "testGroup",
@@ -72,7 +67,9 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                 1
               )
             )
-            .flatMap(c => c.subscribe(subscription).toManaged_ *> c.plainStream.toQueue())
+            .flatMap(
+              c => c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.of[String], Serde.of[String]).toQueue()
+            )
 
         for {
           outcome <- producer.produceChunk(chunks).either
