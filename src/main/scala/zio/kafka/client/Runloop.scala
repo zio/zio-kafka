@@ -3,19 +3,20 @@ package zio.kafka.client
 import org.apache.kafka.clients.consumer.{
   ConsumerRebalanceListener,
   ConsumerRecord,
+  ConsumerRecords,
   OffsetAndMetadata,
   OffsetCommitCallback
 }
 import org.apache.kafka.common.TopicPartition
 import zio._
-import zio.duration._
-import zio.stream._
 import zio.blocking.Blocking
 import zio.clock.Clock
+import zio.duration._
+import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.stream._
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
-import org.apache.kafka.clients.consumer.ConsumerRecords
 
 case class Runloop(fiber: Fiber[Throwable, Unit], deps: Runloop.Deps)
 object Runloop {
@@ -45,7 +46,8 @@ object Runloop {
     partitions: Queue[Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]],
     rebalances: Queue[Rebalance],
     rebalancingRef: Ref[Boolean],
-    rebalanceListener: ConsumerRebalanceListener
+    rebalanceListener: ConsumerRebalanceListener,
+    diagnostics: Diagnostics
   ) {
     def commit(cmd: Command.Commit)   = commitQueue.offer(cmd).unit
     def commits                       = ZStream.fromQueue(commitQueue)
@@ -57,9 +59,16 @@ object Runloop {
     def polls = ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency))
     def newPartition(tp: TopicPartition, data: StreamChunk[Throwable, ByteArrayCommittableRecord]) =
       partitions.offer(Take.Value(tp -> data)).unit
+
+    def emitDiagnostic(event: DiagnosticEvent) = diagnostics.emit(event)
   }
   object Deps {
-    def make(consumer: ConsumerAccess, pollFrequency: Duration, pollTimeout: Duration) =
+    def make(
+      consumer: ConsumerAccess,
+      pollFrequency: Duration,
+      pollTimeout: Duration,
+      diagnostics: Diagnostics
+    ) =
       for {
         rebalancingRef <- Ref.make(false).toManaged_
         requestQueue   <- Queue.unbounded[Command.Request].toManaged(_.shutdown)
@@ -76,16 +85,24 @@ object Runloop {
                        new ConsumerRebalanceListener {
                          override def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
                            runtime.unsafeRun(
-                             rebalancingRef
-                               .set(true) *> rebalances.offer(Rebalance.Revoked(partitions.asScala.toSet)).fork
+                             for {
+                               _       <- rebalancingRef.set(true)
+                               revoked = partitions.asScala.toSet
+                               handle  <- rebalances.offer(Rebalance.Revoked(revoked)).fork
+                               _       <- diagnostics.emit(DiagnosticEvent.Rebalance.Revoked(revoked))
+                             } yield handle
                            )
                            ()
                          }
 
                          override def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
                            runtime.unsafeRun(
-                             rebalancingRef
-                               .set(false) *> rebalances.offer(Rebalance.Assigned(partitions.asScala.toSet)).fork
+                             for {
+                               _        <- rebalancingRef.set(false)
+                               assigned = partitions.asScala.toSet
+                               handle   <- rebalances.offer(Rebalance.Assigned(partitions.asScala.toSet)).fork
+                               _        <- diagnostics.emit(DiagnosticEvent.Rebalance.Assigned(assigned))
+                             } yield handle
                            )
                            consumer.consumer.pause(partitions)
                            ()
@@ -102,7 +119,8 @@ object Runloop {
         partitions,
         rebalances,
         rebalancingRef,
-        listener
+        listener,
+        diagnostics
       )
   }
 
@@ -145,6 +163,7 @@ object Runloop {
       for {
         p <- Promise.make[Throwable, Unit]
         _ <- deps.commit(Command.Commit(offsets, p))
+        _ <- deps.emitDiagnostic(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await
       } yield ()
 
@@ -155,6 +174,7 @@ object Runloop {
             for {
               p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
               _      <- deps.request(Command.Request(tp, p))
+              _      <- deps.emitDiagnostic(DiagnosticEvent.Request(tp))
               result <- p.await
             } yield result
           }
@@ -188,12 +208,18 @@ object Runloop {
                   offsets.asJava,
                   new OffsetCommitCallback {
                     def onComplete(data: java.util.Map[TopicPartition, OffsetAndMetadata], err: Exception) =
-                      if (err eq null) runtime.unsafeRun(cont(Exit.succeed(())))
-                      else runtime.unsafeRun(cont(Exit.fail(err)))
+                      if (err eq null)
+                        runtime.unsafeRun(
+                          cont(Exit.succeed(())) <* deps.emitDiagnostic(DiagnosticEvent.Commit.Success(offsets))
+                        )
+                      else
+                        runtime.unsafeRun(
+                          cont(Exit.fail(err)) <* deps.emitDiagnostic(DiagnosticEvent.Commit.Failure(offsets))
+                        )
                   }
                 )
               }
-            }.catchAll(e => cont(Exit.fail(e)))
+            }.catchAll(e => cont(Exit.fail(e)) <* deps.emitDiagnostic(DiagnosticEvent.Commit.Failure(offsets)))
       } yield ()
 
     def handlePoll(state: State): BlockingTask[State] =
@@ -306,7 +332,17 @@ object Runloop {
                            revoked(_)
                          ).flatMap {
                            case (pendingRequests, bufferedRecords) =>
-                             fulfillRequests(pendingRequests, bufferedRecords, records)
+                             for {
+                               output                    <- fulfillRequests(pendingRequests, bufferedRecords, records)
+                               (notFulfilled, fulfilled) = output
+                               _ <- deps.emitDiagnostic(
+                                     DiagnosticEvent.Poll(
+                                       requestedPartitions,
+                                       fulfilled.keySet,
+                                       notFulfilled.map(_.tp).toSet
+                                     )
+                                   )
+                             } yield output
                          }.map((newlyAssigned.toSet, _))
                        }
 
