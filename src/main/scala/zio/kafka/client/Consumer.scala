@@ -108,14 +108,14 @@ object Consumer {
    * Messages on a single partition are processed sequentially, while the processing of
    * multiple partitions happens in parallel.
    *
-   * Messages are processed with 'at least once' consistency: it is not guaranteed that every message
-   * that is processed by the effect has a corresponding offset commit before stream termination.
-   *
    * Offsets are committed after execution of the effect. They are batched when a commit action is in progress
    * to avoid backpressuring the stream.
    *
    * The effect should must absorb any failures. Failures should be handled by retries or ignoring the
    * error, which will result in the Kafka message being skipped.
+   *
+   * Messages are processed with 'at least once' consistency: it is not guaranteed that every message
+   * that is processed by the effect has a corresponding offset commit before stream termination.
    *
    * Usage example:
    *
