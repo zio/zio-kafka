@@ -72,7 +72,7 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
             )
 
         for {
-          outcome <- producer.produceChunk(chunks).either
+          outcome <- producer.produceChunk(chunks).flatten.either
           _       <- ZIO.effect(outcome.isRight shouldBe true)
           _       <- ZIO.effect(outcome.right.get.size shouldBe 2)
           _ <- withConsumer(Topics(Set(topic1))).use { consumer =>
@@ -95,7 +95,7 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
       "an empty chunk of records" in runWithProducer { producer =>
         val chunks = Chunk.fromIterable(List.empty)
         for {
-          outcome <- producer.produceChunk(chunks).either
+          outcome <- producer.produceChunk(chunks).flatten.either
           _       <- ZIO.effect(outcome.isRight shouldBe true)
           _       <- ZIO.effect(outcome.right.get.isEmpty shouldBe true)
         } yield ()
