@@ -57,7 +57,7 @@ class Consumer private (
             if (settings.perPartitionChunkPrefetch <= 0) partition
             else ZStreamChunk(partition.chunks.buffer(settings.perPartitionChunkPrefetch))
 
-          tp -> partitionStream.mapM(CommittableRecord.deserialize(_, keyDeserializer, valueDeserializer))
+          tp -> partitionStream.mapM(_.deserializeWith(keyDeserializer, valueDeserializer))
       }
 
   def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): BlockingTask[List[PartitionInfo]] =
