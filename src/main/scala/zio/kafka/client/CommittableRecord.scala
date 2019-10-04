@@ -22,8 +22,8 @@ object CommittableRecord {
     valueDeserializer: Deserializer[R, V]
   ): RIO[R, CommittableRecord[K, V]] =
     for {
-      key   <- keyDeserializer.deserialize(record.record.key())
-      value <- valueDeserializer.deserialize(record.record.value())
+      key   <- keyDeserializer.deserialize(record.record.topic(), record.record.key())
+      value <- valueDeserializer.deserialize(record.record.topic(), record.record.value())
     } yield {
       val r = record.record
       record.copy(
