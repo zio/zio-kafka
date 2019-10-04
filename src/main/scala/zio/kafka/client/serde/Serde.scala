@@ -4,6 +4,7 @@ import org.apache.kafka.common.serialization.{ Serde => KafkaSerde }
 import zio.{ RIO, Task }
 
 import scala.util.Try
+import org.apache.kafka.common.header.Headers
 
 /**
  * A serializer and deserializer for values of type T
@@ -27,33 +28,40 @@ trait Serde[-R, T] extends Deserializer[R, T] with Serializer[R, T] {
 }
 
 object Serde extends Serdes {
+
   /**
    * Create a Serde from a deserializer and serializer function
    *
    * The (de)serializer functions can returned a failure ZIO with a Throwable to indicate (de)serialization failure
    */
-  def apply[R, T](deser: (String, Array[Byte]) => RIO[R, T])(ser: (String, T) => RIO[R, Array[Byte]]): Serde[R, T] =
+  def apply[R, T](
+    deser: (String, Headers, Array[Byte]) => RIO[R, T]
+  )(ser: (String, Headers, T) => RIO[R, Array[Byte]]): Serde[R, T] =
     new Serde[R, T] {
-      override def serialize(topic: String, value: T): RIO[R, Array[Byte]]  = ser(topic, value)
-      override def deserialize(topic: String, data: Array[Byte]): RIO[R, T] = deser(topic, data)
+      override def serialize(topic: String, headers: Headers, value: T): RIO[R, Array[Byte]] =
+        ser(topic, headers, value)
+      override def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T] =
+        deser(topic, headers, data)
     }
 
   /**
    * Create a Serde from a deserializer and serializer function
    */
   def apply[R, T](deser: Deserializer[R, T])(ser: Serializer[R, T]): Serde[R, T] = new Serde[R, T] {
-    override def serialize(topic: String, value: T): RIO[R, Array[Byte]]  = ser.serialize(topic, value)
-    override def deserialize(topic: String, data: Array[Byte]): RIO[R, T] = deser.deserialize(topic, data)
+    override def serialize(topic: String, headers: Headers, value: T): RIO[R, Array[Byte]] =
+      ser.serialize(topic, headers, value)
+    override def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T] =
+      deser.deserialize(topic, headers, data)
   }
 
   /**
    * Create a Serde from a Kafka Serde
    */
   def apply[T](serde: KafkaSerde[T]): Serde[Any, T] = new Serde[Any, T] {
-    override def serialize(topic: String, value: T): Task[Array[Byte]] =
-      Task(serde.serializer().serialize(topic, value))
-    override def deserialize(topic: String, data: Array[Byte]): Task[T] =
-      Task(serde.deserializer().deserialize(topic, data))
+    override def serialize(topic: String, headers: Headers, value: T): Task[Array[Byte]] =
+      Task(serde.serializer().serialize(topic, headers, value))
+    override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Task[T] =
+      Task(serde.deserializer().deserialize(topic, headers, data))
   }
 
   implicit def deserializerWithError[R, T](implicit deser: Deserializer[R, T]): Deserializer[R, Try[T]] =

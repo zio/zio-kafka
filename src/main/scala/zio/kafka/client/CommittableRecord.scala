@@ -11,8 +11,8 @@ final case class CommittableRecord[K, V](record: ConsumerRecord[K, V], offset: O
     valueDeserializer: Deserializer[R, V1]
   )(implicit ev1: K <:< Array[Byte], ev2: V <:< Array[Byte]): RIO[R, CommittableRecord[K1, V1]] =
     for {
-      key   <- keyDeserializer.deserialize(record.topic(), record.key())
-      value <- valueDeserializer.deserialize(record.topic(), record.value())
+      key   <- keyDeserializer.deserialize(record.topic(), record.headers(), record.key())
+      value <- valueDeserializer.deserialize(record.topic(), record.headers(), record.value())
     } yield {
       copy(
         record = new ConsumerRecord[K1, V1](
