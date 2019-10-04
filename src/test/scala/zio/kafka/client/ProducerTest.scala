@@ -33,7 +33,7 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
     r: Producer[Any, String, String] => RIO[Any with Blocking with Clock, A]
   ): A =
     unsafeRun(
-      Producer.make(settings, Serde.of[String], Serde.of[String]).use(r)
+      Producer.make(settings, Serde.string, Serde.string).use(r)
     )
 
   "A string producer" can {
@@ -68,7 +68,7 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
               )
             )
             .flatMap(
-              c => c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.of[String], Serde.of[String]).toQueue()
+              c => c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.string).toQueue()
             )
 
         for {

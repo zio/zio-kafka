@@ -93,8 +93,8 @@ object Producer {
         r: ProducerRecord[K, V]
       ): RIO[R, ByteArrayProducerRecord] =
         for {
-          key   <- keySerializer.serialize(r.key())
-          value <- valueSerializer.serialize(r.value())
+          key   <- keySerializer.serialize(r.topic, r.headers, r.key())
+          value <- valueSerializer.serialize(r.topic, r.headers, r.value())
         } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
     }
 
