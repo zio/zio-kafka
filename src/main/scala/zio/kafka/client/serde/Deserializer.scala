@@ -42,13 +42,7 @@ trait Deserializer[-R, +T] {
     Deserializer(deserialize(_, _).fold(e => Failure(e), v => Success(v)))
 }
 
-object Deserializer {
-
-  /**
-   * Obtain an instance of a Deserializer of some type from the implicit scope
-   */
-  def of[T](implicit deser: Deserializer[Any, T]): Deserializer[Any, T] = deser
-
+object Deserializer extends Serdes {
   /**
    * Create a deserializer from a function
    */

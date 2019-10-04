@@ -1,9 +1,6 @@
 package zio.kafka.client.serde
 
-import java.nio.ByteBuffer
-import java.util.UUID
-
-import org.apache.kafka.common.serialization.{ Serde => KafkaSerde, Serdes => KafkaSerdes }
+import org.apache.kafka.common.serialization.{ Serde => KafkaSerde }
 import zio.{ RIO, Task }
 
 import scala.util.Try
@@ -29,9 +26,7 @@ trait Serde[-R, T] extends Deserializer[R, T] with Serializer[R, T] {
     Serde(mapM(f))(contramapM(g))
 }
 
-object Serde {
-  def of[T](implicit serde: Serde[Any, T]): Serde[Any, T] = serde
-
+object Serde extends Serdes {
   /**
    * Create a Serde from a deserializer and serializer function
    *
@@ -60,17 +55,6 @@ object Serde {
     override def deserialize(topic: String, data: Array[Byte]): Task[T] =
       Task(serde.deserializer().deserialize(topic, data))
   }
-
-  implicit val long: Serde[Any, Long]   = Serde(KafkaSerdes.Long()).inmap(Long2long)(long2Long)
-  implicit val int: Serde[Any, Int]     = Serde(KafkaSerdes.Integer()).inmap(Integer2int)(int2Integer)
-  implicit val short: Serde[Any, Short] = Serde(KafkaSerdes.Short()).inmap(Short2short)(short2Short)
-  implicit val float: Serde[Any, Float] = Serde(KafkaSerdes.Float()).inmap(Float2float)(float2Float)
-  implicit val double: Serde[Any, Double] =
-    Serde(KafkaSerdes.Double()).inmap(Double2double)(double2Double)
-  implicit val string: Serde[Any, String]         = Serde(KafkaSerdes.String())
-  implicit val byteArray: Serde[Any, Array[Byte]] = Serde(KafkaSerdes.ByteArray())
-  implicit val byteBuffer: Serde[Any, ByteBuffer] = Serde(KafkaSerdes.ByteBuffer())
-  implicit val uuid: Serde[Any, UUID]             = Serde(KafkaSerdes.UUID())
 
   implicit def deserializerWithError[R, T](implicit deser: Deserializer[R, T]): Deserializer[R, Try[T]] =
     deser.asTry

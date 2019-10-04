@@ -28,13 +28,7 @@ trait Serializer[-R, -T] {
     }
 }
 
-object Serializer {
-
-  /**
-   * Obtain an instance of a Serializer of some type from the implicit scope
-   */
-  def of[T](implicit ser: Serializer[Any, T]): Serializer[Any, T] = ser
-
+object Serializer extends Serdes {
   /**
    * Create a serializer from a function
    */
