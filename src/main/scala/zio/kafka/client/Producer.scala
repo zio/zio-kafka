@@ -1,6 +1,5 @@
 package zio.kafka.client
 
-import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicLong
 
 import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
@@ -12,7 +11,11 @@ import zio.stream.ZSink
 
 import scala.collection.JavaConverters._
 
-trait Producer[R, K, V] {
+class Producer[R, K, V] private (
+  p: ByteArrayProducer,
+  keySerializer: Serializer[R, K],
+  valueSerializer: Serializer[R, V]
+) {
 
   /**
    * Produce a single record. The effect returned from this method has two layers and
@@ -26,7 +29,25 @@ trait Producer[R, K, V] {
    * but enqueue a batch of records and await all of their acknowledgements at once. That
    * amortizes the cost of sending requests to Kafka and increases throughput.
    */
-  def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]]
+  def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]] =
+    for {
+      done             <- Promise.make[Throwable, RecordMetadata]
+      serializedRecord <- serialize(record)
+      runtime          <- ZIO.runtime[Blocking]
+      _ <- effectBlocking {
+            p.send(
+              serializedRecord,
+              new Callback {
+                def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
+                  if (err != null) runtime.unsafeRun(done.fail(err))
+                  else runtime.unsafeRun(done.succeed(metadata))
+
+                  ()
+                }
+              }
+            )
+          }
+    } yield done.await
 
   /**
    * Produces a chunk of records record. The effect returned from this method has two layers
@@ -40,91 +61,58 @@ trait Producer[R, K, V] {
    * outer layer will also signal the transmission of part of the chunk. Regardless,
    * awaiting the inner layer guarantees the transmission of the entire chunk.
    */
-  def produceChunk(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Task[Array[RecordMetadata]]]
+  def produceChunk(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Task[Chunk[RecordMetadata]]] =
+    if (records.isEmpty) ZIO.succeed(Task.succeed(Chunk.empty))
+    else {
+      for {
+        done              <- Promise.make[Throwable, Chunk[RecordMetadata]]
+        runtime           <- ZIO.runtime[Blocking]
+        serializedRecords <- ZIO.traverse(records.toSeq)(serialize(_))
+        _ <- effectBlocking {
+              val it: Iterator[(ByteArrayProducerRecord, Int)] =
+                serializedRecords.iterator.zipWithIndex
+              val res: Array[RecordMetadata] = new Array[RecordMetadata](records.length)
+              val count: AtomicLong          = new AtomicLong
 
-  /**
-   * Flushes the producer's internal buffer. This will guarantee that all records
-   * currently buffered will be transmitted to the broker.
-   */
-  def flush: BlockingTask[Unit]
-}
+              while (it.hasNext) {
+                val (rec, idx): (ByteArrayProducerRecord, Int) = it.next
 
-object Producer {
-  type ByteArrayProducer       = KafkaProducer[Array[Byte], Array[Byte]]
-  type ByteArrayProducerRecord = ProducerRecord[Array[Byte], Array[Byte]]
-
-  def unsafeMake[R, K, V](p: ByteArrayProducer, keySerializer: Serializer[R, K], valueSerializer: Serializer[R, V]) =
-    new Producer[R, K, V] {
-      def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]] =
-        for {
-          done             <- Promise.make[Throwable, RecordMetadata]
-          serializedRecord <- serialize(record)
-          runtime          <- ZIO.runtime[Blocking]
-          _ <- effectBlocking {
                 p.send(
-                  serializedRecord,
+                  rec,
                   new Callback {
                     def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
                       if (err != null) runtime.unsafeRun(done.fail(err))
-                      else runtime.unsafeRun(done.succeed(metadata))
+                      else {
+                        res(idx) = metadata
+                        if (count.incrementAndGet == records.length)
+                          runtime.unsafeRun(done.succeed(Chunk.fromArray(res)))
+                      }
 
                       ()
                     }
                   }
                 )
               }
-        } yield done.await
-
-      def flush: BlockingTask[Unit] =
-        effectBlocking(p.flush())
-
-      def produceChunk(records: Chunk[ProducerRecord[K, V]]) =
-        if (records.isEmpty) {
-          ZIO.succeed(Task.succeed(Array.empty[RecordMetadata]))
-        } else {
-          for {
-            done              <- Promise.make[Throwable, Array[RecordMetadata]]
-            runtime           <- ZIO.runtime[Blocking]
-            serializedRecords <- ZIO.traverse(records.toSeq)(serialize(_))
-            _ <- effectBlocking {
-                  val it: Iterator[(ByteArrayProducerRecord, Int)] =
-                    serializedRecords.toArray.iterator.zipWithIndex
-                  val res: Array[RecordMetadata] = new Array[RecordMetadata](records.length)
-                  val futures                    = Array.fill[Option[Future[RecordMetadata]]](records.length)(None)
-                  val count: AtomicLong          = new AtomicLong
-
-                  while (it.hasNext) {
-                    val (rec, idx): (ByteArrayProducerRecord, Int) = it.next
-                    val future = p.send(
-                      rec,
-                      new Callback {
-                        def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
-                          if (err != null) {
-                            futures.map(_.map(_.cancel(true)))
-                            runtime.unsafeRun(done.fail(err))
-                          } else {
-                            res(idx) = metadata
-                            if (count.incrementAndGet == records.length) runtime.unsafeRun(done.succeed(res))
-                          }
-                          ()
-                        }
-                      }
-                    )
-                    futures.update(idx, Some(future))
-                  }
-                }
-          } yield done.await
-        }
-
-      private def serialize(
-        r: ProducerRecord[K, V]
-      ): RIO[R, ByteArrayProducerRecord] =
-        for {
-          key   <- keySerializer.serialize(r.topic, r.headers, r.key())
-          value <- valueSerializer.serialize(r.topic, r.headers, r.value())
-        } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
+            }
+      } yield done.await
     }
 
+  /**
+   * Flushes the producer's internal buffer. This will guarantee that all records
+   * currently buffered will be transmitted to the broker.
+   */
+  def flush: BlockingTask[Unit] = effectBlocking(p.flush())
+
+  private def serialize(
+    r: ProducerRecord[K, V]
+  ): RIO[R, ByteArrayProducerRecord] =
+    for {
+      key   <- keySerializer.serialize(r.topic, r.headers, r.key())
+      value <- valueSerializer.serialize(r.topic, r.headers, r.value())
+    } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
+}
+
+object Producer {
   def make[R, K, V](
     settings: ProducerSettings,
     keySerializer: Serializer[R, K],
@@ -140,7 +128,7 @@ object Producer {
     }
 
     p.toManaged(p => UIO(p.close(settings.closeTimeout.asJava)))
-      .map(unsafeMake[R, K, V](_, keySerializer, valueSerializer))
+      .map(new Producer[R, K, V](_, keySerializer, valueSerializer))
   }
 
   /**

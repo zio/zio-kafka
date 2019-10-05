@@ -74,7 +74,7 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
         for {
           outcome <- producer.produceChunk(chunks).flatten.either
           _       <- ZIO.effect(outcome.isRight shouldBe true)
-          _       <- ZIO.effect(outcome.right.get.size shouldBe 2)
+          _       <- ZIO.effect(outcome.right.get.length shouldBe 2)
           _ <- withConsumer(Topics(Set(topic1))).use { consumer =>
                 for {
                   messages <- Take.option(consumer.take).someOrFail(new NoSuchElementException)
