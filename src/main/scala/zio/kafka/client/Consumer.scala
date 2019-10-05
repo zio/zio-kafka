@@ -15,7 +15,7 @@ class Consumer private (
   private val consumer: ConsumerAccess,
   private val settings: ConsumerSettings,
   private val runloop: Runloop
-) {
+) { self =>
   def assignment: BlockingTask[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
 
@@ -88,6 +88,9 @@ class Consumer private (
         case Subscription.Topics(topics)   => c.subscribe(topics.asJava, runloop.deps.rebalanceListener)
       }
     }
+
+  def subscribeAnd(subscription: Subscription): SubscribedConsumer =
+    new SubscribedConsumer(subscribe(subscription).as(self))
 
   def subscription: BlockingTask[Set[String]] =
     consumer.withConsumer(_.subscription().asScala.toSet)
