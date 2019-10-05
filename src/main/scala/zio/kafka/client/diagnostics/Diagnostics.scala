@@ -3,10 +3,16 @@ package zio.kafka.client.diagnostics
 import zio.{ Managed, Queue, UIO }
 
 trait Diagnostics {
-  def emit(event: DiagnosticEvent): UIO[Unit]
+  val enabled: Boolean = true
+
+  def emitIfEnabled(event: => DiagnosticEvent): UIO[Unit] =
+    if (enabled) emit(event) else UIO.unit
+
+  protected def emit(event: DiagnosticEvent): UIO[Unit]
 }
 object Diagnostics {
   case object NoOp extends Diagnostics {
+    override val enabled: Boolean                        = false
     override def emit(event: DiagnosticEvent): UIO[Unit] = UIO.unit
   }
 

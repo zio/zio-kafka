@@ -11,9 +11,9 @@ object DiagnosticEvent {
 
   sealed trait Commit extends DiagnosticEvent
   object Commit {
-    case class Started(offsets: Map[TopicPartition, Long])              extends Commit
-    case class Success(offsets: Map[TopicPartition, OffsetAndMetadata]) extends Commit
-    case class Failure(offsets: Map[TopicPartition, OffsetAndMetadata]) extends Commit
+    case class Started(offsets: Map[TopicPartition, Long])                                extends Commit
+    case class Success(offsets: Map[TopicPartition, OffsetAndMetadata])                   extends Commit
+    case class Failure(offsets: Map[TopicPartition, OffsetAndMetadata], cause: Throwable) extends Commit
   }
 
   sealed trait Rebalance extends DiagnosticEvent
