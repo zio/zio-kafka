@@ -101,6 +101,9 @@ class Consumer private (
 }
 
 object Consumer {
+  val offsetBatches: ZSink[Any, Nothing, Nothing, Offset, OffsetBatch] =
+    ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
+
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
@@ -180,7 +183,7 @@ object Consumer {
               }
           }
       }
-      .aggregate(ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _))
+      .aggregate(offsetBatches)
       .mapM(_.commit)
       .runDrain
 }
