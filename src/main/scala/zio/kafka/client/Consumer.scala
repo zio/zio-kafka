@@ -178,7 +178,7 @@ object Consumer {
               }
           }
       }
-      .aggregate(batchingSink)
+      .aggregate(offsetBatches)
       .mapM(_.commit)
       .runDrain
 }
