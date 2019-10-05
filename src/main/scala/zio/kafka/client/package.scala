@@ -3,6 +3,7 @@ package zio.kafka
 import java.util.{ Map => JMap }
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.clients.producer.{ KafkaProducer, ProducerRecord }
 import org.apache.kafka.common.TopicPartition
 
 import zio.ZIO
@@ -14,4 +15,7 @@ package object client {
   type OffsetMap = Map[TopicPartition, OffsetAndMetadata]
 
   type JOffsetMap = JMap[TopicPartition, OffsetAndMetadata]
+
+  type ByteArrayProducer       = KafkaProducer[Array[Byte], Array[Byte]]
+  type ByteArrayProducerRecord = ProducerRecord[Array[Byte], Array[Byte]]
 }
