@@ -100,7 +100,7 @@ class Consumer private (
 }
 
 object Consumer {
-  val batchingSink: ZSink[Any, Nothing, Nothing, Offset, OffsetBatch] =
+  val offsetBatches: ZSink[Any, Nothing, Nothing, Offset, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
   def make(settings: ConsumerSettings): ZManaged[Clock with Blocking, Throwable, Consumer] =
