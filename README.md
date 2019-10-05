@@ -2,13 +2,13 @@
 
 # Welcome to ZIO Kafka
 
-ZIO Kafka provides a purely functional, streams-based to the Kafka
+ZIO Kafka provides a purely functional, streams-based interface to the Kafka
 client. It integrates effortlessly with ZIO and ZIO Streams.
 
 ## Quickstart
 
 Add the following dependencies to your `build.sbt` file:
-```scala
+```
 libraryDependencies ++= Seq(
   "dev.zio" %% "zio-streams" % "1.0.0-RC13",
   "dev.zio" %% "zio-kafka"   % "<version>"
@@ -37,8 +37,10 @@ val consumerSettings: ConsumerSettings =
 
 And use it to create a consumer:
 ```scala
-import zio.blocking.Blocking, zio.clock.Clock
+import zio.ZManaged, zio.blocking.Blocking, zio.clock.Clock 
+import zio.kafka.client.{ Consumer, ConsumerSettings }
 
+val consumerSettings: ConsumerSettings = ???
 val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = 
   Consumer.make(consumerSettings)
 ```
@@ -46,8 +48,13 @@ val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] =
 The consumer returned from `Consumer.make` is wrapped in a `ZManaged`
 to ensure its proper release. To get access to it, use the `ZManaged#use` method:
 ```scala
+import zio._, zio.blocking.Blocking, zio.clock.Clock 
+import zio.kafka.client.Consumer
+
+val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = ???
 consumer.use { c =>
   // Consumer now available as `c`
+  ZIO.unit
 }
 ```
 
@@ -55,18 +62,20 @@ You may stream data from Kafka using the `subscribe` and
 `plainStream` methods. `plainStream` takes as parameters deserializers for the key and values of the Kafka messages. Serializers and deserializers (Serdes) for common data types are available in scope and can be used via `Serde.of[T]`:
 
 ```scala
-import zio.console.putStrLn
+import zio.ZManaged, zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
 import zio.stream._
+import zio.kafka.client._
 import zio.kafka.client.serde._
 
+val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = ???
+
 consumer.use { c =>
-  val records = 
-    ZStream.unwrap(
-      c.subscribe(Subscription.Topics(Set("topic")))
-        .as(c.plainStream(Serde.of[String], Serde.of[String]).tap(record => putStrLn(record.toString)).chunks)
-    )
-     
-  records.runDrain
+  c.subscribeAnd(Subscription.Topics(Set("topic150")))
+    .plainStream(Serde.string, Serde.string)
+    .flattenChunks
+    .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
+    .mapM(_.offset.commit)
+    .runDrain
 }
 ```
 
@@ -74,10 +83,22 @@ If you need to distinguish between the different partitions assigned
 to the consumer, you may use the `Consumer#partitionedStream` method,
 which creates a nested stream of partitions:
 ```scala
-  def partitionedStream[R, K, V](
-    keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
-  ): ZStream[ Clock with Blocking, Throwable, (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]]) ]
+import zio.ZManaged, zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
+import zio.stream._
+import zio.kafka.client._
+import zio.kafka.client.serde._
+
+val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = ???
+
+consumer.use { c =>
+  c.subscribeAnd(Subscription.Topics(Set("topic150")))
+    .partitionedStream(Serde.string, Serde.string)
+    .tap(tpAndStr => putStrLn(s"topic: ${tpAndStr._1.topic}, partition: ${tpAndStr._1.partition}"))
+    .flatMap(_._2.flattenChunks)
+    .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
+    .mapM(_.offset.commit)
+    .runDrain
+}
 ```
 
 ## Example: consuming, producing and committing offset
@@ -91,11 +112,11 @@ import org.apache.kafka.clients.producer.ProducerRecord
 val consumerSettings: ConsumerSettings = ???
 val producerSettings: ProducerSettings = ???
 
-(Consumer.make(consumerSettings) zip Producer.make(producerSettings, Serde.of[Int], Serde.of[String])).use {
+(Consumer.make(consumerSettings) zip Producer.make(producerSettings, Serde.int, Serde.string)).use {
 case (consumer, producer) =>
-  consumer.subscribe(Subscription.topics("my-input-topic")) *>
-    consumer
-      .plainStream(Serde.of[Int], Serde.of[Long])
+  consumer
+      .subscribeAnd(Subscription.topics("my-input-topic"))
+      .plainStream(Serde.int, Serde.long)
       .map { record =>
         val key: Int    = record.record.key()
         val value: Long = record.record.value()
@@ -122,21 +143,22 @@ Serializers and deserializers (serdes) for custom data types can be constructed 
 import java.time.Instant
 import zio.kafka.client.serde._
 
-implicit val instantSerde: Serde[Any, Instant] = Serde.of[Long].inmap(java.time.Instant.ofEpochMilli)(_.toEpochMilli)
+implicit val instantSerde: Serde[Any, Instant] = Serde.long.inmap(java.time.Instant.ofEpochMilli)(_.toEpochMilli)
 
 ```
 
 For a lot of use cases where you just want to do something with all messages on a Kafka topic, ZIO Kafka provides the convenience method `Consumer.consumeWith`. This method lets you execute a ZIO effect for each message. Topic partitions will be processed in parallel and offsets are committed after running the effect automatically. 
 
 ```scala
-import org.apache.kafka.common.serialization.Serdes
-import zio._, zio.duration._
-import zio.kafka.client._
+import zio._
 import zio.console._
+import zio.kafka.client._
+import zio.kafka.client.serde._
 
-implicit val stringSerde = Serdes.String()
+val subscription: Subscription = ???
+val settings: ConsumerSettings = ???
 
-Consumer.consumeWith[Console, String, String](subscription, settings) { case (key, value) =>
+Consumer.consumeWith(settings, subscription, Serde.string, Serde.string) { case (key, value) =>
   putStrLn(s"Received message ${key}: ${value}")
   // Perform an effect with the received message
 }

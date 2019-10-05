@@ -45,10 +45,14 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
     "polling" should {
       "receive messages produced on the topic" in runWithConsumer("group150", "client150") { consumer =>
         for {
-          _       <- consumer.subscribe(Subscription.Topics(Set("topic150")))
-          kvs     <- ZIO((1 to 5).toList.map(i => (s"key$i", s"msg$i")))
-          _       <- produceMany("topic150", kvs)
-          records <- consumer.plainStream(Serde.string, Serde.string).flattenChunks.take(5).runCollect
+          kvs <- ZIO((1 to 5).toList.map(i => (s"key$i", s"msg$i")))
+          _   <- produceMany("topic150", kvs)
+          records <- consumer
+                      .subscribeAnd(Subscription.Topics(Set("topic150")))
+                      .plainStream(Serde.string, Serde.string)
+                      .flattenChunks
+                      .take(5)
+                      .runCollect
           _ <- ZIO.effectTotal(records.map { r =>
                 (r.record.key, r.record.value)
               } shouldEqual kvs)
@@ -94,8 +98,8 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
           _ <- produceMany("topic1", 0, data)
           firstResults <- Consumer.make(settings("group1", "first")).use { consumer =>
                            for {
-                             _ <- consumer.subscribe(Subscription.Topics(Set("topic1")))
                              results <- consumer
+                                         .subscribeAnd(Subscription.Topics(Set("topic1")))
                                          .partitionedStream(Serde.string, Serde.string)
                                          .filter(_._1 == new TopicPartition("topic1", 0))
                                          .flatMap(_._2.flattenChunks)
@@ -114,8 +118,8 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                          }
           secondResults <- Consumer.make(settings("group1", "second")).use { consumer =>
                             for {
-                              _ <- consumer.subscribe(Subscription.Topics(Set("topic1")))
                               results <- consumer
+                                          .subscribeAnd(Subscription.Topics(Set("topic1")))
                                           .partitionedStream(Serde.string, Serde.string)
                                           .flatMap(_._2.flattenChunks)
                                           .take(5)
