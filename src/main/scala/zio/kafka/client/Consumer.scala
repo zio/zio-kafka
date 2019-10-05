@@ -7,6 +7,7 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
 import zio.kafka.client.serde.Deserializer
+import zio.kafka.client.diagnostics.Diagnostics
 import zio.stream._
 
 import scala.collection.JavaConverters._
@@ -81,7 +82,7 @@ class Consumer private (
   def seekToEnd(partitions: Set[TopicPartition]): BlockingTask[Unit] =
     consumer.withConsumer(_.seekToEnd(partitions.asJava))
 
-  def subscribe(subscription: Subscription) =
+  def subscribe(subscription: Subscription): BlockingTask[Unit] =
     consumer.withConsumer { c =>
       subscription match {
         case Subscription.Pattern(pattern) => c.subscribe(pattern.pattern, runloop.deps.rebalanceListener)
@@ -103,13 +104,17 @@ object Consumer {
   val offsetBatches: ZSink[Any, Nothing, Nothing, Offset, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
-  def make(settings: ConsumerSettings): ZManaged[Clock with Blocking, Throwable, Consumer] =
+  def make(
+    settings: ConsumerSettings,
+    diagnostics: Diagnostics = Diagnostics.NoOp
+  ): ZManaged[Clock with Blocking, Throwable, Consumer] =
     for {
       wrapper <- ConsumerAccess.make(settings)
       deps <- Runloop.Deps.make(
                wrapper,
                settings.pollInterval,
-               settings.pollTimeout
+               settings.pollTimeout,
+               diagnostics
              )
       runloop <- Runloop(deps)
     } yield new Consumer(wrapper, settings, runloop)
