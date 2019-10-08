@@ -1,22 +1,16 @@
 package zio.kafka.client
 
-import org.apache.kafka.clients.consumer.{
-  ConsumerRebalanceListener,
-  ConsumerRecord,
-  ConsumerRecords,
-  OffsetAndMetadata,
-  OffsetCommitCallback
-}
+import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
-import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.client.diagnostics.{DiagnosticEvent, Diagnostics}
 import zio.stream._
 
-import scala.collection.mutable
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 case class Runloop(fiber: Fiber[Throwable, Unit], deps: Runloop.Deps)
 object Runloop {
@@ -45,7 +39,6 @@ object Runloop {
     commitQueue: Queue[Command.Commit],
     partitions: Queue[Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]],
     rebalancingRef: Ref[Boolean],
-    rebalanceListener: ConsumerRebalanceListener,
     diagnostics: Diagnostics
   ) {
     def commit(cmd: Command.Commit)   = commitQueue.offer(cmd).unit
@@ -54,6 +47,37 @@ object Runloop {
     def requests                      = ZStream.fromQueue(requestQueue)
 
     val isRebalancing = rebalancingRef.get
+    def registerRebalanceListener(userRebalanceListener: RebalanceListener): ZIO[Blocking, Nothing, ConsumerRebalanceListener] =
+      ZIO
+        .runtime[Blocking]
+        .map { runtime =>
+          new ConsumerRebalanceListener {
+            override def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
+              val partitionSet = partitions.asScala.toSet
+              runtime.unsafeRun(
+                for {
+                  _ <- rebalancingRef.set(true)
+                  _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(partitionSet)).fork
+                  _ <- userRebalanceListener.onPartitionRevoked(partitionSet)
+                } yield ()
+              )
+              ()
+            }
+
+            override def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
+              val partitionSet = partitions.asScala.toSet
+              runtime.unsafeRun(
+                for {
+                  _ <- rebalancingRef.set(false)
+                  _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(partitionSet))
+                  _ <- userRebalanceListener.onPartitionAssigned(partitionSet)
+                } yield ()
+              )
+              consumer.consumer.pause(partitions)
+              ()
+            }
+          }
+        }
 
     def polls = ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency))
     def newPartition(tp: TopicPartition, data: StreamChunk[Throwable, ByteArrayCommittableRecord]) =
@@ -77,29 +101,6 @@ object Runloop {
                          Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]
                        ]
                        .toManaged(_.shutdown)
-        listener <- ZIO
-                     .runtime[Blocking]
-                     .map { runtime =>
-                       new ConsumerRebalanceListener {
-                         override def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
-                           runtime.unsafeRun(
-                             rebalancingRef.set(true) *>
-                               diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(partitions.asScala.toSet))
-                           )
-                           ()
-                         }
-
-                         override def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
-                           runtime.unsafeRun(
-                             rebalancingRef.set(false) *>
-                               diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(partitions.asScala.toSet))
-                           )
-                           consumer.consumer.pause(partitions)
-                           ()
-                         }
-                       }
-                     }
-                     .toManaged_
       } yield Deps(
         consumer,
         pollFrequency,
@@ -108,10 +109,13 @@ object Runloop {
         commitQueue,
         partitions,
         rebalancingRef,
-        listener,
         diagnostics
       )
   }
+
+
+
+
 
   case class State(
     pendingRequests: List[Command.Request],

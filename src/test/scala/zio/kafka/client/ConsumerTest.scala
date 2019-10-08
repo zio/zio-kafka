@@ -247,8 +247,6 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
       "hand-over revoked and continue on assigned partition after re-balance listener execution" in unsafeRun {
 
         val topic        = "rebalance-test"
-        val c1Subscription = Subscription.topics(topic)
-        val c2Subscription = Subscription.topics(topic)
 
         sealed trait ConsumerEvent { val consumerId: Int }
         case class Consumed(override val consumerId: Int, k: Int, v: Int) extends ConsumerEvent
@@ -273,7 +271,10 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
           consumer1         <- Consumer
                                 .consumeWith(
                                   settings("rebalanceGroup", "rebalanceClient"),
-                                  c1Subscription,
+                                  Subscription.topics(topic).withRebalanceListener(RebalanceListener(
+                                    _ => consumerEvents.update(_ :+ Assigned(1)) *> UIO.succeed(()),
+                                    _ => consumerEvents.update(_ :+ Revoked(1)) *> UIO.succeed(())
+                                  )),
                                   Serde.string,
                                   Serde.string
                                 ) { (sKey, sValue) =>
@@ -291,7 +292,10 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
           consumer2         <- Consumer
                                 .consumeWith(
                                   settings("rebalanceGroup", "rebalanceClient"),
-                                  c2Subscription,
+                                  Subscription.topics(topic).withRebalanceListener(RebalanceListener(
+                                    _ => consumerEvents.update(_ :+ Assigned(2)) *> UIO.succeed(()),
+                                    _ => consumerEvents.update(_ :+ Revoked(2)) *> UIO.succeed(())
+                                  )),
                                   Serde.string,
                                   Serde.string
                                 ) { (sKey, sValue) =>
@@ -314,19 +318,21 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
           val consumer2Events = events.filter(_.consumerId == 2)
 
           val consumer1EventsBeforeRebal = consumer1Events
-              .dropWhile({case _: Assigned => true case _ => false})
-              .takeWhile({case _: Consumed => true case _ => false})
+            .dropWhile({case _: Revoked | _: Assigned => true case _ => false})
+            .takeWhile({case _: Consumed              => true case _ => false})
 
           val consumer1RebalEvents = consumer1Events
-            .dropWhile({case _: Assigned | _: Consumed => true case _ => false})
+            .dropWhile({case _: Revoked | _: Assigned => true case _ => false})
+            .dropWhile({case _: Consumed              => true case _ => false})
             .takeWhile({case _: Revoked | _: Assigned => true case _ => false})
 
           val consumer1EventsAfterRebal = consumer1Events
-            .dropWhile({case _: Assigned | _: Consumed => true case _ => false})
+            .dropWhile({case _: Revoked | _: Assigned => true case _ => false})
+            .dropWhile({case _: Consumed              => true case _ => false})
             .dropWhile({case _: Revoked | _: Assigned => true case _ => false})
 
           val consumer2FirstMessage = consumer2Events
-            .dropWhile({case _: Assigned => true case _ => false})
+            .dropWhile({case _: Revoked | _: Assigned => true case _ => false})
             .headOption match {
             case Some(c @ Consumed(_, _, _)) => c
             case _ => fail("Expected consumer2 to have consumed some messages but none found")
