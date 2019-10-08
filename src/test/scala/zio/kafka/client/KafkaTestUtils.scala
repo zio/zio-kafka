@@ -4,7 +4,7 @@ import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
-import zio.{Chunk, UIO, ZIO}
+import zio.{ Chunk, UIO, ZIO }
 
 object KafkaTestUtils {
 
@@ -13,7 +13,7 @@ object KafkaTestUtils {
     EmbeddedKafka.publishToKafka(t, k, m)
   }
 
-  def produceOne(t: String, partition: Int , k: String, m: String): UIO[Unit] = ZIO.effectTotal {
+  def produceOne(t: String, partition: Int, k: String, m: String): UIO[Unit] = ZIO.effectTotal {
     import net.manub.embeddedkafka.Codecs._
     val record = new ProducerRecord[String, String](t, partition, null, k, m)
     EmbeddedKafka.publishToKafka[String](record)

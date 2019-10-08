@@ -4,7 +4,7 @@ import com.typesafe.scalalogging.LazyLogging
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
-import org.scalatest.{EitherValues, Matchers, WordSpecLike}
+import org.scalatest.{ EitherValues, Matchers, WordSpecLike }
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -246,134 +246,185 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
     "re-balancing" should {
       "hand-over revoked and continue on assigned partition after re-balance listener execution" in unsafeRun {
 
-        val topic        = "rebalance-test"
+        val topic = "rebalance-test"
 
         sealed trait ConsumerEvent { val consumerId: Int }
         case class Consumed(override val consumerId: Int, k: Int, v: Int) extends ConsumerEvent
-        case class Revoked(override val consumerId: Int) extends ConsumerEvent
-        case class Assigned(override val consumerId: Int) extends ConsumerEvent
+        case class Revoked(override val consumerId: Int)                  extends ConsumerEvent
+        case class Assigned(override val consumerId: Int)                 extends ConsumerEvent
 
         for {
-          _                 <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = 2))
-          consumerEvents    <- Ref.make[Seq[ConsumerEvent]](Seq())
-          p0Value           <- Ref.make[Int](0)
-          p1Value           <- Ref.make[Int](0)
-          partitionToggle   <- Ref.make[Int](1)
-          producer          <- (for {
-                                 p <- partitionToggle.update(p => if (p == 0) 1 else 0)
-                                 v <- if (p == 0) p0Value.update(_ + 1) else p1Value.update(_ + 1)
-                                 _ <- produceOne(topic, p, p.toString, v.toString)
-                               } yield ()).repeat(Schedule.spaced(1.second)).fork
-          startC2           <- Promise.make[Nothing, Unit]
-          done              <- Promise.make[Nothing, Unit]
-          c1ReceivedRef     <- Ref.make(List.empty[(Int, Int)])
-          c2ReceivedRef     <- Ref.make(List.empty[(Int, Int)])
-          consumer1         <- Consumer
-                                .consumeWith(
-                                  settings("rebalanceGroup", "rebalanceClient"),
-                                  Subscription.topics(topic).withRebalanceListener(RebalanceListener(
-                                    _ => consumerEvents.update(_ :+ Assigned(1)) *> UIO.succeed(()),
-                                    _ => consumerEvents.update(_ :+ Revoked(1)) *> UIO.succeed(())
-                                  )),
-                                  Serde.string,
-                                  Serde.string
-                                ) { (sKey, sValue) =>
-                                  (for {
-                                    key           <- IO(Integer.parseInt(sKey))
-                                    value         <- IO(Integer.parseInt(sValue))
-                                    received      <- c1ReceivedRef.update(_ :+ (key -> value))
-                                    startC2Done   <- startC2.isDone
-                                    _             <- Task.when(List(0, 1).forall(received.map(_._1).contains) && !startC2Done)(startC2.succeed(()))
-                                    _             <- consumerEvents.update(_ :+ Consumed(1, key, value))
-                                  } yield ()).orDie
-                                }
-                                .fork
-          _                 <- startC2.await
-          consumer2         <- Consumer
-                                .consumeWith(
-                                  settings("rebalanceGroup", "rebalanceClient"),
-                                  Subscription.topics(topic).withRebalanceListener(RebalanceListener(
-                                    _ => consumerEvents.update(_ :+ Assigned(2)) *> UIO.succeed(()),
-                                    _ => consumerEvents.update(_ :+ Revoked(2)) *> UIO.succeed(())
-                                  )),
-                                  Serde.string,
-                                  Serde.string
-                                ) { (sKey, sValue) =>
-                                  (for {
-                                    key           <- IO(Integer.parseInt(sKey))
-                                    value         <- IO(Integer.parseInt(sValue))
-                                    received      <- c2ReceivedRef.update(_ :+ (key -> value))
-                                    _             <- Task.when(received.size == 5)(done.succeed(()))
-                                    _             <- consumerEvents.update(_ :+ Consumed(2, key, value))
-                                  } yield ()).orDie
-                                }
-                                .fork
-          _ <- done.await
-          _ <- consumer2.interrupt
-          _ <- consumer1.interrupt
-          _ <- producer.interrupt
+          _               <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = 2))
+          consumerEvents  <- Ref.make[Seq[ConsumerEvent]](Seq())
+          p0Value         <- Ref.make[Int](0)
+          p1Value         <- Ref.make[Int](0)
+          partitionToggle <- Ref.make[Int](1)
+          producer <- (for {
+                       p <- partitionToggle.update(p => if (p == 0) 1 else 0)
+                       v <- if (p == 0) p0Value.update(_ + 1) else p1Value.update(_ + 1)
+                       _ <- produceOne(topic, p, p.toString, v.toString)
+                     } yield ()).repeat(Schedule.spaced(1.second)).fork
+          startC2       <- Promise.make[Nothing, Unit]
+          done          <- Promise.make[Nothing, Unit]
+          c1ReceivedRef <- Ref.make(List.empty[(Int, Int)])
+          c2ReceivedRef <- Ref.make(List.empty[(Int, Int)])
+          consumer1 <- Consumer
+                        .consumeWith(
+                          settings("rebalanceGroup", "rebalanceClient"),
+                          Subscription
+                            .topics(topic)
+                            .withRebalanceListener(
+                              RebalanceListener(
+                                _ => consumerEvents.update(_ :+ Assigned(1)) *> UIO.succeed(()),
+                                _ => consumerEvents.update(_ :+ Revoked(1)) *> UIO.succeed(())
+                              )
+                            ),
+                          Serde.string,
+                          Serde.string
+                        ) { (sKey, sValue) =>
+                          (for {
+                            key         <- IO(Integer.parseInt(sKey))
+                            value       <- IO(Integer.parseInt(sValue))
+                            received    <- c1ReceivedRef.update(_ :+ (key -> value))
+                            startC2Done <- startC2.isDone
+                            _ <- Task.when(List(0, 1).forall(received.map(_._1).contains) && !startC2Done)(
+                                  startC2.succeed(())
+                                )
+                            _ <- consumerEvents.update(_ :+ Consumed(1, key, value))
+                          } yield ()).orDie
+                        }
+                        .fork
+          _ <- startC2.await
+          consumer2 <- Consumer
+                        .consumeWith(
+                          settings("rebalanceGroup", "rebalanceClient"),
+                          Subscription
+                            .topics(topic)
+                            .withRebalanceListener(
+                              RebalanceListener(
+                                _ => consumerEvents.update(_ :+ Assigned(2)) *> UIO.succeed(()),
+                                _ => consumerEvents.update(_ :+ Revoked(2)) *> UIO.succeed(())
+                              )
+                            ),
+                          Serde.string,
+                          Serde.string
+                        ) { (sKey, sValue) =>
+                          (for {
+                            key      <- IO(Integer.parseInt(sKey))
+                            value    <- IO(Integer.parseInt(sValue))
+                            received <- c2ReceivedRef.update(_ :+ (key -> value))
+                            _        <- Task.when(received.size == 5)(done.succeed(()))
+                            _        <- consumerEvents.update(_ :+ Consumed(2, key, value))
+                          } yield ()).orDie
+                        }
+                        .fork
+          _      <- done.await
+          _      <- consumer2.interrupt
+          _      <- consumer1.interrupt
+          _      <- producer.interrupt
           events <- consumerEvents.get
         } yield {
           val consumer1Events = events.filter(_.consumerId == 1)
           val consumer2Events = events.filter(_.consumerId == 2)
 
           val consumer1EventsBeforeRebal = consumer1Events
-            .dropWhile({case _: Revoked | _: Assigned => true case _ => false})
-            .takeWhile({case _: Consumed              => true case _ => false})
+            .dropWhile({
+              case _: Revoked | _: Assigned => true
+              case _                        => false
+            })
+            .takeWhile({
+              case _: Consumed => true
+              case _           => false
+            })
 
           val consumer1RebalEvents = consumer1Events
-            .dropWhile({case _: Revoked | _: Assigned => true case _ => false})
-            .dropWhile({case _: Consumed              => true case _ => false})
-            .takeWhile({case _: Revoked | _: Assigned => true case _ => false})
+            .dropWhile({
+              case _: Revoked | _: Assigned => true
+              case _                        => false
+            })
+            .dropWhile({
+              case _: Consumed => true
+              case _           => false
+            })
+            .takeWhile({
+              case _: Revoked | _: Assigned => true
+              case _                        => false
+            })
 
           val consumer1EventsAfterRebal = consumer1Events
-            .dropWhile({case _: Revoked | _: Assigned => true case _ => false})
-            .dropWhile({case _: Consumed              => true case _ => false})
-            .dropWhile({case _: Revoked | _: Assigned => true case _ => false})
+            .dropWhile({
+              case _: Revoked | _: Assigned => true
+              case _                        => false
+            })
+            .dropWhile({
+              case _: Consumed => true
+              case _           => false
+            })
+            .dropWhile({
+              case _: Revoked | _: Assigned => true
+              case _                        => false
+            })
 
           val consumer2FirstMessage = consumer2Events
-            .dropWhile({case _: Revoked | _: Assigned => true case _ => false})
+            .dropWhile({
+              case _: Revoked | _: Assigned => true
+              case _                        => false
+            })
             .headOption match {
             case Some(c @ Consumed(_, _, _)) => c
-            case _ => fail("Expected consumer2 to have consumed some messages but none found")
+            case _                           => fail("Expected consumer2 to have consumed some messages but none found")
           }
 
           // Consumer1 Revoke should be followed by Assigned
           consumer1RebalEvents match {
             case Seq(_: Revoked, _: Assigned) => succeed
-            case s => fail(s"Expected 'revoked' then 'assigned' but found $s")
+            case s                            => fail(s"Expected 'revoked' then 'assigned' but found $s")
           }
 
           // Consumer1's first message after re-balance should follow it's last message before re-balance of the same partition
           val firstConsumedAfterRebal: Consumed =
             consumer1EventsAfterRebal.headOption match {
               case Some(c @ Consumed(_, _, _)) => c
-              case _ => fail("Expected consumer1 to have consumed messages after re-balance but none found")
+              case _                           => fail("Expected consumer1 to have consumed messages after re-balance but none found")
             }
 
-          consumer1EventsBeforeRebal
-            .reverse
-            .find({case Consumed(1, firstConsumedAfterRebal.k, _) => true case _ => false}) match {
+          consumer1EventsBeforeRebal.reverse
+            .find({
+              case Consumed(1, firstConsumedAfterRebal.k, _) => true
+              case _                                         => false
+            }) match {
             case Some(Consumed(1, firstConsumedAfterRebal.k, lastValBeforeRebal)) =>
               if (lastValBeforeRebal == (firstConsumedAfterRebal.v - 1)) succeed
-              else fail(
-              s"Expected value of message for partition ${firstConsumedAfterRebal.k} " +
-                s"before re-balance to be ${firstConsumedAfterRebal.v - 1}, " +
-                s"but was $lastValBeforeRebal")
-            case _ => fail(s"Expected consumer1 to have consumed messages from partition ${firstConsumedAfterRebal.k} but none found")
+              else
+                fail(
+                  s"Expected value of message for partition ${firstConsumedAfterRebal.k} " +
+                    s"before re-balance to be ${firstConsumedAfterRebal.v - 1}, " +
+                    s"but was $lastValBeforeRebal"
+                )
+            case _ =>
+              fail(
+                s"Expected consumer1 to have consumed messages from partition ${firstConsumedAfterRebal.k} but none found"
+              )
           }
 
           // Consumer2's first message after re-balance should follow Consumer1's last message before re-balance of the same partition
-          consumer1EventsBeforeRebal
-            .reverse
-            .find({case Consumed(1, consumer2FirstMessage.k, _) => true case _ => false}) match {
+          consumer1EventsBeforeRebal.reverse
+            .find({
+              case Consumed(1, consumer2FirstMessage.k, _) => true
+              case _                                       => false
+            }) match {
             case Some(Consumed(1, consumer2FirstMessage.k, lastValBeforeRebal)) =>
               if (lastValBeforeRebal == (consumer2FirstMessage.v - 1)) succeed
-              else fail(
-              s"Expected value of message for partition ${consumer2FirstMessage.k} " +
-                s"before re-balance to be ${firstConsumedAfterRebal.v - 1}, " +
-                s"but was $lastValBeforeRebal")
-            case _ => fail(s"Expected consumer1 to have consumed messages from partition ${consumer2FirstMessage.k} but none found")
+              else
+                fail(
+                  s"Expected value of message for partition ${consumer2FirstMessage.k} " +
+                    s"before re-balance to be ${firstConsumedAfterRebal.v - 1}, " +
+                    s"but was $lastValBeforeRebal"
+                )
+            case _ =>
+              fail(
+                s"Expected consumer1 to have consumed messages from partition ${consumer2FirstMessage.k} but none found"
+              )
           }
         }
       }

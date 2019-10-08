@@ -6,7 +6,7 @@ import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
-import zio.kafka.client.diagnostics.{DiagnosticEvent, Diagnostics}
+import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.stream._
 
 import scala.collection.JavaConverters._
@@ -47,7 +47,9 @@ object Runloop {
     def requests                      = ZStream.fromQueue(requestQueue)
 
     val isRebalancing = rebalancingRef.get
-    def registerRebalanceListener(userRebalanceListener: RebalanceListener): ZIO[Blocking, Nothing, ConsumerRebalanceListener] =
+    def registerRebalanceListener(
+      userRebalanceListener: RebalanceListener
+    ): ZIO[Blocking, Nothing, ConsumerRebalanceListener] =
       ZIO
         .runtime[Blocking]
         .map { runtime =>
@@ -112,10 +114,6 @@ object Runloop {
         diagnostics
       )
   }
-
-
-
-
 
   case class State(
     pendingRequests: List[Command.Request],

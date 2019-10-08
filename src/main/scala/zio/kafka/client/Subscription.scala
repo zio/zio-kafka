@@ -1,6 +1,6 @@
 package zio.kafka.client
 
-import java.util.regex.{Pattern => JPattern}
+import java.util.regex.{ Pattern => JPattern }
 
 import zio.Task
 
@@ -10,8 +10,9 @@ sealed trait Subscription {
   val rebalanceListener: RebalanceListener
 }
 object Subscription {
-  case class Topics(topics: Set[String], rebalanceListener: RebalanceListener = RebalanceListener.None) extends Subscription
-  case class Pattern(pattern: Regex, rebalanceListener: RebalanceListener = RebalanceListener.None)     extends Subscription
+  case class Topics(topics: Set[String], rebalanceListener: RebalanceListener = RebalanceListener.None)
+      extends Subscription
+  case class Pattern(pattern: Regex, rebalanceListener: RebalanceListener = RebalanceListener.None) extends Subscription
 
   def topics(name: String, names: String*): Subscription =
     Topics(Set(name) ++ names.toSet, RebalanceListener.None)
@@ -28,9 +29,9 @@ object Subscription {
   implicit class Extensions(subscription: Subscription) {
     def withRebalanceListener(rebalanceListener: RebalanceListener): Subscription =
       subscription match {
-        case s: Topics => s.copy(rebalanceListener = rebalanceListener)
+        case s: Topics  => s.copy(rebalanceListener = rebalanceListener)
         case s: Pattern => s.copy(rebalanceListener = rebalanceListener)
-        case _ => subscription
+        case _          => subscription
       }
   }
 }

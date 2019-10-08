@@ -1,7 +1,7 @@
 package zio.kafka.client
 
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp
-import org.apache.kafka.common.{PartitionInfo, TopicPartition}
+import org.apache.kafka.common.{ PartitionInfo, TopicPartition }
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -83,23 +83,23 @@ class Consumer private (
     consumer.withConsumer(_.seekToEnd(partitions.asJava))
 
   def subscribe(subscription: Subscription): BlockingTask[Unit] =
-      subscription match {
-        case Subscription.Pattern(pattern, rebalanceListener) =>
-          for {
-            listener  <-  runloop.deps.registerRebalanceListener(rebalanceListener)
-            _         <-  consumer.withConsumer { c =>
-                            c.subscribe(pattern.pattern, listener)
-                          }
-          } yield ()
+    subscription match {
+      case Subscription.Pattern(pattern, rebalanceListener) =>
+        for {
+          listener <- runloop.deps.registerRebalanceListener(rebalanceListener)
+          _ <- consumer.withConsumer { c =>
+                c.subscribe(pattern.pattern, listener)
+              }
+        } yield ()
 
-        case Subscription.Topics(topics, rebalanceListener)   =>
-          for {
-            listener  <-  runloop.deps.registerRebalanceListener(rebalanceListener)
-            _         <-  consumer.withConsumer { c =>
-                            c.subscribe(topics.asJava, listener)
-                          }
-          } yield ()
-      }
+      case Subscription.Topics(topics, rebalanceListener) =>
+        for {
+          listener <- runloop.deps.registerRebalanceListener(rebalanceListener)
+          _ <- consumer.withConsumer { c =>
+                c.subscribe(topics.asJava, listener)
+              }
+        } yield ()
+    }
 
   def subscribeAnd(subscription: Subscription): SubscribedConsumer =
     new SubscribedConsumer(subscribe(subscription).as(self))
