@@ -2,15 +2,21 @@ package zio.kafka.client
 
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.TopicPartition
-import zio.{ Chunk, UIO, ZIO }
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.TopicPartition
+import zio.{Chunk, UIO, ZIO}
 
 object KafkaTestUtils {
 
   def produceOne(t: String, k: String, m: String): UIO[Unit] = ZIO.effectTotal {
     import net.manub.embeddedkafka.Codecs._
     EmbeddedKafka.publishToKafka(t, k, m)
+  }
+
+  def produceOne(t: String, partition: Int , k: String, m: String): UIO[Unit] = ZIO.effectTotal {
+    import net.manub.embeddedkafka.Codecs._
+    val record = new ProducerRecord[String, String](t, partition, null, k, m)
+    EmbeddedKafka.publishToKafka[String](record)
   }
 
   def produceMany(t: String, kvs: List[(String, String)]): UIO[Unit] = ZIO.effectTotal {
