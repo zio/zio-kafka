@@ -28,7 +28,10 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
       groupId,
       clientId,
       5.seconds,
-      Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "earliest"),
+      Map(
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "earliest",
+        ConsumerConfig.METADATA_MAX_AGE_CONFIG  -> "100"
+      ),
       250.millis,
       250.millis,
       1
@@ -54,6 +57,25 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                       .take(5)
                       .runCollect
           _ <- ZIO.effectTotal(records.map { r =>
+                (r.record.key, r.record.value)
+              } shouldEqual kvs)
+        } yield ()
+      }
+    }
+
+    "polling with pattern" should {
+      "receive messages produced on the topic pattern" in runWithConsumer("group151", "client151") { consumer =>
+        for {
+          kvs <- ZIO((1 to 5).toList.map(i => (s"key$i", s"msg$i")))
+          _   <- produceMany("pattern150", kvs)
+          records <- consumer
+                      .subscribeAnd(Subscription.Pattern("pattern[0-9]+".r))
+                      .plainStream(Serde.string, Serde.string)
+                      .flattenChunks
+                      .take(5)
+                      .runCollect
+                      .timeout(20.seconds)
+          _ <- ZIO.effectTotal(records.getOrElse(Nil).map { r =>
                 (r.record.key, r.record.value)
               } shouldEqual kvs)
         } yield ()
