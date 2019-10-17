@@ -74,6 +74,7 @@ consumer.use { c =>
     .plainStream(Serde.string, Serde.string)
     .flattenChunks
     .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
+    .map(_.offset)
     .aggregate(Consumer.offsetBatches)
     .mapM(_.commit)
     .runDrain
@@ -97,6 +98,7 @@ consumer.use { c =>
     .tap(tpAndStr => putStrLn(s"topic: ${tpAndStr._1.topic}, partition: ${tpAndStr._1.partition}"))
     .flatMap(_._2.flattenChunks)
     .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
+    .map(_.offset)
     .aggregate(Consumer.offsetBatches)
     .mapM(_.commit)
     .runDrain
