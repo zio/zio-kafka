@@ -3,16 +3,15 @@ package zio.kafka.client
 import com.typesafe.scalalogging.LazyLogging
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.common.TopicPartition
 import org.scalatest.{ EitherValues, Matchers, WordSpecLike }
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
 import zio.kafka.client.serde.Serde
-import zio.stream.ZSink
 
 class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime with EitherValues {
+
   import KafkaTestUtils._
 
   def pause(): ZIO[Clock, Nothing, Unit] = UIO(()).delay(2.seconds).forever
@@ -28,7 +27,10 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
       groupId,
       clientId,
       5.seconds,
-      Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "earliest"),
+      Map(
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "earliest",
+        "metadata.max.age.ms"                   -> "1000"
+      ),
       250.millis,
       250.millis,
       1
@@ -53,7 +55,8 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                       .flattenChunks
                       .take(5)
                       .runCollect
-          _ <- ZIO.effectTotal(records.map { r =>
+                      .timeout(20.seconds)
+          _ <- ZIO.effectTotal(records.getOrElse(Nil) map { r =>
                 (r.record.key, r.record.value)
               } shouldEqual kvs)
         } yield ()
