@@ -3,12 +3,14 @@ package zio.kafka.client
 import com.typesafe.scalalogging.LazyLogging
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.common.TopicPartition
 import org.scalatest.{ EitherValues, Matchers, WordSpecLike }
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
 import zio.kafka.client.serde.Serde
+import zio.stream.ZSink
 
 class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime with EitherValues {
 
@@ -57,6 +59,25 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                       .runCollect
                       .timeout(20.seconds)
           _ <- ZIO.effectTotal(records.getOrElse(Nil) map { r =>
+                (r.record.key, r.record.value)
+              } shouldEqual kvs)
+        } yield ()
+      }
+    }
+
+    "polling with pattern" should {
+      "receive messages produced on the topic pattern" in runWithConsumer("group150", "client150") { consumer =>
+        for {
+          kvs <- ZIO((1 to 5).toList.map(i => (s"key$i", s"msg$i")))
+          _   <- produceMany("topic150", kvs)
+          records <- consumer
+                      .subscribeAnd(Subscription.Pattern("topic[0-9]+".r))
+                      .plainStream(Serde.string, Serde.string)
+                      .flattenChunks
+                      .take(5)
+                      .runCollect
+                      .timeout(20.seconds)
+          _ <- ZIO.effectTotal(records.getOrElse(Nil).map { r =>
                 (r.record.key, r.record.value)
               } shouldEqual kvs)
         } yield ()
