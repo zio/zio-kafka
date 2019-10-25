@@ -21,7 +21,7 @@ data type:
 import zio._, zio.duration._
 import zio.kafka.client._
 
-val consumerSettings: ConsumerSettings = 
+val settings: ConsumerSettings = 
   ConsumerSettings(
     bootstrapServers          = List("localhost:9092"),
     groupId                   = "group",
@@ -34,8 +34,27 @@ val consumerSettings: ConsumerSettings =
   )
 ```
 
+For a lot of use cases where you just want to do something with all messages on a Kafka topic, ZIO Kafka provides the convenience method `Consumer.consumeWith`. This method lets you execute a ZIO effect for each message. Topic partitions will be processed in parallel and offsets are committed after running the effect automatically. 
 
-And use it to create a consumer:
+```scala
+import zio._
+import zio.console._
+import zio.kafka.client._
+import zio.kafka.client.serde._
+
+val subscription = Subscription.topics("topic")
+
+Consumer.consumeWith(settings, subscription, Serde.string, Serde.string) { case (key, value) =>
+  putStrLn(s"Received message ${key}: ${value}")
+  // Perform an effect with the received message
+}
+```
+
+If you require more control over the consumption process, read on!
+
+## Consuming Kafka topics using ZIO Streams
+
+First, create a consumer using the ConsumerSettings instance:
 ```scala
 import zio.ZManaged, zio.blocking.Blocking, zio.clock.Clock 
 import zio.kafka.client.{ Consumer, ConsumerSettings }
@@ -46,7 +65,9 @@ val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] =
 ```
 
 The consumer returned from `Consumer.make` is wrapped in a `ZManaged`
-to ensure its proper release. To get access to it, use the `ZManaged#use` method:
+to ensure its proper release. To get access to it, you can use the `ZManaged#use` method
+or compose other `ZManaged` instances with it using a for-comprehension. Here's an example
+using `ZManaged#use`:
 ```scala
 import zio._, zio.blocking.Blocking, zio.clock.Clock 
 import zio.kafka.client.Consumer
@@ -58,8 +79,7 @@ consumer.use { c =>
 }
 ```
 
-You may stream data from Kafka using the `subscribe` and
-`plainStream` methods. `plainStream` takes as parameters deserializers for the key and values of the Kafka messages. Serializers and deserializers (Serdes) for common data types are available in scope and can be used via `Serde.of[T]`:
+You may stream data from Kafka using the `subscribe` and `plainStream` methods. `plainStream` takes as parameters deserializers for the key and values of the Kafka messages. Serializers and deserializers (Serdes) for common data types are available in the `Deserializer`, `Serializer`, and `Serde` companion objects:
 
 ```scala
 import zio.ZManaged, zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
@@ -70,7 +90,7 @@ import zio.kafka.client.serde._
 val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = ???
 
 consumer.use { c =>
-  c.subscribeAnd(Subscription.Topics(Set("topic150")))
+  c.subscribeAnd(Subscription.topics("topic150"))
     .plainStream(Serde.string, Serde.string)
     .flattenChunks
     .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
@@ -93,7 +113,7 @@ import zio.kafka.client.serde._
 val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = ???
 
 consumer.use { c =>
-  c.subscribeAnd(Subscription.Topics(Set("topic150")))
+  c.subscribeAnd(Subscription.topics("topic150"))
     .partitionedStream(Serde.string, Serde.string)
     .tap(tpAndStr => putStrLn(s"topic: ${tpAndStr._1.topic}, partition: ${tpAndStr._1.partition}"))
     .flatMap(_._2.flattenChunks)
@@ -106,6 +126,7 @@ consumer.use { c =>
 ```
 
 ## Example: consuming, producing and committing offset
+
 This example shows how to consume messages from topic `topic_a` and produce transformed messages to `topic_b`, after which consumer offsets are committed. Processing is done in chunks using `ZStreamChunk` for more efficiency.
 
 ```scala
@@ -141,37 +162,19 @@ case (consumer, producer) =>
 ```
 
 ## Custom data type serdes
+
 Serializers and deserializers (serdes) for custom data types can be constructed from scratch or by converting existing serdes. For example, to create a serde for an `Instant`:
 
 ```scala
 import java.time.Instant
 import zio.kafka.client.serde._
 
-implicit val instantSerde: Serde[Any, Instant] = Serde.long.inmap(java.time.Instant.ofEpochMilli)(_.toEpochMilli)
-
-```
-
-For a lot of use cases where you just want to do something with all messages on a Kafka topic, ZIO Kafka provides the convenience method `Consumer.consumeWith`. This method lets you execute a ZIO effect for each message. Topic partitions will be processed in parallel and offsets are committed after running the effect automatically. 
-
-```scala
-import zio._
-import zio.console._
-import zio.kafka.client._
-import zio.kafka.client.serde._
-
-val subscription: Subscription = ???
-val settings: ConsumerSettings = ???
-
-Consumer.consumeWith(settings, subscription, Serde.string, Serde.string) { case (key, value) =>
-  putStrLn(s"Received message ${key}: ${value}")
-  // Perform an effect with the received message
-}
+val instantSerde: Serde[Any, Instant] = Serde.long.inmap(java.time.Instant.ofEpochMilli)(_.toEpochMilli)
 ```
 
 ## Getting help
 
-Please feel free to use the [Gitter](https://gitter.im/zio/zio-kafka)
-channel for any and all questions you may have.
+Join us on the [ZIO Discord server](https://discord.gg/2ccFBr4) at the `#zio-kafka` channel.
 
 ## Credits
 
