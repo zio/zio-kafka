@@ -303,7 +303,7 @@ object Runloop {
                          builder.result()
                        }
 
-                       def actualPoll = Task.effectSuspend {
+                       Task.effectSuspend {
                          val prevAssigned = c.assignment().asScala
 
                          val requestedPartitions = state.pendingRequests.map(_.tp).toSet
@@ -312,49 +312,48 @@ object Runloop {
                          val pollTimeout =
                            if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
                            else 0.millis.asJava
-                         val records = c.poll(pollTimeout)
+                         val records =
+                           try c.poll(pollTimeout)
+                           catch {
+                             // The consumer will throw an IllegalStateException if no call to subscribe
+                             // has been made yet, so we just ignore that. We have to poll even if c.subscription()
+                             // is empty because pattern subscriptions start out as empty.
+                             case _: IllegalStateException => null
+                           }
 
-                         val tpsInResponse   = records.partitions.asScala
-                         val currentAssigned = c.assignment().asScala
-                         val newlyAssigned   = currentAssigned -- prevAssigned
-                         val revoked         = prevAssigned -- currentAssigned
-                         val unrequestedRecords =
-                           bufferUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
+                         if (records eq null)
+                           ZIO.succeed(
+                             (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
+                           )
+                         else {
 
-                         endRevoked(
-                           state.pendingRequests,
-                           state.addBufferedRecords(unrequestedRecords).bufferedRecords,
-                           revoked(_)
-                         ).flatMap {
-                           case (pendingRequests, bufferedRecords) =>
-                             for {
-                               output                    <- fulfillRequests(pendingRequests, bufferedRecords, records)
-                               (notFulfilled, fulfilled) = output
-                               _ <- deps.emitIfEnabledDiagnostic(
-                                     DiagnosticEvent.Poll(
-                                       requestedPartitions,
-                                       fulfilled.keySet,
-                                       notFulfilled.map(_.tp).toSet
+                           val tpsInResponse   = records.partitions.asScala
+                           val currentAssigned = c.assignment().asScala
+                           val newlyAssigned   = currentAssigned -- prevAssigned
+                           val revoked         = prevAssigned -- currentAssigned
+                           val unrequestedRecords =
+                             bufferUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
+
+                           endRevoked(
+                             state.pendingRequests,
+                             state.addBufferedRecords(unrequestedRecords).bufferedRecords,
+                             revoked(_)
+                           ).flatMap {
+                             case (pendingRequests, bufferedRecords) =>
+                               for {
+                                 output                    <- fulfillRequests(pendingRequests, bufferedRecords, records)
+                                 (notFulfilled, fulfilled) = output
+                                 _ <- deps.emitIfEnabledDiagnostic(
+                                       DiagnosticEvent.Poll(
+                                         requestedPartitions,
+                                         fulfilled.keySet,
+                                         notFulfilled.map(_.tp).toSet
+                                       )
                                      )
-                                   )
-                             } yield output
-                         }.map((newlyAssigned.toSet, _))
+                               } yield output
+                           }.map((newlyAssigned.toSet, _))
+                         }
                        }
-
-                       ZIO(!c.subscription().isEmpty())
-                         .flatMap(
-                           if (_) actualPoll
-                           else
-                             ZIO.succeed(
-                               (
-                                 Set(),
-                                 (
-                                   state.pendingRequests,
-                                   Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
-                                 )
-                               )
-                             )
-                         )
                      }
         (newlyAssigned, (pendingRequests, bufferedRecords)) = pollResult
         _                                                   <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, partition(tp)))
