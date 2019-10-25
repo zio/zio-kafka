@@ -28,7 +28,10 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
       groupId,
       clientId,
       5.seconds,
-      Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "earliest"),
+      Map(
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "earliest",
+        ConsumerConfig.METADATA_MAX_AGE_CONFIG  -> "100"
+      ),
       250.millis,
       250.millis,
       1
@@ -60,34 +63,22 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
       }
     }
 
-    "using a serializer with an environment" should {
-      "get access to the environment" in unsafeRun {
-        val topic        = "consumeWith5"
-        val subscription = Subscription.Topics(Set(topic))
-        val nrMessages   = 50
-        val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
-
-        import zio.console._
-        implicit val loggingStringSerde: Serde[Console, String] = Serde.string
-          .inmapM(s => putStrLn(s"Deserialized ${s}").as(s))(s => putStrLn(s"Serializing ${s}").as(s))
-
+    "polling with pattern" should {
+      "receive messages produced on the topic pattern" in runWithConsumer("group151", "client151") { consumer =>
         for {
-          done             <- Promise.make[Nothing, Unit]
-          messagesReceived <- Ref.make(List.empty[(String, String)])
-          _                <- produceMany(topic, messages)
-          fib <- Consumer
-                  .consumeWith(settings("group3", "client3"), subscription, loggingStringSerde, loggingStringSerde) {
-                    (key, value) =>
-                      (for {
-                        messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
-                        _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
-                      } yield ()).orDie
-                  }
-                  .fork
-          _ <- done.await
-          _ <- fib.interrupt
-          _ <- fib.join.ignore
-        } yield succeed
+          kvs <- ZIO((1 to 5).toList.map(i => (s"key$i", s"msg$i")))
+          _   <- produceMany("pattern150", kvs)
+          records <- consumer
+                      .subscribeAnd(Subscription.Pattern("pattern[0-9]+".r))
+                      .plainStream(Serde.string, Serde.string)
+                      .flattenChunks
+                      .take(5)
+                      .runCollect
+                      .timeout(20.seconds)
+          _ <- ZIO.effectTotal(records.getOrElse(Nil).map { r =>
+                (r.record.key, r.record.value)
+              } shouldEqual kvs)
+        } yield ()
       }
     }
 
@@ -223,23 +214,22 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
         for {
           messagesReceived <- Ref.make(List.empty[(String, String)])
           _                <- produceMany(topic, messages)
-          fib <- Consumer
-                  .consumeWith(
-                    settings("group3", "client3"),
-                    subscription,
-                    Serde.string,
-                    Serde.string
-                  ) { (key, value) =>
-                    (for {
-                      messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
-                      _ <- Task.when(messagesSoFar.size == 3)(
-                            ZIO.die(new IllegalArgumentException("consumeWith failure"))
-                          )
-                    } yield ()).orDie
-                  }
-                  .fork
-          testResult <- fib.map(_ => fail("Expected consumeWith to fail")).orElse(Fiber.succeed(succeed)).join
-        } yield testResult
+          consumeResult <- Consumer
+                            .consumeWith(
+                              settings("group3", "client3"),
+                              subscription,
+                              Serde.string,
+                              Serde.string
+                            ) { (key, value) =>
+                              (for {
+                                messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
+                                _ <- Task.when(messagesSoFar.size == 3)(
+                                      ZIO.die(new IllegalArgumentException("consumeWith failure"))
+                                    )
+                              } yield ()).orDie
+                            }
+                            .run
+        } yield consumeResult.fold(_ => succeed, _ => fail("Expected consumeWith to fail"))
       }
     }
   }
