@@ -32,6 +32,9 @@ class Consumer private (
   ): BlockingTask[Map[TopicPartition, Long]] =
     consumer.withConsumer(_.endOffsets(partitions.asJava, timeout.asJava).asScala.mapValues(_.longValue()).toMap)
 
+  def gracefulShutdown: UIO[Unit] =
+    runloop.deps.gracefulShutdown
+
   def listTopics(timeout: Duration = Duration.Infinity): BlockingTask[Map[String, List[PartitionInfo]]] =
     consumer.withConsumer(_.listTopics(timeout.asJava).asScala.mapValues(_.asScala.toList).toMap)
 

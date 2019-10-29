@@ -232,5 +232,24 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
         } yield consumeResult.fold(_ => succeed, _ => fail("Expected consumeWith to fail"))
       }
     }
+
+    "shutting down gracefully" should {
+      "not receive messages after shutting down" in runWithConsumer("group150", "client150") { consumer =>
+        for {
+          kvs <- ZIO((1 to 5).toList.map(i => (s"key$i", s"msg$i")))
+          _   <- produceMany("topic150", kvs)
+          _   <- consumer.gracefulShutdown
+          records <- consumer
+                      .subscribeAnd(Subscription.Topics(Set("topic150")))
+                      .plainStream(Serde.string, Serde.string)
+                      .flattenChunks
+                      .take(5)
+                      .runCollect
+          _ <- ZIO.effectTotal(records.map { r =>
+                (r.record.key, r.record.value)
+              } shouldBe empty)
+        } yield ()
+      }
+    }
   }
 }

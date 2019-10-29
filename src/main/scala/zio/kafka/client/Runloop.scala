@@ -46,7 +46,8 @@ object Runloop {
     partitions: Queue[Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]],
     rebalancingRef: Ref[Boolean],
     rebalanceListener: ConsumerRebalanceListener,
-    diagnostics: Diagnostics
+    diagnostics: Diagnostics,
+    shutdownRef: Ref[Boolean]
   ) {
     def commit(cmd: Command.Commit)   = commitQueue.offer(cmd).unit
     def commits                       = ZStream.fromQueue(commitQueue)
@@ -60,6 +61,14 @@ object Runloop {
       partitions.offer(Take.Value(tp -> data)).unit
 
     def emitIfEnabledDiagnostic(event: DiagnosticEvent) = diagnostics.emitIfEnabled(event)
+
+    val isShutdown = shutdownRef.get
+
+    def gracefulShutdown: UIO[Unit] =
+      for {
+        shutdown <- shutdownRef.modify((_, true))
+        _        <- partitions.offer(Take.End).when(!shutdown)
+      } yield ()
   }
   object Deps {
     def make(
@@ -100,6 +109,7 @@ object Runloop {
                        }
                      }
                      .toManaged_
+        shutdownRef <- Ref.make(false).toManaged_
       } yield Deps(
         consumer,
         pollFrequency,
@@ -109,7 +119,8 @@ object Runloop {
         partitions,
         rebalancingRef,
         listener,
-        diagnostics
+        diagnostics,
+        shutdownRef
       )
   }
 
@@ -384,6 +395,12 @@ object Runloop {
                    else doCommit(List(cmd)).as(state)
       } yield newState
 
+    def handleShutdown(state: State, cmd: Command): BlockingTask[State] = cmd match {
+      case Command.Poll()              => UIO.succeed(state)
+      case req @ Command.Request(_, _) => req.cont.fail(None).as(state)
+      case cmd @ Command.Commit(_, _)  => handleCommit(state, cmd)
+    }
+
     ZStream
       .mergeAll(3, 32)(
         deps.polls,
@@ -391,10 +408,14 @@ object Runloop {
         deps.commits
       )
       .foldM(State.initial) { (state, cmd) =>
-        cmd match {
-          case Command.Poll()              => handlePoll(state)
-          case req @ Command.Request(_, _) => handleRequest(state, req)
-          case cmd @ Command.Commit(_, _)  => handleCommit(state, cmd)
+        deps.isShutdown.flatMap { shutdown =>
+          if (shutdown) handleShutdown(state, cmd)
+          else
+            cmd match {
+              case Command.Poll()              => handlePoll(state)
+              case req @ Command.Request(_, _) => handleRequest(state, req)
+              case cmd @ Command.Commit(_, _)  => handleCommit(state, cmd)
+            }
         }
       }
       .onError { cause =>
