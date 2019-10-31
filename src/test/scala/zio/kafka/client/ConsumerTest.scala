@@ -96,14 +96,13 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                                          .flatMap(_._2.flattenChunks)
                                          .take(5)
                                          .transduce(ZSink.collectAll[CommittableRecord[String, String]])
-                                         .mapM { committableRecords =>
+                                         .mapConcatM { committableRecords =>
                                            val records = committableRecords.map(_.record)
                                            val offsetBatch =
                                              committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
 
                                            offsetBatch.commit.as(records)
                                          }
-                                         .mapConcat(Chunk.fromIterable)
                                          .runCollect
                            } yield results
                          }
@@ -115,14 +114,13 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
                                           .flatMap(_._2.flattenChunks)
                                           .take(5)
                                           .transduce(ZSink.collectAll[CommittableRecord[String, String]])
-                                          .mapM { committableRecords =>
+                                          .mapConcatM { committableRecords =>
                                             val records = committableRecords.map(_.record)
                                             val offsetBatch =
                                               committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
 
                                             offsetBatch.commit.as(records)
                                           }
-                                          .mapConcat(Chunk.fromIterable)
                                           .runCollect
                             } yield results
                           }
