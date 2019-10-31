@@ -238,7 +238,7 @@ class ConsumerTest extends WordSpecLike with Matchers with LazyLogging with Defa
         for {
           kvs <- ZIO((1 to 5).toList.map(i => (s"key$i", s"msg$i")))
           _   <- produceMany("topic150", kvs)
-          _   <- consumer.gracefulShutdown
+          _   <- consumer.stopConsumption
           records <- consumer
                       .subscribeAnd(Subscription.Topics(Set("topic150")))
                       .plainStream(Serde.string, Serde.string)

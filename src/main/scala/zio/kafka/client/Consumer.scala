@@ -32,7 +32,11 @@ class Consumer private (
   ): BlockingTask[Map[TopicPartition, Long]] =
     consumer.withConsumer(_.endOffsets(partitions.asJava, timeout.asJava).asScala.mapValues(_.longValue()).toMap)
 
-  def gracefulShutdown: UIO[Unit] =
+  /**
+   * Stops consumption of data, drains buffered records, and ends the attached
+   * streams while still serving commit requests.
+   */
+  def stopConsumption: UIO[Unit] =
     runloop.deps.gracefulShutdown
 
   def listTopics(timeout: Duration = Duration.Infinity): BlockingTask[Map[String, List[PartitionInfo]]] =
