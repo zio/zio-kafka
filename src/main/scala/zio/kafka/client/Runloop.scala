@@ -408,7 +408,7 @@ object Runloop {
       } yield newState
 
     def handleShutdown(state: State, cmd: Command): BlockingTask[State] = cmd match {
-      case Command.Poll() => UIO.succeed(state)
+      case Command.Poll() => handlePoll(state)
       case Command.Request(tp, cont) =>
         state.bufferedRecords.get(tp) match {
           case Some(recs) =>
