@@ -1,4 +1,5 @@
 package zio.kafka.client
+/*
 
 import com.typesafe.scalalogging.LazyLogging
 import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
@@ -103,3 +104,4 @@ class ProducerTest extends WordSpecLike with Matchers with LazyLogging with Defa
     }
   }
 }
+*/
