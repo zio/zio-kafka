@@ -2,14 +2,14 @@ package zio.kafka.client
 
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import zio.{Chunk, Managed, RIO, ZIO}
+import zio.{ Chunk, Managed, RIO, ZIO }
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.kafka.client.serde.Serde
 import zio.duration._
 import zio.kafka.client.Kafka.KafkaTestEnvironment
-import zio.test.environment.{Live, TestEnvironment}
+import zio.test.environment.{ Live, TestEnvironment }
 
 trait Kafka {
   def kafka: Kafka.Service
@@ -21,9 +21,9 @@ object Kafka {
   }
 
   val make: Managed[Nothing, Kafka] =
-    Managed.fromEffect( ZIO.effectTotal( new Kafka {
+    Managed.fromEffect(ZIO.effectTotal(new Kafka {
       override val kafka: Service = new Kafka.Service {
-        val embeddedK = EmbeddedKafka.start()
+        val embeddedK                               = EmbeddedKafka.start()
         override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
       }
     }))
@@ -34,13 +34,13 @@ object Kafka {
 
   def liveClockBlocking: ZIO[KafkaTestEnvironment, Nothing, KafkaClockBlocking] =
     for {
-      clck <- Live.live(ZIO.environment[Clock])
+      clck    <- Live.live(ZIO.environment[Clock])
       blcking <- ZIO.environment[Blocking]
-      kfka <- ZIO.environment[Kafka]
+      kfka    <- ZIO.environment[Kafka]
     } yield new Kafka with Clock with Blocking {
       override def kafka: Service = kfka.kafka
 
-      override val clock: Clock.Service[Any] = clck.clock
+      override val clock: Clock.Service[Any]       = clck.clock
       override val blocking: Blocking.Service[Any] = blcking.blocking
     }
 
@@ -51,7 +51,7 @@ object KafkaTestUtils {
   val kafkaEnvironment: Managed[Nothing, KafkaTestEnvironment] =
     for {
       testEnvironment <- TestEnvironment.Value
-      kafkaService <- Kafka.make
+      kafkaService    <- Kafka.make
     } yield new TestEnvironment(
       testEnvironment.blocking,
       testEnvironment.clock,
@@ -64,7 +64,6 @@ object KafkaTestUtils {
       val kafka = kafkaService.kafka
     }
 
-
   def producerSettings =
     for {
       servers <- ZIO.access[Kafka](_.kafka.bootstrapServers)
@@ -74,18 +73,22 @@ object KafkaTestUtils {
       Map.empty
     )
 
-  def withProducer[A, K, V](r: Producer[Any, K, V] => RIO[Any with Clock with Kafka with Blocking, A],
-                            kSerde: Serde[Any, K],
-                            vSerde: Serde[Any, V]): RIO[KafkaTestEnvironment, A] =
+  def withProducer[A, K, V](
+    r: Producer[Any, K, V] => RIO[Any with Clock with Kafka with Blocking, A],
+    kSerde: Serde[Any, K],
+    vSerde: Serde[Any, V]
+  ): RIO[KafkaTestEnvironment, A] =
     for {
       settings <- producerSettings
       producer = Producer.make(settings, kSerde, vSerde)
-      lcb <- Kafka.liveClockBlocking
-      produced <- producer.use { p => r(p).provide(lcb) }
+      lcb      <- Kafka.liveClockBlocking
+      produced <- producer.use { p =>
+                   r(p).provide(lcb)
+                 }
     } yield produced
 
-  def withProducerStrings[A](r: Producer[Any, String, String] => RIO[Any with Clock with Kafka with Blocking, A])
-  = withProducer(r, Serde.string, Serde.string)
+  def withProducerStrings[A](r: Producer[Any, String, String] => RIO[Any with Clock with Kafka with Blocking, A]) =
+    withProducer(r, Serde.string, Serde.string)
 
   def produceOne(t: String, k: String, m: String) =
     withProducerStrings { p =>
@@ -120,37 +123,37 @@ object KafkaTestUtils {
       5.seconds,
       Map(
         ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "earliest",
-        ConsumerConfig.METADATA_MAX_AGE_CONFIG -> "100"
+        ConsumerConfig.METADATA_MAX_AGE_CONFIG  -> "100"
       ),
       250.millis,
       250.millis,
       1
     )
 
-  def consumeWithStrings(groupId: String,
-                         clientId: String,
-                         subscription: Subscription)
-                        (r: (String, String) => ZIO[Any with Kafka with Clock with Blocking, Nothing, Unit]): RIO[KafkaTestEnvironment, Unit] =
+  def consumeWithStrings(groupId: String, clientId: String, subscription: Subscription)(
+    r: (String, String) => ZIO[Any with Kafka with Clock with Blocking, Nothing, Unit]
+  ): RIO[KafkaTestEnvironment, Unit] =
     for {
       lcb <- Kafka.liveClockBlocking
       inner <- (for {
-        settings <- consumerSettings(groupId, clientId)
-        consumed <- Consumer.consumeWith(settings, subscription, Serde.string, Serde.string)(r)
-      } yield consumed)
-        .provide(lcb)
+                settings <- consumerSettings(groupId, clientId)
+                consumed <- Consumer.consumeWith(settings, subscription, Serde.string, Serde.string)(r)
+              } yield consumed)
+                .provide(lcb)
     } yield inner
 
-  def withConsumer[A](groupId: String, clientId: String)
-                     (r: Consumer => RIO[Any with Kafka with Clock with Blocking, A]): RIO[KafkaTestEnvironment, A] =
+  def withConsumer[A](groupId: String, clientId: String)(
+    r: Consumer => RIO[Any with Kafka with Clock with Blocking, A]
+  ): RIO[KafkaTestEnvironment, A] =
     for {
       lcb <- Kafka.liveClockBlocking
       inner <- (for {
-        settings <- consumerSettings(groupId, clientId)
-        consumer = Consumer.make(settings)
-        consumed <- consumer.use { p => r(p).provide(lcb) }
-      } yield consumed).provide(lcb)
+                settings <- consumerSettings(groupId, clientId)
+                consumer = Consumer.make(settings)
+                consumed <- consumer.use { p =>
+                             r(p).provide(lcb)
+                           }
+              } yield consumed).provide(lcb)
     } yield inner
 
 }
-
-
