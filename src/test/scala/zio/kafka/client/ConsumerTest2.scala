@@ -17,7 +17,7 @@ import zio.duration._
  */
 object ConsumerTest2
     extends DefaultRunnableSpec(
-      suite("consumer test suite")(
+      suite("consumer test suit2")(
         testM("commit offsets for all consumed messages") {
           val topic        = "consumeWith2"
           val subscription = Subscription.Topics(Set(topic))

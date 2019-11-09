@@ -17,7 +17,7 @@ import zio._
  */
 object ConsumerTest
     extends DefaultRunnableSpec(
-      suite("consumer test suite")(
+      suite("consumer test suite pt1")(
         testM("receive messages produced on the topic") {
           val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
           for {
