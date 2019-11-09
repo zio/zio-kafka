@@ -133,6 +133,16 @@ object ConsumerTest
           val nrMessages   = 50
           val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
 
+          def  newM = withConsumer("group3", "client3") { c =>
+            c.subscribe(subscription) *> c
+              .plainStream(Serde.string, Serde.string)
+              .take(1)
+              .flattenChunks
+              .map(r => (r.record.key(), r.record.value()))
+              .run(ZSink.collectAll[(String, String)])
+              .map(_.head)
+          }.orDie
+
           for {
             done             <- Promise.make[Nothing, Unit]
             messagesReceived <- Ref.make(List.empty[(String, String)])
@@ -148,15 +158,7 @@ object ConsumerTest
             _ <- fib.interrupt
             _ <- fib.join.ignore
             _ <- produceOne(topic, "key-new", "msg-new")
-            newMessage <- withConsumer("group3", "client3") { c =>
-                           c.subscribe(subscription) *> c
-                             .plainStream(Serde.string, Serde.string)
-                             .take(1)
-                             .flattenChunks
-                             .map(r => (r.record.key(), r.record.value()))
-                             .run(ZSink.collectAll[(String, String)])
-                             .map(_.head)
-                         }.orDie
+            newMessage <- newM
             consumedMessages <- messagesReceived.get
           } yield assert(consumedMessages, contains(newMessage).negate)
         },
