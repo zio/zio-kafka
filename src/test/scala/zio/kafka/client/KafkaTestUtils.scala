@@ -1,8 +1,7 @@
 package zio.kafka.client
 
 import net.manub.embeddedkafka.EmbeddedKafka
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio.{Chunk, Managed, RIO, ZIO}
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio.blocking.Blocking
@@ -52,7 +51,7 @@ object KafkaTestUtils {
   val kafkaEnvironment: Managed[Nothing, KafkaTestEnvironment] =
     for {
       testEnvironment <- TestEnvironment.Value
-      kafkaService    <- Kafka.make
+      kafkaService <- Kafka.make
     } yield new TestEnvironment(
       testEnvironment.blocking,
       testEnvironment.clock,
@@ -82,15 +81,15 @@ object KafkaTestUtils {
       settings <- producerSettings
       producer = Producer.make(settings, kSerde, vSerde)
       lcb <- Kafka.liveClockBlocking
-      produced <- producer.use { p => r(p).provide(lcb)}
+      produced <- producer.use { p => r(p).provide(lcb) }
     } yield produced
 
   def withProducerStrings[A](r: Producer[Any, String, String] => RIO[Any with Clock with Kafka with Blocking, A])
-    = withProducer(r, Serde.string, Serde.string)
+  = withProducer(r, Serde.string, Serde.string)
 
   def produceOne(t: String, k: String, m: String) =
     withProducerStrings { p =>
-        p.produce(new ProducerRecord(t, k, m))
+      p.produce(new ProducerRecord(t, k, m))
     }
 
   def produceMany(t: String, kvs: List[(String, String)]) =
@@ -121,7 +120,7 @@ object KafkaTestUtils {
       5.seconds,
       Map(
         ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "earliest",
-        ConsumerConfig.METADATA_MAX_AGE_CONFIG  -> "100"
+        ConsumerConfig.METADATA_MAX_AGE_CONFIG -> "100"
       ),
       250.millis,
       250.millis,
@@ -135,8 +134,8 @@ object KafkaTestUtils {
     for {
       lcb <- Kafka.liveClockBlocking
       inner <- (for {
-      settings <- consumerSettings(groupId, clientId)
-      consumed <- Consumer.consumeWith(settings, subscription, Serde.string, Serde.string)(r)
+        settings <- consumerSettings(groupId, clientId)
+        consumed <- Consumer.consumeWith(settings, subscription, Serde.string, Serde.string)(r)
       } yield consumed)
         .provide(lcb)
     } yield inner
@@ -152,17 +151,6 @@ object KafkaTestUtils {
       } yield produced).provide(lcb)
     } yield inner
 
-  def recordsFromAllTopics[K, V](
-    pollResult: Map[TopicPartition, Chunk[ConsumerRecord[K, V]]]
-  ): Chunk[ConsumerRecord[K, V]] =
-    Chunk.fromIterable(pollResult.values).flatMap(identity)
-
-  def getAllRecordsFromMultiplePolls[K, V](
-    res: List[Map[TopicPartition, Chunk[ConsumerRecord[K, V]]]]
-  ): Chunk[ConsumerRecord[K, V]] =
-    res.foldLeft[Chunk[ConsumerRecord[K, V]]](Chunk.empty)(
-      (acc, pollResult) => acc ++ recordsFromAllTopics[K, V](pollResult)
-    )
-
-  def tp(topic: String, partition: Int): TopicPartition = new TopicPartition(topic, partition)
 }
+
+

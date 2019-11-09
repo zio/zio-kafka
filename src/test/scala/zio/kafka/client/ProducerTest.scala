@@ -1,71 +1,107 @@
 package zio.kafka.client
+/*
 
-import zio.test._
-import KafkaTestUtils._
+import com.typesafe.scalalogging.LazyLogging
+import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
-import zio._
+import org.scalatest.{ Matchers, WordSpecLike }
+import zio.blocking.Blocking
+import zio.clock.Clock
+import zio.duration._
 import zio.kafka.client.serde.Serde
 import zio.stream.Take
-import zio.test.Assertion._
+import zio._
 
-object ProducerTest
-    extends DefaultRunnableSpec(
-      suite("producer test suite")(
-        testM("one record") {
-          withProducerStrings { producer =>
-            for {
-              _ <- producer.produce(new ProducerRecord("topic", "boo", "baa"))
-            } yield assertCompletes
-          }
-        },
-        testM("a non-empty chunk of records") {
-          withProducerStrings {
-            producer =>
-              import Subscription._
+class ProducerTest extends WordSpecLike with Matchers with LazyLogging with DefaultRuntime {
 
-              val (topic1, key1, value1) = ("topic1", "boo", "baa")
-              val (topic2, key2, value2) = ("topic2", "baa", "boo")
-              val chunks = Chunk.fromIterable(
-                List(new ProducerRecord(topic1, key1, value1), new ProducerRecord(topic2, key2, value2))
-              )
-              def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
-                Consumer
-                  .make(settings)
-                  .flatMap(
-                    c => c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.string).toQueue()
-                  )
+  def pause(): ZIO[Clock, Nothing, Unit] = UIO(()).delay(2.seconds).forever
 
-              for {
-                outcome  <- producer.produceChunk(chunks).flatten
-                settings <- consumerSettings("testGroup", "testClient")
-                record1 <- withConsumer(Topics(Set(topic1)), settings).use { consumer =>
-                            for {
-                              messages <- Take.option(consumer.take).someOrFail(new NoSuchElementException)
-                              record = messages
-                                .filter(rec => rec.record.key == key1 && rec.record.value == value1)
-                                .toSeq
-                            } yield record
-                          }
-                record2 <- withConsumer(Topics(Set(topic2)), settings).use { consumer =>
-                            for {
-                              messages <- Take.option(consumer.take).someOrFail(new NoSuchElementException)
-                              record   = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
-                            } yield record
-                          }
-              } yield {
-                assert(outcome.length, equalTo(2)) &&
-                assert(record1, isNonEmpty) &&
-                assert(record2.length, isGreaterThan(0))
-              }
-          }
-        },
-        testM("an empty chunk of records") {
-          withProducerStrings { producer =>
-            val chunks = Chunk.fromIterable(List.empty)
-            for {
-              outcome <- producer.produceChunk(chunks).flatten
-            } yield assert(outcome.length, equalTo(0))
-          }
-        }
-      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
+  def log(s: String): UIO[Unit] = ZIO.effectTotal(logger.info(s))
+
+  implicit val config = EmbeddedKafkaConfig(kafkaPort = 0, zooKeeperPort = 0)
+  val embeddedKafka   = EmbeddedKafka.start()
+  val bootstrapServer = s"localhost:${embeddedKafka.config.kafkaPort}"
+
+  val settings =
+    ProducerSettings(
+      List(bootstrapServer),
+      5.seconds,
+      Map.empty
     )
+
+  def runWithProducer[A](
+    r: Producer[Any, String, String] => RIO[Any with Blocking with Clock, A]
+  ): A =
+    unsafeRun(
+      Producer.make(settings, Serde.string, Serde.string).use(r)
+    )
+
+  "A string producer" can {
+    "produce" should {
+      "one record" in runWithProducer { producer =>
+        for {
+          outcome <- producer.produce(new ProducerRecord("topic", "boo", "baa")).either
+          _       <- ZIO.effect(outcome.isRight shouldBe true)
+        } yield ()
+      }
+
+      "a non empty chunk of records" in runWithProducer { producer =>
+        import Subscription._
+
+        val (topic1, key1, value1) = ("topic1", "boo", "baa")
+        val (topic2, key2, value2) = ("topic2", "baa", "boo")
+        val chunks = Chunk.fromIterable(
+          List(new ProducerRecord(topic1, key1, value1), new ProducerRecord(topic2, key2, value2))
+        )
+        def withConsumer(subscription: Subscription) =
+          Consumer
+            .make(
+              ConsumerSettings(
+                List(bootstrapServer),
+                "testGroup",
+                "testClient",
+                5.seconds,
+                Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "earliest"),
+                250.millis,
+                250.millis,
+                1
+              )
+            )
+            .flatMap(
+              c => c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.string).toQueue()
+            )
+
+        for {
+          outcome <- producer.produceChunk(chunks).flatten.either
+          _       <- ZIO.effect(outcome.isRight shouldBe true)
+          _       <- ZIO.effect(outcome.right.get.length shouldBe 2)
+          _ <- withConsumer(Topics(Set(topic1))).use { consumer =>
+                for {
+                  messages <- Take.option(consumer.take).someOrFail(new NoSuchElementException)
+                  record   = messages.filter(rec => rec.record.key == key1 && rec.record.value == value1).toSeq
+                  _        <- ZIO.effect(record should not be empty)
+                } yield ()
+              }
+          _ <- withConsumer(Topics(Set(topic2))).use { consumer =>
+                for {
+                  messages <- Take.option(consumer.take).someOrFail(new NoSuchElementException)
+                  record   = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
+                  _        <- ZIO.effect(record should not be empty)
+                } yield ()
+              }
+        } yield ()
+      }
+
+      "an empty chunk of records" in runWithProducer { producer =>
+        val chunks = Chunk.fromIterable(List.empty)
+        for {
+          outcome <- producer.produceChunk(chunks).flatten.either
+          _       <- ZIO.effect(outcome.isRight shouldBe true)
+          _       <- ZIO.effect(outcome.right.get.isEmpty shouldBe true)
+        } yield ()
+      }
+    }
+  }
+}
+*/
