@@ -127,6 +127,19 @@ object KafkaTestUtils {
       250.millis,
       1
     )
+
+  def consumeWithStrings(groupId: String,
+                         clientId: String,
+                         subscription: Subscription)
+                        (r: (String, String) => ZIO[Any with Kafka with Clock with Blocking, Nothing, Unit]): RIO[KafkaTestEnvironment, Unit] =
+    for {
+      lcb <- Kafka.liveClockBlocking
+      inner <- (for {
+      settings <- consumerSettings(groupId, clientId)
+      consumed <- Consumer.consumeWith(settings, subscription, Serde.string, Serde.string)(r)
+      } yield consumed)
+        .provide(lcb)
+    } yield inner
   
   def withConsumer[A](groupId: String, clientId: String)
                      (r: Consumer => RIO[Any with Kafka with Clock with Blocking, A]): RIO[KafkaTestEnvironment, A] =
@@ -135,8 +148,8 @@ object KafkaTestUtils {
       inner <- (for {
         settings <- consumerSettings(groupId, clientId)
         consumer = Consumer.make(settings)
-        produced <- consumer.use { p => r(p).provide(lcb) }
-      } yield produced).provide(lcb)
+        consumed <- consumer.use { p => r(p).provide(lcb) }
+      } yield consumed).provide(lcb)
     } yield inner
 
   def recordsFromAllTopics[K, V](
