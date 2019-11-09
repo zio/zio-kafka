@@ -133,15 +133,16 @@ object ConsumerTest
           val nrMessages   = 50
           val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
 
-          def  newM = withConsumer("group3", "client3") { c =>
-            c.subscribe(subscription) *> c
-              .plainStream(Serde.string, Serde.string)
-              .take(1)
-              .flattenChunks
-              .map(r => (r.record.key(), r.record.value()))
-              .run(ZSink.collectAll[(String, String)])
-              .map(_.head)
-          }.orDie
+          def newM =
+            withConsumer("group3", "client3") { c =>
+              c.subscribe(subscription) *> c
+                .plainStream(Serde.string, Serde.string)
+                .take(1)
+                .flattenChunks
+                .map(r => (r.record.key(), r.record.value()))
+                .run(ZSink.collectAll[(String, String)])
+                .map(_.head)
+            }.orDie
 
           for {
             done             <- Promise.make[Nothing, Unit]
@@ -155,10 +156,10 @@ object ConsumerTest
                   }).fork
             _ <- done.await *> Live
                   .live(ZIO.sleep(3.seconds)) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
-            _ <- fib.interrupt
-            _ <- fib.join.ignore
-            _ <- produceOne(topic, "key-new", "msg-new")
-            newMessage <- newM
+            _                <- fib.interrupt
+            _                <- fib.join.ignore
+            _                <- produceOne(topic, "key-new", "msg-new")
+            newMessage       <- newM
             consumedMessages <- messagesReceived.get
           } yield assert(consumedMessages, contains(newMessage).negate)
         },
