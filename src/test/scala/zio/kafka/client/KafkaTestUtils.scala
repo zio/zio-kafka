@@ -1,8 +1,8 @@
 package zio.kafka.client
 
-import net.manub.embeddedkafka.EmbeddedKafka
+import net.manub.embeddedkafka.{ EmbeddedK, EmbeddedKafka }
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import zio.{ Chunk, Managed, RIO, ZIO }
+import zio.{ Chunk, Managed, RIO, UIO, ZIO, ZManaged }
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -18,15 +18,19 @@ trait Kafka {
 object Kafka {
   trait Service {
     def bootstrapServers: List[String]
+    def stop(): UIO[Unit]
+  }
+
+  case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka.Service {
+    override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
+
+    override def stop(): UIO[Unit] = ZIO.effectTotal(embeddedK.stop(true))
   }
 
   val make: Managed[Nothing, Kafka] =
-    Managed.fromEffect(ZIO.effectTotal(new Kafka {
-      override val kafka: Service = new Kafka.Service {
-        val embeddedK                               = EmbeddedKafka.start()
-        override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
-      }
-    }))
+    ZManaged.make(ZIO.effectTotal(new Kafka {
+      override val kafka: Service = EmbeddedKafkaService(EmbeddedKafka.start())
+    }))(_.kafka.stop())
 
   type KafkaTestEnvironment = Kafka with TestEnvironment
 
