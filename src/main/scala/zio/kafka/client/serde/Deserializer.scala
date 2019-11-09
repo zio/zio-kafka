@@ -1,9 +1,10 @@
 package zio.kafka.client.serde
 
-import zio.RIO
+import zio.{ RIO, Task }
 
 import scala.util.{ Failure, Success, Try }
 import org.apache.kafka.common.header.Headers
+import org.apache.kafka.common.serialization.{ Deserializer => KafkaDeserializer }
 
 /**
  * Deserializer from byte array to a value of some type T
@@ -51,5 +52,13 @@ object Deserializer extends Serdes {
   def apply[R, T](deser: (String, Headers, Array[Byte]) => RIO[R, T]): Deserializer[R, T] = new Deserializer[R, T] {
     override def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T] =
       deser(topic, headers, data)
+  }
+
+  /**
+   * Create a Deserializer from a Kafka Deserializer
+   */
+  def apply[T](deserializer: KafkaDeserializer[T]): Deserializer[Any, T] = new Deserializer[Any, T] {
+    override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Task[T] =
+      Task(deserializer.deserialize(topic, headers, data))
   }
 }

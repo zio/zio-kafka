@@ -1,7 +1,8 @@
 package zio.kafka.client.serde
 
-import zio.RIO
+import zio.{ RIO, Task }
 import org.apache.kafka.common.header.Headers
+import org.apache.kafka.common.serialization.{ Serializer => KafkaSerializer }
 
 /**
  * Serializer from values of some type T to a byte array
@@ -39,4 +40,12 @@ object Serializer extends Serdes {
       override def serialize(topic: String, headers: Headers, value: T): RIO[R, Array[Byte]] =
         ser(topic, headers, value)
     }
+
+  /**
+   * Create a Serializer from a Kafka Serializer
+   */
+  def apply[T](serializer: KafkaSerializer[T]): Serializer[Any, T] = new Serializer[Any, T] {
+    override def serialize(topic: String, headers: Headers, value: T): Task[Array[Byte]] =
+      Task(serializer.serialize(topic, headers, value))
+  }
 }
