@@ -8,6 +8,7 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.kafka.client.serde.Serde
 import zio.duration._
+import zio.kafka.client.AdminClient.KafkaAdminClientConfig
 import zio.kafka.client.Kafka.KafkaTestEnvironment
 import zio.test.environment.{ Live, TestEnvironment }
 
@@ -23,7 +24,6 @@ object Kafka {
 
   case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka.Service {
     override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
-
     override def stop(): UIO[Unit] = ZIO.effectTotal(embeddedK.stop(true))
   }
 
@@ -99,7 +99,7 @@ object KafkaTestUtils {
       p.produce(new ProducerRecord(t, k, m))
     }
 
-  def produceMany(t: String, kvs: List[(String, String)]) =
+  def produceMany(t: String, kvs: Iterable[(String, String)]) =
     withProducerStrings { p =>
       val records = kvs.map {
         case (k, v) => new ProducerRecord[String, String](t, k, v)
@@ -108,7 +108,7 @@ object KafkaTestUtils {
       p.produceChunk(chunk)
     }
 
-  def produceMany(topic: String, partition: Int, kvs: List[(String, String)]) =
+  def produceMany(topic: String, partition: Int, kvs: Iterable[(String, String)]) =
     withProducerStrings { p =>
       val records = kvs.map {
         case (k, v) => new ProducerRecord[String, String](topic, partition, null, k, v)
@@ -160,4 +160,20 @@ object KafkaTestUtils {
               } yield consumed).provide(lcb)
     } yield inner
 
+  def adminSettings =
+    for {
+      servers <- ZIO.access[Kafka](_.kafka.bootstrapServers)
+    } yield KafkaAdminClientConfig(servers)
+
+  def withAdmin[T](f: AdminClient => RIO[Any with Clock with Kafka with Blocking, T]) =
+    for {
+      settings <- adminSettings
+      lcb      <- Kafka.liveClockBlocking
+      fRes <- AdminClient
+               .adminClient(settings)
+               .use { client =>
+                 f(client)
+               }
+               .provide(lcb)
+    } yield fRes
 }

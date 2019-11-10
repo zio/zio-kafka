@@ -16,21 +16,25 @@ class Consumer private (
   private val consumer: ConsumerAccess,
   private val settings: ConsumerSettings,
   private val runloop: Runloop
-) { self =>
+) {
+  self =>
   def assignment: BlockingTask[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
 
   def beginningOffsets(
-    partitions: Set[TopicPartition],
-    timeout: Duration = Duration.Infinity
-  ): BlockingTask[Map[TopicPartition, Long]] =
+                        partitions: Set[TopicPartition],
+                        timeout: Duration = Duration.Infinity
+                      ): BlockingTask[Map[TopicPartition, Long]] =
     consumer.withConsumer(_.beginningOffsets(partitions.asJava, timeout.asJava).asScala.mapValues(_.longValue()).toMap)
 
   def endOffsets(
-    partitions: Set[TopicPartition],
-    timeout: Duration = Duration.Infinity
-  ): BlockingTask[Map[TopicPartition, Long]] =
-    consumer.withConsumer(_.endOffsets(partitions.asJava, timeout.asJava).asScala.mapValues(_.longValue()).toMap)
+                  partitions: Set[TopicPartition],
+                  timeout: Duration = Duration.Infinity
+                ): BlockingTask[Map[TopicPartition, Long]] =
+    consumer.withConsumer { eo =>
+      val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
+      offs.asScala.mapValues(_.longValue()).toMap
+    }
 
   def listTopics(timeout: Duration = Duration.Infinity): BlockingTask[Map[String, List[PartitionInfo]]] =
     consumer.withConsumer(_.listTopics(timeout.asJava).asScala.mapValues(_.asScala.toList).toMap)
