@@ -147,5 +147,5 @@ object ConsumerTest
             _ => assert("result", equalTo("Expected consumeWith to fail"))
           )
         }
-      ).provideManagedShared(KafkaTestUtils.kafkaEnvironment)
+      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
     )
