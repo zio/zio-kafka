@@ -40,5 +40,5 @@ object ClientAdminTest
               assert(list3.size, equalTo(1))
           }
         }
-      ).provideManagedShared(KafkaTestUtils.kafkaEnvironment)
+      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
     )

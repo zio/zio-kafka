@@ -67,5 +67,5 @@ object ProducerTest
             } yield assert(outcome.length, equalTo(0))
           }
         }
-      ).provideManagedShared(KafkaTestUtils.kafkaEnvironment)
+      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
     )

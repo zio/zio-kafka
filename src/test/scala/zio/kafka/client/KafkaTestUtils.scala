@@ -1,8 +1,8 @@
 package zio.kafka.client
 
-import net.manub.embeddedkafka.{ EmbeddedK, EmbeddedKafka }
+import net.manub.embeddedkafka.{EmbeddedK, EmbeddedKafka}
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import zio.{ Chunk, Managed, RIO, UIO, ZIO, ZManaged }
+import zio.{Chunk, Managed, RIO, UIO, ZIO, ZManaged}
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -10,7 +10,8 @@ import zio.kafka.client.serde.Serde
 import zio.duration._
 import zio.kafka.client.AdminClient.KafkaAdminClientConfig
 import zio.kafka.client.Kafka.KafkaTestEnvironment
-import zio.test.environment.{ Live, TestEnvironment }
+import zio.random.Random
+import zio.test.environment.{Live, TestEnvironment}
 
 trait Kafka {
   def kafka: Kafka.Service
@@ -27,10 +28,22 @@ object Kafka {
     override def stop(): UIO[Unit] = ZIO.effectTotal(embeddedK.stop(true))
   }
 
-  val make: Managed[Nothing, Kafka] =
+  case object DefaultLocal extends Kafka.Service {
+    override def bootstrapServers: List[String] = List(s"localhost:9092")
+
+    override def stop(): UIO[Unit] = UIO.unit
+  }
+
+  val makeEmbedded: Managed[Nothing, Kafka] =
     ZManaged.make(ZIO.effectTotal(new Kafka {
       override val kafka: Service = EmbeddedKafkaService(EmbeddedKafka.start())
     }))(_.kafka.stop())
+
+  val makeLocal: Managed[Nothing, Kafka] =
+    ZManaged.make(ZIO.effectTotal(new Kafka {
+      override val kafka: Service = DefaultLocal
+    }))(_.kafka.stop())
+
 
   type KafkaTestEnvironment = Kafka with TestEnvironment
 
@@ -52,10 +65,10 @@ object Kafka {
 
 object KafkaTestUtils {
 
-  val kafkaEnvironment: Managed[Nothing, KafkaTestEnvironment] =
+  def kafkaEnvironment(kafkaE: Managed[Nothing, Kafka]): Managed[Nothing, KafkaTestEnvironment] =
     for {
       testEnvironment <- TestEnvironment.Value
-      kafkaService    <- Kafka.make
+      kafkaS <- kafkaE
     } yield new TestEnvironment(
       testEnvironment.blocking,
       testEnvironment.clock,
@@ -65,8 +78,14 @@ object KafkaTestUtils {
       testEnvironment.sized,
       testEnvironment.system
     ) with Kafka {
-      val kafka = kafkaService.kafka
+      val kafka = kafkaS.kafka
     }
+
+  val embeddedKafkaEnvironment: Managed[Nothing, KafkaTestEnvironment] =
+    kafkaEnvironment(Kafka.makeEmbedded)
+
+  val localKafkaEnvironment: Managed[Nothing, KafkaTestEnvironment] =
+    kafkaEnvironment(Kafka.makeLocal)
 
   def producerSettings =
     for {
@@ -176,4 +195,17 @@ object KafkaTestUtils {
                }
                .provide(lcb)
     } yield fRes
+
+  // temporary workaround for zio issue #2166 - broken infinity
+  val veryLongTime = Duration.fromNanos(Long.MaxValue)
+
+  def randomThing(prefix: String) = for {
+    random <- ZIO.environment[Random]
+    l <- random.random.nextLong(8)
+  } yield s"$prefix-$l"
+
+  def randomTopic = randomThing("topic")
+
+  def randomGroup = randomThing("group")
+
 }
