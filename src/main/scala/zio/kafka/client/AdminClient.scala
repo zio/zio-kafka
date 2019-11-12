@@ -1,11 +1,20 @@
 package zio.kafka.client
 
-import org.apache.kafka.clients.admin.{AdminClient => JAdminClient, CreatePartitionsResult => JCreatePartitionsResult, CreateTopicsResult => JCreateTopicsResult, DeleteTopicsResult => JDeleteTopicsResult, DescribeTopicsResult => JDescribeTopicsResult, ListTopicsResult => JListTopicsResult, TopicDescription => JTopicDescription, 
-  DeleteRecordsResult => JDeleteRecordsResult, _}
+import org.apache.kafka.clients.admin.{
+  AdminClient => JAdminClient,
+  CreatePartitionsResult => JCreatePartitionsResult,
+  CreateTopicsResult => JCreateTopicsResult,
+  DeleteTopicsResult => JDeleteTopicsResult,
+  DescribeTopicsResult => JDescribeTopicsResult,
+  ListTopicsResult => JListTopicsResult,
+  TopicDescription => JTopicDescription,
+  DeleteRecordsResult => JDeleteRecordsResult,
+  _
+}
 import zio._
 import AdminClient._
 import org.apache.kafka.common.acl.AclOperation
-import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionInfo}
+import org.apache.kafka.common.{ KafkaFuture, TopicPartition, TopicPartitionInfo }
 
 import scala.collection.JavaConverters._
 
@@ -72,21 +81,28 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
       res <- ListTopicsResult(jRes)
     } yield res
 
-  def describeTopics(topicNames: Iterable[String],
-                     describeTopicsOptions: Option[DescribeTopicsOptions] = None): BlockingTask[DescribeTopicsResult] = {
+  def describeTopics(
+    topicNames: Iterable[String],
+    describeTopicsOptions: Option[DescribeTopicsOptions] = None
+  ): BlockingTask[DescribeTopicsResult] = {
     val asJava = topicNames.asJavaCollection
     semaphore.withPermit {
-      ZIO(describeTopicsOptions.fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts)))
-        .map(res => DescribeTopicsResult(res))
+      ZIO(
+        describeTopicsOptions.fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
+      ).map(res => DescribeTopicsResult(res))
     }
   }
 
-  def createPartitions(newPartitions: Map[String, NewPartitions],
-                       createPartitionsOptions: Option[CreatePartitionsOptions] = None): BlockingTask[CreatePartitionsResult] = {
+  def createPartitions(
+    newPartitions: Map[String, NewPartitions],
+    createPartitionsOptions: Option[CreatePartitionsOptions] = None
+  ): BlockingTask[CreatePartitionsResult] = {
     val asJava = newPartitions.asJava
     semaphore.withPermit {
-      ZIO(createPartitionsOptions.fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts)))
-        .map(res => CreatePartitionsResult(res))
+      ZIO(
+        createPartitionsOptions
+          .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts))
+      ).map(res => CreatePartitionsResult(res))
     }
   }
 }
@@ -149,7 +165,12 @@ object AdminClient {
       }
   }
 
-  case class TopicDescription(name: String, internal: Boolean, partitions: List[TopicPartitionInfo], authorizedOperations: Set[AclOperation])
+  case class TopicDescription(
+    name: String,
+    internal: Boolean,
+    partitions: List[TopicPartitionInfo],
+    authorizedOperations: Set[AclOperation]
+  )
 
   object TopicDescription {
     def apply(jt: JTopicDescription): TopicDescription =
@@ -160,8 +181,11 @@ object AdminClient {
 
   object DescribeTopicsResult {
     def apply(j: JDescribeTopicsResult): DescribeTopicsResult = {
-      val zios: Map[String, Task[TopicDescription]] = j.values.asScala.toMap
-        .mapValues { vkf => kafkaFutureToZio(vkf).map { v => TopicDescription(v) } }
+      val zios: Map[String, Task[TopicDescription]] = j.values.asScala.toMap.mapValues { vkf =>
+        kafkaFutureToZio(vkf).map { v =>
+          TopicDescription(v)
+        }
+      }
       ResultMap(zios)
     }
   }
@@ -171,14 +195,15 @@ object AdminClient {
   object CreatePartitionsResult {
     def apply(j: JCreatePartitionsResult): CreatePartitionsResult =
       new CreatePartitionsResult(j.values.asScala.toMap.mapValues(fv => kafkaFutureVoidToZio(fv)))
-    }
-  
+  }
+
   type DeleteRecordsResult = ResultMap[TopicPartition, DeletedRecords]
 
   object DeleteRecordsResult {
     def apply(j: JDeleteRecordsResult): DeleteRecordsResult = {
-      val zios: Map[TopicPartition, Task[DeletedRecords]] = j.lowWatermarks.asScala.toMap
-        .mapValues { vkf => kafkaFutureToZio(vkf) }
+      val zios: Map[TopicPartition, Task[DeletedRecords]] = j.lowWatermarks.asScala.toMap.mapValues { vkf =>
+        kafkaFutureToZio(vkf)
+      }
       ResultMap(zios)
     }
   }

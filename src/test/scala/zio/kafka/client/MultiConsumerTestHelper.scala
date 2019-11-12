@@ -24,13 +24,25 @@ object MultiConsumerTestHelper {
       val tp = new TopicPartition(topic, consumerIndex)
       for {
         data <- consumer
-            .subscribeAnd(Subscription.Topics(Set(topic)))
-            .partitionedStream(Serde.string, Serde.string)
-            .filter(_._1 == tp)
-            .flatMap(_._2.flattenChunks)
-            .take(nTakes)
-            .runCollect
-            .map(x => x.map { item => UsefulInfo(consumerIndex, item.record.topic, item.record.partition, item.offset.offset, item.record.key, item.record.value) })
+                 .subscribeAnd(Subscription.Topics(Set(topic)))
+                 .partitionedStream(Serde.string, Serde.string)
+                 .filter(_._1 == tp)
+                 .flatMap(_._2.flattenChunks)
+                 .take(nTakes)
+                 .runCollect
+                 .map(
+                   x =>
+                     x.map { item =>
+                       UsefulInfo(
+                         consumerIndex,
+                         item.record.topic,
+                         item.record.partition,
+                         item.offset.offset,
+                         item.record.key,
+                         item.record.value
+                       )
+                     }
+                 )
       } yield data
     }
 
@@ -42,44 +54,43 @@ object MultiConsumerTestHelper {
     produceMany(topic, many)
   }
 
-    val test1 = testM("test multiple consumers") {
-      for {
-        topic <- randomTopic
-        consumerGroupId <- randomGroup
-        _ <- makeTopic(topic, 5)
-        _ <- makeMany(topic, 1000)
-        _ <- Live.live(ZIO.sleep(2.seconds))
-        consumed = 0.to(4).map(i => MultiConsumerTestHelper.consumeN(topic, consumerGroupId, i, 3))
-        _ <- ZIO.collectAll(consumed)
-      } yield {
-        assertCompletes
-      }
+  val testMultipleConsumers = testM("test multiple consumers") {
+    for {
+      topic           <- randomTopic
+      consumerGroupId <- randomGroup
+      _               <- makeTopic(topic, 5)
+      _               <- makeMany(topic, 1000)
+      _               <- Live.live(ZIO.sleep(2.seconds))
+      consumed        = 0.to(4).map(i => MultiConsumerTestHelper.consumeN(topic, consumerGroupId, i, 3))
+      _               <- ZIO.collectAll(consumed)
+    } yield {
+      assertCompletes
     }
-    val test2 = testM("test parallel consumers") {
-      for {
-        topic <- randomTopic
-        consumerGroupId <- randomGroup
-        _ <- makeTopic(topic, 5)
-        _ <- makeMany(topic, 1000)
-        _ <- Live.live(ZIO.sleep(2.seconds))
-        consumed = 0.to(4).map(i => MultiConsumerTestHelper.consumeN(topic, consumerGroupId, i, 3))
-        _ <- ZIO.collectAllPar(consumed)
-      } yield {
-        assertCompletes
-      }
+  }
+  val testParallelConsumers = testM("test parallel consumers") {
+    for {
+      topic           <- randomTopic
+      consumerGroupId <- randomGroup
+      _               <- makeTopic(topic, 5)
+      _               <- makeMany(topic, 1000)
+      _               <- Live.live(ZIO.sleep(2.seconds))
+      consumed        = 0.to(4).map(i => MultiConsumerTestHelper.consumeN(topic, consumerGroupId, i, 3))
+      _               <- ZIO.collectAllPar(consumed)
+    } yield {
+      assertCompletes
     }
-    val test3 = testM("test lots of stuff") {
-      for {
-        topic <- randomTopic
-        consumerGroupId <- randomGroup
-        _ <- makeMany(topic, 100000)
-        _ <- Live.live(ZIO.sleep(2.seconds))
-        results <- MultiConsumerTestHelper.consumeN(topic, consumerGroupId, 0, 100000)
-        _ <- Live.live(console.putStrLn(s"${results.size} processed"))
-      } yield {
-        assertCompletes
-      }
+  }
+  val testSingleConsumerManyRecords = testM("test lots of stuff") {
+    for {
+      topic           <- randomTopic
+      consumerGroupId <- randomGroup
+      _               <- makeMany(topic, 100000)
+      _               <- Live.live(ZIO.sleep(2.seconds))
+      results         <- MultiConsumerTestHelper.consumeN(topic, consumerGroupId, 0, 100000)
+      _               <- Live.live(console.putStrLn(s"${results.size} processed"))
+    } yield {
+      assertCompletes
     }
-
+  }
 
 }

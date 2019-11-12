@@ -1,8 +1,8 @@
 package zio.kafka.client
 
-import net.manub.embeddedkafka.{EmbeddedK, EmbeddedKafka}
+import net.manub.embeddedkafka.{ EmbeddedK, EmbeddedKafka }
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import zio.{Chunk, Managed, RIO, UIO, ZIO, ZManaged}
+import zio.{ Chunk, Managed, RIO, UIO, ZIO, ZManaged }
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -11,7 +11,7 @@ import zio.duration._
 import zio.kafka.client.AdminClient.KafkaAdminClientConfig
 import zio.kafka.client.Kafka.KafkaTestEnvironment
 import zio.random.Random
-import zio.test.environment.{Live, TestEnvironment}
+import zio.test.environment.{ Live, TestEnvironment }
 
 trait Kafka {
   def kafka: Kafka.Service
@@ -25,7 +25,7 @@ object Kafka {
 
   case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka.Service {
     override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
-    override def stop(): UIO[Unit] = ZIO.effectTotal(embeddedK.stop(true))
+    override def stop(): UIO[Unit]              = ZIO.effectTotal(embeddedK.stop(true))
   }
 
   case object DefaultLocal extends Kafka.Service {
@@ -44,7 +44,6 @@ object Kafka {
       override val kafka: Service = DefaultLocal
     }))(_.kafka.stop())
 
-
   type KafkaTestEnvironment = Kafka with TestEnvironment
 
   type KafkaClockBlocking = Kafka with Clock with Blocking
@@ -55,7 +54,7 @@ object Kafka {
       blcking <- ZIO.environment[Blocking]
       kfka    <- ZIO.environment[Kafka]
     } yield new Kafka with Clock with Blocking {
-      override def kafka: Service = kfka.kafka
+      override val kafka: Service = kfka.kafka
 
       override val clock: Clock.Service[Any]       = clck.clock
       override val blocking: Blocking.Service[Any] = blcking.blocking
@@ -68,7 +67,7 @@ object KafkaTestUtils {
   def kafkaEnvironment(kafkaE: Managed[Nothing, Kafka]): Managed[Nothing, KafkaTestEnvironment] =
     for {
       testEnvironment <- TestEnvironment.Value
-      kafkaS <- kafkaE
+      kafkaS          <- kafkaE
     } yield new TestEnvironment(
       testEnvironment.blocking,
       testEnvironment.clock,
@@ -199,10 +198,11 @@ object KafkaTestUtils {
   // temporary workaround for zio issue #2166 - broken infinity
   val veryLongTime = Duration.fromNanos(Long.MaxValue)
 
-  def randomThing(prefix: String) = for {
-    random <- ZIO.environment[Random]
-    l <- random.random.nextLong(8)
-  } yield s"$prefix-$l"
+  def randomThing(prefix: String) =
+    for {
+      random <- ZIO.environment[Random]
+      l      <- random.random.nextLong(8)
+    } yield s"$prefix-$l"
 
   def randomTopic = randomThing("topic")
 
