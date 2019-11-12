@@ -22,15 +22,15 @@ class Consumer private (
     consumer.withConsumer(_.assignment().asScala.toSet)
 
   def beginningOffsets(
-                        partitions: Set[TopicPartition],
-                        timeout: Duration = Duration.Infinity
-                      ): BlockingTask[Map[TopicPartition, Long]] =
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  ): BlockingTask[Map[TopicPartition, Long]] =
     consumer.withConsumer(_.beginningOffsets(partitions.asJava, timeout.asJava).asScala.mapValues(_.longValue()).toMap)
 
   def endOffsets(
-                  partitions: Set[TopicPartition],
-                  timeout: Duration = Duration.Infinity
-                ): BlockingTask[Map[TopicPartition, Long]] =
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  ): BlockingTask[Map[TopicPartition, Long]] =
     consumer.withConsumer { eo =>
       val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
       offs.asScala.mapValues(_.longValue()).toMap
