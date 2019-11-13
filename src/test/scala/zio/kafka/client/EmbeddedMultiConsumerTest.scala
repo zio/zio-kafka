@@ -6,6 +6,6 @@ import MultiConsumerTestHelper._
 object EmbeddedMultiConsumerTest
     extends DefaultRunnableSpec(
       suite("consumer test suite3 - multiple consumers")(
-        List(testMultipleConsumers): _*
+        List(testMultipleConsumers, testParallelConsumers, testSingleConsumerManyRecords): _*
       ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
     )

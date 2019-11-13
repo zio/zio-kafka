@@ -3,7 +3,6 @@ package zio.kafka.client
 import zio.test._
 import KafkaTestUtils._
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.common.TopicPartition
 import zio.test.environment.Live
 import zio._
 import zio.duration._
@@ -21,12 +20,10 @@ object MultiConsumerTestHelper {
 
   def consumeN(topic: String, groupId: String, consumerIndex: Int, nTakes: Int) =
     withConsumer(groupId, "client1") { consumer =>
-      val tp = new TopicPartition(topic, consumerIndex)
       for {
         data <- consumer
                  .subscribeAnd(Subscription.Topics(Set(topic)))
                  .partitionedStream(Serde.string, Serde.string)
-                 .filter(_._1 == tp)
                  .flatMap(_._2.flattenChunks)
                  .take(nTakes)
                  .runCollect
