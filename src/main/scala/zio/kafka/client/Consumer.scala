@@ -85,8 +85,9 @@ class Consumer private (
   def subscribe(subscription: Subscription): BlockingTask[Unit] =
     consumer.withConsumer { c =>
       subscription match {
-        case Subscription.Pattern(pattern) => c.subscribe(pattern.pattern, runloop.deps.rebalanceListener)
-        case Subscription.Topics(topics)   => c.subscribe(topics.asJava, runloop.deps.rebalanceListener)
+        case Subscription.Pattern(pattern)        => c.subscribe(pattern.pattern, runloop.deps.rebalanceListener)
+        case Subscription.Topics(topics)          => c.subscribe(topics.asJava, runloop.deps.rebalanceListener)
+        case Subscription.Manual(topicPartitions) => c.assign(topicPartitions.asJava)
       }
     }
 
