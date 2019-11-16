@@ -11,7 +11,7 @@ import zio.stream.ZSink
 
 import scala.collection.JavaConverters._
 
-class Producer[R, K, V] private (
+class Producer[-R, K, V] private (
   p: ByteArrayProducer,
   keySerializer: Serializer[R, K],
   valueSerializer: Serializer[R, V]
