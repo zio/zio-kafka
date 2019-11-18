@@ -40,11 +40,11 @@ buildInfoPackage := "zio.kafka"
 buildInfoObject := "BuildInfo"
 
 libraryDependencies ++= Seq(
-  "dev.zio"                 %% "zio-streams"    % "1.0.0-RC15",
-  "dev.zio"                 %% "zio-test"       % "1.0.0-RC15" % "test",
-  "dev.zio"                 %% "zio-test-sbt"   % "1.0.0-RC15" % "test",
-  "org.apache.kafka"        % "kafka-clients"   % "2.3.0",
-  "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
+  "dev.zio"          %% "zio-streams"  % "1.0.0-RC16",
+  "dev.zio"          %% "zio-test"     % "1.0.0-RC16" % "test",
+  "dev.zio"          %% "zio-test-sbt" % "1.0.0-RC16" % "test",
+  "org.apache.kafka" % "kafka-clients" % "2.3.0",
+//  "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
   "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.0" % "test",
   "ch.qos.logback"          % "logback-classic" % "1.2.3" % "test",
   compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")

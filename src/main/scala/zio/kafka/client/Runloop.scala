@@ -56,7 +56,7 @@ object Runloop {
 
     val isRebalancing = rebalancingRef.get
 
-    def polls = ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency))
+    def polls = ZStream(Command.Poll()).repeat(ZSchedule.spaced(pollFrequency))
     def newPartition(tp: TopicPartition, data: StreamChunk[Throwable, ByteArrayCommittableRecord]) =
       partitions.offer(Take.Value(tp -> data)).unit
 
