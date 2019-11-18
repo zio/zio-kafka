@@ -408,7 +408,14 @@ object Runloop {
       } yield newState
 
     def handleShutdown(state: State, cmd: Command): BlockingTask[State] = cmd match {
-      case Command.Poll() => handlePoll(state)
+      case Command.Poll() =>
+        state.pendingRequests match {
+          case h :: t =>
+            handleShutdown(state, h).flatMap { s =>
+              handleShutdown(s.copy(pendingRequests = t), cmd)
+            }
+          case Nil => handlePoll(state)
+        }
       case Command.Request(tp, cont) =>
         state.bufferedRecords.get(tp) match {
           case Some(recs) =>
