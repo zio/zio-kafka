@@ -47,7 +47,7 @@ libraryDependencies ++= Seq(
 //  "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
   "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.0" % "test",
   "ch.qos.logback"          % "logback-classic" % "1.2.3" % "test",
-  compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
+  compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.0")
 )
 
 testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
