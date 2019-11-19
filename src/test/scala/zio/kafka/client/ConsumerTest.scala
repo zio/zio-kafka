@@ -122,7 +122,6 @@ object ConsumerTest
                   }.fork
             _ <- done.await
             _ <- fib.interrupt
-            _ <- fib.join.ignore
           } yield assertCompletes
         },
         testM("fail when the consuming effect produces a failure") {

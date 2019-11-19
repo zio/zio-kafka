@@ -149,7 +149,7 @@ object KafkaTestUtils {
       ),
       250.millis,
       250.millis,
-      1
+      100
     )
 
   def consumeWithStrings(groupId: String, clientId: String, subscription: Subscription)(
