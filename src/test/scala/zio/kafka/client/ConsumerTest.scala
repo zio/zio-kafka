@@ -146,6 +146,21 @@ object ConsumerTest
             _ => assertCompletes,
             _ => assert("result", equalTo("Expected consumeWith to fail"))
           )
+        },
+        testM("not receive messages after shutting down") {
+          val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+          for {
+            _ <- produceMany("topic150", kvs)
+            records <- withConsumer("group150", "client150") { consumer =>
+                        consumer.stopConsumption *>
+                          consumer
+                            .subscribeAnd(Subscription.Topics(Set("topic150")))
+                            .plainStream(Serde.string, Serde.string)
+                            .flattenChunks
+                            .take(5)
+                            .runCollect
+                      }
+          } yield assert(records, isEmpty)
         }
       ).provideManagedShared(KafkaTestUtils.kafkaEnvironment)
     )
