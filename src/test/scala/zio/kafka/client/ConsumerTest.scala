@@ -162,5 +162,5 @@ object ConsumerTest
                       }
           } yield assert(records, isEmpty)
         }
-      ).provideManagedShared(KafkaTestUtils.kafkaEnvironment)
+      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
     )

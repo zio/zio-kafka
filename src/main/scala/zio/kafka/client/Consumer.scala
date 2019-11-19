@@ -16,7 +16,8 @@ class Consumer private (
   private val consumer: ConsumerAccess,
   private val settings: ConsumerSettings,
   private val runloop: Runloop
-) { self =>
+) {
+  self =>
   def assignment: BlockingTask[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
 
@@ -30,7 +31,10 @@ class Consumer private (
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
   ): BlockingTask[Map[TopicPartition, Long]] =
-    consumer.withConsumer(_.endOffsets(partitions.asJava, timeout.asJava).asScala.mapValues(_.longValue()).toMap)
+    consumer.withConsumer { eo =>
+      val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
+      offs.asScala.mapValues(_.longValue()).toMap
+    }
 
   /**
    * Stops consumption of data, drains buffered records, and ends the attached

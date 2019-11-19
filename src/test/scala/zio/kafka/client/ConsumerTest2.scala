@@ -48,7 +48,7 @@ object ConsumerTest2
             consumedMessages <- messagesReceived.get
           } yield assert(consumedMessages, contains(newMessage).negate)
         }
-      ).provideManagedShared(KafkaTestUtils.kafkaEnvironment)
+      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
     )
 
 object TestHelper {
