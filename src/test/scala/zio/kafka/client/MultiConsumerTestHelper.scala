@@ -1,19 +1,14 @@
 package zio.kafka.client
 
 import zio.test._
-import KafkaTestUtils._
-import org.apache.kafka.clients.admin.NewTopic
-import zio.test.environment.Live
 import zio._
-import zio.duration._
 import zio.kafka.client.serde.Serde
 
 object MultiConsumerTestHelper {
+  import KafkaTestUtils._
+
   def makeTopic(name: String, nParts: Int) = withAdmin { admin =>
-    for {
-      _ <- admin.createTopic(new NewTopic(name, nParts, 1))
-      _ <- ZIO.sleep(3.seconds)
-    } yield ()
+    admin.createTopic(AdminClient.NewTopic(name, nParts, 1))
   }
 
   case class UsefulInfo(consumerIndex: Int, topic: String, partition: Int, offset: Long, key: String, value: String)
@@ -57,12 +52,10 @@ object MultiConsumerTestHelper {
       consumerGroupId <- randomGroup
       _               <- makeTopic(topic, 5)
       _               <- makeMany(topic, 1000)
-      _               <- Live.live(ZIO.sleep(2.seconds))
       consumed        = 0.to(4).map(i => MultiConsumerTestHelper.consumeN(topic, consumerGroupId, i, 3))
       _               <- ZIO.collectAll(consumed)
-    } yield {
-      assertCompletes
-    }
+    } yield assertCompletes
+
   }
   val testParallelConsumers = testM("test parallel consumers") {
     for {
@@ -70,24 +63,19 @@ object MultiConsumerTestHelper {
       consumerGroupId <- randomGroup
       _               <- makeTopic(topic, 5)
       _               <- makeMany(topic, 1000)
-      _               <- Live.live(ZIO.sleep(2.seconds))
       consumed        = 0.to(4).map(i => MultiConsumerTestHelper.consumeN(topic, consumerGroupId, i, 3))
       _               <- ZIO.collectAllPar(consumed)
-    } yield {
-      assertCompletes
-    }
+    } yield assertCompletes
+
   }
   val testSingleConsumerManyRecords = testM("test lots of stuff") {
     for {
       topic           <- randomTopic
       consumerGroupId <- randomGroup
       _               <- makeMany(topic, 100000)
-      _               <- Live.live(ZIO.sleep(2.seconds))
-      results         <- MultiConsumerTestHelper.consumeN(topic, consumerGroupId, 0, 100000)
-      _               <- Live.live(console.putStrLn(s"${results.size} processed"))
-    } yield {
-      assertCompletes
-    }
+      _               <- MultiConsumerTestHelper.consumeN(topic, consumerGroupId, 0, 100000)
+    } yield assertCompletes
+
   }
 
 }

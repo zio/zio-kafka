@@ -188,7 +188,7 @@ object KafkaTestUtils {
       settings <- adminSettings
       lcb      <- Kafka.liveClockBlocking
       fRes <- AdminClient
-               .adminClient(settings)
+               .make(settings)
                .use { client =>
                  f(client)
                }
