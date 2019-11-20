@@ -1,6 +1,6 @@
 package zio.kafka.client
 
-import org.apache.kafka.clients.consumer.{ OffsetAndTimestamp, RetriableCommitFailedException }
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp
 import org.apache.kafka.common.{ PartitionInfo, TopicPartition }
 import zio._
 import zio.blocking.Blocking
@@ -199,15 +199,6 @@ object Consumer {
           }
       }
       .aggregateAsync(offsetBatches)
-      .mapM(
-        batch =>
-          batch.commit
-            .retry(
-              Schedule.doWhile[Throwable]({
-                case _: RetriableCommitFailedException => true
-                case _                                 => false
-              }) && commitRetryPolicy
-            )
-      )
+      .mapM(_.commitOrRetry(commitRetryPolicy))
       .runDrain
 }
