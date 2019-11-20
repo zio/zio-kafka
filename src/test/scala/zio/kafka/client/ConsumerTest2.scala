@@ -42,13 +42,12 @@ object ConsumerTest2
             _ <- done.await *> Live
                   .live(ZIO.sleep(3.seconds)) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
             _                <- fib.interrupt
-            _                <- fib.join.ignore
             _                <- produceOne(topic, "key-new", "msg-new")
             newMessage       <- TestHelper.newM(subscription)
             consumedMessages <- messagesReceived.get
           } yield assert(consumedMessages, contains(newMessage).negate)
         }
-      ).provideManagedShared(KafkaTestUtils.kafkaEnvironment)
+      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
     )
 
 object TestHelper {
