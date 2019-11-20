@@ -57,8 +57,25 @@ object Runloop {
     val isRebalancing = rebalancingRef.get
 
     def polls = ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency))
+
+    // Put a new partition stream on the queue
     def newPartition(tp: TopicPartition, data: StreamChunk[Throwable, ByteArrayCommittableRecord]) =
       partitions.offer(Take.Value(tp -> data)).unit
+
+    // Creates a stream that puts requests on the request queue for a given partition
+    def streamForPartition(tp: TopicPartition): ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord] =
+      ZStreamChunk {
+        ZStream {
+          ZManaged.succeed {
+            for {
+              p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
+              _      <- request(Command.Request(tp, p))
+              _      <- emitIfEnabledDiagnostic(DiagnosticEvent.Request(tp))
+              result <- p.await
+            } yield result
+          }
+        }
+      }
 
     def emitIfEnabledDiagnostic(event: DiagnosticEvent) = diagnostics.emitIfEnabled(event)
 
@@ -162,23 +179,6 @@ object Runloop {
   object State {
     def initial: State = State(Nil, Nil, Map())
   }
-
-  def streamForPartition(
-    deps: Deps,
-    tp: TopicPartition
-  ): ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord] =
-    ZStreamChunk {
-      ZStream {
-        ZManaged.succeed {
-          for {
-            p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-            _      <- deps.request(Command.Request(tp, p))
-            _      <- deps.emitIfEnabledDiagnostic(DiagnosticEvent.Request(tp))
-            result <- p.await
-          } yield result
-        }
-      }
-    }
 
   def apply(deps: Deps): ZManaged[Clock with Blocking, Throwable, Runloop] = {
 
@@ -381,7 +381,7 @@ object Runloop {
                        }
                      }
         (newlyAssigned, (pendingRequests, bufferedRecords)) = pollResult
-        _                                                   <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, streamForPartition(deps, tp)))
+        _                                                   <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, deps.streamForPartition(tp)))
         stillRebalancing                                    <- deps.isRebalancing
         newPendingCommits <- if (!stillRebalancing && state.pendingCommits.nonEmpty)
                               doCommit(state.pendingCommits).as(Nil)
