@@ -8,6 +8,7 @@ import zio.clock.Clock
 import zio.duration._
 import zio.kafka.client.serde.Deserializer
 import zio.kafka.client.diagnostics.Diagnostics
+import zio.kafka.client.impl.ConsumerAccess
 import zio.stream._
 
 import scala.collection.JavaConverters._

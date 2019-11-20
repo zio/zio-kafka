@@ -1,15 +1,16 @@
-package zio.kafka.client
+package zio.kafka.client.impl
 
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio._
 import zio.blocking.{ blocking, Blocking }
-import zio.kafka.client.ConsumerAccess.ByteArrayKafkaConsumer
+import zio.kafka.client.{ BlockingTask, ConsumerSettings }
+import zio.kafka.client.impl.ConsumerAccess.ByteArrayKafkaConsumer
 
 import scala.collection.JavaConverters._
 
-class ConsumerAccess(private[client] val consumer: ByteArrayKafkaConsumer, access: Semaphore) {
+private[client] class ConsumerAccess(private[client] val consumer: ByteArrayKafkaConsumer, access: Semaphore) {
   def withConsumer[A](f: ByteArrayKafkaConsumer => A): BlockingTask[A] =
     withConsumerM[Any, A](c => ZIO(f(c)))
 
@@ -26,7 +27,7 @@ class ConsumerAccess(private[client] val consumer: ByteArrayKafkaConsumer, acces
     }
 }
 
-object ConsumerAccess {
+private[client] object ConsumerAccess {
   type ByteArrayKafkaConsumer = KafkaConsumer[Array[Byte], Array[Byte]]
 
   def make(settings: ConsumerSettings) =

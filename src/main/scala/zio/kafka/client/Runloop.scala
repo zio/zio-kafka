@@ -13,6 +13,7 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
 import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.client.impl.ConsumerAccess
 import zio.stream._
 
 import scala.collection.mutable
