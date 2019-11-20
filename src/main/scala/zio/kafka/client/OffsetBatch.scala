@@ -16,7 +16,7 @@ object OffsetBatch {
   def apply(offsets: Iterable[Offset]): OffsetBatch = offsets.foldLeft(empty)(_ merge _)
 }
 
-final case class OffsetBatchImpl(
+private final case class OffsetBatchImpl(
   offsets: Map[TopicPartition, Long],
   commitHandle: Map[TopicPartition, Long] => Task[Unit]
 ) extends OffsetBatch {
