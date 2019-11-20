@@ -67,7 +67,6 @@ object ConsumerTest
                          .subscribeAnd(Subscription.manual(topic, partition = 2))
                          .plainStream(Serde.string, Serde.string)
                          .flattenChunks
-                         .tap(r => ZIO(println(r.toString)))
                          .take(1)
                          .runHead
                      }
