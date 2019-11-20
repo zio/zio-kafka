@@ -163,6 +163,23 @@ object Runloop {
     def initial: State = State(Nil, Nil, Map())
   }
 
+  def streamForPartition(
+    deps: Deps,
+    tp: TopicPartition
+  ): ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord] =
+    ZStreamChunk {
+      ZStream {
+        ZManaged.succeed {
+          for {
+            p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
+            _      <- deps.request(Command.Request(tp, p))
+            _      <- deps.emitIfEnabledDiagnostic(DiagnosticEvent.Request(tp))
+            result <- p.await
+          } yield result
+        }
+      }
+    }
+
   def apply(deps: Deps): ZManaged[Clock with Blocking, Throwable, Runloop] = {
 
     def commit(offsets: Map[TopicPartition, Long]): ZIO[Any, Throwable, Unit] =
@@ -172,20 +189,6 @@ object Runloop {
         _ <- deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await
       } yield ()
-
-    def partition(tp: TopicPartition): ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord] =
-      ZStreamChunk {
-        ZStream {
-          ZManaged.succeed {
-            for {
-              p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-              _      <- deps.request(Command.Request(tp, p))
-              _      <- deps.emitIfEnabledDiagnostic(DiagnosticEvent.Request(tp))
-              result <- p.await
-            } yield result
-          }
-        }
-      }
 
     def doCommit(cmds: List[Command.Commit]): ZIO[Blocking, Nothing, Unit] =
       for {
@@ -338,17 +341,16 @@ object Runloop {
                              case _: IllegalStateException => null
                            }
                          deps.isShutdown.flatMap { shutdown =>
-                           if (shutdown)
-                             ZIO.effectTotal(deps.consumer.consumer.pause(requestedPartitions.asJava)) *>
+                           if (shutdown) {
+                             ZIO.effectTotal(c.pause(requestedPartitions.asJava)) *>
                                ZIO.succeed(
                                  (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
                                )
-                           else if (records eq null)
+                           } else if (records eq null) {
                              ZIO.succeed(
                                (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
                              )
-                           else {
-
+                           } else {
                              val tpsInResponse   = records.partitions.asScala
                              val currentAssigned = c.assignment().asScala
                              val newlyAssigned   = currentAssigned -- prevAssigned
@@ -379,7 +381,7 @@ object Runloop {
                        }
                      }
         (newlyAssigned, (pendingRequests, bufferedRecords)) = pollResult
-        _                                                   <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, partition(tp)))
+        _                                                   <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, streamForPartition(deps, tp)))
         stillRebalancing                                    <- deps.isRebalancing
         newPendingCommits <- if (!stillRebalancing && state.pendingCommits.nonEmpty)
                               doCommit(state.pendingCommits).as(Nil)

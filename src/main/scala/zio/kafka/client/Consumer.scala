@@ -94,11 +94,15 @@ class Consumer private (
     consumer.withConsumer(_.seekToEnd(partitions.asJava))
 
   def subscribe(subscription: Subscription): BlockingTask[Unit] =
-    consumer.withConsumer { c =>
+    consumer.withConsumerM { c =>
       subscription match {
-        case Subscription.Pattern(pattern)        => c.subscribe(pattern.pattern, runloop.deps.rebalanceListener)
-        case Subscription.Topics(topics)          => c.subscribe(topics.asJava, runloop.deps.rebalanceListener)
-        case Subscription.Manual(topicPartitions) => c.assign(topicPartitions.asJava)
+        case Subscription.Pattern(pattern) => ZIO(c.subscribe(pattern.pattern, runloop.deps.rebalanceListener))
+        case Subscription.Topics(topics)   => ZIO(c.subscribe(topics.asJava, runloop.deps.rebalanceListener))
+        case Subscription.Manual(topicPartitions) =>
+          ZIO(c.assign(topicPartitions.asJava)) *>
+            ZIO.foreach_(topicPartitions)(
+              tp => runloop.deps.newPartition(tp, Runloop.streamForPartition(runloop.deps, tp))
+            )
       }
     }
 

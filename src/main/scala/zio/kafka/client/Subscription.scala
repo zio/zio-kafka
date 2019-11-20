@@ -9,9 +9,9 @@ import org.apache.kafka.common.TopicPartition
 
 sealed trait Subscription
 object Subscription {
-  case class Topics(topics: Set[String])                  extends Subscription
-  case class Pattern(pattern: Regex)                      extends Subscription
-  case class Manual(topicPartitions: Set[TopicPartition]) extends Subscription
+  final case class Topics(topics: Set[String])                  extends Subscription
+  final case class Pattern(pattern: Regex)                      extends Subscription
+  final case class Manual(topicPartitions: Set[TopicPartition]) extends Subscription
 
   def topics(name: String, names: String*): Subscription =
     Topics(Set(name) ++ names.toSet)
@@ -26,10 +26,24 @@ object Subscription {
     Pattern(new Regex(pattern.pattern()))
 
   /**
-   * Subscribe manually to a fixed set of topic-partitions
+   * Create a manual subscription to a fixed set of topic-partitions
+   *
+   * A consumer with this type of subscription does not perform consumer rebalancing
    *
    * @param topicPartitions Tuples of topic and partition
    */
-  def manual(topicPartitions: (String, Int)*) =
+  def manual(topicPartitions: (String, Int)*): Manual =
     Manual(topicPartitions.map { case (topic, partition) => new TopicPartition(topic, partition) }.toSet)
+
+  /**
+   * Create a subscription to a single topic-partition
+   *
+   * A consumer with this type of subscription does not perform consumer rebalancing
+   *
+   * @param topic
+   * @param partition
+   * @return
+   */
+  def manual(topic: String, partition: Int): Manual =
+    manual((topic, partition))
 }
