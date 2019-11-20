@@ -43,7 +43,7 @@ libraryDependencies ++= Seq(
   "dev.zio"          %% "zio-streams"  % "1.0.0-RC17",
   "dev.zio"          %% "zio-test"     % "1.0.0-RC17" % "test",
   "dev.zio"          %% "zio-test-sbt" % "1.0.0-RC17" % "test",
-  "org.apache.kafka" % "kafka-clients" % "2.3.0",
+  "org.apache.kafka" % "kafka-clients" % "2.3.1",
 //  "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
   "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.1" % "test",
   "ch.qos.logback"          % "logback-classic" % "1.2.3" % "test",
