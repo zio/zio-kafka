@@ -53,7 +53,7 @@ object ConsumerTest
             }
           } yield assert(kvOut, equalTo(kvs))
         },
-        testM("receive only messages when creating a manual subscription ") {
+        testM("receive only messages from the subscribed topic-partition when creating a manual subscription") {
           val nrPartitions = 5
           val topic        = "manual-topic"
 
