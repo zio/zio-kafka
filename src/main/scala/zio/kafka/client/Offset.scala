@@ -13,7 +13,7 @@ sealed trait Offset {
 
   /**
    * Attempts to commit and retries according to the given policy when the commit fails
-   * with a [[org.apache.kafka.clients.consumer.RetriableCommitFailedException]]
+   * with a RetriableCommitFailedException
    */
   def commitOrRetry[R, B](policy: Schedule[R, Any, B]): ZIO[R with Clock, Throwable, Unit] =
     Offset.commitOrRetry(commit, policy)

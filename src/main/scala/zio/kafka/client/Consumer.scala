@@ -164,7 +164,7 @@ object Consumer {
    * @param subscription Topic subscription parameters
    * @param keyDeserializer Deserializer for the key of the messages
    * @param valueDeserializer Deserializer for the value of the messages
-   * @param commitRetryPolicy Retry commits that failed due to a [[org.apache.kafka.clients.consumer.RetriableCommitFailedException]] according to this schedule
+   * @param commitRetryPolicy Retry commits that failed due to a RetriableCommitFailedException according to this schedule
    * @param f Function that returns the effect to execute for each message. It is passed the key and value
    * @tparam R Environment for the consuming effect
    * @tparam R1 Environment for the deserializers
