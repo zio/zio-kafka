@@ -1,6 +1,6 @@
 package zio.kafka.client
 
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp
+import org.apache.kafka.clients.consumer.{ OffsetAndTimestamp, RetriableCommitFailedException }
 import org.apache.kafka.common.{ PartitionInfo, TopicPartition }
 import zio._
 import zio.blocking.Blocking
@@ -139,9 +139,10 @@ object Consumer {
    * multiple partitions happens in parallel.
    *
    * Offsets are committed after execution of the effect. They are batched when a commit action is in progress
-   * to avoid backpressuring the stream.
+   * to avoid backpressuring the stream. When commits fail due to a [[RetriableCommitFailedException]] they are
+   * retried according to commitRetryPolicy
    *
-   * The effect should must absorb any failures. Failures should be handled by retries or ignoring the
+   * The effect should absorb any failures. Failures should be handled by retries or ignoring the
    * error, which will result in the Kafka message being skipped.
    *
    * Messages are processed with 'at least once' consistency: it is not guaranteed that every message
@@ -163,8 +164,10 @@ object Consumer {
    * @param subscription Topic subscription parameters
    * @param keyDeserializer Deserializer for the key of the messages
    * @param valueDeserializer Deserializer for the value of the messages
+   * @param commitRetryPolicy Retry commits that failed due to a [[RetriableCommitFailedException]]
    * @param f Function that returns the effect to execute for each message. It is passed the key and value
-   * @tparam R Environment
+   * @tparam R Environment for the consuming effect
+   * @tparam R1 Environment for the deserializers
    * @tparam K Type of keys (an implicit `Deserializer` should be in scope)
    * @tparam V Type of values (an implicit `Deserializer` should be in scope)
    * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
@@ -173,7 +176,8 @@ object Consumer {
     settings: ConsumerSettings,
     subscription: Subscription,
     keyDeserializer: Deserializer[R1, K],
-    valueDeserializer: Deserializer[R1, V]
+    valueDeserializer: Deserializer[R1, V],
+    commitRetryPolicy: Schedule[Clock, Any, (Duration, Int)] = Schedule.exponential(1.second) && Schedule.recurs(3)
   )(
     f: (K, V) => ZIO[R, Nothing, Unit]
   ): ZIO[R with R1 with Blocking with Clock, Throwable, Unit] =
@@ -195,6 +199,15 @@ object Consumer {
           }
       }
       .aggregateAsync(offsetBatches)
-      .mapM(_.commit)
+      .mapM(
+        batch =>
+          batch.commit
+            .retry(
+              Schedule.doWhile[Throwable]({
+                case _: RetriableCommitFailedException => true
+                case _                                 => false
+              }) && commitRetryPolicy
+            )
+      )
       .runDrain
 }
