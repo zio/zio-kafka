@@ -58,13 +58,8 @@ object Runloop {
 
     def polls = ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency))
 
-    // Put a new partition stream on the queue
-    def newPartition(tp: TopicPartition, data: StreamChunk[Throwable, ByteArrayCommittableRecord]) =
-      partitions.offer(Take.Value(tp -> data)).unit
-
-    // Creates a stream that puts requests on the request queue for a given partition
-    def streamForPartition(tp: TopicPartition): ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord] =
-      ZStreamChunk {
+    def newPartitionStream(tp: TopicPartition) = {
+      val stream = ZStreamChunk {
         ZStream {
           ZManaged.succeed {
             for {
@@ -76,6 +71,9 @@ object Runloop {
           }
         }
       }
+
+      partitions.offer(Take.Value(tp -> stream)).unit
+    }
 
     def emitIfEnabledDiagnostic(event: DiagnosticEvent) = diagnostics.emitIfEnabled(event)
 
@@ -381,7 +379,7 @@ object Runloop {
                        }
                      }
         (newlyAssigned, (pendingRequests, bufferedRecords)) = pollResult
-        _                                                   <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, deps.streamForPartition(tp)))
+        _                                                   <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartitionStream(tp))
         stillRebalancing                                    <- deps.isRebalancing
         newPendingCommits <- if (!stillRebalancing && state.pendingCommits.nonEmpty)
                               doCommit(state.pendingCommits).as(Nil)

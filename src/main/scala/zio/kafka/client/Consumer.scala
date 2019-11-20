@@ -100,9 +100,7 @@ class Consumer private (
         case Subscription.Topics(topics)   => ZIO(c.subscribe(topics.asJava, runloop.deps.rebalanceListener))
         case Subscription.Manual(topicPartitions) =>
           ZIO(c.assign(topicPartitions.asJava)) *>
-            ZIO.foreach_(topicPartitions)(
-              tp => runloop.deps.newPartition(tp, runloop.deps.streamForPartition(tp))
-            )
+            ZIO.foreach_(topicPartitions)(runloop.deps.newPartitionStream)
       }
     }
 
