@@ -1,26 +1,20 @@
-package zio.kafka.client
+package zio.kafka.client.impl
 
-import org.apache.kafka.clients.consumer.{
-  ConsumerRebalanceListener,
-  ConsumerRecord,
-  ConsumerRecords,
-  OffsetAndMetadata,
-  OffsetCommitCallback
-}
+import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
 import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.client.impl.ConsumerAccess
+import zio.kafka.client.{ BlockingTask, CommittableRecord }
 import zio.stream._
 
-import scala.collection.mutable
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
-case class Runloop(fiber: Fiber[Throwable, Unit], deps: Runloop.Deps)
-object Runloop {
+private[client] final case class Runloop(fiber: Fiber[Throwable, Unit], deps: Runloop.Deps)
+private[client] object Runloop {
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
   type ByteArrayConsumerRecord    = ConsumerRecord[Array[Byte], Array[Byte]]
 
