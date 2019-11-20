@@ -135,12 +135,14 @@ object Runloop {
     pendingCommits: List[Command.Commit],
     bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]
   ) {
-    def addCommit(c: Command.Commit)             = copy(pendingCommits = c :: pendingCommits)
-    def setCommits(reqs: List[Command.Commit])   = copy(pendingCommits = reqs)
-    def addRequest(c: Command.Request)           = copy(pendingRequests = c :: pendingRequests)
-    def setRequests(reqs: List[Command.Request]) = copy(pendingRequests = reqs)
-    def clearCommits                             = copy(pendingCommits = Nil)
-    def clearRequests                            = copy(pendingRequests = Nil)
+    def addCommit(c: Command.Commit)           = copy(pendingCommits = c :: pendingCommits)
+    def setCommits(reqs: List[Command.Commit]) = copy(pendingCommits = reqs)
+    def addRequest(c: Command.Request) = {
+      println(s"Adding request ${c.tp}")
+      copy(pendingRequests = c :: pendingRequests)
+    }
+    def clearCommits  = copy(pendingCommits = Nil)
+    def clearRequests = copy(pendingRequests = Nil)
     def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
       copy(
         bufferedRecords = recs.foldLeft(bufferedRecords) {
@@ -179,6 +181,7 @@ object Runloop {
           ZManaged.succeed {
             for {
               p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
+              _      = println(s"Requesting on the queue for ${tp}")
               _      <- deps.request(Command.Request(tp, p))
               _      <- deps.emitIfEnabledDiagnostic(DiagnosticEvent.Request(tp))
               result <- p.await
@@ -262,6 +265,9 @@ object Runloop {
                          revokeAction.as((acc.reverse, buf.toMap))
                        }
 
+                       /**
+                        * @return Tuple of the list of unfulfilled requests and corresponding remaining buffered records
+                        */
                        def fulfillRequests(
                          pendingRequests: List[Command.Request],
                          bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
@@ -281,9 +287,10 @@ object Runloop {
                            val bufferedChunk = buf.getOrElse(req.tp, Chunk.empty)
                            val reqRecs       = records.records(req.tp)
 
-                           if ((bufferedChunk.length + reqRecs.size) == 0)
+                           if ((bufferedChunk.length + reqRecs.size) == 0) {
+                             println(s"Unable to fulfill request for ${req.tp}")
                              acc ::= req
-                           else {
+                           } else {
                              val concatenatedChunk = bufferedChunk ++
                                Chunk.fromArray(
                                  reqRecs.toArray(Array.ofDim[ByteArrayConsumerRecord](reqRecs.size))
@@ -325,10 +332,12 @@ object Runloop {
 
                          val requestedPartitions = state.pendingRequests.map(_.tp).toSet
                          c.resume(requestedPartitions.asJava)
+                         c.pause((prevAssigned -- requestedPartitions).asJava)
 
                          val pollTimeout =
                            if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
                            else 0.millis.asJava
+                         println(s"Polling. Requested partitions: ${requestedPartitions}")
                          val records =
                            try c.poll(pollTimeout)
                            catch {
@@ -337,6 +346,9 @@ object Runloop {
                              // is empty because pattern subscriptions start out as empty.
                              case _: IllegalStateException => null
                            }
+                         println(
+                           s"Got ${records.count()} records, last offset = ${records.iterator().asScala.toSeq.lastOption.map(_.offset())}"
+                         )
                          deps.isShutdown.flatMap { shutdown =>
                            if (shutdown)
                              ZIO.effectTotal(deps.consumer.consumer.pause(requestedPartitions.asJava)) *>
@@ -378,13 +390,13 @@ object Runloop {
                          }
                        }
                      }
-        (newlyAssigned, (pendingRequests, bufferedRecords)) = pollResult
-        _                                                   <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, partition(tp)))
-        stillRebalancing                                    <- deps.isRebalancing
+        (newlyAssigned, (unfulfilledRequests, bufferedRecords)) = pollResult
+        _                                                       <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, partition(tp)))
+        stillRebalancing                                        <- deps.isRebalancing
         newPendingCommits <- if (!stillRebalancing && state.pendingCommits.nonEmpty)
                               doCommit(state.pendingCommits).as(Nil)
                             else ZIO.succeed(state.pendingCommits)
-      } yield State(pendingRequests, newPendingCommits, bufferedRecords)
+      } yield State(unfulfilledRequests, newPendingCommits, bufferedRecords)
 
     def handleRequest(state: State, req: Command.Request): URIO[Blocking, State] =
       deps.consumer
