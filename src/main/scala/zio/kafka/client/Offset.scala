@@ -16,6 +16,14 @@ sealed trait Offset {
    * with a [[org.apache.kafka.clients.consumer.RetriableCommitFailedException]]
    */
   def commitOrRetry[R, B](policy: Schedule[R, Any, B]): ZIO[R with Clock, Throwable, Unit] =
+    Offset.commitOrRetry(commit, policy)
+}
+
+object Offset {
+  private[client] def commitOrRetry[R, B](
+    commit: Task[Unit],
+    policy: Schedule[R, Any, B]
+  ): ZIO[R with Clock, Throwable, Unit] =
     commit.retry(
       Schedule.doWhile[Throwable]({
         case _: RetriableCommitFailedException => true

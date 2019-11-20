@@ -1,6 +1,5 @@
 package zio.kafka.client
 
-import org.apache.kafka.clients.consumer.RetriableCommitFailedException
 import org.apache.kafka.common.TopicPartition
 import zio.clock.Clock
 import zio.{ Schedule, Task, ZIO }
@@ -16,12 +15,7 @@ sealed trait OffsetBatch {
    * with a [[org.apache.kafka.clients.consumer.RetriableCommitFailedException]]
    */
   def commitOrRetry[R, B](policy: Schedule[R, Any, B]): ZIO[R with Clock, Throwable, Unit] =
-    commit.retry(
-      Schedule.doWhile[Throwable]({
-        case _: RetriableCommitFailedException => true
-        case _                                 => false
-      }) && policy
-    )
+    Offset.commitOrRetry(commit, policy)
 }
 
 object OffsetBatch {
