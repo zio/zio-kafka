@@ -10,7 +10,7 @@ import zio.test.Assertion._
 
 object ProducerTest
     extends DefaultRunnableSpec(
-      suite("consumer test suite")(
+      suite("producer test suite")(
         testM("one record") {
           withProducerStrings { producer =>
             for {
@@ -67,5 +67,5 @@ object ProducerTest
             } yield assert(outcome.length, equalTo(0))
           }
         }
-      ).provideManagedShared(KafkaTestUtils.kafkaEnvironment)
+      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
     )
