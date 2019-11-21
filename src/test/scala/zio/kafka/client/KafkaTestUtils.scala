@@ -115,7 +115,7 @@ object KafkaTestUtils {
   def produceOne(t: String, k: String, m: String) =
     withProducerStrings { p =>
       p.produce(new ProducerRecord(t, k, m))
-    }
+    }.flatten
 
   def produceMany(t: String, kvs: Iterable[(String, String)]) =
     withProducerStrings { p =>
@@ -124,7 +124,7 @@ object KafkaTestUtils {
       }
       val chunk = Chunk.fromIterable(records)
       p.produceChunk(chunk)
-    }
+    }.flatten
 
   def produceMany(topic: String, partition: Int, kvs: Iterable[(String, String)]) =
     withProducerStrings { p =>
@@ -133,7 +133,7 @@ object KafkaTestUtils {
       }
       val chunk = Chunk.fromIterable(records)
       p.produceChunk(chunk)
-    }
+    }.flatten
 
   def consumerSettings(groupId: String, clientId: String) =
     for {
