@@ -113,6 +113,18 @@ class Producer[-R, K, V] private (
 }
 
 object Producer {
+
+  /**
+   * Create a new Producer for records of some type
+   *
+   * @param settings Producer settings
+   * @param keySerializer Serializer for the record keys
+   * @param valueSerializer Serializer for the record values
+   * @tparam R Environment required by the serializers
+   * @tparam K Type of record keys
+   * @tparam V Type of record values
+   * @return Producer as a Managed resource that will be closed automatically after use.
+   */
   def make[R, K, V](
     settings: ProducerSettings,
     keySerializer: Serializer[R, K],
