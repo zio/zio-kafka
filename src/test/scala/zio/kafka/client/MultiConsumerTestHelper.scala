@@ -51,7 +51,7 @@ object MultiConsumerTestHelper {
       topic           <- randomTopic
       consumerGroupId <- randomGroup
       _               <- makeTopic(topic, 5)
-      _               <- makeMany(topic, 1000)
+      _               <- makeMany(topic, 100)
       consumed        = 0.to(4).map(i => MultiConsumerTestHelper.consumeN(topic, consumerGroupId, i, 3))
       _               <- ZIO.collectAll(consumed)
     } yield assertCompletes
@@ -62,7 +62,7 @@ object MultiConsumerTestHelper {
       topic           <- randomTopic
       consumerGroupId <- randomGroup
       _               <- makeTopic(topic, 5)
-      _               <- makeMany(topic, 1000)
+      _               <- makeMany(topic, 100)
       consumed        = 0.to(4).map(i => MultiConsumerTestHelper.consumeN(topic, consumerGroupId, i, 3))
       _               <- ZIO.collectAllPar(consumed)
     } yield assertCompletes
@@ -72,8 +72,8 @@ object MultiConsumerTestHelper {
     for {
       topic           <- randomTopic
       consumerGroupId <- randomGroup
-      _               <- makeMany(topic, 100000)
-      _               <- MultiConsumerTestHelper.consumeN(topic, consumerGroupId, 0, 100000)
+      _               <- makeMany(topic, 100)
+      _               <- MultiConsumerTestHelper.consumeN(topic, consumerGroupId, 0, 100)
     } yield assertCompletes
 
   }
