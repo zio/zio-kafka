@@ -15,14 +15,14 @@ sealed trait Offset {
    * Attempts to commit and retries according to the given policy when the commit fails
    * with a RetriableCommitFailedException
    */
-  def commitOrRetry[R, B](policy: Schedule[R, Any, B]): ZIO[R with Clock, Throwable, Unit] =
+  def commitOrRetry[R, B](policy: Schedule[R, Throwable, B]): ZIO[R with Clock, Throwable, Unit] =
     Offset.commitOrRetry(commit, policy)
 }
 
 object Offset {
   private[client] def commitOrRetry[R, B](
     commit: Task[Unit],
-    policy: Schedule[R, Any, B]
+    policy: Schedule[R, Throwable, B]
   ): ZIO[R with Clock, Throwable, Unit] =
     commit.retry(
       Schedule.doWhile[Throwable]({
