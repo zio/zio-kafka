@@ -137,12 +137,9 @@ object Runloop {
   ) {
     def addCommit(c: Command.Commit)           = copy(pendingCommits = c :: pendingCommits)
     def setCommits(reqs: List[Command.Commit]) = copy(pendingCommits = reqs)
-    def addRequest(c: Command.Request) = {
-      println(s"Adding request ${c.tp}")
-      copy(pendingRequests = c :: pendingRequests)
-    }
-    def clearCommits  = copy(pendingCommits = Nil)
-    def clearRequests = copy(pendingRequests = Nil)
+    def addRequest(c: Command.Request)         = copy(pendingRequests = c :: pendingRequests)
+    def clearCommits                           = copy(pendingCommits = Nil)
+    def clearRequests                          = copy(pendingRequests = Nil)
     def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
       copy(
         bufferedRecords = recs.foldLeft(bufferedRecords) {
@@ -181,7 +178,6 @@ object Runloop {
           ZManaged.succeed {
             for {
               p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-              _      = println(s"Requesting on the queue for ${tp}")
               _      <- deps.request(Command.Request(tp, p))
               _      <- deps.emitIfEnabledDiagnostic(DiagnosticEvent.Request(tp))
               result <- p.await
@@ -288,7 +284,6 @@ object Runloop {
                            val reqRecs       = records.records(req.tp)
 
                            if ((bufferedChunk.length + reqRecs.size) == 0) {
-                             println(s"Unable to fulfill request for ${req.tp}")
                              acc ::= req
                            } else {
                              val concatenatedChunk = bufferedChunk ++
@@ -337,7 +332,6 @@ object Runloop {
                          val pollTimeout =
                            if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
                            else 0.millis.asJava
-                         println(s"Polling. Requested partitions: ${requestedPartitions}")
                          val records =
                            try c.poll(pollTimeout)
                            catch {
@@ -346,9 +340,6 @@ object Runloop {
                              // is empty because pattern subscriptions start out as empty.
                              case _: IllegalStateException => null
                            }
-                         println(
-                           s"Got ${records.count()} records, last offset = ${records.iterator().asScala.toSeq.lastOption.map(_.offset())}"
-                         )
                          deps.isShutdown.flatMap { shutdown =>
                            if (shutdown)
                              ZIO.effectTotal(deps.consumer.consumer.pause(requestedPartitions.asJava)) *>
