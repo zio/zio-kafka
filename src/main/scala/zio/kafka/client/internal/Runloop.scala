@@ -130,12 +130,11 @@ private[client] object Runloop {
     pendingCommits: List[Command.Commit],
     bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]
   ) {
-    def addCommit(c: Command.Commit)             = copy(pendingCommits = c :: pendingCommits)
-    def setCommits(reqs: List[Command.Commit])   = copy(pendingCommits = reqs)
-    def addRequest(c: Command.Request)           = copy(pendingRequests = c :: pendingRequests)
-    def setRequests(reqs: List[Command.Request]) = copy(pendingRequests = reqs)
-    def clearCommits                             = copy(pendingCommits = Nil)
-    def clearRequests                            = copy(pendingRequests = Nil)
+    def addCommit(c: Command.Commit)           = copy(pendingCommits = c :: pendingCommits)
+    def setCommits(reqs: List[Command.Commit]) = copy(pendingCommits = reqs)
+    def addRequest(c: Command.Request)         = copy(pendingRequests = c :: pendingRequests)
+    def clearCommits                           = copy(pendingCommits = Nil)
+    def clearRequests                          = copy(pendingRequests = Nil)
     def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
       copy(
         bufferedRecords = recs.foldLeft(bufferedRecords) {
@@ -276,9 +275,9 @@ private[client] object Runloop {
                            val bufferedChunk = buf.getOrElse(req.tp, Chunk.empty)
                            val reqRecs       = records.records(req.tp)
 
-                           if ((bufferedChunk.length + reqRecs.size) == 0)
+                           if ((bufferedChunk.length + reqRecs.size) == 0) {
                              acc ::= req
-                           else {
+                           } else {
                              val concatenatedChunk = bufferedChunk ++
                                Chunk.fromArray(
                                  reqRecs.toArray(Array.ofDim[ByteArrayConsumerRecord](reqRecs.size))
@@ -320,6 +319,7 @@ private[client] object Runloop {
 
                          val requestedPartitions = state.pendingRequests.map(_.tp).toSet
                          c.resume(requestedPartitions.asJava)
+                         c.pause((prevAssigned -- requestedPartitions).asJava)
 
                          val pollTimeout =
                            if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
@@ -373,13 +373,13 @@ private[client] object Runloop {
                          }
                        }
                      }
-        (newlyAssigned, (pendingRequests, bufferedRecords)) = pollResult
-        _                                                   <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, partition(tp)))
-        stillRebalancing                                    <- deps.isRebalancing
+        (newlyAssigned, (unfulfilledRequests, bufferedRecords)) = pollResult
+        _                                                       <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, partition(tp)))
+        stillRebalancing                                        <- deps.isRebalancing
         newPendingCommits <- if (!stillRebalancing && state.pendingCommits.nonEmpty)
                               doCommit(state.pendingCommits).as(Nil)
                             else ZIO.succeed(state.pendingCommits)
-      } yield State(pendingRequests, newPendingCommits, bufferedRecords)
+      } yield State(unfulfilledRequests, newPendingCommits, bufferedRecords)
 
     def handleRequest(state: State, req: Command.Request): URIO[Blocking, State] =
       deps.consumer
