@@ -147,9 +147,9 @@ object KafkaTestUtils {
         ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "earliest",
         ConsumerConfig.METADATA_MAX_AGE_CONFIG  -> "100"
       ),
-      1.second,
-      1.second,
-      1
+      250.millis,
+      250.millis,
+      100
     )
 
   def consumeWithStrings(groupId: String, clientId: String, subscription: Subscription)(

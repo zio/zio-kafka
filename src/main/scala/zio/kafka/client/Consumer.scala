@@ -66,9 +66,8 @@ class Consumer private (
       .map {
         case (tp, partition) =>
           val partitionStream =
-            partition
-//            if (settings.perPartitionChunkPrefetch <= 0) partition
-//            else ZStreamChunk(partition.chunks.buffer(settings.perPartitionChunkPrefetch))
+            if (settings.perPartitionChunkPrefetch <= 0) partition
+            else ZStreamChunk(partition.chunks.buffer(settings.perPartitionChunkPrefetch))
 
           tp -> partitionStream.mapM(_.deserializeWith(keyDeserializer, valueDeserializer))
       }
