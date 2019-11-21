@@ -1,4 +1,4 @@
-package zio.kafka.client.impl
+package zio.kafka.client.internal
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition

@@ -1,4 +1,4 @@
-package zio.kafka.client.impl
+package zio.kafka.client.internal
 
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.errors.WakeupException
@@ -6,7 +6,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio._
 import zio.blocking.{ blocking, Blocking }
 import zio.kafka.client.{ BlockingTask, ConsumerSettings }
-import zio.kafka.client.impl.ConsumerAccess.ByteArrayKafkaConsumer
+import zio.kafka.client.internal.ConsumerAccess.ByteArrayKafkaConsumer
 
 import scala.collection.JavaConverters._
 
