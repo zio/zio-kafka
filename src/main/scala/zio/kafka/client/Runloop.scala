@@ -261,9 +261,6 @@ object Runloop {
                          revokeAction.as((acc.reverse, buf.toMap))
                        }
 
-                       /**
-                        * @return Tuple of the list of unfulfilled requests and corresponding remaining buffered records
-                        */
                        def fulfillRequests(
                          pendingRequests: List[Command.Request],
                          bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
