@@ -2,10 +2,11 @@ package zio.kafka.client
 
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.common.TopicPartition
+import zio.test.environment.Live
 import zio._
 import zio.kafka.client.KafkaTestUtils._
 import zio.kafka.client.serde.Serde
-import zio.stream.ZSink
+import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.duration._
 import zio.test.{ DefaultRunnableSpec, _ }
@@ -231,6 +232,47 @@ object ConsumerTest
                             .map(_.toMap)
                       }
           } yield assert(offsets.values.map(_.offset), forall(equalTo(nrMessages / nrPartitions)))
+        },
+        testM("handle rebalancing by completing topic-partition streams") {
+          val nrMessages   = 50
+          val nrPartitions = 6
+
+          for {
+            // Produce messages on several partitions
+            topic <- randomTopic
+            group <- randomGroup
+            _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+            _ <- ZIO.traverse(1 to nrMessages) { i =>
+                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+                }
+
+            // Consume messages
+            subscription = Subscription.topics(topic)
+            consumer1 <- withConsumer(group, "client1") { consumer =>
+                          consumer
+                            .subscribeAnd(subscription)
+                            .partitionedStream(Serde.string, Serde.string)
+                            .flatMapPar(nrPartitions) {
+                              case (tp, partition) =>
+                                ZStream
+                                  .fromEffect(partition.flattenChunks.runDrain)
+                                  .as(tp)
+                            }
+                            .take(nrPartitions / 2)
+                            .runDrain
+                        }.fork
+            _ <- Live.live(ZIO.sleep(5.seconds))
+            consumer2 <- withConsumer(group, "client2") { consumer =>
+                          consumer
+                            .subscribeAnd(subscription)
+                            .partitionedStream(Serde.string, Serde.string)
+                            .take(nrPartitions / 2)
+                            .runDrain
+                        }.fork
+            _ <- consumer1.join
+            _ <- consumer2.join
+          } yield assertCompletes
         }
+        // TODO diagnostic events
       ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment) @@ timeout(180.seconds)
     )
