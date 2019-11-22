@@ -121,7 +121,10 @@ class Consumer private (
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-    ZStreamChunk(partitionedStream[R, K, V](keyDeserializer, valueDeserializer).flatMapPar(Int.MaxValue)(_._2.chunks))
+    ZStreamChunk(
+      partitionedStream[R, K, V](keyDeserializer, valueDeserializer)
+        .flatMapPar(n = Int.MaxValue, outputBuffer = 1)(_._2.chunks)
+    )
 
   def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
     consumer.withConsumer(_.seek(partition, offset))

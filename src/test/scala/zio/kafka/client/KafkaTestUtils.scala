@@ -1,6 +1,6 @@
 package zio.kafka.client
 
-import net.manub.embeddedkafka.{ EmbeddedK, EmbeddedKafka }
+import net.manub.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio.{ Chunk, Managed, RIO, UIO, ZIO, ZManaged }
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -33,6 +33,10 @@ object Kafka {
 
     override def stop(): UIO[Unit] = UIO.unit
   }
+
+  implicit val embeddedKafkaConfig = EmbeddedKafkaConfig(
+    customBrokerProperties = Map("group.min.session.timeout.ms" -> "500")
+  )
 
   val makeEmbedded: Managed[Nothing, Kafka] =
     ZManaged.make(ZIO.effectTotal(new Kafka {
@@ -139,17 +143,20 @@ object KafkaTestUtils {
     for {
       servers <- ZIO.access[Kafka](_.kafka.bootstrapServers)
     } yield ConsumerSettings(
-      servers,
-      groupId,
-      clientId,
-      5.seconds,
-      Map(
-        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "earliest",
-        ConsumerConfig.METADATA_MAX_AGE_CONFIG  -> "100"
+      bootstrapServers = servers,
+      groupId = groupId,
+      clientId = clientId,
+      closeTimeout = 5.seconds,
+      extraDriverSettings = Map(
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG     -> "earliest",
+        ConsumerConfig.METADATA_MAX_AGE_CONFIG      -> "100",
+        ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG    -> "1000",
+        ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG -> "250",
+        ConsumerConfig.MAX_POLL_RECORDS_CONFIG      -> "10"
       ),
-      250.millis,
-      250.millis,
-      100
+      pollInterval = 100.millis,
+      pollTimeout = 100.millis,
+      perPartitionChunkPrefetch = 1
     )
 
   def consumeWithStrings(groupId: String, clientId: String, subscription: Subscription)(
@@ -165,7 +172,7 @@ object KafkaTestUtils {
     } yield inner
 
   def withConsumer[A](groupId: String, clientId: String)(
-    r: Consumer => RIO[Any with Kafka with Clock with Blocking, A]
+    r: Consumer => RIO[Kafka with Clock with Blocking, A]
   ): RIO[KafkaTestEnvironment, A] =
     for {
       lcb <- Kafka.liveClockBlocking

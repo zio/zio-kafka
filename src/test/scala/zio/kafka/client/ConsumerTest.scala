@@ -1,14 +1,15 @@
 package zio.kafka.client
 
 import net.manub.embeddedkafka.EmbeddedKafka
-import zio.kafka.client.serde.Serde
-import zio.stream.ZSink
-import zio.test._
-import zio.test.Assertion._
-import zio.test.DefaultRunnableSpec
-import KafkaTestUtils._
 import org.apache.kafka.common.TopicPartition
 import zio._
+import zio.kafka.client.KafkaTestUtils._
+import zio.kafka.client.serde.Serde
+import zio.stream.ZSink
+import zio.test.Assertion._
+import zio.duration._
+import zio.test.{ DefaultRunnableSpec, _ }
+import zio.test.TestAspect._
 
 /**
  * Health warning - if extending these tests, be aware that consumer requires the live clock.
@@ -17,8 +18,8 @@ import zio._
  */
 object ConsumerTest
     extends DefaultRunnableSpec(
-      suite("consumer test suite pt1")(
-        testM("receive messages produced on the topic") {
+      suite("Consumer Streaming")(
+        testM("plainStream emits messages for a topic subscription") {
           val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
           for {
             _ <- produceMany("topic150", kvs)
@@ -36,7 +37,7 @@ object ConsumerTest
             }
           } yield assert(kvOut, equalTo(kvs))
         },
-        testM("receive messages produced on the topic pattern") {
+        testM("plainStream emits messages for a pattern subscription") {
           val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
           for {
             _ <- produceMany("pattern150", kvs)
@@ -98,31 +99,39 @@ object ConsumerTest
                             }
           } yield assert((firstResults ++ secondResults).map(rec => rec.key() -> rec.value()), equalTo(data))
         },
-        testM("consume all the messages on a topic") {
-          val topic        = "consumeWith"
-          val subscription = Subscription.Topics(Set(topic))
+        testM("partitionedStream emits messages for each partition in a separate stream") {
           val nrMessages   = 50
           val nrPartitions = 5
 
           for {
             // Produce messages on several partitions
-            _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = 5))
+            topic <- randomTopic
+            group <- randomGroup
+            _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
             _ <- ZIO.traverse(1 to nrMessages) { i =>
                   produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                 }
 
             // Consume messages
-            done             <- Promise.make[Nothing, Unit]
-            messagesReceived <- Ref.make(List.empty[(String, String)])
-            fib <- consumeWithStrings("group3", "client3", subscription) { (key, value) =>
-                    (for {
-                      messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
-                      _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
-                    } yield ()).orDie
+            messagesReceived <- ZIO.traverse(0 until nrPartitions)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
+            subscription     = Subscription.topics(topic)
+            fib <- withConsumer(group, "client3") { consumer =>
+                    consumer
+                      .subscribeAnd(subscription)
+                      .partitionedStream(Serde.string, Serde.string)
+                      .flatMapPar(nrPartitions) {
+                        case (_, partition) =>
+                          partition.mapM { record =>
+                            messagesReceived(record.partition).update(_ + 1).as(record)
+                          }.flattenChunks
+                      }
+                      .take(nrMessages)
+                      .runDrain
                   }.fork
-            _ <- done.await
-            _ <- fib.interrupt
-          } yield assertCompletes
+            _                    <- fib.join
+            messagesPerPartition <- ZIO.traverse(messagesReceived.values)(_.get)
+
+          } yield assert(messagesPerPartition, forall(equalTo(nrMessages / nrPartitions)))
         },
         testM("fail when the consuming effect produces a failure") {
           val topic        = "consumeWith3"
@@ -131,35 +140,38 @@ object ConsumerTest
           val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
 
           for {
-            messagesReceived <- Ref.make(List.empty[(String, String)])
-            _                <- produceMany(topic, messages)
-            consumeResult <- consumeWithStrings("group3", "client3", subscription) { (key, value) =>
-                              (for {
-                                messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
-                                _ <- Task.when(messagesSoFar.size == 3)(
-                                      ZIO.die(new IllegalArgumentException("consumeWith failure"))
-                                    )
-                              } yield ()).orDie
+            _ <- produceMany(topic, messages)
+            consumeResult <- consumeWithStrings("group3", "client3", subscription) {
+                              case (_, _) =>
+                                ZIO.fail(new IllegalArgumentException("consumeWith failure")).orDie
                             }.run
           } yield consumeResult.fold(
             _ => assertCompletes,
             _ => assert("result", equalTo("Expected consumeWith to fail"))
           )
         },
-        testM("not receive messages after shutting down") {
-          val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+        testM("stopConsumption must stop the stream") {
+          val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
           for {
-            _ <- produceMany("topic150", kvs)
-            records <- withConsumer("group150", "client150") { consumer =>
-                        consumer.stopConsumption *>
-                          consumer
-                            .subscribeAnd(Subscription.Topics(Set("topic150")))
-                            .plainStream(Serde.string, Serde.string)
-                            .flattenChunks
-                            .take(5)
-                            .runCollect
-                      }
-          } yield assert(records, isEmpty)
-        }
+            topic            <- randomTopic
+            _                <- produceMany(topic, kvs)
+            messagesReceived <- Ref.make[Int](0)
+            _ <- withConsumer("group150", "client150") { consumer =>
+                  consumer
+                    .subscribeAnd(Subscription.topics(topic))
+                    .plainStream(Serde.string, Serde.string)
+                    .mapM { _ =>
+                      for {
+                        nr <- messagesReceived.update(_ + 1)
+                        _  <- consumer.stopConsumption.when(nr == 3)
+                      } yield ()
+                    }
+                    .flattenChunks
+                    .runDrain
+                }
+            nr <- messagesReceived.get
+          } yield assert(nr, isLessThanEqualTo(10)) // NOTE this depends on a max_poll_records setting of 10
+        } @@ timeout(60.seconds)
+//        testM("process outstanding commits after a graceful shutdown")
       ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
     )

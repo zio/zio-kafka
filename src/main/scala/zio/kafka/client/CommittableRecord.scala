@@ -30,6 +30,11 @@ final case class CommittableRecord[K, V](record: ConsumerRecord[K, V], offset: O
         )
       )
     }
+
+  def key: K          = record.key
+  def value: V        = record.value()
+  def partition: Int  = record.partition()
+  def timestamp: Long = record.timestamp()
 }
 
 object CommittableRecord {
