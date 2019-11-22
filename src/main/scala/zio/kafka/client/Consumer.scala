@@ -139,7 +139,7 @@ object Consumer {
    * multiple partitions happens in parallel.
    *
    * Offsets are committed after execution of the effect. They are batched when a commit action is in progress
-   * to avoid backpressuring the stream. When commits fail due to a [[org.apache.kafka.clients.consumer.RetriableCommitFailedException]] they are
+   * to avoid backpressuring the stream. When commits fail due to a org.apache.kafka.clients.consumer.RetriableCommitFailedException they are
    * retried according to commitRetryPolicy
    *
    * The effect should absorb any failures. Failures should be handled by retries or ignoring the
