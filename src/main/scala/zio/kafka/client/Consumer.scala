@@ -1,6 +1,6 @@
 package zio.kafka.client
 
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp
+import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetAndTimestamp }
 import org.apache.kafka.common.{ PartitionInfo, TopicPartition }
 import zio._
 import zio.blocking.Blocking
@@ -33,6 +33,12 @@ class Consumer private (
     timeout: Duration = Duration.Infinity
   ): BlockingTask[Map[TopicPartition, Long]] =
     consumer.withConsumer(_.beginningOffsets(partitions.asJava, timeout.asJava).asScala.mapValues(_.longValue()).toMap)
+
+  /**
+   * Retrieve the last committed offset for a given topic-partition
+   */
+  def committed(partition: TopicPartition, timeout: Duration = Duration.Infinity): BlockingTask[OffsetAndMetadata] =
+    consumer.withConsumer(_.committed(partition, timeout.asJava))
 
   def endOffsets(
     partitions: Set[TopicPartition],
