@@ -8,6 +8,7 @@ import zio.clock.Clock
 import zio.duration._
 import zio.kafka.client.serde.Deserializer
 import zio.kafka.client.diagnostics.Diagnostics
+import zio.kafka.client.internal.{ ConsumerAccess, Runloop }
 import zio.stream._
 
 import scala.collection.JavaConverters._
@@ -18,6 +19,12 @@ class Consumer private (
   private val runloop: Runloop
 ) {
   self =>
+
+  /**
+   * Returns the topic-partitions that this consumer is currently assigned.
+   *
+   * This is subject to consumer rebalancing, unless using a manual subscription.
+   */
   def assignment: BlockingTask[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
 
@@ -52,6 +59,23 @@ class Consumer private (
   ): BlockingTask[Map[TopicPartition, OffsetAndTimestamp]] =
     consumer.withConsumer(_.offsetsForTimes(timestamps.mapValues(Long.box).asJava, timeout.asJava).asScala.toMap)
 
+  /**
+   * Create a stream with messages on the subscribed topic-partitions by topic-partition
+   *
+   * The top-level stream will emit new topic-partition streams for each topic-partition that is assigned
+   * to this consumer. This is subject to consumer rebalancing, unless a manual subscription
+   * was made. When rebalancing occurs, new topic-partition streams may be emitted and existing
+   * streams may be completed.
+   *
+   * All streams can be completed by calling [[stopConsumption]].
+   *
+   * @param keyDeserializer Deserializer for the record keys
+   * @param valueDeserializer Deserializer for the record values
+   * @tparam R Environment required by the serializers
+   * @tparam K Type of record keys
+   * @tparam V Type of record values
+   * @return
+   */
   def partitionedStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
@@ -78,6 +102,21 @@ class Consumer private (
   def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): BlockingTask[Long] =
     consumer.withConsumer(_.position(partition, timeout.asJava))
 
+  /**
+   * Create a stream with all messages on the subscribed topic-partitions
+   *
+   * The stream will emit messages from all topic-partitions interleaved. Per-partition
+   * record order is guaranteed, but the topic-partition interleaving is non-deterministic.
+   *
+   * The stream can be completed by calling [[stopConsumption]].
+   *
+   * @param keyDeserializer Deserializer for the record keys
+   * @param valueDeserializer Deserializer for the record values
+   * @tparam R Environment required by the serializers
+   * @tparam K Type of record keys
+   * @tparam V Type of record values
+   * @return
+   */
   def plainStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
