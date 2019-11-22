@@ -197,8 +197,40 @@ object ConsumerTest
                          consumer.committed(new TopicPartition(topic, 0))
                      }
           } yield assert(offset.offset, isLessThanEqualTo(10L)) // NOTE this depends on a max_poll_records setting of 10
+        },
+        testM("offset batching collects the latest offset for all partitions") {
+          val nrMessages   = 50
+          val nrPartitions = 5
+
+          for {
+            // Produce messages on several partitions
+            topic <- randomTopic
+            group <- randomGroup
+            _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+            _ <- ZIO.traverse(1 to nrMessages) { i =>
+                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+                }
+
+            // Consume messages
+            messagesReceived <- ZIO.traverse(0 until nrPartitions)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
+            subscription     = Subscription.topics(topic)
+            offsets <- withConsumer(group, "client3") { consumer =>
+                        consumer
+                          .subscribeAnd(subscription)
+                          .partitionedStream(Serde.string, Serde.string)
+                          .flatMapPar(nrPartitions)(_._2.map(_.offset).flattenChunks)
+                          .take(nrMessages)
+                          .aggregate(Consumer.offsetBatches)
+                          .take(1)
+                          .mapM(_.commit)
+                          .runDrain *>
+                          ZIO
+                            .traverse((0 until nrPartitions).map(new TopicPartition(topic, _)))(
+                              tp => consumer.committed(tp).map(tp -> _)
+                            )
+                            .map(_.toMap)
+                      }
+          } yield assert(offsets.values.map(_.offset), forall(equalTo(nrMessages / nrPartitions)))
         }
       ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment) @@ timeout(180.seconds)
     )
-
-// TODO: batch commits
