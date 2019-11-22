@@ -154,9 +154,10 @@ object ConsumerTest
           val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
           for {
             topic            <- randomTopic
+            group            <- randomGroup
             _                <- produceMany(topic, kvs)
             messagesReceived <- Ref.make[Int](0)
-            _ <- withConsumer("group150", "client150") { consumer =>
+            _ <- withConsumer(group, "client150") { consumer =>
                   consumer
                     .subscribeAnd(Subscription.topics(topic))
                     .plainStream(Serde.string, Serde.string)
@@ -171,7 +172,33 @@ object ConsumerTest
                 }
             nr <- messagesReceived.get
           } yield assert(nr, isLessThanEqualTo(10)) // NOTE this depends on a max_poll_records setting of 10
-        } @@ timeout(60.seconds)
-//        testM("process outstanding commits after a graceful shutdown")
-      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
+        },
+        testM("process outstanding commits after a graceful shutdown") {
+          val kvs   = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+          val topic = "test-outstanding-commits"
+          for {
+            group            <- randomGroup
+            _                <- produceMany(topic, kvs)
+            messagesReceived <- Ref.make[Int](0)
+            offset <- withConsumer(group, "client150") { consumer =>
+                       consumer
+                         .subscribeAnd(Subscription.topics(topic))
+                         .plainStream(Serde.string, Serde.string)
+                         .mapM { record =>
+                           for {
+                             nr <- messagesReceived.update(_ + 1)
+                             _  <- consumer.stopConsumption.when(nr == 1)
+                           } yield record.offset
+                         }
+                         .flattenChunks
+                         .aggregate(Consumer.offsetBatches)
+                         .mapM(_.commit)
+                         .runDrain *>
+                         consumer.committed(new TopicPartition(topic, 0))
+                     }
+          } yield assert(offset.offset, isLessThanEqualTo(10L)) // NOTE this depends on a max_poll_records setting of 10
+        }
+      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment) @@ timeout(180.seconds)
     )
+
+// TODO: batch commits
