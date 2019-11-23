@@ -10,7 +10,7 @@ client. It integrates effortlessly with ZIO and ZIO Streams.
 Add the following dependencies to your `build.sbt` file:
 ```
 libraryDependencies ++= Seq(
-  "dev.zio" %% "zio-streams" % "1.0.0-RC15",
+  "dev.zio" %% "zio-streams" % "1.0.0-RC17",
   "dev.zio" %% "zio-kafka"   % "<version>"
 )
 ```
@@ -95,7 +95,7 @@ consumer.use { c =>
     .flattenChunks
     .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
     .map(_.offset)
-    .aggregate(Consumer.offsetBatches)
+    .aggregateAsync(Consumer.offsetBatches)
     .mapM(_.commit)
     .runDrain
 }
@@ -119,7 +119,7 @@ consumer.use { c =>
     .flatMap(_._2.flattenChunks)
     .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
     .map(_.offset)
-    .aggregate(Consumer.offsetBatches)
+    .aggregateAsync(Consumer.offsetBatches)
     .mapM(_.commit)
     .runDrain
 }
