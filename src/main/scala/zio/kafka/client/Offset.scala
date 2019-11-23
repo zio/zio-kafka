@@ -10,11 +10,11 @@ sealed trait Offset {
   def batch: OffsetBatch
 }
 
-final case class OffsetImpl(
+private final case class OffsetImpl(
   topicPartition: TopicPartition,
   offset: Long,
   commitHandle: Map[TopicPartition, Long] => Task[Unit]
 ) extends Offset {
   val commit: Task[Unit] = commitHandle(Map(topicPartition    -> offset))
-  val batch              = OffsetBatchImpl(Map(topicPartition -> offset), commitHandle)
+  val batch: OffsetBatch = OffsetBatchImpl(Map(topicPartition -> offset), commitHandle)
 }
