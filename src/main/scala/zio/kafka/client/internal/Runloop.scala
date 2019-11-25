@@ -26,12 +26,6 @@ private[client] object Runloop {
     case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
   }
 
-  sealed abstract class Rebalance
-  object Rebalance {
-    case class Revoked(previousAssignment: Set[TopicPartition]) extends Rebalance
-    case class Assigned(currentAssignment: Set[TopicPartition]) extends Rebalance
-  }
-
   case class Deps(
     consumer: ConsumerAccess,
     pollFrequency: Duration,
