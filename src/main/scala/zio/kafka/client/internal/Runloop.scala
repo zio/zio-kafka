@@ -96,7 +96,7 @@ private[client] object Runloop {
                          override def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
                            runtime.unsafeRun(
                              rebalancingRef.set(false) *>
-                               diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(partitions.asScala.toSet))
+                               diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(partitions.asScala.toSet))
                            )
                            consumer.consumer.pause(partitions)
                            ()

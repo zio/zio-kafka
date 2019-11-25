@@ -10,6 +10,7 @@ import zio.kafka.client.serde.Serde
 import zio.duration._
 import zio.kafka.client.AdminClient.KafkaAdminClientConfig
 import zio.kafka.client.Kafka.KafkaTestEnvironment
+import zio.kafka.client.diagnostics.Diagnostics
 import zio.random.Random
 import zio.test.environment.{ Live, TestEnvironment }
 
@@ -171,14 +172,14 @@ object KafkaTestUtils {
                 .provide(lcb)
     } yield inner
 
-  def withConsumer[A](groupId: String, clientId: String)(
+  def withConsumer[A](groupId: String, clientId: String, diagnostics: Diagnostics = Diagnostics.NoOp)(
     r: Consumer => RIO[Kafka with Clock with Blocking, A]
   ): RIO[KafkaTestEnvironment, A] =
     for {
       lcb <- Kafka.liveClockBlocking
       inner <- (for {
                 settings <- consumerSettings(groupId, clientId)
-                consumer = Consumer.make(settings)
+                consumer = Consumer.make(settings, diagnostics)
                 consumed <- consumer.use { p =>
                              r(p).provide(lcb)
                            }

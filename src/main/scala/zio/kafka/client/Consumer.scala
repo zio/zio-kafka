@@ -169,6 +169,7 @@ object Consumer {
   ): ZManaged[Clock with Blocking, Throwable, Consumer] =
     for {
       wrapper <- ConsumerAccess.make(settings)
+      _       <- ZManaged.make(ZIO.succeed(diagnostics))(_.shutdown)
       deps <- Runloop.Deps.make(
                wrapper,
                settings.pollInterval,
