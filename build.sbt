@@ -1,5 +1,12 @@
-val mainScala = "2.12.10"
-val allScala  = Seq("2.11.12", mainScala)
+lazy val scala211 = "2.11.12"
+lazy val scala212 = "2.12.10"
+lazy val scala213 = "2.13.1"
+lazy val mainScala = scala213
+lazy val allScala  = Seq(scala211, scala212, mainScala)
+
+lazy val zioVersion = "1.0.0-RC17"
+lazy val kafkaVersion = "2.4.0"
+lazy val embeddedKafkaVersion = kafkaVersion
 
 inThisBuild(
   List(
@@ -30,6 +37,12 @@ inThisBuild(
 )
 
 ThisBuild / publishTo := sonatypePublishToBundle.value
+ThisBuild / resolvers ++= Seq(
+  // for Embedded Kafka 2.4.0
+  Resolver.bintrayRepo("seglo", "maven"),
+  // for release candidate builds of Apache Kafka
+  MavenRepository("Apache Staging", "https://repository.apache.org/content/groups/staging/")
+)
 
 name := "zio-kafka"
 scalafmtOnCompile := true
@@ -40,15 +53,16 @@ buildInfoPackage := "zio.kafka"
 buildInfoObject := "BuildInfo"
 
 libraryDependencies ++= Seq(
-  "dev.zio"          %% "zio-streams"  % "1.0.0-RC17",
-  "dev.zio"          %% "zio-test"     % "1.0.0-RC17" % "test",
-  "dev.zio"          %% "zio-test-sbt" % "1.0.0-RC17" % "test",
-  "org.apache.kafka" % "kafka-clients" % "2.3.1",
+  "dev.zio"          %% "zio-streams"  % zioVersion,
+  "dev.zio"          %% "zio-test"     % zioVersion % Test,
+  "dev.zio"          %% "zio-test-sbt" % zioVersion % Test,
+  "org.apache.kafka" % "kafka-clients" % kafkaVersion,
 //  "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
-  "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.1" % "test",
-  "ch.qos.logback"          % "logback-classic" % "1.2.3" % "test",
-  compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.0")
+  "io.github.seglo"  %% "embedded-kafka" % embeddedKafkaVersion, // "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.1" % "test",
+  "ch.qos.logback"   % "logback-classic" % "1.2.3" % Test,
 )
+
+addCompilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full)
 
 testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
 
