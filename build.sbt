@@ -58,8 +58,9 @@ libraryDependencies ++= Seq(
   "dev.zio"          %% "zio-test-sbt" % zioVersion % Test,
   "org.apache.kafka" % "kafka-clients" % kafkaVersion,
 //  "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
-  "io.github.seglo" %% "embedded-kafka" % embeddedKafkaVersion, // "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.1" % "test",
-  "ch.qos.logback"  % "logback-classic" % "1.2.3" % Test
+  "io.github.seglo"        %% "embedded-kafka"          % embeddedKafkaVersion, // "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.1" % "test",
+  "ch.qos.logback"         % "logback-classic"          % "1.2.3" % Test,
+  "org.scala-lang.modules" %% "scala-collection-compat" % "2.1.2"
 )
 
 addCompilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full)
