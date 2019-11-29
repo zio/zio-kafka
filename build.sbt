@@ -1,11 +1,11 @@
-lazy val scala211 = "2.11.12"
-lazy val scala212 = "2.12.10"
-lazy val scala213 = "2.13.1"
+lazy val scala211  = "2.11.12"
+lazy val scala212  = "2.12.10"
+lazy val scala213  = "2.13.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala211, scala212, mainScala)
 
-lazy val zioVersion = "1.0.0-RC17"
-lazy val kafkaVersion = "2.4.0"
+lazy val zioVersion           = "1.0.0-RC17"
+lazy val kafkaVersion         = "2.4.0"
 lazy val embeddedKafkaVersion = kafkaVersion
 
 inThisBuild(
@@ -58,8 +58,8 @@ libraryDependencies ++= Seq(
   "dev.zio"          %% "zio-test-sbt" % zioVersion % Test,
   "org.apache.kafka" % "kafka-clients" % kafkaVersion,
 //  "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
-  "io.github.seglo"  %% "embedded-kafka" % embeddedKafkaVersion, // "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.1" % "test",
-  "ch.qos.logback"   % "logback-classic" % "1.2.3" % Test,
+  "io.github.seglo" %% "embedded-kafka" % embeddedKafkaVersion, // "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.1" % "test",
+  "ch.qos.logback"  % "logback-classic" % "1.2.3" % Test
 )
 
 addCompilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full)
