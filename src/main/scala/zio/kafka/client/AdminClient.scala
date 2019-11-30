@@ -2,8 +2,8 @@ package zio.kafka.client
 
 import org.apache.kafka.clients.admin.{
   AdminClient => JAdminClient,
-  NewPartitions => JNewPartitions,
   NewTopic => JNewTopic,
+  NewPartitions => JNewPartitions,
   TopicDescription => JTopicDescription,
   _
 }
@@ -11,7 +11,7 @@ import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.{ KafkaFuture, TopicPartitionInfo }
 import zio._
 
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters._, scala.collection.compat._
 
 /**
  * Thin wrapper around apache java AdminClient. See java api for descriptions

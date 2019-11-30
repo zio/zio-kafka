@@ -6,12 +6,12 @@ import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
+import zio.kafka.client.serde.Deserializer
 import zio.kafka.client.diagnostics.Diagnostics
 import zio.kafka.client.internal.{ ConsumerAccess, Runloop }
-import zio.kafka.client.serde.Deserializer
 import zio.stream._
 
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters._, scala.collection.compat._
 
 class Consumer private (
   private val consumer: ConsumerAccess,
