@@ -11,7 +11,7 @@ import zio.kafka.client.diagnostics.Diagnostics
 import zio.kafka.client.internal.{ ConsumerAccess, Runloop }
 import zio.stream._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._, scala.collection.compat._
 
 class Consumer private (
   private val consumer: ConsumerAccess,
@@ -32,7 +32,9 @@ class Consumer private (
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
   ): BlockingTask[Map[TopicPartition, Long]] =
-    consumer.withConsumer(_.beginningOffsets(partitions.asJava, timeout.asJava).asScala.mapValues(_.longValue()).toMap)
+    consumer.withConsumer(
+      _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.view.mapValues(_.longValue()).toMap
+    )
 
   def endOffsets(
     partitions: Set[TopicPartition],
@@ -40,7 +42,7 @@ class Consumer private (
   ): BlockingTask[Map[TopicPartition, Long]] =
     consumer.withConsumer { eo =>
       val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
-      offs.asScala.mapValues(_.longValue()).toMap
+      offs.asScala.view.mapValues(_.longValue()).toMap
     }
 
   /**
@@ -51,13 +53,15 @@ class Consumer private (
     runloop.deps.gracefulShutdown
 
   def listTopics(timeout: Duration = Duration.Infinity): BlockingTask[Map[String, List[PartitionInfo]]] =
-    consumer.withConsumer(_.listTopics(timeout.asJava).asScala.mapValues(_.asScala.toList).toMap)
+    consumer.withConsumer(_.listTopics(timeout.asJava).asScala.view.mapValues(_.asScala.toList).toMap)
 
   def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
     timeout: Duration = Duration.Infinity
   ): BlockingTask[Map[TopicPartition, OffsetAndTimestamp]] =
-    consumer.withConsumer(_.offsetsForTimes(timestamps.mapValues(Long.box).asJava, timeout.asJava).asScala.toMap)
+    consumer.withConsumer(
+      _.offsetsForTimes(timestamps.view.mapValues(Long.box).toMap.asJava, timeout.asJava).asScala.toMap
+    )
 
   /**
    * Create a stream with messages on the subscribed topic-partitions by topic-partition

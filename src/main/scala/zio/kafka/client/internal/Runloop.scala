@@ -10,8 +10,8 @@ import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.client.{ BlockingTask, CommittableRecord }
 import zio.stream._
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 private[client] final case class Runloop(fiber: Fiber[Throwable, Unit], deps: Runloop.Deps)
 private[client] object Runloop {
@@ -315,7 +315,7 @@ private[client] object Runloop {
                        }
 
                        Task.effectSuspend {
-                         val prevAssigned = c.assignment().asScala
+                         val prevAssigned = c.assignment().asScala.toSet
 
                          val requestedPartitions = state.pendingRequests.map(_.tp).toSet
                          c.resume(requestedPartitions.asJava)
@@ -344,8 +344,8 @@ private[client] object Runloop {
                              )
                            else {
 
-                             val tpsInResponse   = records.partitions.asScala
-                             val currentAssigned = c.assignment().asScala
+                             val tpsInResponse   = records.partitions.asScala.toSet
+                             val currentAssigned = c.assignment().asScala.toSet
                              val newlyAssigned   = currentAssigned -- prevAssigned
                              val revoked         = prevAssigned -- currentAssigned
                              val unrequestedRecords =
@@ -368,7 +368,7 @@ private[client] object Runloop {
                                          )
                                        )
                                  } yield output
-                             }.map((newlyAssigned.toSet, _))
+                             }.map((newlyAssigned, _))
                            }
                          }
                        }
