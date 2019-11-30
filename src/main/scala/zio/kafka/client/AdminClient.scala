@@ -2,8 +2,8 @@ package zio.kafka.client
 
 import org.apache.kafka.clients.admin.{
   AdminClient => JAdminClient,
-  NewTopic => JNewTopic,
   NewPartitions => JNewPartitions,
+  NewTopic => JNewTopic,
   TopicDescription => JTopicDescription,
   _
 }
@@ -11,7 +11,7 @@ import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.{ KafkaFuture, TopicPartitionInfo }
 import zio._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Thin wrapper around apache java AdminClient. See java api for descriptions
@@ -101,7 +101,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
             .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
             .all()
         )
-      }.map(_.asScala.mapValues(AdminClient.TopicDescription(_)).toMap)
+      }.map(_.asScala.view.mapValues(AdminClient.TopicDescription(_)).toMap)
     }
   }
 
@@ -112,7 +112,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
     newPartitions: Map[String, NewPartitions],
     createPartitionsOptions: Option[CreatePartitionsOptions] = None
   ): BlockingTask[Unit] = {
-    val asJava = newPartitions.mapValues(_.asJava).asJava
+    val asJava = newPartitions.view.mapValues(_.asJava).toMap.asJava
 
     semaphore.withPermit {
       fromKafkaFutureVoid {

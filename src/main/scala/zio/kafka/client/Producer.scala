@@ -9,7 +9,7 @@ import zio.blocking._
 import zio.kafka.client.serde.Serializer
 import zio.stream.ZSink
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class Producer[-R, K, V] private (
   p: ByteArrayProducer,

@@ -2,12 +2,40 @@ version: 2.1
 jobs:
   lint:
     docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.2_2.12.10
+      - image: hseeberger/scala-sbt:8u222_1.3.4_2.13.1
     steps:
       - checkout
       - restore_cache:
           key: sbt-cache
-      - run: sbt ++2.12.10! check
+      - run: sbt ++2.13.1! check
+      - save_cache:
+          key: sbt-cache
+          paths:
+            - "~/.ivy2/cache"
+            - "~/.sbt"
+            - "~/.m2"
+  test213_jdk8:
+    docker:
+      - image: hseeberger/scala-sbt:8u222_1.3.4_2.13.1
+    steps:
+      - checkout
+      - restore_cache:
+          key: sbt-cache
+      - run: sbt ++2.13.1! test packageDoc
+      - save_cache:
+          key: sbt-cache
+          paths:
+            - "~/.ivy2/cache"
+            - "~/.sbt"
+            - "~/.m2"
+  test213_jdk11:
+    docker:
+      - image: hseeberger/scala-sbt:11.0.4_1.3.4_2.13.1
+    steps:
+      - checkout
+      - restore_cache:
+          key: sbt-cache
+      - run: sbt ++2.13.1! test
       - save_cache:
           key: sbt-cache
           paths:
@@ -16,7 +44,7 @@ jobs:
             - "~/.m2"
   test212_jdk8:
     docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.2_2.12.10
+      - image: hseeberger/scala-sbt:8u222_1.3.4_2.12.10
     steps:
       - checkout
       - restore_cache:
@@ -30,7 +58,7 @@ jobs:
             - "~/.m2"
   test212_jdk11:
     docker:
-      - image: hseeberger/scala-sbt:11.0.4_1.3.2_2.12.10
+      - image: hseeberger/scala-sbt:11.0.4_1.3.4_2.12.10
     steps:
       - checkout
       - restore_cache:
@@ -44,7 +72,7 @@ jobs:
             - "~/.m2"
   test211_jdk8:
     docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.2_2.12.10
+      - image: hseeberger/scala-sbt:8u222_1.3.4_2.12.10
     steps:
       - checkout
       - restore_cache:
@@ -58,7 +86,7 @@ jobs:
             - "~/.m2"
   test211_jdk11:
     docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.2_2.12.10
+      - image: hseeberger/scala-sbt:8u222_1.3.4_2.12.10
     steps:
       - checkout
       - restore_cache:
@@ -72,7 +100,7 @@ jobs:
             - "~/.m2"
   release:
     docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.2_2.12.10
+      - image: hseeberger/scala-sbt:8u222_1.3.4_2.13.1
     steps:
       - checkout
       - run: git fetch --tags
@@ -81,13 +109,25 @@ jobs:
       - run: echo -n "${PGP_PUBLIC}" | base64 -d > /tmp/public.asc
       - run: echo -n "${PGP_SECRET}" | base64 -d > /tmp/secret.asc
       - run: echo "credentials += Credentials(\"Sonatype Nexus Repository Manager\", \"oss.sonatype.org\", \"$SONATYPE_USER\", \"$SONATYPE_PASSWORD\")" > ~/.sbt/1.0/sonatype.sbt
-      - run: sbt ++2.12.10! clean sonatypeBundleClean +publishSigned sonatypeBundleRelease
+      - run: sbt ++2.13.1! clean sonatypeBundleClean +publishSigned sonatypeBundleRelease
 
 workflows:
   version: 2
   build:
     jobs:
       - lint:
+          filters:
+            tags:
+              only: /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
+      - test213_jdk8:
+          requires:
+            - lint
+          filters:
+            tags:
+              only: /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
+      - test213_jdk11:
+          requires:
+            - lint
           filters:
             tags:
               only: /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
@@ -118,6 +158,8 @@ workflows:
       - release:
           context: Sonatype
           requires:
+            - test213_jdk8
+            - test213_jdk11
             - test212_jdk8
             - test212_jdk11
             - test211_jdk8
