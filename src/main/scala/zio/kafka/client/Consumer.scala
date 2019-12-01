@@ -37,10 +37,13 @@ class Consumer private (
     )
 
   /**
-   * Retrieve the last committed offset for a given topic-partition
+   * Retrieve the last committed offset for the given topic-partitions
    */
-  def committed(partition: TopicPartition, timeout: Duration = Duration.Infinity): BlockingTask[OffsetAndMetadata] =
-    consumer.withConsumer(_.committed(partition, timeout.asJava))
+  def committed(
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  ): BlockingTask[Map[TopicPartition, OffsetAndMetadata]] =
+    consumer.withConsumer(_.committed(partitions.asJava, timeout.asJava).asScala.toMap)
 
   def endOffsets(
     partitions: Set[TopicPartition],

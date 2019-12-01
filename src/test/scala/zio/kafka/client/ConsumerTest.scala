@@ -238,7 +238,7 @@ object ConsumerTest {
                    .aggregate(Consumer.offsetBatches)
                    .mapM(_.commit)
                    .runDrain *>
-                   consumer.committed(new TopicPartition(topic, 0))
+                   consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
                }
     } yield assert(offset.offset, isLessThanEqualTo(10L)) // NOTE this depends on a max_poll_records setting of 10
   }
@@ -269,11 +269,7 @@ object ConsumerTest {
                     .take(1)
                     .mapM(_.commit)
                     .runDrain *>
-                    ZIO
-                      .traverse((0 until nrPartitions).map(new TopicPartition(topic, _)))(
-                        tp => consumer.committed(tp).map(tp -> _)
-                      )
-                      .map(_.toMap)
+                    consumer.committed((0 until nrPartitions).map(new TopicPartition(topic, _)).toSet)
                 }
     } yield assert(offsets.values.map(_.offset), forall(equalTo(nrMessages / nrPartitions)))
   }
