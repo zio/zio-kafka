@@ -240,7 +240,7 @@ object ConsumerTest {
                    .runDrain *>
                    consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
                }
-    } yield assert(offset.offset, isLessThanEqualTo(10L)) // NOTE this depends on a max_poll_records setting of 10
+    } yield assert(offset.map(_.offset), isSome(isLessThanEqualTo(10L))) // NOTE this depends on a max_poll_records setting of 10
   }
 
   val offsetBatching = testM("offset batching collects the latest offset for all partitions") {
@@ -271,7 +271,7 @@ object ConsumerTest {
                     .runDrain *>
                     consumer.committed((0 until nrPartitions).map(new TopicPartition(topic, _)).toSet)
                 }
-    } yield assert(offsets.values.map(_.offset), forall(equalTo(nrMessages / nrPartitions)))
+    } yield assert(offsets.values.map(_.map(_.offset)), forall(isSome(equalTo(nrMessages / nrPartitions))))
   }
 
   val rebalancing = testM("handle rebalancing by completing topic-partition streams") {

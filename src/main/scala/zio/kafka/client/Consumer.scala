@@ -42,8 +42,10 @@ class Consumer private (
   def committed(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
-  ): BlockingTask[Map[TopicPartition, OffsetAndMetadata]] =
-    consumer.withConsumer(_.committed(partitions.asJava, timeout.asJava).asScala.toMap)
+  ): BlockingTask[Map[TopicPartition, Option[OffsetAndMetadata]]] =
+    consumer.withConsumer(
+      _.committed(partitions.asJava, timeout.asJava).asScala.toMap.view.mapValues(Option.apply).toMap
+    )
 
   def endOffsets(
     partitions: Set[TopicPartition],
