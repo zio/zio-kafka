@@ -52,8 +52,23 @@ private[client] object Runloop {
     val isRebalancing = rebalancingRef.get
 
     def polls = ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency))
-    def newPartition(tp: TopicPartition, data: StreamChunk[Throwable, ByteArrayCommittableRecord]) =
-      partitions.offer(Take.Value(tp -> data)).unit
+
+    def newPartitionStream(tp: TopicPartition) = {
+      val stream = ZStreamChunk {
+        ZStream {
+          ZManaged.succeed {
+            for {
+              p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
+              _      <- request(Command.Request(tp, p))
+              _      <- emitIfEnabledDiagnostic(DiagnosticEvent.Request(tp))
+              result <- p.await
+            } yield result
+          }
+        }
+      }
+
+      partitions.offer(Take.Value(tp -> stream)).unit
+    }
 
     def emitIfEnabledDiagnostic(event: DiagnosticEvent) = diagnostics.emitIfEnabled(event)
 
@@ -166,20 +181,6 @@ private[client] object Runloop {
         _ <- deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await
       } yield ()
-
-    def partition(tp: TopicPartition): ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord] =
-      ZStreamChunk {
-        ZStream {
-          ZManaged.succeed {
-            for {
-              p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-              _      <- deps.request(Command.Request(tp, p))
-              _      <- deps.emitIfEnabledDiagnostic(DiagnosticEvent.Request(tp))
-              result <- p.await
-            } yield result
-          }
-        }
-      }
 
     def doCommit(cmds: List[Command.Commit]): ZIO[Blocking, Nothing, Unit] =
       for {
@@ -333,17 +334,16 @@ private[client] object Runloop {
                              case _: IllegalStateException => null
                            }
                          deps.isShutdown.flatMap { shutdown =>
-                           if (shutdown)
-                             ZIO.effectTotal(deps.consumer.consumer.pause(requestedPartitions.asJava)) *>
+                           if (shutdown) {
+                             ZIO.effectTotal(c.pause(requestedPartitions.asJava)) *>
                                ZIO.succeed(
                                  (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
                                )
-                           else if (records eq null)
+                           } else if (records eq null) {
                              ZIO.succeed(
                                (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
                              )
-                           else {
-
+                           } else {
                              val tpsInResponse   = records.partitions.asScala.toSet
                              val currentAssigned = c.assignment().asScala.toSet
                              val newlyAssigned   = currentAssigned -- prevAssigned
@@ -374,7 +374,7 @@ private[client] object Runloop {
                        }
                      }
         (newlyAssigned, (unfulfilledRequests, bufferedRecords)) = pollResult
-        _                                                       <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartition(tp, partition(tp)))
+        _                                                       <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartitionStream(tp))
         stillRebalancing                                        <- deps.isRebalancing
         newPendingCommits <- if (!stillRebalancing && state.pendingCommits.nonEmpty)
                               doCommit(state.pendingCommits).as(Nil)
