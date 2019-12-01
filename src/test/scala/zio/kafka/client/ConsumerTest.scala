@@ -24,6 +24,7 @@ object ConsumerTestSuite
       suite("Consumer Streaming")(
         plainStreamTopic,
         plainStreamPattern,
+        plainStreamManual,
         restartFromCommittedPosition,
         partitionedStreamBasic,
         consumeWithFailStream,
@@ -72,6 +73,29 @@ object ConsumerTest {
       }
     } yield assert(kvOut, equalTo(kvs))
   }
+
+  val plainStreamManual =
+    testM("receive only messages from the subscribed topic-partition when creating a manual subscription") {
+      val nrPartitions = 5
+      val topic        = "manual-topic"
+
+      for {
+        _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+        _ <- ZIO.traverse(1 to nrPartitions) { i =>
+              produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+            }
+        record <- withConsumer("group150", "client150") { consumer =>
+                   consumer
+                     .subscribeAnd(Subscription.manual(topic, partition = 2))
+                     .plainStream(Serde.string, Serde.string)
+                     .flattenChunks
+                     .take(1)
+                     .runHead
+                 }
+        kvOut = record.map(r => (r.record.key, r.record.value))
+      } yield assert(kvOut, isSome(equalTo("key2" -> "msg2")))
+    }
+
   val restartFromCommittedPosition = testM("restart from the committed position") {
     val data = (1 to 10).toList.map(i => s"key$i" -> s"msg$i")
     for {

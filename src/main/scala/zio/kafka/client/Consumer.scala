@@ -11,7 +11,7 @@ import zio.kafka.client.diagnostics.Diagnostics
 import zio.kafka.client.internal.{ ConsumerAccess, Runloop }
 import zio.stream._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._, scala.collection.compat._
 
 class Consumer private (
   private val consumer: ConsumerAccess,
@@ -32,7 +32,9 @@ class Consumer private (
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
   ): BlockingTask[Map[TopicPartition, Long]] =
-    consumer.withConsumer(_.beginningOffsets(partitions.asJava, timeout.asJava).asScala.mapValues(_.longValue()).toMap)
+    consumer.withConsumer(
+      _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.view.mapValues(_.longValue()).toMap
+    )
 
   /**
    * Retrieve the last committed offset for a given topic-partition
@@ -46,7 +48,7 @@ class Consumer private (
   ): BlockingTask[Map[TopicPartition, Long]] =
     consumer.withConsumer { eo =>
       val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
-      offs.asScala.mapValues(_.longValue()).toMap
+      offs.asScala.view.mapValues(_.longValue()).toMap
     }
 
   /**
@@ -57,13 +59,15 @@ class Consumer private (
     runloop.deps.gracefulShutdown
 
   def listTopics(timeout: Duration = Duration.Infinity): BlockingTask[Map[String, List[PartitionInfo]]] =
-    consumer.withConsumer(_.listTopics(timeout.asJava).asScala.mapValues(_.asScala.toList).toMap)
+    consumer.withConsumer(_.listTopics(timeout.asJava).asScala.view.mapValues(_.asScala.toList).toMap)
 
   def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
     timeout: Duration = Duration.Infinity
   ): BlockingTask[Map[TopicPartition, OffsetAndTimestamp]] =
-    consumer.withConsumer(_.offsetsForTimes(timestamps.mapValues(Long.box).asJava, timeout.asJava).asScala.toMap)
+    consumer.withConsumer(
+      _.offsetsForTimes(timestamps.view.mapValues(Long.box).toMap.asJava, timeout.asJava).asScala.toMap
+    )
 
   /**
    * Create a stream with messages on the subscribed topic-partitions by topic-partition
@@ -142,10 +146,13 @@ class Consumer private (
     consumer.withConsumer(_.seekToEnd(partitions.asJava))
 
   def subscribe(subscription: Subscription): BlockingTask[Unit] =
-    consumer.withConsumer { c =>
+    consumer.withConsumerM { c =>
       subscription match {
-        case Subscription.Pattern(pattern) => c.subscribe(pattern.pattern, runloop.deps.rebalanceListener)
-        case Subscription.Topics(topics)   => c.subscribe(topics.asJava, runloop.deps.rebalanceListener)
+        case Subscription.Pattern(pattern) => ZIO(c.subscribe(pattern.pattern, runloop.deps.rebalanceListener))
+        case Subscription.Topics(topics)   => ZIO(c.subscribe(topics.asJava, runloop.deps.rebalanceListener))
+        case Subscription.Manual(topicPartitions) =>
+          ZIO(c.assign(topicPartitions.asJava)) *>
+            ZIO.foreach_(topicPartitions)(runloop.deps.newPartitionStream)
       }
     }
 
@@ -188,9 +195,10 @@ object Consumer {
    * multiple partitions happens in parallel.
    *
    * Offsets are committed after execution of the effect. They are batched when a commit action is in progress
-   * to avoid backpressuring the stream.
+   * to avoid backpressuring the stream. When commits fail due to a org.apache.kafka.clients.consumer.RetriableCommitFailedException they are
+   * retried according to commitRetryPolicy
    *
-   * The effect should must absorb any failures. Failures should be handled by retries or ignoring the
+   * The effect should absorb any failures. Failures should be handled by retries or ignoring the
    * error, which will result in the Kafka message being skipped.
    *
    * Messages are processed with 'at least once' consistency: it is not guaranteed that every message
@@ -212,8 +220,10 @@ object Consumer {
    * @param subscription Topic subscription parameters
    * @param keyDeserializer Deserializer for the key of the messages
    * @param valueDeserializer Deserializer for the value of the messages
+   * @param commitRetryPolicy Retry commits that failed due to a RetriableCommitFailedException according to this schedule
    * @param f Function that returns the effect to execute for each message. It is passed the key and value
-   * @tparam R Environment
+   * @tparam R Environment for the consuming effect
+   * @tparam R1 Environment for the deserializers
    * @tparam K Type of keys (an implicit `Deserializer` should be in scope)
    * @tparam V Type of values (an implicit `Deserializer` should be in scope)
    * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
@@ -222,7 +232,8 @@ object Consumer {
     settings: ConsumerSettings,
     subscription: Subscription,
     keyDeserializer: Deserializer[R1, K],
-    valueDeserializer: Deserializer[R1, V]
+    valueDeserializer: Deserializer[R1, V],
+    commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
   )(
     f: (K, V) => ZIO[R, Nothing, Unit]
   ): ZIO[R with R1 with Blocking with Clock, Throwable, Unit] =
@@ -244,6 +255,6 @@ object Consumer {
           }
       }
       .aggregateAsync(offsetBatches)
-      .mapM(_.commit)
+      .mapM(_.commitOrRetry(commitRetryPolicy))
       .runDrain
 }
