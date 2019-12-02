@@ -18,7 +18,7 @@ object ClientAdminTestHelper {
     KafkaTestUtils.withAdmin { client =>
       for {
         list1 <- client.listTopics()
-        _     <- client.createTopic(AdminClient.NewTopic("topic1", 1, 1))
+        _     <- client.createTopic(KafkaAdmin.NewTopic("topic1", 1, 1))
         list2 <- client.listTopics()
         _     <- client.deleteTopic("topic1")
         list3 <- client.listTopics()
@@ -32,7 +32,7 @@ object ClientAdminTestHelper {
     KafkaTestUtils.withAdmin { client =>
       for {
         list1 <- client.listTopics()
-        _     <- client.createTopics(List(AdminClient.NewTopic("topic2", 1, 1), AdminClient.NewTopic("topic3", 4, 1)))
+        _     <- client.createTopics(List(KafkaAdmin.NewTopic("topic2", 1, 1), KafkaAdmin.NewTopic("topic3", 4, 1)))
         list2 <- client.listTopics()
         _     <- client.deleteTopic("topic2")
         list3 <- client.listTopics()
@@ -59,7 +59,7 @@ object ClientAdminTestHelper {
     KafkaTestUtils.withAdmin { client =>
       for {
         list1        <- client.listTopics()
-        _            <- client.createTopics(List(AdminClient.NewTopic("topic4", 1, 1), AdminClient.NewTopic("topic5", 4, 1)))
+        _            <- client.createTopics(List(KafkaAdmin.NewTopic("topic4", 1, 1), KafkaAdmin.NewTopic("topic5", 4, 1)))
         descriptions <- client.describeTopics(List("topic4", "topic5"))
         _            <- client.deleteTopics(List("topic4", "topic5"))
         list3        <- client.listTopics()

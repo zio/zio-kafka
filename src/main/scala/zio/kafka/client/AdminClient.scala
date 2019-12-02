@@ -10,123 +10,73 @@ import org.apache.kafka.clients.admin.{
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.{ KafkaFuture, TopicPartitionInfo }
 import zio._
+import zio.kafka.client.BlockingTask
 
-import scala.jdk.CollectionConverters._, scala.collection.compat._
+import scala.jdk.CollectionConverters._
 
-/**
- * Thin wrapper around apache java AdminClient. See java api for descriptions
- * @param adminClient
- * @param semaphore
- */
-case class AdminClient(private val adminClient: JAdminClient, private val semaphore: Semaphore) {
-  import AdminClient._
-
-  /**
-   * Create multiple topics.
-   */
-  def createTopics(
-    newTopics: Iterable[NewTopic],
-    createTopicOptions: Option[CreateTopicsOptions] = None
-  ): BlockingTask[Unit] = {
-    val asJava = newTopics.map(_.asJava).asJavaCollection
-    semaphore.withPermit(
-      fromKafkaFutureVoid {
-        blocking
-          .effectBlocking(
-            createTopicOptions
-              .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts))
-              .all()
-          )
-      }
-    )
-  }
-
-  /**
-   * Create a single topic.
-   */
-  def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): BlockingTask[Unit] =
-    createTopics(List(newTopic), Some(new CreateTopicsOptions().validateOnly(validateOnly)))
-
-  /**
-   * Delete multiple topics.
-   */
-  def deleteTopics(
-    topics: Iterable[String],
-    deleteTopicsOptions: Option[DeleteTopicsOptions] = None
-  ): BlockingTask[Unit] = {
-    val asJava = topics.asJavaCollection
-
-    semaphore.withPermit {
-      fromKafkaFutureVoid {
-        blocking
-          .effectBlocking(
-            deleteTopicsOptions
-              .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts))
-              .all()
-          )
-      }
-    }
-  }
-
-  /**
-   * Delete a single topic.
-   */
-  def deleteTopic(topic: String): BlockingTask[Unit] =
-    deleteTopics(List(topic))
-
-  /**
-   * List the topics in the cluster.
-   */
-  def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): BlockingTask[Map[String, TopicListing]] =
-    semaphore.withPermit {
-      fromKafkaFuture {
-        blocking.effectBlocking(
-          listTopicsOptions.fold(adminClient.listTopics())(opts => adminClient.listTopics(opts)).namesToListings()
-        )
-      }.map(_.asScala.toMap)
-    }
-
-  /**
-   * Describe the specified topics.
-   */
-  def describeTopics(
-    topicNames: Iterable[String],
-    describeTopicsOptions: Option[DescribeTopicsOptions] = None
-  ): BlockingTask[Map[String, TopicDescription]] = {
-    val asJava = topicNames.asJavaCollection
-    semaphore.withPermit {
-      fromKafkaFuture {
-        blocking.effectBlocking(
-          describeTopicsOptions
-            .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
-            .all()
-        )
-      }.map(_.asScala.view.mapValues(AdminClient.TopicDescription(_)).toMap)
-    }
-  }
-
-  /**
-   * Add new partitions to a topic.
-   */
-  def createPartitions(
-    newPartitions: Map[String, NewPartitions],
-    createPartitionsOptions: Option[CreatePartitionsOptions] = None
-  ): BlockingTask[Unit] = {
-    val asJava = newPartitions.view.mapValues(_.asJava).toMap.asJava
-
-    semaphore.withPermit {
-      fromKafkaFutureVoid {
-        blocking.effectBlocking(
-          createPartitionsOptions
-            .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts))
-            .all()
-        )
-      }
-    }
-  }
+trait KafkaAdmin {
+  val kafkaAdmin: KafkaAdmin.Service
 }
 
-object AdminClient {
+object KafkaAdmin {
+  trait Service {
+
+    /**
+     * Create multiple topics.
+     */
+    def createTopics(
+      newTopics: Iterable[NewTopic],
+      createTopicOptions: Option[CreateTopicsOptions] = None
+    ): BlockingTask[Unit]
+
+    /**
+     * Create a single topic.
+     */
+    def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): BlockingTask[Unit]
+
+    /**
+     * Delete multiple topics.
+     */
+    def deleteTopics(
+      topics: Iterable[String],
+      deleteTopicsOptions: Option[DeleteTopicsOptions] = None
+    ): BlockingTask[Unit]
+
+    /**
+     * Delete a single topic.
+     */
+    def deleteTopic(topic: String): BlockingTask[Unit]
+
+    /**
+     * List the topics in the cluster.
+     */
+    def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): BlockingTask[Map[String, TopicListing]]
+
+    /**
+     * Describe the specified topics.
+     */
+    def describeTopics(
+      topicNames: Iterable[String],
+      describeTopicsOptions: Option[DescribeTopicsOptions] = None
+    ): BlockingTask[Map[String, Any]]
+
+    /**
+     * Add new partitions to a topic.
+     */
+    def createPartitions(
+      newPartitions: Map[String, NewPartitions],
+      createPartitionsOptions: Option[CreatePartitionsOptions] = None
+    ): BlockingTask[Unit]
+
+  }
+
+  def make(config: KafkaAdmin.KafkaAdminClientConfig) =
+    AdminClient.make(config).map { ac =>
+      new KafkaAdmin {
+        override val kafkaAdmin: Service = ac
+      }
+    }
+
   def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] =
     kfv.flatMap { f =>
       Task.effectAsync[T] { cb =>
@@ -188,7 +138,127 @@ object AdminClient {
     additionalConfig: Map[String, AnyRef] = Map.empty
   )
 
-  def make(config: KafkaAdminClientConfig) =
+}
+
+/**
+ * Thin wrapper around apache java AdminClient. See java api for descriptions
+ * @param adminClient
+ * @param semaphore
+ */
+case class AdminClient(private val adminClient: JAdminClient, private val semaphore: Semaphore)
+    extends KafkaAdmin.Service {
+  import KafkaAdmin._
+
+  /**
+   * Create multiple topics.
+   */
+  override def createTopics(
+    newTopics: Iterable[NewTopic],
+    createTopicOptions: Option[CreateTopicsOptions]
+  ): BlockingTask[Unit] = {
+    val asJava = newTopics.map(_.asJava).asJavaCollection
+    semaphore.withPermit(
+      fromKafkaFutureVoid {
+        blocking
+          .effectBlocking(
+            createTopicOptions
+              .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts))
+              .all()
+          )
+      }
+    )
+  }
+
+  /**
+   * Create a single topic.
+   */
+  override def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): BlockingTask[Unit] =
+    createTopics(List(newTopic), Some(new CreateTopicsOptions().validateOnly(validateOnly)))
+
+  /**
+   * Delete multiple topics.
+   */
+  override def deleteTopics(
+    topics: Iterable[String],
+    deleteTopicsOptions: Option[DeleteTopicsOptions] = None
+  ): BlockingTask[Unit] = {
+    val asJava = topics.asJavaCollection
+
+    semaphore.withPermit {
+      fromKafkaFutureVoid {
+        blocking
+          .effectBlocking(
+            deleteTopicsOptions
+              .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts))
+              .all()
+          )
+      }
+    }
+  }
+
+  /**
+   * Delete a single topic.
+   */
+  override def deleteTopic(topic: String): BlockingTask[Unit] =
+    deleteTopics(List(topic))
+
+  /**
+   * List the topics in the cluster.
+   */
+  override def listTopics(
+    listTopicsOptions: Option[ListTopicsOptions] = None
+  ): BlockingTask[Map[String, TopicListing]] =
+    semaphore.withPermit {
+      fromKafkaFuture {
+        blocking.effectBlocking(
+          listTopicsOptions.fold(adminClient.listTopics())(opts => adminClient.listTopics(opts)).namesToListings()
+        )
+      }.map(_.asScala.toMap)
+    }
+
+  /**
+   * Describe the specified topics.
+   */
+  override def describeTopics(
+    topicNames: Iterable[String],
+    describeTopicsOptions: Option[DescribeTopicsOptions] = None
+  ): BlockingTask[Map[String, TopicDescription]] = {
+    val asJava = topicNames.asJavaCollection
+    semaphore.withPermit {
+      fromKafkaFuture {
+        blocking.effectBlocking(
+          describeTopicsOptions
+            .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
+            .all()
+        )
+      }.map(_.asScala.view.mapValues(KafkaAdmin.TopicDescription(_)).toMap)
+    }
+  }
+
+  /**
+   * Add new partitions to a topic.
+   */
+  override def createPartitions(
+    newPartitions: Map[String, NewPartitions],
+    createPartitionsOptions: Option[CreatePartitionsOptions]
+  ): BlockingTask[Unit] = {
+    val asJava = newPartitions.view.mapValues(_.asJava).toMap.asJava
+
+    semaphore.withPermit {
+      fromKafkaFutureVoid {
+        blocking.effectBlocking(
+          createPartitionsOptions
+            .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts))
+            .all()
+        )
+      }
+    }
+  }
+}
+
+object AdminClient {
+
+  def make(config: KafkaAdmin.KafkaAdminClientConfig) =
     ZManaged.make {
       val configMap = (config.additionalConfig + (AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> config.bootstrapServers
         .mkString(","))).asJava

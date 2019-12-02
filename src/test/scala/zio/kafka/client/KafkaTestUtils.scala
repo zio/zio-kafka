@@ -8,7 +8,7 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.kafka.client.serde.Serde
 import zio.duration._
-import zio.kafka.client.AdminClient.KafkaAdminClientConfig
+import zio.kafka.client.KafkaAdmin.KafkaAdminClientConfig
 import zio.kafka.client.Kafka.KafkaTestEnvironment
 import zio.random.Random
 import zio.test.environment.{ Live, TestEnvironment }
@@ -183,14 +183,14 @@ object KafkaTestUtils {
       servers <- ZIO.access[Kafka](_.kafka.bootstrapServers)
     } yield KafkaAdminClientConfig(servers)
 
-  def withAdmin[T](f: AdminClient => RIO[Any with Clock with Kafka with Blocking, T]) =
+  def withAdmin[T](f: KafkaAdmin.Service => RIO[Any with Clock with Kafka with Blocking, T]) =
     for {
       settings <- adminSettings
       lcb      <- Kafka.liveClockBlocking
-      fRes <- AdminClient
+      fRes <- KafkaAdmin
                .make(settings)
-               .use { client =>
-                 f(client)
+               .use { admin =>
+                 f(admin.kafkaAdmin)
                }
                .provide(lcb)
     } yield fRes
