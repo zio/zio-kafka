@@ -11,7 +11,7 @@ import zio.kafka.client.diagnostics.Diagnostics
 import zio.kafka.client.internal.{ ConsumerAccess, Runloop }
 import zio.stream._
 
-import scala.jdk.CollectionConverters._, scala.collection.compat._
+import scala.jdk.CollectionConverters._
 
 class Consumer private (
   private val consumer: ConsumerAccess,
