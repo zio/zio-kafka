@@ -70,6 +70,13 @@ object KafkaAdmin {
 
   }
 
+  def make(config: KafkaAdmin.KafkaAdminClientConfig) =
+    AdminClient.make(config).map { ac =>
+      new KafkaAdmin {
+        override val kafkaAdmin: Service = ac
+      }
+    }
+
   def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] =
     kfv.flatMap { f =>
       Task.effectAsync[T] { cb =>

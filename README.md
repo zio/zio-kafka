@@ -211,6 +211,45 @@ consumer.use { c =>
     .runDrain
 }
 ```
+## Kafka Admin
+
+zio-kafka also includes KafkaAdmin - a wrapper for the KafkaAdminClient in the java apis.
+
+We use a module pattern for KafkaAdmin
+```scala
+trait KafkaAdmin {
+  val kafkaAdmin: KafkaAdmin.Service
+}
+
+object KafkaAdmin {
+  trait Service {
+        /**
+     * Create multiple topics.
+     */
+    def createTopics(
+      newTopics: Iterable[NewTopic],
+      createTopicOptions: Option[CreateTopicsOptions] = None
+    ): BlockingTask[Unit]
+
+  // etc
+  }
+```
+More detailed docs can be found in the javadocs https://javadoc.io/doc/org.apache.kafka/kafka-clients/latest/index.html
+
+There are scala case classes for most of the parameter and return types (e.g. NewTopic above), which are a close match.
+
+KafkaAdmin can be created as a ZManaged. This snippet is based on the KafkaTestUtils in the source test library.
+```
+  def withAdmin[T](f: KafkaAdmin.Service => RIO[Any with Clock with Kafka with Blocking, T]) =
+    for {
+      settings <- adminSettings
+      fRes <- KafkaAdmin
+               .make(settings)
+               .use { admin =>
+                 f(admin.kafkaAdmin)
+               }
+    } yield fRes
+```
 
 ## Getting help
 

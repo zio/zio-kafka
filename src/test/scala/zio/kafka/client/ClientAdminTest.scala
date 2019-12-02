@@ -66,7 +66,6 @@ object ClientAdminTestHelper {
       } yield assert(list1.size, equalTo(0)) &&
         assert(descriptions.size, equalTo(2)) &&
         assert(list3.size, equalTo(0))
-
     }
   }
 
