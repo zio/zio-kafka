@@ -172,6 +172,46 @@ import zio.kafka.client.serde._
 val instantSerde: Serde[Any, Instant] = Serde.long.inmap(java.time.Instant.ofEpochMilli)(_.toEpochMilli)
 ```
 
+## Handling deserialization failures
+The default behavior for a consumer stream when encountering a deserialization failure is to fail the stream. In many cases you may want to handle this situation differently, eg by skipping the message that failed to deserialize or by executing an alternative effect. For this purpose, any `Deserializer[T]` for some type `T` can be easily converted into a `Deserializer[Try[T]]` where deserialization failures are converted to a `Failure` using the `asTry` method.
+
+Below is an example of skipping messages that fail to deserialize. The offset is passed downstream to be committed.
+
+```scala
+import zio.ZManaged, zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
+import zio.stream._
+import zio.kafka.client._
+import zio.kafka.client.serde._
+import scala.util.{Success, Failure}
+import zio._
+
+val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = ???
+
+consumer.use { c =>
+  val stream = c.subscribeAnd(Subscription.topics("topic150"))
+    .plainStream(Serde.string, Serde.string.asTry)
+
+  stream 
+      .mapM { record => 
+        val tryValue: Try[String] = record.record.value()
+        val offset: Offset = record.offset
+    
+        tryValue match {
+            case Success(value) =>
+              // Action for successful deserialization
+              someEffect(value).as(offset)
+            case Failure(exception) =>
+              // Possibly log the exception or take alternative action
+              ZIO.succeed(offset)
+        }
+    }
+    .flattenChunks
+    .aggregateAsync(Consumer.offsetBatches)
+    .mapM(_.commit)
+    .runDrain
+}
+```
+
 ## Getting help
 
 Join us on the [ZIO Discord server](https://discord.gg/2ccFBr4) at the `#zio-kafka` channel.

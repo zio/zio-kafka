@@ -8,7 +8,7 @@ import zio.blocking.{ blocking, Blocking }
 import zio.kafka.client.{ BlockingTask, ConsumerSettings }
 import zio.kafka.client.internal.ConsumerAccess.ByteArrayKafkaConsumer
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 private[client] class ConsumerAccess(private[client] val consumer: ByteArrayKafkaConsumer, access: Semaphore) {
   def withConsumer[A](f: ByteArrayKafkaConsumer => A): BlockingTask[A] =
