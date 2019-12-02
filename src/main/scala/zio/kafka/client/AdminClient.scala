@@ -10,9 +10,8 @@ import org.apache.kafka.clients.admin.{
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.{ KafkaFuture, TopicPartitionInfo }
 import zio._
-import zio.kafka.client.BlockingTask
 
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters._, scala.collection.compat._
 
 trait KafkaAdmin {
   val kafkaAdmin: KafkaAdmin.Service
