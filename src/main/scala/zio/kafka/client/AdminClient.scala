@@ -2,8 +2,8 @@ package zio.kafka.client
 
 import org.apache.kafka.clients.admin.{
   AdminClient => JAdminClient,
-  NewTopic => JNewTopic,
   NewPartitions => JNewPartitions,
+  NewTopic => JNewTopic,
   TopicDescription => JTopicDescription,
   _
 }
@@ -69,13 +69,6 @@ object KafkaAdmin {
     ): BlockingTask[Unit]
 
   }
-
-  def make(config: KafkaAdmin.KafkaAdminClientConfig) =
-    AdminClient.make(config).map { ac =>
-      new KafkaAdmin {
-        override val kafkaAdmin: Service = ac
-      }
-    }
 
   def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] =
     kfv.flatMap { f =>
