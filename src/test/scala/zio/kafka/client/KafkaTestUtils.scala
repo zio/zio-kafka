@@ -8,7 +8,7 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.kafka.client.serde.Serde
 import zio.duration._
-import zio.kafka.client.AdminClient.KafkaAdminClientConfig
+import zio.kafka.client.KafkaAdmin.KafkaAdminClientConfig
 import zio.kafka.client.Kafka.KafkaTestEnvironment
 import zio.random.Random
 import zio.test.environment.{ Live, TestEnvironment }
