@@ -180,8 +180,8 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZManaged[Clock with Blocking, Throwable, Consumer] =
     for {
-      wrapper <- ConsumerAccess.make(settings)
       _       <- ZManaged.finalizer(diagnostics.shutdown)
+      wrapper <- ConsumerAccess.make(settings)
       deps <- Runloop.Deps.make(
                wrapper,
                settings.pollInterval,
