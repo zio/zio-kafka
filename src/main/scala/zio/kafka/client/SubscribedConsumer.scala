@@ -19,7 +19,7 @@ class SubscribedConsumer(private val underlying: BlockingTask[Consumer]) {
     valueDeserializer: Deserializer[R, V]
   ): ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
     ZStreamChunk(
-      partitionedStream[R, K, V](keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, outputBuffer = 1)(
+      partitionedStream[R, K, V](keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue)(
         _._2.chunks
       )
     )
