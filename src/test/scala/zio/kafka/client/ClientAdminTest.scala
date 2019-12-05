@@ -7,11 +7,11 @@ import zio.test.TestAspect._
 import ClientAdminTestHelper._
 
 object ClientAdminTest
-    extends DefaultRunnableSpec(
-      suite("client admin test")(
-        List(singleTopic, multiTopics, describeTopics): _*
-      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment) @@ sequential
-    )
+    extends DefaultRunnableSpec {
+  def spec = suite("client admin test")(
+    List(singleTopic, multiTopics, describeTopics): _*
+  ).provideSomeManagedShared(KafkaTestUtils.embeddedKafkaEnvironment) @@ sequential
+}
 
 object ClientAdminTestHelper {
   val singleTopic = testM("create, list, delete single topic") {

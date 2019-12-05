@@ -16,39 +16,39 @@ import zio.duration._
  * Or you can can use Live.live here but it's probably easier to use the wrappers
  */
 object ConsumerTest2
-    extends DefaultRunnableSpec(
-      suite("consumer test suit2")(
-        testM("commit offsets for all consumed messages") {
-          val topic        = "consumeWith2"
-          val subscription = Subscription.Topics(Set(topic))
-          val nrMessages   = 50
-          val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+    extends DefaultRunnableSpec {
+  def spec = suite("consumer test suit2")(
+    testM("commit offsets for all consumed messages") {
+      val topic = "consumeWith2"
+      val subscription = Subscription.Topics(Set(topic))
+      val nrMessages = 50
+      val messages = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
 
-          // contents of main for extracted to avoid name mangling issues with CI
+      // contents of main for extracted to avoid name mangling issues with CI
 
-          def consumeIt(messagesReceived: Ref[List[(String, String)]], done: Promise[Nothing, Unit]) =
-            consumeWithStrings("group3", "client3", subscription)({ (key, value) =>
-              (for {
-                messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
-                _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
-              } yield ()).orDie
-            }).fork
+      def consumeIt(messagesReceived: Ref[List[(String, String)]], done: Promise[Nothing, Unit]) =
+        consumeWithStrings("group3", "client3", subscription)({ (key, value) =>
+          (for {
+            messagesSoFar <- messagesReceived.update(_ :+ (key -> value))
+            _ <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
+          } yield ()).orDie
+        }).fork
 
-          for {
-            done             <- Promise.make[Nothing, Unit]
-            messagesReceived <- Ref.make(List.empty[(String, String)])
-            _                <- produceMany(topic, messages)
-            fib              <- consumeIt(messagesReceived, done)
-            _ <- done.await *> Live
-                  .live(ZIO.sleep(3.seconds)) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
-            _                <- fib.interrupt
-            _                <- produceOne(topic, "key-new", "msg-new")
-            newMessage       <- TestHelper.newM(subscription)
-            consumedMessages <- messagesReceived.get
-          } yield assert(consumedMessages, contains(newMessage).negate)
-        }
-      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
-    )
+      for {
+        done <- Promise.make[Nothing, Unit]
+        messagesReceived <- Ref.make(List.empty[(String, String)])
+        _ <- produceMany(topic, messages)
+        fib <- consumeIt(messagesReceived, done)
+        _ <- done.await *> Live
+          .live(ZIO.sleep(3.seconds)) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
+        _ <- fib.interrupt
+        _ <- produceOne(topic, "key-new", "msg-new")
+        newMessage <- TestHelper.newM(subscription)
+        consumedMessages <- messagesReceived.get
+      } yield assert(consumedMessages, contains(newMessage).negate)
+    }
+  ).provideSomeManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
+}
 
 object TestHelper {
   def newM(subscription: Subscription) =
