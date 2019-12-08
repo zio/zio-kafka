@@ -36,7 +36,7 @@ object Kafka {
   }
 
   implicit val embeddedKafkaConfig = EmbeddedKafkaConfig(
-    customBrokerProperties = Map("group.min.session.timeout.ms" -> "500")
+    customBrokerProperties = Map("group.min.session.timeout.ms" -> "500", "group.initial.rebalance.delay.ms" -> "0")
   )
 
   val makeEmbedded: Managed[Nothing, Kafka] =
