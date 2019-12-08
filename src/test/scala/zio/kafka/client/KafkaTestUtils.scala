@@ -11,7 +11,7 @@ import zio.clock.Clock
 import zio.kafka.client.serde.Serde
 import zio.duration._
 import zio.kafka.client.AdminClient.KafkaAdminClientConfig
-import zio.kafka.client.Kafka.KafkaTestEnvironment
+import zio.kafka.client.Kafka.{ KafkaClockBlocking, KafkaTestEnvironment }
 import zio.kafka.client.diagnostics.Diagnostics
 import zio.test.environment.{ Live, TestEnvironment }
 
@@ -54,7 +54,7 @@ object Kafka {
 
   type KafkaClockBlocking = Kafka with Clock with Blocking
 
-  def liveClockBlocking: ZIO[KafkaTestEnvironment, Nothing, KafkaClockBlocking] =
+  def liveClockBlocking: ZIO[KafkaTestEnvironment, Nothing, Kafka with Clock with Blocking] =
     for {
       clck    <- Live.live(ZIO.environment[Clock])
       blcking <- ZIO.environment[Blocking]
@@ -158,7 +158,7 @@ object KafkaTestUtils {
       ),
       pollInterval = 100.millis,
       pollTimeout = 100.millis,
-      perPartitionChunkPrefetch = 1
+      perPartitionChunkPrefetch = 16
     )
 
   def consumeWithStrings(groupId: String, clientId: String, subscription: Subscription)(
@@ -173,18 +173,20 @@ object KafkaTestUtils {
                 .provide(lcb)
     } yield inner
 
-  def withConsumer[A](groupId: String, clientId: String, diagnostics: Diagnostics = Diagnostics.NoOp)(
-    r: Consumer => RIO[Kafka with Clock with Blocking, A]
-  ): RIO[KafkaTestEnvironment, A] =
+  def withConsumer[A, R <: KafkaClockBlocking](
+    groupId: String,
+    clientId: String,
+    diagnostics: Diagnostics = Diagnostics.NoOp
+  )(
+    r: Consumer => RIO[R, A]
+  )(implicit ev: KafkaClockBlocking <:< R): RIO[KafkaTestEnvironment, A] =
     for {
       lcb <- Kafka.liveClockBlocking
       inner <- (for {
                 settings <- consumerSettings(groupId, clientId)
                 consumer = Consumer.make(settings, diagnostics)
-                consumed <- consumer.use { p =>
-                             r(p).provide(lcb)
-                           }
-              } yield consumed).provide(lcb)
+                consumed <- consumer.use(r)
+              } yield consumed).provide(ev.apply(lcb)) // Because an LCB is also an R but somehow scala can't infer that
     } yield inner
 
   def adminSettings =
