@@ -1,6 +1,6 @@
 package zio.kafka.client.diagnostics
 
-import zio.{ Managed, Queue, UIO }
+import zio.{ Managed, Queue, UIO, ZIO, ZManaged }
 
 trait Diagnostics {
   val enabled: Boolean = true
@@ -26,6 +26,9 @@ object Diagnostics {
   }
   object SlidingQueue {
     def make(queueSize: Int = 16): Managed[Nothing, SlidingQueue] =
-      Queue.sliding[DiagnosticEvent](queueSize).toManaged(_.shutdown).map(SlidingQueue(_))
+      for {
+        q            <- Queue.sliding[DiagnosticEvent](queueSize).toManaged(_.shutdown)
+        slidingQueue <- ZManaged.make(ZIO.succeed(SlidingQueue(q)))(_.shutdown)
+      } yield slidingQueue
   }
 }
