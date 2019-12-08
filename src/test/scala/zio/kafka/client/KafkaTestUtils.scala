@@ -179,14 +179,15 @@ object KafkaTestUtils {
     diagnostics: Diagnostics = Diagnostics.NoOp
   )(
     r: Consumer => RIO[R, A]
-  )(implicit ev: KafkaClockBlocking <:< R): RIO[KafkaTestEnvironment, A] =
+  ): RIO[KafkaTestEnvironment, A] =
     for {
       lcb <- Kafka.liveClockBlocking
       inner <- (for {
                 settings <- consumerSettings(groupId, clientId)
                 consumer = Consumer.make(settings, diagnostics)
                 consumed <- consumer.use(r)
-              } yield consumed).provide(ev.apply(lcb)) // Because an LCB is also an R but somehow scala can't infer that
+              } yield consumed)
+                .provide(lcb.asInstanceOf[R]) // Because an LCB is also an R but somehow scala can't infer that
     } yield inner
 
   def adminSettings =
