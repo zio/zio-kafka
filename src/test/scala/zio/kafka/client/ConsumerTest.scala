@@ -319,48 +319,54 @@ object ConsumerTest {
     val nrMessages   = 50
     val nrPartitions = 6
 
-    Diagnostics.SlidingQueue.make().use { diagnostics =>
-      for {
-        // Produce messages on several partitions
-        topic <- randomTopic
-        group <- randomGroup
-        _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-        _ <- ZIO.traverse(1 to nrMessages) { i =>
-              produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
-            }
+    Diagnostics.SlidingQueue
+      .make()
+      .use { diagnostics =>
+        for {
+          // Produce messages on several partitions
+          topic <- randomTopic
+          group <- randomGroup
+          _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.traverse(1 to nrMessages) { i =>
+                produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+              }
 
-        // Consume messages
-        subscription = Subscription.topics(topic)
-        consumer1 <- withConsumer(group, "client1", diagnostics) { consumer =>
-                      consumer
-                        .subscribeAnd(subscription)
-                        .partitionedStream(Serde.string, Serde.string)
-                        .flatMapPar(nrPartitions) {
-                          case (tp, partition) =>
-                            ZStream
-                              .fromEffect(partition.flattenChunks.runDrain)
-                              .as(tp)
-                        }
-                        .take(nrPartitions / 2)
-                        .runDrain
-                    }.fork
-        diagnosticStream <- ZStream
-                             .fromQueue(diagnostics.queue)
-                             .collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
-                             .runCollect
-                             .fork
-        _ <- Live.live(ZIO.sleep(5.seconds))
-        consumer2 <- withConsumer(group, "client2") { consumer =>
-                      consumer
-                        .subscribeAnd(subscription)
-                        .partitionedStream(Serde.string, Serde.string)
-                        .take(nrPartitions / 2)
-                        .runDrain
-                    }.fork
-        _                <- consumer1.join
-        _                <- consumer2.join
-        diagnosticEvents <- diagnosticStream.join
-      } yield assert(diagnosticEvents.size, isGreaterThanEqualTo(2))
-    }
+          // Consume messages
+          subscription = Subscription.topics(topic)
+          consumer1 <- withConsumer(group, "client1", diagnostics) { consumer =>
+                        consumer
+                          .subscribeAnd(subscription)
+                          .partitionedStream(Serde.string, Serde.string)
+                          .flatMapPar(nrPartitions) {
+                            case (tp, partition) =>
+                              ZStream
+                                .fromEffect(partition.flattenChunks.runDrain)
+                                .as(tp)
+                          }
+                          .take(nrPartitions / 2)
+                          .runDrain
+                      }.fork
+          diagnosticStream <- ZStream
+                               .fromQueue(diagnostics.queue)
+                               .collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
+                               .runCollect
+                               .fork
+          _ <- Live.live(ZIO.sleep(5.seconds))
+          consumer2 <- withConsumer(group, "client2") { consumer =>
+                        consumer
+                          .subscribeAnd(subscription)
+                          .partitionedStream(Serde.string, Serde.string)
+                          .take(nrPartitions / 2)
+                          .runDrain
+                      }.fork
+          _ <- consumer1.join
+          _ <- consumer1.join
+          _ <- consumer2.join
+        } yield diagnosticStream.join
+      }
+      .flatten
+      .map { diagnosticEvents =>
+        assert(diagnosticEvents.size, isGreaterThanEqualTo(2))
+      }
   }
 }
