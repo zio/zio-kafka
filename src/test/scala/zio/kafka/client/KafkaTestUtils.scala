@@ -1,8 +1,10 @@
 package zio.kafka.client
 
+import java.util.UUID
+
 import net.manub.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import zio.{ Chunk, Managed, RIO, UIO, ZIO, ZManaged }
+import zio.{ Chunk, Managed, RIO, Task, UIO, ZIO, ZManaged }
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -208,8 +210,7 @@ object KafkaTestUtils {
 
   def randomThing(prefix: String) =
     for {
-      random <- ZIO.environment[Random]
-      l      <- random.random.nextLong(8)
+      l <- Task(UUID.randomUUID())
     } yield s"$prefix-$l"
 
   def randomTopic = randomThing("topic")
