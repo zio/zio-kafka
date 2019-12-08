@@ -13,7 +13,6 @@ import zio.duration._
 import zio.kafka.client.AdminClient.KafkaAdminClientConfig
 import zio.kafka.client.Kafka.KafkaTestEnvironment
 import zio.kafka.client.diagnostics.Diagnostics
-import zio.random.Random
 import zio.test.environment.{ Live, TestEnvironment }
 
 trait Kafka {
