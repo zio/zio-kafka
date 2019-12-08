@@ -1,6 +1,6 @@
 package zio.kafka.client.diagnostics
 
-import zio.{ Managed, Queue, UIO, ZIO, ZManaged }
+import zio.{ Managed, Queue, UIO }
 
 trait Diagnostics {
   val enabled: Boolean = true
