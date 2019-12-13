@@ -71,7 +71,7 @@ libraryDependencies ++= Seq(
 //  "org.scalatest"           %% "scalatest"      % "3.0.5" % "test",
   "io.github.seglo"        %% "embedded-kafka"          % embeddedKafkaVersion, // "io.github.embeddedkafka" %% "embedded-kafka" % "2.3.1" % "test",
   "ch.qos.logback"         % "logback-classic"          % "1.2.3" % Test,
-  "org.scala-lang.modules" %% "scala-collection-compat" % "2.1.2",
+  "org.scala-lang.modules" %% "scala-collection-compat" % "2.1.3",
   compilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full)
 ) ++ {
   if (scalaBinaryVersion.value == "2.13") silencer else Seq.empty
