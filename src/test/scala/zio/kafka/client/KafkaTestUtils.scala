@@ -1,16 +1,18 @@
 package zio.kafka.client
 
-import net.manub.embeddedkafka.{ EmbeddedK, EmbeddedKafka }
+import java.util.UUID
+
+import net.manub.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import zio.{ Chunk, Managed, RIO, UIO, ZIO, ZManaged }
+import zio.{ Chunk, Managed, RIO, Task, UIO, ZIO, ZManaged }
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.kafka.client.serde.Serde
 import zio.duration._
 import zio.kafka.client.AdminClient.KafkaAdminClientConfig
-import zio.kafka.client.Kafka.KafkaTestEnvironment
-import zio.random.Random
+import zio.kafka.client.Kafka.{ KafkaClockBlocking, KafkaTestEnvironment }
+import zio.kafka.client.diagnostics.Diagnostics
 import zio.test.environment.{ Live, TestEnvironment }
 
 trait Kafka {
@@ -34,6 +36,10 @@ object Kafka {
     override def stop(): UIO[Unit] = UIO.unit
   }
 
+  implicit val embeddedKafkaConfig = EmbeddedKafkaConfig(
+    customBrokerProperties = Map("group.min.session.timeout.ms" -> "500", "group.initial.rebalance.delay.ms" -> "0")
+  )
+
   val makeEmbedded: Managed[Nothing, Kafka] =
     ZManaged.make(ZIO.effectTotal(new Kafka {
       override val kafka: Service = EmbeddedKafkaService(EmbeddedKafka.start())
@@ -48,7 +54,7 @@ object Kafka {
 
   type KafkaClockBlocking = Kafka with Clock with Blocking
 
-  def liveClockBlocking: ZIO[KafkaTestEnvironment, Nothing, KafkaClockBlocking] =
+  def liveClockBlocking: ZIO[KafkaTestEnvironment, Nothing, Kafka with Clock with Blocking] =
     for {
       clck    <- Live.live(ZIO.environment[Clock])
       blcking <- ZIO.environment[Blocking]
@@ -139,17 +145,20 @@ object KafkaTestUtils {
     for {
       servers <- ZIO.access[Kafka](_.kafka.bootstrapServers)
     } yield ConsumerSettings(
-      servers,
-      groupId,
-      clientId,
-      5.seconds,
-      Map(
-        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "earliest",
-        ConsumerConfig.METADATA_MAX_AGE_CONFIG  -> "100"
+      bootstrapServers = servers,
+      groupId = groupId,
+      clientId = clientId,
+      closeTimeout = 5.seconds,
+      extraDriverSettings = Map(
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG     -> "earliest",
+        ConsumerConfig.METADATA_MAX_AGE_CONFIG      -> "100",
+        ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG    -> "1000",
+        ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG -> "250",
+        ConsumerConfig.MAX_POLL_RECORDS_CONFIG      -> "10"
       ),
-      250.millis,
-      250.millis,
-      100
+      pollInterval = 100.millis,
+      pollTimeout = 100.millis,
+      perPartitionChunkPrefetch = 16
     )
 
   def consumeWithStrings(groupId: String, clientId: String, subscription: Subscription)(
@@ -164,18 +173,21 @@ object KafkaTestUtils {
                 .provide(lcb)
     } yield inner
 
-  def withConsumer[A](groupId: String, clientId: String)(
-    r: Consumer => RIO[Any with Kafka with Clock with Blocking, A]
+  def withConsumer[A, R <: KafkaClockBlocking](
+    groupId: String,
+    clientId: String,
+    diagnostics: Diagnostics = Diagnostics.NoOp
+  )(
+    r: Consumer => RIO[R, A]
   ): RIO[KafkaTestEnvironment, A] =
     for {
       lcb <- Kafka.liveClockBlocking
       inner <- (for {
                 settings <- consumerSettings(groupId, clientId)
-                consumer = Consumer.make(settings)
-                consumed <- consumer.use { p =>
-                             r(p).provide(lcb)
-                           }
-              } yield consumed).provide(lcb)
+                consumer = Consumer.make(settings, diagnostics)
+                consumed <- consumer.use(r)
+              } yield consumed)
+                .provide(lcb.asInstanceOf[R]) // Because an LCB is also an R but somehow scala can't infer that
     } yield inner
 
   def adminSettings =
@@ -200,8 +212,7 @@ object KafkaTestUtils {
 
   def randomThing(prefix: String) =
     for {
-      random <- ZIO.environment[Random]
-      l      <- random.random.nextLong(8)
+      l <- Task(UUID.randomUUID())
     } yield s"$prefix-$l"
 
   def randomTopic = randomThing("topic")

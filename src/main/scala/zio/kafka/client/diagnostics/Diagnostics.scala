@@ -19,8 +19,9 @@ object Diagnostics {
   case class SlidingQueue(queue: Queue[DiagnosticEvent]) extends Diagnostics {
     override def emit(event: DiagnosticEvent): UIO[Unit] = queue.offer(event).unit
   }
+
   object SlidingQueue {
-    def make: Managed[Nothing, SlidingQueue] =
-      Queue.sliding[DiagnosticEvent](16).toManaged(_.shutdown).map(SlidingQueue(_))
+    def make(queueSize: Int = 16): Managed[Nothing, SlidingQueue] =
+      Queue.sliding[DiagnosticEvent](queueSize).toManaged(_.shutdown).map(SlidingQueue(_))
   }
 }

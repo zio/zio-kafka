@@ -1,6 +1,6 @@
 package zio.kafka.client
 
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp
+import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetAndTimestamp }
 import org.apache.kafka.common.{ PartitionInfo, TopicPartition }
 import zio._
 import zio.blocking.Blocking
@@ -34,6 +34,17 @@ class Consumer private (
   ): BlockingTask[Map[TopicPartition, Long]] =
     consumer.withConsumer(
       _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.view.mapValues(_.longValue()).toMap
+    )
+
+  /**
+   * Retrieve the last committed offset for the given topic-partitions
+   */
+  def committed(
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  ): BlockingTask[Map[TopicPartition, Option[OffsetAndMetadata]]] =
+    consumer.withConsumer(
+      _.committed(partitions.asJava, timeout.asJava).asScala.toMap.view.mapValues(Option.apply).toMap
     )
 
   def endOffsets(
@@ -125,7 +136,10 @@ class Consumer private (
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-    ZStreamChunk(partitionedStream[R, K, V](keyDeserializer, valueDeserializer).flatMapPar(Int.MaxValue)(_._2.chunks))
+    ZStreamChunk(
+      partitionedStream[R, K, V](keyDeserializer, valueDeserializer)
+        .flatMapPar(n = Int.MaxValue)(_._2.chunks)
+    )
 
   def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
     consumer.withConsumer(_.seek(partition, offset))
