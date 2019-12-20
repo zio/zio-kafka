@@ -298,6 +298,18 @@ private[client] object Runloop {
                          builder.result()
                        }
 
+                       def doSeekForNewPartitions(tps: Set[TopicPartition], c: ByteArrayKafkaConsumer): Task[Unit] =
+                         deps.offsetRetrieval match {
+                           // For new partitions we do a seek
+                           case OffsetRetrieval.Manual(getOffsets) =>
+                             getOffsets(tps).flatMap { offsets =>
+                               ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
+                             }.when(tps.nonEmpty)
+
+                           case OffsetRetrieval.Auto(_) =>
+                             ZIO.unit
+                         }
+
                        Task.effectSuspend {
                          val prevAssigned = c.assignment().asScala.toSet
 
@@ -329,27 +341,11 @@ private[client] object Runloop {
 
                              val revoked = prevAssigned -- currentAssigned
 
-                             def doSeek(tps: Set[TopicPartition], c: ByteArrayKafkaConsumer): Task[Unit] =
-                               deps.offsetRetrieval match {
-                                 case OffsetRetrieval.Auto(_) =>
-                                   ZIO.unit
-
-                                 // For new partitions we do a seek
-                                 case OffsetRetrieval.Manual(getOffsets) =>
-                                   getOffsets(newlyAssigned).flatMap { offsets =>
-                                     ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
-                                   }.when(newlyAssigned.nonEmpty)
-                               }
-
-                             // TODO ignore records that were done before a seek?
-                             // Polling will give us data from partitions that we haven't seek'd yet, depending on
-                             // offset storage strategy
-
                              val tpsInResponse = records.partitions.asScala.toSet
                              val unrequestedRecords =
                                bufferUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
 
-                             doSeek(newlyAssigned, c) *> endRevoked(
+                             doSeekForNewPartitions(newlyAssigned, c) *> endRevoked(
                                state.pendingRequests,
                                state.addBufferedRecords(unrequestedRecords).bufferedRecords,
                                revoked(_)

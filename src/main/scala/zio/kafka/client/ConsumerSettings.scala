@@ -21,5 +21,4 @@ case class ConsumerSettings(
       ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false"
     ) ++
       extraDriverSettings
-
 }
