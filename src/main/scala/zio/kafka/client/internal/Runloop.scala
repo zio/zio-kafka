@@ -337,7 +337,6 @@ private[client] object Runloop {
                                  // For new partitions we do a seek
                                  case OffsetStorage.Manual(getOffsets) =>
                                    getOffsets(newlyAssigned).flatMap { offsets =>
-                                     println(s"Seeking! ${offsets}")
                                      ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
                                    }.when(newlyAssigned.nonEmpty)
                                }

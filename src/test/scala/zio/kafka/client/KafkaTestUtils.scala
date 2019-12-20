@@ -1,8 +1,10 @@
 package zio.kafka.client
 
+import java.util.UUID
+
 import net.manub.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import zio.{ Chunk, Managed, RIO, UIO, ZIO, ZManaged }
+import zio.{ Chunk, Managed, RIO, Task, UIO, ZIO, ZManaged }
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -10,7 +12,6 @@ import zio.kafka.client.serde.Serde
 import zio.duration._
 import zio.kafka.client.AdminClient.KafkaAdminClientConfig
 import zio.kafka.client.Kafka.{ KafkaClockBlocking, KafkaTestEnvironment }
-import zio.random.Random
 import zio.test.environment.{ Live, TestEnvironment }
 
 trait Kafka {
@@ -201,11 +202,7 @@ object KafkaTestUtils {
   // temporary workaround for zio issue #2166 - broken infinity
   val veryLongTime = Duration.fromNanos(Long.MaxValue)
 
-  def randomThing(prefix: String) =
-    for {
-      random <- ZIO.environment[Random]
-      l      <- random.random.nextLong(8)
-    } yield s"$prefix-$l"
+  def randomThing(prefix: String) = Task(UUID.randomUUID()).map(id => s"$prefix-$id")
 
   def randomTopic = randomThing("topic")
 

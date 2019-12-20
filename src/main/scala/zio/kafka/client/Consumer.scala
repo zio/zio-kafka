@@ -13,6 +13,7 @@ import zio.clock.Clock
 import zio.duration._
 import zio.kafka.client.serde.Deserializer
 import zio.kafka.client.diagnostics.Diagnostics
+import zio.kafka.client.internal.Runloop.Deps
 import zio.kafka.client.internal.{ ConsumerAccess, Runloop }
 import zio.stream._
 
@@ -187,7 +188,27 @@ object ConsumerStream {
     Clock with Blocking,
     Throwable,
     (Control, ZStream[Any, Throwable, (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])])
-  ] =
+  ] = {
+    // For manual subscriptions we have to do some manual work before starting the run loop
+    def subscribe(consumer: Consumer, deps: Deps, runtime: Runtime[Blocking]) =
+      consumer.subscribe(subscription, deps.rebalanceListener.toConsumerRebalanceListener(runtime)) *>
+        (subscription match {
+          // TODO this is a bit duplicate to Runloop
+          case Subscription.Manual(topicPartitions) =>
+            ZIO.foreach_(topicPartitions)(deps.newPartitionStream) *> {
+              offsetStorage match {
+                case OffsetStorage.Auto(_) => ZIO.unit
+                case OffsetStorage.Manual(getOffsets) =>
+                  getOffsets(topicPartitions).flatMap { offsets =>
+                    consumer.consumer.withConsumerM { c =>
+                      ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
+                    }
+                  }
+              }
+            }
+          case _ => ZIO.unit
+        })
+
     for {
       wrapper  <- ConsumerAccess.make(settings)
       consumer = new Consumer(wrapper)
@@ -198,28 +219,7 @@ object ConsumerStream {
                diagnostics,
                offsetStorage
              )
-      _ <- ZIO
-            .runtime[Blocking]
-            .flatMap { runtime =>
-              consumer.subscribe(subscription, deps.rebalanceListener.toConsumerRebalanceListener(runtime)) *> // For manual subscriptions we have to do some manual work before starting the run loop
-                (subscription match {
-                  // TODO this is a bit duplicate to Runloop
-                  case Subscription.Manual(topicPartitions) =>
-                    ZIO.foreach_(topicPartitions)(deps.newPartitionStream) *> {
-                      offsetStorage match {
-                        case OffsetStorage.Auto(_) => ZIO.unit
-                        case OffsetStorage.Manual(getOffsets) =>
-                          getOffsets(topicPartitions).flatMap { offsets =>
-                            wrapper.withConsumerM { c =>
-                              ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
-                            }
-                          }
-                      }
-                    }
-                  case _ => ZIO.unit
-                })
-            }
-            .toManaged_
+      _       <- ZIO.runtime[Blocking].flatMap(subscribe(consumer, deps, _)).toManaged_
       runloop <- Runloop(deps)
       stream = ZStream
         .fromQueue(runloop.deps.partitions)
@@ -237,6 +237,7 @@ object ConsumerStream {
         override def stopConsumption: Task[Unit] = runloop.deps.gracefulShutdown
       }
     } yield (control, stream)
+  }
 
   /**
    * Execute an effect for each record and commit the offset after processing

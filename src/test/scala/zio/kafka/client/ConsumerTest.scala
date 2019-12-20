@@ -92,11 +92,12 @@ object ConsumerTest {
       val topic        = "manual-topic"
 
       for {
-        _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+        clientId <- randomClientId
+        _        <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
         _ <- ZIO.traverse(1 to nrPartitions) { i =>
               produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
             }
-        record <- withConsumerSettings("group150", "client150") { settings =>
+        record <- withConsumerSettings("group150", clientId) { settings =>
                    ConsumerStream
                      .plain(settings, Subscription.manual(topic, partition = 2), Serde.string, Serde.string)
                      .map(_._2)
@@ -327,6 +328,7 @@ object ConsumerTest {
     for {
       group            <- randomGroup
       clientId         <- randomClientId
+      clientId2        <- randomClientId
       _                <- produceMany(topic, kvs)
       messagesReceived <- Ref.make[Int](0)
       offset <- withConsumerSettings(group, clientId) { settings =>
@@ -340,9 +342,10 @@ object ConsumerTest {
                      }.flattenChunks
                        .aggregate(ConsumerStream.offsetBatches)
                        .mapM(_.commit)
-                       .runDrain *> Consumer
-                       .make(settings)
-                       .use(_.committed(Set(new TopicPartition(topic, 0))).map(_.values.head))
+                       .runDrain *>
+                       Consumer
+                         .make(settings.copy(clientId = clientId2))
+                         .use(_.committed(Set(new TopicPartition(topic, 0))).map(_.values.head))
                  }
                }
     } yield assert(offset.map(_.offset), isSome(isLessThanEqualTo(10L))) // NOTE this depends on a max_poll_records setting of 10
@@ -354,10 +357,11 @@ object ConsumerTest {
 
     for {
       // Produce messages on several partitions
-      topic    <- randomTopic
-      group    <- randomGroup
-      clientId <- randomClientId
-      _        <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+      topic     <- randomTopic
+      group     <- randomGroup
+      clientId  <- randomClientId
+      clientId2 <- randomClientId
+      _         <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
       _ <- ZIO.traverse(1 to nrMessages) { i =>
             produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
           }
@@ -374,7 +378,7 @@ object ConsumerTest {
                         .take(1)
                         .mapM(_.commit)
                         .runDrain *> Consumer
-                        .make(settings)
+                        .make(settings.copy(clientId = clientId2))
                         .use(_.committed((0 until nrPartitions).map(new TopicPartition(topic, _)).toSet))
                   }
                 }
