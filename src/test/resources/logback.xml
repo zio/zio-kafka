@@ -5,17 +5,15 @@
         </encoder>
     </appender>
 
-    <logger name="org.apache.kafka" level="ERROR" >
-        <appender-ref ref="STDOUT" />
-    </logger>
+    <logger name="org.apache.kafka" level="INFO"/>
 
-    <logger name="kafka" level="WARN" >
-        <appender-ref ref="STDOUT" />
-    </logger>
+    <logger name="org.apache.kafka.clients.consumer.ConsumerConfig" level="WARN"/>
 
-    <logger name="org.apache.zookeeper" level="ERROR" >
-        <appender-ref ref="STDOUT" />
-    </logger>
+    <logger name="org.apache.kafka.clients.producer.ProducerConfig" level="WARN"/>
+
+    <logger name="kafka" level="WARN"/>
+
+    <logger name="org.apache.zookeeper" level="ERROR"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT" />
