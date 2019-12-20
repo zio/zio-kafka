@@ -8,7 +8,7 @@ import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
-import zio.kafka.client.ConsumerStream.OffsetStorage
+import zio.kafka.client.ConsumerStream.OffsetRetrieval
 import zio.kafka.client.diagnostics.DiagnosticEvent.Rebalance.{ Assigned, Revoked }
 import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.client.internal.ConsumerAccess.ByteArrayKafkaConsumer
@@ -42,7 +42,7 @@ private[client] object Runloop {
     rebalanceListener: RebalanceListener[Any],
     diagnostics: Diagnostics,
     shutdownRef: Ref[Boolean],
-    offsetStorage: OffsetStorage
+    offsetRetrieval: OffsetRetrieval
   ) {
     def commit(cmd: Command.Commit)   = commitQueue.offer(cmd).unit
     def commits                       = ZStream.fromQueue(commitQueue)
@@ -86,7 +86,7 @@ private[client] object Runloop {
       pollFrequency: Duration,
       pollTimeout: Duration,
       diagnostics: Diagnostics,
-      offsetStorage: OffsetStorage
+      offsetRetrieval: OffsetRetrieval
     ) =
       for {
         rebalancingRef <- Ref.make(false).toManaged_
@@ -119,7 +119,7 @@ private[client] object Runloop {
         listener,
         diagnostics,
         shutdownRef,
-        offsetStorage
+        offsetRetrieval
       )
   }
 
@@ -330,12 +330,12 @@ private[client] object Runloop {
                              val revoked = prevAssigned -- currentAssigned
 
                              def doSeek(tps: Set[TopicPartition], c: ByteArrayKafkaConsumer): Task[Unit] =
-                               deps.offsetStorage match {
-                                 case OffsetStorage.Auto(_) =>
+                               deps.offsetRetrieval match {
+                                 case OffsetRetrieval.Auto(_) =>
                                    ZIO.unit
 
                                  // For new partitions we do a seek
-                                 case OffsetStorage.Manual(getOffsets) =>
+                                 case OffsetRetrieval.Manual(getOffsets) =>
                                    getOffsets(newlyAssigned).flatMap { offsets =>
                                      ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
                                    }.when(newlyAssigned.nonEmpty)

@@ -146,10 +146,10 @@ object ConsumerStream {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    offsetStorage: OffsetStorage = OffsetStorage.Auto(),
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZManaged[Clock with Blocking, Throwable, (Control, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])] =
-    partitioned[R, K, V](settings, subscription, keyDeserializer, valueDeserializer, offsetStorage, diagnostics).map {
+    partitioned[R, K, V](settings, subscription, keyDeserializer, valueDeserializer, offsetRetrieval, diagnostics).map {
       case (control, stream) =>
         (control, ZStreamChunk(stream.flatMapPar(n = Int.MaxValue, outputBuffer = 1)(_._2.chunks)))
     }
@@ -182,7 +182,7 @@ object ConsumerStream {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    offsetStorage: OffsetStorage = OffsetStorage.Auto(),
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZManaged[
     Clock with Blocking,
@@ -196,9 +196,9 @@ object ConsumerStream {
           // TODO this is a bit duplicate to Runloop
           case Subscription.Manual(topicPartitions) =>
             ZIO.foreach_(topicPartitions)(deps.newPartitionStream) *> {
-              offsetStorage match {
-                case OffsetStorage.Auto(_) => ZIO.unit
-                case OffsetStorage.Manual(getOffsets) =>
+              offsetRetrieval match {
+                case OffsetRetrieval.Auto(_) => ZIO.unit
+                case OffsetRetrieval.Manual(getOffsets) =>
                   getOffsets(topicPartitions).flatMap { offsets =>
                     consumer.consumer.withConsumerM { c =>
                       ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
@@ -217,7 +217,7 @@ object ConsumerStream {
                settings.pollInterval,
                settings.pollTimeout,
                diagnostics,
-               offsetStorage
+               offsetRetrieval
              )
       _       <- ZIO.runtime[Blocking].flatMap(subscribe(consumer, deps, _)).toManaged_
       runloop <- Runloop(deps)
@@ -288,10 +288,10 @@ object ConsumerStream {
     subscription: Subscription,
     keyDeserializer: Deserializer[R1, K],
     valueDeserializer: Deserializer[R1, V],
-    offsetStorage: OffsetStorage = OffsetStorage.Auto(),
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
   )(f: (K, V) => ZIO[R, Nothing, Unit]): ZIO[R with R1 with Clock with Blocking, Throwable, Unit] =
-    partitioned[R1, K, V](settings, subscription, keyDeserializer, valueDeserializer, offsetStorage).use {
+    partitioned[R1, K, V](settings, subscription, keyDeserializer, valueDeserializer, offsetRetrieval).use {
       case (_, stream) =>
         stream
           .flatMapPar(Int.MaxValue, outputBuffer = settings.perPartitionChunkPrefetch) {
@@ -306,13 +306,12 @@ object ConsumerStream {
           .runDrain
     }
 
-  // TODO rename to OffsetRetrieval
-  sealed trait OffsetStorage
+  sealed trait OffsetRetrieval
 
-  object OffsetStorage {
+  object OffsetRetrieval {
     // TODO process the strategy in the consumer settings be included here?
-    final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest)                extends OffsetStorage
-    final case class Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]]) extends OffsetStorage
+    final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest)                extends OffsetRetrieval
+    final case class Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]]) extends OffsetRetrieval
   }
 
   sealed trait AutoOffsetStrategy

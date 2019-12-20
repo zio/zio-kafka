@@ -13,7 +13,7 @@ import zio.test.{ DefaultRunnableSpec, _ }
 import zio.test.TestAspect._
 import ConsumerTest._
 import zio.clock.Clock
-import zio.kafka.client.ConsumerStream.OffsetStorage
+import zio.kafka.client.ConsumerStream.OffsetRetrieval
 import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
 
 /**
@@ -131,7 +131,7 @@ object ConsumerTest {
                        Subscription.manual(topic, partition = 2),
                        Serde.string,
                        Serde.string,
-                       offsetStorage = OffsetStorage.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+                       offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
                      )
                      .map(_._2)
                      .use { stream =>
@@ -229,8 +229,8 @@ object ConsumerTest {
                             Subscription.topics(topic),
                             Serde.string,
                             Serde.string,
-                            offsetStorage =
-                              OffsetStorage.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+                            offsetRetrieval =
+                              OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
                           )
                           .use {
                             case (_, stream) =>
