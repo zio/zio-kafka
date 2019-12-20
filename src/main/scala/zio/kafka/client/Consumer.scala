@@ -125,40 +125,6 @@ object Consumer {
 object ConsumerStream {
 
   /**
-   * Create a stream with all messages on the subscribed topic-partitions
-   *
-   * The stream will emit messages from all topic-partitions interleaved. Per-partition
-   * record order is guaranteed, but the topic-partition interleaving is non-deterministic.
-   *
-   * The stream can be completed by calling [[stopConsumption]].
-   *
-   * @param settings Settings for creating a [[Consumer]]
-   * @param subscription Topic subscription parameters
-   * @param keyDeserializer Deserializer for the record keys
-   * @param valueDeserializer Deserializer for the record values
-   * @tparam R Environment required by the serializers
-   * @tparam K Type of record keys
-   * @tparam V Type of record values
-   * @return
-   */
-  def plain[R, K, V](
-    settings: ConsumerSettings,
-    subscription: Subscription,
-    keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V],
-    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
-    diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZManaged[Clock with Blocking, Throwable, (Control, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])] =
-    partitioned[R, K, V](settings, subscription, keyDeserializer, valueDeserializer, offsetRetrieval, diagnostics).map {
-      case (control, stream) =>
-        (control, ZStreamChunk(stream.flatMapPar(n = Int.MaxValue, outputBuffer = 1)(_._2.chunks)))
-    }
-
-  trait Control {
-    def stopConsumption: Task[Unit]
-  }
-
-  /**
    * Create a stream with messages on the subscribed topic-partitions by topic-partition
    *
    * The top-level stream will emit new topic-partition streams for each topic-partition that is assigned
@@ -238,6 +204,36 @@ object ConsumerStream {
       }
     } yield (control, stream)
   }
+
+  /**
+   * Create a stream with all messages on the subscribed topic-partitions
+   *
+   * The stream will emit messages from all topic-partitions interleaved. Per-partition
+   * record order is guaranteed, but the topic-partition interleaving is non-deterministic.
+   *
+   * The stream can be completed by calling [[stopConsumption]].
+   *
+   * @param settings Settings for creating a [[Consumer]]
+   * @param subscription Topic subscription parameters
+   * @param keyDeserializer Deserializer for the record keys
+   * @param valueDeserializer Deserializer for the record values
+   * @tparam R Environment required by the serializers
+   * @tparam K Type of record keys
+   * @tparam V Type of record values
+   * @return
+   */
+  def plain[R, K, V](
+    settings: ConsumerSettings,
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V],
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+    diagnostics: Diagnostics = Diagnostics.NoOp
+  ): ZManaged[Clock with Blocking, Throwable, (Control, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])] =
+    partitioned[R, K, V](settings, subscription, keyDeserializer, valueDeserializer, offsetRetrieval, diagnostics).map {
+      case (control, stream) =>
+        (control, ZStreamChunk(stream.flatMapPar(n = Int.MaxValue, outputBuffer = 1)(_._2.chunks)))
+    }
 
   /**
    * Execute an effect for each record and commit the offset after processing
@@ -324,4 +320,8 @@ object ConsumerStream {
 
   val offsetBatches: ZSink[Any, Nothing, Nothing, Offset, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
+
+  trait Control {
+    def stopConsumption: Task[Unit]
+  }
 }
