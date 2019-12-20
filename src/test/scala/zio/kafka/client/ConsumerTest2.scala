@@ -52,14 +52,16 @@ object ConsumerTest2
 
 object TestHelper {
   def newM(subscription: Subscription) =
-    withConsumer("group3", "client3") { c =>
-      c.subscribe(subscription) *> c
-        .plainStream(Serde.string, Serde.string)
-        .take(1)
-        .flattenChunks
-        .map(r => (r.record.key(), r.record.value()))
-        .run(ZSink.collectAll[(String, String)])
-        .map(_.head)
+    withConsumerSettings("group3", "client3") { settings =>
+      ConsumerStream.plain(settings, subscription, Serde.string, Serde.string).use {
+        case (_, stream) =>
+          stream
+            .take(1)
+            .flattenChunks
+            .map(r => (r.record.key(), r.record.value()))
+            .run(ZSink.collectAll[(String, String)])
+            .map(_.head)
+      }
     }.orDie
 
 }

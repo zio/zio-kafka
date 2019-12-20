@@ -1,10 +1,8 @@
 package zio.kafka.client
 
-import java.util.UUID
-
 import net.manub.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import zio.{ Chunk, Managed, RIO, Task, UIO, ZIO, ZManaged }
+import zio.{ Chunk, Managed, RIO, UIO, ZIO, ZManaged }
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -12,7 +10,7 @@ import zio.kafka.client.serde.Serde
 import zio.duration._
 import zio.kafka.client.AdminClient.KafkaAdminClientConfig
 import zio.kafka.client.Kafka.{ KafkaClockBlocking, KafkaTestEnvironment }
-import zio.kafka.client.diagnostics.Diagnostics
+import zio.random.Random
 import zio.test.environment.{ Live, TestEnvironment }
 
 trait Kafka {
@@ -168,25 +166,18 @@ object KafkaTestUtils {
       lcb <- Kafka.liveClockBlocking
       inner <- (for {
                 settings <- consumerSettings(groupId, clientId)
-                consumed <- Consumer.consumeWith(settings, subscription, Serde.string, Serde.string)(r)
+                consumed <- ConsumerStream.consumeWith(settings, subscription, Serde.string, Serde.string)(r)
               } yield consumed)
                 .provide(lcb)
     } yield inner
 
-  def withConsumer[A, R <: KafkaClockBlocking](
-    groupId: String,
-    clientId: String,
-    diagnostics: Diagnostics = Diagnostics.NoOp
-  )(
-    r: Consumer => RIO[R, A]
+  def withConsumerSettings[A, R <: KafkaClockBlocking](groupId: String, clientId: String)(
+    r: ConsumerSettings => RIO[R, A]
   ): RIO[KafkaTestEnvironment, A] =
     for {
       lcb <- Kafka.liveClockBlocking
-      inner <- (for {
-                settings <- consumerSettings(groupId, clientId)
-                consumer = Consumer.make(settings, diagnostics)
-                consumed <- consumer.use(r)
-              } yield consumed)
+      inner <- consumerSettings(groupId, clientId)
+                .flatMap(r)
                 .provide(lcb.asInstanceOf[R]) // Because an LCB is also an R but somehow scala can't infer that
     } yield inner
 
@@ -212,7 +203,8 @@ object KafkaTestUtils {
 
   def randomThing(prefix: String) =
     for {
-      l <- Task(UUID.randomUUID())
+      random <- ZIO.environment[Random]
+      l      <- random.random.nextLong(8)
     } yield s"$prefix-$l"
 
   def randomTopic = randomThing("topic")

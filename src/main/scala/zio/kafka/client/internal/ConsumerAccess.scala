@@ -30,7 +30,7 @@ private[client] class ConsumerAccess(private[client] val consumer: ByteArrayKafk
 private[client] object ConsumerAccess {
   type ByteArrayKafkaConsumer = KafkaConsumer[Array[Byte], Array[Byte]]
 
-  def make(settings: ConsumerSettings) =
+  def make(settings: ConsumerSettings): ZManaged[Blocking, Throwable, ConsumerAccess] =
     for {
       access <- Semaphore.make(1).toManaged_
       consumer <- blocking {

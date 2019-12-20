@@ -1,11 +1,15 @@
 package zio.kafka.client.internal
 
+import java.util
+
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
+import zio.kafka.client.ConsumerStream.OffsetStorage
+import zio.kafka.client.diagnostics.DiagnosticEvent.Rebalance.{ Assigned, Revoked }
 import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.client.{ BlockingTask, CommittableRecord }
 import zio.stream._
@@ -34,9 +38,10 @@ private[client] object Runloop {
     commitQueue: Queue[Command.Commit],
     partitions: Queue[Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]],
     rebalancingRef: Ref[Boolean],
-    rebalanceListener: ConsumerRebalanceListener,
+    rebalanceListener: RebalanceListener[Any],
     diagnostics: Diagnostics,
-    shutdownRef: Ref[Boolean]
+    shutdownRef: Ref[Boolean],
+    offsetStorage: OffsetStorage
   ) {
     def commit(cmd: Command.Commit)   = commitQueue.offer(cmd).unit
     def commits                       = ZStream.fromQueue(commitQueue)
@@ -47,7 +52,7 @@ private[client] object Runloop {
 
     def polls = ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency))
 
-    def newPartitionStream(tp: TopicPartition) = {
+    def newPartitionStream(tp: TopicPartition): UIO[Unit] = {
       val stream = ZStreamChunk {
         ZStream {
           ZManaged.succeed {
@@ -79,7 +84,8 @@ private[client] object Runloop {
       consumer: ConsumerAccess,
       pollFrequency: Duration,
       pollTimeout: Duration,
-      diagnostics: Diagnostics
+      diagnostics: Diagnostics,
+      offsetStorage: OffsetStorage
     ) =
       for {
         rebalancingRef <- Ref.make(false).toManaged_
@@ -96,29 +102,10 @@ private[client] object Runloop {
                          }
                        }
                        .toManaged(_.shutdown)
-        listener <- ZIO
-                     .runtime[Blocking]
-                     .map { runtime =>
-                       new ConsumerRebalanceListener {
-                         override def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
-                           runtime.unsafeRun(
-                             rebalancingRef.set(true) *>
-                               diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(partitions.asScala.toSet))
-                           )
-                           ()
-                         }
-
-                         override def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
-                           runtime.unsafeRun(
-                             rebalancingRef.set(false) *>
-                               diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(partitions.asScala.toSet))
-                           )
-                           consumer.consumer.pause(partitions)
-                           ()
-                         }
-                       }
-                     }
-                     .toManaged_
+        listener = RebalanceListener(
+          tp => diagnostics.emitIfEnabled(Assigned(tp)) *> rebalancingRef.set(true),
+          tp => diagnostics.emitIfEnabled(Revoked(tp)) *> rebalancingRef.set(false)
+        )
         shutdownRef <- Ref.make(false).toManaged_
       } yield Deps(
         consumer,
@@ -130,7 +117,8 @@ private[client] object Runloop {
         rebalancingRef,
         listener,
         diagnostics,
-        shutdownRef
+        shutdownRef,
+        offsetStorage
       )
   }
 
@@ -143,8 +131,8 @@ private[client] object Runloop {
     def setCommits(reqs: List[Command.Commit]) = copy(pendingCommits = reqs)
     def addRequest(c: Command.Request)         = copy(pendingRequests = c :: pendingRequests)
     def clearCommits                           = copy(pendingCommits = Nil)
-    def clearRequests                          = copy(pendingRequests = Nil)
-    def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
+//    def clearRequests                          = copy(pendingRequests = Nil)
+    def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]): State =
       copy(
         bufferedRecords = recs.foldLeft(bufferedRecords) {
           case (acc, (tp, recs)) =>
@@ -317,16 +305,10 @@ private[client] object Runloop {
                          c.pause((prevAssigned -- requestedPartitions).asJava)
 
                          val pollTimeout =
-                           if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
-                           else 0.millis.asJava
-                         val records =
-                           try c.poll(pollTimeout)
-                           catch {
-                             // The consumer will throw an IllegalStateException if no call to subscribe
-                             // has been made yet, so we just ignore that. We have to poll even if c.subscription()
-                             // is empty because pattern subscriptions start out as empty.
-                             case _: IllegalStateException => null
-                           }
+                           if (requestedPartitions.nonEmpty) deps.pollTimeout
+                           else 0.millis
+                         val records = c.poll(pollTimeout.asJava)
+
                          deps.isShutdown.flatMap { shutdown =>
                            if (shutdown) {
                              ZIO.effectTotal(c.pause(requestedPartitions.asJava)) *>
@@ -338,22 +320,48 @@ private[client] object Runloop {
                                (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
                              )
                            } else {
-                             val tpsInResponse   = records.partitions.asScala.toSet
                              val currentAssigned = c.assignment().asScala.toSet
                              val newlyAssigned   = currentAssigned -- prevAssigned
                              val revoked         = prevAssigned -- currentAssigned
+
+                             // Polling will give us data from partitions that we haven't seek'd yet, depending on
+                             // offset storage strategy
+                             val seek = deps.offsetStorage match {
+                               case OffsetStorage.Auto(reset) =>
+                                 ZIO.unit
+
+                               // For new partitions we do a seek
+                               case OffsetStorage.Manual(getOffsets) =>
+                                 getOffsets(newlyAssigned).flatMap { offsets =>
+                                   println(s"Seeking! ${offsets}")
+                                   ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
+                                 }.when(newlyAssigned.nonEmpty)
+                             }
+
+                             // TODO ignore records that were done before a seek
+
+                             val tpsInResponse = records.partitions.asScala.toSet
                              val unrequestedRecords =
                                bufferUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
 
-                             endRevoked(
+                             seek *> endRevoked(
                                state.pendingRequests,
                                state.addBufferedRecords(unrequestedRecords).bufferedRecords,
                                revoked(_)
                              ).flatMap {
                                case (pendingRequests, bufferedRecords) =>
+                                 val (allowedRequests, withheldRequests) = deps.offsetStorage match {
+                                   case OffsetStorage.Manual(_) =>
+                                     pendingRequests.partition(req => !newlyAssigned.contains(req.tp))
+                                   case OffsetStorage.Auto(_) => (pendingRequests, List.empty)
+                                 }
+                                 println(s"Withholding requests for ${withheldRequests
+                                   .map(_.tp)}, allowing ${allowedRequests.map(_.tp)}")
+
                                  for {
-                                   output                    <- fulfillRequests(pendingRequests, bufferedRecords, records)
-                                   (notFulfilled, fulfilled) = output
+                                   output       <- fulfillRequests(allowedRequests, bufferedRecords, records)
+                                   notFulfilled = withheldRequests ++ output._1
+                                   fulfilled    = output._2
                                    _ <- deps.emitIfEnabledDiagnostic(
                                          DiagnosticEvent.Poll(
                                            requestedPartitions,
@@ -361,15 +369,16 @@ private[client] object Runloop {
                                            notFulfilled.map(_.tp).toSet
                                          )
                                        )
-                                 } yield output
+                                 } yield (notFulfilled, fulfilled)
                              }.map((newlyAssigned, _))
                            }
                          }
                        }
                      }
         (newlyAssigned, (unfulfilledRequests, bufferedRecords)) = pollResult
-        _                                                       <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartitionStream(tp))
-        stillRebalancing                                        <- deps.isRebalancing
+        // Create new partition substreams for newly assigned partitions
+        _                <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartitionStream(tp))
+        stillRebalancing <- deps.isRebalancing
         newPendingCommits <- if (!stillRebalancing && state.pendingCommits.nonEmpty)
                               doCommit(state.pendingCommits).as(Nil)
                             else ZIO.succeed(state.pendingCommits)
@@ -438,7 +447,34 @@ private[client] object Runloop {
       }
       .unit
       .toManaged_
+      .ensuringFirst(deps.gracefulShutdown)
       .fork
       .map(Runloop(_, deps))
   }
+
+  case class RebalanceListener[-R](
+    onAssigned: Set[TopicPartition] => ZIO[R, Nothing, Any] = (_: Set[TopicPartition]) => UIO.unit,
+    onRevoked: Set[TopicPartition] => ZIO[R, Nothing, Any] = (_: Set[TopicPartition]) => UIO.unit
+  ) {
+    def toConsumerRebalanceListener(runtime: Runtime[R]): ConsumerRebalanceListener = new ConsumerRebalanceListener {
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+        runtime.unsafeRun(onAssigned(partitions.asScala.toSet))
+        ()
+      }
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+        runtime.unsafeRun(onRevoked(partitions.asScala.toSet))
+        ()
+      }
+    }
+
+    def +[R1 <: R](listener2: RebalanceListener[R1]): RebalanceListener[R1] = copy(
+      onAssigned = tp => listener2.onAssigned(tp) *> onAssigned(tp),
+      onRevoked = tp => listener2.onRevoked(tp) *> onRevoked(tp)
+    )
+  }
+
+  object RebalanceListener {
+    val noop = RebalanceListener[Any]()
+  }
+
 }
