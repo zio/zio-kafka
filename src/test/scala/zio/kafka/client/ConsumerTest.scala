@@ -12,6 +12,7 @@ import zio.duration._
 import zio.test.{ DefaultRunnableSpec, _ }
 import zio.test.TestAspect._
 import ConsumerTest._
+import zio.clock.Clock
 import zio.kafka.client.ConsumerStream.OffsetStorage
 import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
 
@@ -23,18 +24,21 @@ import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
 object ConsumerTestSuite
     extends DefaultRunnableSpec(
       suite("Consumer Streaming")(
-        plainStreamTopic,
-        plainStreamPattern,
-        plainStreamManual,
-        restartFromCommittedPosition,
-        partitionedStreamBasic,
-        consumeWithFailStream,
-        stopConsumptionStopStream,
-        stopConsumptionCommits,
-        offsetBatching,
-        rebalancing,
-        diagnosticRelabancing,
-        manualSeek
+        List(
+          plainStreamTopic,
+          plainStreamPattern,
+          plainStreamManual,
+          plainStreamManualAssignmentManualSeek,
+          restartFromCommittedPosition,
+          partitionedStreamBasic,
+          consumeWithFailStream,
+          stopConsumptionStopStream,
+          stopConsumptionCommits,
+          offsetBatching,
+          rebalancing,
+          diagnosticRelabancing,
+          manualSeek
+        ).map(_ @@ after(ZIO.sleep(1.second).provide(Clock.Live))): _* // There's some flaky behavior here
       ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment) @@ timeout(180.seconds)
     )
 
@@ -42,9 +46,10 @@ object ConsumerTest {
   val plainStreamTopic = testM("plainStream emits messages for a topic subscription") {
     val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
     for {
-      _ <- produceMany("topic150", kvs)
+      _        <- produceMany("topic150", kvs)
+      clientId <- randomClientId
 
-      records <- withConsumerSettings("group150", "client150") { settings =>
+      records <- withConsumerSettings("group150", clientId) { settings =>
                   ConsumerStream
                     .plain(settings, Subscription.topics("topic150"), Serde.string, Serde.string)
                     .use {
@@ -63,8 +68,9 @@ object ConsumerTest {
   val plainStreamPattern = testM("plainStream emits messages for a pattern subscription") {
     val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
     for {
-      _ <- produceMany("pattern150", kvs)
-      records <- withConsumerSettings("group150", "client150") { settings =>
+      _        <- produceMany("pattern150", kvs)
+      clientId <- randomClientId
+      records <- withConsumerSettings("group150", clientId) { settings =>
                   ConsumerStream
                     .plain(settings, Subscription.pattern("pattern[0-9]+".r), Serde.string, Serde.string)
                     .use {
@@ -104,11 +110,46 @@ object ConsumerTest {
       } yield assert(kvOut, isSome(equalTo("key2" -> "msg2")))
     }
 
+  val plainStreamManualAssignmentManualSeek =
+    testM("receive from the right offset when creating a manual subscription with manual seeking") {
+      val nrPartitions = 5
+      val topic        = "manual-topic"
+
+      val manualOffsetSeek = 3
+
+      for {
+        _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+        _ <- ZIO.traverse(1 to nrPartitions) { i =>
+              produceMany(topic, partition = i % nrPartitions, kvs = (1 to 10).map(j => s"key$i-$j" -> s"msg$i-$j"))
+            }
+        clientId <- randomClientId
+        record <- withConsumerSettings("group150", clientId) { settings =>
+                   ConsumerStream
+                     .plain(
+                       settings,
+                       Subscription.manual(topic, partition = 2),
+                       Serde.string,
+                       Serde.string,
+                       offsetStorage = OffsetStorage.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+                     )
+                     .map(_._2)
+                     .use { stream =>
+                       stream.flattenChunks
+                         .take(1)
+                         .runHead
+                     }
+                 }
+        kvOut = record.map(r => (r.record.key, r.record.value))
+      } yield assert(kvOut, isSome(equalTo("key2-3" -> "msg2-3")))
+    }
+
   val restartFromCommittedPosition = testM("restart from the committed position") {
     val data = (1 to 10).toList.map(i => s"key$i" -> s"msg$i")
     for {
-      _ <- produceMany("topic1", 0, data)
-      firstResults <- withConsumerSettings("group1", "first") { settings =>
+      _              <- produceMany("topic1", 0, data)
+      clientIdFirst  <- randomClientId
+      clientIdSecond <- randomClientId
+      firstResults <- withConsumerSettings("group1", clientIdFirst) { settings =>
                        ConsumerStream
                          .partitioned(settings, Subscription.topics("topic1"), Serde.string, Serde.string)
                          .use {
@@ -128,7 +169,7 @@ object ConsumerTest {
                                .runCollect
                          }
                      }
-      secondResults <- withConsumerSettings("group1", "second") { settings =>
+      secondResults <- withConsumerSettings("group1", clientIdSecond) { settings =>
                         ConsumerStream
                           .partitioned(settings, Subscription.topics("topic1"), Serde.string, Serde.string)
                           .use {
@@ -156,10 +197,12 @@ object ConsumerTest {
     val manualOffsetSeek = 3
 
     for {
-      topic <- randomTopic
-      _     <- produceMany(topic, 0, data)
+      topic          <- randomTopic
+      clientIdFirst  <- randomClientId
+      clientIdSecond <- randomClientId
+      _              <- produceMany(topic, 0, data)
       // Consume 5 records to have the offset committed at 5
-      _ <- withConsumerSettings("group1", "first") { settings =>
+      _ <- withConsumerSettings("group1", clientIdFirst) { settings =>
             ConsumerStream
               .plain(settings, Subscription.topics(topic), Serde.string, Serde.string)
               .use {
@@ -178,7 +221,7 @@ object ConsumerTest {
               }
           }
       // Start a new consumer with manual offset before the committed offset
-      secondResults <- withConsumerSettings("group1", "second") { settings =>
+      secondResults <- withConsumerSettings("group1", clientIdSecond) { settings =>
                         ConsumerStream
                           .plain(
                             settings,
@@ -206,9 +249,10 @@ object ConsumerTest {
 
     for {
       // Produce messages on several partitions
-      topic <- randomTopic
-      group <- randomGroup
-      _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+      topic    <- randomTopic
+      group    <- randomGroup
+      clientId <- randomClientId
+      _        <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
       _ <- ZIO.traverse(1 to nrMessages) { i =>
             produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
           }
@@ -216,7 +260,7 @@ object ConsumerTest {
       // Consume messages
       messagesReceived <- ZIO.traverse(0 until nrPartitions)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
       subscription     = Subscription.topics(topic)
-      _ <- withConsumerSettings(group, "client3") { settings =>
+      _ <- withConsumerSettings(group, clientId) { settings =>
             ConsumerStream.partitioned(settings, subscription, Serde.string, Serde.string).use {
               case (_, stream) =>
                 stream
@@ -242,8 +286,9 @@ object ConsumerTest {
     val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
 
     for {
-      _ <- produceMany(topic, messages)
-      consumeResult <- consumeWithStrings("group3", "client3", subscription) {
+      clientId <- randomClientId
+      _        <- produceMany(topic, messages)
+      consumeResult <- consumeWithStrings("group3", clientId, subscription) {
                         case (_, _) =>
                           ZIO.fail(new IllegalArgumentException("consumeWith failure")).orDie
                       }.run
@@ -258,9 +303,10 @@ object ConsumerTest {
     for {
       topic            <- randomTopic
       group            <- randomGroup
+      clientId         <- randomClientId
       _                <- produceMany(topic, kvs)
       messagesReceived <- Ref.make[Int](0)
-      _ <- withConsumerSettings(group, "client150") { settings =>
+      _ <- withConsumerSettings(group, clientId) { settings =>
             ConsumerStream.plain(settings, Subscription.topics(topic), Serde.string, Serde.string).use {
               case (control, stream) =>
                 stream.mapM { _ =>
@@ -280,9 +326,10 @@ object ConsumerTest {
     val topic = "test-outstanding-commits"
     for {
       group            <- randomGroup
+      clientId         <- randomClientId
       _                <- produceMany(topic, kvs)
       messagesReceived <- Ref.make[Int](0)
-      offset <- withConsumerSettings(group, "client150") { settings =>
+      offset <- withConsumerSettings(group, clientId) { settings =>
                  ConsumerStream.plain(settings, Subscription.topics(topic), Serde.string, Serde.string).use {
                    case (control, stream) =>
                      stream.mapM { record =>
@@ -307,16 +354,17 @@ object ConsumerTest {
 
     for {
       // Produce messages on several partitions
-      topic <- randomTopic
-      group <- randomGroup
-      _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+      topic    <- randomTopic
+      group    <- randomGroup
+      clientId <- randomClientId
+      _        <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
       _ <- ZIO.traverse(1 to nrMessages) { i =>
             produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
           }
 
       // Consume messages
       subscription = Subscription.topics(topic)
-      offsets <- withConsumerSettings(group, "client3") { settings =>
+      offsets <- withConsumerSettings(group, clientId) { settings =>
                   ConsumerStream.partitioned(settings, subscription, Serde.string, Serde.string).use {
                     case (_, stream) =>
                       stream
@@ -339,16 +387,18 @@ object ConsumerTest {
 
     for {
       // Produce messages on several partitions
-      topic <- randomTopic
-      group <- randomGroup
-      _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+      topic     <- randomTopic
+      group     <- randomGroup
+      clientId  <- randomClientId
+      clientId2 <- randomClientId
+      _         <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
       _ <- ZIO.traverse(1 to nrMessages) { i =>
             produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
           }
 
       // Consume messages
       subscription = Subscription.topics(topic)
-      consumer1 <- withConsumerSettings(group, "client1") { settings =>
+      consumer1 <- withConsumerSettings(group, clientId) { settings =>
                     ConsumerStream.partitioned(settings, subscription, Serde.string, Serde.string).use {
                       case (_, stream) =>
                         stream
@@ -363,7 +413,7 @@ object ConsumerTest {
                     }
                   }.fork
       _ <- Live.live(ZIO.sleep(5.seconds))
-      consumer2 <- withConsumerSettings(group, "client2") { settings =>
+      consumer2 <- withConsumerSettings(group, clientId2) { settings =>
                     ConsumerStream.partitioned(settings, subscription, Serde.string, Serde.string).use {
                       case (_, stream) =>
                         stream
@@ -385,16 +435,18 @@ object ConsumerTest {
       .use { diagnostics =>
         for {
           // Produce messages on several partitions
-          topic <- randomTopic
-          group <- randomGroup
-          _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          topic     <- randomTopic
+          group     <- randomGroup
+          clientId  <- randomClientId
+          clientId2 <- randomClientId
+          _         <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.traverse(1 to nrMessages) { i =>
                 produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
               }
 
           // Consume messages
           subscription = Subscription.topics(topic)
-          consumer1 <- withConsumerSettings(group, "client1") { settings =>
+          consumer1 <- withConsumerSettings(group, clientId) { settings =>
                         ConsumerStream
                           .partitioned(settings, subscription, Serde.string, Serde.string, diagnostics = diagnostics)
                           .use {
@@ -416,7 +468,7 @@ object ConsumerTest {
                                .runCollect
                                .fork
           _ <- Live.live(ZIO.sleep(5.seconds))
-          consumer2 <- withConsumerSettings(group, "client2") { settings =>
+          consumer2 <- withConsumerSettings(group, clientId2) { settings =>
                         ConsumerStream
                           .partitioned(settings, subscription, Serde.string, Serde.string)
                           .use {

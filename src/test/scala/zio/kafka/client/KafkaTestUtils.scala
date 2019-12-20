@@ -209,6 +209,9 @@ object KafkaTestUtils {
 
   def randomTopic = randomThing("topic")
 
+  // Necessary to prevent https://issues.apache.org/jira/browse/KAFKA-3992
+  def randomClientId = randomThing("client")
+
   def randomGroup = randomThing("group")
 
 }

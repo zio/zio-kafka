@@ -11,6 +11,7 @@ import zio.duration._
 import zio.kafka.client.ConsumerStream.OffsetStorage
 import zio.kafka.client.diagnostics.DiagnosticEvent.Rebalance.{ Assigned, Revoked }
 import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.client.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.client.{ BlockingTask, CommittableRecord }
 import zio.stream._
 
@@ -321,47 +322,43 @@ private[client] object Runloop {
                              )
                            } else {
                              val currentAssigned = c.assignment().asScala.toSet
-                             val newlyAssigned   = currentAssigned -- prevAssigned
-                             val revoked         = prevAssigned -- currentAssigned
 
+                             // Newly assigned partitions by automatic rebalancing only
+                             // (manual partitions are not in this set)
+                             val newlyAssigned = currentAssigned -- prevAssigned
+
+                             val revoked = prevAssigned -- currentAssigned
+
+                             def doSeek(tps: Set[TopicPartition], c: ByteArrayKafkaConsumer): Task[Unit] =
+                               deps.offsetStorage match {
+                                 case OffsetStorage.Auto(_) =>
+                                   ZIO.unit
+
+                                 // For new partitions we do a seek
+                                 case OffsetStorage.Manual(getOffsets) =>
+                                   getOffsets(newlyAssigned).flatMap { offsets =>
+                                     println(s"Seeking! ${offsets}")
+                                     ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
+                                   }.when(newlyAssigned.nonEmpty)
+                               }
+
+                             // TODO ignore records that were done before a seek?
                              // Polling will give us data from partitions that we haven't seek'd yet, depending on
                              // offset storage strategy
-                             val seek = deps.offsetStorage match {
-                               case OffsetStorage.Auto(reset) =>
-                                 ZIO.unit
-
-                               // For new partitions we do a seek
-                               case OffsetStorage.Manual(getOffsets) =>
-                                 getOffsets(newlyAssigned).flatMap { offsets =>
-                                   println(s"Seeking! ${offsets}")
-                                   ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
-                                 }.when(newlyAssigned.nonEmpty)
-                             }
-
-                             // TODO ignore records that were done before a seek
 
                              val tpsInResponse = records.partitions.asScala.toSet
                              val unrequestedRecords =
                                bufferUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
 
-                             seek *> endRevoked(
+                             doSeek(newlyAssigned, c) *> endRevoked(
                                state.pendingRequests,
                                state.addBufferedRecords(unrequestedRecords).bufferedRecords,
                                revoked(_)
                              ).flatMap {
                                case (pendingRequests, bufferedRecords) =>
-                                 val (allowedRequests, withheldRequests) = deps.offsetStorage match {
-                                   case OffsetStorage.Manual(_) =>
-                                     pendingRequests.partition(req => !newlyAssigned.contains(req.tp))
-                                   case OffsetStorage.Auto(_) => (pendingRequests, List.empty)
-                                 }
-                                 println(s"Withholding requests for ${withheldRequests
-                                   .map(_.tp)}, allowing ${allowedRequests.map(_.tp)}")
-
                                  for {
-                                   output       <- fulfillRequests(allowedRequests, bufferedRecords, records)
-                                   notFulfilled = withheldRequests ++ output._1
-                                   fulfilled    = output._2
+                                   output                    <- fulfillRequests(pendingRequests, bufferedRecords, records)
+                                   (notFulfilled, fulfilled) = output
                                    _ <- deps.emitIfEnabledDiagnostic(
                                          DiagnosticEvent.Poll(
                                            requestedPartitions,

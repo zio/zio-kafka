@@ -5,7 +5,7 @@
         </encoder>
     </appender>
 
-    <logger name="org.apache.kafka" level="INFO"/>
+    <logger name="org.apache.kafka" level="WARN"/>
 
     <logger name="org.apache.kafka.clients.consumer.ConsumerConfig" level="WARN"/>
 

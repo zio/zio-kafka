@@ -189,7 +189,8 @@ object ConsumerStream {
     (Control, ZStream[Any, Throwable, (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])])
   ] =
     for {
-      wrapper <- ConsumerAccess.make(settings)
+      wrapper  <- ConsumerAccess.make(settings)
+      consumer = new Consumer(wrapper)
       deps <- Runloop.Deps.make(
                wrapper,
                settings.pollInterval,
@@ -200,27 +201,23 @@ object ConsumerStream {
       _ <- ZIO
             .runtime[Blocking]
             .flatMap { runtime =>
-              subscription match {
-                case Subscription.Pattern(pattern) =>
-                  wrapper.withConsumer { c =>
-                    c.subscribe(
-                      pattern.pattern,
-                      deps.rebalanceListener.toConsumerRebalanceListener(runtime)
-                    )
-                  }
-                case Subscription.Topics(topics) =>
-                  wrapper.withConsumer { c =>
-                    c.subscribe(
-                      topics.asJava,
-                      deps.rebalanceListener.toConsumerRebalanceListener(runtime)
-                    )
-                  }
-
-                // TODO manual subscription + manual seek, does it work..?
-                case Subscription.Manual(topicPartitions) =>
-                  wrapper.withConsumer(_.assign(topicPartitions.asJava)) *>
-                    ZIO.foreach_(topicPartitions)(deps.newPartitionStream)
-              }
+              consumer.subscribe(subscription, deps.rebalanceListener.toConsumerRebalanceListener(runtime)) *> // For manual subscriptions we have to do some manual work before starting the run loop
+                (subscription match {
+                  // TODO this is a bit duplicate to Runloop
+                  case Subscription.Manual(topicPartitions) =>
+                    ZIO.foreach_(topicPartitions)(deps.newPartitionStream) *> {
+                      offsetStorage match {
+                        case OffsetStorage.Auto(_) => ZIO.unit
+                        case OffsetStorage.Manual(getOffsets) =>
+                          getOffsets(topicPartitions).flatMap { offsets =>
+                            wrapper.withConsumerM { c =>
+                              ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
+                            }
+                          }
+                      }
+                    }
+                  case _ => ZIO.unit
+                })
             }
             .toManaged_
       runloop <- Runloop(deps)
@@ -308,9 +305,11 @@ object ConsumerStream {
           .runDrain
     }
 
+  // TODO rename to OffsetRetrieval
   sealed trait OffsetStorage
 
   object OffsetStorage {
+    // TODO process the strategy in the consumer settings be included here?
     final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest)                extends OffsetStorage
     final case class Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]]) extends OffsetStorage
   }
