@@ -132,7 +132,6 @@ private[client] object Runloop {
     def setCommits(reqs: List[Command.Commit]) = copy(pendingCommits = reqs)
     def addRequest(c: Command.Request)         = copy(pendingRequests = c :: pendingRequests)
     def clearCommits                           = copy(pendingCommits = Nil)
-//    def clearRequests                          = copy(pendingRequests = Nil)
     def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]): State =
       copy(
         bufferedRecords = recs.foldLeft(bufferedRecords) {
