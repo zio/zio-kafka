@@ -300,7 +300,6 @@ private[client] object Runloop {
 
                        def doSeekForNewPartitions(tps: Set[TopicPartition], c: ByteArrayKafkaConsumer): Task[Unit] =
                          deps.offsetRetrieval match {
-                           // For new partitions we do a seek
                            case OffsetRetrieval.Manual(getOffsets) =>
                              getOffsets(tps).flatMap { offsets =>
                                ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
@@ -445,8 +444,8 @@ private[client] object Runloop {
   }
 
   case class RebalanceListener[-R](
-    onAssigned: Set[TopicPartition] => ZIO[R, Nothing, Any] = (_: Set[TopicPartition]) => UIO.unit,
-    onRevoked: Set[TopicPartition] => ZIO[R, Nothing, Any] = (_: Set[TopicPartition]) => UIO.unit
+    onAssigned: Set[TopicPartition] => ZIO[R, Nothing, Any],
+    onRevoked: Set[TopicPartition] => ZIO[R, Nothing, Any]
   ) {
     def toConsumerRebalanceListener(runtime: Runtime[R]): ConsumerRebalanceListener = new ConsumerRebalanceListener {
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
@@ -458,15 +457,5 @@ private[client] object Runloop {
         ()
       }
     }
-
-    def +[R1 <: R](listener2: RebalanceListener[R1]): RebalanceListener[R1] = copy(
-      onAssigned = tp => listener2.onAssigned(tp) *> onAssigned(tp),
-      onRevoked = tp => listener2.onRevoked(tp) *> onRevoked(tp)
-    )
   }
-
-  object RebalanceListener {
-    val noop = RebalanceListener[Any]()
-  }
-
 }

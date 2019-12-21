@@ -1,12 +1,16 @@
 package zio.kafka.client
 
+import java.util
+
 import org.apache.kafka.clients.consumer.{
+  ConsumerConfig,
   ConsumerRebalanceListener,
   ConsumerRecords,
   OffsetAndMetadata,
-  OffsetAndTimestamp
+  OffsetAndTimestamp,
+  OffsetCommitCallback
 }
-import org.apache.kafka.common.{ PartitionInfo, TopicPartition }
+import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition }
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -30,7 +34,6 @@ import scala.collection.compat._
 class Consumer private[zio] (
   private[zio] val consumer: ConsumerAccess
 ) {
-  self =>
 
   /**
    * Returns the topic-partitions that this consumer is currently assigned.
@@ -47,6 +50,17 @@ class Consumer private[zio] (
     consumer.withConsumer(
       _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.view.mapValues(_.longValue()).toMap
     )
+
+  def commitAsync: BlockingTask[Map[TopicPartition, OffsetAndMetadata]] = consumer.withConsumerM { c =>
+    ZIO.effectAsync { callback =>
+      c.commitAsync(new OffsetCommitCallback {
+        override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = {
+          val result = if (exception != null) ZIO.fail(exception) else ZIO.succeed(offsets.asScala.toMap)
+          callback(result)
+        }
+      })
+    }
+  }
 
   /**
    * Retrieve the last committed offset for the given topic-partitions
@@ -79,14 +93,26 @@ class Consumer private[zio] (
       _.offsetsForTimes(timestamps.view.mapValues(Long.box).toMap.asJava, timeout.asJava).asScala.toMap
     )
 
+  def metrics: ZIO[Blocking, Throwable, Map[MetricName, Metric]] =
+    consumer.withConsumer(_.metrics()).map(_.asScala.toMap)
+
   def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): BlockingTask[List[PartitionInfo]] =
     consumer.withConsumer(_.partitionsFor(topic, timeout.asJava).asScala.toList)
+
+  def pause(topicPartitions: Set[TopicPartition]): BlockingTask[Unit] =
+    consumer.withConsumer(_.pause(topicPartitions.asJavaCollection))
+
+  def paused: BlockingTask[Set[TopicPartition]] =
+    consumer.withConsumer(_.paused()).map(_.asScala.toSet)
 
   def poll(timeout: Duration): BlockingTask[ConsumerRecords[Array[Byte], Array[Byte]]] =
     consumer.withConsumer(_.poll(timeout.asJava))
 
   def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): BlockingTask[Long] =
     consumer.withConsumer(_.position(partition, timeout.asJava))
+
+  def resume(topicPartitions: Set[TopicPartition]): BlockingTask[Unit] =
+    consumer.withConsumer(_.resume(topicPartitions.asJavaCollection))
 
   def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
     consumer.withConsumer(_.seek(partition, offset))
@@ -175,8 +201,16 @@ object ConsumerStream {
           case _ => ZIO.unit
         })
 
+    val settingsWithAutoOffsetReset = offsetRetrieval match {
+      case OffsetRetrieval.Auto(reset) =>
+        settings.copy(
+          extraDriverSettings = settings.driverSettings + (ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
+        )
+      case OffsetRetrieval.Manual(_) => settings
+    }
+
     for {
-      wrapper  <- ConsumerAccess.make(settings)
+      wrapper  <- ConsumerAccess.make(settingsWithAutoOffsetReset)
       consumer = new Consumer(wrapper)
       deps <- Runloop.Deps.make(
                wrapper,
@@ -200,7 +234,8 @@ object ConsumerStream {
         }
         .ensuringFirst(runloop.deps.gracefulShutdown)
       control = new Control {
-        override def stopConsumption: Task[Unit] = runloop.deps.gracefulShutdown
+        override def stopConsumption: Task[Unit]                    = runloop.deps.gracefulShutdown
+        override def metrics: BlockingTask[Map[MetricName, Metric]] = consumer.metrics
       }
     } yield (control, stream)
   }
@@ -305,12 +340,17 @@ object ConsumerStream {
   sealed trait OffsetRetrieval
 
   object OffsetRetrieval {
-    // TODO process the strategy in the consumer settings be included here?
     final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest)                extends OffsetRetrieval
     final case class Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]]) extends OffsetRetrieval
   }
 
-  sealed trait AutoOffsetStrategy
+  sealed trait AutoOffsetStrategy { self =>
+    def toConfig = self match {
+      case AutoOffsetStrategy.Earliest => "earliest"
+      case AutoOffsetStrategy.Latest   => "latest"
+      case AutoOffsetStrategy.None     => "none"
+    }
+  }
 
   object AutoOffsetStrategy {
     case object Earliest extends AutoOffsetStrategy
@@ -322,6 +362,19 @@ object ConsumerStream {
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
   trait Control {
+
+    /**
+     * Stop consuming messages
+     *
+     * This will complete the partition streams and the main stream, draining any buffered records.
+     * @return
+     */
     def stopConsumption: Task[Unit]
+
+    /**
+     * Get consumer metrics
+     * @return
+     */
+    def metrics: BlockingTask[Map[MetricName, Metric]]
   }
 }
