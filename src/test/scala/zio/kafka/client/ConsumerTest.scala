@@ -12,6 +12,8 @@ import zio.duration._
 import zio.test.{ DefaultRunnableSpec, _ }
 import zio.test.TestAspect._
 import ConsumerTest._
+import zio.clock.Clock
+import zio.kafka.client.Consumer.OffsetRetrieval
 import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
 
 /**
@@ -22,17 +24,21 @@ import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
 object ConsumerTestSuite
     extends DefaultRunnableSpec(
       suite("Consumer Streaming")(
-        plainStreamTopic,
-        plainStreamPattern,
-        plainStreamManual,
-        restartFromCommittedPosition,
-        partitionedStreamBasic,
-        consumeWithFailStream,
-        stopConsumptionStopStream,
-        stopConsumptionCommits,
-        offsetBatching,
-        rebalancing,
-        diagnosticRelabancing
+        List(
+          plainStreamTopic,
+          plainStreamPattern,
+          plainStreamManual,
+          plainStreamManualAssignmentManualSeek,
+          restartFromCommittedPosition,
+          partitionedStreamBasic,
+          consumeWithFailStream,
+          stopConsumptionStopStream,
+          stopConsumptionCommits,
+          offsetBatching,
+          rebalancing,
+          diagnosticRelabancing,
+          manualSeek
+        ).map(_ @@ after(ZIO.sleep(1.second).provide(Clock.Live))): _* // There's some flaky behavior here
       ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment) @@ timeout(180.seconds)
     )
 
@@ -94,6 +100,34 @@ object ConsumerTest {
                  }
         kvOut = record.map(r => (r.record.key, r.record.value))
       } yield assert(kvOut, isSome(equalTo("key2" -> "msg2")))
+    }
+
+  val plainStreamManualAssignmentManualSeek =
+    testM("receive from the right offset when creating a manual subscription with manual seeking") {
+      val nrPartitions = 5
+      val topic        = "manual-topic"
+
+      val manualOffsetSeek = 3
+
+      for {
+        _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+        _ <- ZIO.traverse(1 to nrPartitions) { i =>
+              produceMany(topic, partition = i % nrPartitions, kvs = (1 to 10).map(j => s"key$i-$j" -> s"msg$i-$j"))
+            }
+        offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+        record <- withConsumer("group150", "client150", offsetRetrieval = offsetRetrieval) { consumer =>
+                   consumer
+                     .subscribeAnd(Subscription.manual(topic, partition = 2))
+                     .plainStream(
+                       Serde.string,
+                       Serde.string
+                     )
+                     .flattenChunks
+                     .take(1)
+                     .runHead
+                 }
+        kvOut = record.map(r => (r.record.key, r.record.value))
+      } yield assert(kvOut, isSome(equalTo("key2-3" -> "msg2-3")))
     }
 
   val restartFromCommittedPosition = testM("restart from the committed position") {
@@ -368,5 +402,44 @@ object ConsumerTest {
       .map { diagnosticEvents =>
         assert(diagnosticEvents.size, isGreaterThanEqualTo(2))
       }
+  }
+
+  val manualSeek = testM("support manual seeking") {
+    val nrRecords        = 10
+    val data             = (1 to nrRecords).toList.map(i => s"key$i" -> s"msg$i")
+    val manualOffsetSeek = 3
+
+    for {
+      topic <- randomTopic
+      _     <- produceMany(topic, 0, data)
+      // Consume 5 records to have the offset committed at 5
+      _ <- withConsumer("group1", "client1") { consumer =>
+            consumer
+              .subscribeAnd(Subscription.topics(topic))
+              .plainStream(Serde.string, Serde.string)
+              .flattenChunks
+              .take(5)
+              .transduce(ZSink.collectAll[CommittableRecord[String, String]])
+              .mapConcatM { committableRecords =>
+                val records = committableRecords.map(_.record)
+                val offsetBatch =
+                  committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+
+                offsetBatch.commit.as(records)
+              }
+              .runCollect
+          }
+      // Start a new consumer with manual offset before the committed offset
+      offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+      secondResults <- withConsumer("group1", "client2", offsetRetrieval = offsetRetrieval) { consumer =>
+                        consumer
+                          .subscribeAnd(Subscription.topics(topic))
+                          .plainStream(Serde.string, Serde.string)
+                          .take(nrRecords - manualOffsetSeek)
+                          .map(_.record)
+                          .runCollect
+                      }
+      // Check that we only got the records starting from the manually seek'd offset
+    } yield assert(secondResults.map(rec => rec.key() -> rec.value()), equalTo(data.drop(manualOffsetSeek)))
   }
 }

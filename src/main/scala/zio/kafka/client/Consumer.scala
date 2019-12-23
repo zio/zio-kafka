@@ -6,12 +6,14 @@ import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
+import zio.kafka.client.Consumer.OffsetRetrieval
 import zio.kafka.client.serde.Deserializer
 import zio.kafka.client.diagnostics.Diagnostics
 import zio.kafka.client.internal.{ ConsumerAccess, Runloop }
 import zio.stream._
 
-import scala.jdk.CollectionConverters._, scala.collection.compat._
+import scala.jdk.CollectionConverters._
+import scala.collection.compat._
 
 class Consumer private (
   private val consumer: ConsumerAccess,
@@ -155,9 +157,19 @@ class Consumer private (
       subscription match {
         case Subscription.Pattern(pattern) => ZIO(c.subscribe(pattern.pattern, runloop.deps.rebalanceListener))
         case Subscription.Topics(topics)   => ZIO(c.subscribe(topics.asJava, runloop.deps.rebalanceListener))
+
+        // For manual subscriptions we have to do some manual work before starting the run loop
         case Subscription.Manual(topicPartitions) =>
           ZIO(c.assign(topicPartitions.asJava)) *>
-            ZIO.foreach_(topicPartitions)(runloop.deps.newPartitionStream)
+            ZIO.foreach_(topicPartitions)(runloop.deps.newPartitionStream) *> {
+            settings.offsetRetrieval match {
+              case OffsetRetrieval.Manual(getOffsets) =>
+                getOffsets(topicPartitions).flatMap { offsets =>
+                  ZIO.traverse_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
+                }
+              case OffsetRetrieval.Auto(_) => ZIO.unit
+            }
+          }
       }
     }
 
@@ -185,7 +197,8 @@ object Consumer {
                wrapper,
                settings.pollInterval,
                settings.pollTimeout,
-               diagnostics
+               diagnostics,
+               settings.offsetRetrieval
              )
       runloop <- Runloop(deps)
     } yield new Consumer(wrapper, settings, runloop)
@@ -261,4 +274,25 @@ object Consumer {
       .aggregateAsync(offsetBatches)
       .mapM(_.commitOrRetry(commitRetryPolicy))
       .runDrain
+
+  sealed trait OffsetRetrieval
+
+  object OffsetRetrieval {
+    final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest)                extends OffsetRetrieval
+    final case class Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]]) extends OffsetRetrieval
+  }
+
+  sealed trait AutoOffsetStrategy { self =>
+    def toConfig = self match {
+      case AutoOffsetStrategy.Earliest => "earliest"
+      case AutoOffsetStrategy.Latest   => "latest"
+      case AutoOffsetStrategy.None     => "none"
+    }
+  }
+
+  object AutoOffsetStrategy {
+    case object Earliest extends AutoOffsetStrategy
+    case object Latest   extends AutoOffsetStrategy
+    case object None     extends AutoOffsetStrategy
+  }
 }
