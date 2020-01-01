@@ -129,15 +129,16 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
 object AdminClient {
   def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] =
     kfv.flatMap { f =>
-      Task.effectAsync[T] { cb =>
+      Task.effectAsyncInterrupt[T] { cb =>
         f.whenComplete {
           new KafkaFuture.BiConsumer[T, Throwable] {
-            def accept(t: T, e: Throwable) =
-              if (e ne null) cb(Task.fail(e))
+            def accept(t: T, e: Throwable): Unit =
+              if (f.isCancelled) cb(ZIO.fiberId.flatMap(id => Task.halt(Cause.interrupt(id))))
+              else if (e ne null) cb(Task.fail(e))
               else cb(Task.succeed(t))
           }
         }
-        ()
+        Left(ZIO.effectTotal(f.cancel(true)))
       }
     }
 
