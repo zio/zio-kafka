@@ -2,7 +2,7 @@ package zio.kafka.client
 
 import java.util.concurrent.atomic.AtomicLong
 
-import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
+import org.apache.kafka.clients.producer.{ Callback, KafkaProducer => JKafkaProducer, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio._
 import zio.blocking._
@@ -11,11 +11,23 @@ import zio.stream.ZSink
 
 import scala.jdk.CollectionConverters._
 
+trait KafkaProducer[K, V] {
+  val kafkaProducer: KafkaProducer.Service[K, V, Any]
+}
+
+object KafkaProducer {
+  trait Service[-R, K, V] {
+    def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]]
+    def produceChunk(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Task[Chunk[RecordMetadata]]]
+    def flush(): BlockingTask[Unit]
+  }
+}
+
 class Producer[-R, K, V] private (
   p: ByteArrayProducer,
   keySerializer: Serializer[R, K],
   valueSerializer: Serializer[R, V]
-) {
+) extends KafkaProducer.Service[R, K, V] {
 
   /**
    * Produce a single record. The effect returned from this method has two layers and
@@ -29,7 +41,7 @@ class Producer[-R, K, V] private (
    * but enqueue a batch of records and await all of their acknowledgements at once. That
    * amortizes the cost of sending requests to Kafka and increases throughput.
    */
-  def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]] =
+  override def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]] =
     for {
       done             <- Promise.make[Throwable, RecordMetadata]
       serializedRecord <- serialize(record)
@@ -61,7 +73,7 @@ class Producer[-R, K, V] private (
    * outer layer will also signal the transmission of part of the chunk. Regardless,
    * awaiting the inner layer guarantees the transmission of the entire chunk.
    */
-  def produceChunk(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Task[Chunk[RecordMetadata]]] =
+  override def produceChunk(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Task[Chunk[RecordMetadata]]] =
     if (records.isEmpty) ZIO.succeed(Task.succeed(Chunk.empty))
     else {
       for {
@@ -101,7 +113,7 @@ class Producer[-R, K, V] private (
    * Flushes the producer's internal buffer. This will guarantee that all records
    * currently buffered will be transmitted to the broker.
    */
-  def flush: BlockingTask[Unit] = effectBlocking(p.flush())
+  override def flush: BlockingTask[Unit] = effectBlocking(p.flush())
 
   private def serialize(
     r: ProducerRecord[K, V]
@@ -132,7 +144,7 @@ object Producer {
   ): ZManaged[Blocking, Throwable, Producer[R, K, V]] = {
     val p = ZIO {
       val props = settings.driverSettings.asJava
-      new KafkaProducer[Array[Byte], Array[Byte]](
+      new JKafkaProducer[Array[Byte], Array[Byte]](
         props,
         new ByteArraySerializer(),
         new ByteArraySerializer()

@@ -13,11 +13,60 @@ import zio.stream._
 
 import scala.jdk.CollectionConverters._, scala.collection.compat._
 
+trait KafkaConsumer {
+  val kafakConsumer: KafkaConsumer.Service
+}
+
+object KafkaConsumer {
+  trait Service {
+    def assignment: BlockingTask[Set[TopicPartition]]
+    def beginningOffsets(
+      partitions: Set[TopicPartition],
+      timeout: Duration = Duration.Infinity
+    ): BlockingTask[Map[TopicPartition, Long]]
+    def committed(
+      partitions: Set[TopicPartition],
+      timeout: Duration = Duration.Infinity
+    ): BlockingTask[Map[TopicPartition, Option[OffsetAndMetadata]]]
+    def endOffsets(
+      partitions: Set[TopicPartition],
+      timeout: Duration = Duration.Infinity
+    ): BlockingTask[Map[TopicPartition, Long]]
+    def stopConsumption: UIO[Unit]
+    def listTopics(timeout: Duration = Duration.Infinity): BlockingTask[Map[String, List[PartitionInfo]]]
+    def offsetsForTimes(
+      timestamps: Map[TopicPartition, Long],
+      timeout: Duration = Duration.Infinity
+    ): BlockingTask[Map[TopicPartition, OffsetAndTimestamp]]
+    def partitionedStream[R, K, V](
+      keyDeserializer: Deserializer[R, K],
+      valueDeserializer: Deserializer[R, V]
+    ): ZStream[
+      Clock with Blocking,
+      Throwable,
+      (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
+    ]
+    def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): BlockingTask[List[PartitionInfo]]
+    def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): BlockingTask[Long]
+    def plainStream[R, K, V](
+      keyDeserializer: Deserializer[R, K],
+      valueDeserializer: Deserializer[R, V]
+    ): ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]]
+    def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit]
+    def seekToBeginning(partitions: Set[TopicPartition]): BlockingTask[Unit]
+    def seekToEnd(partitions: Set[TopicPartition]): BlockingTask[Unit]
+    def subscribe(subscription: Subscription): BlockingTask[Unit]
+    def subscribeAnd(subscription: Subscription): SubscribedConsumer
+    def subscription(): BlockingTask[Set[String]]
+    def unsubscribe(): BlockingTask[Unit]
+  }
+}
+
 class Consumer private (
   private val consumer: ConsumerAccess,
   private val settings: ConsumerSettings,
   private val runloop: Runloop
-) {
+) extends KafkaConsumer.Service {
   self =>
 
   /**
