@@ -74,10 +74,10 @@ class Consumer private (
    *
    * This is subject to consumer rebalancing, unless using a manual subscription.
    */
-  def assignment: BlockingTask[Set[TopicPartition]] =
+  override def assignment: BlockingTask[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
 
-  def beginningOffsets(
+  override def beginningOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
   ): BlockingTask[Map[TopicPartition, Long]] =
@@ -88,7 +88,7 @@ class Consumer private (
   /**
    * Retrieve the last committed offset for the given topic-partitions
    */
-  def committed(
+  override def committed(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
   ): BlockingTask[Map[TopicPartition, Option[OffsetAndMetadata]]] =
@@ -96,7 +96,7 @@ class Consumer private (
       _.committed(partitions.asJava, timeout.asJava).asScala.toMap.view.mapValues(Option.apply).toMap
     )
 
-  def endOffsets(
+  override def endOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
   ): BlockingTask[Map[TopicPartition, Long]] =
@@ -109,13 +109,13 @@ class Consumer private (
    * Stops consumption of data, drains buffered records, and ends the attached
    * streams while still serving commit requests.
    */
-  def stopConsumption: UIO[Unit] =
+  override def stopConsumption: UIO[Unit] =
     runloop.deps.gracefulShutdown
 
-  def listTopics(timeout: Duration = Duration.Infinity): BlockingTask[Map[String, List[PartitionInfo]]] =
+  override def listTopics(timeout: Duration = Duration.Infinity): BlockingTask[Map[String, List[PartitionInfo]]] =
     consumer.withConsumer(_.listTopics(timeout.asJava).asScala.view.mapValues(_.asScala.toList).toMap)
 
-  def offsetsForTimes(
+  override def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
     timeout: Duration = Duration.Infinity
   ): BlockingTask[Map[TopicPartition, OffsetAndTimestamp]] =
@@ -140,7 +140,7 @@ class Consumer private (
    * @tparam V Type of record values
    * @return
    */
-  def partitionedStream[R, K, V](
+  override def partitionedStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): ZStream[
@@ -160,10 +160,10 @@ class Consumer private (
           tp -> partitionStream.mapM(_.deserializeWith(keyDeserializer, valueDeserializer))
       }
 
-  def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): BlockingTask[List[PartitionInfo]] =
+  override def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): BlockingTask[List[PartitionInfo]] =
     consumer.withConsumer(_.partitionsFor(topic, timeout.asJava).asScala.toList)
 
-  def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): BlockingTask[Long] =
+  override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): BlockingTask[Long] =
     consumer.withConsumer(_.position(partition, timeout.asJava))
 
   /**
@@ -181,7 +181,7 @@ class Consumer private (
    * @tparam V Type of record values
    * @return
    */
-  def plainStream[R, K, V](
+  override def plainStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
@@ -190,16 +190,16 @@ class Consumer private (
         .flatMapPar(n = Int.MaxValue)(_._2.chunks)
     )
 
-  def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
+  override def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
     consumer.withConsumer(_.seek(partition, offset))
 
-  def seekToBeginning(partitions: Set[TopicPartition]): BlockingTask[Unit] =
+  override def seekToBeginning(partitions: Set[TopicPartition]): BlockingTask[Unit] =
     consumer.withConsumer(_.seekToBeginning(partitions.asJava))
 
-  def seekToEnd(partitions: Set[TopicPartition]): BlockingTask[Unit] =
+  override def seekToEnd(partitions: Set[TopicPartition]): BlockingTask[Unit] =
     consumer.withConsumer(_.seekToEnd(partitions.asJava))
 
-  def subscribe(subscription: Subscription): BlockingTask[Unit] =
+  override def subscribe(subscription: Subscription): BlockingTask[Unit] =
     consumer.withConsumerM { c =>
       subscription match {
         case Subscription.Pattern(pattern) => ZIO(c.subscribe(pattern.pattern, runloop.deps.rebalanceListener))
@@ -210,13 +210,13 @@ class Consumer private (
       }
     }
 
-  def subscribeAnd(subscription: Subscription): SubscribedConsumer =
+  override def subscribeAnd(subscription: Subscription): SubscribedConsumer =
     new SubscribedConsumer(subscribe(subscription).as(self))
 
-  def subscription: BlockingTask[Set[String]] =
+  override def subscription: BlockingTask[Set[String]] =
     consumer.withConsumer(_.subscription().asScala.toSet)
 
-  def unsubscribe: BlockingTask[Unit] =
+  override def unsubscribe: BlockingTask[Unit] =
     consumer.withConsumer(_.unsubscribe())
 }
 
