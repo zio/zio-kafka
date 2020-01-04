@@ -9,7 +9,7 @@ import ClientAdminTestHelper._
 object ClientAdminTest
     extends DefaultRunnableSpec(
       suite("client admin test")(
-        List(singleTopic, multiTopics, describeTopics): _*
+        List(singleTopic, multiTopics, listOnly, describeTopics): _*
       ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment) @@ sequential
     )
 
