@@ -222,8 +222,8 @@ private[client] object Runloop {
                   }
                 )
               }
-            }.catchAll(
-              e => cont(Exit.fail(e)) <* deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Failure(offsets, e))
+            }.catchAll(e =>
+              cont(Exit.fail(e)) <* deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Failure(offsets, e))
             )
       } yield ()
 

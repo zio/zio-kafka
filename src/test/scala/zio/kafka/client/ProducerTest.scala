@@ -31,8 +31,8 @@ object ProducerTest
               def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
                 Consumer
                   .make(settings)
-                  .flatMap(
-                    c => c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.string).toQueue()
+                  .flatMap(c =>
+                    c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.string).toQueue()
                   )
 
               for {
