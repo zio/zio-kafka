@@ -6,6 +6,7 @@ import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
+import zio.kafka.client.Consumer.OffsetRetrieval
 import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.client.{ BlockingTask, CommittableRecord }
 import zio.stream._
@@ -36,7 +37,8 @@ private[client] object Runloop {
     rebalancingRef: Ref[Boolean],
     rebalanceListener: ConsumerRebalanceListener,
     diagnostics: Diagnostics,
-    shutdownRef: Ref[Boolean]
+    shutdownRef: Ref[Boolean],
+    offsetRetrieval: OffsetRetrieval
   ) {
     def commit(cmd: Command.Commit)   = commitQueue.offer(cmd).unit
     def commits                       = ZStream.fromQueue(commitQueue)
@@ -79,7 +81,8 @@ private[client] object Runloop {
       consumer: ConsumerAccess,
       pollFrequency: Duration,
       pollTimeout: Duration,
-      diagnostics: Diagnostics
+      diagnostics: Diagnostics,
+      offsetRetrieval: OffsetRetrieval
     ) =
       for {
         rebalancingRef <- Ref.make(false).toManaged_
@@ -130,7 +133,8 @@ private[client] object Runloop {
         rebalancingRef,
         listener,
         diagnostics,
-        shutdownRef
+        shutdownRef,
+        offsetRetrieval
       )
   }
 
@@ -309,6 +313,17 @@ private[client] object Runloop {
                          builder.result()
                        }
 
+                       def doSeekForNewPartitions(tps: Set[TopicPartition]): Task[Unit] =
+                         deps.offsetRetrieval match {
+                           case OffsetRetrieval.Manual(getOffsets) =>
+                             getOffsets(tps).flatMap { offsets =>
+                               ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
+                             }.when(tps.nonEmpty)
+
+                           case OffsetRetrieval.Auto(_) =>
+                             ZIO.unit
+                         }
+
                        Task.effectSuspend {
                          val prevAssigned = c.assignment().asScala.toSet
 
@@ -345,7 +360,7 @@ private[client] object Runloop {
                              val unrequestedRecords =
                                bufferUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
 
-                             endRevoked(
+                             doSeekForNewPartitions(newlyAssigned) *> endRevoked(
                                state.pendingRequests,
                                state.addBufferedRecords(unrequestedRecords).bufferedRecords,
                                revoked(_)

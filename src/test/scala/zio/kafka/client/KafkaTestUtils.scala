@@ -11,6 +11,7 @@ import zio.clock.Clock
 import zio.kafka.client.serde.Serde
 import zio.duration._
 import zio.kafka.client.AdminClient.KafkaAdminClientConfig
+import zio.kafka.client.Consumer.OffsetRetrieval
 import zio.kafka.client.Kafka.{ KafkaClockBlocking, KafkaTestEnvironment }
 import zio.kafka.client.diagnostics.Diagnostics
 import zio.test.environment.{ Live, TestEnvironment }
@@ -141,7 +142,7 @@ object KafkaTestUtils {
       p.produceChunk(chunk)
     }.flatten
 
-  def consumerSettings(groupId: String, clientId: String) =
+  def consumerSettings(groupId: String, clientId: String, offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()) =
     for {
       servers <- ZIO.access[Kafka](_.kafka.bootstrapServers)
     } yield ConsumerSettings(
@@ -158,7 +159,8 @@ object KafkaTestUtils {
       ),
       pollInterval = 100.millis,
       pollTimeout = 100.millis,
-      perPartitionChunkPrefetch = 16
+      perPartitionChunkPrefetch = 16,
+      offsetRetrieval = offsetRetrieval
     )
 
   def consumeWithStrings(groupId: String, clientId: String, subscription: Subscription)(
@@ -176,14 +178,15 @@ object KafkaTestUtils {
   def withConsumer[A, R <: KafkaClockBlocking](
     groupId: String,
     clientId: String,
-    diagnostics: Diagnostics = Diagnostics.NoOp
+    diagnostics: Diagnostics = Diagnostics.NoOp,
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
   )(
     r: Consumer => RIO[R, A]
   ): RIO[KafkaTestEnvironment, A] =
     for {
       lcb <- Kafka.liveClockBlocking
       inner <- (for {
-                settings <- consumerSettings(groupId, clientId)
+                settings <- consumerSettings(groupId, clientId, offsetRetrieval)
                 consumer = Consumer.make(settings, diagnostics)
                 consumed <- consumer.use(r)
               } yield consumed)
