@@ -61,8 +61,10 @@ object Consumer {
     def unsubscribe(): BlockingTask[Unit]
   }
 
-  type ConsumerTask[A] = ZIO[Consumer with Blocking, Throwable, A]
-  def assignment: ConsumerTask[Set[TopicPartition]] = ???
+  private type Self    = Consumer with Blocking
+  type ConsumerTask[A] = ZIO[Self, Throwable, A]
+
+  def assignment: ConsumerTask[Set[TopicPartition]] = ZIO.accessM[Self](_.consumer.assignment)
   def beginningOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
