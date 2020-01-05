@@ -1,7 +1,6 @@
 package zio.kafka.client
 
-import zio.test.{ assertM, suite, testM }
-import zio.test.DefaultRunnableSpec
+import zio.test.{ assertM, checkM, suite, testM, DefaultRunnableSpec, Gen }
 import zio.test.mock.Expectation.value
 import zio.Managed
 import zio.test.environment.TestEnvironment
@@ -19,10 +18,12 @@ object ConsumerModuleTestUtils {
       val consumer = c.consumer
     }
 
-  lazy val cannedAssignments: Set[TopicPartition] = Set(
-    new TopicPartition("foobar", 1),
-    new TopicPartition("foobar", 3)
-  )
+  lazy val assignmentsGen = Gen.sized { s =>
+    val inner = Gen.alphaNumericString <*> Gen.int(0, 100) map {
+      case (t, p) => new TopicPartition(t, p)
+    }
+    Gen.vectorOfN(s)(inner) map { _.toSet }
+  }
 }
 import ConsumerModuleTestUtils._
 
@@ -30,15 +31,17 @@ object ConsumerModuleTest
     extends DefaultRunnableSpec(
       suite("Consumer module")(
         suite("delegates")(
-          testM("assignment") {
-            val eff  = Consumer.assignment
-            val mock = ConsumerMock.assignment returns value(cannedAssignments)
-            val env  = makeEnv(mock)
+          testM("assignment")(
+            checkM(assignmentsGen) { a =>
+              val eff  = Consumer.assignment
+              val mock = ConsumerMock.assignment returns value(a)
+              val env  = makeEnv(mock)
 
-            val result = eff.provideManaged(env)
+              val result = eff.provideManaged(env)
 
-            assertM(result, equalTo(cannedAssignments))
-          }
+              assertM(result, equalTo(a))
+            }
+          )
         )
       )
     )
