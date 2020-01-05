@@ -143,12 +143,15 @@ class Consumer private (
         .flatMapPar(n = Int.MaxValue)(_._2.chunks)
     )
 
+  @deprecated("Use OffsetRetrieval.Manual", since = "0.5.0")
   def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
     consumer.withConsumer(_.seek(partition, offset))
 
+  @deprecated("Use OffsetRetrieval.Manual", since = "0.5.0")
   def seekToBeginning(partitions: Set[TopicPartition]): BlockingTask[Unit] =
     consumer.withConsumer(_.seekToBeginning(partitions.asJava))
 
+  @deprecated("Use OffsetRetrieval.Manual", since = "0.5.0")
   def seekToEnd(partitions: Set[TopicPartition]): BlockingTask[Unit] =
     consumer.withConsumer(_.seekToEnd(partitions.asJava))
 
