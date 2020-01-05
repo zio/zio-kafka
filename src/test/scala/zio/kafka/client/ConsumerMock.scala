@@ -13,28 +13,34 @@ import zio.duration._
 import zio.kafka.client.serde.Deserializer
 import zio.stream._
 
-object ConsumerMock {
-  object assignment       extends Method[Consumer, Unit, Set[TopicPartition]]
-  object beginningOffsets extends Method[Consumer, (Set[TopicPartition], Duration), Map[TopicPartition, Long]]
-  object committed
-      extends Method[Consumer, (Set[TopicPartition], Duration), Map[TopicPartition, Option[OffsetAndMetadata]]]
-  object endOffsets      extends Method[Consumer, (Set[TopicPartition], Duration), Map[TopicPartition, Long]]
-  object stopConsumption extends Method[Consumer, Unit, Unit]
-  object listTopics      extends Method[Consumer, Duration, Map[String, List[PartitionInfo]]]
-  object offsetsForTimes
-      extends Method[Consumer, (Map[TopicPartition, Long], Duration), Map[TopicPartition, OffsetAndTimestamp]]
-  object partitionsFor   extends Method[Consumer, (String, Duration), List[PartitionInfo]]
-  object position        extends Method[Consumer, (TopicPartition, Duration), Long]
-  object seek            extends Method[Consumer, (TopicPartition, Long), Unit]
-  object seekToBeginning extends Method[Consumer, Set[TopicPartition], Unit]
-  object seekToEnd       extends Method[Consumer, Set[TopicPartition], Unit]
-  object subscribe       extends Method[Consumer, Subscription, Unit]
-  object subscription    extends Method[Consumer, Unit, Set[String]]
-  object unsubscribe     extends Method[Consumer, Unit, Unit]
+trait ConsumerMock extends Consumer {
+  val consumer: ConsumerMock.Service
+}
 
-  implicit val mockable: Mockable[Consumer] = (mock: Mock) =>
-    new Consumer {
-      val consumer = new Consumer.Service {
+object ConsumerMock {
+  trait Service extends Consumer.Service
+
+  object assignment       extends Method[ConsumerMock, Unit, Set[TopicPartition]]
+  object beginningOffsets extends Method[ConsumerMock, (Set[TopicPartition], Duration), Map[TopicPartition, Long]]
+  object committed
+      extends Method[ConsumerMock, (Set[TopicPartition], Duration), Map[TopicPartition, Option[OffsetAndMetadata]]]
+  object endOffsets      extends Method[ConsumerMock, (Set[TopicPartition], Duration), Map[TopicPartition, Long]]
+  object stopConsumption extends Method[ConsumerMock, Unit, Unit]
+  object listTopics      extends Method[ConsumerMock, Duration, Map[String, List[PartitionInfo]]]
+  object offsetsForTimes
+      extends Method[ConsumerMock, (Map[TopicPartition, Long], Duration), Map[TopicPartition, OffsetAndTimestamp]]
+  object partitionsFor   extends Method[ConsumerMock, (String, Duration), List[PartitionInfo]]
+  object position        extends Method[ConsumerMock, (TopicPartition, Duration), Long]
+  object seek            extends Method[ConsumerMock, (TopicPartition, Long), Unit]
+  object seekToBeginning extends Method[ConsumerMock, Set[TopicPartition], Unit]
+  object seekToEnd       extends Method[ConsumerMock, Set[TopicPartition], Unit]
+  object subscribe       extends Method[ConsumerMock, Subscription, Unit]
+  object subscription    extends Method[ConsumerMock, Unit, Set[String]]
+  object unsubscribe     extends Method[ConsumerMock, Unit, Unit]
+
+  implicit val mockable: Mockable[ConsumerMock] = (mock: Mock) =>
+    new ConsumerMock {
+      val consumer = new Service {
         def assignment: BlockingTask[Set[TopicPartition]] = mock(ConsumerMock.assignment)
         def beginningOffsets(
           partitions: Set[TopicPartition],
