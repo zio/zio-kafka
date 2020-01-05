@@ -9,7 +9,7 @@ client. It integrates effortlessly with ZIO and ZIO Streams.
 
 - [Quickstart](#quickstart)
 - [Consuming Kafka topics using ZIO Streams](#consuming-kafka-topics-using-zio-streams)
-- [Example: consuming, producing and committing offset](#example--consuming--producing-and-committing-offset)
+- [Example: consuming, producing and committing offset](#example-consuming-producing-and-committing-offset)
 - [Partition assignment and offset retrieval](#partition-assignment-and-offset-retrieval)
 - [Custom data type serdes](#custom-data-type-serdes)
 - [Handling deserialization failures](#handling-deserialization-failures)
