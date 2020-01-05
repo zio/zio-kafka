@@ -1,12 +1,12 @@
 package zio.kafka.client
 
-import zio.test.{ assertM, checkM, suite, testM, DefaultRunnableSpec, Gen }
-import zio.test.mock.Expectation.value
-import zio.Managed
-import zio.test.environment.TestEnvironment
-import zio.blocking.Blocking
 import org.apache.kafka.common.TopicPartition
+import zio.blocking.Blocking
+import zio.Managed
+import zio.test._
 import zio.test.Assertion.equalTo
+import zio.test.mock.Expectation.value
+import zio.test.environment.TestEnvironment
 
 object ConsumerModuleTestUtils {
   def makeEnv(managed: Managed[Nothing, Consumer]): Managed[Nothing, Consumer with Blocking] =
