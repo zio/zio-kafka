@@ -3,6 +3,7 @@ package zio.kafka.client
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import zio._
 import zio.test._
+import zio.test.TestAspect.flaky
 import zio.test.Assertion._
 
 import KafkaFutureTestHelper._
@@ -70,7 +71,7 @@ object KafkaFutureTestHelper {
         assert(f.isDone, equalTo(true) ?? "Kafka future is done")
       }
     }
-  }
+  } @@ flaky
 
   private def withKafkaFuture =
     ZIO.effectTotal(new KafkaFutureImpl[Boolean]).toManaged { f =>
