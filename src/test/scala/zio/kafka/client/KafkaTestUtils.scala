@@ -102,7 +102,7 @@ object KafkaTestUtils {
     )
 
   def withProducer[A, K, V](
-    r: Producer[Any, K, V] => RIO[Any with Clock with Kafka with Blocking, A],
+    r: Producer.Service[Any, K, V] => RIO[Any with Clock with Kafka with Blocking, A],
     kSerde: Serde[Any, K],
     vSerde: Serde[Any, V]
   ): RIO[KafkaTestEnvironment, A] =
@@ -115,7 +115,9 @@ object KafkaTestUtils {
                  }
     } yield produced
 
-  def withProducerStrings[A](r: Producer[Any, String, String] => RIO[Any with Clock with Kafka with Blocking, A]) =
+  def withProducerStrings[A](
+    r: Producer.Service[Any, String, String] => RIO[Any with Clock with Kafka with Blocking, A]
+  ) =
     withProducer(r, Serde.string, Serde.string)
 
   def produceOne(t: String, k: String, m: String) =
