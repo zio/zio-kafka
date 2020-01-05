@@ -61,6 +61,48 @@ object Consumer {
     def unsubscribe(): BlockingTask[Unit]
   }
 
+  type ConsumerTask[A] = ZIO[Consumer with Blocking, Throwable, A]
+  def assignment: ConsumerTask[Set[TopicPartition]] = ???
+  def beginningOffsets(
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  ): ConsumerTask[Map[TopicPartition, Long]] = ???
+  def committed(
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  ): ConsumerTask[Map[TopicPartition, Option[OffsetAndMetadata]]] = ???
+  def endOffsets(
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  ): ConsumerTask[Map[TopicPartition, Long]]                                                            = ???
+  def stopConsumption: URIO[Consumer with Blocking, Unit]                                               = ???
+  def listTopics(timeout: Duration = Duration.Infinity): ConsumerTask[Map[String, List[PartitionInfo]]] = ???
+  def offsetsForTimes(
+    timestamps: Map[TopicPartition, Long],
+    timeout: Duration = Duration.Infinity
+  ): ConsumerTask[Map[TopicPartition, OffsetAndTimestamp]] = ???
+  def partitionedStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStream[
+    Consumer with Clock with Blocking,
+    Throwable,
+    (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
+  ]                                                                                                          = ???
+  def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): ConsumerTask[List[PartitionInfo]] = ???
+  def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): ConsumerTask[Long]         = ???
+  def plainStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStreamChunk[R with Consumer with Clock with Blocking, Throwable, CommittableRecord[K, V]] = ???
+  def seek(partition: TopicPartition, offset: Long): ConsumerTask[Unit]                         = ???
+  def seekToBeginning(partitions: Set[TopicPartition]): ConsumerTask[Unit]                      = ???
+  def seekToEnd(partitions: Set[TopicPartition]): ConsumerTask[Unit]                            = ???
+  def subscribe(subscription: Subscription): ConsumerTask[Unit]                                 = ???
+  def subscribeAnd(subscription: Subscription): ConsumerTask[SubscribedConsumer]                = ???
+  def subscription(): ConsumerTask[Set[String]]                                                 = ???
+  def unsubscribe(): ConsumerTask[Unit]                                                         = ???
+
   val offsetBatches: ZSink[Any, Nothing, Nothing, Offset, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
