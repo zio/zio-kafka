@@ -13,11 +13,11 @@ import zio.stream._
 
 import scala.jdk.CollectionConverters._, scala.collection.compat._
 
-trait KafkaConsumer {
-  val kafakConsumer: KafkaConsumer.Service
+trait Consumer {
+  val consumer: Consumer.Service
 }
 
-object KafkaConsumer {
+object Consumer {
   trait Service {
     def assignment: BlockingTask[Set[TopicPartition]]
     def beginningOffsets(
@@ -60,174 +60,14 @@ object KafkaConsumer {
     def subscription(): BlockingTask[Set[String]]
     def unsubscribe(): BlockingTask[Unit]
   }
-}
 
-class Consumer private (
-  private val consumer: ConsumerAccess,
-  private val settings: ConsumerSettings,
-  private val runloop: Runloop
-) extends KafkaConsumer.Service {
-  self =>
-
-  /**
-   * Returns the topic-partitions that this consumer is currently assigned.
-   *
-   * This is subject to consumer rebalancing, unless using a manual subscription.
-   */
-  override def assignment: BlockingTask[Set[TopicPartition]] =
-    consumer.withConsumer(_.assignment().asScala.toSet)
-
-  override def beginningOffsets(
-    partitions: Set[TopicPartition],
-    timeout: Duration = Duration.Infinity
-  ): BlockingTask[Map[TopicPartition, Long]] =
-    consumer.withConsumer(
-      _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.view.mapValues(_.longValue()).toMap
-    )
-
-  /**
-   * Retrieve the last committed offset for the given topic-partitions
-   */
-  override def committed(
-    partitions: Set[TopicPartition],
-    timeout: Duration = Duration.Infinity
-  ): BlockingTask[Map[TopicPartition, Option[OffsetAndMetadata]]] =
-    consumer.withConsumer(
-      _.committed(partitions.asJava, timeout.asJava).asScala.toMap.view.mapValues(Option.apply).toMap
-    )
-
-  override def endOffsets(
-    partitions: Set[TopicPartition],
-    timeout: Duration = Duration.Infinity
-  ): BlockingTask[Map[TopicPartition, Long]] =
-    consumer.withConsumer { eo =>
-      val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
-      offs.asScala.view.mapValues(_.longValue()).toMap
-    }
-
-  /**
-   * Stops consumption of data, drains buffered records, and ends the attached
-   * streams while still serving commit requests.
-   */
-  override def stopConsumption: UIO[Unit] =
-    runloop.deps.gracefulShutdown
-
-  override def listTopics(timeout: Duration = Duration.Infinity): BlockingTask[Map[String, List[PartitionInfo]]] =
-    consumer.withConsumer(_.listTopics(timeout.asJava).asScala.view.mapValues(_.asScala.toList).toMap)
-
-  override def offsetsForTimes(
-    timestamps: Map[TopicPartition, Long],
-    timeout: Duration = Duration.Infinity
-  ): BlockingTask[Map[TopicPartition, OffsetAndTimestamp]] =
-    consumer.withConsumer(
-      _.offsetsForTimes(timestamps.view.mapValues(Long.box).toMap.asJava, timeout.asJava).asScala.toMap
-    )
-
-  /**
-   * Create a stream with messages on the subscribed topic-partitions by topic-partition
-   *
-   * The top-level stream will emit new topic-partition streams for each topic-partition that is assigned
-   * to this consumer. This is subject to consumer rebalancing, unless a manual subscription
-   * was made. When rebalancing occurs, new topic-partition streams may be emitted and existing
-   * streams may be completed.
-   *
-   * All streams can be completed by calling [[stopConsumption]].
-   *
-   * @param keyDeserializer Deserializer for the record keys
-   * @param valueDeserializer Deserializer for the record values
-   * @tparam R Environment required by the serializers
-   * @tparam K Type of record keys
-   * @tparam V Type of record values
-   * @return
-   */
-  override def partitionedStream[R, K, V](
-    keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
-  ): ZStream[
-    Clock with Blocking,
-    Throwable,
-    (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
-  ] =
-    ZStream
-      .fromQueue(runloop.deps.partitions)
-      .unTake
-      .map {
-        case (tp, partition) =>
-          val partitionStream =
-            if (settings.perPartitionChunkPrefetch <= 0) partition
-            else ZStreamChunk(partition.chunks.buffer(settings.perPartitionChunkPrefetch))
-
-          tp -> partitionStream.mapM(_.deserializeWith(keyDeserializer, valueDeserializer))
-      }
-
-  override def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): BlockingTask[List[PartitionInfo]] =
-    consumer.withConsumer(_.partitionsFor(topic, timeout.asJava).asScala.toList)
-
-  override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): BlockingTask[Long] =
-    consumer.withConsumer(_.position(partition, timeout.asJava))
-
-  /**
-   * Create a stream with all messages on the subscribed topic-partitions
-   *
-   * The stream will emit messages from all topic-partitions interleaved. Per-partition
-   * record order is guaranteed, but the topic-partition interleaving is non-deterministic.
-   *
-   * The stream can be completed by calling [[stopConsumption]].
-   *
-   * @param keyDeserializer Deserializer for the record keys
-   * @param valueDeserializer Deserializer for the record values
-   * @tparam R Environment required by the serializers
-   * @tparam K Type of record keys
-   * @tparam V Type of record values
-   * @return
-   */
-  override def plainStream[R, K, V](
-    keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
-  ): ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-    ZStreamChunk(
-      partitionedStream[R, K, V](keyDeserializer, valueDeserializer)
-        .flatMapPar(n = Int.MaxValue)(_._2.chunks)
-    )
-
-  override def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
-    consumer.withConsumer(_.seek(partition, offset))
-
-  override def seekToBeginning(partitions: Set[TopicPartition]): BlockingTask[Unit] =
-    consumer.withConsumer(_.seekToBeginning(partitions.asJava))
-
-  override def seekToEnd(partitions: Set[TopicPartition]): BlockingTask[Unit] =
-    consumer.withConsumer(_.seekToEnd(partitions.asJava))
-
-  override def subscribe(subscription: Subscription): BlockingTask[Unit] =
-    consumer.withConsumerM { c =>
-      subscription match {
-        case Subscription.Pattern(pattern) => ZIO(c.subscribe(pattern.pattern, runloop.deps.rebalanceListener))
-        case Subscription.Topics(topics)   => ZIO(c.subscribe(topics.asJava, runloop.deps.rebalanceListener))
-        case Subscription.Manual(topicPartitions) =>
-          ZIO(c.assign(topicPartitions.asJava)) *>
-            ZIO.foreach_(topicPartitions)(runloop.deps.newPartitionStream)
-      }
-    }
-
-  override def subscribeAnd(subscription: Subscription): SubscribedConsumer =
-    new SubscribedConsumer(subscribe(subscription).as(self))
-
-  override def subscription: BlockingTask[Set[String]] =
-    consumer.withConsumer(_.subscription().asScala.toSet)
-
-  override def unsubscribe: BlockingTask[Unit] =
-    consumer.withConsumer(_.unsubscribe())
-}
-
-object Consumer {
   val offsetBatches: ZSink[Any, Nothing, Nothing, Offset, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZManaged[Clock with Blocking, Throwable, Consumer] =
+  ): ZManaged[Clock with Blocking, Throwable, Consumer.Service] =
     for {
       wrapper <- ConsumerAccess.make(settings)
       deps <- Runloop.Deps.make(
@@ -237,7 +77,7 @@ object Consumer {
                diagnostics
              )
       runloop <- Runloop(deps)
-    } yield new Consumer(wrapper, settings, runloop)
+    } yield new Live(wrapper, settings, runloop)
 
   /**
    * Execute an effect for each record and commit the offset after processing
@@ -310,4 +150,165 @@ object Consumer {
       .aggregateAsync(offsetBatches)
       .mapM(_.commitOrRetry(commitRetryPolicy))
       .runDrain
+
+  class Live private[Consumer] (
+    private val consumer: ConsumerAccess,
+    private val settings: ConsumerSettings,
+    private val runloop: Runloop
+  ) extends Service {
+    self =>
+
+    /**
+     * Returns the topic-partitions that this consumer is currently assigned.
+     *
+     * This is subject to consumer rebalancing, unless using a manual subscription.
+     */
+    override def assignment: BlockingTask[Set[TopicPartition]] =
+      consumer.withConsumer(_.assignment().asScala.toSet)
+
+    override def beginningOffsets(
+      partitions: Set[TopicPartition],
+      timeout: Duration = Duration.Infinity
+    ): BlockingTask[Map[TopicPartition, Long]] =
+      consumer.withConsumer(
+        _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.view.mapValues(_.longValue()).toMap
+      )
+
+    /**
+     * Retrieve the last committed offset for the given topic-partitions
+     */
+    override def committed(
+      partitions: Set[TopicPartition],
+      timeout: Duration = Duration.Infinity
+    ): BlockingTask[Map[TopicPartition, Option[OffsetAndMetadata]]] =
+      consumer.withConsumer(
+        _.committed(partitions.asJava, timeout.asJava).asScala.toMap.view.mapValues(Option.apply).toMap
+      )
+
+    override def endOffsets(
+      partitions: Set[TopicPartition],
+      timeout: Duration = Duration.Infinity
+    ): BlockingTask[Map[TopicPartition, Long]] =
+      consumer.withConsumer { eo =>
+        val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
+        offs.asScala.view.mapValues(_.longValue()).toMap
+      }
+
+    /**
+     * Stops consumption of data, drains buffered records, and ends the attached
+     * streams while still serving commit requests.
+     */
+    override def stopConsumption: UIO[Unit] =
+      runloop.deps.gracefulShutdown
+
+    override def listTopics(timeout: Duration = Duration.Infinity): BlockingTask[Map[String, List[PartitionInfo]]] =
+      consumer.withConsumer(_.listTopics(timeout.asJava).asScala.view.mapValues(_.asScala.toList).toMap)
+
+    override def offsetsForTimes(
+      timestamps: Map[TopicPartition, Long],
+      timeout: Duration = Duration.Infinity
+    ): BlockingTask[Map[TopicPartition, OffsetAndTimestamp]] =
+      consumer.withConsumer(
+        _.offsetsForTimes(timestamps.view.mapValues(Long.box).toMap.asJava, timeout.asJava).asScala.toMap
+      )
+
+    /**
+     * Create a stream with messages on the subscribed topic-partitions by topic-partition
+     *
+     * The top-level stream will emit new topic-partition streams for each topic-partition that is assigned
+     * to this consumer. This is subject to consumer rebalancing, unless a manual subscription
+     * was made. When rebalancing occurs, new topic-partition streams may be emitted and existing
+     * streams may be completed.
+     *
+     * All streams can be completed by calling [[stopConsumption]].
+     *
+     * @param keyDeserializer Deserializer for the record keys
+     * @param valueDeserializer Deserializer for the record values
+     * @tparam R Environment required by the serializers
+     * @tparam K Type of record keys
+     * @tparam V Type of record values
+     * @return
+     */
+    override def partitionedStream[R, K, V](
+      keyDeserializer: Deserializer[R, K],
+      valueDeserializer: Deserializer[R, V]
+    ): ZStream[
+      Clock with Blocking,
+      Throwable,
+      (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
+    ] =
+      ZStream
+        .fromQueue(runloop.deps.partitions)
+        .unTake
+        .map {
+          case (tp, partition) =>
+            val partitionStream =
+              if (settings.perPartitionChunkPrefetch <= 0) partition
+              else ZStreamChunk(partition.chunks.buffer(settings.perPartitionChunkPrefetch))
+
+            tp -> partitionStream.mapM(_.deserializeWith(keyDeserializer, valueDeserializer))
+        }
+
+    override def partitionsFor(
+      topic: String,
+      timeout: Duration = Duration.Infinity
+    ): BlockingTask[List[PartitionInfo]] =
+      consumer.withConsumer(_.partitionsFor(topic, timeout.asJava).asScala.toList)
+
+    override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): BlockingTask[Long] =
+      consumer.withConsumer(_.position(partition, timeout.asJava))
+
+    /**
+     * Create a stream with all messages on the subscribed topic-partitions
+     *
+     * The stream will emit messages from all topic-partitions interleaved. Per-partition
+     * record order is guaranteed, but the topic-partition interleaving is non-deterministic.
+     *
+     * The stream can be completed by calling [[stopConsumption]].
+     *
+     * @param keyDeserializer Deserializer for the record keys
+     * @param valueDeserializer Deserializer for the record values
+     * @tparam R Environment required by the serializers
+     * @tparam K Type of record keys
+     * @tparam V Type of record values
+     * @return
+     */
+    override def plainStream[R, K, V](
+      keyDeserializer: Deserializer[R, K],
+      valueDeserializer: Deserializer[R, V]
+    ): ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+      ZStreamChunk(
+        partitionedStream[R, K, V](keyDeserializer, valueDeserializer)
+          .flatMapPar(n = Int.MaxValue)(_._2.chunks)
+      )
+
+    override def seek(partition: TopicPartition, offset: Long): BlockingTask[Unit] =
+      consumer.withConsumer(_.seek(partition, offset))
+
+    override def seekToBeginning(partitions: Set[TopicPartition]): BlockingTask[Unit] =
+      consumer.withConsumer(_.seekToBeginning(partitions.asJava))
+
+    override def seekToEnd(partitions: Set[TopicPartition]): BlockingTask[Unit] =
+      consumer.withConsumer(_.seekToEnd(partitions.asJava))
+
+    override def subscribe(subscription: Subscription): BlockingTask[Unit] =
+      consumer.withConsumerM { c =>
+        subscription match {
+          case Subscription.Pattern(pattern) => ZIO(c.subscribe(pattern.pattern, runloop.deps.rebalanceListener))
+          case Subscription.Topics(topics)   => ZIO(c.subscribe(topics.asJava, runloop.deps.rebalanceListener))
+          case Subscription.Manual(topicPartitions) =>
+            ZIO(c.assign(topicPartitions.asJava)) *>
+              ZIO.foreach_(topicPartitions)(runloop.deps.newPartitionStream)
+        }
+      }
+
+    override def subscribeAnd(subscription: Subscription): SubscribedConsumer =
+      new SubscribedConsumer(subscribe(subscription).as(self))
+
+    override def subscription: BlockingTask[Set[String]] =
+      consumer.withConsumer(_.subscription().asScala.toSet)
+
+    override def unsubscribe: BlockingTask[Unit] =
+      consumer.withConsumer(_.unsubscribe())
+  }
 }

@@ -6,7 +6,7 @@ import zio.clock.Clock
 import zio.kafka.client.serde.Deserializer
 import zio.stream.{ ZStream, ZStreamChunk }
 
-class SubscribedConsumer(private val underlying: BlockingTask[Consumer]) {
+class SubscribedConsumer(private val underlying: BlockingTask[Consumer.Service]) {
 
   def partitionedStream[R, K, V](
     keyDeserializer: Deserializer[R, K],

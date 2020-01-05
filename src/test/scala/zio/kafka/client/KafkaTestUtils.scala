@@ -178,7 +178,7 @@ object KafkaTestUtils {
     clientId: String,
     diagnostics: Diagnostics = Diagnostics.NoOp
   )(
-    r: Consumer => RIO[R, A]
+    r: Consumer.Service => RIO[R, A]
   ): RIO[KafkaTestEnvironment, A] =
     for {
       lcb <- Kafka.liveClockBlocking
