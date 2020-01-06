@@ -260,5 +260,5 @@ object ConsumerModuleTest
             assertM(result, isUnit)
           }
         )
-      ) @@ timeout(10.seconds)
+      ) @@ timeout(30.seconds)
     )
