@@ -68,21 +68,24 @@ object Consumer {
   def beginningOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
-  ): ConsumerTask[Map[TopicPartition, Long]] = ???
+  ): ConsumerTask[Map[TopicPartition, Long]] = ZIO.accessM[Self](_.consumer.beginningOffsets(partitions, timeout))
   def committed(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
-  ): ConsumerTask[Map[TopicPartition, Option[OffsetAndMetadata]]] = ???
+  ): ConsumerTask[Map[TopicPartition, Option[OffsetAndMetadata]]] =
+    ZIO.accessM[Self](_.consumer.committed(partitions, timeout))
   def endOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
-  ): ConsumerTask[Map[TopicPartition, Long]]                                                            = ???
-  def stopConsumption: URIO[Consumer with Blocking, Unit]                                               = ???
-  def listTopics(timeout: Duration = Duration.Infinity): ConsumerTask[Map[String, List[PartitionInfo]]] = ???
+  ): ConsumerTask[Map[TopicPartition, Long]]              = ZIO.accessM[Self](_.consumer.endOffsets(partitions, timeout))
+  def stopConsumption: URIO[Consumer with Blocking, Unit] = ZIO.accessM[Self](_.consumer.stopConsumption)
+  def listTopics(timeout: Duration = Duration.Infinity): ConsumerTask[Map[String, List[PartitionInfo]]] =
+    ZIO.accessM[Self](_.consumer.listTopics(timeout))
   def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
     timeout: Duration = Duration.Infinity
-  ): ConsumerTask[Map[TopicPartition, OffsetAndTimestamp]] = ???
+  ): ConsumerTask[Map[TopicPartition, OffsetAndTimestamp]] =
+    ZIO.accessM[Self](_.consumer.offsetsForTimes(timestamps, timeout))
   def partitionedStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
@@ -90,20 +93,25 @@ object Consumer {
     Consumer with Clock with Blocking,
     Throwable,
     (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
-  ]                                                                                                          = ???
-  def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): ConsumerTask[List[PartitionInfo]] = ???
-  def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): ConsumerTask[Long]         = ???
+  ] = ???
+  def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): ConsumerTask[List[PartitionInfo]] =
+    ZIO.accessM[Self](_.consumer.partitionsFor(topic, timeout))
+  def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): ConsumerTask[Long] =
+    ZIO.accessM[Self](_.consumer.position(partition, timeout))
   def plainStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): ZStreamChunk[R with Consumer with Clock with Blocking, Throwable, CommittableRecord[K, V]] = ???
-  def seek(partition: TopicPartition, offset: Long): ConsumerTask[Unit]                         = ???
-  def seekToBeginning(partitions: Set[TopicPartition]): ConsumerTask[Unit]                      = ???
-  def seekToEnd(partitions: Set[TopicPartition]): ConsumerTask[Unit]                            = ???
-  def subscribe(subscription: Subscription): ConsumerTask[Unit]                                 = ???
-  def subscribeAnd(subscription: Subscription): ConsumerTask[SubscribedConsumer]                = ???
-  def subscription(): ConsumerTask[Set[String]]                                                 = ???
-  def unsubscribe(): ConsumerTask[Unit]                                                         = ???
+  def seek(partition: TopicPartition, offset: Long): ConsumerTask[Unit] =
+    ZIO.accessM[Self](_.consumer.seek(partition, offset))
+  def seekToBeginning(partitions: Set[TopicPartition]): ConsumerTask[Unit] =
+    ZIO.accessM[Self](_.consumer.seekToBeginning(partitions))
+  def seekToEnd(partitions: Set[TopicPartition]): ConsumerTask[Unit] =
+    ZIO.accessM[Self](_.consumer.seekToEnd(partitions))
+  def subscribe(subscription: Subscription): ConsumerTask[Unit]                  = ZIO.accessM[Self](_.consumer.subscribe(subscription))
+  def subscribeAnd(subscription: Subscription): ConsumerTask[SubscribedConsumer] = ???
+  def subscription(): ConsumerTask[Set[String]]                                  = ZIO.accessM[Self](_.consumer.subscription())
+  def unsubscribe(): ConsumerTask[Unit]                                          = ZIO.accessM[Self](_.consumer.unsubscribe())
 
   val offsetBatches: ZSink[Any, Nothing, Nothing, Offset, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
