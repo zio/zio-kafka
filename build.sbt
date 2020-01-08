@@ -85,6 +85,10 @@ Compile / doc / scalacOptions ++= {
   if (scalaBinaryVersion.value == "2.13") Seq("-P:silencer:globalFilters=[import scala.collection.compat._]")
   else Seq.empty
 }
+Compile / test / scalacOptions ++= {
+  if (scalaBinaryVersion.value == "2.13") Seq("-P:silencer:globalFilters=[import scala.collection.compat._]")
+  else Seq.empty
+}
 
 testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
 
