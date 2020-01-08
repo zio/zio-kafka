@@ -12,6 +12,8 @@ import zio.test.mock.Expectation.value
 import zio.test.environment.TestEnvironment
 import zio.test.TestAspect.timeout
 
+import scala.collection.compat._
+
 object ConsumerModuleTestUtils {
   def makeEnv(managed: Managed[Nothing, Consumer]): Managed[Nothing, Consumer with Blocking] =
     for {

@@ -38,8 +38,8 @@ object ConsumerMock {
   object subscription    extends Method[ConsumerMock, Unit, Set[String]]
   object unsubscribe     extends Method[ConsumerMock, Unit, Unit]
 
-  implicit val mockable: Mockable[ConsumerMock] = (mock: Mock) =>
-    new ConsumerMock {
+  implicit val mockable = new Mockable[ConsumerMock] {
+    override def environment(mock: Mock) = new ConsumerMock {
       val consumer = new Service {
         def assignment: BlockingTask[Set[TopicPartition]] = mock(ConsumerMock.assignment)
         def beginningOffsets(
@@ -90,4 +90,5 @@ object ConsumerMock {
         def unsubscribe(): BlockingTask[Unit]                              = mock(ConsumerMock.unsubscribe)
       }
     }
+  }
 }
