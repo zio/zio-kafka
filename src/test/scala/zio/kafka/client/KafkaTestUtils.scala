@@ -94,13 +94,7 @@ object KafkaTestUtils {
     kafkaEnvironment(Kafka.makeLocal)
 
   def producerSettings =
-    for {
-      servers <- ZIO.access[Kafka](_.kafka.bootstrapServers)
-    } yield ProducerSettings(
-      servers,
-      5.seconds,
-      Map.empty
-    )
+    ZIO.access[Kafka](_.kafka.bootstrapServers).map(ProducerSettings(_))
 
   def withProducer[A, K, V](
     r: Producer[Any, K, V] => RIO[Any with Clock with Kafka with Blocking, A],

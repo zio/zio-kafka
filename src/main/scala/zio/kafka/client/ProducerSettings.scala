@@ -1,14 +1,34 @@
 package zio.kafka.client
 
-import zio.duration.Duration
 import org.apache.kafka.clients.producer.ProducerConfig
+import zio.duration._
 
 case class ProducerSettings(
   bootstrapServers: List[String],
   closeTimeout: Duration,
-  extraDriverSettings: Map[String, AnyRef]
+  properties: Map[String, AnyRef]
 ) {
   def driverSettings: Map[String, AnyRef] =
     Map(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers.mkString(",")) ++
-      extraDriverSettings
+      properties
+
+  def withBootstrapServers(servers: List[String]): ProducerSettings =
+    copy(bootstrapServers = servers)
+
+  def withCloseTimeout(duration: Duration): ProducerSettings =
+    copy(closeTimeout = duration)
+
+  def withProperty(key: String, value: AnyRef): ProducerSettings =
+    copy(properties = properties + (key -> value))
+
+  def withProperties(kvs: (String, AnyRef)*): ProducerSettings =
+    withProperties(kvs.toMap)
+
+  def withProperties(kvs: Map[String, AnyRef]): ProducerSettings =
+    copy(properties = properties ++ kvs)
+}
+
+object ProducerSettings {
+  def apply(bootstrapServers: List[String]): ProducerSettings =
+    new ProducerSettings(bootstrapServers, 30.seconds, Map())
 }
