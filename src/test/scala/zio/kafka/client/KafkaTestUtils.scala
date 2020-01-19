@@ -143,25 +143,23 @@ object KafkaTestUtils {
     }.flatten
 
   def consumerSettings(groupId: String, clientId: String, offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()) =
-    for {
-      servers <- ZIO.access[Kafka](_.kafka.bootstrapServers)
-    } yield ConsumerSettings(
-      bootstrapServers = servers,
-      groupId = groupId,
-      clientId = clientId,
-      closeTimeout = 5.seconds,
-      extraDriverSettings = Map(
-        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG     -> "earliest",
-        ConsumerConfig.METADATA_MAX_AGE_CONFIG      -> "100",
-        ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG    -> "1000",
-        ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG -> "250",
-        ConsumerConfig.MAX_POLL_RECORDS_CONFIG      -> "10"
-      ),
-      pollInterval = 100.millis,
-      pollTimeout = 100.millis,
-      perPartitionChunkPrefetch = 16,
-      offsetRetrieval = offsetRetrieval
-    )
+    ZIO
+      .access[Kafka](_.kafka.bootstrapServers)
+      .map(
+        ConsumerSettings(_)
+          .withGroupId(groupId)
+          .withClientId(clientId)
+          .withCloseTimeout(5.seconds)
+          .withProperties(
+            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG     -> "earliest",
+            ConsumerConfig.METADATA_MAX_AGE_CONFIG      -> "100",
+            ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG    -> "1000",
+            ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG -> "250",
+            ConsumerConfig.MAX_POLL_RECORDS_CONFIG      -> "10"
+          )
+          .withPerPartitionChunkPrefetch(16)
+          .withOffsetRetrieval(offsetRetrieval)
+      )
 
   def consumeWithStrings(groupId: String, clientId: String, subscription: Subscription)(
     r: (String, String) => ZIO[Any with Kafka with Clock with Blocking, Nothing, Unit]
