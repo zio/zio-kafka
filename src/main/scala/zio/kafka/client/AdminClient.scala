@@ -186,20 +186,13 @@ object AdminClient {
     }
   }
 
-  case class KafkaAdminClientConfig(
-    bootstrapServers: List[String],
-    additionalConfig: Map[String, AnyRef] = Map.empty
-  )
-
-  def make(config: KafkaAdminClientConfig) =
+  def make(settings: AdminClientSettings) =
     ZManaged.make {
-      val configMap = (config.additionalConfig + (AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> config.bootstrapServers
-        .mkString(","))).asJava
       for {
-        ac  <- ZIO(JAdminClient.create(configMap))
+        ac  <- ZIO(JAdminClient.create(settings.driverSettings.asJava))
         sem <- Semaphore.make(1L)
       } yield AdminClient(ac, sem)
     } { client =>
-      ZIO.effectTotal(client.adminClient.close())
+      ZIO.effectTotal(client.adminClient.close(settings.closeTimeout.asJava))
     }
 }
