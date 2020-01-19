@@ -176,12 +176,14 @@ object AdminClient {
     name: String,
     internal: Boolean,
     partitions: List[TopicPartitionInfo],
-    authorizedOperations: Set[AclOperation]
+    authorizedOperations: Option[Set[AclOperation]]
   )
 
   object TopicDescription {
-    def apply(jt: JTopicDescription): TopicDescription =
-      TopicDescription(jt.name, jt.isInternal, jt.partitions.asScala.toList, jt.authorizedOperations.asScala.toSet)
+    def apply(jt: JTopicDescription): TopicDescription = {
+      val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet)
+      TopicDescription(jt.name, jt.isInternal, jt.partitions.asScala.toList, authorizedOperations)
+    }
   }
 
   def make(settings: AdminClientSettings) =
