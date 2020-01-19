@@ -15,7 +15,7 @@ case class ConsumerSettings(
   perPartitionChunkPrefetch: Int,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
 ) {
-  def autoOffsetResetConfig = offsetRetrieval match {
+  private[this] def autoOffsetResetConfig = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
     case OffsetRetrieval.Manual(_)   => Map.empty
   }
@@ -27,5 +27,7 @@ case class ConsumerSettings(
       ConsumerConfig.CLIENT_ID_CONFIG          -> clientId,
       ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false"
     ) ++ autoOffsetResetConfig ++ extraDriverSettings
+}
 
+object ConsumerSettings {
 }
