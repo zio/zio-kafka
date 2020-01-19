@@ -10,7 +10,6 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.kafka.client.serde.Serde
 import zio.duration._
-import zio.kafka.client.AdminClient.KafkaAdminClientConfig
 import zio.kafka.client.Consumer.OffsetRetrieval
 import zio.kafka.client.Kafka.{ KafkaClockBlocking, KafkaTestEnvironment }
 import zio.kafka.client.diagnostics.Diagnostics
@@ -186,9 +185,7 @@ object KafkaTestUtils {
     } yield inner
 
   def adminSettings =
-    for {
-      servers <- ZIO.access[Kafka](_.kafka.bootstrapServers)
-    } yield KafkaAdminClientConfig(servers)
+    ZIO.access[Kafka](_.kafka.bootstrapServers).map(AdminClientSettings(_))
 
   def withAdmin[T](f: AdminClient => RIO[Any with Clock with Kafka with Blocking, T]) =
     for {
