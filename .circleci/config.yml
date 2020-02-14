@@ -70,34 +70,6 @@ jobs:
             - "~/.ivy2/cache"
             - "~/.sbt"
             - "~/.m2"
-  test211_jdk8:
-    docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.4_2.12.10
-    steps:
-      - checkout
-      - restore_cache:
-          key: sbt-cache
-      - run: sbt ++2.11.12! test packageDoc
-      - save_cache:
-          key: sbt-cache
-          paths:
-            - "~/.ivy2/cache"
-            - "~/.sbt"
-            - "~/.m2"
-  test211_jdk11:
-    docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.4_2.12.10
-    steps:
-      - checkout
-      - restore_cache:
-          key: sbt-cache
-      - run: sbt ++2.11.12! test
-      - save_cache:
-          key: sbt-cache
-          paths:
-            - "~/.ivy2/cache"
-            - "~/.sbt"
-            - "~/.m2"
   release:
     docker:
       - image: hseeberger/scala-sbt:8u222_1.3.4_2.13.1
@@ -143,18 +115,6 @@ workflows:
           filters:
             tags:
               only: /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
-      - test211_jdk8:
-          requires:
-            - lint
-          filters:
-            tags:
-              only: /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
-      - test211_jdk11:
-          requires:
-            - lint
-          filters:
-            tags:
-              only: /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
       - release:
           context: Sonatype
           requires:
@@ -162,8 +122,6 @@ workflows:
             - test213_jdk11
             - test212_jdk8
             - test212_jdk11
-            - test211_jdk8
-            - test211_jdk11
           filters:
             branches:
               ignore: /.*/
