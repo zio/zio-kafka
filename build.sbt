@@ -4,7 +4,7 @@ lazy val scala213  = "2.13.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala211, scala212, mainScala)
 
-lazy val zioVersion   = "1.0.0-RC17"
+lazy val zioVersion   = "1.0.0-RC17+396-b16c7e10-SNAPSHOT"
 lazy val kafkaVersion = "2.4.0"
 
 // Allows to silence scalac compilation warnings selectively by code block or file path
@@ -50,6 +50,8 @@ ThisBuild / publishTo := sonatypePublishToBundle.value
 
 name := "zio-kafka"
 scalafmtOnCompile := true
+
+resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
 
 enablePlugins(BuildInfoPlugin)
 buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, isSnapshot)

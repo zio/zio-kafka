@@ -67,7 +67,7 @@ class Producer[-R, K, V] private (
       for {
         done              <- Promise.make[Throwable, Chunk[RecordMetadata]]
         runtime           <- ZIO.runtime[Blocking]
-        serializedRecords <- ZIO.traverse(records.toSeq)(serialize(_))
+        serializedRecords <- ZIO.foreach(records.toSeq)(serialize(_))
         _ <- effectBlocking {
               val it: Iterator[(ByteArrayProducerRecord, Int)] =
                 serializedRecords.iterator.zipWithIndex
