@@ -168,7 +168,7 @@ class Consumer private (
             settings.offsetRetrieval match {
               case OffsetRetrieval.Manual(getOffsets) =>
                 getOffsets(topicPartitions).flatMap { offsets =>
-                  ZIO.traverse_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
+                  ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
                 }
               case OffsetRetrieval.Auto(_) => ZIO.unit
             }

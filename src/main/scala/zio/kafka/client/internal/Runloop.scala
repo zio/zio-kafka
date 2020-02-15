@@ -198,7 +198,7 @@ private[client] object Runloop {
 
           offsets.toMap
         }
-        cont = (e: Exit[Throwable, Unit]) => ZIO.traverse_(cmds)(_.cont.done(e))
+        cont = (e: Exit[Throwable, Unit]) => ZIO.foreach_(cmds)(_.cont.done(e))
         _ <- deps.consumer.withConsumerM { c =>
               // We don't wait for the completion of the commit here, because it
               // will only complete once we poll again.
@@ -317,7 +317,7 @@ private[client] object Runloop {
                          deps.offsetRetrieval match {
                            case OffsetRetrieval.Manual(getOffsets) =>
                              getOffsets(tps).flatMap { offsets =>
-                               ZIO.traverse(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
+                               ZIO.foreach(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
                              }.when(tps.nonEmpty)
 
                            case OffsetRetrieval.Auto(_) =>
@@ -383,7 +383,7 @@ private[client] object Runloop {
                        }
                      }
         (newlyAssigned, (unfulfilledRequests, bufferedRecords)) = pollResult
-        _                                                       <- ZIO.traverse_(newlyAssigned)(tp => deps.newPartitionStream(tp))
+        _                                                       <- ZIO.foreach_(newlyAssigned)(tp => deps.newPartitionStream(tp))
         stillRebalancing                                        <- deps.isRebalancing
         newPendingCommits <- if (!stillRebalancing && state.pendingCommits.nonEmpty)
                               doCommit(state.pendingCommits).as(Nil)
