@@ -2,7 +2,6 @@ package zio.kafka.client
 
 import java.util.concurrent.atomic.AtomicLong
 
-import izreflect.fundamentals.reflection.Tags.Tag
 import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio._
@@ -17,7 +16,8 @@ object Producer {
   trait Service[R, K, V] {
     def produce(record: ProducerRecord[K, V]): RIO[Blocking with R, Task[RecordMetadata]]
     def produceChunk(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Task[Chunk[RecordMetadata]]]
-    def stream: ZSink[R with Blocking, Throwable, Nothing, Chunk[ProducerRecord[K, V]], Unit] =
+
+    final def stream: ZSink[R with Blocking, Throwable, Nothing, Chunk[ProducerRecord[K, V]], Unit] =
       ZSink.drain.contramapM(produceChunk)
   }
 
@@ -114,11 +114,11 @@ object Producer {
     valueSerializer: Serializer[R, V]
   ): Live[R, K, V] = new Live(p, keySerializer, valueSerializer)
 
-  def producer[R: Tag, K: Tag, V: Tag](
+  def producer[R, K, V](
     settings: ProducerSettings,
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): ZLayer.NoDeps[Throwable, HasProducer[R, K, V]] = {
+  )(implicit tagged: Tagged[Service[R, K, V]]): ZLayer.NoDeps[Throwable, Producer[R, K, V]] = {
     val p: Task[KafkaProducer[Array[Byte], Array[Byte]]] = ZIO {
       val props = settings.driverSettings.asJava
       new KafkaProducer[Array[Byte], Array[Byte]](
