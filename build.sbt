@@ -3,7 +3,7 @@ lazy val scala213  = "2.13.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, mainScala)
 
-lazy val zioVersion   = "1.0.0-RC17+396-b16c7e10-SNAPSHOT"
+lazy val zioVersion   = "1.0.0-RC17+443-06dfa39f-SNAPSHOT"
 lazy val kafkaVersion = "2.4.0"
 
 // Allows to silence scalac compilation warnings selectively by code block or file path
