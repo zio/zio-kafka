@@ -2,8 +2,9 @@ package zio.kafka.client
 
 import java.util.UUID
 
+import izreflect.fundamentals.reflection.Tags.Tag
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
@@ -16,27 +17,23 @@ import zio._
 object KafkaTestUtils {
   def producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO.access[Kafka](_.get[Kafka.Service].bootstrapServers).map(ProducerSettings(_))
+  type StringProducer = Producer[Any, String, String]
 
-  def withProducer[R, A, K, V](
-    r: Producer[Any, K, V] => RIO[R, A],
-    kSerde: Serde[Any, K],
-    vSerde: Serde[Any, V]
-  ): RIO[R with Blocking with Kafka, A] =
-    for {
-      settings <- producerSettings
-      producer = Producer.make(settings, kSerde, vSerde)
-      produced <- producer.use(r)
-    } yield produced
+  val testProducer: ZLayer[Kafka, Throwable, StringProducer] =
+    (for {
+      settings <- producerSettings.toManaged_
+      producer <- Producer.producer[Any, String, String](settings, Serde.string, Serde.string).build
+    } yield producer).map(_.get).toLayer
 
-  def withProducerStrings[R, A](
-    r: Producer[Any, String, String] => RIO[R, A]
-  ) =
-    withProducer(r, Serde.string, Serde.string)
+  def withProducerStrings[R: Tag, A: Tag](
+    r: Producer.Service[Any, String, String] => RIO[R, A]
+  ): ZIO[R with StringProducer with Blocking, Throwable, A] =
+    ZLayer.fromService(r).build.use(_.get)
 
-  def produceOne(t: String, k: String, m: String) =
-    withProducerStrings { p =>
-      p.produce(new ProducerRecord(t, k, m))
-    }.flatten
+  def produceOne(t: String, k: String, m: String): ZIO[Blocking with StringProducer, Throwable, RecordMetadata] =
+    withProducerStrings { r =>
+      r.produce(new ProducerRecord(t, k, m)).flatten
+    }
 
   def produceMany(t: String, kvs: Iterable[(String, String)]) =
     withProducerStrings { p =>

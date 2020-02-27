@@ -26,10 +26,7 @@ package object embedded {
       implicit val embeddedKafkaConfig = EmbeddedKafkaConfig(
         customBrokerProperties = Map("group.min.session.timeout.ms" -> "500", "group.initial.rebalance.delay.ms" -> "0")
       )
-
-      ZManaged
-        .make(ZIO.effect(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
-        .map(Has(_))
+      ZManaged.make(ZIO.effect(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
     }
 
     val local: ZLayer.NoDeps[Nothing, Kafka] = ZLayer.succeed(DefaultLocal)
