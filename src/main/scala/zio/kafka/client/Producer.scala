@@ -14,7 +14,33 @@ import scala.jdk.CollectionConverters._
 object Producer {
 
   trait Service[R, K, V] {
+
+    /**
+     * Produce a single record. The effect returned from this method has two layers and
+     * describes the completion of two actions:
+     * 1. The outer layer describes the enqueueing of the record to the Producer's internal
+     *    buffer.
+     * 2. The inner layer describes receiving an acknowledgement from the broker for the
+     *    transmission of the record.
+     *
+     * It is usually recommended to not await the inner layer of every individual record,
+     * but enqueue a batch of records and await all of their acknowledgements at once. That
+     * amortizes the cost of sending requests to Kafka and increases throughput.
+     */
     def produce(record: ProducerRecord[K, V]): RIO[Blocking with R, Task[RecordMetadata]]
+
+    /**
+     * Produces a chunk of records record. The effect returned from this method has two layers
+     * and describes the completion of two actions:
+     * 1. The outer layer describes the enqueueing of all the records to the Producer's
+     *    internal buffer.
+     * 2. The inner layer describes receiving an acknowledgement from the broker for the
+     *    transmission of the records.
+     *
+     * It is possible that for chunks that exceed the producer's internal buffer size, the
+     * outer layer will also signal the transmission of part of the chunk. Regardless,
+     * awaiting the inner layer guarantees the transmission of the entire chunk.
+     */
     def produceChunk(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Task[Chunk[RecordMetadata]]]
 
     final def stream: ZSink[R with Blocking, Throwable, Nothing, Chunk[ProducerRecord[K, V]], Unit] =
@@ -47,18 +73,6 @@ object Producer {
             }
       } yield done.await
 
-    /**
-     * Produces a chunk of records record. The effect returned from this method has two layers
-     * and describes the completion of two actions:
-     * 1. The outer layer describes the enqueueing of all the records to the Producer's
-     *    internal buffer.
-     * 2. The inner layer describes receiving an acknowledgement from the broker for the
-     *    transmission of the records.
-     *
-     * It is possible that for chunks that exceed the producer's internal buffer size, the
-     * outer layer will also signal the transmission of part of the chunk. Regardless,
-     * awaiting the inner layer guarantees the transmission of the entire chunk.
-     */
     override def produceChunk(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Task[Chunk[RecordMetadata]]] =
       if (records.isEmpty) ZIO.succeed(Task.succeed(Chunk.empty))
       else {
