@@ -27,7 +27,7 @@ object KafkaTestUtils {
 
   def withProducerStrings[R: Tag, A: Tag](
     r: Producer.Service[Any, String, String] => RIO[R, A]
-  ): ZIO[R with StringProducer with Blocking, Throwable, A] =
+  ): ZIO[R with StringProducer, Throwable, A] =
     ZLayer.fromService(r).build.use(_.get)
 
   def produceOne(t: String, k: String, m: String): ZIO[Blocking with StringProducer, Throwable, RecordMetadata] =
