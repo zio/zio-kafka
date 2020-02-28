@@ -342,43 +342,37 @@ private[client] object Runloop {
                              // is empty because pattern subscriptions start out as empty.
                              case _: IllegalStateException => null
                            }
-                         deps.isShutdown.flatMap { shutdown =>
-                           if (shutdown) {
-                             ZIO.effectTotal(c.pause(requestedPartitions.asJava)) *>
-                               ZIO.succeed(
-                                 (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
-                               )
-                           } else if (records eq null) {
-                             ZIO.succeed(
-                               (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
-                             )
-                           } else {
-                             val tpsInResponse   = records.partitions.asScala.toSet
-                             val currentAssigned = c.assignment().asScala.toSet
-                             val newlyAssigned   = currentAssigned -- prevAssigned
-                             val revoked         = prevAssigned -- currentAssigned
-                             val unrequestedRecords =
-                               bufferUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
 
-                             doSeekForNewPartitions(newlyAssigned) *> endRevoked(
-                               state.pendingRequests,
-                               state.addBufferedRecords(unrequestedRecords).bufferedRecords,
-                               revoked(_)
-                             ).flatMap {
-                               case (pendingRequests, bufferedRecords) =>
-                                 for {
-                                   output                    <- fulfillRequests(pendingRequests, bufferedRecords, records)
-                                   (notFulfilled, fulfilled) = output
-                                   _ <- deps.emitIfEnabledDiagnostic(
-                                         DiagnosticEvent.Poll(
-                                           requestedPartitions,
-                                           fulfilled.keySet,
-                                           notFulfilled.map(_.tp).toSet
-                                         )
+                         if (records eq null) {
+                           ZIO.succeed(
+                             (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
+                           )
+                         } else {
+                           val tpsInResponse   = records.partitions.asScala.toSet
+                           val currentAssigned = c.assignment().asScala.toSet
+                           val newlyAssigned   = currentAssigned -- prevAssigned
+                           val revoked         = prevAssigned -- currentAssigned
+                           val unrequestedRecords =
+                             bufferUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
+
+                           doSeekForNewPartitions(newlyAssigned) *> endRevoked(
+                             state.pendingRequests,
+                             state.addBufferedRecords(unrequestedRecords).bufferedRecords,
+                             revoked(_)
+                           ).flatMap {
+                             case (pendingRequests, bufferedRecords) =>
+                               for {
+                                 output                    <- fulfillRequests(pendingRequests, bufferedRecords, records)
+                                 (notFulfilled, fulfilled) = output
+                                 _ <- deps.emitIfEnabledDiagnostic(
+                                       DiagnosticEvent.Poll(
+                                         requestedPartitions,
+                                         fulfilled.keySet,
+                                         notFulfilled.map(_.tp).toSet
                                        )
-                                 } yield output
-                             }.map((newlyAssigned, _))
-                           }
+                                     )
+                               } yield output
+                           }.map((newlyAssigned, _))
                          }
                        }
                      }
