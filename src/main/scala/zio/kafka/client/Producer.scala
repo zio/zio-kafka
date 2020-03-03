@@ -132,7 +132,7 @@ object Producer {
     tsv: Tagged[Service[R, K, V]]
   ): ZLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[ProducerSettings], Throwable, Producer[R, K, V]] =
     ZLayer.fromManaged {
-      val z = ZIO
+      ZIO
         .accessM[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[ProducerSettings]] { env =>
           val settings = env.get[ProducerSettings]
           ZIO {
@@ -145,7 +145,7 @@ object Producer {
             Live(rawProducer, settings, env.get[Serializer[R, K]], env.get[Serializer[R, V]])
           }
         }
-      z.toManaged(_.close)
+        .toManaged(_.close)
     }
 
   def make[R, K, V](
