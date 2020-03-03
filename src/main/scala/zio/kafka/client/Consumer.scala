@@ -99,7 +99,7 @@ object Consumer {
      * val settings: ConsumerSettings = ???
      * val subscription = Subscription.Topics(Set("my-kafka-topic"))
      *
-     * val consumerIO = Consumer.consumeWith(settings, subscription, Serdes.string, Serdes.string) { case (key, value) =>
+     * val consumerIO = Consumer.make(settings, Serdes.string, Serdes.string).consumeWith(subscription) { case (key, value) =>
      *   // Process the received record here
      *   putStrLn(s"Received record: \${key}: \${value}")
      * }
