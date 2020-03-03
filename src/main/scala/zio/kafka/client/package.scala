@@ -19,4 +19,5 @@ package object client {
   type ByteArrayProducerRecord = ProducerRecord[Array[Byte], Array[Byte]]
 
   type Producer[R, K, V] = Has[Producer.Service[R, K, V]]
+  type Consumer[R, K, V] = Has[Consumer.Service[R, K, V]]
 }
