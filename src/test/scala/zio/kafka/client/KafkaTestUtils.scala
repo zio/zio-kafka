@@ -2,38 +2,40 @@ package zio.kafka.client
 
 import java.util.UUID
 
-import izreflect.fundamentals.reflection.Tags.Tag
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
+import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
 import zio.kafka.client.Consumer.OffsetRetrieval
+import zio.kafka.client.Producer.Service
 import zio.kafka.client.diagnostics.Diagnostics
-import zio.kafka.client.serde.Serde
 import zio.kafka.client.embedded.Kafka
-import zio._
+import zio.kafka.client.serde.{ Serde, Serializer }
 
 object KafkaTestUtils {
   def producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO.access[Kafka](_.get[Kafka.Service].bootstrapServers).map(ProducerSettings(_))
+
   type StringProducer = Producer[Any, String, String]
 
-  val testProducer: ZLayer[Kafka, Throwable, StringProducer] =
-    (for {
-      settings <- producerSettings.toManaged_
-      producer <- Producer.producer[Any, String, String](settings, Serde.string, Serde.string).build
-    } yield producer).map(_.get).toLayer
+  val testProducer: ZLayer[Kafka, Throwable, Producer[Any, String, String]] =
+    (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
+      Producer.live[Any, String, String]
 
-  def withProducerStrings[R: Tag, A: Tag](
+  def withProducerStrings[R, A](
     r: Producer.Service[Any, String, String] => RIO[R, A]
   ): ZIO[R with StringProducer, Throwable, A] =
-    ZLayer.fromService(r).build.use(_.get)
+    ZIO.accessM(env => r(env.get))
+
+  def produce[R, K, V](
+    record: ProducerRecord[K, V]
+  )(implicit ts: Tagged[Service[R, K, V]]): RIO[R with Producer[R, K, V] with Blocking, Task[RecordMetadata]] =
+    ZIO.accessM(_.get.produce(record))
 
   def produceOne(t: String, k: String, m: String): ZIO[Blocking with StringProducer, Throwable, RecordMetadata] =
-    withProducerStrings { r =>
-      r.produce(new ProducerRecord(t, k, m)).flatten
-    }
+    produce[Any, String, String](new ProducerRecord(t, k, m)).flatten
 
   def produceMany(t: String, kvs: Iterable[(String, String)]) =
     withProducerStrings { p =>
