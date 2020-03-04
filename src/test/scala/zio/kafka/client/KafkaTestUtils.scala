@@ -9,7 +9,6 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
 import zio.kafka.client.Consumer.OffsetRetrieval
-import zio.kafka.client.Producer.Service
 import zio.kafka.client.diagnostics.Diagnostics
 import zio.kafka.client.embedded.Kafka
 import zio.kafka.client.serde.{ Deserializer, Serde, Serializer }
@@ -30,13 +29,8 @@ object KafkaTestUtils {
   ): ZIO[R with StringProducer, Throwable, A] =
     ZIO.accessM(env => r(env.get))
 
-  def produce[R, K, V](
-    record: ProducerRecord[K, V]
-  )(implicit ts: Tagged[Service[R, K, V]]): RIO[R with Producer[R, K, V] with Blocking, Task[RecordMetadata]] =
-    ZIO.accessM(_.get.produce(record))
-
   def produceOne(t: String, k: String, m: String): ZIO[Blocking with StringProducer, Throwable, RecordMetadata] =
-    produce[Any, String, String](new ProducerRecord(t, k, m)).flatten
+    Producer.produce[Any, String, String](new ProducerRecord(t, k, m)).flatten
 
   def produceMany(t: String, kvs: Iterable[(String, String)]) =
     withProducerStrings { p =>
