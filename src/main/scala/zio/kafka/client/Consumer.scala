@@ -333,7 +333,7 @@ object Consumer {
   def assignment[R, K, V](
     implicit tsv: Tagged[Service[R, K, V]]
   ): RIO[R with Blocking with Consumer[R, K, V], Set[TopicPartition]] =
-    withConsumerService(_.assignment)
+    withConsumerService[R, Any, K, V, Set[TopicPartition]](_.assignment)
 
   /**
    * Accessor method for [[Service.beginningOffsets]]
@@ -342,7 +342,7 @@ object Consumer {
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
   )(implicit tsv: Tagged[Service[R, K, V]]): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, Long]] =
-    withConsumerService(_.beginningOffsets(partitions, timeout))
+    withConsumerService[R, Any, K, V, Map[TopicPartition, Long]](_.beginningOffsets(partitions, timeout))
 
   /**
    * Accessor method for [[Service.committed]]
@@ -353,7 +353,7 @@ object Consumer {
   )(
     implicit tsv: Tagged[Service[R, K, V]]
   ): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, Option[OffsetAndMetadata]]] =
-    withConsumerService(_.committed(partitions, timeout))
+    withConsumerService[R, Any, K, V, Map[TopicPartition, Option[OffsetAndMetadata]]](_.committed(partitions, timeout))
 
   /**
    * Accessor method for [[Service.endOffsets]]
@@ -362,7 +362,7 @@ object Consumer {
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
   )(implicit tsv: Tagged[Service[R, K, V]]): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, Long]] =
-    withConsumerService(_.endOffsets(partitions, timeout))
+    withConsumerService[R, Any, K, V, Map[TopicPartition, Long]](_.endOffsets(partitions, timeout))
 
   /**
    * Accessor method for [[Service.listTopics]]
@@ -370,7 +370,7 @@ object Consumer {
   def listTopics[R, K, V](timeout: Duration = Duration.Infinity)(
     implicit tsv: Tagged[Service[R, K, V]]
   ): RIO[R with Blocking with Consumer[R, K, V], Map[String, List[PartitionInfo]]] =
-    withConsumerService(_.listTopics(timeout))
+    withConsumerService[R, Any, K, V, Map[String, List[PartitionInfo]]](_.listTopics(timeout))
 
   /**
    * Accessor method for [[Service.partitionedStream]]
@@ -388,10 +388,7 @@ object Consumer {
   def plainStream[R, K, V](
     implicit tsv: Tagged[Service[R, K, V]]
   ): ZStreamChunk[R with Consumer[R, K, V] with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-    ZStreamChunk(
-      ZStream
-        .accessStream[R with Consumer[R, K, V] with Clock with Blocking](_.get[Service[R, K, V]].plainStream.chunks)
-    )
+    ZStreamChunk(ZStream.accessStream(_.get[Service[R, K, V]].plainStream.chunks))
 
   /**
    * Accessor method for [[Service.stopConsumption]]
@@ -420,7 +417,7 @@ object Consumer {
   def subscribe[R, K, V](subscription: Subscription)(
     implicit tsv: Tagged[Service[R, K, V]]
   ): RIO[R with Blocking with Consumer[R, K, V], Unit] =
-    withConsumerService(_.subscribe(subscription))
+    withConsumerService[R, Any, K, V, Unit](_.subscribe(subscription))
 
   /**
    * Accessor method for [[Service.unsubscribe]]
@@ -428,7 +425,7 @@ object Consumer {
   def unsubscribe[R, K, V](
     implicit tsv: Tagged[Service[R, K, V]]
   ): RIO[R with Blocking with Consumer[R, K, V], Unit] =
-    withConsumerService(_.unsubscribe)
+    withConsumerService[R, Any, K, V, Unit](_.unsubscribe)
 
   /**
    * Accessor method for [[Service.offsetsForTimes]]
@@ -439,7 +436,7 @@ object Consumer {
   )(
     implicit tsv: Tagged[Service[R, K, V]]
   ): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, OffsetAndTimestamp]] =
-    withConsumerService(_.offsetsForTimes(timestamps, timeout))
+    withConsumerService[R, Any, K, V, Map[TopicPartition, OffsetAndTimestamp]](_.offsetsForTimes(timestamps, timeout))
 
   /**
    * Accessor method for [[Service.partitionsFor]]
@@ -447,7 +444,7 @@ object Consumer {
   def partitionsFor[R, K, V](topic: String, timeout: Duration = Duration.Infinity)(
     implicit tsv: Tagged[Service[R, K, V]]
   ): RIO[R with Blocking with Consumer[R, K, V], List[PartitionInfo]] =
-    withConsumerService(_.partitionsFor(topic, timeout))
+    withConsumerService[R, Any, K, V, List[PartitionInfo]](_.partitionsFor(topic, timeout))
 
   /**
    * Accessor method for [[Service.position]]
@@ -455,7 +452,7 @@ object Consumer {
   def position[R, K, V](partition: TopicPartition, timeout: Duration = Duration.Infinity)(
     implicit tsv: Tagged[Service[R, K, V]]
   ): RIO[R with Blocking with Consumer[R, K, V], Long] =
-    withConsumerService(_.position(partition, timeout))
+    withConsumerService[R, Any, K, V, Long](_.position(partition, timeout))
 
   /**
    * Accessor method for [[Service.subscribeAnd]]
@@ -471,7 +468,7 @@ object Consumer {
   def subscription[R, K, V](
     implicit tsv: Tagged[Service[R, K, V]]
   ): RIO[R with Blocking with Consumer[R, K, V], Set[String]] =
-    withConsumerService(_.subscription)
+    withConsumerService[R, Any, K, V, Set[String]](_.subscription)
 
   sealed trait OffsetRetrieval
 
