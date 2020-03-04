@@ -12,15 +12,16 @@ import zio.kafka.client.Consumer.OffsetRetrieval
 import zio.kafka.client.Producer.Service
 import zio.kafka.client.diagnostics.Diagnostics
 import zio.kafka.client.embedded.Kafka
-import zio.kafka.client.serde.{ Serde, Serializer }
+import zio.kafka.client.serde.{ Deserializer, Serde, Serializer }
 
 object KafkaTestUtils {
   def producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO.access[Kafka](_.get[Kafka.Service].bootstrapServers).map(ProducerSettings(_))
 
   type StringProducer = Producer[Any, String, String]
+  type StringConsumer = Consumer[Any, String, String]
 
-  val testProducer: ZLayer[Kafka, Throwable, Producer[Any, String, String]] =
+  val testProducer: ZLayer[Kafka, Throwable, StringProducer] =
     (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
       Producer.live[Any, String, String]
 
@@ -74,25 +75,26 @@ object KafkaTestUtils {
           .withOffsetRetrieval(offsetRetrieval)
       )
 
-  def consumeWithStrings[R](groupId: String, clientId: String, subscription: Subscription)(
-    r: (String, String) => URIO[R, Unit]
-  ): RIO[R with Blocking with Clock with Kafka, Unit] =
-    for {
-      settings <- consumerSettings(groupId, clientId)
-      consumed <- Consumer.consumeWith(settings, subscription, Serde.string, Serde.string)(r)
-    } yield consumed
-
-  def withConsumer[R, A](
+  def withConsumerStrings[RC, A](
     groupId: String,
     clientId: String,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
-  )(r: Consumer => RIO[R, A]) =
-    for {
-      settings <- consumerSettings(groupId, clientId, offsetRetrieval)
-      consumer = Consumer.make(settings, diagnostics)
-      consumed <- consumer.use(r)
-    } yield consumed
+  )(
+    r: Consumer.Service[Any, String, String] => RIO[RC, A]
+  ): ZIO[RC with Clock with Blocking with Kafka, Throwable, A] = {
+    val layers = (ZLayer.requires[Clock] ++ ZLayer
+      .requires[Blocking] ++ ZLayer.succeed(diagnostics) ++
+      ZLayer.succeed(Serde.string: Deserializer[Any, String]) ++ consumerSettings(groupId, clientId, offsetRetrieval).toLayer) >>> Consumer.live
+    layers.build.use { consumer =>
+      r(consumer.get)
+    }
+  }
+
+  def consumeWithStrings[RC](groupId: String, clientId: String, subscription: Subscription)(
+    r: (String, String) => URIO[RC, Unit]
+  ): RIO[RC with Blocking with Clock with Kafka, Unit] =
+    withConsumerStrings(groupId, clientId)(_.consumeWith(subscription)(r))
 
   def adminSettings =
     ZIO.access[Kafka](_.get[Kafka.Service].bootstrapServers).map(AdminClientSettings(_))
