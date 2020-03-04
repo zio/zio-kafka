@@ -2,7 +2,7 @@ package zio.kafka.client
 
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetAndTimestamp }
 import org.apache.kafka.common.{ PartitionInfo, TopicPartition }
-import zio._
+import zio.{ RIO, _ }
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
@@ -10,8 +10,8 @@ import zio.kafka.client.serde.Deserializer
 import zio.kafka.client.diagnostics.Diagnostics
 import zio.kafka.client.internal.{ ConsumerAccess, Runloop }
 import zio.stream._
-import scala.collection.compat._
 
+import scala.collection.compat._
 import scala.jdk.CollectionConverters._
 
 object Consumer {
@@ -321,6 +321,157 @@ object Consumer {
       .succeed(
         valueDeserializer
       )) >>> live[R, K, V])
+
+  def withConsumerService[R, RC, K, V, A](
+    r: Service[R, K, V] => RIO[R with RC with Blocking, A]
+  )(implicit tsv: Tagged[Service[R, K, V]]): RIO[R with RC with Blocking with Consumer[R, K, V], A] =
+    ZIO.accessM(env => r(env.get[Service[R, K, V]]))
+
+  /**
+   * Accessor method for [[Service.assignment]]
+   */
+  def assignment[R, K, V](
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): RIO[R with Blocking with Consumer[R, K, V], Set[TopicPartition]] =
+    withConsumerService(_.assignment)
+
+  /**
+   * Accessor method for [[Service.beginningOffsets]]
+   */
+  def beginningOffsets[R, K, V](
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  )(implicit tsv: Tagged[Service[R, K, V]]): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, Long]] =
+    withConsumerService(_.beginningOffsets(partitions, timeout))
+
+  /**
+   * Accessor method for [[Service.committed]]
+   */
+  def committed[R, K, V](
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  )(
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, Option[OffsetAndMetadata]]] =
+    withConsumerService(_.committed(partitions, timeout))
+
+  /**
+   * Accessor method for [[Service.endOffsets]]
+   */
+  def endOffsets[R, K, V](
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  )(implicit tsv: Tagged[Service[R, K, V]]): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, Long]] =
+    withConsumerService(_.endOffsets(partitions, timeout))
+
+  /**
+   * Accessor method for [[Service.listTopics]]
+   */
+  def listTopics[R, K, V](timeout: Duration = Duration.Infinity)(
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): RIO[R with Blocking with Consumer[R, K, V], Map[String, List[PartitionInfo]]] =
+    withConsumerService(_.listTopics(timeout))
+
+  /**
+   * Accessor method for [[Service.partitionedStream]]
+   */
+  def partitionedStream[R, K, V](implicit tsv: Tagged[Service[R, K, V]]): ZStream[
+    Consumer[R, K, V] with Clock with Blocking,
+    Throwable,
+    (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
+  ] =
+    ZStream.accessStream(_.get[Service[R, K, V]].partitionedStream)
+
+  /**
+   * Accessor method for [[Service.plainStream]]
+   */
+  def plainStream[R, K, V](
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): ZStreamChunk[R with Consumer[R, K, V] with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+    ZStreamChunk(
+      ZStream
+        .accessStream[R with Consumer[R, K, V] with Clock with Blocking](_.get[Service[R, K, V]].plainStream.chunks)
+    )
+
+  /**
+   * Accessor method for [[Service.stopConsumption]]
+   */
+  def stopConsumption[R, K, V](
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): RIO[Consumer[R, K, V], Unit] =
+    ZIO.accessM(_.get[Service[R, K, V]].stopConsumption)
+
+  /**
+   * Accessor method for [[Service.consumeWith]]
+   */
+  def consumeWith[R, RC, K, V](
+    subscription: Subscription,
+    commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+  )(
+    f: (K, V) => URIO[RC, Unit]
+  )(
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): ZIO[R with RC with Consumer[R, K, V] with Blocking with Clock, Throwable, Unit] =
+    ZIO.accessM(_.get[Service[R, K, V]].consumeWith(subscription, commitRetryPolicy)(f))
+
+  /**
+   * Accessor method for [[Service.subscribe]]
+   */
+  def subscribe[R, K, V](subscription: Subscription)(
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): RIO[R with Blocking with Consumer[R, K, V], Unit] =
+    withConsumerService(_.subscribe(subscription))
+
+  /**
+   * Accessor method for [[Service.unsubscribe]]
+   */
+  def unsubscribe[R, K, V](
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): RIO[R with Blocking with Consumer[R, K, V], Unit] =
+    withConsumerService(_.unsubscribe)
+
+  /**
+   * Accessor method for [[Service.offsetsForTimes]]
+   */
+  def offsetsForTimes[R, K, V](
+    timestamps: Map[TopicPartition, Long],
+    timeout: Duration = Duration.Infinity
+  )(
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, OffsetAndTimestamp]] =
+    withConsumerService(_.offsetsForTimes(timestamps, timeout))
+
+  /**
+   * Accessor method for [[Service.partitionsFor]]
+   */
+  def partitionsFor[R, K, V](topic: String, timeout: Duration = Duration.Infinity)(
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): RIO[R with Blocking with Consumer[R, K, V], List[PartitionInfo]] =
+    withConsumerService(_.partitionsFor(topic, timeout))
+
+  /**
+   * Accessor method for [[Service.position]]
+   */
+  def position[R, K, V](partition: TopicPartition, timeout: Duration = Duration.Infinity)(
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): RIO[R with Blocking with Consumer[R, K, V], Long] =
+    withConsumerService(_.position(partition, timeout))
+
+  /**
+   * Accessor method for [[Service.subscribeAnd]]
+   */
+  def subscribeAnd[R, K, V](subscription: Subscription)(
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): RIO[R with Blocking with Consumer[R, K, V], SubscribedConsumer[R, K, V]] =
+    ZIO.access(_.get[Service[R, K, V]].subscribeAnd(subscription))
+
+  /**
+   * Accessor method for [[Service.subscription]]
+   */
+  def subscription[R, K, V](
+    implicit tsv: Tagged[Service[R, K, V]]
+  ): RIO[R with Blocking with Consumer[R, K, V], Set[String]] =
+    withConsumerService(_.subscription)
 
   sealed trait OffsetRetrieval
 
