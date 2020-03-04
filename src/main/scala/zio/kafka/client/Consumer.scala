@@ -10,6 +10,7 @@ import zio.kafka.client.serde.Deserializer
 import zio.kafka.client.diagnostics.Diagnostics
 import zio.kafka.client.internal.{ ConsumerAccess, Runloop }
 import zio.stream._
+import scala.collection.compat._
 
 import scala.jdk.CollectionConverters._
 
@@ -118,6 +119,8 @@ object Consumer {
     ): ZIO[R with RC with Blocking with Clock, Throwable, Unit]
 
     def subscribe(subscription: Subscription): BlockingTask[Unit]
+
+    def unsubscribe: BlockingTask[Unit]
 
     def offsetsForTimes(
       timestamps: Map[TopicPartition, Long],
@@ -265,7 +268,7 @@ object Consumer {
         }
       }
 
-    private def unsubscribe: BlockingTask[Unit] =
+    override def unsubscribe: BlockingTask[Unit] =
       consumer.withConsumer(_.unsubscribe())
   }
 
