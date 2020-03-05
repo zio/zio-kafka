@@ -70,34 +70,58 @@ jobs:
             - "~/.ivy2/cache"
             - "~/.sbt"
             - "~/.m2"
-  test211_jdk8:
-    docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.4_2.12.10
+  test_211_jdk8_jvm:
     steps:
       - checkout
       - restore_cache:
-          key: sbt-cache
-      - run: sbt ++2.11.12! test packageDoc
+          key: sbt-cache-v2
+      - run:
+          name: Install JDK
+          command: |
+            while $(ps aux | grep -i ' apt ' | grep -v grep > /dev/null); do sleep 1; done # Wait for apt to be ready
+
+            sudo rm /etc/apt/sources.list.d/*
+            sudo tee /etc/apt/sources.list > /dev/null \<< 'EOF'
+            deb http://mirror.math.princeton.edu/pub/ubuntu/ xenial main universe
+            deb http://mirror.math.princeton.edu/pub/ubuntu/ xenial-updates main universe
+            deb http://mirror.math.princeton.edu/pub/ubuntu/ xenial-backports main universe
+            deb http://mirror.math.princeton.edu/pub/ubuntu/ xenial-security main restricted universe
+            EOF
+
+            if [ $JDK_VERSION == 11 ]; then
+              wget -qO - https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public | sudo apt-key add -
+              sudo add-apt-repository https://adoptopenjdk.jfrog.io/adoptopenjdk/deb/ -y
+            fi
+            sudo apt update
+            if [ $JDK_VERSION == 11 ]; then
+              sudo apt install -y adoptopenjdk-11-hotspot
+            elif [ $JDK_VERSION == 8 ]; then
+              sudo apt install -y openjdk-8-jdk
+            fi
+            java -version
+      - run:
+          name: Run tests
+          command: ./sbt -Dfatal.warnings=true ++${SCALA_VERSION}! testJVM211
+      - run:
+          name: Clean unwanted files from cache
+          command: |
+            rm -fv $HOME/.ivy2/.sbt.ivy.lock
+            find $HOME/.ivy2/cache -name "ivydata-*.properties" -print -delete
+            find $HOME/.sbt        -name "*.lock"               -print -delete
       - save_cache:
-          key: sbt-cache
+          key: sbt-cache-v2
           paths:
             - "~/.ivy2/cache"
             - "~/.sbt"
             - "~/.m2"
-  test211_jdk11:
-    docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.4_2.12.10
-    steps:
-      - checkout
-      - restore_cache:
-          key: sbt-cache
-      - run: sbt ++2.11.12! test
-      - save_cache:
-          key: sbt-cache
-          paths:
-            - "~/.ivy2/cache"
-            - "~/.sbt"
-            - "~/.m2"
+            - "~/.cache"
+    machine:
+      image: ubuntu-1604:201903-01
+    resource_class: large
+    environment:
+      - SCALA_VERSION: 2.11.12
+      - JDK_VERSION: 8
+
   release:
     docker:
       - image: hseeberger/scala-sbt:8u222_1.3.4_2.13.1
@@ -143,13 +167,7 @@ workflows:
           filters:
             tags:
               only: /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
-      - test211_jdk8:
-          requires:
-            - lint
-          filters:
-            tags:
-              only: /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
-      - test211_jdk11:
+      - test_211_jdk8_jvm:
           requires:
             - lint
           filters:
@@ -162,8 +180,7 @@ workflows:
             - test213_jdk11
             - test212_jdk8
             - test212_jdk11
-            - test211_jdk8
-            - test211_jdk11
+            - test_211_jdk8_jvm
           filters:
             branches:
               ignore: /.*/
