@@ -1,15 +1,15 @@
 package zio.kafka.client
 
-import zio.test._
-import zio.test.environment.TestEnvironment
-import KafkaTestUtils._
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio._
-import zio.kafka.client.serde.Serde
+import zio.clock.Clock
+import zio.kafka.client.KafkaTestUtils._
 import zio.kafka.client.embedded.Kafka
+import zio.kafka.client.serde.Serde
 import zio.stream.Take
 import zio.test.Assertion._
-import zio.clock.Clock
+import zio.test._
+import zio.test.environment.TestEnvironment
 
 object ProducerSpec extends DefaultRunnableSpec {
   override def spec =
@@ -32,11 +32,10 @@ object ProducerSpec extends DefaultRunnableSpec {
               List(new ProducerRecord(topic1, key1, value1), new ProducerRecord(topic2, key2, value2))
             )
             def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
-              Consumer
-                .make(settings)
-                .flatMap(c =>
-                  c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.string).toQueue()
-                )
+              Consumer.make(settings, Serde.string, Serde.string).build.flatMap { service =>
+                val c = service.get
+                (c.subscribe(subscription).toManaged_ *> c.plainStream.toQueue())
+              }
 
             for {
               outcome  <- producer.produceChunk(chunks).flatten
@@ -70,5 +69,7 @@ object ProducerSpec extends DefaultRunnableSpec {
           } yield assert(outcome.length)(equalTo(0))
         }
       }
-    ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live)
+    ).provideSomeLayerShared[TestEnvironment](
+      ((Kafka.embedded >>> testProducer) ++ Kafka.embedded).mapError(TestFailure.fail) ++ Clock.live
+    )
 }
