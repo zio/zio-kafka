@@ -73,6 +73,7 @@ libraryDependencies ++= Seq(
 
 Compile / compile / scalacOptions ++= {
   if (scalaBinaryVersion.value == "2.13") Seq("-P:silencer:globalFilters=[import scala.collection.compat._]")
+  else if (scalaBinaryVersion.value == "2.11") Seq("-Xmax-classfile-name", "242")
   else Seq.empty
 }
 Compile / doc / scalacOptions ++= {
