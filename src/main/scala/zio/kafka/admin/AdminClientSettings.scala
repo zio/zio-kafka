@@ -1,4 +1,4 @@
-package zio.kafka.client
+package zio.kafka.admin
 
 import org.apache.kafka.clients.admin.AdminClientConfig
 import zio.duration._

@@ -1,4 +1,4 @@
-package zio.kafka.client
+package zio.kafka
 
 import java.util.UUID
 
@@ -8,10 +8,13 @@ import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
-import zio.kafka.client.Consumer.OffsetRetrieval
-import zio.kafka.client.diagnostics.Diagnostics
-import zio.kafka.client.embedded.Kafka
-import zio.kafka.client.serde.{ Deserializer, Serde, Serializer }
+import zio.kafka.admin._
+import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.consumer._
+import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.embedded.Kafka
+import zio.kafka.serde.{ Deserializer, Serde, Serializer }
+import zio.kafka.producer._
 
 object KafkaTestUtils {
   def producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =

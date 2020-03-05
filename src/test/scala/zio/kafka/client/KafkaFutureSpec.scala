@@ -1,7 +1,8 @@
-package zio.kafka.client
+package zio.kafka
 
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import zio._
+import zio.kafka.admin._
 import zio.test.{ testM, _ }
 import zio.test.TestAspect.flaky
 import zio.test.Assertion._

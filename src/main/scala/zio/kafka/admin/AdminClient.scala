@@ -1,4 +1,4 @@
-package zio.kafka.client
+package zio.kafka.admin
 
 import org.apache.kafka.clients.admin.{
   AdminClient => JAdminClient,
@@ -10,6 +10,7 @@ import org.apache.kafka.clients.admin.{
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.{ KafkaFuture, TopicPartitionInfo }
 import zio._
+import zio.blocking.Blocking
 
 import scala.jdk.CollectionConverters._, scala.collection.compat._
 
@@ -27,7 +28,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
   def createTopics(
     newTopics: Iterable[NewTopic],
     createTopicOptions: Option[CreateTopicsOptions] = None
-  ): BlockingTask[Unit] = {
+  ): RIO[Blocking, Unit] = {
     val asJava = newTopics.map(_.asJava).asJavaCollection
     semaphore.withPermit(
       fromKafkaFutureVoid {
@@ -44,7 +45,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
   /**
    * Create a single topic.
    */
-  def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): BlockingTask[Unit] =
+  def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): RIO[Blocking, Unit] =
     createTopics(List(newTopic), Some(new CreateTopicsOptions().validateOnly(validateOnly)))
 
   /**
@@ -53,7 +54,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
   def deleteTopics(
     topics: Iterable[String],
     deleteTopicsOptions: Option[DeleteTopicsOptions] = None
-  ): BlockingTask[Unit] = {
+  ): RIO[Blocking, Unit] = {
     val asJava = topics.asJavaCollection
 
     semaphore.withPermit {
@@ -71,13 +72,13 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
   /**
    * Delete a single topic.
    */
-  def deleteTopic(topic: String): BlockingTask[Unit] =
+  def deleteTopic(topic: String): RIO[Blocking, Unit] =
     deleteTopics(List(topic))
 
   /**
    * List the topics in the cluster.
    */
-  def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): BlockingTask[Map[String, TopicListing]] =
+  def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): RIO[Blocking, Map[String, TopicListing]] =
     semaphore.withPermit {
       fromKafkaFuture {
         blocking.effectBlocking(
@@ -92,7 +93,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
   def describeTopics(
     topicNames: Iterable[String],
     describeTopicsOptions: Option[DescribeTopicsOptions] = None
-  ): BlockingTask[Map[String, TopicDescription]] = {
+  ): RIO[Blocking, Map[String, TopicDescription]] = {
     val asJava = topicNames.asJavaCollection
     semaphore.withPermit {
       fromKafkaFuture {
@@ -111,7 +112,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
   def createPartitions(
     newPartitions: Map[String, NewPartitions],
     createPartitionsOptions: Option[CreatePartitionsOptions] = None
-  ): BlockingTask[Unit] = {
+  ): RIO[Blocking, Unit] = {
     val asJava = newPartitions.view.mapValues(_.asJava).toMap.asJava
 
     semaphore.withPermit {

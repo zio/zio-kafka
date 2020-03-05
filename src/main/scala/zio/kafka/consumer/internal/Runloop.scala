@@ -1,4 +1,4 @@
-package zio.kafka.client.internal
+package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
@@ -6,16 +6,16 @@ import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
-import zio.kafka.client.Consumer.OffsetRetrieval
-import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.client.{ BlockingTask, CommittableRecord }
+import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.CommittableRecord
 import zio.stream._
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
-private[client] final case class Runloop(fiber: Fiber[Throwable, Unit], deps: Runloop.Deps)
-private[client] object Runloop {
+private[consumer] final case class Runloop(fiber: Fiber[Throwable, Unit], deps: Runloop.Deps)
+private[consumer] object Runloop {
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
   type ByteArrayConsumerRecord    = ConsumerRecord[Array[Byte], Array[Byte]]
 
@@ -227,7 +227,7 @@ private[client] object Runloop {
             )
       } yield ()
 
-    def handlePoll(state: State): BlockingTask[State] =
+    def handlePoll(state: State): RIO[Blocking, State] =
       for {
         pollResult <- deps.consumer.withConsumerM { c =>
                        def endRevoked(
@@ -411,7 +411,7 @@ private[client] object Runloop {
                    else doCommit(List(cmd)).as(state)
       } yield newState
 
-    def handleShutdown(state: State, cmd: Command): BlockingTask[State] = cmd match {
+    def handleShutdown(state: State, cmd: Command): RIO[Blocking, State] = cmd match {
       case Command.Poll() =>
         state.pendingRequests match {
           case h :: t =>

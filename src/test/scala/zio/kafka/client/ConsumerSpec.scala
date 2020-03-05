@@ -1,14 +1,15 @@
-package zio.kafka.client
+package zio.kafka.consumer
 
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.common.TopicPartition
-import zio.{ Promise, Ref, Task, ZIO }
+import zio.{ Promise, Ref, Task, ZIO, ZLayer }
+import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
-import zio.kafka.client.Consumer.OffsetRetrieval
-import zio.kafka.client.KafkaTestUtils._
-import zio.kafka.client.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.client.embedded.Kafka
+import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.KafkaTestUtils._
+import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.embedded.Kafka
 import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._
@@ -30,6 +31,25 @@ object ConsumerSpec extends DefaultRunnableSpec {
                         .flattenChunks
                         .take(5)
                         .runCollect
+                    }
+          kvOut = records.map { r =>
+            (r.record.key, r.record.value)
+          }
+        } yield assert(kvOut)(equalTo(kvs))
+      },
+      testM("Consumer.subscribeAnd works properly") {
+        val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          _ <- produceMany("topic150", kvs)
+
+          records <- withConsumerStrings("group150", "client150") { consumer =>
+                      Consumer
+                        .subscribeAnd[Any, String, String](Subscription.Topics(Set("topic150")))
+                        .plainStream
+                        .flattenChunks
+                        .take(5)
+                        .runCollect
+                        .provideSomeLayer[Blocking with Clock](ZLayer.succeed(consumer))
                     }
           kvOut = records.map { r =>
             (r.record.key, r.record.value)

@@ -1,4 +1,4 @@
-package zio.kafka.client
+package zio.kafka.consumer
 
 import zio.Task
 

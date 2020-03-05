@@ -1,4 +1,4 @@
-package zio.kafka.client.serde
+package zio.kafka.serde
 
 import java.nio.ByteBuffer
 import java.util.UUID

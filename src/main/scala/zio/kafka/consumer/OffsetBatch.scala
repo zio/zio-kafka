@@ -1,4 +1,4 @@
-package zio.kafka.client
+package zio.kafka.consumer
 
 import org.apache.kafka.common.TopicPartition
 import zio.{ Schedule, Task, ZIO }

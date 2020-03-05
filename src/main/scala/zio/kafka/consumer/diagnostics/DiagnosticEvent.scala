@@ -1,4 +1,4 @@
-package zio.kafka.client.diagnostics
+package zio.kafka.consumer.diagnostics
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition

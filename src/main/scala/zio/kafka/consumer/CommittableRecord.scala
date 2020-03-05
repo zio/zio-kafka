@@ -1,9 +1,9 @@
-package zio.kafka.client
+package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import zio.{ RIO, Task }
-import zio.kafka.client.serde.Deserializer
+import zio.kafka.serde.Deserializer
 
 final case class CommittableRecord[K, V](record: ConsumerRecord[K, V], offset: Offset) {
   def deserializeWith[R, K1, V1](

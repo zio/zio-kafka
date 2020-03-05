@@ -1,4 +1,4 @@
-package zio.kafka.client
+package zio.kafka
 
 import net.manub.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import zio._

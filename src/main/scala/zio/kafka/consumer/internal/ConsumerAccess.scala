@@ -1,23 +1,23 @@
-package zio.kafka.client.internal
+package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio._
 import zio.blocking.{ blocking, Blocking }
-import zio.kafka.client.{ BlockingTask, ConsumerSettings }
-import zio.kafka.client.internal.ConsumerAccess.ByteArrayKafkaConsumer
+import zio.kafka.consumer.ConsumerSettings
+import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 
 import scala.jdk.CollectionConverters._
 
-private[client] class ConsumerAccess(private[client] val consumer: ByteArrayKafkaConsumer, access: Semaphore) {
-  def withConsumer[A](f: ByteArrayKafkaConsumer => A): BlockingTask[A] =
+private[consumer] class ConsumerAccess(private[consumer] val consumer: ByteArrayKafkaConsumer, access: Semaphore) {
+  def withConsumer[A](f: ByteArrayKafkaConsumer => A): RIO[Blocking, A] =
     withConsumerM[Any, A](c => ZIO(f(c)))
 
   def withConsumerM[R, A](f: ByteArrayKafkaConsumer => ZIO[R, Throwable, A]): ZIO[R with Blocking, Throwable, A] =
     access.withPermit(withConsumerNoPermit(f))
 
-  private[client] def withConsumerNoPermit[R, A](
+  private[consumer] def withConsumerNoPermit[R, A](
     f: ByteArrayKafkaConsumer => ZIO[R, Throwable, A]
   ): ZIO[R with Blocking, Throwable, A] =
     blocking(ZIO.effectSuspend(f(consumer))).catchSome {
@@ -27,7 +27,7 @@ private[client] class ConsumerAccess(private[client] val consumer: ByteArrayKafk
     }
 }
 
-private[client] object ConsumerAccess {
+private[consumer] object ConsumerAccess {
   type ByteArrayKafkaConsumer = KafkaConsumer[Array[Byte], Array[Byte]]
 
   def make(settings: ConsumerSettings) =

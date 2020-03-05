@@ -1,4 +1,4 @@
-package zio.kafka.client
+package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException
 import org.apache.kafka.common.TopicPartition
@@ -19,7 +19,7 @@ sealed trait Offset {
 }
 
 object Offset {
-  private[client] def commitOrRetry[R, B](
+  private[consumer] def commitOrRetry[R, B](
     commit: Task[Unit],
     policy: Schedule[R, Throwable, B]
   ): ZIO[R, Throwable, Unit] =

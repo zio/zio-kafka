@@ -1,4 +1,4 @@
-package zio.kafka.client.diagnostics
+package zio.kafka.consumer.diagnostics
 
 import zio.{ Managed, Queue, UIO }
 

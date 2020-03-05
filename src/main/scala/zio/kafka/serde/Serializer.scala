@@ -1,4 +1,4 @@
-package zio.kafka.client.serde
+package zio.kafka.serde
 
 import zio.{ RIO, Task }
 import org.apache.kafka.common.header.Headers

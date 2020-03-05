@@ -1,11 +1,12 @@
-package zio.kafka.client
+package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio._
 import zio.clock.Clock
-import zio.kafka.client.KafkaTestUtils._
-import zio.kafka.client.embedded.Kafka
-import zio.kafka.client.serde.Serde
+import zio.kafka.KafkaTestUtils._
+import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
+import zio.kafka.embedded.Kafka
+import zio.kafka.serde.Serde
 import zio.stream.Take
 import zio.test.Assertion._
 import zio.test._

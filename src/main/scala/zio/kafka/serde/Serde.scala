@@ -1,4 +1,4 @@
-package zio.kafka.client.serde
+package zio.kafka.serde
 
 import org.apache.kafka.common.serialization.{ Serde => KafkaSerde }
 import zio.{ RIO, Task }

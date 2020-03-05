@@ -1,6 +1,7 @@
-package zio.kafka.client
+package zio.kafka.admin
 
-import zio.kafka.client.embedded.Kafka
+import zio.kafka.KafkaTestUtils
+import zio.kafka.embedded.Kafka
 import zio.test._
 import zio.test.Assertion._
 import zio.test.TestAspect._

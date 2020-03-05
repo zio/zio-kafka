@@ -22,7 +22,7 @@ client. It integrates effortlessly with ZIO and ZIO Streams.
 Add the following dependencies to your `build.sbt` file:
 ```
 libraryDependencies ++= Seq(
-  "dev.zio" %% "zio-streams" % "1.0.0-RC17",
+  "dev.zio" %% "zio-streams" % "1.0.0-RC18",
   "dev.zio" %% "zio-kafka"   % "<version>"
 )
 ```
@@ -31,19 +31,13 @@ Somewhere in your application, configure the `zio.kafka.ConsumerSettings`
 data type:
 ```scala
 import zio._, zio.duration._
-import zio.kafka.client._
+import zio.kafka.consumer._
 
 val settings: ConsumerSettings = 
-  ConsumerSettings(
-    bootstrapServers          = List("localhost:9092"),
-    groupId                   = "group",
-    clientId                  = "client",
-    closeTimeout              = 30.seconds,
-    extraDriverSettings       = Map(),
-    pollInterval              = 250.millis,
-    pollTimeout               = 50.millis,
-    perPartitionChunkPrefetch = 2
-  )
+  ConsumerSettings(List("localhost:9092"))
+    .withGroupId("group")
+    .withClientId("client")
+    .withCloseTimeout(30.seconds)
 ```
 
 For a lot of use cases where you just want to do something with all messages on a Kafka topic, ZIO Kafka provides the convenience method `Consumer.consumeWith`. This method lets you execute a ZIO effect for each message. Topic partitions will be processed in parallel and offsets are committed after running the effect automatically. 
@@ -51,8 +45,8 @@ For a lot of use cases where you just want to do something with all messages on 
 ```scala
 import zio._
 import zio.console._
-import zio.kafka.client._
-import zio.kafka.client.serde._
+import zio.kafka.consumer._
+import zio.kafka.serde._
 
 val subscription = Subscription.topics("topic")
 
@@ -66,75 +60,70 @@ If you require more control over the consumption process, read on!
 
 ## Consuming Kafka topics using ZIO Streams
 
-First, create a consumer using the ConsumerSettings instance:
+First, create a consumer using the ConsumerSettings instance and the
+appropriate deserializers:
 ```scala
-import zio.ZManaged, zio.blocking.Blocking, zio.clock.Clock 
-import zio.kafka.client.{ Consumer, ConsumerSettings }
+import zio.ZLayer, zio.blocking.Blocking, zio.clock.Clock 
+import zio.kafka.consumer.{ Consumer, ConsumerSettings }
+import zio.kafka.serde.Deserializer
 
-val consumerSettings: ConsumerSettings = ???
-val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = 
-  Consumer.make(consumerSettings)
+val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
+val consumer: ZLayer[Clock with Blocking, Throwable, Consumer[Any, String, String]] = 
+  Consumer.make(consumerSettings, Deserializer.string, Deserializer.string)
 ```
 
-The consumer returned from `Consumer.make` is wrapped in a `ZManaged`
-to ensure its proper release. To get access to it, you can use the `ZManaged#use` method
-or compose other `ZManaged` instances with it using a for-comprehension. Here's an example
-using `ZManaged#use`:
+More deserializers are available on the `Deserializer` object.
+
+The consumer returned from `Consumer.make` is wrapped in a `ZLayer`
+to allow for easy composition with other ZIO environment components. 
+You may provide that layer to effects that require a consumer. Here's
+an example:
 ```scala
 import zio._, zio.blocking.Blocking, zio.clock.Clock 
-import zio.kafka.client.Consumer
+import zio.kafka.consumer._
 
-val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = ???
-consumer.use { c =>
-  // Consumer now available as `c`
-  ZIO.unit
-}
+val data: RIO[Clock with Blocking, 
+              List[CommittableRecord[String, String]]] = 
+  (Consumer.subscribe[Any, String, String](Subscription.topics("topic")) *>
+  Consumer.plainStream[Any, String, String].take(50).runCollect)
+    .provideSomeLayer(consumer)
 ```
 
-You may stream data from Kafka using the `subscribe` and `plainStream` methods. `plainStream` takes as parameters deserializers for the key and values of the Kafka messages. Serializers and deserializers (Serdes) for common data types are available in the `Deserializer`, `Serializer`, and `Serde` companion objects:
+You may stream data from Kafka using the `subscribeAnd` and `plainStream`
+methods:
 
 ```scala
-import zio.ZManaged, zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
+import zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
 import zio.stream._
-import zio.kafka.client._
-import zio.kafka.client.serde._
+import zio.kafka.consumer._
 
-val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = ???
-
-consumer.use { c =>
-  c.subscribeAnd(Subscription.topics("topic150"))
-    .plainStream(Serde.string, Serde.string)
-    .flattenChunks
-    .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
-    .map(_.offset)
-    .aggregateAsync(Consumer.offsetBatches)
-    .mapM(_.commit)
-    .runDrain
-}
+Consumer.subscribeAnd[Any, String, String](Subscription.topics("topic150"))
+  .plainStream
+  .flattenChunks
+  .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
+  .map(_.offset)
+  .aggregateAsync(Consumer.offsetBatches)
+  .mapM(_.commit)
+  .runDrain
 ```
 
 If you need to distinguish between the different partitions assigned
 to the consumer, you may use the `Consumer#partitionedStream` method,
 which creates a nested stream of partitions:
 ```scala
-import zio.ZManaged, zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
+import zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
 import zio.stream._
-import zio.kafka.client._
-import zio.kafka.client.serde._
+import zio.kafka.consumer._
 
-val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = ???
-
-consumer.use { c =>
-  c.subscribeAnd(Subscription.topics("topic150"))
-    .partitionedStream(Serde.string, Serde.string)
-    .tap(tpAndStr => putStrLn(s"topic: ${tpAndStr._1.topic}, partition: ${tpAndStr._1.partition}"))
-    .flatMap(_._2.flattenChunks)
-    .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
-    .map(_.offset)
-    .aggregateAsync(Consumer.offsetBatches)
-    .mapM(_.commit)
-    .runDrain
-}
+Consumer.subscribeAnd[Any, String, String](Subscription.topics("topic150"))
+  .partitionedStream
+  .tap(tpAndStr => putStrLn(s"topic: ${tpAndStr._1.topic}, partition: ${tpAndStr._1.partition}"))
+  .flatMap(_._2.flattenChunks)
+  .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
+  .map(_.offset)
+  .aggregateAsync(Consumer.offsetBatches)
+  .mapM(_.commit)
+  .runDrain
 ```
 
 ## Example: consuming, producing and committing offset
@@ -142,35 +131,38 @@ consumer.use { c =>
 This example shows how to consume messages from topic `topic_a` and produce transformed messages to `topic_b`, after which consumer offsets are committed. Processing is done in chunks using `ZStreamChunk` for more efficiency.
 
 ```scala
-import zio.kafka.client._
-import zio.kafka.client.serde._
+import zio.kafka.consumer._
+import zio.kafka.producer._
+import zio.kafka.serde._
 import org.apache.kafka.clients.producer.ProducerRecord
 
-val consumerSettings: ConsumerSettings = ???
-val producerSettings: ProducerSettings = ???
+val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
+val producerSettings: ProducerSettings = ProducerSettings(List("localhost:9092"))
 
-(Consumer.make(consumerSettings) zip Producer.make(producerSettings, Serde.int, Serde.string)).use {
-case (consumer, producer) =>
-  consumer
-      .subscribeAnd(Subscription.topics("my-input-topic"))
-      .plainStream(Serde.int, Serde.long)
-      .map { record =>
-        val key: Int    = record.record.key()
-        val value: Long = record.record.value()
-        val newValue: String = value.toString
+val consumerAndProducer = 
+  Consumer.make(consumerSettings, Serde.int, Serde.long) ++
+  Producer.make(producerSettings, Serde.int, Serde.string)
 
-        val producerRecord: ProducerRecord[Int, String] = new ProducerRecord("my-output-topic", key, newValue)
-        (producerRecord, record.offset)
-      }
-      .chunks
-      .mapM { chunk =>
-        val records     = chunk.map(_._1)
-        val offsetBatch = OffsetBatch(chunk.map(_._2).toSeq)
+val consumeProduceStream = Consumer
+  .subscribeAnd[Any, Int, Long](Subscription.topics("my-input-topic"))
+  .plainStream
+  .map { record =>
+    val key: Int    = record.record.key()
+    val value: Long = record.record.value()
+    val newValue: String = value.toString
 
-        producer.produceChunk(records) *> offsetBatch.commit
-      }
-      .runDrain
-}
+    val producerRecord: ProducerRecord[Int, String] = new ProducerRecord("my-output-topic", key, newValue)
+    (producerRecord, record.offset)
+  }
+  .chunks
+  .mapM { chunk =>
+    val records     = chunk.map(_._1)
+    val offsetBatch = OffsetBatch(chunk.map(_._2).toSeq)
+
+    Producer.produceChunk[Any, Int, String](records) *> offsetBatch.commit
+  }
+  .runDrain
+  .provideSomeLayer(consumerAndProducer)
 ```
 
 ## Partition assignment and offset retrieval
@@ -180,9 +172,9 @@ case (consumer, producer) =>
 
 | Use case | Method |
 | --- | --- |
-| One or more topics, automatic partition assignment | `consumer.subscribe(Subscription.topics("my_topic", "other_topic"))` |
-| Topics matching a pattern | `consumer.subscribe(Subscription.pattern("topic.*"))` |
-| Manual partition assignment | `consumer.subscribe(Subscription.manual("my_topic" -> 1, "my_topic" -> 2))` |
+| One or more topics, automatic partition assignment | `Consumer.subscribe(Subscription.topics("my_topic", "other_topic"))` |
+| Topics matching a pattern | `Consumer.subscribe(Subscription.pattern("topic.*"))` |
+| Manual partition assignment | `Consumer.subscribe(Subscription.manual("my_topic" -> 1, "my_topic" -> 2))` |
 
 By default `zio-kafka` will start streaming a partition from the last committed offset for the consumer group, or the latest message on the topic if no offset has yet been committed. You can also choose to store offsets outside of kafka. This can be useful in cases where consistency between data stores and consumer offset is required.
 
@@ -211,38 +203,38 @@ The default behavior for a consumer stream when encountering a deserialization f
 Below is an example of skipping messages that fail to deserialize. The offset is passed downstream to be committed.
 
 ```scala
-import zio.ZManaged, zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
+import zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
 import zio.stream._
-import zio.kafka.client._
-import zio.kafka.client.serde._
-import scala.util.{Success, Failure}
+import zio.kafka.consumer._
+import zio.kafka.serde._
+import scala.util.{Try, Success, Failure}
 import zio._
 
-val consumer: ZManaged[Clock with Blocking, Throwable, Consumer] = ???
+val consumer = Consumer.make(consumerSettings, Serde.string, Serde.string.asTry)
 
-consumer.use { c =>
-  val stream = c.subscribeAnd(Subscription.topics("topic150"))
-    .plainStream(Serde.string, Serde.string.asTry)
+val stream = Consumer
+  .subscribeAnd[Any, String, Try[String]](Subscription.topics("topic150"))
+  .plainStream
 
-  stream 
-      .mapM { record => 
-        val tryValue: Try[String] = record.record.value()
-        val offset: Offset = record.offset
-    
-        tryValue match {
-            case Success(value) =>
-              // Action for successful deserialization
-              someEffect(value).as(offset)
-            case Failure(exception) =>
-              // Possibly log the exception or take alternative action
-              ZIO.succeed(offset)
-        }
+stream 
+  .mapM { record => 
+    val tryValue: Try[String] = record.record.value()
+    val offset: Offset = record.offset
+  
+    tryValue match {
+      case Success(value) =>
+        // Action for successful deserialization
+        someEffect(value).as(offset)
+      case Failure(exception) =>
+        // Possibly log the exception or take alternative action
+        ZIO.succeed(offset)
     }
-    .flattenChunks
-    .aggregateAsync(Consumer.offsetBatches)
-    .mapM(_.commit)
-    .runDrain
-}
+  }
+  .flattenChunks
+  .aggregateAsync(Consumer.offsetBatches)
+  .mapM(_.commit)
+  .runDrain
+  .provideSomeLayer(consumer)
 ```
 
 ## Getting help
