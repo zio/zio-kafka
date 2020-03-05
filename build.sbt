@@ -1,7 +1,8 @@
+lazy val scala211  = "2.11.12"
 lazy val scala212  = "2.12.10"
 lazy val scala213  = "2.13.1"
 lazy val mainScala = scala213
-lazy val allScala  = Seq(scala212, mainScala)
+lazy val allScala  = Seq(scala211, scala212, mainScala)
 
 lazy val zioVersion   = "1.0.0-RC18"
 lazy val kafkaVersion = "2.4.0"
@@ -72,6 +73,7 @@ libraryDependencies ++= Seq(
 
 Compile / compile / scalacOptions ++= {
   if (scalaBinaryVersion.value == "2.13") Seq("-P:silencer:globalFilters=[import scala.collection.compat._]")
+  else if (scalaBinaryVersion.value == "2.11") Seq("-Xmax-classfile-name", "242")
   else Seq.empty
 }
 Compile / doc / scalacOptions ++= {
