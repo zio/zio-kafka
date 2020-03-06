@@ -325,11 +325,14 @@ private[consumer] object Runloop {
                          }
 
                        Task.effectSuspend {
-                         val prevAssigned = c.assignment().asScala.toSet
-
+                         val prevAssigned        = c.assignment().asScala.toSet
                          val requestedPartitions = state.pendingRequests.map(_.tp).toSet
-                         c.resume(requestedPartitions.asJava)
-                         c.pause((prevAssigned -- requestedPartitions).asJava)
+
+                         val toResume = prevAssigned intersect requestedPartitions
+                         val toPause  = prevAssigned -- requestedPartitions
+
+                         c.resume(toResume.asJava)
+                         c.pause(toPause.asJava)
 
                          val pollTimeout =
                            if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
@@ -344,10 +347,11 @@ private[consumer] object Runloop {
                            }
                          deps.isShutdown.flatMap { shutdown =>
                            if (shutdown) {
-                             ZIO.effectTotal(c.pause(requestedPartitions.asJava)) *>
-                               ZIO.succeed(
-                                 (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
-                               )
+                             ZIO.effectTotal {
+                               val currentAssigned = c.assignment().asScala.toSet
+                               c.pause(requestedPartitions.intersect(currentAssigned).asJava)
+                               (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
+                             }
                            } else if (records eq null) {
                              ZIO.succeed(
                                (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
