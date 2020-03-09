@@ -474,5 +474,5 @@ object ConsumerSpec extends DefaultRunnableSpec {
       }
     ).provideSomeLayerShared[TestEnvironment](
       ((Kafka.embedded >>> stringProducer) ++ Kafka.embedded).mapError(TestFailure.fail) ++ Clock.live
-    ) @@ timeout(30.seconds)
+    ) @@ timeout(180.seconds)
 }
