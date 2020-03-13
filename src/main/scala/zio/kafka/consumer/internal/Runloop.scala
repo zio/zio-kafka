@@ -433,46 +433,27 @@ private[consumer] object Runloop {
       case cmd @ Command.Commit(_, _) => handleCommit(state, cmd)
     }
 
-    forkManagedDaemon {
-      ZStream
-        .mergeAll(3, 32)(
-          deps.polls,
-          deps.requests,
-          deps.commits
-        )
-        .foldM(State.initial) { (state, cmd) =>
-          deps.isShutdown.flatMap { shutdown =>
-            if (shutdown) handleShutdown(state, cmd)
-            else
-              cmd match {
-                case Command.Poll()              => handlePoll(state)
-                case req @ Command.Request(_, _) => handleRequest(state, req)
-                case cmd @ Command.Commit(_, _)  => handleCommit(state, cmd)
-              }
-          }
-        }
-        .onError { cause =>
-          deps.partitions.offer(Take.Fail(cause))
-        }
-        .unit
-        .toManaged_
-    }.map(Runloop(_, deps))
-  }
-
-  def forkManagedDaemon[R, E, A](self: ZManaged[R, E, A]): ZManaged[R, Nothing, Fiber.Runtime[E, A]] =
-    ZManaged {
-      for {
-        finalizer <- Ref.make[Exit[Any, Any] => ZIO[R, Nothing, Any]](_ => UIO.unit)
-        // The reservation phase of the new `ZManaged` runs uninterruptibly;
-        // so to make sure the acquire phase of the original `ZManaged` runs
-        // interruptibly, we need to create an interruptible hole in the region.
-        fiber <- ZIO.interruptibleMask { restore =>
-                  restore(self.reserve.tap(r => finalizer.set(r.release))) >>= (_.acquire)
-                }.forkDaemon
-      } yield Reservation(
-        acquire = UIO.succeedNow(fiber),
-        release = e => fiber.interrupt *> finalizer.get.flatMap(f => f(e))
+    ZStream
+      .mergeAll(3, 32)(
+        deps.polls,
+        deps.requests,
+        deps.commits
       )
-    }
-
+      .foldM(State.initial) { (state, cmd) =>
+        deps.isShutdown.flatMap { shutdown =>
+          if (shutdown) handleShutdown(state, cmd)
+          else
+            cmd match {
+              case Command.Poll()              => handlePoll(state)
+              case req @ Command.Request(_, _) => handleRequest(state, req)
+              case cmd @ Command.Commit(_, _)  => handleCommit(state, cmd)
+            }
+        }
+      }
+      .onError(cause => deps.partitions.offer(Take.Fail(cause)))
+      .unit
+      .toManaged_
+      .fork
+      .map(Runloop(_, deps))
+  }
 }
