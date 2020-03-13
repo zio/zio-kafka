@@ -22,9 +22,7 @@ private[consumer] class ConsumerAccess(private[consumer] val consumer: ByteArray
   ): ZIO[R with Blocking, Throwable, A] =
     blocking(ZIO.effectSuspend(f(consumer))).catchSome {
       case _: WakeupException => ZIO.interrupt
-    }.fork.flatMap { fib =>
-      fib.join.onInterrupt(ZIO.effectTotal(consumer.wakeup()) *> fib.interrupt)
-    }
+    }.fork.flatMap(fib => fib.join.onInterrupt(ZIO.effectTotal(consumer.wakeup()) *> fib.interrupt))
 }
 
 private[consumer] object ConsumerAccess {
@@ -41,8 +39,6 @@ private[consumer] object ConsumerAccess {
                        new ByteArrayDeserializer()
                      )
                    }
-                 }.toManaged { c =>
-                   blocking(access.withPermit(UIO(c.close(settings.closeTimeout.asJava))))
-                 }
+                 }.toManaged(c => blocking(access.withPermit(UIO(c.close(settings.closeTimeout.asJava)))))
     } yield new ConsumerAccess(consumer, access)
 }

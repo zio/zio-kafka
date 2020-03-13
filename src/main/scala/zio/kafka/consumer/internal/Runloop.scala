@@ -419,9 +419,7 @@ private[consumer] object Runloop {
       case Command.Poll() =>
         state.pendingRequests match {
           case h :: t =>
-            handleShutdown(state, h).flatMap { s =>
-              handleShutdown(s.copy(pendingRequests = t), cmd)
-            }
+            handleShutdown(state, h).flatMap(s => handleShutdown(s.copy(pendingRequests = t), cmd))
           case Nil => handlePoll(state)
         }
       case Command.Request(tp, cont) =>

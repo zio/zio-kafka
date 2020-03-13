@@ -31,9 +31,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                       .take(5)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](stringConsumer("group150", "client150"))
-          kvOut = records.map { r =>
-            (r.record.key, r.record.value)
-          }
+          kvOut = records.map(r => (r.record.key, r.record.value))
         } yield assert(kvOut)(equalTo(kvs))
       },
       testM("Consumer.subscribeAnd works properly") {
@@ -48,9 +46,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                       .take(5)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](stringConsumer("group160", "client160"))
-          kvOut = records.map { r =>
-            (r.record.key, r.record.value)
-          }
+          kvOut = records.map(r => (r.record.key, r.record.value))
         } yield assert(kvOut)(equalTo(kvs))
       },
       testM("Consuming+provideCustomLayer") {
@@ -65,9 +61,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                       .take(10000)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](stringConsumer("group170", "client170"))
-          kvOut = records.map { r =>
-            (r.record.key, r.record.value)
-          }
+          kvOut = records.map(r => (r.record.key, r.record.value))
         } yield assert(kvOut)(equalTo(kvs))
       },
       testM("plainStream emits messages for a pattern subscription") {
@@ -81,9 +75,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                       .take(5)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](stringConsumer("group150", "client150"))
-          kvOut = records.map { r =>
-            (r.record.key, r.record.value)
-          }
+          kvOut = records.map(r => (r.record.key, r.record.value))
         } yield assert(kvOut)(equalTo(kvs))
       },
       testM("receive only messages from the subscribed topic-partition when creating a manual subscription") {
@@ -195,9 +187,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                   .partitionedStream
                   .flatMapPar(nrPartitions) {
                     case (_, partition) =>
-                      partition.mapM { record =>
-                        messagesReceived(record.partition).update(_ + 1).as(record)
-                      }.flattenChunks
+                      partition.mapM(record => messagesReceived(record.partition).update(_ + 1).as(record)).flattenChunks
                   }
                   .take(nrMessages.toLong)
                   .runDrain
@@ -269,7 +259,9 @@ object ConsumerSpec extends DefaultRunnableSpec {
                      .runDrain *>
                      Consumer.committed[Any, String, String](Set(new TopicPartition(topic, 0))).map(_.values.head))
                      .provideSomeLayer[Kafka with Blocking with Clock](stringConsumer(group, "client150"))
-        } yield assert(offset.map(_.offset))(isSome(isLessThanEqualTo(10L))) // NOTE this depends on a max_poll_records setting of 10
+        } yield assert(offset.map(_.offset))(
+          isSome(isLessThanEqualTo(10L))
+        ) // NOTE this depends on a max_poll_records setting of 10
       },
       testM("offset batching collects the latest offset for all partitions") {
         val nrMessages   = 50
@@ -395,9 +387,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
               } yield diagnosticStream.join
           }
           .flatten
-          .map { diagnosticEvents =>
-            assert(diagnosticEvents.size)(isGreaterThanEqualTo(2))
-          }
+          .map(diagnosticEvents => assert(diagnosticEvents.size)(isGreaterThanEqualTo(2)))
       },
       testM("support manual seeking") {
         val nrRecords        = 10
@@ -457,7 +447,9 @@ object ConsumerSpec extends DefaultRunnableSpec {
           _                <- produceMany(topic, messages)
           fib              <- consumeIt(messagesReceived, done)
           _ <- done.await *> Live
-                .live(ZIO.sleep(3.seconds)) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
+                .live(
+                  ZIO.sleep(3.seconds)
+                ) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
           _ <- fib.interrupt
           _ <- produceOne(topic, "key-new", "msg-new")
           newMessage <- (Consumer.subscribe[Any, String, String](subscription) *> Consumer

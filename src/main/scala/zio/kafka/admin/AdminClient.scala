@@ -193,7 +193,5 @@ object AdminClient {
         ac  <- ZIO(JAdminClient.create(settings.driverSettings.asJava))
         sem <- Semaphore.make(1L)
       } yield AdminClient(ac, sem)
-    } { client =>
-      ZIO.effectTotal(client.adminClient.close(settings.closeTimeout.asJava))
-    }
+    }(client => ZIO.effectTotal(client.adminClient.close(settings.closeTimeout.asJava)))
 }
