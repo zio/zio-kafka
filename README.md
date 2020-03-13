@@ -22,7 +22,7 @@ client. It integrates effortlessly with ZIO and ZIO Streams.
 Add the following dependencies to your `build.sbt` file:
 ```
 libraryDependencies ++= Seq(
-  "dev.zio" %% "zio-streams" % "1.0.0-RC18",
+  "dev.zio" %% "zio-streams" % "1.0.0-RC18-2",
   "dev.zio" %% "zio-kafka"   % "<version>"
 )
 ```
@@ -192,7 +192,7 @@ Serializers and deserializers (serdes) for custom data types can be constructed 
 
 ```scala
 import java.time.Instant
-import zio.kafka.client.serde._
+import zio.kafka.serde._
 
 val instantSerde: Serde[Any, Instant] = Serde.long.inmap(java.time.Instant.ofEpochMilli)(_.toEpochMilli)
 ```
