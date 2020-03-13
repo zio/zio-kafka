@@ -132,15 +132,9 @@ package object producer {
       private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout.asJava))
     }
 
-    def live[R, K, V](
-      implicit ts: Tagged[Serializer[R, K]],
-      td: Tagged[Serializer[R, V]],
-      tsv: Tagged[Service[R, K, V]]
-    ): ZLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[ProducerSettings], Throwable, Producer[
-      R,
-      K,
-      V
-    ]] =
+    def live[R: Tagged, K: Tagged, V: Tagged]: ZLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[
+      ProducerSettings
+    ], Throwable, Producer[R, K, V]] =
       ZLayer.fromManaged {
         ZIO
           .accessM[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[ProducerSettings]] { env =>
@@ -158,48 +152,38 @@ package object producer {
           .toManaged(_.close)
       }
 
-    def make[R, K, V](
+    def make[R: Tagged, K: Tagged, V: Tagged](
       settings: ProducerSettings,
       keySerializer: Serializer[R, K],
       valueSerializer: Serializer[R, V]
-    )(
-      implicit ts: Tagged[Serializer[R, K]],
-      td: Tagged[Serializer[R, V]],
-      tsh: Tagged[Has[Serializer[R, K]]],
-      trv: Tagged[Has[Serializer[R, V]]],
-      tsv: Tagged[Service[R, K, V]]
     ): ZLayer[Any, Throwable, Producer[R, K, V]] =
       (ZLayer.succeed(settings) ++ ZLayer.succeed(keySerializer) ++ ZLayer.succeed(valueSerializer)) >>> live[R, K, V]
 
-    def withProducerService[R, K, V, A](
+    def withProducerService[R: Tagged, K: Tagged, V: Tagged, A](
       r: Producer.Service[R, K, V] => RIO[R with Blocking, A]
-    )(implicit tsv: Tagged[Service[R, K, V]]): RIO[R with Blocking with Producer[R, K, V], A] =
+    ): RIO[R with Blocking with Producer[R, K, V], A] =
       ZIO.accessM(env => r(env.get[Producer.Service[R, K, V]]))
 
     /**
      * Accessor method for [[Service.produce]]
      */
-    def produce[R, K, V](
+    def produce[R: Tagged, K: Tagged, V: Tagged](
       record: ProducerRecord[K, V]
-    )(implicit tsv: Tagged[Service[R, K, V]]): RIO[R with Blocking with Producer[R, K, V], Task[RecordMetadata]] =
+    ): RIO[R with Blocking with Producer[R, K, V], Task[RecordMetadata]] =
       withProducerService(_.produce(record))
 
     /**
      * Accessor method for [[Service.produceChunk]]
      */
-    def produceChunk[R, K, V](
+    def produceChunk[R: Tagged, K: Tagged, V: Tagged](
       records: Chunk[ProducerRecord[K, V]]
-    )(
-      implicit tsv: Tagged[Service[R, K, V]]
     ): RIO[R with Blocking with Producer[R, K, V], Task[Chunk[RecordMetadata]]] =
       withProducerService(_.produceChunk(records))
 
     /**
      * Accessor method for [[Service.flush]]
      */
-    def flush[R, K, V](
-      implicit tsv: Tagged[Service[R, K, V]]
-    ): ZIO[R with Blocking with Producer[R, K, V], Throwable, Unit] =
+    def flush[R: Tagged, K: Tagged, V: Tagged]: ZIO[R with Blocking with Producer[R, K, V], Throwable, Unit] =
       withProducerService(_.flush)
   }
 }
