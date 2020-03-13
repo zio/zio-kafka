@@ -168,7 +168,7 @@ package object producer {
       tsh: Tagged[Has[Serializer[R, K]]],
       trv: Tagged[Has[Serializer[R, V]]],
       tsv: Tagged[Service[R, K, V]]
-    ): ZLayer.NoDeps[Throwable, Producer[R, K, V]] =
+    ): ZLayer[Any, Throwable, Producer[R, K, V]] =
       (ZLayer.succeed(settings) ++ ZLayer.succeed(keySerializer) ++ ZLayer.succeed(valueSerializer)) >>> live[R, K, V]
 
     def withProducerService[R, K, V, A](

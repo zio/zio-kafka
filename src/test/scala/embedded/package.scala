@@ -22,13 +22,13 @@ package object embedded {
       override def stop(): UIO[Unit]              = UIO.unit
     }
 
-    val embedded: ZLayer.NoDeps[Throwable, Kafka] = ZLayer.fromManaged {
+    val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.fromManaged {
       implicit val embeddedKafkaConfig = EmbeddedKafkaConfig(
         customBrokerProperties = Map("group.min.session.timeout.ms" -> "500", "group.initial.rebalance.delay.ms" -> "0")
       )
       ZManaged.make(ZIO.effect(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
     }
 
-    val local: ZLayer.NoDeps[Nothing, Kafka] = ZLayer.succeed(DefaultLocal)
+    val local: ZLayer[Any, Nothing, Kafka] = ZLayer.succeed(DefaultLocal)
   }
 }
