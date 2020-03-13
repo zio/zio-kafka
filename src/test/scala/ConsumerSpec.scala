@@ -187,7 +187,9 @@ object ConsumerSpec extends DefaultRunnableSpec {
                   .partitionedStream
                   .flatMapPar(nrPartitions) {
                     case (_, partition) =>
-                      partition.mapM(record => messagesReceived(record.partition).update(_ + 1).as(record)).flattenChunks
+                      partition
+                        .mapM(record => messagesReceived(record.partition).update(_ + 1).as(record))
+                        .flattenChunks
                   }
                   .take(nrMessages.toLong)
                   .runDrain
