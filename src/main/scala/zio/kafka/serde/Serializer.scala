@@ -17,17 +17,13 @@ trait Serializer[-R, -T] {
    * Create a serializer for a type U based on the serializer for type T and a mapping function
    */
   def contramap[U](f: U => T): Serializer[R, U] =
-    Serializer { (topic, headers, u) =>
-      serialize(topic, headers, f(u))
-    }
+    Serializer((topic, headers, u) => serialize(topic, headers, f(u)))
 
   /**
    * Create a serializer for a type U based on the serializer for type T and an effectful mapping function
    */
   def contramapM[R1 <: R, U](f: U => RIO[R1, T]): Serializer[R1, U] =
-    Serializer { (topic, headers, u) =>
-      f(u).flatMap(serialize(topic, headers, _))
-    }
+    Serializer((topic, headers, u) => f(u).flatMap(serialize(topic, headers, _)))
 }
 
 object Serializer extends Serdes {

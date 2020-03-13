@@ -246,11 +246,9 @@ package object consumer {
     val offsetBatches: ZSink[Any, Nothing, Nothing, Offset, OffsetBatch] =
       ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
-    def live[R, K, V](
-      implicit tkd: Tagged[Deserializer[R, K]],
-      tvd: Tagged[Deserializer[R, V]],
-      ts: Tagged[Service[R, K, V]]
-    ): ZLayer[Clock with Blocking with Has[Deserializer[R, K]] with Has[Deserializer[R, V]] with Has[ConsumerSettings] with Has[
+    def live[R: Tagged, K: Tagged, V: Tagged]: ZLayer[Clock with Blocking with Has[Deserializer[R, K]] with Has[
+      Deserializer[R, V]
+    ] with Has[ConsumerSettings] with Has[
       Diagnostics
     ], Throwable, Consumer[R, K, V]] =
       ZLayer.fromManaged {
@@ -275,17 +273,11 @@ package object consumer {
           }
       }
 
-    def make[R, K, V](
+    def make[R: Tagged, K: Tagged, V: Tagged](
       settings: ConsumerSettings,
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V],
       diagnostics: Diagnostics = Diagnostics.NoOp
-    )(
-      implicit tkd: Tagged[Deserializer[R, K]],
-      thkd: Tagged[Has[Deserializer[R, K]]],
-      tvd: Tagged[Deserializer[R, V]],
-      thvd: Tagged[Has[Deserializer[R, V]]],
-      ts: Tagged[Service[R, K, V]]
     ): ZLayer[Clock with Blocking, Throwable, Consumer[R, K, V]] =
       ((ZLayer.requires[Clock] ++ ZLayer
         .requires[Blocking] ++ ZLayer.succeed(settings) ++ ZLayer.succeed(diagnostics) ++ ZLayer.succeed(
@@ -295,36 +287,32 @@ package object consumer {
           valueDeserializer
         )) >>> live[R, K, V])
 
-    def withConsumerService[R, RC, K, V, A](
+    def withConsumerService[R: Tagged, RC, K: Tagged, V: Tagged, A](
       r: Service[R, K, V] => RIO[R with RC with Blocking, A]
-    )(implicit tsv: Tagged[Service[R, K, V]]): RIO[R with RC with Blocking with Consumer[R, K, V], A] =
+    ): RIO[R with RC with Blocking with Consumer[R, K, V], A] =
       ZIO.accessM(env => r(env.get[Service[R, K, V]]))
 
     /**
      * Accessor method for [[Service.assignment]]
      */
-    def assignment[R, K, V](
-      implicit tsv: Tagged[Service[R, K, V]]
-    ): RIO[R with Blocking with Consumer[R, K, V], Set[TopicPartition]] =
+    def assignment[R: Tagged, K: Tagged, V: Tagged]: RIO[R with Blocking with Consumer[R, K, V], Set[TopicPartition]] =
       withConsumerService[R, Any, K, V, Set[TopicPartition]](_.assignment)
 
     /**
      * Accessor method for [[Service.beginningOffsets]]
      */
-    def beginningOffsets[R, K, V](
+    def beginningOffsets[R: Tagged, K: Tagged, V: Tagged](
       partitions: Set[TopicPartition],
       timeout: Duration = Duration.Infinity
-    )(implicit tsv: Tagged[Service[R, K, V]]): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, Long]] =
+    ): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, Long]] =
       withConsumerService[R, Any, K, V, Map[TopicPartition, Long]](_.beginningOffsets(partitions, timeout))
 
     /**
      * Accessor method for [[Service.committed]]
      */
-    def committed[R, K, V](
+    def committed[R: Tagged, K: Tagged, V: Tagged](
       partitions: Set[TopicPartition],
       timeout: Duration = Duration.Infinity
-    )(
-      implicit tsv: Tagged[Service[R, K, V]]
     ): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, Option[OffsetAndMetadata]]] =
       withConsumerService[R, Any, K, V, Map[TopicPartition, Option[OffsetAndMetadata]]](
         _.committed(partitions, timeout)
@@ -333,24 +321,24 @@ package object consumer {
     /**
      * Accessor method for [[Service.endOffsets]]
      */
-    def endOffsets[R, K, V](
+    def endOffsets[R: Tagged, K: Tagged, V: Tagged](
       partitions: Set[TopicPartition],
       timeout: Duration = Duration.Infinity
-    )(implicit tsv: Tagged[Service[R, K, V]]): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, Long]] =
+    ): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, Long]] =
       withConsumerService[R, Any, K, V, Map[TopicPartition, Long]](_.endOffsets(partitions, timeout))
 
     /**
      * Accessor method for [[Service.listTopics]]
      */
-    def listTopics[R, K, V](timeout: Duration = Duration.Infinity)(
-      implicit tsv: Tagged[Service[R, K, V]]
+    def listTopics[R: Tagged, K: Tagged, V: Tagged](
+      timeout: Duration = Duration.Infinity
     ): RIO[R with Blocking with Consumer[R, K, V], Map[String, List[PartitionInfo]]] =
       withConsumerService[R, Any, K, V, Map[String, List[PartitionInfo]]](_.listTopics(timeout))
 
     /**
      * Accessor method for [[Service.partitionedStream]]
      */
-    def partitionedStream[R, K, V](implicit tsv: Tagged[Service[R, K, V]]): ZStream[
+    def partitionedStream[R: Tagged, K: Tagged, V: Tagged]: ZStream[
       Consumer[R, K, V] with Clock with Blocking,
       Throwable,
       (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
@@ -360,17 +348,14 @@ package object consumer {
     /**
      * Accessor method for [[Service.plainStream]]
      */
-    def plainStream[R, K, V](
-      implicit tsv: Tagged[Service[R, K, V]]
-    ): ZStreamChunk[R with Consumer[R, K, V] with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+    def plainStream[R: Tagged, K: Tagged, V: Tagged]
+      : ZStreamChunk[R with Consumer[R, K, V] with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
       ZStreamChunk(ZStream.accessStream(_.get[Service[R, K, V]].plainStream.chunks))
 
     /**
      * Accessor method for [[Service.stopConsumption]]
      */
-    def stopConsumption[R, K, V](
-      implicit tsv: Tagged[Service[R, K, V]]
-    ): RIO[Consumer[R, K, V], Unit] =
+    def stopConsumption[R: Tagged, K: Tagged, V: Tagged]: RIO[Consumer[R, K, V], Unit] =
       ZIO.accessM(_.get[Service[R, K, V]].stopConsumption)
 
     /**
@@ -415,7 +400,7 @@ package object consumer {
      * @tparam V Type of values (an implicit `Deserializer` should be in scope)
      * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
      */
-    def consumeWith[R, R1, K, V](
+    def consumeWith[R, R1: Tagged, K: Tagged, V: Tagged](
       settings: ConsumerSettings,
       subscription: Subscription,
       keyDeserializer: Deserializer[R1, K],
@@ -423,12 +408,6 @@ package object consumer {
       commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
     )(
       f: (K, V) => ZIO[R, Nothing, Unit]
-    )(
-      implicit tkd: Tagged[Deserializer[R1, K]],
-      thkd: Tagged[Has[Deserializer[R1, K]]],
-      tvd: Tagged[Deserializer[R1, V]],
-      thvd: Tagged[Has[Deserializer[R1, V]]],
-      ts: Tagged[Service[R1, K, V]]
     ): ZIO[R with R1 with Blocking with Clock, Throwable, Unit] =
       Consumer
         .make(settings, keyDeserializer, valueDeserializer)
@@ -439,51 +418,49 @@ package object consumer {
     /**
      * Accessor method for [[Service.subscribe]]
      */
-    def subscribe[R, K, V](subscription: Subscription)(
-      implicit tsv: Tagged[Service[R, K, V]]
+    def subscribe[R: Tagged, K: Tagged, V: Tagged](
+      subscription: Subscription
     ): RIO[R with Blocking with Consumer[R, K, V], Unit] =
       withConsumerService[R, Any, K, V, Unit](_.subscribe(subscription))
 
     /**
      * Accessor method for [[Service.unsubscribe]]
      */
-    def unsubscribe[R, K, V](
-      implicit tsv: Tagged[Service[R, K, V]]
-    ): RIO[R with Blocking with Consumer[R, K, V], Unit] =
+    def unsubscribe[R: Tagged, K: Tagged, V: Tagged]: RIO[R with Blocking with Consumer[R, K, V], Unit] =
       withConsumerService[R, Any, K, V, Unit](_.unsubscribe)
 
     /**
      * Accessor method for [[Service.offsetsForTimes]]
      */
-    def offsetsForTimes[R, K, V](
+    def offsetsForTimes[R: Tagged, K: Tagged, V: Tagged](
       timestamps: Map[TopicPartition, Long],
       timeout: Duration = Duration.Infinity
-    )(
-      implicit tsv: Tagged[Service[R, K, V]]
     ): RIO[R with Blocking with Consumer[R, K, V], Map[TopicPartition, OffsetAndTimestamp]] =
       withConsumerService[R, Any, K, V, Map[TopicPartition, OffsetAndTimestamp]](_.offsetsForTimes(timestamps, timeout))
 
     /**
      * Accessor method for [[Service.partitionsFor]]
      */
-    def partitionsFor[R, K, V](topic: String, timeout: Duration = Duration.Infinity)(
-      implicit tsv: Tagged[Service[R, K, V]]
+    def partitionsFor[R: Tagged, K: Tagged, V: Tagged](
+      topic: String,
+      timeout: Duration = Duration.Infinity
     ): RIO[R with Blocking with Consumer[R, K, V], List[PartitionInfo]] =
       withConsumerService[R, Any, K, V, List[PartitionInfo]](_.partitionsFor(topic, timeout))
 
     /**
      * Accessor method for [[Service.position]]
      */
-    def position[R, K, V](partition: TopicPartition, timeout: Duration = Duration.Infinity)(
-      implicit tsv: Tagged[Service[R, K, V]]
+    def position[R: Tagged, K: Tagged, V: Tagged](
+      partition: TopicPartition,
+      timeout: Duration = Duration.Infinity
     ): RIO[R with Blocking with Consumer[R, K, V], Long] =
       withConsumerService[R, Any, K, V, Long](_.position(partition, timeout))
 
     /**
      * Accessor method for [[Service.subscribeAnd]]
      */
-    def subscribeAnd[R, K, V](subscription: Subscription)(
-      implicit tsv: Tagged[Service[R, K, V]]
+    def subscribeAnd[R: Tagged, K: Tagged, V: Tagged](
+      subscription: Subscription
     ): SubscribedConsumerFromEnvironment[R, K, V] =
       new SubscribedConsumerFromEnvironment(
         ZIO.accessM { env =>
@@ -495,9 +472,7 @@ package object consumer {
     /**
      * Accessor method for [[Service.subscription]]
      */
-    def subscription[R, K, V](
-      implicit tsv: Tagged[Service[R, K, V]]
-    ): RIO[R with Blocking with Consumer[R, K, V], Set[String]] =
+    def subscription[R: Tagged, K: Tagged, V: Tagged]: RIO[R with Blocking with Consumer[R, K, V], Set[String]] =
       withConsumerService[R, Any, K, V, Set[String]](_.subscription)
 
     sealed trait OffsetRetrieval
