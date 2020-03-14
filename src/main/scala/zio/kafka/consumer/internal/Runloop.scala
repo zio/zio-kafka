@@ -1,5 +1,7 @@
 package zio.kafka.consumer.internal
 
+import java.util
+
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import zio._
@@ -169,27 +171,26 @@ private[consumer] object Runloop {
               ZIO {
                 c.commitAsync(
                   offsets.asJava,
-                  new OffsetCommitCallback {
-                    def onComplete(data: java.util.Map[TopicPartition, OffsetAndMetadata], err: Exception) =
-                      if (err eq null)
-                        runtime.unsafeRun(
-                          cont(Exit.succeed(())) <* deps.emitIfEnabledDiagnostic(
-                            DiagnosticEvent.Commit.Success(offsets)
-                          )
-                        )
-                      else
-                        runtime.unsafeRun(
-                          cont(Exit.fail(err)) <* deps.emitIfEnabledDiagnostic(
-                            DiagnosticEvent.Commit.Failure(offsets, err)
-                          )
-                        )
-                  }
+                  makeOffsetCommitCallback(
+                    onSuccess = cont(Exit.succeed(())) <*
+                      deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Success(offsets)),
+                    onFailure = err =>
+                      cont(Exit.fail(err)) <*
+                        deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Failure(offsets, err))
+                  )(runtime)
                 )
               }
             }.catchAll(e =>
               cont(Exit.fail(e)) <* deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Failure(offsets, e))
             )
       } yield ()
+
+    def makeOffsetCommitCallback(onSuccess: Task[Unit], onFailure: Exception => Task[Unit])(
+      runtime: Runtime[Any]
+    ): OffsetCommitCallback = new OffsetCommitCallback {
+      override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
+        runtime.unsafeRun(if (exception eq null) onSuccess else onFailure(exception))
+    }
 
     // Pause partitions for which there is no demand and resume those for which there is now demand
     def resumeAndPausePartitions(
