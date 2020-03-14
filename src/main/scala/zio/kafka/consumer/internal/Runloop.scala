@@ -311,6 +311,11 @@ private[consumer] object Runloop {
         case _: IllegalStateException => null
       }
 
+    def pauseAllPartitions(c: ByteArrayKafkaConsumer) = ZIO.effectTotal {
+      val currentAssigned = c.assignment().asScala.toSet
+      c.pause(currentAssigned.asJava)
+    }
+
     def handlePoll(state: State): RIO[Blocking, State] =
       for {
         pollResult <- deps.consumer.withConsumerM { c =>
@@ -326,11 +331,9 @@ private[consumer] object Runloop {
                          // Check shutdown again after polling (which takes up to the poll timeout)
                          deps.isShutdown.flatMap { shutdown =>
                            if (shutdown) {
-                             ZIO.effectTotal {
-                               val currentAssigned = c.assignment().asScala.toSet
-                               c.pause(requestedPartitions.intersect(currentAssigned).asJava)
+                             pauseAllPartitions(c) *> ZIO.succeed(
                                (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
-                             }
+                             )
                            } else if (records eq null) {
                              ZIO.succeed(
                                (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
