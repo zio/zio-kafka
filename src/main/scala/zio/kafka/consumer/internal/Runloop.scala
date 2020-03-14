@@ -35,7 +35,7 @@ private[consumer] object Runloop {
     commitQueue: Queue[Command.Commit],
     partitions: Queue[Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]],
     rebalancingRef: Ref[Boolean],
-    rebalanceListener: ConsumerRebalanceListener,
+    rebalanceListener: RebalanceListener,
     diagnostics: Diagnostics,
     shutdownRef: Ref[Boolean],
     offsetRetrieval: OffsetRetrieval
@@ -76,6 +76,7 @@ private[consumer] object Runloop {
         _        <- partitions.offer(Take.End).when(!shutdown)
       } yield ()
   }
+
   object Deps {
     def make(
       consumer: ConsumerAccess,
@@ -99,29 +100,22 @@ private[consumer] object Runloop {
                          }
                        }
                        .toManaged(_.shutdown)
-        listener <- ZIO
-                     .runtime[Blocking]
-                     .map { runtime =>
-                       new ConsumerRebalanceListener {
-                         override def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
-                           runtime.unsafeRun(
-                             rebalancingRef.set(true) *>
-                               diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(partitions.asScala.toSet))
-                           )
-                           ()
-                         }
+        rebalanceListener = {
+          val trackRebalancing = RebalanceListener(
+            onAssigned = _ => rebalancingRef.set(false),
+            onRevoked = _ => rebalancingRef.set(true)
+          )
 
-                         override def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
-                           runtime.unsafeRun(
-                             rebalancingRef.set(false) *>
-                               diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(partitions.asScala.toSet))
-                           )
-                           consumer.consumer.pause(partitions)
-                           ()
-                         }
-                       }
-                     }
-                     .toManaged_
+          val emitDiagnostics = RebalanceListener(
+            assigned => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(assigned)),
+            revoked => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked))
+          )
+
+          val pausePartitionsOnRevoke =
+            RebalanceListener.onRevoked(revoked => Task(consumer.consumer.pause(revoked.asJavaCollection)))
+
+          trackRebalancing ++ emitDiagnostics ++ pausePartitionsOnRevoke
+        }
         shutdownRef <- Ref.make(false).toManaged_
       } yield Deps(
         consumer,
@@ -131,7 +125,7 @@ private[consumer] object Runloop {
         commitQueue,
         partitions,
         rebalancingRef,
-        listener,
+        rebalanceListener,
         diagnostics,
         shutdownRef,
         offsetRetrieval

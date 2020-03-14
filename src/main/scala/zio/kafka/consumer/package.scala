@@ -219,23 +219,27 @@ package object consumer {
           .runDrain
 
       override def subscribe(subscription: Subscription): RIO[Blocking, Unit] =
-        consumer.withConsumerM { c =>
-          subscription match {
-            case Subscription.Pattern(pattern) => ZIO(c.subscribe(pattern.pattern, runloop.deps.rebalanceListener))
-            case Subscription.Topics(topics)   => ZIO(c.subscribe(topics.asJava, runloop.deps.rebalanceListener))
+        ZIO.runtime[Any].flatMap { runtime =>
+          consumer.withConsumerM { c =>
+            subscription match {
+              case Subscription.Pattern(pattern) =>
+                ZIO(c.subscribe(pattern.pattern, runloop.deps.rebalanceListener.asKafkaRebalanceListener(runtime)))
+              case Subscription.Topics(topics) =>
+                ZIO(c.subscribe(topics.asJava, runloop.deps.rebalanceListener.asKafkaRebalanceListener(runtime)))
 
-            // For manual subscriptions we have to do some manual work before starting the run loop
-            case Subscription.Manual(topicPartitions) =>
-              ZIO(c.assign(topicPartitions.asJava)) *>
-                ZIO.foreach_(topicPartitions)(runloop.deps.newPartitionStream) *> {
-                settings.offsetRetrieval match {
-                  case OffsetRetrieval.Manual(getOffsets) =>
-                    getOffsets(topicPartitions).flatMap { offsets =>
-                      ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
-                    }
-                  case OffsetRetrieval.Auto(_) => ZIO.unit
+              // For manual subscriptions we have to do some manual work before starting the run loop
+              case Subscription.Manual(topicPartitions) =>
+                ZIO(c.assign(topicPartitions.asJava)) *>
+                  ZIO.foreach_(topicPartitions)(runloop.deps.newPartitionStream) *> {
+                  settings.offsetRetrieval match {
+                    case OffsetRetrieval.Manual(getOffsets) =>
+                      getOffsets(topicPartitions).flatMap { offsets =>
+                        ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
+                      }
+                    case OffsetRetrieval.Auto(_) => ZIO.unit
+                  }
                 }
-              }
+            }
           }
         }
 
