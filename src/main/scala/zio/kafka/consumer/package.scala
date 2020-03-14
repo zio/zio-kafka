@@ -223,9 +223,9 @@ package object consumer {
           consumer.withConsumerM { c =>
             subscription match {
               case Subscription.Pattern(pattern) =>
-                ZIO(c.subscribe(pattern.pattern, runloop.deps.rebalanceListener.asKafkaRebalanceListener(runtime)))
+                ZIO(c.subscribe(pattern.pattern, runloop.deps.rebalanceListener.toKafka(runtime)))
               case Subscription.Topics(topics) =>
-                ZIO(c.subscribe(topics.asJava, runloop.deps.rebalanceListener.asKafkaRebalanceListener(runtime)))
+                ZIO(c.subscribe(topics.asJava, runloop.deps.rebalanceListener.toKafka(runtime)))
 
               // For manual subscriptions we have to do some manual work before starting the run loop
               case Subscription.Manual(topicPartitions) =>

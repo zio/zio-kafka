@@ -11,7 +11,17 @@ private[consumer] final case class RebalanceListener(
   onAssigned: Set[TopicPartition] => Task[Unit],
   onRevoked: Set[TopicPartition] => Task[Unit]
 ) {
-  def asKafkaRebalanceListener(runtime: Runtime[Any]): ConsumerRebalanceListener =
+
+  /**
+   * Combine with another [[RebalanceListener]] and execute their actions sequentially
+   */
+  def ++(that: RebalanceListener) =
+    RebalanceListener(
+      assigned => onAssigned(assigned) *> that.onAssigned(assigned),
+      revoked => onRevoked(revoked) *> that.onRevoked(revoked)
+    )
+
+  def toKafka(runtime: Runtime[Any]): ConsumerRebalanceListener =
     new ConsumerRebalanceListener {
       override def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
         runtime.unsafeRun(onRevoked(partitions.asScala.toSet))
@@ -24,14 +34,6 @@ private[consumer] final case class RebalanceListener(
       }
     }
 
-  /**
-   * Combine with another [[RebalanceListener]] and execute their actions sequentially
-   */
-  def ++(that: RebalanceListener) =
-    RebalanceListener(
-      assigned => onAssigned(assigned) *> that.onAssigned(assigned),
-      revoked => onRevoked(revoked) *> that.onRevoked(revoked)
-    )
 }
 
 object RebalanceListener {
