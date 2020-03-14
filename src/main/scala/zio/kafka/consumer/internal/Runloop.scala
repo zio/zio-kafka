@@ -165,27 +165,17 @@ private[consumer] object Runloop {
 
     def doCommit(cmds: List[Command.Commit]): ZIO[Blocking, Nothing, Unit] =
       for {
-        runtime <- ZIO.runtime[Any]
-        offsets = aggregateOffsets(cmds)
-        cont    = (e: Exit[Throwable, Unit]) => ZIO.foreach_(cmds)(_.cont.done(e))
+        runtime   <- ZIO.runtime[Any]
+        offsets   = aggregateOffsets(cmds)
+        cont      = (e: Exit[Throwable, Unit]) => ZIO.foreach_(cmds)(_.cont.done(e))
+        onSuccess = cont(Exit.succeed(())) <* deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Success(offsets))
+        onFailure = (err: Throwable) =>
+          cont(Exit.fail(err)) <* deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Failure(offsets, err))
         _ <- deps.consumer.withConsumerM { c =>
               // We don't wait for the completion of the commit here, because it
               // will only complete once we poll again.
-              ZIO {
-                c.commitAsync(
-                  offsets.asJava,
-                  makeOffsetCommitCallback(
-                    onSuccess = cont(Exit.succeed(())) <*
-                      deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Success(offsets)),
-                    onFailure = err =>
-                      cont(Exit.fail(err)) <*
-                        deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Failure(offsets, err))
-                  )(runtime)
-                )
-              }
-            }.catchAll(e =>
-              cont(Exit.fail(e)) <* deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Failure(offsets, e))
-            )
+              ZIO(c.commitAsync(offsets.asJava, makeOffsetCommitCallback(onSuccess, onFailure)(runtime)))
+            }.catchAll(onFailure)
       } yield ()
 
     def makeOffsetCommitCallback(onSuccess: Task[Unit], onFailure: Exception => Task[Unit])(
