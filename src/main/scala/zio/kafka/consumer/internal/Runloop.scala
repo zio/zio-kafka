@@ -402,6 +402,13 @@ private[consumer] object Runloop {
                    else doCommit(List(cmd)).as(state)
       } yield newState
 
+    def handleOperational(state: State, cmd: Command): RIO[Blocking, State] =
+      cmd match {
+        case Command.Poll()              => handlePoll(state)
+        case req @ Command.Request(_, _) => handleRequest(state, req)
+        case cmd @ Command.Commit(_, _)  => handleCommit(state, cmd)
+      }
+
     def handleShutdown(state: State, cmd: Command): RIO[Blocking, State] = cmd match {
       case Command.Poll() =>
         state.pendingRequests match {
@@ -429,12 +436,7 @@ private[consumer] object Runloop {
       .foldM(State.initial) { (state, cmd) =>
         deps.isShutdown.flatMap { shutdown =>
           if (shutdown) handleShutdown(state, cmd)
-          else
-            cmd match {
-              case Command.Poll()              => handlePoll(state)
-              case req @ Command.Request(_, _) => handleRequest(state, req)
-              case cmd @ Command.Commit(_, _)  => handleCommit(state, cmd)
-            }
+          else handleOperational(state, cmd)
         }
       }
       .onError(cause => deps.partitions.offer(Take.Fail(cause)))
