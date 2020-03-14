@@ -222,137 +222,140 @@ private[consumer] object Runloop {
             )
       } yield ()
 
+    // Pause partitions for which there is no demand and resume those for which there is now demand
+    def resumeAndPausePartitions(
+      c: ByteArrayKafkaConsumer,
+      assignment: Set[TopicPartition],
+      requestedPartitions: Set[TopicPartition]
+    ) = {
+      val toResume = assignment intersect requestedPartitions
+      val toPause  = assignment -- requestedPartitions
+
+      c.resume(toResume.asJava)
+      c.pause(toPause.asJava)
+    }
+
+    def endRevoked(
+      reqs: List[Command.Request],
+      bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
+      revoked: TopicPartition => Boolean
+    ): UIO[
+      (List[Command.Request], Map[TopicPartition, Chunk[ByteArrayConsumerRecord]])
+    ] = {
+      var acc = List[Command.Request]()
+      val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
+      buf ++= bufferedRecords
+
+      var revokeAction: UIO[_] = UIO.unit
+
+      val reqsIt = reqs.iterator
+      while (reqsIt.hasNext) {
+        val req = reqsIt.next
+        if (revoked(req.tp)) {
+          revokeAction = revokeAction *> req.cont.fail(None)
+          buf -= req.tp
+        } else acc ::= req
+      }
+
+      revokeAction.as((acc.reverse, buf.toMap))
+    }
+
+    def fulfillRequests(
+      pendingRequests: List[Command.Request],
+      bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
+      records: ConsumerRecords[Array[Byte], Array[Byte]]
+    ): UIO[
+      (List[Command.Request], Map[TopicPartition, Chunk[ByteArrayConsumerRecord]])
+    ] = {
+      var acc = List[Command.Request]()
+      val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
+      buf ++= bufferedRecords
+
+      var fulfillAction: UIO[_] = UIO.unit
+
+      val reqsIt = pendingRequests.iterator
+      while (reqsIt.hasNext) {
+        val req           = reqsIt.next
+        val bufferedChunk = buf.getOrElse(req.tp, Chunk.empty)
+        val reqRecs       = records.records(req.tp)
+
+        if ((bufferedChunk.length + reqRecs.size) == 0) {
+          acc ::= req
+        } else {
+          val concatenatedChunk = bufferedChunk ++
+            Chunk.fromArray(
+              reqRecs.toArray(Array.ofDim[ByteArrayConsumerRecord](reqRecs.size))
+            )
+
+          fulfillAction = fulfillAction *> req.cont.succeed(
+            concatenatedChunk.map(CommittableRecord(_, commit(_)))
+          )
+          buf -= req.tp
+        }
+      }
+
+      fulfillAction.as((acc, buf.toMap))
+    }
+
+    def bufferUnrequestedPartitions(
+      records: ConsumerRecords[Array[Byte], Array[Byte]],
+      unrequestedTps: Iterable[TopicPartition]
+    ): Map[TopicPartition, Chunk[ByteArrayConsumerRecord]] = {
+      val builder = Map.newBuilder[TopicPartition, Chunk[ByteArrayConsumerRecord]]
+      builder.sizeHint(unrequestedTps.size)
+
+      val tpsIt = unrequestedTps.iterator
+      while (tpsIt.hasNext) {
+        val tp   = tpsIt.next
+        val recs = records.records(tp)
+
+        if (recs.size > 0)
+          builder += (tp -> Chunk.fromArray(
+            recs.toArray(Array.ofDim[ByteArrayConsumerRecord](recs.size))
+          ))
+      }
+
+      builder.result()
+    }
+
+    def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Unit] =
+      deps.offsetRetrieval match {
+        case OffsetRetrieval.Manual(getOffsets) =>
+          getOffsets(tps)
+            .flatMap(offsets => ZIO.foreach(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) })
+            .when(tps.nonEmpty)
+
+        case OffsetRetrieval.Auto(_) =>
+          ZIO.unit
+      }
+
+    def doPoll(c: ByteArrayKafkaConsumer, requestedPartitions: Set[TopicPartition]) =
+      try {
+        val pollTimeout =
+          if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
+          else 0.millis.asJava
+
+        c.poll(pollTimeout)
+      } catch {
+        // The consumer will throw an IllegalStateException if no call to subscribe
+        // has been made yet, so we just ignore that. We have to poll even if c.subscription()
+        // is empty because pattern subscriptions start out as empty.
+        case _: IllegalStateException => null
+      }
+
     def handlePoll(state: State): RIO[Blocking, State] =
       for {
         pollResult <- deps.consumer.withConsumerM { c =>
-                       // Pause partitions for which there is no demand and resume those for which there is now demand
-                       def resumeAndPausePartitions(
-                         assignment: Set[TopicPartition],
-                         requestedPartitions: Set[TopicPartition]
-                       ) = {
-                         val toResume = assignment intersect requestedPartitions
-                         val toPause  = assignment -- requestedPartitions
-
-                         c.resume(toResume.asJava)
-                         c.pause(toPause.asJava)
-                       }
-
-                       def endRevoked(
-                         reqs: List[Command.Request],
-                         bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
-                         revoked: TopicPartition => Boolean
-                       ): UIO[
-                         (List[Command.Request], Map[TopicPartition, Chunk[ByteArrayConsumerRecord]])
-                       ] = {
-                         var acc = List[Command.Request]()
-                         val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
-                         buf ++= bufferedRecords
-
-                         var revokeAction: UIO[_] = UIO.unit
-
-                         val reqsIt = reqs.iterator
-                         while (reqsIt.hasNext) {
-                           val req = reqsIt.next
-                           if (revoked(req.tp)) {
-                             revokeAction = revokeAction *> req.cont.fail(None)
-                             buf -= req.tp
-                           } else acc ::= req
-                         }
-
-                         revokeAction.as((acc.reverse, buf.toMap))
-                       }
-
-                       def fulfillRequests(
-                         pendingRequests: List[Command.Request],
-                         bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
-                         records: ConsumerRecords[Array[Byte], Array[Byte]]
-                       ): UIO[
-                         (List[Command.Request], Map[TopicPartition, Chunk[ByteArrayConsumerRecord]])
-                       ] = {
-                         var acc = List[Command.Request]()
-                         val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
-                         buf ++= bufferedRecords
-
-                         var fulfillAction: UIO[_] = UIO.unit
-
-                         val reqsIt = pendingRequests.iterator
-                         while (reqsIt.hasNext) {
-                           val req           = reqsIt.next
-                           val bufferedChunk = buf.getOrElse(req.tp, Chunk.empty)
-                           val reqRecs       = records.records(req.tp)
-
-                           if ((bufferedChunk.length + reqRecs.size) == 0) {
-                             acc ::= req
-                           } else {
-                             val concatenatedChunk = bufferedChunk ++
-                               Chunk.fromArray(
-                                 reqRecs.toArray(Array.ofDim[ByteArrayConsumerRecord](reqRecs.size))
-                               )
-
-                             fulfillAction = fulfillAction *> req.cont.succeed(
-                               concatenatedChunk.map(CommittableRecord(_, commit(_)))
-                             )
-                             buf -= req.tp
-                           }
-                         }
-
-                         fulfillAction.as((acc, buf.toMap))
-                       }
-
-                       def bufferUnrequestedPartitions(
-                         records: ConsumerRecords[Array[Byte], Array[Byte]],
-                         unrequestedTps: Iterable[TopicPartition]
-                       ): Map[TopicPartition, Chunk[ByteArrayConsumerRecord]] = {
-                         val builder = Map.newBuilder[TopicPartition, Chunk[ByteArrayConsumerRecord]]
-                         builder.sizeHint(unrequestedTps.size)
-
-                         val tpsIt = unrequestedTps.iterator
-                         while (tpsIt.hasNext) {
-                           val tp   = tpsIt.next
-                           val recs = records.records(tp)
-
-                           if (recs.size > 0)
-                             builder += (tp -> Chunk.fromArray(
-                               recs.toArray(Array.ofDim[ByteArrayConsumerRecord](recs.size))
-                             ))
-                         }
-
-                         builder.result()
-                       }
-
-                       def doSeekForNewPartitions(tps: Set[TopicPartition]): Task[Unit] =
-                         deps.offsetRetrieval match {
-                           case OffsetRetrieval.Manual(getOffsets) =>
-                             getOffsets(tps).flatMap { offsets =>
-                               ZIO.foreach(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
-                             }.when(tps.nonEmpty)
-
-                           case OffsetRetrieval.Auto(_) =>
-                             ZIO.unit
-                         }
-
-                       def doPoll(requestedPartitions: Set[TopicPartition]) =
-                         try {
-                           val pollTimeout =
-                             if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
-                             else 0.millis.asJava
-
-                           c.poll(pollTimeout)
-                         } catch {
-                           // The consumer will throw an IllegalStateException if no call to subscribe
-                           // has been made yet, so we just ignore that. We have to poll even if c.subscription()
-                           // is empty because pattern subscriptions start out as empty.
-                           case _: IllegalStateException => null
-                         }
-
                        Task.effectSuspend {
+
                          val prevAssigned        = c.assignment().asScala.toSet
                          val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-                         resumeAndPausePartitions(prevAssigned, requestedPartitions)
+                         resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
-                         val records = doPoll(requestedPartitions)
+                         val records = doPoll(c, requestedPartitions)
 
+                         // Check shutdown again after polling (which takes up to the poll timeout)
                          deps.isShutdown.flatMap { shutdown =>
                            if (shutdown) {
                              ZIO.effectTotal {
@@ -372,7 +375,7 @@ private[consumer] object Runloop {
                              val unrequestedRecords =
                                bufferUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
 
-                             doSeekForNewPartitions(newlyAssigned) *> endRevoked(
+                             doSeekForNewPartitions(c, newlyAssigned) *> endRevoked(
                                state.pendingRequests,
                                state.addBufferedRecords(unrequestedRecords).bufferedRecords,
                                revoked(_)
