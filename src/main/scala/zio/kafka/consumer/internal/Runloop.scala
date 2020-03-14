@@ -402,29 +402,31 @@ private[consumer] object Runloop {
                    else doCommit(List(cmd)).as(state)
       } yield newState
 
-    def handleOperational(state: State, cmd: Command): RIO[Blocking, State] =
-      cmd match {
-        case Command.Poll()              => handlePoll(state)
-        case req @ Command.Request(_, _) => handleRequest(state, req)
-        case cmd @ Command.Commit(_, _)  => handleCommit(state, cmd)
-      }
+    def handleOperational(state: State, cmd: Command): RIO[Blocking, State] = cmd match {
+      case Command.Poll() =>
+        handlePoll(state)
+      case req @ Command.Request(_, _) =>
+        handleRequest(state, req)
+      case cmd @ Command.Commit(_, _) =>
+        handleCommit(state, cmd)
+    }
 
+    /**
+     * After shutdown, we end all pending requests (ending their partition streams) and pause
+     * all partitions, but keep executing commits and polling
+     *
+     * Buffered records for paused partitions will be removed to drain the stream
+     * as fast as possible.
+     */
     def handleShutdown(state: State, cmd: Command): RIO[Blocking, State] = cmd match {
       case Command.Poll() =>
-        state.pendingRequests match {
-          case h :: t =>
-            handleShutdown(state, h).flatMap(s => handleShutdown(s.copy(pendingRequests = t), cmd))
-          case Nil => handlePoll(state)
-        }
-      case Command.Request(tp, cont) =>
-        state.bufferedRecords.get(tp) match {
-          case Some(recs) =>
-            cont
-              .succeed(recs.map(CommittableRecord(_, commit(_))))
-              .as(state.removeBufferedRecordsFor(tp))
-          case None => cont.fail(None).as(state)
-        }
-      case cmd @ Command.Commit(_, _) => handleCommit(state, cmd)
+        // End all pending requests
+        ZIO.foreach_(state.pendingRequests)(_.cont.fail(None)) *>
+          handlePoll(state.copy(pendingRequests = List.empty, bufferedRecords = Map.empty))
+      case Command.Request(_, cont) =>
+        cont.fail(None).as(state)
+      case cmd @ Command.Commit(_, _) =>
+        handleCommit(state, cmd)
     }
 
     ZStream
