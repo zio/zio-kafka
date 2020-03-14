@@ -60,7 +60,7 @@ private[consumer] object Runloop {
             for {
               p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
               _      <- request(Command.Request(tp, p))
-              _      <- emitIfEnabledDiagnostic(DiagnosticEvent.Request(tp))
+              _      <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
               result <- p.await
             } yield result
           }
@@ -69,8 +69,6 @@ private[consumer] object Runloop {
 
       partitions.offer(Take.Value(tp -> stream)).unit
     }
-
-    def emitIfEnabledDiagnostic(event: DiagnosticEvent) = diagnostics.emitIfEnabled(event)
 
     val isShutdown = shutdownRef.get
 
@@ -142,7 +140,7 @@ private[consumer] object Runloop {
       for {
         p <- Promise.make[Throwable, Unit]
         _ <- deps.commit(Command.Commit(offsets, p))
-        _ <- deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Started(offsets))
+        _ <- deps.diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await
       } yield ()
 
@@ -166,9 +164,9 @@ private[consumer] object Runloop {
     def doCommit(cmds: List[Command.Commit]): ZIO[Blocking, Nothing, Unit] = {
       val offsets   = aggregateOffsets(cmds)
       val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreach_(cmds)(_.cont.done(e))
-      val onSuccess = cont(Exit.succeed(())) <* deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Success(offsets))
+      val onSuccess = cont(Exit.succeed(())) <* deps.diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
       val onFailure = (err: Throwable) =>
-        cont(Exit.fail(err)) <* deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Failure(offsets, err))
+        cont(Exit.fail(err)) <* deps.diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
 
       ZIO
         .runtime[Any]
@@ -203,6 +201,13 @@ private[consumer] object Runloop {
       c.pause(toPause.asJava)
     }
 
+    /**
+     * Does all needed to end revoked partitions:
+     * 1. Fail the Requests's continuation promises
+     * 2. Remove from the list of pending requets
+     * 3. Remove from buffered records
+     * @return New pending requests and new buffered records
+     */
     def endRevoked(
       reqs: List[Command.Request],
       bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
@@ -355,7 +360,7 @@ private[consumer] object Runloop {
                                  for {
                                    output                    <- fulfillRequests(pendingRequests, bufferedRecords, records)
                                    (notFulfilled, fulfilled) = output
-                                   _ <- deps.emitIfEnabledDiagnostic(
+                                   _ <- deps.diagnostics.emitIfEnabled(
                                          DiagnosticEvent.Poll(
                                            requestedPartitions,
                                            fulfilled.keySet,
