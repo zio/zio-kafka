@@ -146,25 +146,28 @@ private[consumer] object Runloop {
         _ <- p.await
       } yield ()
 
+    // Returns the highest offset to commit per partition
+    def aggregateOffsets(cmds: List[Command.Commit]): Map[TopicPartition, OffsetAndMetadata] = {
+      val offsets = mutable.Map[TopicPartition, OffsetAndMetadata]()
+
+      cmds.foreach { commit =>
+        commit.offsets.foreach {
+          case (tp, offset) =>
+            val existing = offsets.get(tp).fold(-1L)(_.offset())
+
+            if (existing < offset)
+              offsets += tp -> new OffsetAndMetadata(offset + 1)
+        }
+      }
+
+      offsets.toMap
+    }
+
     def doCommit(cmds: List[Command.Commit]): ZIO[Blocking, Nothing, Unit] =
       for {
         runtime <- ZIO.runtime[Any]
-        offsets = {
-          val offsets = mutable.Map[TopicPartition, OffsetAndMetadata]()
-
-          cmds.foreach { commit =>
-            commit.offsets.foreach {
-              case (tp, offset) =>
-                val existing = offsets.get(tp).fold(-1L)(_.offset())
-
-                if (existing < offset)
-                  offsets += tp -> new OffsetAndMetadata(offset + 1)
-            }
-          }
-
-          offsets.toMap
-        }
-        cont = (e: Exit[Throwable, Unit]) => ZIO.foreach_(cmds)(_.cont.done(e))
+        offsets = aggregateOffsets(cmds)
+        cont    = (e: Exit[Throwable, Unit]) => ZIO.foreach_(cmds)(_.cont.done(e))
         _ <- deps.consumer.withConsumerM { c =>
               // We don't wait for the completion of the commit here, because it
               // will only complete once we poll again.
