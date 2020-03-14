@@ -138,11 +138,8 @@ private[consumer] object Runloop {
     pendingCommits: List[Command.Commit],
     bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]
   ) {
-    def addCommit(c: Command.Commit)           = copy(pendingCommits = c :: pendingCommits)
-    def setCommits(reqs: List[Command.Commit]) = copy(pendingCommits = reqs)
-    def addRequest(c: Command.Request)         = copy(pendingRequests = c :: pendingRequests)
-    def clearCommits                           = copy(pendingCommits = Nil)
-    def clearRequests                          = copy(pendingRequests = Nil)
+    def addCommit(c: Command.Commit)   = copy(pendingCommits = c :: pendingCommits)
+    def addRequest(c: Command.Request) = copy(pendingRequests = c :: pendingRequests)
     def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
       copy(
         bufferedRecords = recs.foldLeft(bufferedRecords) {
@@ -156,9 +153,6 @@ private[consumer] object Runloop {
 
     def removeBufferedRecordsFor(tp: TopicPartition) =
       copy(bufferedRecords = bufferedRecords - tp)
-
-    def setBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
-      copy(bufferedRecords = recs)
   }
 
   object State {
