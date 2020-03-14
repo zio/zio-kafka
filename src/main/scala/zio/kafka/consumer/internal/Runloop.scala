@@ -33,29 +33,6 @@ private[consumer] final class Runloop(
   private val isRebalancing = rebalancingRef.get
   private val isShutdown    = shutdownRef.get
 
-  val rebalanceListener = {
-    val trackRebalancing = RebalanceListener(
-      onAssigned = _ => rebalancingRef.set(false),
-      onRevoked = _ => rebalancingRef.set(true)
-    )
-
-    val emitDiagnostics = RebalanceListener(
-      assigned => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(assigned)),
-      revoked => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked))
-    )
-
-    val pausePartitionsOnRevoke =
-      RebalanceListener.onRevoked(revoked => Task(consumer.consumer.pause(revoked.asJavaCollection)))
-
-    trackRebalancing ++ emitDiagnostics ++ pausePartitionsOnRevoke
-  }
-
-  def gracefulShutdown: UIO[Unit] =
-    for {
-      shutdown <- shutdownRef.modify((_, true))
-      _        <- partitions.offer(Take.End).when(!shutdown)
-    } yield ()
-
   def newPartitionStream(tp: TopicPartition) = {
     val stream = ZStreamChunk {
       ZStream {
@@ -73,6 +50,29 @@ private[consumer] final class Runloop(
     partitions.offer(Take.Value(tp -> stream)).unit
   }
 
+  def gracefulShutdown: UIO[Unit] =
+    for {
+      shutdown <- shutdownRef.modify((_, true))
+      _        <- partitions.offer(Take.End).when(!shutdown)
+    } yield ()
+
+  val rebalanceListener = {
+    val trackRebalancing = RebalanceListener(
+      onAssigned = _ => rebalancingRef.set(false),
+      onRevoked = _ => rebalancingRef.set(true)
+    )
+
+    val emitDiagnostics = RebalanceListener(
+      assigned => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(assigned)),
+      revoked => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked))
+    )
+
+    val pausePartitionsOnRevoke =
+      RebalanceListener.onRevoked(revoked => Task(consumer.consumer.pause(revoked.asJavaCollection)))
+
+    trackRebalancing ++ emitDiagnostics ++ pausePartitionsOnRevoke
+  }
+
   private def commit(offsets: Map[TopicPartition, Long]): ZIO[Any, Throwable, Unit] =
     for {
       p <- Promise.make[Throwable, Unit]
@@ -80,23 +80,6 @@ private[consumer] final class Runloop(
       _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
       _ <- p.await
     } yield ()
-
-  // Returns the highest offset to commit per partition
-  private def aggregateOffsets(cmds: List[Command.Commit]): Map[TopicPartition, OffsetAndMetadata] = {
-    val offsets = mutable.Map[TopicPartition, OffsetAndMetadata]()
-
-    cmds.foreach { commit =>
-      commit.offsets.foreach {
-        case (tp, offset) =>
-          val existing = offsets.get(tp).fold(-1L)(_.offset())
-
-          if (existing < offset)
-            offsets += tp -> new OffsetAndMetadata(offset + 1)
-      }
-    }
-
-    offsets.toMap
-  }
 
   private def doCommit(cmds: List[Command.Commit]): ZIO[Blocking, Nothing, Unit] = {
     val offsets   = aggregateOffsets(cmds)
@@ -118,24 +101,28 @@ private[consumer] final class Runloop(
       .catchAll(onFailure)
   }
 
+  // Returns the highest offset to commit per partition
+  private def aggregateOffsets(cmds: List[Command.Commit]): Map[TopicPartition, OffsetAndMetadata] = {
+    val offsets = mutable.Map[TopicPartition, OffsetAndMetadata]()
+
+    cmds.foreach { commit =>
+      commit.offsets.foreach {
+        case (tp, offset) =>
+          val existing = offsets.get(tp).fold(-1L)(_.offset())
+
+          if (existing < offset)
+            offsets += tp -> new OffsetAndMetadata(offset + 1)
+      }
+    }
+
+    offsets.toMap
+  }
+
   private def makeOffsetCommitCallback(onSuccess: Task[Unit], onFailure: Exception => Task[Unit])(
     runtime: Runtime[Any]
   ): OffsetCommitCallback = new OffsetCommitCallback {
     override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
       runtime.unsafeRun(if (exception eq null) onSuccess else onFailure(exception))
-  }
-
-  // Pause partitions for which there is no demand and resume those for which there is now demand
-  private def resumeAndPausePartitions(
-    c: ByteArrayKafkaConsumer,
-    assignment: Set[TopicPartition],
-    requestedPartitions: Set[TopicPartition]
-  ) = {
-    val toResume = assignment intersect requestedPartitions
-    val toPause  = assignment -- requestedPartitions
-
-    c.resume(toResume.asJava)
-    c.pause(toPause.asJava)
   }
 
   /**
@@ -253,6 +240,19 @@ private[consumer] final class Runloop(
       case _: IllegalStateException => null
     }
 
+  // Pause partitions for which there is no demand and resume those for which there is now demand
+  private def resumeAndPausePartitions(
+    c: ByteArrayKafkaConsumer,
+    assignment: Set[TopicPartition],
+    requestedPartitions: Set[TopicPartition]
+  ) = {
+    val toResume = assignment intersect requestedPartitions
+    val toPause  = assignment -- requestedPartitions
+
+    c.resume(toResume.asJava)
+    c.pause(toPause.asJava)
+  }
+
   private def pauseAllPartitions(c: ByteArrayKafkaConsumer) = ZIO.effectTotal {
     val currentAssigned = c.assignment().asScala.toSet
     c.pause(currentAssigned.asJava)
@@ -339,15 +339,6 @@ private[consumer] final class Runloop(
                  else doCommit(List(cmd)).as(state)
     } yield newState
 
-  private def handleOperational(state: State, cmd: Command): RIO[Blocking, State] = cmd match {
-    case Command.Poll() =>
-      handlePoll(state)
-    case req @ Command.Request(_, _) =>
-      handleRequest(state, req)
-    case cmd @ Command.Commit(_, _) =>
-      handleCommit(state, cmd)
-  }
-
   /**
    * After shutdown, we end all pending requests (ending their partition streams) and pause
    * all partitions, but keep executing commits and polling
@@ -362,6 +353,15 @@ private[consumer] final class Runloop(
         handlePoll(state.copy(pendingRequests = List.empty, bufferedRecords = Map.empty))
     case Command.Request(_, cont) =>
       cont.fail(None).as(state)
+    case cmd @ Command.Commit(_, _) =>
+      handleCommit(state, cmd)
+  }
+
+  private def handleOperational(state: State, cmd: Command): RIO[Blocking, State] = cmd match {
+    case Command.Poll() =>
+      handlePoll(state)
+    case req @ Command.Request(_, _) =>
+      handleRequest(state, req)
     case cmd @ Command.Commit(_, _) =>
       handleCommit(state, cmd)
   }
