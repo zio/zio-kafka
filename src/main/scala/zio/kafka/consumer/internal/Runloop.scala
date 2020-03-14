@@ -26,13 +26,29 @@ private[consumer] final class Runloop(
   commitQueue: Queue[Command.Commit],
   val partitions: Queue[Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]],
   rebalancingRef: Ref[Boolean],
-  val rebalanceListener: RebalanceListener,
   diagnostics: Diagnostics,
   shutdownRef: Ref[Boolean],
   offsetRetrieval: OffsetRetrieval
 ) {
   private val isRebalancing = rebalancingRef.get
   private val isShutdown    = shutdownRef.get
+
+  val rebalanceListener = {
+    val trackRebalancing = RebalanceListener(
+      onAssigned = _ => rebalancingRef.set(false),
+      onRevoked = _ => rebalancingRef.set(true)
+    )
+
+    val emitDiagnostics = RebalanceListener(
+      assigned => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(assigned)),
+      revoked => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked))
+    )
+
+    val pausePartitionsOnRevoke =
+      RebalanceListener.onRevoked(revoked => Task(consumer.consumer.pause(revoked.asJavaCollection)))
+
+    trackRebalancing ++ emitDiagnostics ++ pausePartitionsOnRevoke
+  }
 
   def gracefulShutdown: UIO[Unit] =
     for {
@@ -403,22 +419,6 @@ private[consumer] object Runloop {
                        }
                      }
                      .toManaged(_.shutdown)
-      rebalanceListener = {
-        val trackRebalancing = RebalanceListener(
-          onAssigned = _ => rebalancingRef.set(false),
-          onRevoked = _ => rebalancingRef.set(true)
-        )
-
-        val emitDiagnostics = RebalanceListener(
-          assigned => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(assigned)),
-          revoked => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked))
-        )
-
-        val pausePartitionsOnRevoke =
-          RebalanceListener.onRevoked(revoked => Task(consumer.consumer.pause(revoked.asJavaCollection)))
-
-        trackRebalancing ++ emitDiagnostics ++ pausePartitionsOnRevoke
-      }
       shutdownRef <- Ref.make(false).toManaged_
       runloop = new Runloop(
         consumer,
@@ -428,7 +428,6 @@ private[consumer] object Runloop {
         commitQueue,
         partitions,
         rebalancingRef,
-        rebalanceListener,
         diagnostics,
         shutdownRef,
         offsetRetrieval
