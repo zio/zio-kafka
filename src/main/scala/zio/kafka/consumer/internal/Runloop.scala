@@ -10,6 +10,7 @@ import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.CommittableRecord
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
+import zio.kafka.consumer.internal.Runloop.{ ByteArrayConsumerRecord, Command }
 import zio.stream._
 
 import scala.collection.mutable
@@ -131,32 +132,6 @@ private[consumer] object Runloop {
         shutdownRef,
         offsetRetrieval
       )
-  }
-
-  case class State(
-    pendingRequests: List[Command.Request],
-    pendingCommits: List[Command.Commit],
-    bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]
-  ) {
-    def addCommit(c: Command.Commit)   = copy(pendingCommits = c :: pendingCommits)
-    def addRequest(c: Command.Request) = copy(pendingRequests = c :: pendingRequests)
-    def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
-      copy(
-        bufferedRecords = recs.foldLeft(bufferedRecords) {
-          case (acc, (tp, recs)) =>
-            acc.get(tp) match {
-              case Some(existingRecs) => acc + (tp -> (existingRecs ++ recs))
-              case None               => acc + (tp -> recs)
-            }
-        }
-      )
-
-    def removeBufferedRecordsFor(tp: TopicPartition) =
-      copy(bufferedRecords = bufferedRecords - tp)
-  }
-
-  object State {
-    def initial: State = State(Nil, Nil, Map())
   }
 
   def apply(deps: Deps): ZManaged[Clock with Blocking, Throwable, Runloop] = {
@@ -461,4 +436,30 @@ private[consumer] object Runloop {
       .fork
       .map(Runloop(_, deps))
   }
+}
+
+private[internal] final case class State(
+  pendingRequests: List[Command.Request],
+  pendingCommits: List[Command.Commit],
+  bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]
+) {
+  def addCommit(c: Command.Commit)   = copy(pendingCommits = c :: pendingCommits)
+  def addRequest(c: Command.Request) = copy(pendingRequests = c :: pendingRequests)
+  def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
+    copy(
+      bufferedRecords = recs.foldLeft(bufferedRecords) {
+        case (acc, (tp, recs)) =>
+          acc.get(tp) match {
+            case Some(existingRecs) => acc + (tp -> (existingRecs ++ recs))
+            case None               => acc + (tp -> recs)
+          }
+      }
+    )
+
+  def removeBufferedRecordsFor(tp: TopicPartition) =
+    copy(bufferedRecords = bufferedRecords - tp)
+}
+
+object State {
+  def initial: State = State(Nil, Nil, Map())
 }
