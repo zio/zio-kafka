@@ -157,6 +157,11 @@ private[consumer] final class Runloop(
     revokeAction.as((acc.reverse, buf.toMap))
   }
 
+  /**
+   * Fulfill pending requests with records retrieved from poll() call + buffered records
+   *
+   * @return Remaining pending requests and remaining/new buffered records
+   */
   private def fulfillRequests(
     pendingRequests: List[Command.Request],
     bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
@@ -194,7 +199,7 @@ private[consumer] final class Runloop(
     fulfillAction.as((acc, buf.toMap))
   }
 
-  private def bufferUnrequestedPartitions(
+  private def bufferRecordsForUnrequestedPartitions(
     records: ConsumerRecords[Array[Byte], Array[Byte]],
     unrequestedTps: Iterable[TopicPartition]
   ): Map[TopicPartition, Chunk[ByteArrayConsumerRecord]] = {
@@ -286,7 +291,7 @@ private[consumer] final class Runloop(
                            val newlyAssigned   = currentAssigned -- prevAssigned
                            val revoked         = prevAssigned -- currentAssigned
                            val unrequestedRecords =
-                             bufferUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
+                             bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
 
                            doSeekForNewPartitions(c, newlyAssigned) *> endRevoked(
                              state.pendingRequests,
