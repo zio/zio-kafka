@@ -8,7 +8,7 @@ import zio.clock.Clock
 import zio.duration._
 import zio.kafka.serde.Deserializer
 import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
+import zio.kafka.consumer.internal.{ ConsumerAccess, Deps, Runloop }
 import zio.stream._
 
 import scala.collection.compat._
@@ -148,7 +148,7 @@ package object consumer {
        * streams while still serving commit requests.
        */
       override def stopConsumption: UIO[Unit] =
-        runloop.deps.gracefulShutdown
+        runloop.gracefulShutdown
 
       override def listTopics(timeout: Duration = Duration.Infinity): RIO[Blocking, Map[String, List[PartitionInfo]]] =
         consumer.withConsumer(_.listTopics(timeout.asJava).asScala.view.mapValues(_.asScala.toList).toMap)
@@ -167,7 +167,7 @@ package object consumer {
         (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
       ] =
         ZStream
-          .fromQueue(runloop.deps.partitions)
+          .fromQueue(runloop.partitions)
           .unTake
           .map {
             case (tp, partition) =>
@@ -223,14 +223,14 @@ package object consumer {
           consumer.withConsumerM { c =>
             subscription match {
               case Subscription.Pattern(pattern) =>
-                ZIO(c.subscribe(pattern.pattern, runloop.deps.rebalanceListener.toKafka(runtime)))
+                ZIO(c.subscribe(pattern.pattern, runloop.rebalanceListener.toKafka(runtime)))
               case Subscription.Topics(topics) =>
-                ZIO(c.subscribe(topics.asJava, runloop.deps.rebalanceListener.toKafka(runtime)))
+                ZIO(c.subscribe(topics.asJava, runloop.rebalanceListener.toKafka(runtime)))
 
               // For manual subscriptions we have to do some manual work before starting the run loop
               case Subscription.Manual(topicPartitions) =>
                 ZIO(c.assign(topicPartitions.asJava)) *>
-                  ZIO.foreach_(topicPartitions)(runloop.deps.newPartitionStream) *> {
+                  ZIO.foreach_(topicPartitions)(runloop.newPartitionStream) *> {
                   settings.offsetRetrieval match {
                     case OffsetRetrieval.Manual(getOffsets) =>
                       getOffsets(topicPartitions).flatMap { offsets =>
@@ -265,7 +265,7 @@ package object consumer {
             val settings = env.get[ConsumerSettings]
             for {
               wrapper <- ConsumerAccess.make(settings)
-              deps <- Runloop.Deps.make(
+              deps <- Deps.make(
                        wrapper,
                        settings.pollInterval,
                        settings.pollTimeout,
