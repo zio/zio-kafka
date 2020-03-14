@@ -331,23 +331,28 @@ private[consumer] object Runloop {
                              ZIO.unit
                          }
 
+                       def doPoll(requestedPartitions: Set[TopicPartition]) =
+                         try {
+                           val pollTimeout =
+                             if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
+                             else 0.millis.asJava
+
+                           c.poll(pollTimeout)
+                         } catch {
+                           // The consumer will throw an IllegalStateException if no call to subscribe
+                           // has been made yet, so we just ignore that. We have to poll even if c.subscription()
+                           // is empty because pattern subscriptions start out as empty.
+                           case _: IllegalStateException => null
+                         }
+
                        Task.effectSuspend {
                          val prevAssigned        = c.assignment().asScala.toSet
                          val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
                          resumeAndPausePartitions(prevAssigned, requestedPartitions)
 
-                         val pollTimeout =
-                           if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
-                           else 0.millis.asJava
-                         val records =
-                           try c.poll(pollTimeout)
-                           catch {
-                             // The consumer will throw an IllegalStateException if no call to subscribe
-                             // has been made yet, so we just ignore that. We have to poll even if c.subscription()
-                             // is empty because pattern subscriptions start out as empty.
-                             case _: IllegalStateException => null
-                           }
+                         val records = doPoll(requestedPartitions)
+
                          deps.isShutdown.flatMap { shutdown =>
                            if (shutdown) {
                              ZIO.effectTotal {
