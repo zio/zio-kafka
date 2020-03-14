@@ -9,6 +9,7 @@ import zio.duration._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.CommittableRecord
+import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.stream._
 
 import scala.collection.mutable
@@ -224,6 +225,18 @@ private[consumer] object Runloop {
     def handlePoll(state: State): RIO[Blocking, State] =
       for {
         pollResult <- deps.consumer.withConsumerM { c =>
+                       // Pause partitions for which there is no demand and resume those for which there is now demand
+                       def resumeAndPausePartitions(
+                         assignment: Set[TopicPartition],
+                         requestedPartitions: Set[TopicPartition]
+                       ) = {
+                         val toResume = assignment intersect requestedPartitions
+                         val toPause  = assignment -- requestedPartitions
+
+                         c.resume(toResume.asJava)
+                         c.pause(toPause.asJava)
+                       }
+
                        def endRevoked(
                          reqs: List[Command.Request],
                          bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
@@ -322,11 +335,7 @@ private[consumer] object Runloop {
                          val prevAssigned        = c.assignment().asScala.toSet
                          val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-                         val toResume = prevAssigned intersect requestedPartitions
-                         val toPause  = prevAssigned -- requestedPartitions
-
-                         c.resume(toResume.asJava)
-                         c.pause(toPause.asJava)
+                         resumeAndPausePartitions(prevAssigned, requestedPartitions)
 
                          val pollTimeout =
                            if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
