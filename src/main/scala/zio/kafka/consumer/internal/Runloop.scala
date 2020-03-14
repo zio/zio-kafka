@@ -226,6 +226,19 @@ private[consumer] final class Runloop(
         ZIO.unit
     }
 
+  // Pause partitions for which there is no demand and resume those for which there is now demand
+  private def resumeAndPausePartitions(
+    c: ByteArrayKafkaConsumer,
+    assignment: Set[TopicPartition],
+    requestedPartitions: Set[TopicPartition]
+  ) = {
+    val toResume = assignment intersect requestedPartitions
+    val toPause  = assignment -- requestedPartitions
+
+    c.resume(toResume.asJava)
+    c.pause(toPause.asJava)
+  }
+
   private def doPoll(c: ByteArrayKafkaConsumer, requestedPartitions: Set[TopicPartition]) =
     try {
       val pollTimeout =
@@ -239,19 +252,6 @@ private[consumer] final class Runloop(
       // is empty because pattern subscriptions start out as empty.
       case _: IllegalStateException => null
     }
-
-  // Pause partitions for which there is no demand and resume those for which there is now demand
-  private def resumeAndPausePartitions(
-    c: ByteArrayKafkaConsumer,
-    assignment: Set[TopicPartition],
-    requestedPartitions: Set[TopicPartition]
-  ) = {
-    val toResume = assignment intersect requestedPartitions
-    val toPause  = assignment -- requestedPartitions
-
-    c.resume(toResume.asJava)
-    c.pause(toPause.asJava)
-  }
 
   private def pauseAllPartitions(c: ByteArrayKafkaConsumer) = ZIO.effectTotal {
     val currentAssigned = c.assignment().asScala.toSet
