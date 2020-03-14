@@ -164,21 +164,23 @@ private[consumer] object Runloop {
     }
 
     def doCommit(cmds: List[Command.Commit]): ZIO[Blocking, Nothing, Unit] = {
-
       val offsets   = aggregateOffsets(cmds)
       val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreach_(cmds)(_.cont.done(e))
       val onSuccess = cont(Exit.succeed(())) <* deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Success(offsets))
       val onFailure = (err: Throwable) =>
         cont(Exit.fail(err)) <* deps.emitIfEnabledDiagnostic(DiagnosticEvent.Commit.Failure(offsets, err))
 
-      for {
-        runtime <- ZIO.runtime[Any]
-        _ <- deps.consumer.withConsumerM { c =>
-              // We don't wait for the completion of the commit here, because it
-              // will only complete once we poll again.
-              ZIO(c.commitAsync(offsets.asJava, makeOffsetCommitCallback(onSuccess, onFailure)(runtime)))
-            }.catchAll(onFailure)
-      } yield ()
+      ZIO
+        .runtime[Any]
+        .map(makeOffsetCommitCallback(onSuccess, onFailure))
+        .flatMap { callback =>
+          deps.consumer.withConsumerM { c =>
+            // We don't wait for the completion of the commit here, because it
+            // will only complete once we poll again.
+            ZIO(c.commitAsync(offsets.asJava, callback))
+          }
+        }
+        .catchAll(onFailure)
     }
 
     def makeOffsetCommitCallback(onSuccess: Task[Unit], onFailure: Exception => Task[Unit])(
