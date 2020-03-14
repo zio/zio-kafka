@@ -18,97 +18,27 @@ import zio.stream._
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
-case class Deps(
+private[consumer] final class Runloop(
   consumer: ConsumerAccess,
   pollFrequency: Duration,
   pollTimeout: Duration,
   requestQueue: Queue[Command.Request],
   commitQueue: Queue[Command.Commit],
-  partitions: Queue[Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]],
+  val partitions: Queue[Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]],
   rebalancingRef: Ref[Boolean],
-  rebalanceListener: RebalanceListener,
+  val rebalanceListener: RebalanceListener,
   diagnostics: Diagnostics,
   shutdownRef: Ref[Boolean],
   offsetRetrieval: OffsetRetrieval
 ) {
-  def commit(cmd: Command.Commit)   = commitQueue.offer(cmd).unit
-  def commits                       = ZStream.fromQueue(commitQueue)
-  def request(cmd: Command.Request) = requestQueue.offer(cmd).unit
-  def requests                      = ZStream.fromQueue(requestQueue)
-
-  val isRebalancing = rebalancingRef.get
-
-  def polls = ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency))
-
-  val isShutdown = shutdownRef.get
-}
-
-object Deps {
-  def make(
-    consumer: ConsumerAccess,
-    pollFrequency: Duration,
-    pollTimeout: Duration,
-    diagnostics: Diagnostics,
-    offsetRetrieval: OffsetRetrieval
-  ) =
-    for {
-      rebalancingRef <- Ref.make(false).toManaged_
-      requestQueue   <- Queue.unbounded[Command.Request].toManaged(_.shutdown)
-      commitQueue    <- Queue.unbounded[Command.Commit].toManaged(_.shutdown)
-      partitions <- Queue
-                     .unbounded[
-                       Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]
-                     ]
-                     .map { queue =>
-                       queue.mapM {
-                         case Take.End => queue.shutdown.as(Take.End)
-                         case x        => ZIO.succeed(x)
-                       }
-                     }
-                     .toManaged(_.shutdown)
-      rebalanceListener = {
-        val trackRebalancing = RebalanceListener(
-          onAssigned = _ => rebalancingRef.set(false),
-          onRevoked = _ => rebalancingRef.set(true)
-        )
-
-        val emitDiagnostics = RebalanceListener(
-          assigned => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(assigned)),
-          revoked => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked))
-        )
-
-        val pausePartitionsOnRevoke =
-          RebalanceListener.onRevoked(revoked => Task(consumer.consumer.pause(revoked.asJavaCollection)))
-
-        trackRebalancing ++ emitDiagnostics ++ pausePartitionsOnRevoke
-      }
-      shutdownRef <- Ref.make(false).toManaged_
-    } yield Deps(
-      consumer,
-      pollFrequency,
-      pollTimeout,
-      requestQueue,
-      commitQueue,
-      partitions,
-      rebalancingRef,
-      rebalanceListener,
-      diagnostics,
-      shutdownRef,
-      offsetRetrieval
-    )
-}
-
-private[consumer] final class Runloop(deps: Deps) {
-  val partitions: Queue[Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]] =
-    deps.partitions
+  private val isRebalancing = rebalancingRef.get
+  private val isShutdown    = shutdownRef.get
 
   def gracefulShutdown: UIO[Unit] =
     for {
-      shutdown <- deps.shutdownRef.modify((_, true))
+      shutdown <- shutdownRef.modify((_, true))
       _        <- partitions.offer(Take.End).when(!shutdown)
     } yield ()
-
-  val rebalanceListener: RebalanceListener = deps.rebalanceListener
 
   def newPartitionStream(tp: TopicPartition) = {
     val stream = ZStreamChunk {
@@ -116,8 +46,8 @@ private[consumer] final class Runloop(deps: Deps) {
         ZManaged.succeed {
           for {
             p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-            _      <- deps.request(Command.Request(tp, p))
-            _      <- deps.diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
+            _      <- requestQueue.offer(Command.Request(tp, p)).unit
+            _      <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
             result <- p.await
           } yield result
         }
@@ -130,8 +60,8 @@ private[consumer] final class Runloop(deps: Deps) {
   private def commit(offsets: Map[TopicPartition, Long]): ZIO[Any, Throwable, Unit] =
     for {
       p <- Promise.make[Throwable, Unit]
-      _ <- deps.commit(Command.Commit(offsets, p))
-      _ <- deps.diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
+      _ <- commitQueue.offer(Command.Commit(offsets, p)).unit
+      _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
       _ <- p.await
     } yield ()
 
@@ -155,15 +85,15 @@ private[consumer] final class Runloop(deps: Deps) {
   private def doCommit(cmds: List[Command.Commit]): ZIO[Blocking, Nothing, Unit] = {
     val offsets   = aggregateOffsets(cmds)
     val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreach_(cmds)(_.cont.done(e))
-    val onSuccess = cont(Exit.succeed(())) <* deps.diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
+    val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
     val onFailure = (err: Throwable) =>
-      cont(Exit.fail(err)) <* deps.diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
+      cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
 
     ZIO
       .runtime[Any]
       .map(makeOffsetCommitCallback(onSuccess, onFailure))
       .flatMap { callback =>
-        deps.consumer.withConsumerM { c =>
+        consumer.withConsumerM { c =>
           // We don't wait for the completion of the commit here, because it
           // will only complete once we poll again.
           ZIO(c.commitAsync(offsets.asJava, callback))
@@ -283,7 +213,7 @@ private[consumer] final class Runloop(deps: Deps) {
   }
 
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Unit] =
-    deps.offsetRetrieval match {
+    offsetRetrieval match {
       case OffsetRetrieval.Manual(getOffsets) =>
         getOffsets(tps)
           .flatMap(offsets => ZIO.foreach(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) })
@@ -296,7 +226,7 @@ private[consumer] final class Runloop(deps: Deps) {
   private def doPoll(c: ByteArrayKafkaConsumer, requestedPartitions: Set[TopicPartition]) =
     try {
       val pollTimeout =
-        if (requestedPartitions.nonEmpty) deps.pollTimeout.asJava
+        if (requestedPartitions.nonEmpty) this.pollTimeout.asJava
         else 0.millis.asJava
 
       c.poll(pollTimeout)
@@ -314,7 +244,7 @@ private[consumer] final class Runloop(deps: Deps) {
 
   private def handlePoll(state: State): RIO[Blocking, State] =
     for {
-      pollResult <- deps.consumer.withConsumerM { c =>
+      pollResult <- consumer.withConsumerM { c =>
                      Task.effectSuspend {
 
                        val prevAssigned        = c.assignment().asScala.toSet
@@ -325,7 +255,7 @@ private[consumer] final class Runloop(deps: Deps) {
                        val records = doPoll(c, requestedPartitions)
 
                        // Check shutdown again after polling (which takes up to the poll timeout)
-                       deps.isShutdown.flatMap { shutdown =>
+                       isShutdown.flatMap { shutdown =>
                          if (shutdown) {
                            pauseAllPartitions(c) *> ZIO.succeed(
                              (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
@@ -351,7 +281,7 @@ private[consumer] final class Runloop(deps: Deps) {
                                for {
                                  output                    <- fulfillRequests(pendingRequests, bufferedRecords, records)
                                  (notFulfilled, fulfilled) = output
-                                 _ <- deps.diagnostics.emitIfEnabled(
+                                 _ <- diagnostics.emitIfEnabled(
                                        DiagnosticEvent.Poll(
                                          requestedPartitions,
                                          fulfilled.keySet,
@@ -366,18 +296,18 @@ private[consumer] final class Runloop(deps: Deps) {
                    }
       (newlyAssigned, (unfulfilledRequests, bufferedRecords)) = pollResult
       _                                                       <- ZIO.foreach_(newlyAssigned)(tp => newPartitionStream(tp))
-      stillRebalancing                                        <- deps.isRebalancing
+      stillRebalancing                                        <- isRebalancing
       newPendingCommits <- if (!stillRebalancing && state.pendingCommits.nonEmpty)
                             doCommit(state.pendingCommits).as(Nil)
                           else ZIO.succeed(state.pendingCommits)
     } yield State(unfulfilledRequests, newPendingCommits, bufferedRecords)
 
   private def handleRequest(state: State, req: Command.Request): URIO[Blocking, State] =
-    deps.consumer
+    consumer
       .withConsumer(_.assignment.asScala)
       .flatMap { assignment =>
         for {
-          rebalancing <- deps.isRebalancing
+          rebalancing <- isRebalancing
           newState <- if (!rebalancing && !assignment.contains(req.tp))
                        req.cont.fail(None).as(state)
                      else UIO.succeed(state.addRequest(req))
@@ -387,13 +317,13 @@ private[consumer] final class Runloop(deps: Deps) {
 
   private def handleCommit(state: State, cmd: Command.Commit): URIO[Blocking, State] =
     for {
-      rebalancing <- deps.isRebalancing
+      rebalancing <- isRebalancing
       newState <- if (rebalancing)
                    UIO.succeed(state.addCommit(cmd))
                  else doCommit(List(cmd)).as(state)
     } yield newState
 
-  def handleOperational(state: State, cmd: Command): RIO[Blocking, State] = cmd match {
+  private def handleOperational(state: State, cmd: Command): RIO[Blocking, State] = cmd match {
     case Command.Poll() =>
       handlePoll(state)
     case req @ Command.Request(_, _) =>
@@ -409,7 +339,7 @@ private[consumer] final class Runloop(deps: Deps) {
    * Buffered records for paused partitions will be removed to drain the stream
    * as fast as possible.
    */
-  def handleShutdown(state: State, cmd: Command): RIO[Blocking, State] = cmd match {
+  private def handleShutdown(state: State, cmd: Command): RIO[Blocking, State] = cmd match {
     case Command.Poll() =>
       // End all pending requests
       ZIO.foreach_(state.pendingRequests)(_.cont.fail(None)) *>
@@ -419,6 +349,24 @@ private[consumer] final class Runloop(deps: Deps) {
     case cmd @ Command.Commit(_, _) =>
       handleCommit(state, cmd)
   }
+
+  def run =
+    ZStream
+      .mergeAll(3, 32)(
+        ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency)),
+        ZStream.fromQueue(requestQueue),
+        ZStream.fromQueue(commitQueue)
+      )
+      .foldM(State.initial) { (state, cmd) =>
+        isShutdown.flatMap { shutdown =>
+          if (shutdown) handleShutdown(state, cmd)
+          else handleOperational(state, cmd)
+        }
+      }
+      .onError(cause => partitions.offer(Take.Fail(cause)))
+      .unit
+      .toManaged_
+      .fork
 }
 
 private[consumer] object Runloop {
@@ -433,27 +381,60 @@ private[consumer] object Runloop {
     case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
   }
 
-  def apply(deps: Deps): ZManaged[Clock with Blocking, Throwable, Runloop] = {
-    val runloop = new Runloop(deps)
+  def apply(
+    consumer: ConsumerAccess,
+    pollFrequency: Duration,
+    pollTimeout: Duration,
+    diagnostics: Diagnostics,
+    offsetRetrieval: OffsetRetrieval
+  ): ZManaged[Blocking with Clock, Nothing, Runloop] =
+    for {
+      rebalancingRef <- Ref.make(false).toManaged_
+      requestQueue   <- Queue.unbounded[Command.Request].toManaged(_.shutdown)
+      commitQueue    <- Queue.unbounded[Command.Commit].toManaged(_.shutdown)
+      partitions <- Queue
+                     .unbounded[
+                       Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]
+                     ]
+                     .map { queue =>
+                       queue.mapM {
+                         case Take.End => queue.shutdown.as(Take.End)
+                         case x        => ZIO.succeed(x)
+                       }
+                     }
+                     .toManaged(_.shutdown)
+      rebalanceListener = {
+        val trackRebalancing = RebalanceListener(
+          onAssigned = _ => rebalancingRef.set(false),
+          onRevoked = _ => rebalancingRef.set(true)
+        )
 
-    ZStream
-      .mergeAll(3, 32)(
-        deps.polls,
-        deps.requests,
-        deps.commits
-      )
-      .foldM(State.initial) { (state, cmd) =>
-        deps.isShutdown.flatMap { shutdown =>
-          if (shutdown) runloop.handleShutdown(state, cmd)
-          else runloop.handleOperational(state, cmd)
-        }
+        val emitDiagnostics = RebalanceListener(
+          assigned => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(assigned)),
+          revoked => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked))
+        )
+
+        val pausePartitionsOnRevoke =
+          RebalanceListener.onRevoked(revoked => Task(consumer.consumer.pause(revoked.asJavaCollection)))
+
+        trackRebalancing ++ emitDiagnostics ++ pausePartitionsOnRevoke
       }
-      .onError(cause => deps.partitions.offer(Take.Fail(cause)))
-      .unit
-      .toManaged_
-      .fork
-      .as(runloop)
-  }
+      shutdownRef <- Ref.make(false).toManaged_
+      runloop = new Runloop(
+        consumer,
+        pollFrequency,
+        pollTimeout,
+        requestQueue,
+        commitQueue,
+        partitions,
+        rebalancingRef,
+        rebalanceListener,
+        diagnostics,
+        shutdownRef,
+        offsetRetrieval
+      )
+      _ <- runloop.run
+    } yield runloop
 }
 
 private[internal] final case class State(

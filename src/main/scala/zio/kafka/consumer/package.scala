@@ -8,7 +8,7 @@ import zio.clock.Clock
 import zio.duration._
 import zio.kafka.serde.Deserializer
 import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.internal.{ ConsumerAccess, Deps, Runloop }
+import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
 import zio.stream._
 
 import scala.collection.compat._
@@ -265,14 +265,13 @@ package object consumer {
             val settings = env.get[ConsumerSettings]
             for {
               wrapper <- ConsumerAccess.make(settings)
-              deps <- Deps.make(
-                       wrapper,
-                       settings.pollInterval,
-                       settings.pollTimeout,
-                       env.get[Diagnostics],
-                       settings.offsetRetrieval
-                     )
-              runloop <- Runloop(deps)
+              runloop <- Runloop(
+                          wrapper,
+                          settings.pollInterval,
+                          settings.pollTimeout,
+                          env.get[Diagnostics],
+                          settings.offsetRetrieval
+                        )
             } yield Live(wrapper, settings, runloop, env.get[Deserializer[R, K]], env.get[Deserializer[R, V]])
           }
       }
