@@ -18,7 +18,6 @@ import zio.kafka.producer._
 
 object KafkaTestUtils {
   type StringProducer = Producer[Any, String, String]
-  type StringConsumer = Consumer[Any, String, String]
 
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO.access[Kafka](_.get[Kafka.Service].bootstrapServers).map(ProducerSettings(_))
@@ -72,17 +71,15 @@ object KafkaTestUtils {
         .withOffsetRetrieval(offsetRetrieval)
     }
 
-  def stringConsumer(
+  def consumer(
     groupId: String,
     clientId: String,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZLayer[Kafka with Clock with Blocking, Throwable, Consumer[Any, String, String]] =
+  ): ZLayer[Kafka with Clock with Blocking, Throwable, Consumer] =
     (ZLayer.fromEffect(consumerSettings(groupId, clientId, offsetRetrieval)) ++
-      ZLayer.requires[Clock] ++
-      ZLayer.requires[Blocking] ++
-      ZLayer.succeed(Deserializer.string: Deserializer[Any, String]) ++
-      ZLayer.succeed(diagnostics)) >>> Consumer.live[Any, String, String]
+      ZLayer.requires[Clock with Blocking] ++
+      ZLayer.succeed(diagnostics)) >>> Consumer.live
 
   def consumeWithStrings[RC](groupId: String, clientId: String, subscription: Subscription)(
     r: (String, String) => URIO[RC, Unit]

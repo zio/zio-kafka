@@ -84,8 +84,8 @@ import zio.kafka.consumer._
 
 val data: RIO[Clock with Blocking, 
               List[CommittableRecord[String, String]]] = 
-  (Consumer.subscribe[Any, String, String](Subscription.topics("topic")) *>
-  Consumer.plainStream[Any, String, String].take(50).runCollect)
+  (Consumer.subscribe(Subscription.topics("topic")) *>
+  Consumer.plainStream(Serde.string, Serde.string).take(50).runCollect)
     .provideSomeLayer(consumer)
 ```
 
@@ -97,8 +97,8 @@ import zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
 import zio.stream._
 import zio.kafka.consumer._
 
-Consumer.subscribeAnd[Any, String, String](Subscription.topics("topic150"))
-  .plainStream
+Consumer.subscribeAnd(Subscription.topics("topic150"))
+  .plainStream(Serde.string, Serde.string)
   .flattenChunks
   .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
   .map(_.offset)
@@ -115,8 +115,8 @@ import zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
 import zio.stream._
 import zio.kafka.consumer._
 
-Consumer.subscribeAnd[Any, String, String](Subscription.topics("topic150"))
-  .partitionedStream
+Consumer.subscribeAnd(Subscription.topics("topic150"))
+  .partitionedStream(Serde.string, Serde.string)
   .tap(tpAndStr => putStrLn(s"topic: ${tpAndStr._1.topic}, partition: ${tpAndStr._1.partition}"))
   .flatMap(_._2.flattenChunks)
   .tap(cr => putStrLn(s"key: ${cr.record.key}, value: ${cr.record.value}"))
@@ -140,12 +140,12 @@ val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")
 val producerSettings: ProducerSettings = ProducerSettings(List("localhost:9092"))
 
 val consumerAndProducer = 
-  Consumer.make(consumerSettings, Serde.int, Serde.long) ++
+  Consumer.make(consumerSettings) ++
   Producer.make(producerSettings, Serde.int, Serde.string)
 
 val consumeProduceStream = Consumer
-  .subscribeAnd[Any, Int, Long](Subscription.topics("my-input-topic"))
-  .plainStream
+  .subscribeAnd(Subscription.topics("my-input-topic"))
+  .plainStream(Serde.int, Serde.long)
   .map { record =>
     val key: Int    = record.record.key()
     val value: Long = record.record.value()
@@ -210,11 +210,11 @@ import zio.kafka.serde._
 import scala.util.{Try, Success, Failure}
 import zio._
 
-val consumer = Consumer.make(consumerSettings, Serde.string, Serde.string.asTry)
+val consumer = Consumer.make(consumerSettings)
 
 val stream = Consumer
-  .subscribeAnd[Any, String, Try[String]](Subscription.topics("topic150"))
-  .plainStream
+  .subscribeAnd(Subscription.topics("topic150"))
+  .plainStream(Serde.string, Serde.string.asTry)
 
 stream 
   .mapM { record => 
@@ -247,7 +247,7 @@ This library is heavily inspired and made possible by the research and implement
 
 ## Legal
 
-Copyright 2019 Itamar Ravid and the zio-kafka contributors. All rights reserved.
+Copyright 2020 Itamar Ravid and the zio-kafka contributors. All rights reserved.
 
 [Link-SonatypeReleases]: https://oss.sonatype.org/content/repositories/releases/dev/zio/zio-kafka_2.12/ "Sonatype Releases"
 [Badge-SonatypeReleases]: https://img.shields.io/nexus/r/https/oss.sonatype.org/dev.zio/zio-kafka_2.12.svg "Sonatype Releases"

@@ -5,33 +5,40 @@ import zio.RIO
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.stream.{ ZStream, ZStreamChunk }
+import zio.kafka.serde.Deserializer
 
-class SubscribedConsumer[R, K, V](
-  private val underlying: RIO[Blocking, Consumer.Service[R, K, V]]
+class SubscribedConsumer(
+  private val underlying: RIO[Blocking, Consumer.Service]
 ) {
 
-  def partitionedStream: ZStream[
+  def partitionedStream[R, K, V](keyDeserializer: Deserializer[R, K], valueDeserializer: Deserializer[R, V]): ZStream[
     Clock with Blocking,
     Throwable,
     (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
   ] =
-    ZStream.fromEffect(underlying).flatMap(_.partitionedStream)
+    ZStream.fromEffect(underlying).flatMap(_.partitionedStream(keyDeserializer, valueDeserializer))
 
-  def plainStream: ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-    ZStreamChunk(partitionedStream.flatMapPar(n = Int.MaxValue)(_._2.chunks))
+  def plainStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+    ZStreamChunk(partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue)(_._2.chunks))
 }
 
-class SubscribedConsumerFromEnvironment[R, K, V](
-  private val underlying: RIO[Blocking with Consumer[R, K, V], Consumer.Service[R, K, V]]
+class SubscribedConsumerFromEnvironment(
+  private val underlying: RIO[Blocking with Consumer, Consumer.Service]
 ) {
 
-  def partitionedStream: ZStream[
-    Clock with Blocking with Consumer[R, K, V],
+  def partitionedStream[R, K, V](keyDeserializer: Deserializer[R, K], valueDeserializer: Deserializer[R, V]): ZStream[
+    Clock with Blocking with Consumer,
     Throwable,
     (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
   ] =
-    ZStream.fromEffect(underlying).flatMap(_.partitionedStream)
+    ZStream.fromEffect(underlying).flatMap(_.partitionedStream(keyDeserializer, valueDeserializer))
 
-  def plainStream: ZStreamChunk[R with Clock with Blocking with Consumer[R, K, V], Throwable, CommittableRecord[K, V]] =
-    ZStreamChunk(partitionedStream.flatMapPar(n = Int.MaxValue)(_._2.chunks))
+  def plainStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStreamChunk[R with Clock with Blocking with Consumer, Throwable, CommittableRecord[K, V]] =
+    ZStreamChunk(partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue)(_._2.chunks))
 }

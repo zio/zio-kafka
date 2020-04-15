@@ -27,7 +27,7 @@ private final case class OffsetBatchImpl(
   offsets: Map[TopicPartition, Long],
   commitHandle: Map[TopicPartition, Long] => Task[Unit]
 ) extends OffsetBatch {
-  val commit: Task[Unit] = commitHandle(offsets)
+  def commit: Task[Unit] = commitHandle(offsets)
 
   def merge(offset: Offset) =
     copy(

@@ -36,6 +36,6 @@ private final case class OffsetImpl(
   offset: Long,
   commitHandle: Map[TopicPartition, Long] => Task[Unit]
 ) extends Offset {
-  val commit: Task[Unit] = commitHandle(Map(topicPartition    -> offset))
-  val batch: OffsetBatch = OffsetBatchImpl(Map(topicPartition -> offset), commitHandle)
+  def commit: Task[Unit] = commitHandle(Map(topicPartition    -> offset))
+  def batch: OffsetBatch = OffsetBatchImpl(Map(topicPartition -> offset), commitHandle)
 }
