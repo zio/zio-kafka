@@ -93,8 +93,8 @@ object ZIOKafka extends App {
         .currentTime(TimeUnit.MILLISECONDS)
         .flatMap { startTime =>
           Consumer
-            .subscribeAnd[Any, String, String](Subscription.topics("inputs-topic"))
-            .plainStream
+            .subscribeAnd(Subscription.topics("inputs-topic"))
+            .plainStream(Serde.string, Serde.string)
             .take(expectedCount)
             .chunks
             .map { recordChunk =>
@@ -112,7 +112,7 @@ object ZIOKafka extends App {
               )
             }
         })
-      .provideCustomLayer(Consumer.make[Any, String, String](settings, Serde.string, Serde.string))
+      .provideCustomLayer(Consumer.make(settings))
       .fold(_ => 1, _ => 0)
 
   }
