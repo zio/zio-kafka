@@ -22,7 +22,7 @@ private[consumer] final class Runloop(
   consumer: ConsumerAccess,
   pollFrequency: Duration,
   pollTimeout: Duration,
-  requestQueue: Queue[Command.Request],
+  requestQueue: RequestBuffer,
   commitQueue: Queue[Command.Commit],
   val partitions: Queue[Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]],
   rebalancingRef: Ref[Boolean],
@@ -39,7 +39,7 @@ private[consumer] final class Runloop(
         ZManaged.succeed {
           for {
             p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-            _      <- requestQueue.offer(Command.Request(tp, p)).unit
+            _      <- requestQueue.offer(Runloop.Request(tp, p)).unit
             _      <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
             result <- p.await
           } yield result
@@ -133,13 +133,13 @@ private[consumer] final class Runloop(
    * @return New pending requests and new buffered records
    */
   private def endRevoked(
-    reqs: List[Command.Request],
+    reqs: List[Runloop.Request],
     bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
     revoked: TopicPartition => Boolean
   ): UIO[
-    (List[Command.Request], Map[TopicPartition, Chunk[ByteArrayConsumerRecord]])
+    (List[Runloop.Request], Map[TopicPartition, Chunk[ByteArrayConsumerRecord]])
   ] = {
-    var acc = List[Command.Request]()
+    var acc = List[Runloop.Request]()
     val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
     buf ++= bufferedRecords
 
@@ -163,13 +163,13 @@ private[consumer] final class Runloop(
    * @return Remaining pending requests and remaining/new buffered records
    */
   private def fulfillRequests(
-    pendingRequests: List[Command.Request],
+    pendingRequests: List[Runloop.Request],
     bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
     records: ConsumerRecords[Array[Byte], Array[Byte]]
   ): UIO[
-    (List[Command.Request], Map[TopicPartition, Chunk[ByteArrayConsumerRecord]])
+    (List[Runloop.Request], Map[TopicPartition, Chunk[ByteArrayConsumerRecord]])
   ] = {
-    var acc = List[Command.Request]()
+    var acc = List[Runloop.Request]()
     val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
     buf ++= bufferedRecords
 
@@ -323,18 +323,21 @@ private[consumer] final class Runloop(
                           else ZIO.succeed(state.pendingCommits)
     } yield State(unfulfilledRequests, newPendingCommits, bufferedRecords)
 
-  private def handleRequest(state: State, req: Command.Request): URIO[Blocking, State] =
+  private def handleRequests(state: State, reqs: List[Runloop.Request]): URIO[Blocking, State] =
     consumer
       .withConsumer(_.assignment.asScala)
       .flatMap { assignment =>
         for {
           rebalancing <- isRebalancing
-          newState <- if (!rebalancing && !assignment.contains(req.tp))
-                       req.cont.fail(None).as(state)
-                     else UIO.succeed(state.addRequest(req))
+          newState <- if (rebalancing) UIO.succeed(state.addRequests(reqs))
+                     else
+                       ZIO.foldLeft(reqs)(state) { (state, req) =>
+                         if (assignment.contains(req.tp)) UIO.succeed(state.addRequest(req))
+                         else req.cont.fail(None).as(state)
+                       }
         } yield newState
       }
-      .orElse(UIO.succeed(state.addRequest(req)))
+      .orElse(UIO.succeed(state.addRequests(reqs)))
 
   private def handleCommit(state: State, cmd: Command.Commit): URIO[Blocking, State] =
     for {
@@ -356,8 +359,8 @@ private[consumer] final class Runloop(
       // End all pending requests
       ZIO.foreach_(state.pendingRequests)(_.cont.fail(None)) *>
         handlePoll(state.copy(pendingRequests = List.empty, bufferedRecords = Map.empty))
-    case Command.Request(_, cont) =>
-      cont.fail(None).as(state)
+    case Command.Requests(reqs) =>
+      ZIO.foreach(reqs)(_.cont.fail(None)).as(state)
     case cmd @ Command.Commit(_, _) =>
       handleCommit(state, cmd)
   }
@@ -365,17 +368,22 @@ private[consumer] final class Runloop(
   private def handleOperational(state: State, cmd: Command): RIO[Blocking, State] = cmd match {
     case Command.Poll() =>
       handlePoll(state)
-    case req @ Command.Request(_, _) =>
-      handleRequest(state, req)
+    case Command.Requests(reqs) =>
+      handleRequests(state, reqs).flatMap { state =>
+        // Optimization: eagerly poll if we have pending requests instead of waiting
+        // for the next scheduled poll.
+        if (state.pendingRequests.nonEmpty) handlePoll(state)
+        else UIO.succeed(state)
+      }
     case cmd @ Command.Commit(_, _) =>
       handleCommit(state, cmd)
   }
 
   def run =
     ZStream
-      .mergeAll(3, 32)(
+      .mergeAll(3, 1)(
         ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency)),
-        ZStream.fromQueue(requestQueue),
+        requestQueue.stream.map(Command.Requests(_)),
         ZStream.fromQueue(commitQueue)
       )
       .foldM(State.initial) { (state, cmd) =>
@@ -394,10 +402,11 @@ private[consumer] object Runloop {
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
   type ByteArrayConsumerRecord    = ConsumerRecord[Array[Byte], Array[Byte]]
 
+  case class Request(tp: TopicPartition, cont: Promise[Option[Throwable], Chunk[ByteArrayCommittableRecord]])
+
   sealed abstract class Command
   object Command {
-    case class Request(tp: TopicPartition, cont: Promise[Option[Throwable], Chunk[ByteArrayCommittableRecord]])
-        extends Command
+    case class Requests(requests: List[Request])                                          extends Command
     case class Poll()                                                                     extends Command
     case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
   }
@@ -411,7 +420,7 @@ private[consumer] object Runloop {
   ): ZManaged[Blocking with Clock, Nothing, Runloop] =
     for {
       rebalancingRef <- Ref.make(false).toManaged_
-      requestQueue   <- Queue.unbounded[Command.Request].toManaged(_.shutdown)
+      requestQueue   <- RequestBuffer.make.toManaged(_.shutdown)
       commitQueue    <- Queue.unbounded[Command.Commit].toManaged(_.shutdown)
       partitions <- Queue
                      .unbounded[
@@ -442,12 +451,13 @@ private[consumer] object Runloop {
 }
 
 private[internal] final case class State(
-  pendingRequests: List[Command.Request],
+  pendingRequests: List[Runloop.Request],
   pendingCommits: List[Command.Commit],
   bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]
 ) {
-  def addCommit(c: Command.Commit)   = copy(pendingCommits = c :: pendingCommits)
-  def addRequest(c: Command.Request) = copy(pendingRequests = c :: pendingRequests)
+  def addCommit(c: Command.Commit)          = copy(pendingCommits = c :: pendingCommits)
+  def addRequest(c: Runloop.Request)        = copy(pendingRequests = c :: pendingRequests)
+  def addRequests(c: List[Runloop.Request]) = copy(pendingRequests = c ++ pendingRequests)
   def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
     copy(
       bufferedRecords = recs.foldLeft(bufferedRecords) {
