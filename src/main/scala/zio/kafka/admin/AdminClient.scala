@@ -17,9 +17,8 @@ import scala.jdk.CollectionConverters._, scala.collection.compat._
 /**
  * Thin wrapper around apache java AdminClient. See java api for descriptions
  * @param adminClient
- * @param semaphore
  */
-case class AdminClient(private val adminClient: JAdminClient, private val semaphore: Semaphore) {
+case class AdminClient(private val adminClient: JAdminClient) {
   import AdminClient._
 
   /**
@@ -30,16 +29,14 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
     createTopicOptions: Option[CreateTopicsOptions] = None
   ): RIO[Blocking, Unit] = {
     val asJava = newTopics.map(_.asJava).asJavaCollection
-    semaphore.withPermit(
-      fromKafkaFutureVoid {
-        blocking
-          .effectBlocking(
-            createTopicOptions
-              .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts))
-              .all()
-          )
-      }
-    )
+    fromKafkaFutureVoid {
+      blocking
+        .effectBlocking(
+          createTopicOptions
+            .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts))
+            .all()
+        )
+    }
   }
 
   /**
@@ -56,16 +53,13 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
     deleteTopicsOptions: Option[DeleteTopicsOptions] = None
   ): RIO[Blocking, Unit] = {
     val asJava = topics.asJavaCollection
-
-    semaphore.withPermit {
-      fromKafkaFutureVoid {
-        blocking
-          .effectBlocking(
-            deleteTopicsOptions
-              .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts))
-              .all()
-          )
-      }
+    fromKafkaFutureVoid {
+      blocking
+        .effectBlocking(
+          deleteTopicsOptions
+            .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts))
+            .all()
+        )
     }
   }
 
@@ -79,13 +73,11 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
    * List the topics in the cluster.
    */
   def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): RIO[Blocking, Map[String, TopicListing]] =
-    semaphore.withPermit {
-      fromKafkaFuture {
-        blocking.effectBlocking(
-          listTopicsOptions.fold(adminClient.listTopics())(opts => adminClient.listTopics(opts)).namesToListings()
-        )
-      }.map(_.asScala.toMap)
-    }
+    fromKafkaFuture {
+      blocking.effectBlocking(
+        listTopicsOptions.fold(adminClient.listTopics())(opts => adminClient.listTopics(opts)).namesToListings()
+      )
+    }.map(_.asScala.toMap)
 
   /**
    * Describe the specified topics.
@@ -95,15 +87,13 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
     describeTopicsOptions: Option[DescribeTopicsOptions] = None
   ): RIO[Blocking, Map[String, TopicDescription]] = {
     val asJava = topicNames.asJavaCollection
-    semaphore.withPermit {
-      fromKafkaFuture {
-        blocking.effectBlocking(
-          describeTopicsOptions
-            .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
-            .all()
-        )
-      }.map(_.asScala.view.mapValues(AdminClient.TopicDescription(_)).toMap)
-    }
+    fromKafkaFuture {
+      blocking.effectBlocking(
+        describeTopicsOptions
+          .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
+          .all()
+      )
+    }.map(_.asScala.view.mapValues(AdminClient.TopicDescription(_)).toMap)
   }
 
   /**
@@ -114,15 +104,12 @@ case class AdminClient(private val adminClient: JAdminClient, private val semaph
     createPartitionsOptions: Option[CreatePartitionsOptions] = None
   ): RIO[Blocking, Unit] = {
     val asJava = newPartitions.view.mapValues(_.asJava).toMap.asJava
-
-    semaphore.withPermit {
-      fromKafkaFutureVoid {
-        blocking.effectBlocking(
-          createPartitionsOptions
-            .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts))
-            .all()
-        )
-      }
+    fromKafkaFutureVoid {
+      blocking.effectBlocking(
+        createPartitionsOptions
+          .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts))
+          .all()
+      )
     }
   }
 }
@@ -188,10 +175,7 @@ object AdminClient {
   }
 
   def make(settings: AdminClientSettings) =
-    ZManaged.make {
-      for {
-        ac  <- ZIO(JAdminClient.create(settings.driverSettings.asJava))
-        sem <- Semaphore.make(1L)
-      } yield AdminClient(ac, sem)
-    }(client => ZIO.effectTotal(client.adminClient.close(settings.closeTimeout.asJava)))
+    ZManaged.make(
+      ZIO(JAdminClient.create(settings.driverSettings.asJava)).map(ac => AdminClient(ac))
+    )(client => ZIO.effectTotal(client.adminClient.close(settings.closeTimeout.asJava)))
 }
