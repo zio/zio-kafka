@@ -13,7 +13,7 @@ import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.embedded.Kafka
-import zio.kafka.serde.{ Deserializer, Serde, Serializer }
+import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.producer._
 
 object KafkaTestUtils {
@@ -23,7 +23,7 @@ object KafkaTestUtils {
     ZIO.access[Kafka](_.get[Kafka.Service].bootstrapServers).map(ProducerSettings(_))
 
   val stringProducer: ZLayer[Kafka, Throwable, StringProducer] =
-    (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
+    (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(Serializers(Serde.string, Serde.string))) >>>
       Producer.live[Any, String, String]
 
   def produceOne(

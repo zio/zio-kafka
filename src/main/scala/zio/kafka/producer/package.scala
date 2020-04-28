@@ -159,12 +159,11 @@ package object producer {
       private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout.asJava))
     }
 
-    def live[R: Tag, K: Tag, V: Tag]: ZLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[
-      ProducerSettings
-    ], Throwable, Producer[R, K, V]] =
+    def live[R: Tag, K: Tag, V: Tag]
+      : ZLayer[Has[Serializers[R, K, V]] with Has[ProducerSettings], Throwable, Producer[R, K, V]] =
       ZLayer
-        .fromServicesManaged[Serializer[R, K], Serializer[R, V], ProducerSettings, Any, Throwable, Service[R, K, V]] {
-          (keySerializer, valueSerializer, settings) => make(settings, keySerializer, valueSerializer)
+        .fromServicesManaged[Serializers[R, K, V], ProducerSettings, Any, Throwable, Service[R, K, V]] {
+          (serializers, settings) => make(settings, serializers.keySerializer, serializers.valueSerializer)
         }
 
     def make[R, K, V](
@@ -237,3 +236,10 @@ package object producer {
       withProducerService(_.flush)
   }
 }
+
+/**
+ * This class exists to solve problem of clashing [[zio.kafka.serde.Serializer]] implementations when
+ * key and value serializers have same type.
+ * Without it ZIO layer would discard one key or value serializer and use the another.
+ * */
+case class Serializers[R, K, V](keySerializer: Serializer[R, K], valueSerializer: Serializer[R, V])
