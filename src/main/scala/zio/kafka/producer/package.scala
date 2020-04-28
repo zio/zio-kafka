@@ -137,17 +137,10 @@ package object producer {
     ], Throwable, Producer[R, K, V]] =
       ZLayer
         .fromServicesManaged[Serializer[R, K], Serializer[R, V], ProducerSettings, Any, Throwable, Service[R, K, V]] {
-          (keySerializer, valueSerializer, settings) => makeManaged(settings, keySerializer, valueSerializer)
+          (keySerializer, valueSerializer, settings) => make(settings, keySerializer, valueSerializer)
         }
 
-    def make[R: Tagged, K: Tagged, V: Tagged](
-      settings: ProducerSettings,
-      keySerializer: Serializer[R, K],
-      valueSerializer: Serializer[R, V]
-    ): ZLayer[Any, Throwable, Producer[R, K, V]] =
-      ZLayer.fromManaged(makeManaged(settings, keySerializer, valueSerializer))
-
-    def makeManaged[R: Tagged, K: Tagged, V: Tagged](
+    def make[R, K, V](
       settings: ProducerSettings,
       keySerializer: Serializer[R, K],
       valueSerializer: Serializer[R, V]

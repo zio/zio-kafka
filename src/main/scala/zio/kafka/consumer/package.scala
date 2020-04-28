@@ -266,16 +266,10 @@ package object consumer {
 
     def live: ZLayer[Clock with Blocking with Has[ConsumerSettings] with Has[Diagnostics], Throwable, Consumer] =
       ZLayer.fromServicesManaged[ConsumerSettings, Diagnostics, Clock with Blocking, Throwable, Service] {
-        (settings, diagnostics) => makeManaged(settings, diagnostics)
+        (settings, diagnostics) => make(settings, diagnostics)
       }
 
     def make(
-      settings: ConsumerSettings,
-      diagnostics: Diagnostics = Diagnostics.NoOp
-    ): ZLayer[Clock with Blocking, Throwable, Consumer] =
-      ZLayer.fromManaged(makeManaged(settings, diagnostics))
-
-    def makeManaged(
       settings: ConsumerSettings,
       diagnostics: Diagnostics = Diagnostics.NoOp
     ): ZManaged[Clock with Blocking, Throwable, Service] =
@@ -416,7 +410,7 @@ package object consumer {
       f: (K, V) => ZIO[R, Nothing, Unit]
     ): ZIO[R with R1 with Blocking with Clock, Throwable, Unit] =
       Consumer
-        .makeManaged(settings)
+        .make(settings)
         .use(_.consumeWith(subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
 
     /**
