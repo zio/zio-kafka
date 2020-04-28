@@ -265,28 +265,24 @@ package object consumer {
       ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
     def live: ZLayer[Clock with Blocking with Has[ConsumerSettings] with Has[Diagnostics], Throwable, Consumer] =
-      ZLayer.fromManaged {
-        ZManaged
-          .accessManaged[Clock with Blocking with Has[ConsumerSettings] with Has[Diagnostics]] { env =>
-            val settings = env.get[ConsumerSettings]
-            for {
-              wrapper <- ConsumerAccess.make(settings)
-              runloop <- Runloop(
-                          wrapper,
-                          settings.pollInterval,
-                          settings.pollTimeout,
-                          env.get[Diagnostics],
-                          settings.offsetRetrieval
-                        )
-            } yield Live(wrapper, settings, runloop)
-          }
+      ZLayer.fromServicesManaged[ConsumerSettings, Diagnostics, Clock with Blocking, Throwable, Service] {
+        (settings, diagnostics) => make(settings, diagnostics)
       }
 
     def make(
       settings: ConsumerSettings,
       diagnostics: Diagnostics = Diagnostics.NoOp
-    ): ZLayer[Clock with Blocking, Throwable, Consumer] =
-      ((ZLayer.requires[Clock with Blocking] ++ ZLayer.succeed(settings) ++ ZLayer.succeed(diagnostics)) >>> live)
+    ): ZManaged[Clock with Blocking, Throwable, Service] =
+      for {
+        wrapper <- ConsumerAccess.make(settings)
+        runloop <- Runloop(
+                    wrapper,
+                    settings.pollInterval,
+                    settings.pollTimeout,
+                    diagnostics,
+                    settings.offsetRetrieval
+                  )
+      } yield Live(wrapper, settings, runloop)
 
     def withConsumerService[R, A](
       r: Service => RIO[R with Blocking, A]
@@ -415,8 +411,6 @@ package object consumer {
     ): ZIO[R with R1 with Blocking with Clock, Throwable, Unit] =
       Consumer
         .make(settings)
-        .build
-        .map(_.get[Service])
         .use(_.consumeWith(subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
 
     /**

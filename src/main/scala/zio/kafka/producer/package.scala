@@ -135,29 +135,25 @@ package object producer {
     def live[R: Tagged, K: Tagged, V: Tagged]: ZLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[
       ProducerSettings
     ], Throwable, Producer[R, K, V]] =
-      ZLayer.fromManaged {
-        ZIO
-          .accessM[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[ProducerSettings]] { env =>
-            val settings = env.get[ProducerSettings]
-            ZIO {
-              val props = settings.driverSettings.asJava
-              val rawProducer = new KafkaProducer[Array[Byte], Array[Byte]](
-                props,
-                new ByteArraySerializer(),
-                new ByteArraySerializer()
-              )
-              Live(rawProducer, settings, env.get[Serializer[R, K]], env.get[Serializer[R, V]])
-            }
-          }
-          .toManaged(_.close)
-      }
+      ZLayer
+        .fromServicesManaged[Serializer[R, K], Serializer[R, V], ProducerSettings, Any, Throwable, Service[R, K, V]] {
+          (keySerializer, valueSerializer, settings) => make(settings, keySerializer, valueSerializer)
+        }
 
-    def make[R: Tagged, K: Tagged, V: Tagged](
+    def make[R, K, V](
       settings: ProducerSettings,
       keySerializer: Serializer[R, K],
       valueSerializer: Serializer[R, V]
-    ): ZLayer[Any, Throwable, Producer[R, K, V]] =
-      (ZLayer.succeed(settings) ++ ZLayer.succeed(keySerializer) ++ ZLayer.succeed(valueSerializer)) >>> live[R, K, V]
+    ): ZManaged[Any, Throwable, Service[R, K, V]] =
+      ZIO.effect {
+        val props = settings.driverSettings.asJava
+        val rawProducer = new KafkaProducer[Array[Byte], Array[Byte]](
+          props,
+          new ByteArraySerializer(),
+          new ByteArraySerializer()
+        )
+        Live(rawProducer, settings, keySerializer, valueSerializer)
+      }.toManaged(_.close)
 
     def withProducerService[R: Tagged, K: Tagged, V: Tagged, A](
       r: Producer.Service[R, K, V] => RIO[R with Blocking, A]

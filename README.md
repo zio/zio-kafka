@@ -60,19 +60,17 @@ If you require more control over the consumption process, read on!
 
 ## Consuming Kafka topics using ZIO Streams
 
-First, create a consumer using the ConsumerSettings instance and the
-appropriate deserializers:
+First, create a consumer using the ConsumerSettings instance:
 ```scala
-import zio.ZLayer, zio.blocking.Blocking, zio.clock.Clock 
+import zio.ZLayer, zio.ZManaged, zio.blocking.Blocking, zio.clock.Clock
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
-import zio.kafka.serde.Deserializer
 
 val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
-val consumer: ZLayer[Clock with Blocking, Throwable, Consumer[Any, String, String]] = 
-  Consumer.make(consumerSettings, Deserializer.string, Deserializer.string)
+val consumerManaged: ZManaged[Clock with Blocking, Throwable, Consumer.Service] =
+  Consumer.make(consumerSettings)
+val consumer: ZLayer[Clock with Blocking, Throwable, Consumer] =
+  ZLayer.fromManaged(consumerManaged)
 ```
-
-More deserializers are available on the `Deserializer` object.
 
 The consumer returned from `Consumer.make` is wrapped in a `ZLayer`
 to allow for easy composition with other ZIO environment components. 
@@ -81,6 +79,7 @@ an example:
 ```scala
 import zio._, zio.blocking.Blocking, zio.clock.Clock 
 import zio.kafka.consumer._
+import zio.kafka.serde._
 
 val data: RIO[Clock with Blocking, 
               List[CommittableRecord[String, String]]] = 
@@ -94,7 +93,6 @@ methods:
 
 ```scala
 import zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
-import zio.stream._
 import zio.kafka.consumer._
 
 Consumer.subscribeAnd(Subscription.topics("topic150"))
@@ -112,7 +110,6 @@ to the consumer, you may use the `Consumer#partitionedStream` method,
 which creates a nested stream of partitions:
 ```scala
 import zio.blocking.Blocking, zio.clock.Clock, zio.console.putStrLn
-import zio.stream._
 import zio.kafka.consumer._
 
 Consumer.subscribeAnd(Subscription.topics("topic150"))
@@ -131,6 +128,7 @@ Consumer.subscribeAnd(Subscription.topics("topic150"))
 This example shows how to consume messages from topic `topic_a` and produce transformed messages to `topic_b`, after which consumer offsets are committed. Processing is done in chunks using `ZStreamChunk` for more efficiency.
 
 ```scala
+import zio.ZLayer
 import zio.kafka.consumer._
 import zio.kafka.producer._
 import zio.kafka.serde._
@@ -140,8 +138,8 @@ val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")
 val producerSettings: ProducerSettings = ProducerSettings(List("localhost:9092"))
 
 val consumerAndProducer = 
-  Consumer.make(consumerSettings) ++
-  Producer.make(producerSettings, Serde.int, Serde.string)
+  ZLayer.fromManaged(Consumer.make(consumerSettings)) ++
+    ZLayer.fromManaged(Producer.make(producerSettings, Serde.int, Serde.string))
 
 val consumeProduceStream = Consumer
   .subscribeAnd(Subscription.topics("my-input-topic"))

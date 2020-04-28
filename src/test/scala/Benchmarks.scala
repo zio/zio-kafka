@@ -26,12 +26,14 @@ object PopulateTopic extends App {
       .mapMPar(5)(_.flatMap(chunk => console.putStrLn(s"Wrote chunk of ${chunk.size}")))
       .runDrain
       .provideCustomLayer(
-        Producer.make(
-          ProducerSettings(List("localhost:9092"))
-            .withProperty(ProducerConfig.ACKS_CONFIG, "1")
-            .withProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4"),
-          Serde.string,
-          Serde.string
+        ZLayer.fromManaged(
+          Producer.make(
+            ProducerSettings(List("localhost:9092"))
+              .withProperty(ProducerConfig.ACKS_CONFIG, "1")
+              .withProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4"),
+            Serde.string,
+            Serde.string
+          )
         )
       )
       .fold(_ => 1, _ => 0)
@@ -112,7 +114,7 @@ object ZIOKafka extends App {
               )
             }
         })
-      .provideCustomLayer(Consumer.make(settings))
+      .provideCustomLayer(ZLayer.fromManaged(Consumer.make(settings)))
       .fold(_ => 1, _ => 0)
 
   }

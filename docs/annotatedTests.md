@@ -133,7 +133,7 @@ withProducer creates settings and a ZManaged\[Producer\]. It then creates liveCl
 zio environment with the Live clock (which is essential when running code that
 uses scheduling or other timing features - as does much of zio-kafka)
 
-The actual poroducer operation function is simply wrapped in the producer.use
+The actual producer operation function is simply wrapped in the producer.use
 ```scala
               _ <- producer.produce(new ProducerRecord("topic", "boo", "baa"))
 ```

@@ -29,8 +29,7 @@ object ProducerSpec extends DefaultRunnableSpec {
           List(new ProducerRecord(topic1, key1, value1), new ProducerRecord(topic2, key2, value2))
         )
         def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
-          Consumer.make(settings).build.flatMap { service =>
-            val c = service.get
+          Consumer.make(settings).flatMap { c =>
             (c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.string).toQueue())
           }
 
