@@ -20,7 +20,7 @@ package object producer {
     trait Service[R, K, V] {
 
       /**
-       * Produce a single record. The effect returned from this method has two layers and
+       * Produces a single record. The effect returned from this method has two layers and
        * describes the completion of two actions:
        * 1. The outer layer describes the enqueueing of the record to the Producer's internal
        *    buffer.
@@ -30,11 +30,12 @@ package object producer {
        * It is usually recommended to not await the inner layer of every individual record,
        * but enqueue a batch of records and await all of their acknowledgements at once. That
        * amortizes the cost of sending requests to Kafka and increases throughput.
+       * See [[produce]] for version that awaits broker acknowledgement.
        */
-      def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]]
+      def produceAsync(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]]
 
       /**
-       * Produces a chunk of records record. The effect returned from this method has two layers
+       * Produces a chunk of records. The effect returned from this method has two layers
        * and describes the completion of two actions:
        * 1. The outer layer describes the enqueueing of all the records to the Producer's
        *    internal buffer.
@@ -45,7 +46,19 @@ package object producer {
        * outer layer will also signal the transmission of part of the chunk. Regardless,
        * awaiting the inner layer guarantees the transmission of the entire chunk.
        */
-      def produceChunk(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Task[Chunk[RecordMetadata]]]
+      def produceChunkAsync(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Task[Chunk[RecordMetadata]]]
+
+      /**
+       * Produces a single record and await broker acknowledgement. See [[produceAsync]] for
+       * version that allows to avoid round-trip-time penalty for each record.
+       */
+      def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, RecordMetadata]
+
+      /**
+       * Produces a chunk of records. See [[produceChunkAsync]] for version that allows
+       * to avoid round-trip-time penalty for each chunk.
+       */
+      def produceChunk(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Chunk[RecordMetadata]]
 
       /**
        * Flushes the producer's internal buffer. This will guarantee that all records
@@ -63,7 +76,7 @@ package object producer {
       keySerializer: Serializer[R, K],
       valueSerializer: Serializer[R, V]
     ) extends Service[R, K, V] {
-      override def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]] =
+      override def produceAsync(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]] =
         for {
           done             <- Promise.make[Throwable, RecordMetadata]
           serializedRecord <- serialize(record)
@@ -83,7 +96,7 @@ package object producer {
               }
         } yield done.await
 
-      override def produceChunk(
+      override def produceChunkAsync(
         records: Chunk[ProducerRecord[K, V]]
       ): RIO[R with Blocking, Task[Chunk[RecordMetadata]]] =
         if (records.isEmpty) ZIO.succeed(Task.succeed(Chunk.empty))
@@ -120,6 +133,14 @@ package object producer {
                 }
           } yield done.await
         }
+
+      override def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, RecordMetadata] =
+        produceAsync(record).flatten
+
+      override def produceChunk(
+        records: Chunk[ProducerRecord[K, V]]
+      ): RIO[R with Blocking, Chunk[RecordMetadata]] =
+        produceChunkAsync(records).flatten
 
       override def flush: RIO[Blocking, Unit] = effectBlocking(p.flush())
 
@@ -161,11 +182,27 @@ package object producer {
       ZIO.accessM(env => r(env.get[Producer.Service[R, K, V]]))
 
     /**
+     * Accessor method for [[Service.produceAsync]]
+     */
+    def produceAsync[R: Tagged, K: Tagged, V: Tagged](
+      record: ProducerRecord[K, V]
+    ): RIO[R with Blocking with Producer[R, K, V], Task[RecordMetadata]] =
+      withProducerService(_.produceAsync(record))
+
+    /**
+     * Accessor method for [[Service.produceChunkAsync]]
+     */
+    def produceChunkAsync[R: Tagged, K: Tagged, V: Tagged](
+      records: Chunk[ProducerRecord[K, V]]
+    ): RIO[R with Blocking with Producer[R, K, V], Task[Chunk[RecordMetadata]]] =
+      withProducerService(_.produceChunkAsync(records))
+
+    /**
      * Accessor method for [[Service.produce]]
      */
     def produce[R: Tagged, K: Tagged, V: Tagged](
       record: ProducerRecord[K, V]
-    ): RIO[R with Blocking with Producer[R, K, V], Task[RecordMetadata]] =
+    ): RIO[R with Blocking with Producer[R, K, V], RecordMetadata] =
       withProducerService(_.produce(record))
 
     /**
@@ -173,7 +210,7 @@ package object producer {
      */
     def produceChunk[R: Tagged, K: Tagged, V: Tagged](
       records: Chunk[ProducerRecord[K, V]]
-    ): RIO[R with Blocking with Producer[R, K, V], Task[Chunk[RecordMetadata]]] =
+    ): RIO[R with Blocking with Producer[R, K, V], Chunk[RecordMetadata]] =
       withProducerService(_.produceChunk(records))
 
     /**
