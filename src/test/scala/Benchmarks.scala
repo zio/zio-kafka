@@ -22,7 +22,7 @@ object PopulateTopic extends App {
     dataStream(872000).map {
       case (k, v) => new ProducerRecord("inputs-topic", null, null, k, v)
     }.chunks
-      .mapM(Producer.produceChunk[Any, String, String])
+      .mapM(Producer.produceChunkAsync[Any, String, String])
       .mapMPar(5)(_.flatMap(chunk => console.putStrLn(s"Wrote chunk of ${chunk.size}")))
       .runDrain
       .provideCustomLayer(

@@ -34,7 +34,7 @@ object ProducerSpec extends DefaultRunnableSpec {
           }
 
         for {
-          outcome  <- Producer.produceChunk[Any, String, String](chunks).flatten
+          outcome  <- Producer.produceChunk[Any, String, String](chunks)
           settings <- consumerSettings("testGroup", "testClient")
           record1 <- withConsumer(Topics(Set(topic1)), settings).use { consumer =>
                       for {
@@ -59,7 +59,7 @@ object ProducerSpec extends DefaultRunnableSpec {
       testM("an empty chunk of records") {
         val chunks = Chunk.fromIterable(List.empty)
         for {
-          outcome <- Producer.produceChunk[Any, String, String](chunks).flatten
+          outcome <- Producer.produceChunk[Any, String, String](chunks)
         } yield assert(outcome.length)(equalTo(0))
       }
     ).provideSomeLayerShared[TestEnvironment](
