@@ -7,7 +7,6 @@ import zio.kafka.KafkaTestUtils._
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
-import zio.stream.Take
 import zio.test.Assertion._
 import zio.test._
 import zio.test.environment.TestEnvironment
@@ -29,17 +28,16 @@ object ProducerSpec extends DefaultRunnableSpec {
           List(new ProducerRecord(topic1, key1, value1), new ProducerRecord(topic2, key2, value2))
         )
         def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
-          Consumer.make(settings).build.flatMap { service =>
-            val c = service.get
+          Consumer.make(settings).flatMap { c =>
             (c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.string).toQueue())
           }
 
         for {
-          outcome  <- Producer.produceChunk[Any, String, String](chunks).flatten
+          outcome  <- Producer.produceChunk[Any, String, String](chunks)
           settings <- consumerSettings("testGroup", "testClient")
           record1 <- withConsumer(Topics(Set(topic1)), settings).use { consumer =>
                       for {
-                        messages <- Take.option(consumer.take).someOrFail(new NoSuchElementException)
+                        messages <- consumer.take.flatMap(ZIO.done(_)).mapError(_.getOrElse(new NoSuchElementException))
                         record = messages
                           .filter(rec => rec.record.key == key1 && rec.record.value == value1)
                           .toSeq
@@ -47,7 +45,7 @@ object ProducerSpec extends DefaultRunnableSpec {
                     }
           record2 <- withConsumer(Topics(Set(topic2)), settings).use { consumer =>
                       for {
-                        messages <- Take.option(consumer.take).someOrFail(new NoSuchElementException)
+                        messages <- consumer.take.flatMap(ZIO.done(_)).mapError(_.getOrElse(new NoSuchElementException))
                         record   = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
                       } yield record
                     }
@@ -60,7 +58,7 @@ object ProducerSpec extends DefaultRunnableSpec {
       testM("an empty chunk of records") {
         val chunks = Chunk.fromIterable(List.empty)
         for {
-          outcome <- Producer.produceChunk[Any, String, String](chunks).flatten
+          outcome <- Producer.produceChunk[Any, String, String](chunks)
         } yield assert(outcome.length)(equalTo(0))
       }
     ).provideSomeLayerShared[TestEnvironment](

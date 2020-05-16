@@ -31,7 +31,7 @@ object KafkaTestUtils {
     key: String,
     message: String
   ): ZIO[Blocking with StringProducer, Throwable, RecordMetadata] =
-    Producer.produce[Any, String, String](new ProducerRecord(topic, key, message)).flatten
+    Producer.produce[Any, String, String](new ProducerRecord(topic, key, message))
 
   def produceMany(
     topic: String,
@@ -42,7 +42,6 @@ object KafkaTestUtils {
       .produceChunk[Any, String, String](Chunk.fromIterable(kvs.map {
         case (k, v) => new ProducerRecord(topic, partition, null, k, v)
       }))
-      .flatten
 
   def produceMany(
     topic: String,
@@ -52,7 +51,6 @@ object KafkaTestUtils {
       .produceChunk[Any, String, String](Chunk.fromIterable(kvs.map {
         case (k, v) => new ProducerRecord(topic, k, v)
       }))
-      .flatten
 
   def consumerSettings(groupId: String, clientId: String, offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()) =
     ZIO.access[Kafka] { kafka: Kafka =>

@@ -24,7 +24,7 @@ private[consumer] final class Runloop(
   pollTimeout: Duration,
   requestQueue: RequestBuffer,
   commitQueue: Queue[Command.Commit],
-  val partitions: Queue[Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]],
+  val partitions: Queue[Exit[Option[Throwable], (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
   rebalancingRef: Ref[Boolean],
   diagnostics: Diagnostics,
   shutdownRef: Ref[Boolean],
@@ -34,7 +34,7 @@ private[consumer] final class Runloop(
   private val isShutdown    = shutdownRef.get
 
   def newPartitionStream(tp: TopicPartition) = {
-    val stream = ZStreamChunk {
+    val stream =
       ZStream {
         ZManaged.succeed {
           for {
@@ -45,15 +45,14 @@ private[consumer] final class Runloop(
           } yield result
         }
       }
-    }
 
-    partitions.offer(Take.Value(tp -> stream)).unit
+    partitions.offer(Exit.succeed(tp -> stream)).unit
   }
 
   def gracefulShutdown: UIO[Unit] =
     for {
       shutdown <- shutdownRef.modify((_, true))
-      _        <- partitions.offer(Take.End).when(!shutdown)
+      _        <- partitions.offer(Exit.fail(None)).when(!shutdown)
     } yield ()
 
   val rebalanceListener = {
@@ -392,7 +391,7 @@ private[consumer] final class Runloop(
           else handleOperational(state, cmd)
         }
       }
-      .onError(cause => partitions.offer(Take.Fail(cause)))
+      .onError(cause => partitions.offer(Exit.halt(cause.map(Some(_)))))
       .unit
       .toManaged_
       .fork
@@ -424,12 +423,12 @@ private[consumer] object Runloop {
       commitQueue    <- Queue.unbounded[Command.Commit].toManaged(_.shutdown)
       partitions <- Queue
                      .unbounded[
-                       Take[Throwable, (TopicPartition, ZStreamChunk[Any, Throwable, ByteArrayCommittableRecord])]
+                       Exit[Option[Throwable], (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
                      ]
                      .map { queue =>
                        queue.mapM {
-                         case Take.End => queue.shutdown.as(Take.End)
-                         case x        => ZIO.succeed(x)
+                         case e @ Exit.Failure(cause) if cause.contains(Cause.fail(None)) => queue.shutdown.as(e)
+                         case x                                                           => ZIO.succeed(x)
                        }
                      }
                      .toManaged(_.shutdown)
