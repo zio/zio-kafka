@@ -21,8 +21,7 @@ object PopulateTopic extends App {
   def run(args: List[String]): ZIO[zio.ZEnv, Nothing, Int] =
     dataStream(872000).map {
       case (k, v) => new ProducerRecord("inputs-topic", null, null, k, v)
-    }.chunks
-      .mapM(Producer.produceChunkAsync[Any, String, String])
+    }.mapChunksM(Producer.produceChunkAsync[Any, String, String](_).map(Chunk(_)))
       .mapMPar(5)(_.flatMap(chunk => console.putStrLn(s"Wrote chunk of ${chunk.size}")))
       .runDrain
       .provideCustomLayer(
@@ -97,14 +96,13 @@ object ZIOKafka extends App {
           Consumer
             .subscribeAnd(Subscription.topics("inputs-topic"))
             .plainStream(Serde.string, Serde.string)
-            .take(expectedCount)
-            .chunks
-            .map { recordChunk =>
+            .take(expectedCount.toLong)
+            .mapChunks { recordChunk =>
               val messageCount = recordChunk.size
               println(s"Got chunk of ${messageCount}")
-              val lengthCount = recordChunk.fold(0)(_ + _.value.length)
+              val lengthCount = recordChunk.foldLeft(0)(_ + _.value.length)
 
-              (messageCount, lengthCount)
+              Chunk(messageCount -> lengthCount)
             }
             .runDrain *>
             clock.currentTime(TimeUnit.MILLISECONDS).flatMap { endTime =>
