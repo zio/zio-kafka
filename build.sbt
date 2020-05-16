@@ -68,7 +68,9 @@ libraryDependencies ++= Seq(
   "org.scala-lang.modules"  %% "scala-collection-compat" % "2.1.6",
   compilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full)
 ) ++ {
-  if (scalaBinaryVersion.value == "2.13") silencer else Seq.empty
+  if (scalaBinaryVersion.value == "2.13") silencer
+  else if (scalaBinaryVersion.value == "2.12") silencer
+  else Seq.empty
 }
 
 Compile / compile / scalacOptions ++= {

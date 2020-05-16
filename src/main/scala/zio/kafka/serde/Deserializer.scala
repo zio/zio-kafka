@@ -1,10 +1,11 @@
 package zio.kafka.serde
 
-import zio.{ RIO, Task }
-
-import scala.util.{ Failure, Success, Try }
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Deserializer => KafkaDeserializer }
+import zio.{ RIO, Task, ZIO }
+
+import scala.annotation.nowarn
+import scala.util.{ Failure, Success, Try }
 
 /**
  * Deserializer from byte array to a value of some type T
@@ -42,6 +43,9 @@ trait Deserializer[-R, +T] {
    */
   def asTry: Deserializer[R, Try[T]] =
     Deserializer(deserialize(_, _, _).fold(e => Failure(e), v => Success(v)))
+
+  def asOption(implicit @nowarn ev: T <:< AnyRef): Deserializer[R, Option[T]] =
+    Deserializer((topic, headers, data) => ZIO.foreach(Option(data))(deserialize(topic, headers, _)))
 }
 
 object Deserializer extends Serdes {

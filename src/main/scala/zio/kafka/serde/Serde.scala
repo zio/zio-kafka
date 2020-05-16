@@ -25,6 +25,9 @@ trait Serde[-R, T] extends Deserializer[R, T] with Serializer[R, T] {
    */
   def inmapM[R1 <: R, U](f: T => RIO[R1, U])(g: U => RIO[R1, T]): Serde[R1, U] =
     Serde(mapM(f))(contramapM(g))
+
+  def asOption(implicit ev: T <:< AnyRef, ev2: Null <:< T): Serde[R, Option[T]] =
+    Serde(super[Deserializer].asOption)(super[Serializer].asOption)
 }
 
 object Serde extends Serdes {
