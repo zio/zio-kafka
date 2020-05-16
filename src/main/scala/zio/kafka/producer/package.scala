@@ -7,7 +7,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio._
 import zio.blocking._
 import zio.kafka.serde.Serializer
-import zio.stream.ZSink
+import zio.stream.ZTransducer
 
 import scala.jdk.CollectionConverters._
 
@@ -18,6 +18,21 @@ package object producer {
 
   object Producer {
     trait Service[R, K, V] {
+
+      /**
+       * Produces a single record and await broker acknowledgement. See [[produceAsync]] for
+       * version that allows to avoid round-trip-time penalty for each record.
+       */
+      def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, RecordMetadata]
+
+      /**
+       * A stream transducer that produces all records from the stream.
+       */
+      final val produceAll: ZTransducer[R with Blocking, Throwable, ProducerRecord[K, V], RecordMetadata] =
+        ZTransducer.fromPush {
+          case None        => UIO.succeed(Chunk.empty)
+          case Some(chunk) => produceChunk(chunk)
+        }
 
       /**
        * Produces a single record. The effect returned from this method has two layers and
@@ -49,12 +64,6 @@ package object producer {
       def produceChunkAsync(records: Chunk[ProducerRecord[K, V]]): RIO[R with Blocking, Task[Chunk[RecordMetadata]]]
 
       /**
-       * Produces a single record and await broker acknowledgement. See [[produceAsync]] for
-       * version that allows to avoid round-trip-time penalty for each record.
-       */
-      def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, RecordMetadata]
-
-      /**
        * Produces a chunk of records. See [[produceChunkAsync]] for version that allows
        * to avoid round-trip-time penalty for each chunk.
        */
@@ -65,9 +74,6 @@ package object producer {
        * currently buffered will be transmitted to the broker.
        */
       def flush: RIO[Blocking, Unit]
-
-      final def stream: ZSink[R with Blocking, Throwable, Nothing, Chunk[ProducerRecord[K, V]], Unit] =
-        ZSink.drain.contramapM(produceChunk)
     }
 
     final case class Live[R, K, V](
@@ -153,7 +159,7 @@ package object producer {
       private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout.asJava))
     }
 
-    def live[R: Tagged, K: Tagged, V: Tagged]: ZLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[
+    def live[R: Tag, K: Tag, V: Tag]: ZLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[
       ProducerSettings
     ], Throwable, Producer[R, K, V]] =
       ZLayer
@@ -176,15 +182,34 @@ package object producer {
         Live(rawProducer, settings, keySerializer, valueSerializer)
       }.toManaged(_.close)
 
-    def withProducerService[R: Tagged, K: Tagged, V: Tagged, A](
+    def withProducerService[R: Tag, K: Tag, V: Tag, A](
       r: Producer.Service[R, K, V] => RIO[R with Blocking, A]
     ): RIO[R with Blocking with Producer[R, K, V], A] =
       ZIO.accessM(env => r(env.get[Producer.Service[R, K, V]]))
 
     /**
+     * Accessor method for [[Service.produce]]
+     */
+    def produce[R: Tag, K: Tag, V: Tag](
+      record: ProducerRecord[K, V]
+    ): RIO[R with Blocking with Producer[R, K, V], RecordMetadata] =
+      withProducerService(_.produce(record))
+
+    /**
+     * A stream transducer that produces all records from the stream.
+     */
+    def produceAll[R: Tag, K: Tag, V: Tag]
+      : ZTransducer[R with Blocking with Producer[R, K, V], Throwable, ProducerRecord[K, V], RecordMetadata] =
+      ZTransducer.fromPush {
+        case None => UIO.succeed(Chunk.empty)
+        case Some(chunk) =>
+          produceChunk[R, K, V](chunk)
+      }
+
+    /**
      * Accessor method for [[Service.produceAsync]]
      */
-    def produceAsync[R: Tagged, K: Tagged, V: Tagged](
+    def produceAsync[R: Tag, K: Tag, V: Tag](
       record: ProducerRecord[K, V]
     ): RIO[R with Blocking with Producer[R, K, V], Task[RecordMetadata]] =
       withProducerService(_.produceAsync(record))
@@ -192,23 +217,15 @@ package object producer {
     /**
      * Accessor method for [[Service.produceChunkAsync]]
      */
-    def produceChunkAsync[R: Tagged, K: Tagged, V: Tagged](
+    def produceChunkAsync[R: Tag, K: Tag, V: Tag](
       records: Chunk[ProducerRecord[K, V]]
     ): RIO[R with Blocking with Producer[R, K, V], Task[Chunk[RecordMetadata]]] =
       withProducerService(_.produceChunkAsync(records))
 
     /**
-     * Accessor method for [[Service.produce]]
-     */
-    def produce[R: Tagged, K: Tagged, V: Tagged](
-      record: ProducerRecord[K, V]
-    ): RIO[R with Blocking with Producer[R, K, V], RecordMetadata] =
-      withProducerService(_.produce(record))
-
-    /**
      * Accessor method for [[Service.produceChunk]]
      */
-    def produceChunk[R: Tagged, K: Tagged, V: Tagged](
+    def produceChunk[R: Tag, K: Tag, V: Tag](
       records: Chunk[ProducerRecord[K, V]]
     ): RIO[R with Blocking with Producer[R, K, V], Chunk[RecordMetadata]] =
       withProducerService(_.produceChunk(records))
@@ -216,7 +233,7 @@ package object producer {
     /**
      * Accessor method for [[Service.flush]]
      */
-    def flush[R: Tagged, K: Tagged, V: Tagged]: ZIO[R with Blocking with Producer[R, K, V], Throwable, Unit] =
+    def flush[R: Tag, K: Tag, V: Tag]: ZIO[R with Blocking with Producer[R, K, V], Throwable, Unit] =
       withProducerService(_.flush)
   }
 }
