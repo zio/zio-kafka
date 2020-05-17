@@ -3,6 +3,7 @@ package zio.kafka.serde
 import org.apache.kafka.common.header.internals.RecordHeaders
 import zio._
 import zio.test.Assertion._
+import zio.test.TestAspect._
 import zio.test._
 
 object DeserializerSpec extends DefaultRunnableSpec {
@@ -22,7 +23,7 @@ object DeserializerSpec extends DefaultRunnableSpec {
           )
         }
       }
-    )
+    ) @@ sequential //For some reason the tests have to run in sequence else they would hang and timeout eventually
   )
 
   private lazy val stringDeserializer: Deserializer[Any, String] = Serde.string
