@@ -172,15 +172,18 @@ package object producer {
       keySerializer: Serializer[R, K],
       valueSerializer: Serializer[R, V]
     ): ZManaged[Any, Throwable, Service[R, K, V]] =
-      ZIO.effect {
-        val props = settings.driverSettings.asJava
-        val rawProducer = new KafkaProducer[Array[Byte], Array[Byte]](
-          props,
-          new ByteArraySerializer(),
-          new ByteArraySerializer()
-        )
-        Live(rawProducer, settings, keySerializer, valueSerializer)
-      }.toManaged(_.close)
+      (for {
+        props <- ZIO.effect(settings.driverSettings)
+        _     <- keySerializer.configure(props, isKey = true)
+        _     <- valueSerializer.configure(props, isKey = false)
+        rawProducer <- ZIO.effect(
+                        new KafkaProducer[Array[Byte], Array[Byte]](
+                          props.asJava,
+                          new ByteArraySerializer(),
+                          new ByteArraySerializer()
+                        )
+                      )
+      } yield Live(rawProducer, settings, keySerializer, valueSerializer)).toManaged(_.close)
 
     def withProducerService[R: Tag, K: Tag, V: Tag, A](
       r: Producer.Service[R, K, V] => RIO[R with Blocking, A]
