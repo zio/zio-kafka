@@ -50,14 +50,14 @@ object ConsumerSpec extends DefaultRunnableSpec {
         } yield assert(kvOut)(equalTo(kvs))
       },
       testM("Consuming+provideCustomLayer") {
-        val kvs = (1 to 10000).toList.map(i => (s"key$i", s"msg$i"))
+        val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
         for {
           _ <- produceMany("topic170", kvs)
 
           records <- Consumer
                       .subscribeAnd(Subscription.Topics(Set("topic170")))
                       .plainStream(Serde.string, Serde.string)
-                      .take(10000)
+                      .take(100)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](consumer("group170", "client170"))
           kvOut = records.map(r => (r.record.key, r.record.value))
