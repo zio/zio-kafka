@@ -37,7 +37,7 @@ object ProducerSpec extends DefaultRunnableSpec {
           settings <- consumerSettings("testGroup", "testClient")
           record1 <- withConsumer(Topics(Set(topic1)), settings).use { consumer =>
                       for {
-                        messages <- consumer.take.flatMap(ZIO.done(_)).mapError(_.getOrElse(new NoSuchElementException))
+                        messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
                         record = messages
                           .filter(rec => rec.record.key == key1 && rec.record.value == value1)
                           .toSeq
@@ -45,7 +45,7 @@ object ProducerSpec extends DefaultRunnableSpec {
                     }
           record2 <- withConsumer(Topics(Set(topic2)), settings).use { consumer =>
                       for {
-                        messages <- consumer.take.flatMap(ZIO.done(_)).mapError(_.getOrElse(new NoSuchElementException))
+                        messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
                         record   = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
                       } yield record
                     }
