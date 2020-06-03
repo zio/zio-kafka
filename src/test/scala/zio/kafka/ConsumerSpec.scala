@@ -16,6 +16,7 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test.environment._
 import zio.test.{ DefaultRunnableSpec, _ }
+import zio.stream.ZTransducer
 
 object ConsumerSpec extends DefaultRunnableSpec {
   override def spec: ZSpec[TestEnvironment, Throwable] =
@@ -28,7 +29,6 @@ object ConsumerSpec extends DefaultRunnableSpec {
           records <- Consumer
                       .subscribeAnd(Subscription.Topics(Set("topic150")))
                       .plainStream(Serde.string, Serde.string)
-                      .flattenChunks
                       .take(5)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](consumer("group150", "client150"))
@@ -43,7 +43,6 @@ object ConsumerSpec extends DefaultRunnableSpec {
           records <- Consumer
                       .subscribeAnd(Subscription.Topics(Set("topic160")))
                       .plainStream(Serde.string, Serde.string)
-                      .flattenChunks
                       .take(5)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](consumer("group160", "client160"))
@@ -51,15 +50,14 @@ object ConsumerSpec extends DefaultRunnableSpec {
         } yield assert(kvOut)(equalTo(kvs))
       },
       testM("Consuming+provideCustomLayer") {
-        val kvs = (1 to 10000).toList.map(i => (s"key$i", s"msg$i"))
+        val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
         for {
           _ <- produceMany("topic170", kvs)
 
           records <- Consumer
                       .subscribeAnd(Subscription.Topics(Set("topic170")))
                       .plainStream(Serde.string, Serde.string)
-                      .flattenChunks
-                      .take(10000)
+                      .take(100)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](consumer("group170", "client170"))
           kvOut = records.map(r => (r.record.key, r.record.value))
@@ -72,7 +70,6 @@ object ConsumerSpec extends DefaultRunnableSpec {
           records <- Consumer
                       .subscribeAnd(Subscription.Pattern("pattern[0-9]+".r))
                       .plainStream(Serde.string, Serde.string)
-                      .flattenChunks
                       .take(5)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](consumer("group150", "client150"))
@@ -81,7 +78,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
       },
       testM("receive only messages from the subscribed topic-partition when creating a manual subscription") {
         val nrPartitions = 5
-        val topic        = "manual-topic"
+        val topic        = "manual-topic0"
 
         for {
           _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
@@ -91,7 +88,6 @@ object ConsumerSpec extends DefaultRunnableSpec {
           record <- Consumer
                      .subscribeAnd(Subscription.manual(topic, partition = 2))
                      .plainStream(Serde.string, Serde.string)
-                     .flattenChunks
                      .take(1)
                      .runHead
                      .provideSomeLayer[Kafka with Blocking with Clock](consumer("group150", "client150"))
@@ -100,20 +96,19 @@ object ConsumerSpec extends DefaultRunnableSpec {
       },
       testM("receive from the right offset when creating a manual subscription with manual seeking") {
         val nrPartitions = 5
-        val topic        = "manual-topic"
+        val topic        = "manual-topic1"
 
         val manualOffsetSeek = 3
 
         for {
           _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreach(1 to nrPartitions) { i =>
-                produceMany(topic, partition = i % nrPartitions, kvs = (1 to 10).map(j => s"key$i-$j" -> s"msg$i-$j"))
+                produceMany(topic, partition = i % nrPartitions, kvs = (0 to 9).map(j => s"key$i-$j" -> s"msg$i-$j"))
               }
           offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
           record <- Consumer
                      .subscribeAnd(Subscription.manual(topic, partition = 2))
                      .plainStream(Serde.string, Serde.string)
-                     .flattenChunks
                      .take(1)
                      .runHead
                      .provideSomeLayer[Kafka with Blocking with Clock](
@@ -131,9 +126,9 @@ object ConsumerSpec extends DefaultRunnableSpec {
                                        .subscribeAnd(Subscription.Topics(Set("topic1")))
                                        .partitionedStream(Serde.string, Serde.string)
                                        .filter(_._1 == new TopicPartition("topic1", 0))
-                                       .flatMap(_._2.flattenChunks)
+                                       .flatMap(_._2)
                                        .take(5)
-                                       .transduce(ZSink.collectAll[CommittableRecord[String, String]])
+                                       .transduce(ZTransducer.collectAllN(Int.MaxValue))
                                        .mapConcatM { committableRecords =>
                                          val records = committableRecords.map(_.record)
                                          val offsetBatch =
@@ -150,9 +145,9 @@ object ConsumerSpec extends DefaultRunnableSpec {
                             results <- Consumer
                                         .subscribeAnd(Subscription.Topics(Set("topic1")))
                                         .partitionedStream(Serde.string, Serde.string)
-                                        .flatMap(_._2.flattenChunks)
+                                        .flatMap(_._2)
                                         .take(5)
-                                        .transduce(ZSink.collectAll[CommittableRecord[String, String]])
+                                        .transduce(ZTransducer.collectAllN(Int.MaxValue))
                                         .mapConcatM { committableRecords =>
                                           val records = committableRecords.map(_.record)
                                           val offsetBatch =
@@ -190,7 +185,6 @@ object ConsumerSpec extends DefaultRunnableSpec {
                     case (_, partition) =>
                       partition
                         .mapM(record => messagesReceived(record.partition).update(_ + 1).as(record))
-                        .flattenChunks
                   }
                   .take(nrMessages.toLong)
                   .runDrain
@@ -229,7 +223,6 @@ object ConsumerSpec extends DefaultRunnableSpec {
                 .plainStream(Serde.string, Serde.string)
                 .zipWithIndex
                 .tap { case (_, idx) => Consumer.stopConsumption.when(idx == 3) }
-                .flattenChunks
                 .runDrain
                 .provideSomeLayer[Kafka with Blocking with Clock](consumer(group, "client150")) *> keepProducing
                 .set(false)
@@ -251,7 +244,6 @@ object ConsumerSpec extends DefaultRunnableSpec {
                          _  <- Consumer.stopConsumption.when(nr == 1)
                        } yield record.offset
                      }
-                     .flattenChunks
                      .aggregate(Consumer.offsetBatches)
                      .mapM(_.commit)
                      .runDrain *>
@@ -278,7 +270,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
           offsets <- (Consumer
                       .subscribeAnd(subscription)
                       .partitionedStream(Serde.string, Serde.string)
-                      .flatMapPar(nrPartitions)(_._2.map(_.offset).flattenChunks)
+                      .flatMapPar(nrPartitions)(_._2.map(_.offset))
                       .take(nrMessages.toLong)
                       .aggregate(Consumer.offsetBatches)
                       .take(1)
@@ -309,7 +301,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                         .flatMapPar(nrPartitions) {
                           case (tp, partition) =>
                             ZStream
-                              .fromEffect(partition.flattenChunks.runDrain)
+                              .fromEffect(partition.runDrain)
                               .as(tp)
                         }
                         .take(nrPartitions.toLong / 2)
@@ -353,7 +345,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                               .flatMapPar(nrPartitions) {
                                 case (tp, partition) =>
                                   ZStream
-                                    .fromEffect(partition.flattenChunks.runDrain)
+                                    .fromEffect(partition.runDrain)
                                     .as(tp)
                               }
                               .take(nrPartitions.toLong / 2)
@@ -395,9 +387,8 @@ object ConsumerSpec extends DefaultRunnableSpec {
           _ <- Consumer
                 .subscribeAnd(Subscription.topics(topic))
                 .plainStream(Serde.string, Serde.string)
-                .flattenChunks
                 .take(5)
-                .transduce(ZSink.collectAll[CommittableRecord[String, String]])
+                .transduce(ZTransducer.collectAllN(Int.MaxValue))
                 .mapConcatM { committableRecords =>
                   val records = committableRecords.map(_.record)
                   val offsetBatch =
@@ -412,7 +403,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
           secondResults <- Consumer
                             .subscribeAnd(Subscription.topics(topic))
                             .plainStream(Serde.string, Serde.string)
-                            .take(nrRecords - manualOffsetSeek)
+                            .take(nrRecords.toLong - manualOffsetSeek)
                             .map(_.record)
                             .runCollect
                             .provideSomeLayer[Kafka with Blocking with Clock](
@@ -449,7 +440,6 @@ object ConsumerSpec extends DefaultRunnableSpec {
           newMessage <- (Consumer.subscribe(subscription) *> Consumer
                          .plainStream(Serde.string, Serde.string)
                          .take(1)
-                         .flattenChunks
                          .map(r => (r.record.key(), r.record.value()))
                          .run(ZSink.collectAll[(String, String)])
                          .map(_.head)

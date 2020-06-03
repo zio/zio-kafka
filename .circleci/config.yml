@@ -2,12 +2,12 @@ version: 2.1
 jobs:
   lint:
     docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.4_2.13.1
+      - image: hseeberger/scala-sbt:8u252_1.3.10_2.13.2
     steps:
       - checkout
       - restore_cache:
           key: sbt-cache
-      - run: sbt ++2.13.1! check
+      - run: sbt ++2.13.2! check
       - save_cache:
           key: sbt-cache
           paths:
@@ -16,12 +16,12 @@ jobs:
             - "~/.m2"
   test213_jdk8:
     docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.4_2.13.1
+      - image: hseeberger/scala-sbt:8u252_1.3.10_2.13.2
     steps:
       - checkout
       - restore_cache:
           key: sbt-cache
-      - run: sbt ++2.13.1! test packageDoc
+      - run: sbt ++2.13.2! test packageDoc
       - save_cache:
           key: sbt-cache
           paths:
@@ -30,12 +30,12 @@ jobs:
             - "~/.m2"
   test213_jdk11:
     docker:
-      - image: hseeberger/scala-sbt:11.0.4_1.3.4_2.13.1
+      - image: hseeberger/scala-sbt:11.0.7_1.3.10_2.13.2
     steps:
       - checkout
       - restore_cache:
           key: sbt-cache
-      - run: sbt ++2.13.1! test
+      - run: sbt ++2.13.2! test
       - save_cache:
           key: sbt-cache
           paths:
@@ -44,12 +44,12 @@ jobs:
             - "~/.m2"
   test212_jdk8:
     docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.4_2.12.10
+      - image: hseeberger/scala-sbt:8u252_1.3.10_2.12.11
     steps:
       - checkout
       - restore_cache:
           key: sbt-cache
-      - run: sbt ++2.12.10! test packageDoc
+      - run: sbt ++2.12.11! test packageDoc
       - save_cache:
           key: sbt-cache
           paths:
@@ -58,12 +58,12 @@ jobs:
             - "~/.m2"
   test212_jdk11:
     docker:
-      - image: hseeberger/scala-sbt:11.0.4_1.3.4_2.12.10
+      - image: hseeberger/scala-sbt:11.0.7_1.3.10_2.12.11
     steps:
       - checkout
       - restore_cache:
           key: sbt-cache
-      - run: sbt ++2.12.10! test
+      - run: sbt ++2.12.11! test
       - save_cache:
           key: sbt-cache
           paths:
@@ -128,7 +128,7 @@ jobs:
 
   release:
     docker:
-      - image: hseeberger/scala-sbt:8u222_1.3.4_2.13.1
+      - image: hseeberger/scala-sbt:8u252_1.3.10_2.13.2
     steps:
       - checkout
       - run: git fetch --tags

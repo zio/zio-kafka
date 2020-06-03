@@ -24,6 +24,9 @@ trait Serializer[-R, -T] {
    */
   def contramapM[R1 <: R, U](f: U => RIO[R1, T]): Serializer[R1, U] =
     Serializer((topic, headers, u) => f(u).flatMap(serialize(topic, headers, _)))
+
+  def asOption[U <: T](implicit ev: Null <:< T): Serializer[R, Option[U]] =
+    contramap(_.orNull)
 }
 
 object Serializer extends Serdes {

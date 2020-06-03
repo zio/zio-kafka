@@ -7,7 +7,6 @@ import zio.kafka.KafkaTestUtils._
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
-import zio.stream.Take
 import zio.test.Assertion._
 import zio.test._
 import zio.test.environment.TestEnvironment
@@ -38,7 +37,7 @@ object ProducerSpec extends DefaultRunnableSpec {
           settings <- consumerSettings("testGroup", "testClient")
           record1 <- withConsumer(Topics(Set(topic1)), settings).use { consumer =>
                       for {
-                        messages <- Take.option(consumer.take).someOrFail(new NoSuchElementException)
+                        messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
                         record = messages
                           .filter(rec => rec.record.key == key1 && rec.record.value == value1)
                           .toSeq
@@ -46,7 +45,7 @@ object ProducerSpec extends DefaultRunnableSpec {
                     }
           record2 <- withConsumer(Topics(Set(topic2)), settings).use { consumer =>
                       for {
-                        messages <- Take.option(consumer.take).someOrFail(new NoSuchElementException)
+                        messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
                         record   = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
                       } yield record
                     }

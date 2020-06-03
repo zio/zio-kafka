@@ -18,11 +18,10 @@ object PopulateTopic extends App {
       .take(length)
       .chunkN(500)
 
-  def run(args: List[String]): ZIO[zio.ZEnv, Nothing, Int] =
+  def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] =
     dataStream(872000).map {
       case (k, v) => new ProducerRecord("inputs-topic", null, null, k, v)
-    }.chunks
-      .mapM(Producer.produceChunkAsync[Any, String, String])
+    }.mapChunksM(Producer.produceChunkAsync[Any, String, String](_).map(Chunk(_)))
       .mapMPar(5)(_.flatMap(chunk => console.putStrLn(s"Wrote chunk of ${chunk.size}")))
       .runDrain
       .provideCustomLayer(
@@ -36,7 +35,7 @@ object PopulateTopic extends App {
           )
         )
       )
-      .fold(_ => 1, _ => 0)
+      .exitCode
 }
 
 object Plain {
@@ -80,7 +79,7 @@ object ZIOKafka extends App {
   import zio.kafka.consumer._
   import zio.duration._
 
-  def run(args: List[String]): ZIO[zio.ZEnv, Nothing, Int] = {
+  def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] = {
     val expectedCount = 1000000
     val settings = ConsumerSettings(List("localhost:9092"))
       .withGroupId(s"zio-kafka-${scala.util.Random.nextInt}")
@@ -97,14 +96,13 @@ object ZIOKafka extends App {
           Consumer
             .subscribeAnd(Subscription.topics("inputs-topic"))
             .plainStream(Serde.string, Serde.string)
-            .take(expectedCount)
-            .chunks
-            .map { recordChunk =>
+            .take(expectedCount.toLong)
+            .mapChunks { recordChunk =>
               val messageCount = recordChunk.size
               println(s"Got chunk of ${messageCount}")
-              val lengthCount = recordChunk.fold(0)(_ + _.value.length)
+              val lengthCount = recordChunk.foldLeft(0)(_ + _.value.length)
 
-              (messageCount, lengthCount)
+              Chunk(messageCount -> lengthCount)
             }
             .runDrain *>
             clock.currentTime(TimeUnit.MILLISECONDS).flatMap { endTime =>
@@ -115,7 +113,7 @@ object ZIOKafka extends App {
             }
         })
       .provideCustomLayer(ZLayer.fromManaged(Consumer.make(settings)))
-      .fold(_ => 1, _ => 0)
+      .exitCode
 
   }
 }

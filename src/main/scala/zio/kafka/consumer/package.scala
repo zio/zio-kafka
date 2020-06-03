@@ -63,7 +63,7 @@ package object consumer {
       ): ZStream[
         Clock with Blocking,
         Throwable,
-        (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
+        (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
       ]
 
       /**
@@ -77,7 +77,7 @@ package object consumer {
       def plainStream[R, K, V](
         keyDeserializer: Deserializer[R, K],
         valueDeserializer: Deserializer[R, V]
-      ): ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]]
+      ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]]
 
       /**
        * Stops consumption of data, drains buffered records, and ends the attached
@@ -173,16 +173,16 @@ package object consumer {
       ): ZStream[
         Clock with Blocking,
         Throwable,
-        (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
+        (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
       ] =
         ZStream
           .fromQueue(runloop.partitions)
-          .unTake
+          .collectWhileSuccess
           .map {
             case (tp, partition) =>
               val partitionStream =
                 if (settings.perPartitionChunkPrefetch <= 0) partition
-                else ZStreamChunk(partition.chunks.buffer(settings.perPartitionChunkPrefetch))
+                else partition.buffer(settings.perPartitionChunkPrefetch)
 
               tp -> partitionStream.mapM(_.deserializeWith(keyDeserializer, valueDeserializer))
           }
@@ -199,8 +199,8 @@ package object consumer {
       override def plainStream[R, K, V](
         keyDeserializer: Deserializer[R, K],
         valueDeserializer: Deserializer[R, V]
-      ): ZStreamChunk[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-        ZStreamChunk(partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue)(_._2.chunks))
+      ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+        partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue)(_._2)
 
       override def subscribeAnd(subscription: Subscription): SubscribedConsumer =
         new SubscribedConsumer(subscribe(subscription).as(this))
@@ -225,7 +225,7 @@ package object consumer {
                   partitionStream.mapM {
                     case CommittableRecord(record, offset) =>
                       f(record.key(), record.value()).as(offset)
-                  }.flattenChunks
+                  }
               }
           }
           .aggregateAsync(offsetBatches)
@@ -261,8 +261,8 @@ package object consumer {
         consumer.withConsumer(_.unsubscribe())
     }
 
-    val offsetBatches: ZSink[Any, Nothing, Nothing, Offset, OffsetBatch] =
-      ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
+    val offsetBatches: ZTransducer[Any, Nothing, Offset, OffsetBatch] =
+      ZTransducer.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
     def live: ZLayer[Clock with Blocking with Has[ConsumerSettings] with Has[Diagnostics], Throwable, Consumer] =
       ZLayer.fromServicesManaged[ConsumerSettings, Diagnostics, Clock with Blocking, Throwable, Service] {
@@ -333,24 +333,24 @@ package object consumer {
     /**
      * Accessor method for [[Service.partitionedStream]]
      */
-    def partitionedStream[R: Tagged, K: Tagged, V: Tagged](
+    def partitionedStream[R: Tag, K: Tag, V: Tag](
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
     ): ZStream[
       Consumer with Clock with Blocking,
       Throwable,
-      (TopicPartition, ZStreamChunk[R, Throwable, CommittableRecord[K, V]])
+      (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
     ] =
       ZStream.accessStream(_.get[Service].partitionedStream(keyDeserializer, valueDeserializer))
 
     /**
      * Accessor method for [[Service.plainStream]]
      */
-    def plainStream[R: Tagged, K: Tagged, V: Tagged](
+    def plainStream[R: Tag, K: Tag, V: Tag](
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
-    ): ZStreamChunk[R with Consumer with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-      ZStreamChunk(ZStream.accessStream(_.get[Service].plainStream(keyDeserializer, valueDeserializer).chunks))
+    ): ZStream[R with Consumer with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+      ZStream.accessStream(_.get[Service].plainStream(keyDeserializer, valueDeserializer))
 
     /**
      * Accessor method for [[Service.stopConsumption]]
@@ -400,7 +400,7 @@ package object consumer {
      * @tparam V Type of values (an implicit `Deserializer` should be in scope)
      * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
      */
-    def consumeWith[R, R1: Tagged, K: Tagged, V: Tagged](
+    def consumeWith[R, R1: Tag, K: Tag, V: Tag](
       settings: ConsumerSettings,
       subscription: Subscription,
       keyDeserializer: Deserializer[R1, K],
