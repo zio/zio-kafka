@@ -184,7 +184,7 @@ package object consumer {
                 if (settings.perPartitionChunkPrefetch <= 0) partition
                 else partition.buffer(settings.perPartitionChunkPrefetch)
 
-              tp -> partitionStream.mapM(_.deserializeWith(keyDeserializer, valueDeserializer))
+              tp -> partitionStream.mapChunksM(_.mapM(_.deserializeWith(keyDeserializer, valueDeserializer)))
           }
 
       override def partitionsFor(
@@ -222,10 +222,10 @@ package object consumer {
             partitionedStream(keyDeserializer, valueDeserializer)
               .flatMapPar(Int.MaxValue, outputBuffer = settings.perPartitionChunkPrefetch) {
                 case (_, partitionStream) =>
-                  partitionStream.mapM {
+                  partitionStream.mapChunksM(_.mapM {
                     case CommittableRecord(record, offset) =>
                       f(record.key(), record.value()).as(offset)
-                  }
+                  })
               }
           }
           .aggregateAsync(offsetBatches)
