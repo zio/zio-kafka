@@ -6,6 +6,7 @@ import zio.{ RIO, Task, ZIO }
 
 import scala.annotation.nowarn
 import scala.util.{ Failure, Success, Try }
+import scala.jdk.CollectionConverters._
 
 /**
  * Deserializer from byte array to a value of some type T
@@ -15,6 +16,7 @@ import scala.util.{ Failure, Success, Try }
  */
 trait Deserializer[-R, +T] {
   def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T]
+  def configure(props: Map[String, AnyRef], isKey: Boolean): Task[Unit]
 
   /**
    * Create a deserializer for a type U based on the deserializer for type T and a mapping function
@@ -56,6 +58,8 @@ object Deserializer extends Serdes {
   def apply[R, T](deser: (String, Headers, Array[Byte]) => RIO[R, T]): Deserializer[R, T] = new Deserializer[R, T] {
     override def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T] =
       deser(topic, headers, data)
+
+    override def configure(props: Map[String, AnyRef], isKey: Boolean): Task[Unit] = Task.unit
   }
 
   /**
@@ -64,5 +68,8 @@ object Deserializer extends Serdes {
   def apply[T](deserializer: KafkaDeserializer[T]): Deserializer[Any, T] = new Deserializer[Any, T] {
     override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Task[T] =
       Task(deserializer.deserialize(topic, headers, data))
+
+    override def configure(props: Map[String, AnyRef], isKey: Boolean): zio.Task[Unit] =
+      Task(deserializer.configure(props.asJava, isKey))
   }
 }
