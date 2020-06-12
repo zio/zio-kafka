@@ -174,18 +174,26 @@ package object consumer {
         Clock with Blocking,
         Throwable,
         (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
-      ] =
-        ZStream
-          .fromQueue(runloop.partitions)
-          .collectWhileSuccess
-          .map {
-            case (tp, partition) =>
-              val partitionStream =
-                if (settings.perPartitionChunkPrefetch <= 0) partition
-                else partition.buffer(settings.perPartitionChunkPrefetch)
-
-              tp -> partitionStream.mapM(_.deserializeWith(keyDeserializer, valueDeserializer))
+      ] = {
+        val configureDeserializers =
+          ZStream.fromEffect {
+            keyDeserializer.configure(settings.driverSettings, isKey = true) *>
+              valueDeserializer.configure(settings.driverSettings, isKey = false)
           }
+
+        configureDeserializers *>
+          ZStream
+            .fromQueue(runloop.partitions)
+            .collectWhileSuccess
+            .map {
+              case (tp, partition) =>
+                val partitionStream =
+                  if (settings.perPartitionChunkPrefetch <= 0) partition
+                  else partition.buffer(settings.perPartitionChunkPrefetch)
+
+                tp -> partitionStream.mapChunksM(_.mapM(_.deserializeWith(keyDeserializer, valueDeserializer)))
+            }
+      }
 
       override def partitionsFor(
         topic: String,
@@ -222,10 +230,10 @@ package object consumer {
             partitionedStream(keyDeserializer, valueDeserializer)
               .flatMapPar(Int.MaxValue, outputBuffer = settings.perPartitionChunkPrefetch) {
                 case (_, partitionStream) =>
-                  partitionStream.mapM {
+                  partitionStream.mapChunksM(_.mapM {
                     case CommittableRecord(record, offset) =>
                       f(record.key(), record.value()).as(offset)
-                  }
+                  })
               }
           }
           .aggregateAsync(offsetBatches)

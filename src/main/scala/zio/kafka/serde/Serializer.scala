@@ -4,6 +4,8 @@ import zio.{ RIO, Task }
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Serializer => KafkaSerializer }
 
+import scala.jdk.CollectionConverters._
+
 /**
  * Serializer from values of some type T to a byte array
  *
@@ -12,6 +14,7 @@ import org.apache.kafka.common.serialization.{ Serializer => KafkaSerializer }
  */
 trait Serializer[-R, -T] {
   def serialize(topic: String, headers: Headers, value: T): RIO[R, Array[Byte]]
+  def configure(props: Map[String, AnyRef], isKey: Boolean): Task[Unit]
 
   /**
    * Create a serializer for a type U based on the serializer for type T and a mapping function
@@ -38,6 +41,8 @@ object Serializer extends Serdes {
     new Serializer[R, T] {
       override def serialize(topic: String, headers: Headers, value: T): RIO[R, Array[Byte]] =
         ser(topic, headers, value)
+
+      override def configure(props: Map[String, AnyRef], isKey: Boolean): Task[Unit] = Task.unit
     }
 
   /**
@@ -46,5 +51,8 @@ object Serializer extends Serdes {
   def apply[T](serializer: KafkaSerializer[T]): Serializer[Any, T] = new Serializer[Any, T] {
     override def serialize(topic: String, headers: Headers, value: T): Task[Array[Byte]] =
       Task(serializer.serialize(topic, headers, value))
+
+    override def configure(props: Map[String, AnyRef], isKey: Boolean): Task[Unit] =
+      Task(serializer.configure(props.asJava, isKey))
   }
 }

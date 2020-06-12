@@ -51,7 +51,9 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
       testM("interrupted") {
         withKafkaFuture.use { f =>
           for {
-            fiber  <- AdminClient.fromKafkaFuture(ZIO.effectTotal(f)).fork
+            latch  <- Promise.make[Nothing, Unit]
+            fiber  <- AdminClient.fromKafkaFuture(latch.succeed(()) *> ZIO.effectTotal(f)).fork
+            _      <- latch.await
             result <- fiber.interrupt
           } yield {
             assert(result.interrupted)(equalTo(true) ?? "fiber was interrupted") &&

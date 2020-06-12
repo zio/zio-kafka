@@ -17,6 +17,7 @@ import zio.test.TestAspect._
 import zio.test.environment._
 import zio.test.{ DefaultRunnableSpec, _ }
 import zio.stream.ZTransducer
+import zio.Chunk
 
 object ConsumerSpec extends DefaultRunnableSpec {
   override def spec: ZSpec[TestEnvironment, Throwable] =
@@ -35,6 +36,20 @@ object ConsumerSpec extends DefaultRunnableSpec {
           kvOut = records.map(r => (r.record.key, r.record.value))
         } yield assert(kvOut)(equalTo(kvs))
       },
+      testM("chunk sizes") {
+        val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          _ <- produceMany("topic1289", kvs)
+
+          sizes <- Consumer
+                    .subscribeAnd(Subscription.Topics(Set("topic1289")))
+                    .plainStream(Serde.string, Serde.string)
+                    .take(100)
+                    .mapChunks(c => Chunk(c.size))
+                    .runCollect
+                    .provideSomeLayer[Kafka with Blocking with Clock](consumer("group1289", "client150"))
+        } yield assert(sizes)(forall(isGreaterThan(1)))
+      },
       testM("Consumer.subscribeAnd works properly") {
         val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
         for {
@@ -50,14 +65,14 @@ object ConsumerSpec extends DefaultRunnableSpec {
         } yield assert(kvOut)(equalTo(kvs))
       },
       testM("Consuming+provideCustomLayer") {
-        val kvs = (1 to 10000).toList.map(i => (s"key$i", s"msg$i"))
+        val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
         for {
           _ <- produceMany("topic170", kvs)
 
           records <- Consumer
                       .subscribeAnd(Subscription.Topics(Set("topic170")))
                       .plainStream(Serde.string, Serde.string)
-                      .take(10000)
+                      .take(100)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](consumer("group170", "client170"))
           kvOut = records.map(r => (r.record.key, r.record.value))

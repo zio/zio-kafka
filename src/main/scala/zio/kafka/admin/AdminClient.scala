@@ -2,12 +2,14 @@ package zio.kafka.admin
 
 import org.apache.kafka.clients.admin.{
   AdminClient => JAdminClient,
-  NewTopic => JNewTopic,
+  Config => JConfig,
   NewPartitions => JNewPartitions,
+  NewTopic => JNewTopic,
   TopicDescription => JTopicDescription,
   _
 }
 import org.apache.kafka.common.acl.AclOperation
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.{ KafkaFuture, TopicPartitionInfo }
 import zio._
 import zio.blocking.Blocking
@@ -97,6 +99,23 @@ case class AdminClient(private val adminClient: JAdminClient) {
   }
 
   /**
+   * Get the configuration for the specified resources.
+   */
+  def describeConfigs(
+    configResources: Iterable[ConfigResource],
+    describeConfigsOptions: Option[DescribeConfigsOptions] = None
+  ): RIO[Blocking, Map[ConfigResource, KafkaConfig]] = {
+    val asJava = configResources.asJavaCollection
+    fromKafkaFuture {
+      blocking.effectBlocking(
+        describeConfigsOptions
+          .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts))
+          .all()
+      )
+    }.map(_.asScala.view.mapValues(AdminClient.KafkaConfig(_)).toMap)
+  }
+
+  /**
    * Add new partitions to a topic.
    */
   def createPartitions(
@@ -172,6 +191,13 @@ object AdminClient {
       val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet)
       TopicDescription(jt.name, jt.isInternal, jt.partitions.asScala.toList, authorizedOperations)
     }
+  }
+
+  case class KafkaConfig(entries: Map[String, ConfigEntry])
+
+  object KafkaConfig {
+    def apply(jConfig: JConfig): KafkaConfig =
+      KafkaConfig(jConfig.entries().asScala.map(e => e.name() -> e).toMap)
   }
 
   def make(settings: AdminClientSettings) =

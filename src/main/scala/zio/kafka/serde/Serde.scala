@@ -1,10 +1,12 @@
 package zio.kafka.serde
 
 import org.apache.kafka.common.serialization.{ Serde => KafkaSerde }
+import org.apache.kafka.common.header.Headers
+
 import zio.{ RIO, Task }
 
 import scala.util.Try
-import org.apache.kafka.common.header.Headers
+import scala.jdk.CollectionConverters._
 
 /**
  * A serializer and deserializer for values of type T
@@ -45,6 +47,7 @@ object Serde extends Serdes {
         ser(topic, headers, value)
       override def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T] =
         deser(topic, headers, data)
+      override def configure(props: Map[String, AnyRef], isKey: Boolean): Task[Unit] = Task.unit
     }
 
   /**
@@ -55,6 +58,8 @@ object Serde extends Serdes {
       ser.serialize(topic, headers, value)
     override def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T] =
       deser.deserialize(topic, headers, data)
+    override def configure(props: Map[String, AnyRef], isKey: Boolean): Task[Unit] =
+      deser.configure(props, isKey) *> ser.configure(props, isKey)
   }
 
   /**
@@ -65,6 +70,8 @@ object Serde extends Serdes {
       Task(serde.serializer().serialize(topic, headers, value))
     override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Task[T] =
       Task(serde.deserializer().deserialize(topic, headers, data))
+    override def configure(props: Map[String, AnyRef], isKey: Boolean): Task[Unit] =
+      Task(serde.configure(props.asJava, isKey))
   }
 
   implicit def deserializerWithError[R, T](implicit deser: Deserializer[R, T]): Deserializer[R, Try[T]] =

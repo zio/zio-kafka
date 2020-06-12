@@ -18,7 +18,7 @@ object PopulateTopic extends App {
       .take(length)
       .chunkN(500)
 
-  def run(args: List[String]): ZIO[zio.ZEnv, Nothing, Int] =
+  def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] =
     dataStream(872000).map {
       case (k, v) => new ProducerRecord("inputs-topic", null, null, k, v)
     }.mapChunksM(Producer.produceChunkAsync[Any, String, String](_).map(Chunk(_)))
@@ -35,7 +35,7 @@ object PopulateTopic extends App {
           )
         )
       )
-      .fold(_ => 1, _ => 0)
+      .exitCode
 }
 
 object Plain {
@@ -79,7 +79,7 @@ object ZIOKafka extends App {
   import zio.kafka.consumer._
   import zio.duration._
 
-  def run(args: List[String]): ZIO[zio.ZEnv, Nothing, Int] = {
+  def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] = {
     val expectedCount = 1000000
     val settings = ConsumerSettings(List("localhost:9092"))
       .withGroupId(s"zio-kafka-${scala.util.Random.nextInt}")
@@ -113,7 +113,7 @@ object ZIOKafka extends App {
             }
         })
       .provideCustomLayer(ZLayer.fromManaged(Consumer.make(settings)))
-      .fold(_ => 1, _ => 0)
+      .exitCode
 
   }
 }
