@@ -20,13 +20,13 @@ package object producer {
     trait Service[R, K, V] {
 
       /**
-       * Produces a single record and await broker acknowledgement. See [[produceAsync]] for
+       * Produces a single record and await broker acknowledgement. See [[produceAsync(record*]] for
        * version that allows to avoid round-trip-time penalty for each record.
        */
       def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, RecordMetadata]
 
       /**
-       * Produces a single record and await broker acknowledgement. See [[produceAsync]] for
+       * Produces a single record and await broker acknowledgement. See [[produceAsync(topic*]] for
        * version that allows to avoid round-trip-time penalty for each record.
        */
       def produce(topic: String, key: K, value: V): RIO[R with Blocking, RecordMetadata]
@@ -51,7 +51,7 @@ package object producer {
        * It is usually recommended to not await the inner layer of every individual record,
        * but enqueue a batch of records and await all of their acknowledgements at once. That
        * amortizes the cost of sending requests to Kafka and increases throughput.
-       * See [[produce]] for version that awaits broker acknowledgement.
+       * See [[produce(record*]] for version that awaits broker acknowledgement.
        */
       def produceAsync(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]]
 
@@ -66,7 +66,7 @@ package object producer {
        * It is usually recommended to not await the inner layer of every individual record,
        * but enqueue a batch of records and await all of their acknowledgements at once. That
        * amortizes the cost of sending requests to Kafka and increases throughput.
-       * See [[produce]] for version that awaits broker acknowledgement.
+       * See [[produce(topic*]] for version that awaits broker acknowledgement.
        */
       def produceAsync(topic: String, key: K, value: V): RIO[R with Blocking, Task[RecordMetadata]]
 
@@ -218,7 +218,7 @@ package object producer {
       ZIO.accessM(env => r(env.get[Producer.Service[R, K, V]]))
 
     /**
-     * Accessor method for [[Service.produce]]
+     * Accessor method for [[Service.produce(record*]]
      */
     def produce[R: Tag, K: Tag, V: Tag](
       record: ProducerRecord[K, V]
@@ -226,7 +226,7 @@ package object producer {
       withProducerService(_.produce(record))
 
     /**
-     * Accessor method for [[Service.produce]]
+     * Accessor method for [[Service.produce(topic*]]
      */
     def produce[R: Tag, K: Tag, V: Tag](
       topic: String,
@@ -247,7 +247,7 @@ package object producer {
       }
 
     /**
-     * Accessor method for [[Service.produceAsync]]
+     * Accessor method for [[Service.produceAsync(record*]]
      */
     def produceAsync[R: Tag, K: Tag, V: Tag](
       record: ProducerRecord[K, V]
@@ -255,7 +255,7 @@ package object producer {
       withProducerService(_.produceAsync(record))
 
     /**
-     * Accessor method for [[Service.produceAsync]]
+     * Accessor method for [[Service.produceAsync(topic*]]
      */
     def produceAsync[R: Tag, K: Tag, V: Tag](
       topic: String,
