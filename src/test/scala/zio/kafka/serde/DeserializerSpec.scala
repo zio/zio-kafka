@@ -17,7 +17,7 @@ object DeserializerSpec extends DefaultRunnableSpec {
       },
       testM("deserialize to Some when value is not null") {
         checkM(Gen.anyString) { string =>
-          assertM(stringDeserializer.asOption.deserialize("topic1", new RecordHeaders, string.getBytes))(
+          assertM(stringDeserializer.asOption.deserialize("topic1", new RecordHeaders, string.getBytes("UTF-8")))(
             isSome(equalTo(string))
           )
         }
