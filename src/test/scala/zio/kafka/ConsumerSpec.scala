@@ -33,7 +33,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                       .take(5)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](consumer("group150", "client150"))
-          kvOut = records.map(r => (r.record.key, r.record.value))
+          kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
       testM("chunk sizes") {
@@ -61,7 +61,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                       .take(5)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](consumer("group160", "client160"))
-          kvOut = records.map(r => (r.record.key, r.record.value))
+          kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
       testM("Consuming+provideCustomLayer") {
@@ -75,7 +75,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                       .take(100)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](consumer("group170", "client170"))
-          kvOut = records.map(r => (r.record.key, r.record.value))
+          kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
       testM("plainStream emits messages for a pattern subscription") {
@@ -88,7 +88,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                       .take(5)
                       .runCollect
                       .provideSomeLayer[Kafka with Blocking with Clock](consumer("group150", "client150"))
-          kvOut = records.map(r => (r.record.key, r.record.value))
+          kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
       testM("receive only messages from the subscribed topic-partition when creating a manual subscription") {
@@ -175,7 +175,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                                           consumer("group1", "second")
                                         )
                           } yield results
-        } yield assert((firstResults ++ secondResults).map(rec => rec.key() -> rec.value()))(equalTo(data))
+        } yield assert((firstResults ++ secondResults).map(rec => rec.key() -> rec.value()).toList)(equalTo(data))
       },
       testM("partitionedStream emits messages for each partition in a separate stream") {
         val nrMessages   = 50
@@ -425,7 +425,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                               consumer("group1", "client2", offsetRetrieval)
                             )
           // Check that we only got the records starting from the manually seek'd offset
-        } yield assert(secondResults.map(rec => rec.key() -> rec.value()))(equalTo(data.drop(manualOffsetSeek)))
+        } yield assert(secondResults.map(rec => rec.key() -> rec.value()).toList)(equalTo(data.drop(manualOffsetSeek)))
       },
       testM("commit offsets for all consumed messages") {
         val topic        = "consumeWith2"
