@@ -12,8 +12,10 @@ object SerializerSpec extends DefaultRunnableSpec {
       },
       testM("serialize Some values") {
         checkM(Gen.anyString) { string =>
-          assertM(stringSerializer.asOption.serialize("topic1", new RecordHeaders, Some(string)))(
-            equalTo(string.getBytes)
+          assertM(
+            stringSerializer.asOption.serialize("topic1", new RecordHeaders, Some(string)).map(new String(_, "UTF-8"))
+          )(
+            equalTo(string)
           )
         }
       }
