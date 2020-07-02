@@ -2,11 +2,15 @@ package zio.kafka
 
 import java.util.concurrent.atomic.AtomicLong
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArraySerializer
+
 import zio._
 import zio.blocking._
 import zio.kafka.serde.Serializer
+
 import zio.stream.ZTransducer
 
 import scala.jdk.CollectionConverters._
@@ -74,6 +78,15 @@ package object producer {
        * currently buffered will be transmitted to the broker.
        */
       def flush: RIO[Blocking, Unit]
+
+      def initTransactions: RIO[Blocking, Unit]
+      def beginTransaction: RIO[Blocking, Unit]
+      def commitTransaction: RIO[Blocking, Unit]
+      def abortTransaction: RIO[Blocking, Unit]
+      def sendOffsetsToTransaction(
+        offsets: Map[TopicPartition, OffsetAndMetadata],
+        consumerGroupId: String
+      ): RIO[Blocking, Unit]
     }
 
     final case class Live[R, K, V](
@@ -149,6 +162,19 @@ package object producer {
         produceChunkAsync(records).flatten
 
       override def flush: RIO[Blocking, Unit] = effectBlocking(p.flush())
+
+      override def initTransactions: RIO[Blocking, Unit] = effectBlocking(p.initTransactions())
+
+      override def beginTransaction: RIO[Blocking, Unit] = effectBlocking(p.beginTransaction())
+
+      override def commitTransaction: RIO[Blocking, Unit] = effectBlocking(p.commitTransaction())
+
+      override def abortTransaction: RIO[Blocking, Unit] = effectBlocking(p.abortTransaction())
+
+      override def sendOffsetsToTransaction(
+        offsets: Map[TopicPartition, OffsetAndMetadata],
+        consumerGroupId: String
+      ): RIO[Blocking, Unit] = effectBlocking(p.sendOffsetsToTransaction(offsets.asJava, consumerGroupId))
 
       private def serialize(r: ProducerRecord[K, V]): RIO[R, ByteRecord] =
         for {
@@ -238,5 +264,23 @@ package object producer {
      */
     def flush[R: Tag, K: Tag, V: Tag]: ZIO[R with Blocking with Producer[R, K, V], Throwable, Unit] =
       withProducerService(_.flush)
+
+    def initTransactions[R: Tag, K: Tag, V: Tag]: RIO[R with Blocking with Producer[R, K, V], Unit] =
+      withProducerService(_.initTransactions)
+
+    def beginTransaction[R: Tag, K: Tag, V: Tag]: RIO[R with Blocking with Producer[R, K, V], Unit] =
+      withProducerService(_.beginTransaction)
+
+    def commitTransaction[R: Tag, K: Tag, V: Tag]: RIO[R with Blocking with Producer[R, K, V], Unit] =
+      withProducerService(_.commitTransaction)
+
+    def abortTransaction[R: Tag, K: Tag, V: Tag]: RIO[R with Blocking with Producer[R, K, V], Unit] =
+      withProducerService(_.abortTransaction)
+
+    def sendOffsetsToTransaction[R: Tag, K: Tag, V: Tag](
+      offsets: Map[TopicPartition, OffsetAndMetadata],
+      consumerGroupId: String
+    ): RIO[R with Blocking with Producer[R, K, V], Unit] =
+      withProducerService(_.sendOffsetsToTransaction(offsets, consumerGroupId))
   }
 }
