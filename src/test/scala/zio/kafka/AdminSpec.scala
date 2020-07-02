@@ -1,7 +1,9 @@
 package zio.kafka.admin
 
 import org.apache.kafka.common.config.ConfigResource
+import zio.ZIO
 import zio.kafka.KafkaTestUtils
+import zio.kafka.admin.AdminClient.{ OffsetSpec, TopicPartition }
 import zio.kafka.embedded.Kafka
 import zio.test.Assertion._
 import zio.test.TestAspect._
@@ -94,6 +96,22 @@ object AdminSpec extends DefaultRunnableSpec {
                         )
                       )
           } yield assert(configs.size)(equalTo(1))
+        }
+      },
+      testM("list offsets for multiple topic") {
+        KafkaTestUtils.withAdmin {
+          client =>
+            for {
+              _ <- client.createTopics(List(AdminClient.NewTopic("topic8", 2, 1), AdminClient.NewTopic("topic9", 3, 1)))
+              offsets <- client.listOffsets(
+                          Map(
+                            TopicPartition("topic8", 0) -> OffsetSpec.LatestSpec,
+                            TopicPartition("topic8", 1) -> OffsetSpec.EarliestSpec,
+                            TopicPartition("topic9", 2) -> OffsetSpec.TimestampSpec(0)
+                          ),
+                          None
+                        )
+            } yield assert(offsets.size)(equalTo(3))
         }
       }
     ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail)) @@ sequential

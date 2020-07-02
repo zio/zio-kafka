@@ -3,18 +3,27 @@ package zio.kafka.admin
 import org.apache.kafka.clients.admin.{
   AdminClient => JAdminClient,
   Config => JConfig,
+  ListOffsetsOptions => JListOffsetsOptions,
   NewPartitions => JNewPartitions,
   NewTopic => JNewTopic,
+  OffsetSpec => JOffsetSpec,
   TopicDescription => JTopicDescription,
   _
 }
+import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.{ KafkaFuture, TopicPartitionInfo }
+import org.apache.kafka.common.{
+  IsolationLevel => JIsolationLevel,
+  KafkaFuture,
+  TopicPartition => JTopicPartition,
+  TopicPartitionInfo
+}
 import zio._
 import zio.blocking.Blocking
 
-import scala.jdk.CollectionConverters._, scala.collection.compat._
+import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 
 /**
  * Thin wrapper around apache java AdminClient. See java api for descriptions
@@ -131,6 +140,23 @@ case class AdminClient(private val adminClient: JAdminClient) {
       )
     }
   }
+
+  /**
+   * List offset for the specified partitions.
+   */
+  def listOffsets(
+    topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
+    listOffsetOptions: Option[ListOffsetsOptions]
+  ): RIO[Blocking, Map[TopicPartition, ListOffsetsResultInfo]] = {
+    val asJava = topicPartitionOffsets.map { case (t, p) => t.asJava -> p.asJava }.asJava
+    fromKafkaFuture {
+      blocking.effectBlocking(
+        listOffsetOptions
+          .fold(adminClient.listOffsets(asJava))(opts => adminClient.listOffsets(asJava, opts.asJava))
+          .all()
+      )
+    }
+  }.map(_.asScala.map { case (t, p) => TopicPartition(t) -> ListOffsetsResultInfo(p) }.toMap)
 }
 
 object AdminClient {
@@ -191,6 +217,60 @@ object AdminClient {
       val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet)
       TopicDescription(jt.name, jt.isInternal, jt.partitions.asScala.toList, authorizedOperations)
     }
+  }
+
+  case class TopicPartition(
+    name: String,
+    partition: Int
+  ) {
+    def asJava = new JTopicPartition(name, partition)
+  }
+
+  object TopicPartition {
+    def apply(tp: JTopicPartition): TopicPartition = new TopicPartition(tp.topic(), tp.partition())
+  }
+
+  sealed abstract class OffsetSpec { def asJava: JOffsetSpec }
+
+  object OffsetSpec {
+    final case object EarliestSpec extends OffsetSpec {
+      override def asJava = JOffsetSpec.earliest()
+    }
+
+    final case object LatestSpec extends OffsetSpec {
+      override def asJava = JOffsetSpec.latest()
+    }
+
+    final case class TimestampSpec(timestamp: Long) extends OffsetSpec {
+      override def asJava = JOffsetSpec.forTimestamp(timestamp)
+    }
+  }
+
+  sealed abstract class IsolationLevel { def asJava: JIsolationLevel }
+
+  object IsolationLevel {
+    final case object ReadUncommitted extends IsolationLevel {
+      override def asJava = JIsolationLevel.READ_UNCOMMITTED
+    }
+
+    final case object ReadCommitted extends IsolationLevel {
+      override def asJava = JIsolationLevel.READ_COMMITTED
+    }
+  }
+
+  case class ListOffsetsOptions(isolationLevel: IsolationLevel = IsolationLevel.ReadUncommitted) {
+    def asJava = new JListOffsetsOptions(isolationLevel.asJava)
+  }
+
+  case class ListOffsetsResultInfo(
+    offset: Long,
+    timestamp: Long,
+    leaderEpoch: Option[Int]
+  )
+
+  object ListOffsetsResultInfo {
+    def apply(lo: JListOffsetsResultInfo): ListOffsetsResultInfo =
+      ListOffsetsResultInfo(lo.offset(), lo.timestamp(), lo.leaderEpoch().toScala.map(_.toInt))
   }
 
   case class KafkaConfig(entries: Map[String, ConfigEntry])
