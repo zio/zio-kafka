@@ -1,9 +1,8 @@
 package zio.kafka.admin
 
 import org.apache.kafka.common.config.ConfigResource
-import zio.ZIO
 import zio.kafka.KafkaTestUtils
-import zio.kafka.admin.AdminClient.{ OffsetSpec, TopicPartition }
+import zio.kafka.admin.AdminClient.{ OffsetAndMetadata, OffsetSpec, TopicPartition }
 import zio.kafka.embedded.Kafka
 import zio.test.Assertion._
 import zio.test.TestAspect._
@@ -99,17 +98,23 @@ object AdminSpec extends DefaultRunnableSpec {
         }
       },
       testM("list offsets for multiple topic") {
+        // TODO: Needs to be improved if this PR is to be merged (more realistic scenario with producer and consumer)
         KafkaTestUtils.withAdmin {
           client =>
             for {
               _ <- client.createTopics(List(AdminClient.NewTopic("topic8", 2, 1), AdminClient.NewTopic("topic9", 3, 1)))
+              _ <- client.alterConsumerGroupOffsets(
+                    "group1",
+                    Map(
+                      TopicPartition("topic8", 0) -> OffsetAndMetadata(10)
+                    )
+                  )
               offsets <- client.listOffsets(
                           Map(
                             TopicPartition("topic8", 0) -> OffsetSpec.LatestSpec,
                             TopicPartition("topic8", 1) -> OffsetSpec.EarliestSpec,
                             TopicPartition("topic9", 2) -> OffsetSpec.TimestampSpec(0)
-                          ),
-                          None
+                          )
                         )
             } yield assert(offsets.size)(equalTo(3))
         }
