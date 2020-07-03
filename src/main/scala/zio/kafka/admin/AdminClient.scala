@@ -2,6 +2,7 @@ package zio.kafka.admin
 
 import org.apache.kafka.clients.admin.{
   AdminClient => JAdminClient,
+  AlterConsumerGroupOffsetsOptions => JAlterConsumerGroupOffsetsOptions,
   Config => JConfig,
   ListOffsetsOptions => JListOffsetsOptions,
   NewPartitions => JNewPartitions,
@@ -11,6 +12,7 @@ import org.apache.kafka.clients.admin.{
   _
 }
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
+import org.apache.kafka.clients.consumer.{ OffsetAndMetadata => JOffsetAndMetadata }
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.{
@@ -146,9 +148,9 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def listOffsets(
     topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
-    listOffsetOptions: Option[ListOffsetsOptions]
+    listOffsetOptions: Option[ListOffsetsOptions] = None
   ): RIO[Blocking, Map[TopicPartition, ListOffsetsResultInfo]] = {
-    val asJava = topicPartitionOffsets.map { case (t, p) => t.asJava -> p.asJava }.asJava
+    val asJava = topicPartitionOffsets.bimap(_.asJava, _.asJava).asJava
     fromKafkaFuture {
       blocking.effectBlocking(
         listOffsetOptions
@@ -156,7 +158,29 @@ case class AdminClient(private val adminClient: JAdminClient) {
           .all()
       )
     }
-  }.map(_.asScala.map { case (t, p) => TopicPartition(t) -> ListOffsetsResultInfo(p) }.toMap)
+  }.map(_.asScala.toMap.bimap(TopicPartition(_), ListOffsetsResultInfo(_)))
+
+  /**
+   * AlterOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets)
+   *
+   */
+  def alterConsumerGroupOffsets(
+    groupId: String,
+    offsets: Map[TopicPartition, OffsetAndMetadata],
+    alterConsumerGroupOffsetsOptions: Option[AlterConsumerGroupOffsetsOptions] = None
+  ): RIO[Blocking, Unit] = {
+    val asJava = offsets.bimap(_.asJava, _.asJava).asJava
+
+    fromKafkaFutureVoid {
+      blocking.effectBlocking(
+        alterConsumerGroupOffsetsOptions
+          .fold(adminClient.alterConsumerGroupOffsets(groupId, asJava))(opts =>
+            adminClient.alterConsumerGroupOffsets(groupId, asJava, opts.asJava)
+          )
+          .all()
+      )
+    }
+  }
 }
 
 object AdminClient {
@@ -258,8 +282,14 @@ object AdminClient {
     }
   }
 
-  case class ListOffsetsOptions(isolationLevel: IsolationLevel = IsolationLevel.ReadUncommitted) {
-    def asJava = new JListOffsetsOptions(isolationLevel.asJava)
+  case class ListOffsetsOptions(
+    isolationLevel: IsolationLevel = IsolationLevel.ReadUncommitted,
+    timeoutMs: Option[Int]
+  ) {
+    def asJava = {
+      val offsetOpt = new JListOffsetsOptions(isolationLevel.asJava)
+      timeoutMs.fold(offsetOpt)(timeout => offsetOpt.timeoutMs(timeout))
+    }
   }
 
   case class ListOffsetsResultInfo(
@@ -273,6 +303,20 @@ object AdminClient {
       ListOffsetsResultInfo(lo.offset(), lo.timestamp(), lo.leaderEpoch().toScala.map(_.toInt))
   }
 
+  case class OffsetAndMetadata(
+    offset: Long,
+    leaderEpoch: Option[Int] = None,
+    metadata: Option[String] = None
+  ) {
+    def asJava = new JOffsetAndMetadata(offset, leaderEpoch.map(Int.box).toJava, metadata.orNull)
+  }
+
+  case class AlterConsumerGroupOffsetsOptions(
+    timeoutMs: Int
+  ) {
+    def asJava = new JAlterConsumerGroupOffsetsOptions().timeoutMs(timeoutMs)
+  }
+
   case class KafkaConfig(entries: Map[String, ConfigEntry])
 
   object KafkaConfig {
@@ -284,4 +328,8 @@ object AdminClient {
     ZManaged.make(
       ZIO(JAdminClient.create(settings.driverSettings.asJava)).map(ac => AdminClient(ac))
     )(client => ZIO.effectTotal(client.adminClient.close(settings.closeTimeout.asJava)))
+
+  implicit class MapOps[K1, V1](val v: Map[K1, V1]) extends AnyVal {
+    def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2) = v.map(kv => fk(kv._1) -> fv(kv._2))
+  }
 }
