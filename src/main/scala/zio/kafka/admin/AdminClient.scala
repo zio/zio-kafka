@@ -161,8 +161,7 @@ case class AdminClient(private val adminClient: JAdminClient) {
   }.map(_.asScala.toMap.bimap(TopicPartition(_), ListOffsetsResultInfo(_)))
 
   /**
-   * AlterOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets)
-   *
+   * Alter offsets for the specified partitions and consumer group.
    */
   def alterConsumerGroupOffsets(
     groupId: String,
