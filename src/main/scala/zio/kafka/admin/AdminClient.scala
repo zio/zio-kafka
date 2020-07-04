@@ -1,5 +1,7 @@
 package zio.kafka.admin
 
+import java.util.Optional
+
 import org.apache.kafka.clients.admin.{
   AdminClient => JAdminClient,
   AlterConsumerGroupOffsetsOptions => JAlterConsumerGroupOffsetsOptions,
@@ -16,16 +18,16 @@ import org.apache.kafka.clients.consumer.{ OffsetAndMetadata => JOffsetAndMetada
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.{
-  IsolationLevel => JIsolationLevel,
   KafkaFuture,
-  TopicPartition => JTopicPartition,
-  TopicPartitionInfo
+  TopicPartitionInfo,
+  IsolationLevel => JIsolationLevel,
+  TopicPartition => JTopicPartition
 }
 import zio._
 import zio.blocking.Blocking
 
+import scala.collection.compat._
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters._
 
 /**
  * Thin wrapper around apache java AdminClient. See java api for descriptions
@@ -328,5 +330,13 @@ object AdminClient {
 
   implicit class MapOps[K1, V1](val v: Map[K1, V1]) extends AnyVal {
     def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2) = v.map(kv => fk(kv._1) -> fv(kv._2))
+  }
+
+  implicit class OptionalOps[T](val v: Optional[T]) extends AnyVal {
+    def toScala = if (v.isPresent) Some(v.get()) else None
+  }
+
+  implicit class OptionOps[T](val v: Option[T]) extends AnyVal {
+    def toJava = v.fold(Optional.empty[T])(Optional.of)
   }
 }
