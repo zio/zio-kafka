@@ -169,7 +169,6 @@ case class AdminClient(private val adminClient: JAdminClient) {
     alterConsumerGroupOffsetsOptions: Option[AlterConsumerGroupOffsetsOptions] = None
   ): RIO[Blocking, Unit] = {
     val asJava = offsets.bimap(_.asJava, _.asJava).asJava
-
     fromKafkaFutureVoid {
       blocking.effectBlocking(
         alterConsumerGroupOffsetsOptions
@@ -225,7 +224,6 @@ object AdminClient {
       if (newAssignments.nonEmpty)
         JNewPartitions.increaseTo(totalCount, newAssignments.map(_.map(Int.box).asJava).asJava)
       else JNewPartitions.increaseTo(totalCount)
-
   }
 
   case class TopicDescription(
