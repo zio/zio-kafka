@@ -14,6 +14,7 @@ import zio.kafka.serde.Serializer
 import zio.stream.ZTransducer
 
 import scala.jdk.CollectionConverters._
+import zio.kafka.producer.Transaction
 
 package object producer {
   type ByteRecord = ProducerRecord[Array[Byte], Array[Byte]]
@@ -79,14 +80,9 @@ package object producer {
        */
       def flush: RIO[Blocking, Unit]
 
-      def initTransactions: RIO[Blocking, Unit]
-      def beginTransaction: RIO[Blocking, Unit]
-      def commitTransaction: RIO[Blocking, Unit]
-      def abortTransaction: RIO[Blocking, Unit]
-      def sendOffsetsToTransaction(
-        offsets: Map[TopicPartition, OffsetAndMetadata],
-        consumerGroupId: String
-      ): RIO[Blocking, Unit]
+      def initTransactions: RIO[R with Blocking, Unit]
+
+      def transaction: ZManaged[Blocking, Throwable, Transaction[R, K, V]]
     }
 
     final case class Live[R, K, V](
@@ -163,18 +159,9 @@ package object producer {
 
       override def flush: RIO[Blocking, Unit] = effectBlocking(p.flush())
 
-      override def initTransactions: RIO[Blocking, Unit] = effectBlocking(p.initTransactions())
+      override def initTransactions: RIO[R with Blocking, Unit] = effectBlocking(p.initTransactions())
 
-      override def beginTransaction: RIO[Blocking, Unit] = effectBlocking(p.beginTransaction())
-
-      override def commitTransaction: RIO[Blocking, Unit] = effectBlocking(p.commitTransaction())
-
-      override def abortTransaction: RIO[Blocking, Unit] = effectBlocking(p.abortTransaction())
-
-      override def sendOffsetsToTransaction(
-        offsets: Map[TopicPartition, OffsetAndMetadata],
-        consumerGroupId: String
-      ): RIO[Blocking, Unit] = effectBlocking(p.sendOffsetsToTransaction(offsets.asJava, consumerGroupId))
+      override def transaction: ZManaged[Blocking, Throwable, Transaction[R, K, V]] = Transaction.make(this)
 
       private def serialize(r: ProducerRecord[K, V]): RIO[R, ByteRecord] =
         for {
@@ -215,6 +202,11 @@ package object producer {
       r: Producer.Service[R, K, V] => RIO[R with Blocking, A]
     ): RIO[R with Blocking with Producer[R, K, V], A] =
       ZIO.accessM(env => r(env.get[Producer.Service[R, K, V]]))
+
+    def withProducerServiceManaged[R: Tag, K: Tag, V: Tag, A](
+      r: Producer.Service[R, K, V] => RManaged[R with Blocking, A]
+    ): RManaged[R with Blocking with Producer[R, K, V], A] =
+      ZManaged.accessManaged(env => r(env.get[Producer.Service[R, K, V]]))
 
     /**
      * Accessor method for [[Service.produce]]
@@ -268,19 +260,8 @@ package object producer {
     def initTransactions[R: Tag, K: Tag, V: Tag]: RIO[R with Blocking with Producer[R, K, V], Unit] =
       withProducerService(_.initTransactions)
 
-    def beginTransaction[R: Tag, K: Tag, V: Tag]: RIO[R with Blocking with Producer[R, K, V], Unit] =
-      withProducerService(_.beginTransaction)
+    def transaction[R: Tag, K: Tag, V: Tag]: RManaged[R with Blocking with Producer[R, K, V], Transaction[R, K, V]] =
+      withProducerServiceManaged(_.transaction)
 
-    def commitTransaction[R: Tag, K: Tag, V: Tag]: RIO[R with Blocking with Producer[R, K, V], Unit] =
-      withProducerService(_.commitTransaction)
-
-    def abortTransaction[R: Tag, K: Tag, V: Tag]: RIO[R with Blocking with Producer[R, K, V], Unit] =
-      withProducerService(_.abortTransaction)
-
-    def sendOffsetsToTransaction[R: Tag, K: Tag, V: Tag](
-      offsets: Map[TopicPartition, OffsetAndMetadata],
-      consumerGroupId: String
-    ): RIO[R with Blocking with Producer[R, K, V], Unit] =
-      withProducerService(_.sendOffsetsToTransaction(offsets, consumerGroupId))
   }
 }
