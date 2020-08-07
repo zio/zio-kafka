@@ -191,7 +191,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
               }
 
           // Consume messages
-          messagesReceived <- ZIO.foreach(0 until nrPartitions)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
+          messagesReceived <- ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
           subscription     = Subscription.topics(topic)
           fib <- Consumer
                   .subscribeAnd(subscription)
@@ -232,7 +232,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
           topic         <- randomTopic
           group         <- randomGroup
           keepProducing <- Ref.make(true)
-          _             <- (produceOne(topic, "key", "value") *> keepProducing.get).doWhile(b => b).fork
+          _             <- (produceOne(topic, "key", "value") *> keepProducing.get).repeatWhile(b => b).fork
           _ <- Consumer
                 .subscribeAnd(Subscription.topics(topic))
                 .plainStream(Serde.string, Serde.string)
@@ -280,7 +280,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
               }
 
           // Consume messages
-          messagesReceived <- ZIO.foreach(0 until nrPartitions)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
+          messagesReceived <- ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
           subscription     = Subscription.topics(topic)
           offsets <- (Consumer
                       .subscribeAnd(subscription)
