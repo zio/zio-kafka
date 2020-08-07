@@ -39,6 +39,6 @@ private[consumer] object ConsumerAccess {
                        new ByteArrayDeserializer()
                      )
                    }
-                 }.toManaged(c => blocking(access.withPermit(UIO(c.close(settings.closeTimeout.asJava)))))
+                 }.toManaged(c => blocking(access.withPermit(UIO(c.close(settings.closeTimeout)))))
     } yield new ConsumerAccess(consumer, access)
 }
