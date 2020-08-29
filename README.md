@@ -22,7 +22,7 @@ client. It integrates effortlessly with ZIO and ZIO Streams.
 Add the following dependencies to your `build.sbt` file:
 ```
 libraryDependencies ++= Seq(
-  "dev.zio" %% "zio-streams" % "1.0.0-RC19",
+  "dev.zio" %% "zio-streams" % "1.0.0",
   "dev.zio" %% "zio-kafka"   % "<version>"
 )
 ```
@@ -176,7 +176,7 @@ By default `zio-kafka` will start streaming a partition from the last committed 
 
 | Use case | Method |
 | --- | --- |
-| Offsets in kafka, start at latest message if no offset committed | `OffsetRetrieval.Auto` |
+| Offsets in kafka, start at latest message if no offset committed | `OffsetRetrieval.Auto()` |
 | Offsets in kafka, start at earliest message if no offset committed | `OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)` |
 | Manual/external offset storage | `Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]])` |
 
