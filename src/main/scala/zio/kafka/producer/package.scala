@@ -183,7 +183,7 @@ package object producer {
           value <- valueSerializer.serialize(r.topic, r.headers, r.value())
         } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
 
-      private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout.asJava))
+      private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout))
     }
 
     def live[R: Tag, K: Tag, V: Tag]: ZLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[
