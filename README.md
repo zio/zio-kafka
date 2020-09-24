@@ -176,7 +176,7 @@ By default `zio-kafka` will start streaming a partition from the last committed 
 
 | Use case | Method |
 | --- | --- |
-| Offsets in kafka, start at latest message if no offset committed | `OffsetRetrieval.Auto` |
+| Offsets in kafka, start at latest message if no offset committed | `OffsetRetrieval.Auto()` |
 | Offsets in kafka, start at earliest message if no offset committed | `OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)` |
 | Manual/external offset storage | `Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]])` |
 
