@@ -1,8 +1,3 @@
-/*
- * Copyright (C) 2014 - 2016 Softwaremill <https://softwaremill.com>
- * Copyright (C) 2016 - 2020 Lightbend Inc. <https://www.lightbend.com>
- */
-
 package zio.kafka.test.containers;
 
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
