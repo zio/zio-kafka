@@ -22,7 +22,7 @@ import java.util.stream.Stream;
 
 /** This container wraps Confluent Kafka and Zookeeper (optionally)
  *  Copied the from Alpakka Kafka library https://github.com/akka/alpakka-kafka */
-public class AlpakkaKafkaContainer extends GenericContainer<AlpakkaKafkaContainer> {
+public class ZioKafkaContainer extends GenericContainer<ZioKafkaContainer> {
 
   private static final String STARTER_SCRIPT = "/testcontainers_start.sh";
 
@@ -45,11 +45,11 @@ public class AlpakkaKafkaContainer extends GenericContainer<AlpakkaKafkaContaine
 
   private boolean enableRemoteJmxService = false;
 
-  public AlpakkaKafkaContainer() {
+  public ZioKafkaContainer() {
     this("5.3.1");
   }
 
-  public AlpakkaKafkaContainer(String confluentPlatformVersion) {
+  public ZioKafkaContainer(String confluentPlatformVersion) {
     super(
         TestcontainersConfiguration.getInstance().getKafkaImage() + ":" + confluentPlatformVersion);
 
@@ -72,7 +72,7 @@ public class AlpakkaKafkaContainer extends GenericContainer<AlpakkaKafkaContaine
   }
 
   @Override
-  public AlpakkaKafkaContainer withNetwork(Network network) {
+  public ZioKafkaContainer withNetwork(Network network) {
     useImplicitNetwork = false;
     return super.withNetwork(network);
   }
@@ -91,17 +91,17 @@ public class AlpakkaKafkaContainer extends GenericContainer<AlpakkaKafkaContaine
     return super.getNetwork();
   }
 
-  public AlpakkaKafkaContainer withEmbeddedZookeeper() {
+  public ZioKafkaContainer withEmbeddedZookeeper() {
     externalZookeeperConnect = null;
     return self();
   }
 
-  public AlpakkaKafkaContainer withExternalZookeeper(String connectString) {
+  public ZioKafkaContainer withExternalZookeeper(String connectString) {
     externalZookeeperConnect = connectString;
     return self();
   }
 
-  public AlpakkaKafkaContainer withRemoteJmxService() {
+  public ZioKafkaContainer withRemoteJmxService() {
     enableRemoteJmxService = true;
     return self();
   }

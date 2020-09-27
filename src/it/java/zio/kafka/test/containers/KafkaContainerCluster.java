@@ -23,13 +23,13 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class KafkaContainerCluster implements Startable {
 
   public static final String CONFLUENT_PLATFORM_VERSION =
-      AlpakkaKafkaContainer.DEFAULT_CP_PLATFORM_VERSION;
+      ZioKafkaContainer.DEFAULT_CP_PLATFORM_VERSION;
   public static final int START_TIMEOUT_SECONDS = 120;
 
   private final int brokersNum;
   private final Network network;
   private final GenericContainer zookeeper;
-  private final Collection<AlpakkaKafkaContainer> brokers;
+  private final Collection<ZioKafkaContainer> brokers;
   private final DockerClient dockerClient = DockerClientFactory.instance().client();
 
   public KafkaContainerCluster(int brokersNum, int internalTopicsRf) {
@@ -55,18 +55,18 @@ public class KafkaContainerCluster implements Startable {
         new GenericContainer("confluentinc/cp-zookeeper:" + confluentPlatformVersion)
             .withNetwork(network)
             .withNetworkAliases("zookeeper")
-            .withEnv("ZOOKEEPER_CLIENT_PORT", String.valueOf(AlpakkaKafkaContainer.ZOOKEEPER_PORT));
+            .withEnv("ZOOKEEPER_CLIENT_PORT", String.valueOf(ZioKafkaContainer.ZOOKEEPER_PORT));
 
     this.brokers =
         IntStream.range(0, this.brokersNum)
             .mapToObj(
                 brokerNum ->
-                    new AlpakkaKafkaContainer(confluentPlatformVersion)
+                    new ZioKafkaContainer(confluentPlatformVersion)
                         .withNetwork(this.network)
                         .withNetworkAliases("broker-" + brokerNum)
                         .withRemoteJmxService()
                         .dependsOn(this.zookeeper)
-                        .withExternalZookeeper("zookeeper:" + AlpakkaKafkaContainer.ZOOKEEPER_PORT)
+                        .withExternalZookeeper("zookeeper:" + ZioKafkaContainer.ZOOKEEPER_PORT)
                         .withEnv("KAFKA_BROKER_ID", brokerNum + "")
                         .withEnv("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", internalTopicsRf + "")
                         .withEnv("KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS", internalTopicsRf + "")
@@ -84,13 +84,13 @@ public class KafkaContainerCluster implements Startable {
     return this.zookeeper;
   }
 
-  public Collection<AlpakkaKafkaContainer> getBrokers() {
+  public Collection<ZioKafkaContainer> getBrokers() {
     return this.brokers;
   }
 
   public String getBootstrapServers() {
     return brokers.stream()
-        .map(AlpakkaKafkaContainer::getBootstrapServers)
+        .map(ZioKafkaContainer::getBootstrapServers)
         .collect(Collectors.joining(","));
   }
 
@@ -130,7 +130,7 @@ public class KafkaContainerCluster implements Startable {
                       "sh",
                       "-c",
                       "zookeeper-shell zookeeper:"
-                          + AlpakkaKafkaContainer.ZOOKEEPER_PORT
+                          + ZioKafkaContainer.ZOOKEEPER_PORT
                           + " ls /brokers/ids | tail -n 1")
                   .exec()
                   .getId())
