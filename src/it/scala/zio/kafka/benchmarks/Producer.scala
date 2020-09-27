@@ -6,7 +6,7 @@ import zio.kafka.benchmarks.commands.RunTestCommand
 import zio.kafka.benchmarks.fixtures.KafkaProducerFixtures
 import zio.kafka.benchmarks.scenarios.{ RawProducerBenchmarks, ZioProducerBenchmarks }
 
-class ProducerBenchmarks extends BenchmarksBase {
+class PlainProducer extends BenchmarksBase {
   val prefix = "apache-kafka-plain-producer"
 
   it should "bench with small messages" in {
@@ -31,7 +31,7 @@ class ProducerBenchmarks extends BenchmarksBase {
   }
 }
 
-class ZioProducerBenchmarks extends BenchmarksBase {
+class ZioProducer extends BenchmarksBase {
   val prefix = "zio-plain-producer"
 
   it should "bench with small messages" in {

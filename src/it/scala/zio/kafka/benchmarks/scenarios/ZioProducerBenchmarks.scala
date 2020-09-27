@@ -18,7 +18,7 @@ object ZioProducerBenchmarks extends LazyLogging {
   def plainFlow(fixture: KafkaProducerTestFixture, meter: Meter): Unit = {
     val msg = PerfFixtureHelpers.stringOfSize(fixture.msgSize)
     val stream = Stream
-      .fromIterable(0 to fixture.msgCount) // pre-allocates, but Stream.range is very slow!
+      .range(0, fixture.msgCount - 1)
       .map { number =>
         val partition: Int = (number % fixture.numberOfPartitions).toInt
         new ProducerRecord[Array[Byte], String](fixture.topic, partition, null, msg)

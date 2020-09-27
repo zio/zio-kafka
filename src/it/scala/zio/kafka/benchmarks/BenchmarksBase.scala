@@ -5,7 +5,8 @@ import zio.kafka.benchmarks.fixtures.PerfFixtureHelpers.FilledTopic
 
 object BenchmarksBase {
   // Message count multiplier to adapt for shorter local testing
-  val factor = 1000
+  // TODO should be 1000 by default, but I'm leaving 10 since until problem with slow Source.range() is resolved
+  val factor = 10
 
   val numBrokers = 1 // TODO config
 
