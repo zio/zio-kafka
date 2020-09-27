@@ -60,11 +60,11 @@ buildInfoObject := "BuildInfo"
 
 libraryDependencies ++= Seq(
   "dev.zio"                 %% "zio-streams"             % zioVersion,
-  "dev.zio"                 %% "zio-test"                % zioVersion % Test,
-  "dev.zio"                 %% "zio-test-sbt"            % zioVersion % Test,
+  "dev.zio"                 %% "zio-test"                % zioVersion % "test",
+  "dev.zio"                 %% "zio-test-sbt"            % zioVersion % "test",
   "org.apache.kafka"        % "kafka-clients"            % kafkaVersion,
-  "io.github.embeddedkafka" %% "embedded-kafka"          % kafkaVersion % Test,
-  "ch.qos.logback"          % "logback-classic"          % "1.2.3" % Test,
+  "io.github.embeddedkafka" %% "embedded-kafka"          % kafkaVersion % "test",
+  "ch.qos.logback"          % "logback-classic"          % "1.2.3" % "test",
   "org.scala-lang.modules"  %% "scala-collection-compat" % "2.2.0",
   compilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full)
 ) ++ {
