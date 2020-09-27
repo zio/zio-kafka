@@ -8,7 +8,7 @@ import java.util.{ Arrays, Properties, UUID }
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.kafka.clients.admin.{ AdminClient, NewTopic }
 import org.apache.kafka.clients.producer._
-import org.apache.kafka.common.serialization.{ ByteArraySerializer, StringSerializer }
+import org.apache.kafka.common.serialization.ByteArraySerializer
 
 import scala.concurrent.duration._
 import scala.concurrent.{ Await, Promise }
@@ -43,7 +43,7 @@ private[benchmarks] trait PerfFixtureHelpers extends LazyLogging {
   def fillTopic(ft: FilledTopic, kafkaHost: String): Unit =
     initTopicAndProducer(ft, kafkaHost)
 
-  def createTopic(ft: FilledTopic, kafkaHost: String): KafkaProducer[Array[Byte], String] = {
+  def createTopic(ft: FilledTopic, kafkaHost: String): KafkaProducer[Array[Byte], Array[Byte]] = {
     val props = new Properties
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaHost)
     val admin    = AdminClient.create(props)
@@ -77,7 +77,7 @@ private[benchmarks] trait PerfFixtureHelpers extends LazyLogging {
     result.all().get(10, TimeUnit.SECONDS)
     // fill topic with messages
     val producer =
-      new KafkaProducer[Array[Byte], String](props, new ByteArraySerializer, new StringSerializer)
+      new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
     val lastElementStoredPromise = Promise[Unit]
     val loggedStep               = if (ft.msgCount > logPercentStep) ft.msgCount / (100 / logPercentStep) else 1
     val msg                      = stringOfSize(ft.msgSize)
@@ -85,7 +85,7 @@ private[benchmarks] trait PerfFixtureHelpers extends LazyLogging {
       if (!lastElementStoredPromise.isCompleted) {
         val partition: Int = (i % ft.numberOfPartitions).toInt
         producer.send(
-          new ProducerRecord[Array[Byte], String](ft.topic, partition, null, msg),
+          new ProducerRecord[Array[Byte], Array[Byte]](ft.topic, partition, null, msg.getBytes),
           new Callback {
             override def onCompletion(recordMetadata: RecordMetadata, e: Exception): Unit =
               if (e == null) {

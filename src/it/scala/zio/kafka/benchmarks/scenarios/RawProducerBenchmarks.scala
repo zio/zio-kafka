@@ -20,7 +20,7 @@ object RawProducerBenchmarks extends LazyLogging {
     for (i <- 1 to fixture.msgCount) {
       val partition: Int = (i % fixture.numberOfPartitions).toInt
       producer.send(
-        new ProducerRecord[Array[Byte], String](fixture.topic, partition, null, msg),
+        new ProducerRecord[Array[Byte], Array[Byte]](fixture.topic, partition, null, msg.getBytes),
         new Callback {
           override def onCompletion(metadata: RecordMetadata, exception: Exception): Unit = meter.mark()
         }

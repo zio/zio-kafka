@@ -28,5 +28,5 @@ object BenchmarksBase {
 }
 
 abstract class BenchmarksBase extends AnyFlatSpecLike {
-  val bootstrapServers = "localhost:9092"
+  val bootstrapServers = "localhost:9092" // TODO support containers, clustering
 }

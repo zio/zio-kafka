@@ -65,6 +65,8 @@ Defaults.itSettings
 
 libraryDependencies ++= Seq(
   "dev.zio"                    %% "zio-streams"             % zioVersion,
+  "dev.zio"                    %% "zio-test"                % zioVersion % Test,
+  "dev.zio"                    %% "zio-test-sbt"            % zioVersion % Test,
   "org.apache.kafka"           % "kafka-clients"            % kafkaVersion,
   "io.github.embeddedkafka"    %% "embedded-kafka"          % kafkaVersion % Test,
   "ch.qos.logback"             % "logback-classic"          % "1.2.3" % "test, it",
