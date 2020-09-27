@@ -19,6 +19,7 @@ object ZioProducerBenchmarks extends LazyLogging {
     val msg = PerfFixtureHelpers.stringOfSize(fixture.msgSize)
     val stream = Stream
       .range(0, fixture.msgCount - 1)
+      .chunkN(1000)
       .map { number =>
         val partition: Int = (number % fixture.numberOfPartitions).toInt
         new ProducerRecord[Array[Byte], String](fixture.topic, partition, null, msg)
