@@ -59,18 +59,20 @@ buildInfoPackage := "zio.kafka"
 buildInfoObject := "BuildInfo"
 
 libraryDependencies ++= Seq(
-  "dev.zio"                 %% "zio-streams"             % zioVersion,
-  "dev.zio"                 %% "zio-test"                % zioVersion % "test",
-  "dev.zio"                 %% "zio-test-sbt"            % zioVersion % "test",
-  "org.apache.kafka"        % "kafka-clients"            % kafkaVersion,
-  "io.github.embeddedkafka" %% "embedded-kafka"          % kafkaVersion % "test->compile",
-  "ch.qos.logback"          % "logback-classic"          % "1.2.3" % "test",
-  "org.scala-lang.modules"  %% "scala-collection-compat" % "2.2.0",
+  "dev.zio"                %% "zio-streams"             % zioVersion,
+  "dev.zio"                %% "zio-test"                % zioVersion % "test",
+  "dev.zio"                %% "zio-test-sbt"            % zioVersion % "test",
+  "org.apache.kafka"       % "kafka-clients"            % kafkaVersion,
+  "ch.qos.logback"         % "logback-classic"          % "1.2.3" % "test",
+  "org.scala-lang.modules" %% "scala-collection-compat" % "2.2.0",
   compilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full)
 ) ++ {
   if (scalaBinaryVersion.value == "2.13") silencer
   else if (scalaBinaryVersion.value == "2.12") silencer
   else Seq.empty
+} ++ {
+  if (scalaBinaryVersion.value == "2.11") Seq.empty
+  else Seq("io.github.embeddedkafka" %% "embedded-kafka" % kafkaVersion % "test")
 }
 
 Compile / compile / scalacOptions ++= {
