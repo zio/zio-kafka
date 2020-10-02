@@ -11,8 +11,8 @@ import zio.{ ZEnv, ZIO }
 object BenchmarksBase {
   // Message count multiplier to adapt for shorter local testing
   val factor = 1000
-
-  val numBrokers = 1 // TODO config
+  // A placeholder for future support for multi-node
+  val numBrokers = 1
 
   lazy val topic_50_100 = FilledTopic(50 * factor, 100, replicationFactor = numBrokers)
 
@@ -33,7 +33,7 @@ object BenchmarksBase {
 }
 
 abstract class BenchmarksBase extends AnyFlatSpecLike {
-  val bootstrapServers = "localhost:9092" // TODO support containers, clustering
+  val bootstrapServers = "localhost:9092"
   val runtime          = zio.Runtime.default
 
   def runWithProducer(
