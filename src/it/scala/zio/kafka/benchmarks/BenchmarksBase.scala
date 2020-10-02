@@ -36,7 +36,7 @@ abstract class BenchmarksBase extends AnyFlatSpecLike {
   val bootstrapServers = "localhost:9092" // TODO support containers, clustering
   val runtime          = zio.Runtime.default
 
-  def runWithProducer[R](
+  def runWithProducer(
     cmd: RunTestCommand,
     testCase: (KafkaProducerTestFixture, Meter) => ZIO[ZEnv, Throwable, Unit]
   ): Unit = {
