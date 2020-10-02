@@ -1,7 +1,12 @@
 package zio.kafka.benchmarks
 
+import com.codahale.metrics.Meter
 import org.scalatest.flatspec.AnyFlatSpecLike
+import zio.kafka.benchmarks.Timed.runTimed
+import zio.kafka.benchmarks.commands.RunTestCommand
 import zio.kafka.benchmarks.fixtures.PerfFixtureHelpers.FilledTopic
+import zio.kafka.benchmarks.fixtures.{ KafkaProducerFixtures, KafkaProducerTestFixture }
+import zio.{ ZEnv, ZIO }
 
 object BenchmarksBase {
   // Message count multiplier to adapt for shorter local testing
@@ -29,4 +34,17 @@ object BenchmarksBase {
 
 abstract class BenchmarksBase extends AnyFlatSpecLike {
   val bootstrapServers = "localhost:9092" // TODO support containers, clustering
+  val runtime          = zio.Runtime.default
+
+  def runWithProducer[R](
+    cmd: RunTestCommand,
+    testCase: (KafkaProducerTestFixture, Meter) => ZIO[ZEnv, Throwable, Unit]
+  ): Unit = {
+
+    val program = KafkaProducerFixtures
+      .initializedProducer(cmd)
+      .use(runTimed(cmd, testCase))
+
+    runtime.unsafeRun(program)
+  }
 }

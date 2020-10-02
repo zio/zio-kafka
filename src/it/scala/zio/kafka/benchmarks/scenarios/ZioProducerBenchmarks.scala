@@ -15,17 +15,20 @@ object ZioProducerBenchmarks extends LazyLogging {
   @volatile var lastPartStart = System.nanoTime()
   val logStep                 = 100000
 
-  def plainFlow(fixture: KafkaProducerTestFixture, meter: Meter): Unit = {
+  def plainFlow(
+    fixture: KafkaProducerTestFixture,
+    meter: Meter
+  ): ZIO[Blocking, Throwable, Unit] = {
     val msg = PerfFixtureHelpers.stringOfSize(fixture.msgSize)
-    val stream = Stream
+    Stream
       .range(0, fixture.msgCount - 1)
       .chunkN(1000)
       .map { number =>
         val partition: Int = (number % fixture.numberOfPartitions).toInt
-        new ProducerRecord[Array[Byte], String](fixture.topic, partition, null, msg)
+        new ProducerRecord[Array[Byte], Array[Byte]](fixture.topic, partition, null, msg.getBytes)
       }
       .transduce {
-        Producer.produceAll[Any, Array[Byte], String]
+        Producer.produceAll[Any, Array[Byte], Array[Byte]]
       }
       .map { msg: RecordMetadata =>
         meter.mark()
@@ -37,11 +40,7 @@ object ZioProducerBenchmarks extends LazyLogging {
         }
         msg
       }
-
-    // TODO extract the unsafe running part away
-    val runtime         = Runtime.default
-    val blockingService = Blocking.live
-    val _: Unit         = runtime.unsafeRun(stream.runDrain.provideLayer(fixture.zioProducer ++ blockingService))
-    logger.info("Stream finished")
+      .runDrain
+      .provideSomeLayer[Blocking](ZLayer.succeed(fixture.producer: Producer.Service[Any, Array[Byte], Array[Byte]]))
   }
 }

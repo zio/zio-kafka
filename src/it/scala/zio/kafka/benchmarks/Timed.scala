@@ -5,6 +5,7 @@ import java.util.concurrent.TimeUnit
 
 import com.codahale.metrics._
 import com.typesafe.scalalogging.LazyLogging
+import zio.RIO
 import zio.kafka.benchmarks.commands.RunTestCommand
 import zio.kafka.benchmarks.fixtures.FixtureGen
 
@@ -27,7 +28,10 @@ object Timed extends LazyLogging {
       .convertDurationsTo(TimeUnit.MILLISECONDS)
       .build(benchmarkReportBasePath.toFile)
 
-  def runPerfTest[F](command: RunTestCommand, fixtureGen: FixtureGen[F], testBody: (F, Meter) => Unit): Unit = {
+  def runTimed[F, R](
+    command: RunTestCommand,
+    testBody: (F, Meter) => RIO[R, Unit]
+  )(fixtureGen: FixtureGen[F]): RIO[R, Unit] = {
     val name     = command.testName
     val msgCount = command.msgCount
     logger.info(s"Generating fixture for $name ${command.filledTopic}")
@@ -36,12 +40,13 @@ object Timed extends LazyLogging {
     val meter   = metrics.meter(name)
     logger.info(s"Running benchmarks for $name")
     val now = System.nanoTime()
-    testBody(fixture, meter)
-    val after = System.nanoTime()
-    val took  = (after - now).nanos
-    logger.info(s"Test $name took ${took.toMillis} ms")
-    reporter(metrics).report()
-    csvReporter(metrics).report()
+    testBody(fixture, meter).map { _ =>
+      val after = System.nanoTime()
+      val took  = (after - now).nanos
+      logger.info(s"Test $name took ${took.toMillis} ms")
+      reporter(metrics).report()
+      csvReporter(metrics).report()
+    }
   }
 
 }

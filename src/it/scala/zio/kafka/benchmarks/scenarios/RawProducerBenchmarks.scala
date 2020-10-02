@@ -1,18 +1,19 @@
 package zio.kafka.benchmarks.scenarios
 
-import scala.concurrent.duration._
-
-import com.typesafe.scalalogging.LazyLogging
 import com.codahale.metrics.Meter
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.kafka.clients.producer.{ Callback, ProducerRecord, RecordMetadata }
+import zio.Task
 import zio.kafka.benchmarks.fixtures.{ KafkaProducerTestFixture, PerfFixtureHelpers }
+
+import scala.concurrent.duration._
 
 object RawProducerBenchmarks extends LazyLogging {
 
   val logStep = 100000
 
-  def plainFlow(fixture: KafkaProducerTestFixture, meter: Meter): Unit = {
-    val producer      = fixture.producer
+  def plainFlow(fixture: KafkaProducerTestFixture, meter: Meter): Task[Unit] = {
+    val producer      = fixture.producer.p
     var lastPartStart = System.nanoTime()
 
     val msg = PerfFixtureHelpers.stringOfSize(fixture.msgSize)
@@ -33,6 +34,7 @@ object RawProducerBenchmarks extends LazyLogging {
         lastPartStart = lastPartEnd
       }
     }
-    fixture.close()
+
+    Task.unit
   }
 }
