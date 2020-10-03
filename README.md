@@ -13,6 +13,7 @@ client. It integrates effortlessly with ZIO and ZIO Streams.
 - [Partition assignment and offset retrieval](#partition-assignment-and-offset-retrieval)
 - [Custom data type serdes](#custom-data-type-serdes)
 - [Handling deserialization failures](#handling-deserialization-failures)
+- [Benchmarks](#benchmarks)
 - [Getting help](#getting-help)
 - [Credits](#credits)
 - [Legal](#legal)
@@ -231,6 +232,24 @@ stream
   .runDrain
   .provideSomeLayer(consumer)
 ```
+
+## Benchmarks
+
+Benchmarks can be found in the `it` module, under the `zio.kafka.benchmarks` package
+
+### Producer benchmarks
+
+See `zio.kafka.benchmarks.PlainProducer` for tests scenarios executed by a simple loop
+which emits messages using raw Kafka client.
+See `zio.kafka.benchmarks.ZioProducer` for benchmarks for same set of scenarios using zio-kafka.
+
+Running:
+To run a single scenario, expose Kafka at `localhost:9092` and run selected scenario
+from `PlainProducer` or `ZioProducer` using a command like:
+```
+it:test *PlainProducer* -- -z "bench with 500b messages"
+``` 
+Results will be printed to the console, with mean throughput being the main metric.  
 
 ## Getting help
 
