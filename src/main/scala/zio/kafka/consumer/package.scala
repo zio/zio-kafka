@@ -1,7 +1,7 @@
 package zio.kafka
 
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetAndTimestamp }
-import org.apache.kafka.common.{ PartitionInfo, TopicPartition }
+import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition }
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -113,6 +113,11 @@ package object consumer {
       def subscribeAnd(subscription: Subscription): SubscribedConsumer
 
       def subscription: RIO[Blocking, Set[String]]
+
+      /**
+       * Expose internal consumer metrics
+       */
+      def metrics: RIO[Blocking, Map[MetricName, Metric]]
     }
 
     final case class Live(
@@ -267,6 +272,9 @@ package object consumer {
 
       override def unsubscribe: RIO[Blocking, Unit] =
         consumer.withConsumer(_.unsubscribe())
+
+      override def metrics: RIO[Blocking, Map[MetricName, Metric]] =
+        consumer.withConsumer(_.metrics().asScala.toMap)
     }
 
     val offsetBatches: ZTransducer[Any, Nothing, Offset, OffsetBatch] =
@@ -478,6 +486,12 @@ package object consumer {
      */
     def subscription: RIO[Blocking with Consumer, Set[String]] =
       withConsumerService(_.subscription)
+
+    /**
+     * Accessor method for [[Service.metrics]]
+     */
+    def metrics: RIO[Blocking with Consumer, Map[MetricName, Metric]] =
+      withConsumerService(_.metrics)
 
     sealed trait OffsetRetrieval
 
