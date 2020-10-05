@@ -3,6 +3,7 @@ package zio.kafka
 import java.util.concurrent.atomic.AtomicLong
 
 import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
+import org.apache.kafka.common.{ Metric, MetricName }
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio._
 import zio.blocking._
@@ -95,6 +96,11 @@ package object producer {
        * currently buffered will be transmitted to the broker.
        */
       def flush: RIO[Blocking, Unit]
+
+      /**
+       * Expose internal producer metrics
+       */
+      def metrics: RIO[Blocking, Map[MetricName, Metric]]
     }
 
     final case class Live[R, K, V](
@@ -176,6 +182,8 @@ package object producer {
         produceChunkAsync(records).flatten
 
       override def flush: RIO[Blocking, Unit] = effectBlocking(p.flush())
+
+      override def metrics: RIO[Blocking, Map[MetricName, Metric]] = effectBlocking(p.metrics().asScala.toMap)
 
       private def serialize(r: ProducerRecord[K, V]): RIO[R, ByteRecord] =
         for {
@@ -285,5 +293,12 @@ package object producer {
      */
     def flush[R: Tag, K: Tag, V: Tag]: ZIO[R with Blocking with Producer[R, K, V], Throwable, Unit] =
       withProducerService(_.flush)
+
+    /**
+     * Accessor method for [[Service.metrics]]
+     */
+    def metrics[R: Tag, K: Tag, V: Tag]
+      : ZIO[R with Blocking with Producer[R, K, V], Throwable, Map[MetricName, Metric]] =
+      withProducerService(_.metrics)
   }
 }
