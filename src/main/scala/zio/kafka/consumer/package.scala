@@ -189,7 +189,7 @@ package object consumer {
         configureDeserializers *>
           ZStream
             .fromQueue(runloop.partitions)
-            .collectWhileSuccess
+            .flattenExitOption
             .map {
               case (tp, partition) =>
                 val partitionStream =
