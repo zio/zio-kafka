@@ -22,6 +22,12 @@ import zio.Chunk
 object ConsumerSpec extends DefaultRunnableSpec {
   override def spec: ZSpec[TestEnvironment, Throwable] =
     suite("Consumer Streaming")(
+      testM("export metrics") {
+        for {
+          metrics <- Consumer.metrics
+                      .provideSomeLayer[Kafka with Blocking with Clock](consumer("group1289", "client150"))
+        } yield assert(metrics)(isNonEmpty)
+      },
       testM("plainStream emits messages for a topic subscription") {
         val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
         for {
