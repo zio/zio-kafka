@@ -102,6 +102,7 @@ object KafkaTestUtils {
                .use(client => f(client))
                .provideSomeLayer[Kafka](Clock.live ++ Blocking.live)
     } yield fRes
+
   def randomThing(prefix: String): Task[String] =
     Task(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
 

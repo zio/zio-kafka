@@ -175,7 +175,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                                           consumer("group1", "second")
                                         )
                           } yield results
-        } yield assert((firstResults ++ secondResults).map(rec => rec.key() -> rec.value()).toList)(equalTo(data))
+        } yield assert((firstResults ++ q).map(rec => rec.key() -> rec.value()).toList)(equalTo(data))
       },
       testM("partitionedStream emits messages for each partition in a separate stream") {
         val nrMessages   = 50
