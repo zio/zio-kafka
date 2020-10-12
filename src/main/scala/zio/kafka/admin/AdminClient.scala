@@ -28,13 +28,15 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def createTopics(
     newTopics: Iterable[NewTopic],
-    createTopicOptions: Option[CreateTopicsOptions] = None
+    createTopicOptions: Option[CreateTopicsOptions] = None,
+    options: Option[CreateTopicsOptions] = None
   ): RIO[Blocking, Unit] = {
     val asJava = newTopics.map(_.asJava).asJavaCollection
     fromKafkaFutureVoid {
       blocking
         .effectBlocking(
-          createTopicOptions
+          options
+            .orElse(createTopicOptions)
             .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts))
             .all()
         )
@@ -52,13 +54,15 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def deleteTopics(
     topics: Iterable[String],
-    deleteTopicsOptions: Option[DeleteTopicsOptions] = None
+    deleteTopicsOptions: Option[DeleteTopicsOptions] = None,
+    options: Option[DeleteTopicsOptions] = None
   ): RIO[Blocking, Unit] = {
     val asJava = topics.asJavaCollection
     fromKafkaFutureVoid {
       blocking
         .effectBlocking(
-          deleteTopicsOptions
+          options
+            .orElse(deleteTopicsOptions)
             .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts))
             .all()
         )
@@ -86,12 +90,14 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def describeTopics(
     topicNames: Iterable[String],
-    describeTopicsOptions: Option[DescribeTopicsOptions] = None
+    describeTopicsOptions: Option[DescribeTopicsOptions] = None,
+    options: Option[DescribeTopicsOptions] = None
   ): RIO[Blocking, Map[String, TopicDescription]] = {
     val asJava = topicNames.asJavaCollection
     fromKafkaFuture {
       blocking.effectBlocking(
-        describeTopicsOptions
+        options
+          .orElse(describeTopicsOptions)
           .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
           .all()
       )
@@ -103,12 +109,14 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def describeConfigs(
     configResources: Iterable[ConfigResource],
-    describeConfigsOptions: Option[DescribeConfigsOptions] = None
+    describeConfigsOptions: Option[DescribeConfigsOptions] = None,
+    options: Option[DescribeConfigsOptions] = None
   ): RIO[Blocking, Map[ConfigResource, KafkaConfig]] = {
     val asJava = configResources.asJavaCollection
     fromKafkaFuture {
       blocking.effectBlocking(
-        describeConfigsOptions
+        options
+          .orElse(describeConfigsOptions)
           .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts))
           .all()
       )
@@ -120,12 +128,14 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def createPartitions(
     newPartitions: Map[String, NewPartitions],
-    createPartitionsOptions: Option[CreatePartitionsOptions] = None
+    createPartitionsOptions: Option[CreatePartitionsOptions] = None,
+    options: Option[CreatePartitionsOptions] = None
   ): RIO[Blocking, Unit] = {
     val asJava = newPartitions.view.mapValues(_.asJava).toMap.asJava
     fromKafkaFutureVoid {
       blocking.effectBlocking(
-        createPartitionsOptions
+        options
+          .orElse(createPartitionsOptions)
           .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts))
           .all()
       )
