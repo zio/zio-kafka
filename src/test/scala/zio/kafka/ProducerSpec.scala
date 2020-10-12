@@ -60,6 +60,11 @@ object ProducerSpec extends DefaultRunnableSpec {
         for {
           outcome <- Producer.produceChunk[Any, String, String](chunks)
         } yield assert(outcome.length)(equalTo(0))
+      },
+      testM("export metrics") {
+        for {
+          metrics <- Producer.metrics[Any, String, String]
+        } yield assert(metrics)(isNonEmpty)
       }
     ).provideSomeLayerShared[TestEnvironment](
       ((Kafka.embedded >>> stringProducer) ++ Kafka.embedded).mapError(TestFailure.fail) ++ Clock.live

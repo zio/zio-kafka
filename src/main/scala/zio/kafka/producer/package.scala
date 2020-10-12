@@ -3,6 +3,7 @@ package zio.kafka
 import java.util.concurrent.atomic.AtomicLong
 
 import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
+import org.apache.kafka.common.{ Metric, MetricName }
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio._
 import zio.blocking._
@@ -20,10 +21,16 @@ package object producer {
     trait Service[R, K, V] {
 
       /**
-       * Produces a single record and await broker acknowledgement. See [[produceAsync]] for
+       * Produces a single record and await broker acknowledgement. See [[produceAsync(record*]] for
        * version that allows to avoid round-trip-time penalty for each record.
        */
       def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, RecordMetadata]
+
+      /**
+       * Produces a single record and await broker acknowledgement. See [[produceAsync(topic*]] for
+       * version that allows to avoid round-trip-time penalty for each record.
+       */
+      def produce(topic: String, key: K, value: V): RIO[R with Blocking, RecordMetadata]
 
       /**
        * A stream transducer that produces all records from the stream.
@@ -45,9 +52,24 @@ package object producer {
        * It is usually recommended to not await the inner layer of every individual record,
        * but enqueue a batch of records and await all of their acknowledgements at once. That
        * amortizes the cost of sending requests to Kafka and increases throughput.
-       * See [[produce]] for version that awaits broker acknowledgement.
+       * See [[produce(record*]] for version that awaits broker acknowledgement.
        */
       def produceAsync(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]]
+
+      /**
+       * Produces a single record. The effect returned from this method has two layers and
+       * describes the completion of two actions:
+       * 1. The outer layer describes the enqueueing of the record to the Producer's internal
+       *    buffer.
+       * 2. The inner layer describes receiving an acknowledgement from the broker for the
+       *    transmission of the record.
+       *
+       * It is usually recommended to not await the inner layer of every individual record,
+       * but enqueue a batch of records and await all of their acknowledgements at once. That
+       * amortizes the cost of sending requests to Kafka and increases throughput.
+       * See [[produce(topic*]] for version that awaits broker acknowledgement.
+       */
+      def produceAsync(topic: String, key: K, value: V): RIO[R with Blocking, Task[RecordMetadata]]
 
       /**
        * Produces a chunk of records. The effect returned from this method has two layers
@@ -74,6 +96,11 @@ package object producer {
        * currently buffered will be transmitted to the broker.
        */
       def flush: RIO[Blocking, Unit]
+
+      /**
+       * Expose internal producer metrics
+       */
+      def metrics: RIO[Blocking, Map[MetricName, Metric]]
     }
 
     final case class Live[R, K, V](
@@ -143,6 +170,12 @@ package object producer {
       override def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, RecordMetadata] =
         produceAsync(record).flatten
 
+      override def produce(topic: String, key: K, value: V): RIO[R with Blocking, RecordMetadata] =
+        produce(new ProducerRecord(topic, key, value))
+
+      override def produceAsync(topic: String, key: K, value: V): RIO[R with Blocking, Task[RecordMetadata]] =
+        produceAsync(new ProducerRecord(topic, key, value))
+
       override def produceChunk(
         records: Chunk[ProducerRecord[K, V]]
       ): RIO[R with Blocking, Chunk[RecordMetadata]] =
@@ -150,13 +183,15 @@ package object producer {
 
       override def flush: RIO[Blocking, Unit] = effectBlocking(p.flush())
 
+      override def metrics: RIO[Blocking, Map[MetricName, Metric]] = effectBlocking(p.metrics().asScala.toMap)
+
       private def serialize(r: ProducerRecord[K, V]): RIO[R, ByteRecord] =
         for {
           key   <- keySerializer.serialize(r.topic, r.headers, r.key())
           value <- valueSerializer.serialize(r.topic, r.headers, r.value())
         } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
 
-      private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout.asJava))
+      private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout))
     }
 
     def live[R: Tag, K: Tag, V: Tag]: ZLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[
@@ -191,12 +226,22 @@ package object producer {
       ZIO.accessM(env => r(env.get[Producer.Service[R, K, V]]))
 
     /**
-     * Accessor method for [[Service.produce]]
+     * Accessor method for [[Service.produce(record*]]
      */
     def produce[R: Tag, K: Tag, V: Tag](
       record: ProducerRecord[K, V]
     ): RIO[R with Blocking with Producer[R, K, V], RecordMetadata] =
       withProducerService(_.produce(record))
+
+    /**
+     * Accessor method for [[Service.produce(topic*]]
+     */
+    def produce[R: Tag, K: Tag, V: Tag](
+      topic: String,
+      key: K,
+      value: V
+    ): RIO[R with Blocking with Producer[R, K, V], RecordMetadata] =
+      withProducerService(_.produce(topic, key, value))
 
     /**
      * A stream transducer that produces all records from the stream.
@@ -210,12 +255,22 @@ package object producer {
       }
 
     /**
-     * Accessor method for [[Service.produceAsync]]
+     * Accessor method for [[Service.produceAsync(record*]]
      */
     def produceAsync[R: Tag, K: Tag, V: Tag](
       record: ProducerRecord[K, V]
     ): RIO[R with Blocking with Producer[R, K, V], Task[RecordMetadata]] =
       withProducerService(_.produceAsync(record))
+
+    /**
+     * Accessor method for [[Service.produceAsync(topic*]]
+     */
+    def produceAsync[R: Tag, K: Tag, V: Tag](
+      topic: String,
+      key: K,
+      value: V
+    ): RIO[R with Blocking with Producer[R, K, V], Task[RecordMetadata]] =
+      withProducerService(_.produceAsync(topic, key, value))
 
     /**
      * Accessor method for [[Service.produceChunkAsync]]
@@ -238,5 +293,12 @@ package object producer {
      */
     def flush[R: Tag, K: Tag, V: Tag]: ZIO[R with Blocking with Producer[R, K, V], Throwable, Unit] =
       withProducerService(_.flush)
+
+    /**
+     * Accessor method for [[Service.metrics]]
+     */
+    def metrics[R: Tag, K: Tag, V: Tag]
+      : ZIO[R with Blocking with Producer[R, K, V], Throwable, Map[MetricName, Metric]] =
+      withProducerService(_.metrics)
   }
 }

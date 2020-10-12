@@ -213,5 +213,5 @@ object AdminClient {
   def make(settings: AdminClientSettings) =
     ZManaged.make(
       ZIO(JAdminClient.create(settings.driverSettings.asJava)).map(ac => AdminClient(ac))
-    )(client => ZIO.effectTotal(client.adminClient.close(settings.closeTimeout.asJava)))
+    )(client => ZIO.effectTotal(client.adminClient.close(settings.closeTimeout)))
 }
