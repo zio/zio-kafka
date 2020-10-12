@@ -25,6 +25,7 @@ import org.apache.kafka.common.{
 }
 import zio._
 import zio.blocking.Blocking
+import zio.duration.Duration
 
 import scala.collection.compat._
 import scala.jdk.CollectionConverters._
@@ -283,11 +284,11 @@ object AdminClient {
 
   case class ListOffsetsOptions(
     isolationLevel: IsolationLevel = IsolationLevel.ReadUncommitted,
-    timeoutMs: Option[Int]
+    timeout: Option[Duration]
   ) {
     def asJava = {
       val offsetOpt = new JListOffsetsOptions(isolationLevel.asJava)
-      timeoutMs.fold(offsetOpt)(timeout => offsetOpt.timeoutMs(timeout))
+      timeout.fold(offsetOpt)(timeout => offsetOpt.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
@@ -311,9 +312,9 @@ object AdminClient {
   }
 
   case class AlterConsumerGroupOffsetsOptions(
-    timeoutMs: Int
+    timeout: Duration
   ) {
-    def asJava = new JAlterConsumerGroupOffsetsOptions().timeoutMs(timeoutMs)
+    def asJava = new JAlterConsumerGroupOffsetsOptions().timeoutMs(timeout.toMillis.toInt)
   }
 
   case class KafkaConfig(entries: Map[String, ConfigEntry])
