@@ -1,8 +1,17 @@
 package zio.kafka.admin
 
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.config.ConfigResource
+import zio.Chunk
+import zio.blocking.Blocking
+import zio.clock.Clock
 import zio.kafka.KafkaTestUtils
+import zio.kafka.KafkaTestUtils._
+import zio.kafka.admin.AdminClient.{ OffsetAndMetadata, OffsetSpec, TopicPartition }
+import zio.kafka.consumer.{ Consumer, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
+import zio.kafka.serde.Serde
+import zio.stream.ZTransducer
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
@@ -95,6 +104,80 @@ object AdminSpec extends DefaultRunnableSpec {
                       )
           } yield assert(configs.size)(equalTo(1))
         }
+      },
+      testM("list offsets") {
+        KafkaTestUtils.withAdmin {
+          client =>
+            val topic    = "topic8"
+            val msgCount = 20
+            val kvs      = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
+
+            for {
+              _ <- client.createTopics(List(AdminClient.NewTopic("topic8", 3, 1)))
+              _ <- produceMany(topic, kvs).provideSomeLayer[Kafka with Blocking with Clock](stringProducer)
+              offsets <- client.listOffsets(
+                          (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
+                        )
+            } yield assert(offsets.values.map(_.offset).sum)(equalTo(msgCount.toLong))
+        }
+      },
+      testM("alter offsets") {
+        KafkaTestUtils.withAdmin {
+          client =>
+            val topic            = "topic9"
+            val consumerGroupID  = "topic9"
+            val partitionCount   = 3
+            val msgCount         = 20
+            val partitionResetBy = 2
+
+            val p   = (0 until partitionCount).map(i => TopicPartition("topic9", i))
+            val kvs = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
+
+            def consumeAndCommit(count: Long) =
+              Consumer
+                .subscribeAnd(Subscription.Topics(Set(topic)))
+                .partitionedStream[Kafka with Blocking with Clock, String, String](Serde.string, Serde.string)
+                .flatMapPar(partitionCount)(_._2)
+                .take(count)
+                .transduce(ZTransducer.collectAllN(Int.MaxValue))
+                .mapConcatM { committableRecords =>
+                  val records = committableRecords.map(_.record)
+                  val offsetBatch =
+                    committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+
+                  offsetBatch.commit.as(records)
+                }
+                .runCollect
+                .provideSomeLayer[Kafka with Blocking with Clock](consumer(consumerGroupID, "topic9"))
+
+            def toMap(records: Chunk[ConsumerRecord[String, String]]): Map[Int, List[(Long, String, String)]] =
+              records.toList
+                .map(r => (r.partition(), (r.offset(), r.key(), r.value())))
+                .groupBy(_._1)
+                .map { case (k, vs) => (k, vs.map(_._2).sortBy(_._1)) }
+
+            for {
+              _          <- client.createTopics(List(AdminClient.NewTopic(topic, partitionCount, 1)))
+              _          <- produceMany(topic, kvs).provideSomeLayer[Kafka with Blocking with Clock](stringProducer)
+              records    <- consumeAndCommit(msgCount.toLong).map(toMap)
+              endOffsets <- client.listOffsets((0 until partitionCount).map(i => p(i) -> OffsetSpec.LatestSpec).toMap)
+              _ <- client.alterConsumerGroupOffsets(
+                    consumerGroupID,
+                    Map(
+                      p(0) -> OffsetAndMetadata(0),                                         // from the beginning
+                      p(1) -> OffsetAndMetadata(endOffsets(p(1)).offset - partitionResetBy) // re-read two messages
+                    )
+                  )
+              expectedMsgsToConsume = endOffsets(p(0)).offset + partitionResetBy
+              recordsAfterAltering  <- consumeAndCommit(expectedMsgsToConsume.toLong).map(toMap)
+            } yield {
+              assert(recordsAfterAltering(0))(equalTo(records(0))) &&
+              assert(records(1).take(endOffsets(p(1)).offset.toInt - partitionResetBy) ++ recordsAfterAltering(1))(
+                equalTo(records(1))
+              ) &&
+              assert(recordsAfterAltering.get(2))(isNone)
+            }
+        }
       }
-    ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail)) @@ sequential
+    ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
 }
