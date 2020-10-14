@@ -42,15 +42,14 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def createTopics(
     newTopics: Iterable[NewTopic],
-    @deprecated("use options", "0.13") createTopicOptions: Option[CreateTopicsOptions] = None,
-    options: Option[CreateTopicsOptions] = None
+    @deprecatedName(Symbol("createTopicOptions"), "zio-kafka 0.13") options: Option[CreateTopicsOptions] = None
   ): RIO[Blocking, Unit] = {
     val asJava = newTopics.map(_.asJava).asJavaCollection
+
     fromKafkaFutureVoid {
       blocking
         .effectBlocking(
           options
-            .orElse(createTopicOptions)
             .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts))
             .all()
         )
@@ -68,15 +67,13 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def deleteTopics(
     topics: Iterable[String],
-    @deprecated("use options", "0.13") deleteTopicsOptions: Option[DeleteTopicsOptions] = None,
-    options: Option[DeleteTopicsOptions] = None
+    @deprecatedName(Symbol("deleteTopicsOptions"), "zio-kafka 0.13") options: Option[DeleteTopicsOptions] = None
   ): RIO[Blocking, Unit] = {
     val asJava = topics.asJavaCollection
     fromKafkaFutureVoid {
       blocking
         .effectBlocking(
           options
-            .orElse(deleteTopicsOptions)
             .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts))
             .all()
         )
@@ -104,14 +101,12 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def describeTopics(
     topicNames: Iterable[String],
-    @deprecated("use options", "0.13") describeTopicsOptions: Option[DescribeTopicsOptions] = None,
-    options: Option[DescribeTopicsOptions] = None
+    @deprecatedName(Symbol("describeTopicsOptions"), "zio-kafka 0.13") options: Option[DescribeTopicsOptions] = None
   ): RIO[Blocking, Map[String, TopicDescription]] = {
     val asJava = topicNames.asJavaCollection
     fromKafkaFuture {
       blocking.effectBlocking(
         options
-          .orElse(describeTopicsOptions)
           .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
           .all()
       )
@@ -123,14 +118,12 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def describeConfigs(
     configResources: Iterable[ConfigResource],
-    @deprecated("use options", "0.13") describeConfigsOptions: Option[DescribeConfigsOptions] = None,
-    options: Option[DescribeConfigsOptions] = None
+    @deprecatedName(Symbol("describeConfigsOptions"), "zio-kafka 0.13") options: Option[DescribeConfigsOptions] = None
   ): RIO[Blocking, Map[ConfigResource, KafkaConfig]] = {
     val asJava = configResources.asJavaCollection
     fromKafkaFuture {
       blocking.effectBlocking(
         options
-          .orElse(describeConfigsOptions)
           .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts))
           .all()
       )
@@ -142,14 +135,12 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def createPartitions(
     newPartitions: Map[String, NewPartitions],
-    @deprecated("use options", "0.13") createPartitionsOptions: Option[CreatePartitionsOptions] = None,
-    options: Option[CreatePartitionsOptions] = None
+    @deprecatedName(Symbol("createPartitionsOptions"), "zio-kafka 0.13") options: Option[CreatePartitionsOptions] = None
   ): RIO[Blocking, Unit] = {
     val asJava = newPartitions.view.mapValues(_.asJava).toMap.asJava
     fromKafkaFutureVoid {
       blocking.effectBlocking(
         options
-          .orElse(createPartitionsOptions)
           .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts))
           .all()
       )
@@ -161,14 +152,12 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def listOffsets(
     topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
-    @deprecated("use options", "0.13") listOffsetOptions: Option[ListOffsetsOptions] = None,
-    options: Option[ListOffsetsOptions] = None
+    @deprecatedName(Symbol("listOffsetOptions"), "zio-kafka 0.13") options: Option[ListOffsetsOptions] = None
   ): RIO[Blocking, Map[TopicPartition, ListOffsetsResultInfo]] = {
     val asJava = topicPartitionOffsets.bimap(_.asJava, _.asJava).asJava
     fromKafkaFuture {
       blocking.effectBlocking(
         options
-          .orElse(listOffsetOptions)
           .fold(adminClient.listOffsets(asJava))(opts => adminClient.listOffsets(asJava, opts.asJava))
           .all()
       )
@@ -181,15 +170,14 @@ case class AdminClient(private val adminClient: JAdminClient) {
   def alterConsumerGroupOffsets(
     groupId: String,
     offsets: Map[TopicPartition, OffsetAndMetadata],
-    @deprecated("use options", "0.13") alterConsumerGroupOffsetsOptions: Option[AlterConsumerGroupOffsetsOptions] =
-      None,
-    options: Option[AlterConsumerGroupOffsetsOptions] = None
+    @deprecatedName(Symbol("alterConsumerGroupOffsetsOptions"), "zio-kafka 0.13") options: Option[
+      AlterConsumerGroupOffsetsOptions
+    ] = None
   ): RIO[Blocking, Unit] = {
     val asJava = offsets.bimap(_.asJava, _.asJava).asJava
     fromKafkaFutureVoid {
       blocking.effectBlocking(
         options
-          .orElse(alterConsumerGroupOffsetsOptions)
           .fold(adminClient.alterConsumerGroupOffsets(groupId, asJava))(opts =>
             adminClient.alterConsumerGroupOffsets(groupId, asJava, opts.asJava)
           )
