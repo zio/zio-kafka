@@ -22,7 +22,7 @@ client. It integrates effortlessly with ZIO and ZIO Streams.
 Add the following dependencies to your `build.sbt` file:
 ```
 libraryDependencies ++= Seq(
-  "dev.zio" %% "zio-streams" % "1.0.0",
+  "dev.zio" %% "zio-streams" % "1.0.2",
   "dev.zio" %% "zio-kafka"   % "<version>"
 )
 ```
