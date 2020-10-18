@@ -139,7 +139,7 @@ case class AdminClient(private val adminClient: JAdminClient) {
   /**
    * Get the cluster nodes.
    */
-  def listClusterNodes(options: Option[DescribeClusterOptions] = None): RIO[Blocking, List[Node]] =
+  def describeClusterNodes(options: Option[DescribeClusterOptions] = None): RIO[Blocking, List[Node]] =
     fromKafkaFuture(
       describeCluster(options).map(_.nodes())
     ).map(_.asScala.toList)
@@ -147,10 +147,30 @@ case class AdminClient(private val adminClient: JAdminClient) {
   /**
    * Get the cluster controller.
    */
-  def getClusterController(options: Option[DescribeClusterOptions] = None): RIO[Blocking, Node] =
+  def describeClusterController(options: Option[DescribeClusterOptions] = None): RIO[Blocking, Node] =
     fromKafkaFuture(
       describeCluster(options).map(_.controller())
     )
+
+  /**
+   * Get the cluster id.
+   */
+  def describeClusterId(options: Option[DescribeClusterOptions] = None): RIO[Blocking, String] =
+    fromKafkaFuture(
+      describeCluster(options).map(_.clusterId())
+    )
+
+  /**
+   * Get the cluster authorized operations.
+   */
+  def describeClusterAuthorizedOperations(
+    options: Option[DescribeClusterOptions] = None
+  ): RIO[Blocking, Set[AclOperation]] =
+    for {
+      res <- describeCluster(options)
+      opt <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
+      lst <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
+    } yield lst
 
   /**
    * Add new partitions to a topic.
