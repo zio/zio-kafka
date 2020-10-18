@@ -21,6 +21,7 @@ import org.apache.kafka.common.{
   KafkaFuture,
   TopicPartitionInfo,
   IsolationLevel => JIsolationLevel,
+  Node,
   TopicPartition => JTopicPartition
 }
 import zio._
@@ -129,6 +130,27 @@ case class AdminClient(private val adminClient: JAdminClient) {
       )
     }.map(_.asScala.view.mapValues(AdminClient.KafkaConfig(_)).toMap)
   }
+
+  private def describeCluster(options: Option[DescribeClusterOptions]) =
+    blocking.effectBlocking(
+      options.fold(adminClient.describeCluster())(opts => adminClient.describeCluster(opts))
+    )
+
+  /**
+   * Get the cluster nodes.
+   */
+  def listClusterNodes(options: Option[DescribeClusterOptions] = None): RIO[Blocking, List[Node]] =
+    fromKafkaFuture(
+      describeCluster(options).map(_.nodes())
+    ).map(_.asScala.toList)
+
+  /**
+   * Get the cluster controller.
+   */
+  def getClusterController(options: Option[DescribeClusterOptions] = None): RIO[Blocking, Node] =
+    fromKafkaFuture(
+      describeCluster(options).map(_.controller())
+    )
 
   /**
    * Add new partitions to a topic.

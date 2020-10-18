@@ -94,6 +94,20 @@ object AdminSpec extends DefaultRunnableSpec {
               assert(list3.size)(equalTo(0))
         }
       },
+      testM("list cluster nodes") {
+        KafkaTestUtils.withAdmin { client =>
+          for {
+            nodes <- client.listClusterNodes()
+          } yield assert(nodes.size)(equalTo(1))
+        }
+      },
+      testM("get cluster controller") {
+        KafkaTestUtils.withAdmin { client =>
+          for {
+            controller <- client.getClusterController()
+          } yield assert(controller.id())(equalTo(0))
+        }
+      },
       testM("describe broker config") {
         KafkaTestUtils.withAdmin { client =>
           for {
