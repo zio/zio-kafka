@@ -1,6 +1,7 @@
 package zio.kafka.admin
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
 import zio.Chunk
 import zio.blocking.Blocking
@@ -92,6 +93,34 @@ object AdminSpec extends DefaultRunnableSpec {
             } yield assert(list1.size)(equalTo(0)) &&
               assert(configs.size)(equalTo(2)) &&
               assert(list3.size)(equalTo(0))
+        }
+      },
+      testM("list cluster nodes") {
+        KafkaTestUtils.withAdmin { client =>
+          for {
+            nodes <- client.describeClusterNodes()
+          } yield assert(nodes.size)(equalTo(1))
+        }
+      },
+      testM("get cluster controller") {
+        KafkaTestUtils.withAdmin { client =>
+          for {
+            controller <- client.describeClusterController()
+          } yield assert(controller.id())(equalTo(0))
+        }
+      },
+      testM("get cluster id") {
+        KafkaTestUtils.withAdmin { client =>
+          for {
+            controllerId <- client.describeClusterId()
+          } yield assert(controllerId.nonEmpty)(isTrue)
+        }
+      },
+      testM("get cluster authorized operations") {
+        KafkaTestUtils.withAdmin { client =>
+          for {
+            operations <- client.describeClusterAuthorizedOperations()
+          } yield assert(operations)(equalTo(Set.empty[AclOperation]))
         }
       },
       testM("describe broker config") {
