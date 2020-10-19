@@ -19,6 +19,8 @@ import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.{
   KafkaFuture,
+  Metric,
+  MetricName,
   TopicPartitionInfo,
   IsolationLevel => JIsolationLevel,
   Node,
@@ -227,6 +229,15 @@ case class AdminClient(private val adminClient: JAdminClient) {
       )
     }
   }
+
+  /**
+   * Retrieves metrics for the underlying AdminClient
+   *
+   */
+  def metrics: RIO[Blocking, Map[MetricName, Metric]] =
+    blocking.effectBlocking(
+      adminClient.metrics().asScala.toMap
+    )
 }
 
 object AdminClient {
