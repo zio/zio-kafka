@@ -64,7 +64,7 @@ libraryDependencies ++= Seq(
   "dev.zio"                %% "zio-test-sbt"            % zioVersion % "test",
   "org.apache.kafka"       % "kafka-clients"            % kafkaVersion,
   "ch.qos.logback"         % "logback-classic"          % "1.2.3" % "test",
-  "org.scala-lang.modules" %% "scala-collection-compat" % "2.2.0",
+  "org.scala-lang.modules" %% "scala-collection-compat" % "2.3.0",
   compilerPlugin("org.typelevel" % "kind-projector" % "0.11.0" cross CrossVersion.full)
 ) ++ {
   if (scalaBinaryVersion.value == "2.13") silencer
