@@ -101,6 +101,13 @@ package object consumer {
 
       def unsubscribe: RIO[Blocking, Unit]
 
+      /**
+       * Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the
+       * earliest offset whose timestamp is greater than or equal to the given timestamp in the corresponding partition.
+       *
+       * The consumer does not have to be assigned the partitions.
+       * If no messages exist yet for a partition, it will not exist in the returned map.
+       */
       def offsetsForTimes(
         timestamps: Map[TopicPartition, Long],
         timeout: Duration = Duration.Infinity
@@ -170,6 +177,9 @@ package object consumer {
       ): RIO[Blocking, Map[TopicPartition, OffsetAndTimestamp]] =
         consumer.withConsumer(
           _.offsetsForTimes(timestamps.view.mapValues(Long.box).toMap.asJava, timeout.asJava).asScala.toMap
+          // If a partition doesn't exist yet, the map will have 'null' as entry.
+          // It's more idiomatic scala to then simply not have that map entry.
+            .filter(_._2 != null)
         )
 
       override def partitionedStream[R, K, V](
