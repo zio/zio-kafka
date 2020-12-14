@@ -65,7 +65,7 @@ libraryDependencies ++= Seq(
   "org.apache.kafka"           % "kafka-clients"            % kafkaVersion,
   "com.fasterxml.jackson.core" % "jackson-databind"         % "2.10.2",
   "ch.qos.logback"             % "logback-classic"          % "1.2.3" % "test",
-  "org.scala-lang.modules"     %% "scala-collection-compat" % "2.3.0",
+  "org.scala-lang.modules"     %% "scala-collection-compat" % "2.3.1",
   compilerPlugin("org.typelevel" % "kind-projector" % "0.11.1" cross CrossVersion.full)
 ) ++ {
   if (scalaBinaryVersion.value == "2.13") silencer
