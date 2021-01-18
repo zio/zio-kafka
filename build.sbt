@@ -66,7 +66,7 @@ libraryDependencies ++= Seq(
   "com.fasterxml.jackson.core" % "jackson-databind"         % "2.10.2",
   "ch.qos.logback"             % "logback-classic"          % "1.2.3" % "test",
   "org.scala-lang.modules"     %% "scala-collection-compat" % "2.3.2",
-  compilerPlugin("org.typelevel" % "kind-projector" % "0.11.1" cross CrossVersion.full)
+  compilerPlugin("org.typelevel" % "kind-projector" % "0.11.3" cross CrossVersion.full)
 ) ++ {
   if (scalaBinaryVersion.value == "2.13") silencer
   else if (scalaBinaryVersion.value == "2.12") silencer
