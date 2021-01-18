@@ -27,9 +27,9 @@ libraryDependencies ++= Seq(
 )
 ```
 
-On some JVMs it is necessary to add this dependency as well:
-```
-libraryDependencies += "com.fasterxml.jackson.core" % "jackson-databind" % "2.10.2" // or higher version
+On some JVMs it is necessary to add this dependency as well:	
+```	
+libraryDependencies += "com.fasterxml.jackson.core" % "jackson-databind" % "2.10.2" // or higher version	
 ```
 
 Somewhere in your application, configure the `zio.kafka.ConsumerSettings` 
