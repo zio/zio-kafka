@@ -1,0 +1,20 @@
+pull_request_rules:
+  - name: merge Scala Steward's PRs
+    conditions:
+      - base=master
+      - author=scala-steward
+      - "body~=(labels: library-update, semver-minor)|(labels: library-update, semver-patch)|(labels: sbt-plugin-update, semver-minor)|(labels: sbt-plugin-update, semver-patch)|(labels: test-library-update, semver-minor)|(labels: test-library-update, semver-patch)"
+      - "status-success=ci/circleci: test213_jdk11"
+      - "status-success=ci/circleci: test213_jdk8"
+      - "status-success=ci/circleci: test212_jdk11"
+      - "status-success=ci/circleci: test212_jdk8"
+      - "status-success=ci/circleci: test_211_jdk8_jvm"      
+    actions:
+      merge:
+        method: squash
+  - name: Automatic merge on approval
+    conditions:
+      - "#approved-reviews-by>=1"
+    actions:
+      merge:
+        method: squash

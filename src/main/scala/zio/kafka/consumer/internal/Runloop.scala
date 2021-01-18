@@ -239,8 +239,8 @@ private[consumer] final class Runloop(
     val toResume = assignment intersect requestedPartitions
     val toPause  = assignment -- requestedPartitions
 
-    c.resume(toResume.asJava)
-    c.pause(toPause.asJava)
+    if (toResume.nonEmpty) c.resume(toResume.asJava)
+    if (toPause.nonEmpty) c.pause(toPause.asJava)
   }
 
   private def doPoll(c: ByteArrayKafkaConsumer, requestedPartitions: Set[TopicPartition]) =
