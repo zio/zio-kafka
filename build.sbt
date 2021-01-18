@@ -63,7 +63,7 @@ libraryDependencies ++= Seq(
   "dev.zio"                    %% "zio-test"                % zioVersion % "test",
   "dev.zio"                    %% "zio-test-sbt"            % zioVersion % "test",
   "org.apache.kafka"           % "kafka-clients"            % kafkaVersion,
-  "com.fasterxml.jackson.core" % "jackson-databind"         % "2.10.2",
+  "com.fasterxml.jackson.core" % "jackson-databind"         % "2.10.5.1",
   "ch.qos.logback"             % "logback-classic"          % "1.2.3" % "test",
   "org.scala-lang.modules"     %% "scala-collection-compat" % "2.3.2",
   compilerPlugin("org.typelevel" % "kind-projector" % "0.11.3" cross CrossVersion.full)
