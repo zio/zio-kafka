@@ -15,11 +15,11 @@ pull_request_rules:
       - "body~=(labels: library-update, semver-minor)|(labels: library-update, semver-patch)|(labels: sbt-plugin-update, semver-minor)|(labels: sbt-plugin-update, semver-patch)|(labels: scalafix-rule-update, semver-minor)|(labels: scalafix-rule-update, semver-patch)|(labels: test-library-update, semver-minor)|(labels: test-library-update, semver-patch)"
       - "status-success=license/cla"
       - "status-success=lint"
-      - "status-success=test (adopt@1.8, 2.11.12)"
-      - "status-success=test (adopt@1.11, 2.11.12)"
-      - "status-success=test (adopt@1.8, 2.12.12)"
+      - "status-success=compile_211 (adopt@1.8, 2.11.12)"
+      - "status-success=compile_211 (adopt@1.11, 2.11.12)"
+      - "status-success=test (adopt@1.8, 2.12.11)"
       - "status-success=test (adopt@1.8, 2.13.3)"
-      - "status-success=test (adopt@1.11, 2.12.12)"
+      - "status-success=test (adopt@1.11, 2.12.11)"
       - "status-success=test (adopt@1.11, 2.13.3)"
     actions:
       merge:
