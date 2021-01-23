@@ -1,10 +1,10 @@
 lazy val scala211  = "2.11.12"
 lazy val scala212  = "2.12.11"
-lazy val scala213  = "2.13.2"
+lazy val scala213  = "2.13.3"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala211, scala212, mainScala)
 
-lazy val zioVersion   = "1.0.3"
+lazy val zioVersion   = "1.0.4"
 lazy val kafkaVersion = "2.6.0"
 
 // Allows to silence scalac compilation warnings selectively by code block or file path
@@ -59,13 +59,14 @@ buildInfoPackage := "zio.kafka"
 buildInfoObject := "BuildInfo"
 
 libraryDependencies ++= Seq(
-  "dev.zio"                %% "zio-streams"             % zioVersion,
-  "dev.zio"                %% "zio-test"                % zioVersion % "test",
-  "dev.zio"                %% "zio-test-sbt"            % zioVersion % "test",
-  "org.apache.kafka"       % "kafka-clients"            % kafkaVersion,
-  "ch.qos.logback"         % "logback-classic"          % "1.2.3" % "test",
-  "org.scala-lang.modules" %% "scala-collection-compat" % "2.3.0",
-  compilerPlugin("org.typelevel" % "kind-projector" % "0.11.1" cross CrossVersion.full)
+  "dev.zio"                    %% "zio-streams"             % zioVersion,
+  "dev.zio"                    %% "zio-test"                % zioVersion % "test",
+  "dev.zio"                    %% "zio-test-sbt"            % zioVersion % "test",
+  "org.apache.kafka"           % "kafka-clients"            % kafkaVersion,
+  "com.fasterxml.jackson.core" % "jackson-databind"         % "2.12.1",
+  "ch.qos.logback"             % "logback-classic"          % "1.2.3" % "test",
+  "org.scala-lang.modules"     %% "scala-collection-compat" % "2.3.2",
+  compilerPlugin("org.typelevel" % "kind-projector" % "0.11.3" cross CrossVersion.full)
 ) ++ {
   if (scalaBinaryVersion.value == "2.13") silencer
   else if (scalaBinaryVersion.value == "2.12") silencer
