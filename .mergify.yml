@@ -17,9 +17,9 @@ pull_request_rules:
       - "status-success=lint"
       - "status-success=compile_211 (adopt@1.8, 2.11.12)"
       - "status-success=compile_211 (adopt@1.11, 2.11.12)"
-      - "status-success=test (adopt@1.8, 2.12.12)"
+      - "status-success=test (adopt@1.8, 2.12.11)"
       - "status-success=test (adopt@1.8, 2.13.3)"
-      - "status-success=test (adopt@1.11, 2.12.12)"
+      - "status-success=test (adopt@1.11, 2.12.11)"
       - "status-success=test (adopt@1.11, 2.13.3)"
     actions:
       merge:
