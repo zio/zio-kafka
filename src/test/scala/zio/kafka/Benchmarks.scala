@@ -42,7 +42,7 @@ object Plain {
   def main(args: Array[String]): Unit = {
     val props = new java.util.Properties
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
-    props.put(ConsumerConfig.GROUP_ID_CONFIG, s"plain-${scala.util.Random.nextInt}")
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, s"plain-${scala.util.Random.nextInt()}")
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
     val consumer = new KafkaConsumer[String, String](props, new StringDeserializer, new StringDeserializer)
@@ -82,7 +82,7 @@ object ZIOKafka extends App {
   def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] = {
     val expectedCount = 1000000
     val settings = ConsumerSettings(List("localhost:9092"))
-      .withGroupId(s"zio-kafka-${scala.util.Random.nextInt}")
+      .withGroupId(s"zio-kafka-${scala.util.Random.nextInt()}")
       .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       .withProperty("fetch.min.bytes", "128000")
       .withPollInterval(50.millis)
