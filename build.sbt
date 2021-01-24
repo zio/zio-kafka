@@ -54,7 +54,6 @@ resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repos
 enablePlugins(BuildInfoPlugin)
 buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, isSnapshot)
 buildInfoPackage := "zio.kafka"
-buildInfoObject := "BuildInfo"
 
 libraryDependencies ++= Seq(
   "dev.zio"                    %% "zio-streams"             % zioVersion,
