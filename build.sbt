@@ -46,8 +46,6 @@ inThisBuild(
   )
 )
 
-ThisBuild / publishTo := sonatypePublishToBundle.value
-
 name := "zio-kafka"
 scalafmtOnCompile := true
 
