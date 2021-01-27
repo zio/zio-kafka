@@ -15,6 +15,9 @@ case class ProducerSettings(
   def withBootstrapServers(servers: List[String]): ProducerSettings =
     copy(bootstrapServers = servers)
 
+  def withClientId(clientId: String): ProducerSettings =
+    withProperty(ProducerConfig.CLIENT_ID_CONFIG, clientId)
+
   def withCloseTimeout(duration: Duration): ProducerSettings =
     copy(closeTimeout = duration)
 
