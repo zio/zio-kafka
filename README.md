@@ -1,5 +1,7 @@
 [![Release Artifacts][Badge-SonatypeReleases]][Link-SonatypeReleases]
 
+[![Snapshot Artifacts][Badge-SonatypeSnapshots]][Link-SonatypeSnapshots]
+
 # Welcome to ZIO Kafka
 
 ZIO Kafka provides a purely functional, streams-based interface to the Kafka
