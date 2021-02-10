@@ -20,9 +20,12 @@ class SubscribedConsumer(
 
   def plainStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
+    valueDeserializer: Deserializer[R, V],
+    outputBuffer: Int = 4
   ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-    partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue)(_._2)
+    partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, outputBuffer = outputBuffer)(
+      _._2
+    )
 }
 
 class SubscribedConsumerFromEnvironment(
@@ -38,7 +41,10 @@ class SubscribedConsumerFromEnvironment(
 
   def plainStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
+    valueDeserializer: Deserializer[R, V],
+    outputBuffer: Int = 4
   ): ZStream[R with Clock with Blocking with Consumer, Throwable, CommittableRecord[K, V]] =
-    partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue)(_._2)
+    partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, outputBuffer = outputBuffer)(
+      _._2
+    )
 }
