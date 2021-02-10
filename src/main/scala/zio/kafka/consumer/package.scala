@@ -72,11 +72,14 @@ package object consumer {
        * The stream will emit messages from all topic-partitions interleaved. Per-partition
        * record order is guaranteed, but the topic-partition interleaving is non-deterministic.
        *
+       * Up to `outputBuffer` chunks for each topic-partition may be buffered in memory by this operator.
+       *
        * The stream can be completed by calling [[stopConsumption]].
        */
       def plainStream[R, K, V](
         keyDeserializer: Deserializer[R, K],
-        valueDeserializer: Deserializer[R, V]
+        valueDeserializer: Deserializer[R, V],
+        outputBuffer: Int = 4
       ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]]
 
       /**
@@ -221,9 +224,12 @@ package object consumer {
 
       override def plainStream[R, K, V](
         keyDeserializer: Deserializer[R, K],
-        valueDeserializer: Deserializer[R, V]
+        valueDeserializer: Deserializer[R, V],
+        outputBuffer: Int
       ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-        partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue)(_._2)
+        partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, outputBuffer = outputBuffer)(
+          _._2
+        )
 
       override def subscribeAnd(subscription: Subscription): SubscribedConsumer =
         new SubscribedConsumer(subscribe(subscription).as(this))
@@ -374,9 +380,10 @@ package object consumer {
      */
     def plainStream[R: Tag, K: Tag, V: Tag](
       keyDeserializer: Deserializer[R, K],
-      valueDeserializer: Deserializer[R, V]
+      valueDeserializer: Deserializer[R, V],
+      outputBuffer: Int = 4
     ): ZStream[R with Consumer with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-      ZStream.accessStream(_.get[Service].plainStream(keyDeserializer, valueDeserializer))
+      ZStream.accessStream(_.get[Service].plainStream(keyDeserializer, valueDeserializer, outputBuffer))
 
     /**
      * Accessor method for [[Service.stopConsumption]]
