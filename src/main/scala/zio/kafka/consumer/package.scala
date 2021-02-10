@@ -72,7 +72,7 @@ package object consumer {
        * The stream will emit messages from all topic-partitions interleaved. Per-partition
        * record order is guaranteed, but the topic-partition interleaving is non-deterministic.
        *
-       * Up to `outputBuffer` chunks for each topic-partition may be buffered in memory by this operator.
+       * Up to `outputBuffer` chunks may be buffered in memory by this operator.
        *
        * The stream can be completed by calling [[stopConsumption]].
        */
