@@ -85,7 +85,7 @@ lazy val kafka =
         "org.apache.kafka"           % "kafka-clients"            % kafkaVersion,
         "com.fasterxml.jackson.core" % "jackson-databind"         % "2.12.2",
         "ch.qos.logback"             % "logback-classic"          % "1.2.3" % "test",
-        "org.scala-lang.modules"     %% "scala-collection-compat" % "2.4.2",
+        "org.scala-lang.modules"     %% "scala-collection-compat" % "2.4.3",
         compilerPlugin("org.typelevel" % "kind-projector" % "0.11.3" cross CrossVersion.full)
       ) ++ {
         if (scalaBinaryVersion.value == "2.13") silencer
