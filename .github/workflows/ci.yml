@@ -52,7 +52,7 @@ jobs:
       fail-fast: false
       matrix:
         java: ['adopt@1.8', 'adopt@1.11']
-        scala: ['2.12.11', '2.13.3']
+        scala: ['2.12.11', '2.13.5']
     steps:
       - name: Checkout current branch
         uses: actions/checkout@v2.3.4
