@@ -1,4 +1,6 @@
-lazy val scala211  = "2.13.5"
+import sbt.Keys.{ fork, parallelExecution }
+
+lazy val scala211  = "2.11.12"
 lazy val scala212  = "2.12.11"
 lazy val scala213  = "2.13.3"
 lazy val mainScala = scala213
@@ -26,9 +28,9 @@ inThisBuild(
     useCoursier := false,
     scalaVersion := mainScala,
     crossScalaVersions := allScala,
-    parallelExecution in Test := false,
-    fork in Test := true,
-    fork in run := true,
+    Test / parallelExecution := false,
+    Test / fork := true,
+    run / fork := true,
     pgpPublicRing := file("/tmp/public.asc"),
     pgpSecretRing := file("/tmp/secret.asc"),
     pgpPassphrase := sys.env.get("PGP_PASSWORD").map(_.toArray),
@@ -83,9 +85,9 @@ lazy val kafka =
         "dev.zio"                    %% "zio-test"                % zioVersion % "test",
         "dev.zio"                    %% "zio-test-sbt"            % zioVersion % "test",
         "org.apache.kafka"           % "kafka-clients"            % kafkaVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind"         % "2.12.1",
+        "com.fasterxml.jackson.core" % "jackson-databind"         % "2.12.2",
         "ch.qos.logback"             % "logback-classic"          % "1.2.3" % "test",
-        "org.scala-lang.modules"     %% "scala-collection-compat" % "2.4.2",
+        "org.scala-lang.modules"     %% "scala-collection-compat" % "2.4.3",
         compilerPlugin("org.typelevel" % "kind-projector" % "0.11.3" cross CrossVersion.full)
       ) ++ {
         if (scalaBinaryVersion.value == "2.13") silencer
