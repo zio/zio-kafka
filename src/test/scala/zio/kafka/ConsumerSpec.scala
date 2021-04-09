@@ -468,6 +468,18 @@ object ConsumerSpec extends DefaultRunnableSpec {
                          .provideSomeLayer[Kafka with Blocking with Clock](consumer("group3", "client3"))
           consumedMessages <- messagesReceived.get
         } yield assert(consumedMessages)(contains(newMessage).negate)
+      },
+      testM("partitions for topic doesn't fail if doesn't exist") {
+        for {
+          topic  <- randomTopic
+          group  <- randomGroup
+          client <- randomThing("client")
+          partitions <- Consumer
+                         .partitionsFor(topic)
+                         .provideSomeLayer[Kafka with Blocking with Clock](
+                           consumer(group, client, allowAutoCreateTopics = false)
+                         )
+        } yield assert(partitions)(isEmpty)
       }
     ).provideSomeLayerShared[TestEnvironment](
       ((Kafka.embedded >>> stringProducer) ++ Kafka.embedded).mapError(TestFailure.fail) ++ Clock.live
