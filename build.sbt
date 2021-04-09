@@ -1,3 +1,5 @@
+import sbt.Keys.{ fork, parallelExecution }
+
 lazy val scala211  = "2.11.12"
 lazy val scala212  = "2.12.11"
 lazy val scala213  = "2.13.3"
@@ -26,9 +28,9 @@ inThisBuild(
     useCoursier := false,
     scalaVersion := mainScala,
     crossScalaVersions := allScala,
-    parallelExecution in Test := false,
-    fork in Test := true,
-    fork in run := true,
+    Test / parallelExecution := false,
+    Test / fork := true,
+    run / fork := true,
     pgpPublicRing := file("/tmp/public.asc"),
     pgpSecretRing := file("/tmp/secret.asc"),
     pgpPassphrase := sys.env.get("PGP_PASSWORD").map(_.toArray),
