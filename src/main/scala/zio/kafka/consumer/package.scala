@@ -217,7 +217,10 @@ package object consumer {
         topic: String,
         timeout: Duration = Duration.Infinity
       ): RIO[Blocking, List[PartitionInfo]] =
-        consumer.withConsumer(_.partitionsFor(topic, timeout.asJava).asScala.toList)
+        consumer.withConsumer { c =>
+          val partitions = c.partitionsFor(topic, timeout.asJava)
+          if (partitions eq null) List.empty else partitions.asScala.toList
+        }
 
       override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): RIO[Blocking, Long] =
         consumer.withConsumer(_.position(partition, timeout.asJava))
