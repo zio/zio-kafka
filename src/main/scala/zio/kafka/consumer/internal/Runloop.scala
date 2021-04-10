@@ -258,8 +258,8 @@ private[consumer] final class Runloop(
     }
 
   private def pauseAllPartitions(c: ByteArrayKafkaConsumer) = ZIO.effectTotal {
-    val currentAssigned = c.assignment().asScala.toSet
-    c.pause(currentAssigned.asJava)
+    val currentAssigned = c.assignment()
+    c.pause(currentAssigned)
   }
 
   private def handlePoll(state: State): RIO[Blocking, State] =
