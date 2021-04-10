@@ -40,14 +40,12 @@ private[consumer] object ConsumerAccess {
     for {
       access   <- Semaphore.make(1).toManaged_
       blocking <- ZManaged.service[Blocking.Service]
-      consumer <- blocking.blocking {
-                   ZIO {
-                     new KafkaConsumer[Array[Byte], Array[Byte]](
-                       settings.driverSettings.asJava,
-                       new ByteArrayDeserializer(),
-                       new ByteArrayDeserializer()
-                     )
-                   }
+      consumer <- blocking.effectBlocking {
+                   new KafkaConsumer[Array[Byte], Array[Byte]](
+                     settings.driverSettings.asJava,
+                     new ByteArrayDeserializer(),
+                     new ByteArrayDeserializer()
+                   )
                  }.toManaged(c => blocking.blocking(access.withPermit(UIO(c.close(settings.closeTimeout)))))
     } yield new ConsumerAccess(consumer, access, blocking)
 }
