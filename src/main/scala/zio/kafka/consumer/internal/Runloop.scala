@@ -316,35 +316,31 @@ private[consumer] final class Runloop(
                    }
       (newlyAssigned, (unfulfilledRequests, bufferedRecords)) = pollResult
       _                                                       <- ZIO.foreach_(newlyAssigned)(tp => newPartitionStream(tp))
-      stillRebalancing                                        <- isRebalancing
-      newPendingCommits <- if (!stillRebalancing && state.pendingCommits.nonEmpty)
-                            doCommit(state.pendingCommits).as(Nil)
-                          else ZIO.succeed(state.pendingCommits)
+      newPendingCommits <- ZIO.ifM(isRebalancing)(
+                            UIO.succeed(state.pendingCommits),
+                            doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).as(Nil)
+                          )
     } yield State(unfulfilledRequests, newPendingCommits, bufferedRecords)
 
   private def handleRequests(state: State, reqs: List[Runloop.Request]): URIO[Blocking, State] =
     consumer
       .withConsumer(_.assignment.asScala)
       .flatMap { assignment =>
-        for {
-          rebalancing <- isRebalancing
-          newState <- if (rebalancing) UIO.succeed(state.addRequests(reqs))
-                     else
-                       ZIO.foldLeft(reqs)(state) { (state, req) =>
-                         if (assignment.contains(req.tp)) UIO.succeed(state.addRequest(req))
-                         else req.cont.fail(None).as(state)
-                       }
-        } yield newState
+        ZIO.ifM(isRebalancing)(
+          UIO.succeed(state.addRequests(reqs)),
+          ZIO.foldLeft(reqs)(state) { (state, req) =>
+            if (assignment.contains(req.tp)) UIO.succeed(state.addRequest(req))
+            else req.cont.fail(None).as(state)
+          }
+        )
       }
       .orElse(UIO.succeed(state.addRequests(reqs)))
 
   private def handleCommit(state: State, cmd: Command.Commit): URIO[Blocking, State] =
-    for {
-      rebalancing <- isRebalancing
-      newState <- if (rebalancing)
-                   UIO.succeed(state.addCommit(cmd))
-                 else doCommit(List(cmd)).as(state)
-    } yield newState
+    ZIO.ifM(isRebalancing)(
+      UIO.succeed(state.addCommit(cmd)),
+      doCommit(List(cmd)).as(state)
+    )
 
   /**
    * After shutdown, we end all pending requests (ending their partition streams) and pause
@@ -386,10 +382,7 @@ private[consumer] final class Runloop(
         ZStream.fromQueue(commitQueue)
       )
       .foldM(State.initial) { (state, cmd) =>
-        isShutdown.flatMap { shutdown =>
-          if (shutdown) handleShutdown(state, cmd)
-          else handleOperational(state, cmd)
-        }
+        RIO.ifM(isShutdown)(handleShutdown(state, cmd), handleOperational(state, cmd))
       }
       .onError(cause => partitions.offer(Exit.halt(cause.map(Some(_)))))
       .unit
