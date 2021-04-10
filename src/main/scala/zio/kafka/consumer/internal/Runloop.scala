@@ -126,8 +126,8 @@ private[consumer] final class Runloop(
 
   /**
    * Does all needed to end revoked partitions:
-   * 1. Fail the Requests's continuation promises
-   * 2. Remove from the list of pending requets
+   * 1. Fail the Requests' continuation promises
+   * 2. Remove from the list of pending requests
    * 3. Remove from buffered records
    * @return New pending requests and new buffered records
    */
