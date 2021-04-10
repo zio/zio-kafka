@@ -1,7 +1,7 @@
 package zio.kafka.consumer.internal
 
 import zio._
-import zio.stream.ZStream
+import zio.stream.{ UStream, ZStream }
 
 /**
  * A queue-like construct for buffering requests. Allows to take all of the
@@ -32,7 +32,7 @@ private[internal] class RequestBuffer(ref: Ref[RequestBuffer.State]) {
       }
       .flatten
 
-  def stream: ZStream[Any, Nothing, List[Runloop.Request]] =
+  def stream: UStream[List[Runloop.Request]] =
     ZStream.repeatEffectOption {
       takeAll.catchAllCause(cause => if (cause.interrupted) ZIO.fail(None) else ZIO.halt(cause))
     }

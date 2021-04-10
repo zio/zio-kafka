@@ -298,7 +298,7 @@ package object consumer {
     val offsetBatches: ZTransducer[Any, Nothing, Offset, OffsetBatch] =
       ZTransducer.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
-    def live: ZLayer[Clock with Blocking with Has[ConsumerSettings] with Has[Diagnostics], Throwable, Consumer] =
+    def live: RLayer[Clock with Blocking with Has[ConsumerSettings] with Has[Diagnostics], Consumer] =
       (for {
         settings    <- ZManaged.service[ConsumerSettings]
         diagnostics <- ZManaged.service[Diagnostics]
@@ -308,7 +308,7 @@ package object consumer {
     def make(
       settings: ConsumerSettings,
       diagnostics: Diagnostics = Diagnostics.NoOp
-    ): ZManaged[Clock with Blocking, Throwable, Service] =
+    ): RManaged[Clock with Blocking, Service] =
       for {
         wrapper <- ConsumerAccess.make(settings)
         runloop <- Runloop(
@@ -444,8 +444,8 @@ package object consumer {
       valueDeserializer: Deserializer[R1, V],
       commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
     )(
-      f: (K, V) => ZIO[R, Nothing, Unit]
-    ): ZIO[R with R1 with Blocking with Clock, Throwable, Unit] =
+      f: (K, V) => URIO[R, Unit]
+    ): RIO[R with R1 with Blocking with Clock, Unit] =
       Consumer
         .make(settings)
         .use(_.consumeWith(subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
@@ -523,7 +523,7 @@ package object consumer {
     }
 
     sealed trait AutoOffsetStrategy { self =>
-      def toConfig = self match {
+      def toConfig: String = self match {
         case AutoOffsetStrategy.Earliest => "earliest"
         case AutoOffsetStrategy.Latest   => "latest"
         case AutoOffsetStrategy.None     => "none"

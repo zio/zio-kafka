@@ -33,7 +33,7 @@ private[consumer] final class Runloop(
   private val isRebalancing = rebalancingRef.get
   private val isShutdown    = shutdownRef.get
 
-  def newPartitionStream(tp: TopicPartition) = {
+  def newPartitionStream(tp: TopicPartition): UIO[Unit] = {
     val stream =
       ZStream {
         ZManaged.succeed {
@@ -72,7 +72,7 @@ private[consumer] final class Runloop(
     trackRebalancing ++ emitDiagnostics ++ pausePartitionsOnRevoke
   }
 
-  private def commit(offsets: Map[TopicPartition, Long]): ZIO[Any, Throwable, Unit] =
+  private def commit(offsets: Map[TopicPartition, Long]): Task[Unit] =
     for {
       p <- Promise.make[Throwable, Unit]
       _ <- commitQueue.offer(Command.Commit(offsets, p)).unit
@@ -80,7 +80,7 @@ private[consumer] final class Runloop(
       _ <- p.await
     } yield ()
 
-  private def doCommit(cmds: List[Command.Commit]): ZIO[Blocking, Nothing, Unit] = {
+  private def doCommit(cmds: List[Command.Commit]): URIO[Blocking, Unit] = {
     val offsets   = aggregateOffsets(cmds)
     val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreach_(cmds)(_.cont.done(e))
     val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
@@ -378,7 +378,7 @@ private[consumer] final class Runloop(
       handleCommit(state, cmd)
   }
 
-  def run =
+  def run: URManaged[Blocking with Clock, Fiber.Runtime[Throwable, Unit]] =
     ZStream
       .mergeAll(3, 1)(
         ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency)),
@@ -416,7 +416,7 @@ private[consumer] object Runloop {
     pollTimeout: Duration,
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval
-  ): ZManaged[Blocking with Clock, Nothing, Runloop] =
+  ): RManaged[Blocking with Clock, Runloop] =
     for {
       rebalancingRef <- Ref.make(false).toManaged_
       requestQueue   <- RequestBuffer.make.toManaged(_.shutdown)
