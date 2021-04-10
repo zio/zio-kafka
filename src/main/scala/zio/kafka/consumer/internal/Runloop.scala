@@ -277,7 +277,7 @@ private[consumer] final class Runloop(
                        // Check shutdown again after polling (which takes up to the poll timeout)
                        isShutdown.flatMap { shutdown =>
                          if (shutdown) {
-                           pauseAllPartitions(c) *> ZIO.succeed(
+                           pauseAllPartitions(c).as(
                              (Set(), (state.pendingRequests, Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()))
                            )
                          } else if (records eq null) {
