@@ -35,15 +35,13 @@ private[consumer] final class Runloop(
 
   def newPartitionStream(tp: TopicPartition): UIO[Unit] = {
     val stream =
-      ZStream {
-        ZManaged.succeed {
-          for {
-            p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-            _      <- requestQueue.offer(Runloop.Request(tp, p)).unit
-            _      <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
-            result <- p.await
-          } yield result
-        }
+      ZStream.repeatEffectChunkOption {
+        for {
+          p      <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
+          _      <- requestQueue.offer(Runloop.Request(tp, p)).unit
+          _      <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
+          result <- p.await
+        } yield result
       }
 
     partitions.offer(Exit.succeed(tp -> stream)).unit
