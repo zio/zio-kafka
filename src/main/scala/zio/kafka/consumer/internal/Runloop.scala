@@ -148,10 +148,10 @@ private[consumer] final class Runloop(
       if (revoked(req.tp)) {
         revokeAction = revokeAction *> req.cont.fail(None)
         buf -= req.tp
-      } else acc +:= req
+      } else acc :+= req
     }
 
-    revokeAction.as((acc.reverse, buf.toMap))
+    revokeAction.as((acc, buf.toMap))
   }
 
   /**
