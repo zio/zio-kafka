@@ -30,18 +30,13 @@ object ConsumerSpec extends DefaultRunnableSpec {
         val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
         for {
           _ <- produceMany("topic150", kvs)
-          records <- (for {
-                      records1 <- Consumer
-                                   .subscribeAnd(Subscription.Topics(Set("topic150")))
-                                   .plainStream(Serde.string, Serde.string)
-                                   .take(2)
-                                   .runCollect
-                      records2 <- Consumer
-                                   .subscribeAnd(Subscription.Topics(Set("topic150")))
-                                   .plainStream(Serde.string, Serde.string)
-                                   .take(2)
-                                   .runCollect
-                    } yield (records1 ++ records2)).provideSomeLayer(consumer("group150", "client150"))
+
+          records <- Consumer
+                      .subscribeAnd(Subscription.Topics(Set("topic150")))
+                      .plainStream(Serde.string, Serde.string)
+                      .take(5)
+                      .runCollect
+                      .provideSomeLayer[Kafka with Blocking with Clock](consumer("group150", "client150"))
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
