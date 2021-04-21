@@ -8,6 +8,7 @@ object DiagnosticEvent {
   case class Poll(tpRequested: Set[TopicPartition], tpWithData: Set[TopicPartition], tpWithoutData: Set[TopicPartition])
       extends DiagnosticEvent
   case class Request(partition: TopicPartition) extends DiagnosticEvent
+  case class PlainRequest()                     extends DiagnosticEvent
 
   sealed trait Commit extends DiagnosticEvent
   object Commit {

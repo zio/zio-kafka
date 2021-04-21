@@ -23,9 +23,7 @@ class SubscribedConsumer(
     valueDeserializer: Deserializer[R, V],
     outputBuffer: Int = 4
   ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-    partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, outputBuffer = outputBuffer)(
-      _._2
-    )
+    ZStream.fromEffect(underlying).flatMap(_.plainStream(keyDeserializer, valueDeserializer))
 }
 
 class SubscribedConsumerFromEnvironment(
@@ -44,7 +42,7 @@ class SubscribedConsumerFromEnvironment(
     valueDeserializer: Deserializer[R, V],
     outputBuffer: Int = 4
   ): ZStream[R with Clock with Blocking with Consumer, Throwable, CommittableRecord[K, V]] =
-    partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, outputBuffer = outputBuffer)(
-      _._2
-    )
+    ZStream
+      .fromEffect(underlying)
+      .flatMap(_.plainStream(keyDeserializer, valueDeserializer))
 }
