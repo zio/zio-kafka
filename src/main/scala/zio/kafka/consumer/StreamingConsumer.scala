@@ -3,12 +3,13 @@ package zio.kafka.consumer
 import org.apache.kafka.common.TopicPartition
 import zio.blocking.Blocking
 import zio.clock.Clock
-import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.consumer.Consumer.{ offsetBatches, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
 import zio.kafka.serde.Deserializer
 import zio.stream.ZStream
-import zio.{ Has, ZIO, ZLayer }
+import zio._
+import zio.duration._
 
 import scala.jdk.CollectionConverters._
 
@@ -65,6 +66,58 @@ object streaming {
         valueDeserializer: Deserializer[R, V],
         outputBuffer: Int = 4
       ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]]
+
+      /**
+       * Execute an effect for each record and commit the offset after processing
+       *
+       * This method is the easiest way of processing messages on a Kafka topic.
+       *
+       * Messages on a single partition are processed sequentially, while the processing of
+       * multiple partitions happens in parallel.
+       *
+       * Offsets are committed after execution of the effect. They are batched when a commit action is in progress
+       * to avoid backpressuring the stream. When commits fail due to a org.apache.kafka.clients.consumer.RetriableCommitFailedException they are
+       * retried according to commitRetryPolicy
+       *
+       * The effect should absorb any failures. Failures should be handled by retries or ignoring the
+       * error, which will result in the Kafka message being skipped.
+       *
+       * Messages are processed with 'at least once' consistency: it is not guaranteed that every message
+       * that is processed by the effect has a corresponding offset commit before stream termination.
+       *
+       * Usage example:
+       *
+       * {{{
+       * val settings: ConsumerSettings = ???
+       * val subscription = Subscription.Topics(Set("my-kafka-topic"))
+       *
+       * val consumerIO = Consumer.consumeWith(settings, subscription, Serdes.string, Serdes.string) { case (key, value) =>
+       *   // Process the received record here
+       *   putStrLn(s"Received record: \${key}: \${value}")
+       * }
+       * }}}
+       *
+       * @param settings Settings for creating a [[Consumer]]
+       * @param subscription Topic subscription parameters
+       * @param keyDeserializer Deserializer for the key of the messages
+       * @param valueDeserializer Deserializer for the value of the messages
+       * @param commitRetryPolicy Retry commits that failed due to a RetriableCommitFailedException according to this schedule
+       * @param f Function that returns the effect to execute for each message. It is passed the key and value
+       * @tparam R Environment for the consuming effect
+       * @tparam R1 Environment for the deserializers
+       * @tparam K Type of keys (an implicit `Deserializer` should be in scope)
+       * @tparam V Type of values (an implicit `Deserializer` should be in scope)
+       * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
+       */
+      def consumeWith[R, R1: Tag, K: Tag, V: Tag](
+        settings: ConsumerSettings,
+        subscription: Subscription,
+        keyDeserializer: Deserializer[R1, K],
+        valueDeserializer: Deserializer[R1, V],
+        commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+      )(
+        f: (K, V) => ZIO[R, Nothing, Unit]
+      ): ZIO[R with R1 with Blocking with Clock, Throwable, Unit]
     }
 
     case class Live(
@@ -170,6 +223,66 @@ object streaming {
         } yield record
       }
 
+      /**
+       * Execute an effect for each record and commit the offset after processing
+       *
+       * This method is the easiest way of processing messages on a Kafka topic.
+       *
+       * Messages on a single partition are processed sequentially, while the processing of
+       * multiple partitions happens in parallel.
+       *
+       * Offsets are committed after execution of the effect. They are batched when a commit action is in progress
+       * to avoid backpressuring the stream. When commits fail due to a org.apache.kafka.clients.consumer.RetriableCommitFailedException they are
+       * retried according to commitRetryPolicy
+       *
+       * The effect should absorb any failures. Failures should be handled by retries or ignoring the
+       * error, which will result in the Kafka message being skipped.
+       *
+       * Messages are processed with 'at least once' consistency: it is not guaranteed that every message
+       * that is processed by the effect has a corresponding offset commit before stream termination.
+       *
+       * Usage example:
+       *
+       * {{{
+       * val settings: ConsumerSettings = ???
+       * val subscription = Subscription.Topics(Set("my-kafka-topic"))
+       *
+       * val consumerIO = Consumer.consumeWith(settings, subscription, Serdes.string, Serdes.string) { case (key, value) =>
+       *   // Process the received record here
+       *   putStrLn(s"Received record: \${key}: \${value}")
+       * }
+       * }}}
+       *
+       * @param settings Settings for creating a [[Consumer]]
+       * @param subscription Topic subscription parameters
+       * @param keyDeserializer Deserializer for the key of the messages
+       * @param valueDeserializer Deserializer for the value of the messages
+       * @param commitRetryPolicy Retry commits that failed due to a RetriableCommitFailedException according to this schedule
+       * @param f Function that returns the effect to execute for each message. It is passed the key and value
+       * @tparam R Environment for the consuming effect
+       * @tparam R1 Environment for the deserializers
+       * @tparam K Type of keys (an implicit `Deserializer` should be in scope)
+       * @tparam V Type of values (an implicit `Deserializer` should be in scope)
+       * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
+       */
+      def consumeWith[R, R1: Tag, K: Tag, V: Tag](
+        settings: ConsumerSettings,
+        subscription: Subscription,
+        keyDeserializer: Deserializer[R1, K],
+        valueDeserializer: Deserializer[R1, V],
+        commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+      )(
+        f: (K, V) => ZIO[R, Nothing, Unit]
+      ): ZIO[R with R1 with Blocking with Clock, Throwable, Unit] =
+        plainStream(settings, subscription, keyDeserializer, valueDeserializer)
+          .mapChunksM(_.mapM {
+            case CommittableRecord(record, offset) =>
+              f(record.key(), record.value()).as(offset)
+          })
+          .aggregateAsync(offsetBatches)
+          .mapM(_.commitOrRetry(commitRetryPolicy))
+          .runDrain
+
       private def subscribe(
         consumerAccess: ConsumerAccess,
         settings: ConsumerSettings,
@@ -203,4 +316,43 @@ object streaming {
     }
 
   }
+  def partitionedStream[R, K, V](
+    settings: ConsumerSettings,
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStream[
+    R with Clock with Blocking with StreamingConsumer,
+    Throwable,
+    (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
+  ] =
+    ZStream.accessStream(
+      _.get[StreamingConsumer.Service].partitionedStream(settings, subscription, keyDeserializer, valueDeserializer)
+    )
+
+  def plainStream[R, K, V](
+    settings: ConsumerSettings,
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V],
+    outputBuffer: Int = 4
+  ): ZStream[R with Clock with Blocking with StreamingConsumer, Throwable, CommittableRecord[K, V]] =
+    ZStream.accessStream(
+      _.get[StreamingConsumer.Service]
+        .plainStream(settings, subscription, keyDeserializer, valueDeserializer, outputBuffer)
+    )
+
+  def consumeWith[R, R1: Tag, K: Tag, V: Tag](
+    settings: ConsumerSettings,
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R1, K],
+    valueDeserializer: Deserializer[R1, V],
+    commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+  )(
+    f: (K, V) => ZIO[R, Nothing, Unit]
+  ): ZIO[R with R1 with Blocking with Clock with StreamingConsumer, Throwable, Unit] =
+    ZIO.accessM(
+      _.get[StreamingConsumer.Service]
+        .consumeWith(settings, subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f)
+    )
 }

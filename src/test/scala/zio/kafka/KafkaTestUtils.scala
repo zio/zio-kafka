@@ -1,7 +1,6 @@
 package zio.kafka
 
 import java.util.UUID
-
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio._
@@ -12,6 +11,7 @@ import zio.kafka.admin._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.consumer.streaming.StreamingConsumer
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.{ Deserializer, Serde, Serializer }
 import zio.kafka.producer._
@@ -75,6 +75,14 @@ object KafkaTestUtils {
         .withOffsetRetrieval(offsetRetrieval)
     }
 
+  lazy val streamingConsumer: ZLayer[Clock with Blocking, Throwable, StreamingConsumer] =
+    ZLayer.succeed[Diagnostics](Diagnostics.NoOp) >>> StreamingConsumer.live
+
+  def streamingConsumerWithDiagnostics(
+    diagnostics: Diagnostics
+  ): ZLayer[Clock with Blocking, Throwable, StreamingConsumer] =
+    ZLayer.succeed[Diagnostics](diagnostics) >>> StreamingConsumer.live
+
   def consumer(
     groupId: String,
     clientId: String,
@@ -90,13 +98,13 @@ object KafkaTestUtils {
     r: (String, String) => URIO[RC, Unit]
   ): RIO[RC with Blocking with Clock with Kafka, Unit] =
     consumerSettings(groupId, clientId).flatMap { settings =>
-      Consumer.consumeWith(
+      streaming.consumeWith(
         settings,
         subscription,
         Deserializer.string,
         Deserializer.string
       )(r)
-    }
+    }.provideSomeLayer[RC with Blocking with Clock with Kafka](streamingConsumer)
 
   def adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO.access[Kafka](_.get[Kafka.Service].bootstrapServers).map(AdminClientSettings(_))
