@@ -1,14 +1,18 @@
 package zio.kafka
 
 import org.apache.kafka.clients.producer.ProducerRecord
-import zio._, zio.stream._
+import zio._
+import zio.stream._
 import zio.kafka.producer._
 import zio.kafka.serde._
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.consumer.{ ConsumerConfig, KafkaConsumer }
+
 import scala.jdk.CollectionConverters._
 import java.time.Duration
 import org.apache.kafka.common.serialization.StringDeserializer
+import zio.kafka.consumer.diagnostics.Diagnostics
+
 import java.util.concurrent.TimeUnit
 
 object PopulateTopic extends App {
@@ -93,9 +97,8 @@ object ZIOKafka extends App {
       clock
         .currentTime(TimeUnit.MILLISECONDS)
         .flatMap { startTime =>
-          Consumer
-            .subscribeAnd(Subscription.topics("inputs-topic"))
-            .plainStream(Serde.string, Serde.string)
+          streaming
+            .plainStream(settings, Subscription.topics("inputs-topic"), Serde.string, Serde.string)
             .take(expectedCount.toLong)
             .mapChunks { recordChunk =>
               val messageCount = recordChunk.size
@@ -112,7 +115,7 @@ object ZIOKafka extends App {
               )
             }
         })
-      .provideCustomLayer(ZLayer.fromManaged(Consumer.make(settings)))
+      .provideCustomLayer(ZLayer.succeed[Diagnostics](Diagnostics.NoOp) >>> streaming.StreamingConsumer.live)
       .exitCode
 
   }

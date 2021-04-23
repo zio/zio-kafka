@@ -4,7 +4,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import zio._
 import zio.clock.Clock
 import zio.kafka.KafkaTestUtils._
-import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
+import zio.kafka.consumer.{ streaming, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
 import zio.test.Assertion._
@@ -28,9 +28,10 @@ object ProducerSpec extends DefaultRunnableSpec {
           List(new ProducerRecord(topic1, key1, value1), new ProducerRecord(topic2, key2, value2))
         )
         def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
-          Consumer.make(settings).flatMap { c =>
-            (c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.string).toQueue())
-          }
+          streaming
+            .plainStream(settings, subscription, Serde.string, Serde.string)
+            .provideSomeLayer(streamingConsumer)
+            .toQueue()
 
         for {
           outcome  <- Producer.produceChunk[Any, String, String](chunks)

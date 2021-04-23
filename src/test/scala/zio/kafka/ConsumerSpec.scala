@@ -346,31 +346,31 @@ object ConsumerSpec extends DefaultRunnableSpec {
 //                .set(false)
 //        } yield assertCompletes
 //      },
-      testM("process outstanding commits after a graceful shutdown") {
-        val kvs   = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
-        val topic = "test-outstanding-commits"
-        for {
-          group            <- randomGroup
-          _                <- produceMany(topic, kvs)
-          messagesReceived <- Ref.make[Int](0)
-          settings         <- consumerSettings(group, "client150")
-          offset <- (streaming
-                     .plainStream(settings, Subscription.topics(topic), Serde.string, Serde.string)
-                     .mapM { record =>
-                       for {
-                         nr <- messagesReceived.updateAndGet(_ + 1)
-                         _  <- Consumer.stopConsumption.when(nr == 1)
-                       } yield record.offset
-                     }
-                     .aggregate(Consumer.offsetBatches)
-                     .mapM(_.commit)
-                     .runDrain *>
-                     Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head))
-                     .provideSomeLayer[Kafka with Blocking with Clock](
-                       streamingConsumer ++ consumer(group, "client150")
-                     )
-        } yield assert(offset.map(_.offset))(isSome(isLessThanEqualTo(10L)))
-      } @@ TestAspect.ignore, // Not sure how to test this currently
+//      testM("process outstanding commits after a graceful shutdown") {
+//        val kvs   = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+//        val topic = "test-outstanding-commits"
+//        for {
+//          group            <- randomGroup
+//          _                <- produceMany(topic, kvs)
+//          messagesReceived <- Ref.make[Int](0)
+//          settings         <- consumerSettings(group, "client150")
+//          offset <- (streaming
+//                     .plainStream(settings, Subscription.topics(topic), Serde.string, Serde.string)
+//                     .mapM { record =>
+//                       for {
+//                         nr <- messagesReceived.updateAndGet(_ + 1)
+//                         _  <- Consumer.stopConsumption.when(nr == 1)
+//                       } yield record.offset
+//                     }
+//                     .aggregate(Consumer.offsetBatches)
+//                     .mapM(_.commit)
+//                     .runDrain *>
+//                     Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head))
+//                     .provideSomeLayer[Kafka with Blocking with Clock](
+//                       streamingConsumer ++ consumer(group, "client150")
+//                     )
+//        } yield assert(offset.map(_.offset))(isSome(isLessThanEqualTo(10L)))
+//      } @@ TestAspect.ignore, // Not sure how to test this currently
       testM("offset batching collects the latest offset for all partitions") {
         val nrMessages   = 50
         val nrPartitions = 5
@@ -459,9 +459,9 @@ object ConsumerSpec extends DefaultRunnableSpec {
 
                 // Consume messages
                 subscription = Subscription.topics(topic)
-                settings     <- consumerSettings(group, "client1")
+                settings1    <- consumerSettings(group, "client1")
                 consumer1 <- streaming
-                              .partitionedStream(settings, subscription, Serde.string, Serde.string)
+                              .partitionedStream(settings1, subscription, Serde.string, Serde.string)
                               .flatMapPar(nrPartitions) {
                                 case (tp, partition) =>
                                   ZStream
@@ -479,13 +479,13 @@ object ConsumerSpec extends DefaultRunnableSpec {
                                      .collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
                                      .runCollect
                                      .fork
-                _ <- ZIO.sleep(5.seconds)
-                consumer2 <- Consumer
-                              .subscribeAnd(subscription)
-                              .partitionedStream(Serde.string, Serde.string)
+                _         <- ZIO.sleep(5.seconds)
+                settings2 <- consumerSettings(group, "client2")
+                consumer2 <- streaming
+                              .partitionedStream(settings2, subscription, Serde.string, Serde.string)
                               .take(nrPartitions.toLong / 2)
                               .runDrain
-                              .provideSomeLayer[Kafka with Blocking with Clock](consumer(group, "client2"))
+                              .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
                               .fork
                 _ <- consumer1.join
                 _ <- consumer1.join

@@ -15,15 +15,13 @@ class SubscribedConsumer(
     Clock with Blocking,
     Throwable,
     (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
-  ] =
-    ZStream.fromEffect(underlying).flatMap(_.partitionedStream(keyDeserializer, valueDeserializer))
+  ] = ???
 
   def plainStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     outputBuffer: Int = 4
-  ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-    ZStream.fromEffect(underlying).flatMap(_.plainStream(keyDeserializer, valueDeserializer))
+  ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] = ???
 }
 
 class SubscribedConsumerFromEnvironment(
@@ -34,15 +32,11 @@ class SubscribedConsumerFromEnvironment(
     Clock with Blocking with Consumer,
     Throwable,
     (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
-  ] =
-    ZStream.fromEffect(underlying).flatMap(_.partitionedStream(keyDeserializer, valueDeserializer))
+  ] = ???
 
   def plainStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     outputBuffer: Int = 4
-  ): ZStream[R with Clock with Blocking with Consumer, Throwable, CommittableRecord[K, V]] =
-    ZStream
-      .fromEffect(underlying)
-      .flatMap(_.plainStream(keyDeserializer, valueDeserializer))
+  ): ZStream[R with Clock with Blocking with Consumer, Throwable, CommittableRecord[K, V]] = ???
 }

@@ -9,7 +9,7 @@ import zio.clock.Clock
 import zio.kafka.KafkaTestUtils
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.admin.AdminClient.{ OffsetAndMetadata, OffsetSpec, TopicPartition }
-import zio.kafka.consumer.{ Consumer, OffsetBatch, Subscription }
+import zio.kafka.consumer.{ streaming, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
 import zio.stream.ZTransducer
@@ -163,21 +163,23 @@ object AdminSpec extends DefaultRunnableSpec {
             val kvs = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
 
             def consumeAndCommit(count: Long) =
-              Consumer
-                .subscribeAnd(Subscription.Topics(Set(topic)))
-                .partitionedStream[Kafka with Blocking with Clock, String, String](Serde.string, Serde.string)
-                .flatMapPar(partitionCount)(_._2)
-                .take(count)
-                .transduce(ZTransducer.collectAllN(Int.MaxValue))
-                .mapConcatM { committableRecords =>
-                  val records = committableRecords.map(_.record)
-                  val offsetBatch =
-                    committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+              consumerSettings(consumerGroupID, "topic9")
+                .flatMap(settings =>
+                  streaming
+                    .partitionedStream(settings, Subscription.Topics(Set(topic)), Serde.string, Serde.string)
+                    .flatMapPar(partitionCount)(_._2)
+                    .take(count)
+                    .transduce(ZTransducer.collectAllN(Int.MaxValue))
+                    .mapConcatM { committableRecords =>
+                      val records = committableRecords.map(_.record)
+                      val offsetBatch =
+                        committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
 
-                  offsetBatch.commit.as(records)
-                }
-                .runCollect
-                .provideSomeLayer[Kafka with Blocking with Clock](consumer(consumerGroupID, "topic9"))
+                      offsetBatch.commit.as(records)
+                    }
+                    .runCollect
+                )
+                .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
 
             def toMap(records: Chunk[ConsumerRecord[String, String]]): Map[Int, List[(Long, String, String)]] =
               records.toList

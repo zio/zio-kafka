@@ -87,90 +87,6 @@ package object consumer {
       withConsumerService(_.listTopics(timeout))
 
     /**
-     * Accessor method for [[Service.partitionedStream]]
-     */
-    def partitionedStream[R: Tag, K: Tag, V: Tag](
-      keyDeserializer: Deserializer[R, K],
-      valueDeserializer: Deserializer[R, V]
-    ): ZStream[
-      Consumer with Clock with Blocking,
-      Throwable,
-      (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
-    ] =
-      ZStream.accessStream(_.get[Service].partitionedStream(keyDeserializer, valueDeserializer))
-
-    /**
-     * Accessor method for [[Service.plainStream]]
-     */
-    def plainStream[R: Tag, K: Tag, V: Tag](
-      keyDeserializer: Deserializer[R, K],
-      valueDeserializer: Deserializer[R, V],
-      outputBuffer: Int = 4
-    ): ZStream[R with Consumer with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
-      ZStream.accessStream(_.get[Service].plainStream(keyDeserializer, valueDeserializer, outputBuffer))
-
-    /**
-     * Accessor method for [[Service.stopConsumption]]
-     */
-    def stopConsumption: RIO[Consumer, Unit] =
-      ZIO.accessM(_.get[Service].stopConsumption)
-
-    /**
-     * Execute an effect for each record and commit the offset after processing
-     *
-     * This method is the easiest way of processing messages on a Kafka topic.
-     *
-     * Messages on a single partition are processed sequentially, while the processing of
-     * multiple partitions happens in parallel.
-     *
-     * Offsets are committed after execution of the effect. They are batched when a commit action is in progress
-     * to avoid backpressuring the stream. When commits fail due to a org.apache.kafka.clients.consumer.RetriableCommitFailedException they are
-     * retried according to commitRetryPolicy
-     *
-     * The effect should absorb any failures. Failures should be handled by retries or ignoring the
-     * error, which will result in the Kafka message being skipped.
-     *
-     * Messages are processed with 'at least once' consistency: it is not guaranteed that every message
-     * that is processed by the effect has a corresponding offset commit before stream termination.
-     *
-     * Usage example:
-     *
-     * {{{
-     * val settings: ConsumerSettings = ???
-     * val subscription = Subscription.Topics(Set("my-kafka-topic"))
-     *
-     * val consumerIO = Consumer.consumeWith(settings, subscription, Serdes.string, Serdes.string) { case (key, value) =>
-     *   // Process the received record here
-     *   putStrLn(s"Received record: \${key}: \${value}")
-     * }
-     * }}}
-     *
-     * @param settings Settings for creating a [[Consumer]]
-     * @param subscription Topic subscription parameters
-     * @param keyDeserializer Deserializer for the key of the messages
-     * @param valueDeserializer Deserializer for the value of the messages
-     * @param commitRetryPolicy Retry commits that failed due to a RetriableCommitFailedException according to this schedule
-     * @param f Function that returns the effect to execute for each message. It is passed the key and value
-     * @tparam R Environment for the consuming effect
-     * @tparam R1 Environment for the deserializers
-     * @tparam K Type of keys (an implicit `Deserializer` should be in scope)
-     * @tparam V Type of values (an implicit `Deserializer` should be in scope)
-     * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
-     */
-    def consumeWith[R, R1: Tag, K: Tag, V: Tag](
-      settings: ConsumerSettings,
-      subscription: Subscription,
-      keyDeserializer: Deserializer[R1, K],
-      valueDeserializer: Deserializer[R1, V],
-      commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
-    )(
-      f: (K, V) => ZIO[R, Nothing, Unit]
-    ): ZIO[R with R1 with Blocking with Clock, Throwable, Unit] =
-      Consumer
-        .make(settings)
-        .use(_.consumeWith(subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
-
-    /**
      * Accessor method for [[Service.subscribe]]
      */
     def subscribe(subscription: Subscription): RIO[Blocking with Consumer, Unit] =
@@ -208,19 +124,6 @@ package object consumer {
       timeout: Duration = Duration.Infinity
     ): RIO[Blocking with Consumer, Long] =
       withConsumerService(_.position(partition, timeout))
-
-    /**
-     * Accessor method for [[Service.subscribeAnd]]
-     */
-    def subscribeAnd(
-      subscription: Subscription
-    ): SubscribedConsumerFromEnvironment =
-      new SubscribedConsumerFromEnvironment(
-        ZIO.accessM { env =>
-          val consumer = env.get[Service]
-          consumer.subscribe(subscription).as(consumer)
-        }
-      )
 
     /**
      * Accessor method for [[Service.subscription]]
@@ -273,59 +176,6 @@ package object consumer {
 
       def listTopics(timeout: Duration = Duration.Infinity): RIO[Blocking, Map[String, List[PartitionInfo]]]
 
-      /**
-       * Create a stream with messages on the subscribed topic-partitions by topic-partition
-       *
-       * The top-level stream will emit new topic-partition streams for each topic-partition that is assigned
-       * to this consumer. This is subject to consumer rebalancing, unless a manual subscription
-       * was made. When rebalancing occurs, new topic-partition streams may be emitted and existing
-       * streams may be completed.
-       *
-       * All streams can be completed by calling [[stopConsumption]].
-       **/
-      def partitionedStream[R, K, V](
-        keyDeserializer: Deserializer[R, K],
-        valueDeserializer: Deserializer[R, V]
-      ): ZStream[
-        Clock with Blocking,
-        Throwable,
-        (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
-      ]
-
-      /**
-       * Create a stream with all messages on the subscribed topic-partitions
-       *
-       * The stream will emit messages from all topic-partitions interleaved. Per-partition
-       * record order is guaranteed, but the topic-partition interleaving is non-deterministic.
-       *
-       * Up to `outputBuffer` chunks may be buffered in memory by this operator.
-       *
-       * The stream can be completed by calling [[stopConsumption]].
-       */
-      def plainStream[R, K, V](
-        keyDeserializer: Deserializer[R, K],
-        valueDeserializer: Deserializer[R, V],
-        outputBuffer: Int = 4
-      ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]]
-
-      /**
-       * Stops consumption of data, drains buffered records, and ends the attached
-       * streams while still serving commit requests.
-       */
-      def stopConsumption: UIO[Unit]
-
-      /**
-       * See [[Consumer.consumeWith]].
-       */
-      def consumeWith[R, RC, K, V](
-        subscription: Subscription,
-        keyDeserializer: Deserializer[R, K],
-        valueDeserializer: Deserializer[R, V],
-        commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
-      )(
-        f: (K, V) => URIO[RC, Unit]
-      ): ZIO[R with RC with Blocking with Clock, Throwable, Unit]
-
       def subscribe(subscription: Subscription): RIO[Blocking, Unit]
 
       def unsubscribe: RIO[Blocking, Unit]
@@ -345,8 +195,6 @@ package object consumer {
       def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): RIO[Blocking, List[PartitionInfo]]
 
       def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): RIO[Blocking, Long]
-
-      def subscribeAnd(subscription: Subscription): SubscribedConsumer
 
       def subscription: RIO[Blocking, Set[String]]
 
@@ -390,13 +238,6 @@ package object consumer {
           offs.asScala.view.mapValues(_.longValue()).toMap
         }
 
-      /**
-       * Stops consumption of data, drains buffered records, and ends the attached
-       * streams while still serving commit requests.
-       */
-      override def stopConsumption: UIO[Unit] =
-        runloop.gracefulShutdown
-
       override def listTopics(timeout: Duration = Duration.Infinity): RIO[Blocking, Map[String, List[PartitionInfo]]] =
         consumer.withConsumer(_.listTopics(timeout.asJava).asScala.view.mapValues(_.asScala.toList).toMap)
 
@@ -422,33 +263,6 @@ package object consumer {
 
       override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): RIO[Blocking, Long] =
         consumer.withConsumer(_.position(partition, timeout.asJava))
-
-      override def plainStream[R, K, V](
-        keyDeserializer: Deserializer[R, K],
-        valueDeserializer: Deserializer[R, V],
-        outputBuffer: Int
-      ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] = {
-        val configureDeserializers =
-          ZStream.fromEffect {
-            keyDeserializer.configure(settings.driverSettings, isKey = true) *>
-              valueDeserializer.configure(settings.driverSettings, isKey = false)
-          }
-
-        val stream = runloop
-          .newPlainStream()
-          .buffer(settings.perPartitionChunkPrefetch)
-          .mapChunksM(_.mapM(_.deserializeWith(keyDeserializer, valueDeserializer)))
-
-        configureDeserializers *> (if (settings.perPartitionChunkPrefetch <= 0) stream
-                                   else stream.buffer(settings.perPartitionChunkPrefetch))
-
-      }
-      //        flatMapPar(n = Int.MaxValue, outputBuffer = outputBuffer)(
-      //          _._2
-      //        )
-
-      override def subscribeAnd(subscription: Subscription): SubscribedConsumer =
-        new SubscribedConsumer(subscribe(subscription).as(this))
 
       override def subscribe(subscription: Subscription): RIO[Blocking, Unit] =
         ZIO.runtime[Any].flatMap { runtime =>
@@ -478,58 +292,6 @@ package object consumer {
 
       override def subscription: RIO[Blocking, Set[String]] =
         consumer.withConsumer(_.subscription().asScala.toSet)
-
-      override def consumeWith[R, RC, K, V](
-        subscription: Subscription,
-        keyDeserializer: Deserializer[R, K],
-        valueDeserializer: Deserializer[R, V],
-        commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
-      )(
-        f: (K, V) => URIO[RC, Unit]
-      ): ZIO[R with RC with Blocking with Clock, Throwable, Unit] =
-        ZStream
-          .fromEffect(subscribe(subscription))
-          .flatMap { _ =>
-            partitionedStream(keyDeserializer, valueDeserializer)
-              .flatMapPar(Int.MaxValue, outputBuffer = settings.perPartitionChunkPrefetch) {
-                case (_, partitionStream) =>
-                  partitionStream.mapChunksM(_.mapM {
-                    case CommittableRecord(record, offset) =>
-                      f(record.key(), record.value()).as(offset)
-                  })
-              }
-          }
-          .aggregateAsync(offsetBatches)
-          .mapM(_.commitOrRetry(commitRetryPolicy))
-          .runDrain
-
-      override def partitionedStream[R, K, V](
-        keyDeserializer: Deserializer[R, K],
-        valueDeserializer: Deserializer[R, V]
-      ): ZStream[
-        Clock with Blocking,
-        Throwable,
-        (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
-      ] = {
-        val configureDeserializers =
-          ZStream.fromEffect {
-            keyDeserializer.configure(settings.driverSettings, isKey = true) *>
-              valueDeserializer.configure(settings.driverSettings, isKey = false)
-          }
-
-        configureDeserializers *>
-          ZStream
-            .fromQueue(runloop.partitions)
-            .flattenExitOption
-            .map {
-              case (tp, partition) =>
-                val partitionStream =
-                  if (settings.perPartitionChunkPrefetch <= 0) partition
-                  else partition.buffer(settings.perPartitionChunkPrefetch)
-
-                tp -> partitionStream.mapChunksM(_.mapM(_.deserializeWith(keyDeserializer, valueDeserializer)))
-            }
-      }
 
       override def unsubscribe: RIO[Blocking, Unit] =
         consumer.withConsumer(_.unsubscribe())
