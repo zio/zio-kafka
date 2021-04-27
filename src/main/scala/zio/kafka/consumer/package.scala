@@ -31,14 +31,7 @@ package object consumer {
     ): ZManaged[Clock with Blocking, Throwable, Service] =
       for {
         wrapper <- ConsumerAccess.make(settings)
-        runloop <- Runloop(
-                    wrapper,
-                    settings.pollInterval,
-                    settings.pollTimeout,
-                    diagnostics,
-                    settings.offsetRetrieval
-                  )
-      } yield Live(wrapper, settings, runloop)
+      } yield Live(wrapper, settings)
 
     /**
      * Accessor method for [[Service.assignment]]
@@ -85,12 +78,6 @@ package object consumer {
       timeout: Duration = Duration.Infinity
     ): RIO[Blocking with Consumer, Map[String, List[PartitionInfo]]] =
       withConsumerService(_.listTopics(timeout))
-
-    /**
-     * Accessor method for [[Service.subscribe]]
-     */
-    def subscribe(subscription: Subscription): RIO[Blocking with Consumer, Unit] =
-      withConsumerService(_.subscribe(subscription))
 
     /**
      * Accessor method for [[Service.unsubscribe]]
@@ -176,8 +163,6 @@ package object consumer {
 
       def listTopics(timeout: Duration = Duration.Infinity): RIO[Blocking, Map[String, List[PartitionInfo]]]
 
-      def subscribe(subscription: Subscription): RIO[Blocking, Unit]
-
       def unsubscribe: RIO[Blocking, Unit]
 
       /**
@@ -206,8 +191,7 @@ package object consumer {
 
     final case class Live(
       private val consumer: ConsumerAccess,
-      private val settings: ConsumerSettings,
-      private val runloop: Runloop
+      private val settings: ConsumerSettings
     ) extends Service {
 
       override def assignment: RIO[Blocking, Set[TopicPartition]] =
@@ -263,32 +247,6 @@ package object consumer {
 
       override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): RIO[Blocking, Long] =
         consumer.withConsumer(_.position(partition, timeout.asJava))
-
-      override def subscribe(subscription: Subscription): RIO[Blocking, Unit] =
-        ZIO.runtime[Any].flatMap { runtime =>
-          consumer.withConsumerM { c =>
-            subscription match {
-              case Subscription.Pattern(pattern) =>
-                ZIO(c.subscribe(pattern.pattern, runloop.rebalanceListener.toKafka(runtime)))
-              case Subscription.Topics(topics) =>
-                ZIO(c.subscribe(topics.asJava, runloop.rebalanceListener.toKafka(runtime)))
-
-              // For manual subscriptions we have to do some manual work before starting the run loop
-              case Subscription.Manual(topicPartitions) =>
-                ZIO(c.assign(topicPartitions.asJava)) *>
-                  // TODO: Creates unnecessary streams when we are consuming plain stream?
-                  ZIO.foreach_(topicPartitions)(runloop.newPartitionStream) *> {
-                  settings.offsetRetrieval match {
-                    case OffsetRetrieval.Manual(getOffsets) =>
-                      getOffsets(topicPartitions).flatMap { offsets =>
-                        ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
-                      }
-                    case OffsetRetrieval.Auto(_) => ZIO.unit
-                  }
-                }
-            }
-          }
-        }
 
       override def subscription: RIO[Blocking, Set[String]] =
         consumer.withConsumer(_.subscription().asScala.toSet)

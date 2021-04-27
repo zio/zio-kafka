@@ -1,0 +1,528 @@
+package zio.kafka.consumer
+
+import net.manub.embeddedkafka.EmbeddedKafka
+import org.apache.kafka.common.TopicPartition
+import zio.blocking.Blocking
+import zio.clock.Clock
+import zio.duration._
+import zio.kafka.KafkaTestUtils._
+import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.embedded.Kafka
+import zio.kafka.serde.Serde
+import zio.stream.{ ZSink, ZStream, ZTransducer }
+import zio.test.Assertion._
+import zio.test.TestAspect._
+import zio.test.environment._
+import zio.test.{ DefaultRunnableSpec, _ }
+import zio._
+
+object StreamingConsumerSpec extends DefaultRunnableSpec {
+  override def spec: ZSpec[TestEnvironment, Throwable] =
+    suite("Streaming Consumer")(
+      testM("plainStream emits messages for a topic subscription") {
+        val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          _        <- produceMany("topic150", kvs)
+          settings <- consumerSettings("group150", "client150")
+          records <- streaming
+                      .plainStream(settings, Subscription.Topics(Set("topic150")), Serde.string, Serde.string)
+                      .take(5)
+                      .runCollect
+                      .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          kvOut = records.map(r => (r.record.key, r.record.value)).toList
+        } yield assert(kvOut)(equalTo(kvs))
+      },
+      testM("chunk sizes in plain stream") {
+        val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          _        <- produceMany("topic151", kvs)
+          settings <- consumerSettings("group151", "client151")
+          sizes <- streaming
+                    .plainStream(settings, Subscription.Topics(Set("topic151")), Serde.string, Serde.string)
+                    .take(100)
+                    .mapChunks(c => Chunk(c.size))
+                    .runCollect
+                    .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+        } yield assert(sizes)(forall(isGreaterThan(1)))
+      },
+      testM("chunk sizes in partitioned stream") {
+        val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          _        <- produceMany("topic152", kvs)
+          settings <- consumerSettings("group152", "client152")
+          sizes <- streaming
+                    .partitionedStream(
+                      settings,
+                      Subscription.Topics(Set("topic152")),
+                      Serde.string,
+                      Serde.string
+                    )
+                    .flatMap(_._2)
+                    .take(100)
+                    .mapChunks(c => Chunk(c.size))
+                    .runCollect
+                    .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+        } yield assert(sizes)(forall(isGreaterThan(1)))
+      },
+      testM("Topic subscription works properly for plain stream") {
+        val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          _        <- produceMany("topic153", kvs)
+          settings <- consumerSettings("group153", "client153")
+          records <- streaming
+                      .plainStream(settings, Subscription.Topics(Set("topic153")), Serde.string, Serde.string)
+                      .take(5)
+                      .runCollect
+                      .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          kvOut = records.map(r => (r.record.key, r.record.value)).toList
+        } yield assert(kvOut)(equalTo(kvs))
+      },
+      testM("Topic subscription works properly for partitioned stream") {
+        val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          _        <- produceMany("topic154", kvs)
+          settings <- consumerSettings("group154", "client154")
+          records <- streaming
+                      .partitionedStream(settings, Subscription.Topics(Set("topic154")), Serde.string, Serde.string)
+                      .flatMap(_._2)
+                      .take(5)
+                      .runCollect
+                      .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          kvOut = records.map(r => (r.record.key, r.record.value)).toList
+        } yield assert(kvOut)(equalTo(kvs))
+      },
+      testM("Consuming+provideCustomLayer") {
+        val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          _        <- produceMany("topic155", kvs)
+          settings <- consumerSettings("group155", "client155")
+          records <- streaming
+                      .plainStream(settings, Subscription.Topics(Set("topic155")), Serde.string, Serde.string)
+                      .take(100)
+                      .runCollect
+                      .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          kvOut = records.map(r => (r.record.key, r.record.value)).toList
+        } yield assert(kvOut)(equalTo(kvs))
+      },
+      testM("plainStream emits messages for a pattern subscription") {
+        val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          _        <- produceMany("pattern156", kvs)
+          settings <- consumerSettings("group156", "client156")
+          records <- streaming
+                      .plainStream(settings, Subscription.Pattern("pattern[0-9]+".r), Serde.string, Serde.string)
+                      .take(5)
+                      .runCollect
+                      .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          kvOut = records.map(r => (r.record.key, r.record.value)).toList
+        } yield assert(kvOut)(equalTo(kvs))
+      },
+      testM("partitionedStream emits messages for a pattern subscription") {
+        val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          _        <- produceMany("partitionedPattern157", kvs)
+          settings <- consumerSettings("group157", "client157")
+          records <- streaming
+                      .partitionedStream(
+                        settings,
+                        Subscription.Pattern("partitionedPattern[0-9]+".r),
+                        Serde.string,
+                        Serde.string
+                      )
+                      .flatMap(_._2)
+                      .take(5)
+                      .runCollect
+                      .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          kvOut = records.map(r => (r.record.key, r.record.value)).toList
+        } yield assert(kvOut)(equalTo(kvs))
+      },
+      testM(
+        "receive only messages from the subscribed topic-partition using plain stream when creating a manual subscription"
+      ) {
+        val nrPartitions = 5
+        val topic        = "manual-topic0"
+
+        for {
+          _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreach(1 to nrPartitions) { i =>
+                produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+              }
+          settings <- consumerSettings("group158", "client158")
+          record <- streaming
+                   //                                        .plainStream(settings, Subscription.topics(topic), Serde.string, Serde.string)
+                     .plainStream(settings, Subscription.manual(topic, partition = 2), Serde.string, Serde.string)
+                     .take(1)
+                     .runHead
+                     .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          kvOut = record.map(r => (r.record.key, r.record.value))
+        } yield assert(kvOut)(isSome(equalTo("key2" -> "msg2")))
+      },
+      testM(
+        "receive only messages from the subscribed topic-partition using partitioned stream when creating a manual subscription"
+      ) {
+        val nrPartitions = 5
+        val topic        = "manual-topic-partitioned-0"
+
+        for {
+          _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreach(1 to nrPartitions) { i =>
+                produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+              }
+          settings <- consumerSettings("group159", "client159")
+          record <- streaming
+                     .partitionedStream(settings, Subscription.manual(topic, partition = 2), Serde.string, Serde.string)
+                     .flatMap(_._2)
+                     .take(1)
+                     .runHead
+                     .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          kvOut = record.map(r => (r.record.key, r.record.value))
+        } yield assert(kvOut)(isSome(equalTo("key2" -> "msg2")))
+      },
+      testM("receive from the right offset when creating a manual subscription with manual seeking for plain stream") {
+        val nrPartitions = 5
+        val topic        = "manual-topic1"
+
+        val manualOffsetSeek = 3
+
+        for {
+          _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreach(1 to nrPartitions) { i =>
+                produceMany(topic, partition = i % nrPartitions, kvs = (0 to 9).map(j => s"key$i-$j" -> s"msg$i-$j"))
+              }
+          offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+          settings        <- consumerSettings("group160", "client160", offsetRetrieval = offsetRetrieval)
+          record <- streaming
+                   //                     .plainStream(settings, Subscription.topics(topic), Serde.string, Serde.string)
+                     .plainStream(settings, Subscription.manual(topic, partition = 2), Serde.string, Serde.string)
+                     .take(1)
+                     .runHead
+                     .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          kvOut = record.map(r => (r.record.key, r.record.value))
+        } yield assert(kvOut)(isSome(equalTo("key2-3" -> "msg2-3")))
+      },
+      testM(
+        "receive from the right offset when creating a manual subscription with manual seeking for partitioned stream"
+      ) {
+        val nrPartitions = 5
+        val topic        = "manual-topic-partitioned-1"
+
+        val manualOffsetSeek = 3
+
+        for {
+          _ <- ZIO.effectTotal(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreach(1 to nrPartitions) { i =>
+                produceMany(topic, partition = i % nrPartitions, kvs = (0 to 9).map(j => s"key$i-$j" -> s"msg$i-$j"))
+              }
+          offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+          settings        <- consumerSettings("group161", "client161", offsetRetrieval = offsetRetrieval)
+          record <- streaming
+                     .partitionedStream(settings, Subscription.manual(topic, partition = 2), Serde.string, Serde.string)
+                     .flatMap(_._2)
+                     .take(1)
+                     .runHead
+                     .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          kvOut = record.map(r => (r.record.key, r.record.value))
+        } yield assert(kvOut)(isSome(equalTo("key2-3" -> "msg2-3")))
+      },
+      testM("restart from the committed position") {
+        val data = (1 to 10).toList.map(i => s"key$i" -> s"msg$i")
+        for {
+          _        <- produceMany("topic1", 0, data)
+          settings <- consumerSettings("group1", "first")
+          firstResults <- for {
+                           results <- streaming
+                                       .partitionedStream(
+                                         settings,
+                                         Subscription.Topics(Set("topic1")),
+                                         Serde.string,
+                                         Serde.string
+                                       )
+                                       .filter(_._1 == new TopicPartition("topic1", 0))
+                                       .flatMap(_._2)
+                                       .take(5)
+                                       .transduce(ZTransducer.collectAllN(Int.MaxValue))
+                                       .mapConcatM { committableRecords =>
+                                         val records = committableRecords.map(_.record)
+                                         val offsetBatch =
+                                           committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+
+                                         offsetBatch.commit.as(records)
+                                       }
+                                       .runCollect
+                                       .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+                         } yield results
+          settings <- consumerSettings("group1", "second")
+          secondResults <- for {
+                            results <- streaming
+                                        .partitionedStream(
+                                          settings,
+                                          Subscription.Topics(Set("topic1")),
+                                          Serde.string,
+                                          Serde.string
+                                        )
+                                        .flatMap(_._2)
+                                        .take(5)
+                                        .transduce(ZTransducer.collectAllN(Int.MaxValue))
+                                        .mapConcatM { committableRecords =>
+                                          val records = committableRecords.map(_.record)
+                                          val offsetBatch =
+                                            committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+
+                                          offsetBatch.commit.as(records)
+                                        }
+                                        .runCollect
+                                        .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+                          } yield results
+        } yield assert((firstResults ++ secondResults).map(rec => rec.key() -> rec.value()).toList)(equalTo(data))
+      },
+      testM("partitionedStream emits messages for each partition in a separate stream") {
+        val nrMessages   = 50
+        val nrPartitions = 5
+
+        for {
+          // Produce messages on several partitions
+          topic <- randomTopic
+          group <- randomGroup
+          _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreach(1 to nrMessages) { i =>
+                produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+              }
+
+          // Consume messages
+          messagesReceived <- ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
+          subscription     = Subscription.topics(topic)
+          settings         <- consumerSettings(group, "client3")
+          fib <- streaming
+                  .partitionedStream(settings, subscription, Serde.string, Serde.string)
+                  .flatMapPar(nrPartitions) {
+                    case (_, partition) =>
+                      partition
+                        .mapM(record => messagesReceived(record.partition).update(_ + 1).as(record))
+                  }
+                  .take(nrMessages.toLong)
+                  .runDrain
+                  .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+                  .fork
+          _                    <- fib.join
+          messagesPerPartition <- ZIO.foreach(messagesReceived.values)(_.get)
+
+        } yield assert(messagesPerPartition)(forall(equalTo(nrMessages / nrPartitions)))
+      },
+      testM("fail when the consuming effect produces a failure") {
+        val topic        = "consumeWith3"
+        val subscription = Subscription.Topics(Set(topic))
+        val nrMessages   = 10
+        val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+
+        for {
+          _ <- produceMany(topic, messages)
+          consumeResult <- consumeWithStrings("group3", "client3", subscription) {
+                            case (_, _) =>
+                              ZIO.fail(new IllegalArgumentException("consumeWith failure")).orDie
+                          }.run
+        } yield consumeResult.fold(
+          _ => assertCompletes,
+          _ => assert("result")(equalTo("Expected consumeWith to fail"))
+        )
+      } @@ timeout(10.seconds),
+      testM("offset batching collects the latest offset for all partitions") {
+        val nrMessages   = 50
+        val nrPartitions = 5
+
+        for {
+          // Produce messages on several partitions
+          topic <- randomTopic
+          group <- randomGroup
+          _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreach(1 to nrMessages) { i =>
+                produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+              }
+
+          // Consume messages
+          messagesReceived <- ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
+          subscription     = Subscription.topics(topic)
+          settings         <- consumerSettings(group, "client3")
+          offsets <- (streaming
+                      .partitionedStream(settings, subscription, Serde.string, Serde.string)
+                      .flatMapPar(nrPartitions)(_._2.map(_.offset))
+                      .take(nrMessages.toLong)
+                      .aggregate(Consumer.offsetBatches)
+                      .take(1)
+                      .mapM(_.commit)
+                      .runDrain *>
+                      Consumer.committed((0 until nrPartitions).map(new TopicPartition(topic, _)).toSet))
+                      .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer ++ consumer(group, "client3"))
+        } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / nrPartitions))))
+      },
+      testM("handle rebalancing by completing topic-partition streams") {
+        val nrMessages   = 50
+        val nrPartitions = 6
+
+        for {
+          // Produce messages on several partitions
+          topic <- randomTopic
+          group <- randomGroup
+          _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreach(1 to nrMessages) { i =>
+                produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+              }
+
+          // Consume messages
+          subscription = Subscription.topics(topic)
+          settings1    <- consumerSettings(group, "client1")
+          consumer1 <- streaming
+                        .partitionedStream(settings1, subscription, Serde.string, Serde.string)
+                        .flatMapPar(nrPartitions) {
+                          case (tp, partition) =>
+                            ZStream
+                              .fromEffect(partition.runDrain)
+                              .as(tp)
+                        }
+                        .take(nrPartitions.toLong / 2)
+                        .runDrain
+                        .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+                        .fork
+          _         <- Live.live(ZIO.sleep(5.seconds))
+          settings2 <- consumerSettings(group, "client2")
+          consumer2 <- streaming
+                        .partitionedStream(settings2, subscription, Serde.string, Serde.string)
+                        .take(nrPartitions.toLong / 2)
+                        .runDrain
+                        .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+                        .fork
+          _ <- consumer1.join
+          _ <- consumer2.join
+        } yield assertCompletes
+      },
+      testM("produce diagnostic events when rebalancing") {
+        val nrMessages   = 50
+        val nrPartitions = 6
+
+        Diagnostics.SlidingQueue
+          .make()
+          .use {
+            diagnostics =>
+              for {
+                // Produce messages on several partitions
+                topic <- randomTopic
+                group <- randomGroup
+                _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+                _ <- ZIO.foreach(1 to nrMessages) { i =>
+                      produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+                    }
+
+                // Consume messages
+                subscription = Subscription.topics(topic)
+                settings1    <- consumerSettings(group, "client1")
+                consumer1 <- streaming
+                              .partitionedStream(settings1, subscription, Serde.string, Serde.string)
+                              .flatMapPar(nrPartitions) {
+                                case (tp, partition) =>
+                                  ZStream
+                                    .fromEffect(partition.runDrain)
+                                    .as(tp)
+                              }
+                              .take(nrPartitions.toLong / 2)
+                              .runDrain
+                              .provideSomeLayer[Kafka with Blocking with Clock](
+                                streamingConsumerWithDiagnostics(diagnostics)
+                              )
+                              .fork
+                diagnosticStream <- ZStream
+                                     .fromQueue(diagnostics.queue)
+                                     .collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
+                                     .runCollect
+                                     .fork
+                _         <- ZIO.sleep(5.seconds)
+                settings2 <- consumerSettings(group, "client2")
+                consumer2 <- streaming
+                              .partitionedStream(settings2, subscription, Serde.string, Serde.string)
+                              .take(nrPartitions.toLong / 2)
+                              .runDrain
+                              .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+                              .fork
+                _ <- consumer1.join
+                _ <- consumer1.join
+                _ <- consumer2.join
+              } yield diagnosticStream.join
+          }
+          .flatten
+          .map(diagnosticEvents => assert(diagnosticEvents.size)(isGreaterThanEqualTo(2)))
+      },
+      testM("support manual seeking") {
+        val nrRecords        = 10
+        val data             = (1 to nrRecords).toList.map(i => s"key$i" -> s"msg$i")
+        val manualOffsetSeek = 3
+
+        for {
+          topic <- randomTopic
+          _     <- produceMany(topic, 0, data)
+          // Consume 5 records to have the offset committed at 5
+          settings <- consumerSettings("group1", "client1")
+          _ <- streaming
+                .plainStream(settings, Subscription.topics(topic), Serde.string, Serde.string)
+                .take(5)
+                .transduce(ZTransducer.collectAllN(Int.MaxValue))
+                .mapConcatM { committableRecords =>
+                  val records = committableRecords.map(_.record)
+                  val offsetBatch =
+                    committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+
+                  offsetBatch.commit.as(records)
+                }
+                .runCollect
+                .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          // Start a new consumer with manual offset before the committed offset
+          offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+          settings        <- consumerSettings("group1", "client2", offsetRetrieval = offsetRetrieval)
+          secondResults <- streaming
+                            .plainStream(settings, Subscription.topics(topic), Serde.string, Serde.string)
+                            .take(nrRecords.toLong - manualOffsetSeek)
+                            .map(_.record)
+                            .runCollect
+                            .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          // Check that we only got the records starting from the manually seek'd offset
+        } yield assert(secondResults.map(rec => rec.key() -> rec.value()).toList)(equalTo(data.drop(manualOffsetSeek)))
+      },
+      testM("commit offsets for all consumed messages") {
+        val topic        = "consumeWith2"
+        val subscription = Subscription.Topics(Set(topic))
+        val nrMessages   = 50
+        val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+
+        def consumeIt(messagesReceived: Ref[List[(String, String)]], done: Promise[Nothing, Unit]) =
+          consumeWithStrings("group3", "client3", subscription)({ (key, value) =>
+            (for {
+              messagesSoFar <- messagesReceived.updateAndGet(_ :+ (key -> value))
+              _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
+            } yield ()).orDie
+          }).fork
+
+        for {
+          done             <- Promise.make[Nothing, Unit]
+          messagesReceived <- Ref.make(List.empty[(String, String)])
+          _                <- produceMany(topic, messages)
+          fib              <- consumeIt(messagesReceived, done)
+          _ <- done.await *> Live
+                .live(
+                  ZIO.sleep(3.seconds)
+                ) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
+          _        <- fib.interrupt
+          _        <- produceOne(topic, "key-new", "msg-new")
+          settings <- consumerSettings("group3", "client3")
+          newMessage <- streaming
+                         .plainStream(settings, subscription, Serde.string, Serde.string)
+                         .take(1)
+                         .map(r => (r.record.key(), r.record.value()))
+                         .run(ZSink.collectAll[(String, String)])
+                         .map(_.head)
+                         .orDie
+                         .provideSomeLayer[Kafka with Blocking with Clock](streamingConsumer)
+          consumedMessages <- messagesReceived.get
+        } yield assert(consumedMessages)(contains(newMessage).negate)
+      }
+    ).provideSomeLayerShared[TestEnvironment](
+      ((Kafka.embedded >>> stringProducer) ++ Kafka.embedded).mapError(TestFailure.fail) ++ Clock.live
+    ) @@ timeout(180.seconds)
+}

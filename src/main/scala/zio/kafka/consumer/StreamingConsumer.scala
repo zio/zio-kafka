@@ -10,6 +10,7 @@ import zio.kafka.serde.Deserializer
 import zio.stream.ZStream
 import zio._
 import zio.duration._
+import zio.kafka.consumer.internal.Runloop.Mode
 
 import scala.jdk.CollectionConverters._
 
@@ -154,7 +155,8 @@ object streaming {
                         settings.pollInterval,
                         settings.pollTimeout,
                         diagnostics,
-                        settings.offsetRetrieval
+                        settings.offsetRetrieval,
+                        Mode.PartitionStream
                       )
           } yield (runloop, consumerAccess)
         )
@@ -209,7 +211,8 @@ object streaming {
                         settings.pollInterval,
                         settings.pollTimeout,
                         diagnostics,
-                        settings.offsetRetrieval
+                        settings.offsetRetrieval,
+                        Mode.PlainStream
                       )
           } yield (runloop, consumerAccess)
         )
