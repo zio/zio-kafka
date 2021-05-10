@@ -16,7 +16,6 @@ import org.apache.kafka.clients.admin.{
 }
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata => JOffsetAndMetadata }
-import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.{
   KafkaFuture,
@@ -170,10 +169,11 @@ case class AdminClient(private val adminClient: JAdminClient) {
     options: Option[DescribeClusterOptions] = None
   ): RIO[Blocking, Set[AclOperation]] =
     for {
-      res <- describeCluster(options)
-      opt <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
-      lst <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
-    } yield lst
+      res           <- describeCluster(options)
+      opt           <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
+      lst           <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
+      aclOperations = lst.map(AclOperation.apply)
+    } yield aclOperations
 
   /**
    * Add new partitions to a topic.
@@ -308,7 +308,7 @@ object AdminClient {
         jt.name,
         jt.isInternal,
         jt.partitions.asScala.toList.map(TopicPartitionInfo.apply),
-        authorizedOperations
+        authorizedOperations.map(_.map(AclOperation.apply))
       )
     }
   }
