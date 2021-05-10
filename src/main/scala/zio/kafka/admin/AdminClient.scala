@@ -11,6 +11,7 @@ import org.apache.kafka.clients.admin.{
   NewTopic => JNewTopic,
   OffsetSpec => JOffsetSpec,
   TopicDescription => JTopicDescription,
+  TopicListing => JTopicListing,
   _
 }
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
@@ -97,7 +98,7 @@ case class AdminClient(private val adminClient: JAdminClient) {
       blocking.effectBlocking(
         listTopicsOptions.fold(adminClient.listTopics())(opts => adminClient.listTopics(opts)).namesToListings()
       )
-    }.map(_.asScala.toMap)
+    }.map(_.asScala.toMap.view.mapValues(TopicListing.apply).toMap)
 
   /**
    * Describe the specified topics.
@@ -297,6 +298,14 @@ object AdminClient {
       val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet)
       TopicDescription(jt.name, jt.isInternal, jt.partitions.asScala.toList, authorizedOperations)
     }
+  }
+
+  case class TopicListing(name: String, isInternal: Boolean) {
+    def asJava = new JTopicListing(name, isInternal)
+  }
+
+  object TopicListing {
+    def apply(jtl: JTopicListing): TopicListing = TopicListing(jtl.name(), jtl.isInternal)
   }
 
   case class TopicPartition(
