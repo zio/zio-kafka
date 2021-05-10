@@ -1,7 +1,6 @@
 package zio.kafka.admin
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
 import zio.Chunk
 import zio.blocking.Blocking
@@ -106,7 +105,7 @@ object AdminSpec extends DefaultRunnableSpec {
         KafkaTestUtils.withAdmin { client =>
           for {
             controller <- client.describeClusterController()
-          } yield assert(controller.id())(equalTo(0))
+          } yield assert(controller.id)(equalTo(0))
         }
       },
       testM("get cluster id") {
