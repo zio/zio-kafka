@@ -22,7 +22,7 @@ import org.apache.kafka.common.{
   KafkaFuture,
   Metric,
   MetricName,
-  TopicPartitionInfo,
+  TopicPartitionInfo => JTopicPartitionInfo,
   IsolationLevel => JIsolationLevel,
   Node => JNode,
   TopicPartition => JTopicPartition
@@ -304,8 +304,28 @@ object AdminClient {
   object TopicDescription {
     def apply(jt: JTopicDescription): TopicDescription = {
       val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet)
-      TopicDescription(jt.name, jt.isInternal, jt.partitions.asScala.toList, authorizedOperations)
+      TopicDescription(
+        jt.name,
+        jt.isInternal,
+        jt.partitions.asScala.toList.map(TopicPartitionInfo.apply),
+        authorizedOperations
+      )
     }
+  }
+
+  case class TopicPartitionInfo(partition: Int, leader: Node, replicas: List[Node], isr: List[Node]) {
+    lazy val asJava =
+      new JTopicPartitionInfo(partition, leader.asJava, replicas.map(_.asJava).asJava, isr.map(_.asJava).asJava)
+  }
+
+  object TopicPartitionInfo {
+    def apply(jtpi: JTopicPartitionInfo): TopicPartitionInfo =
+      TopicPartitionInfo(
+        jtpi.partition(),
+        Node(jtpi.leader()),
+        jtpi.replicas().asScala.map(Node.apply).toList,
+        jtpi.isr().asScala.map(Node.apply).toList
+      )
   }
 
   case class TopicListing(name: String, isInternal: Boolean) {
