@@ -24,7 +24,7 @@ import org.apache.kafka.common.{
   MetricName,
   TopicPartitionInfo,
   IsolationLevel => JIsolationLevel,
-  Node,
+  Node => JNode,
   TopicPartition => JTopicPartition
 }
 import zio._
@@ -134,7 +134,7 @@ case class AdminClient(private val adminClient: JAdminClient) {
     }.map(_.asScala.view.mapValues(AdminClient.KafkaConfig(_)).toMap)
   }
 
-  private def describeCluster(options: Option[DescribeClusterOptions]) =
+  private def describeCluster(options: Option[DescribeClusterOptions]): RIO[Blocking, DescribeClusterResult] =
     blocking.effectBlocking(
       options.fold(adminClient.describeCluster())(opts => adminClient.describeCluster(opts))
     )
@@ -145,7 +145,7 @@ case class AdminClient(private val adminClient: JAdminClient) {
   def describeClusterNodes(options: Option[DescribeClusterOptions] = None): RIO[Blocking, List[Node]] =
     fromKafkaFuture(
       describeCluster(options).map(_.nodes())
-    ).map(_.asScala.toList)
+    ).map(_.asScala.toList.map(Node.apply))
 
   /**
    * Get the cluster controller.
@@ -153,7 +153,7 @@ case class AdminClient(private val adminClient: JAdminClient) {
   def describeClusterController(options: Option[DescribeClusterOptions] = None): RIO[Blocking, Node] =
     fromKafkaFuture(
       describeCluster(options).map(_.controller())
-    )
+    ).map(Node.apply)
 
   /**
    * Get the cluster id.
@@ -284,6 +284,14 @@ object AdminClient {
       if (newAssignments.nonEmpty)
         JNewPartitions.increaseTo(totalCount, newAssignments.map(_.map(Int.box).asJava).asJava)
       else JNewPartitions.increaseTo(totalCount)
+  }
+
+  case class Node(id: Int, host: String, port: Int, rack: Option[String] = None) {
+    lazy val asJava = rack.fold(new JNode(id, host, port))(rack => new JNode(id, host, port, rack))
+  }
+
+  object Node {
+    def apply(jNode: JNode): Node = Node(jNode.id(), jNode.host(), jNode.port, Option(jNode.rack()))
   }
 
   case class TopicDescription(
