@@ -13,6 +13,7 @@ import org.apache.kafka.clients.admin.{
   TopicListing => JTopicListing,
   CreatePartitionsOptions => JCreatePartitionsOptions,
   DescribeClusterOptions => JDescribeClusterOptions,
+  DescribeConfigsOptions => JDescribeConfigsOptions,
   _
 }
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
@@ -128,7 +129,7 @@ case class AdminClient(private val adminClient: JAdminClient) {
     fromKafkaFuture {
       blocking.effectBlocking(
         options
-          .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts))
+          .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts.asJava))
           .all()
       )
     }.map(
@@ -304,8 +305,14 @@ object AdminClient {
     lazy val asJava: JCreatePartitionsOptions = new JCreatePartitionsOptions().validateOnly(validateOnly)
   }
 
+  case class DescribeConfigsOptions(includeSynonyms: Boolean, includeDocumentation: Boolean) {
+    lazy val asJava: JDescribeConfigsOptions =
+      new JDescribeConfigsOptions().includeSynonyms(includeSynonyms).includeDocumentation(includeDocumentation)
+  }
+
   case class DescribeClusterOptions(includeAuthorizedOperations: Boolean) {
-    lazy val asJava = new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
+    lazy val asJava: JDescribeClusterOptions =
+      new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
   }
 
   case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
