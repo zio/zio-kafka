@@ -300,9 +300,11 @@ package object consumer {
       ZTransducer.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
     def live: ZLayer[Clock with Blocking with Has[ConsumerSettings] with Has[Diagnostics], Throwable, Consumer] =
-      ZLayer.fromServicesManaged[ConsumerSettings, Diagnostics, Clock with Blocking, Throwable, Service] {
-        (settings, diagnostics) => make(settings, diagnostics)
-      }
+      (for {
+        settings    <- ZManaged.service[ConsumerSettings]
+        diagnostics <- ZManaged.service[Diagnostics]
+        consumer    <- make(settings, diagnostics)
+      } yield consumer).toLayer
 
     def make(
       settings: ConsumerSettings,
