@@ -12,6 +12,7 @@ import org.apache.kafka.clients.admin.{
   TopicDescription => JTopicDescription,
   TopicListing => JTopicListing,
   CreatePartitionsOptions => JCreatePartitionsOptions,
+  DescribeClusterOptions => JDescribeClusterOptions,
   _
 }
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
@@ -137,7 +138,7 @@ case class AdminClient(private val adminClient: JAdminClient) {
 
   private def describeCluster(options: Option[DescribeClusterOptions]): RIO[Blocking, DescribeClusterResult] =
     blocking.effectBlocking(
-      options.fold(adminClient.describeCluster())(opts => adminClient.describeCluster(opts))
+      options.fold(adminClient.describeCluster())(opts => adminClient.describeCluster(opts.asJava))
     )
 
   /**
@@ -302,6 +303,11 @@ object AdminClient {
   case class CreatePartitionsOptions(validateOnly: Boolean) {
     lazy val asJava: JCreatePartitionsOptions = new JCreatePartitionsOptions().validateOnly(validateOnly)
   }
+
+  case class DescribeClusterOptions(includeAuthorizedOperations: Boolean) {
+    lazy val asJava = new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
+  }
+
   case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
 
   object MetricName {
