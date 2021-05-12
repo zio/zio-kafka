@@ -11,6 +11,7 @@ import org.apache.kafka.clients.admin.{
   OffsetSpec => JOffsetSpec,
   TopicDescription => JTopicDescription,
   TopicListing => JTopicListing,
+  CreatePartitionsOptions => JCreatePartitionsOptions,
   _
 }
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
@@ -187,7 +188,7 @@ case class AdminClient(private val adminClient: JAdminClient) {
     fromKafkaFutureVoid {
       blocking.effectBlocking(
         options
-          .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts))
+          .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts.asJava))
           .all()
       )
     }
@@ -298,6 +299,9 @@ object AdminClient {
     }
   }
 
+  case class CreatePartitionsOptions(validateOnly: Boolean) {
+    lazy val asJava: JCreatePartitionsOptions = new JCreatePartitionsOptions().validateOnly(validateOnly)
+  }
   case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
 
   object MetricName {
