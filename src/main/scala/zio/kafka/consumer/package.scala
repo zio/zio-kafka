@@ -60,8 +60,7 @@ package object consumer {
       def partitionedStream[R, K, V](
         keyDeserializer: Deserializer[R, K],
         valueDeserializer: Deserializer[R, V]
-      ): ZStream[
-        Clock,
+      ): Stream[
         Throwable,
         (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
       ]
@@ -80,7 +79,7 @@ package object consumer {
         keyDeserializer: Deserializer[R, K],
         valueDeserializer: Deserializer[R, V],
         outputBuffer: Int = 4
-      ): ZStream[R with Clock, Throwable, CommittableRecord[K, V]]
+      ): ZStream[R, Throwable, CommittableRecord[K, V]]
 
       /**
        * Stops consumption of data, drains buffered records, and ends the attached
@@ -189,7 +188,7 @@ package object consumer {
         keyDeserializer: Deserializer[R, K],
         valueDeserializer: Deserializer[R, V]
       ): ZStream[
-        Clock,
+        Any,
         Throwable,
         (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
       ] = {
@@ -229,7 +228,7 @@ package object consumer {
         keyDeserializer: Deserializer[R, K],
         valueDeserializer: Deserializer[R, V],
         outputBuffer: Int
-      ): ZStream[R with Clock, Throwable, CommittableRecord[K, V]] =
+      ): ZStream[R, Throwable, CommittableRecord[K, V]] =
         partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, outputBuffer = outputBuffer)(
           _._2
         )
@@ -347,7 +346,7 @@ package object consumer {
     def committed(
       partitions: Set[TopicPartition],
       timeout: Duration = Duration.Infinity
-    ): RIO[Blocking with Consumer, Map[TopicPartition, Option[OffsetAndMetadata]]] =
+    ): RIO[Consumer, Map[TopicPartition, Option[OffsetAndMetadata]]] =
       withConsumerService(_.committed(partitions, timeout))
 
     /**
@@ -356,7 +355,7 @@ package object consumer {
     def endOffsets(
       partitions: Set[TopicPartition],
       timeout: Duration = Duration.Infinity
-    ): RIO[Blocking with Consumer, Map[TopicPartition, Long]] =
+    ): RIO[Consumer, Map[TopicPartition, Long]] =
       withConsumerService(_.endOffsets(partitions, timeout))
 
     /**
@@ -364,7 +363,7 @@ package object consumer {
      */
     def listTopics(
       timeout: Duration = Duration.Infinity
-    ): RIO[Blocking with Consumer, Map[String, List[PartitionInfo]]] =
+    ): RIO[Consumer, Map[String, List[PartitionInfo]]] =
       withConsumerService(_.listTopics(timeout))
 
     /**
@@ -374,7 +373,7 @@ package object consumer {
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
     ): ZStream[
-      Consumer with Clock with Blocking,
+      Consumer,
       Throwable,
       (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
     ] =
@@ -387,7 +386,7 @@ package object consumer {
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V],
       outputBuffer: Int = 4
-    ): ZStream[R with Consumer with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+    ): ZStream[R with Consumer, Throwable, CommittableRecord[K, V]] =
       ZStream.accessStream(_.get[Service].plainStream(keyDeserializer, valueDeserializer, outputBuffer))
 
     /**
