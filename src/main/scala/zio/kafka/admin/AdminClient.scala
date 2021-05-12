@@ -19,8 +19,8 @@ import org.apache.kafka.clients.consumer.{ OffsetAndMetadata => JOffsetAndMetada
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.{
   KafkaFuture,
-  Metric,
-  MetricName,
+  Metric => JMetric,
+  MetricName => JMetricName,
   TopicPartitionInfo => JTopicPartitionInfo,
   IsolationLevel => JIsolationLevel,
   Node => JNode,
@@ -237,7 +237,10 @@ case class AdminClient(private val adminClient: JAdminClient) {
    */
   def metrics: RIO[Blocking, Map[MetricName, Metric]] =
     blocking.effectBlocking(
-      adminClient.metrics().asScala.toMap
+      adminClient.metrics().asScala.toMap.map {
+        case (metricName, metric) =>
+          (MetricName(metricName), Metric(metric))
+      }
     )
 }
 
@@ -259,6 +262,19 @@ object AdminClient {
 
   def fromKafkaFutureVoid[R](kfv: RIO[R, KafkaFuture[Void]]): RIO[R, Unit] =
     fromKafkaFuture(kfv).unit
+
+  case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
+
+  object MetricName {
+    def apply(jmn: JMetricName): MetricName =
+      MetricName(jmn.name(), jmn.group(), jmn.description(), jmn.tags().asScala.toMap)
+  }
+
+  case class Metric(name: MetricName, metricValue: Double)
+
+  object Metric {
+    def apply(jm: JMetric): Metric = Metric(MetricName(jm.metricName()), jm.value())
+  }
 
   case class NewTopic(
     name: String,
