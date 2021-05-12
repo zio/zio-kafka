@@ -14,6 +14,7 @@ import org.apache.kafka.clients.admin.{
   CreatePartitionsOptions => JCreatePartitionsOptions,
   DescribeClusterOptions => JDescribeClusterOptions,
   DescribeConfigsOptions => JDescribeConfigsOptions,
+  CreateTopicsOptions => JCreateTopicsOptions,
   _
 }
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
@@ -55,7 +56,7 @@ case class AdminClient(private val adminClient: JAdminClient) {
       blocking
         .effectBlocking(
           options
-            .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts))
+            .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts.asJava))
             .all()
         )
     }
@@ -65,7 +66,7 @@ case class AdminClient(private val adminClient: JAdminClient) {
    * Create a single topic.
    */
   def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): RIO[Blocking, Unit] =
-    createTopics(List(newTopic), Some(new CreateTopicsOptions().validateOnly(validateOnly)))
+    createTopics(List(newTopic), Some(CreateTopicsOptions(validateOnly)))
 
   /**
    * Delete multiple topics.
@@ -303,6 +304,10 @@ object AdminClient {
 
   case class CreatePartitionsOptions(validateOnly: Boolean) {
     lazy val asJava: JCreatePartitionsOptions = new JCreatePartitionsOptions().validateOnly(validateOnly)
+  }
+
+  case class CreateTopicsOptions(validateOnly: Boolean) {
+    lazy val asJava: JCreateTopicsOptions = new JCreateTopicsOptions().validateOnly(validateOnly)
   }
 
   case class DescribeConfigsOptions(includeSynonyms: Boolean, includeDocumentation: Boolean) {
