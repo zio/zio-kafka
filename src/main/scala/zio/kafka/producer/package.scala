@@ -107,14 +107,15 @@ package object producer {
       p: KafkaProducer[Array[Byte], Array[Byte]],
       producerSettings: ProducerSettings,
       keySerializer: Serializer[R, K],
-      valueSerializer: Serializer[R, V]
+      valueSerializer: Serializer[R, V],
+      blocking: Blocking.Service
     ) extends Service[R, K, V] {
-      override def produceAsync(record: ProducerRecord[K, V]): RIO[R with Blocking, Task[RecordMetadata]] =
+      override def produceAsync(record: ProducerRecord[K, V]): RIO[R, Task[RecordMetadata]] =
         for {
           done             <- Promise.make[Throwable, RecordMetadata]
           serializedRecord <- serialize(record)
-          runtime          <- ZIO.runtime[Blocking]
-          _ <- effectBlocking {
+          runtime          <- ZIO.runtime[Any]
+          _ <- blocking.effectBlocking {
                 p.send(
                   serializedRecord,
                   new Callback {
@@ -131,14 +132,14 @@ package object producer {
 
       override def produceChunkAsync(
         records: Chunk[ProducerRecord[K, V]]
-      ): RIO[R with Blocking, Task[Chunk[RecordMetadata]]] =
+      ): RIO[R, Task[Chunk[RecordMetadata]]] =
         if (records.isEmpty) ZIO.succeed(Task.succeed(Chunk.empty))
         else {
           for {
             done              <- Promise.make[Throwable, Chunk[RecordMetadata]]
-            runtime           <- ZIO.runtime[Blocking]
+            runtime           <- ZIO.runtime[Any]
             serializedRecords <- ZIO.foreach(records.toSeq)(serialize)
-            _ <- effectBlocking {
+            _ <- blocking.effectBlocking {
                   val it: Iterator[(ByteRecord, Int)] =
                     serializedRecords.iterator.zipWithIndex
                   val res: Array[RecordMetadata] = new Array[RecordMetadata](records.length)
@@ -167,13 +168,13 @@ package object producer {
           } yield done.await
         }
 
-      override def produce(record: ProducerRecord[K, V]): RIO[R with Blocking, RecordMetadata] =
+      override def produce(record: ProducerRecord[K, V]): RIO[R, RecordMetadata] =
         produceAsync(record).flatten
 
-      override def produce(topic: String, key: K, value: V): RIO[R with Blocking, RecordMetadata] =
+      override def produce(topic: String, key: K, value: V): RIO[R, RecordMetadata] =
         produce(new ProducerRecord(topic, key, value))
 
-      override def produceAsync(topic: String, key: K, value: V): RIO[R with Blocking, Task[RecordMetadata]] =
+      override def produceAsync(topic: String, key: K, value: V): RIO[R, Task[RecordMetadata]] =
         produceAsync(new ProducerRecord(topic, key, value))
 
       override def produceChunk(
@@ -181,9 +182,9 @@ package object producer {
       ): RIO[R with Blocking, Chunk[RecordMetadata]] =
         produceChunkAsync(records).flatten
 
-      override def flush: RIO[Blocking, Unit] = effectBlocking(p.flush())
+      override def flush: Task[Unit] = blocking.effectBlocking(p.flush())
 
-      override def metrics: RIO[Blocking, Map[MetricName, Metric]] = effectBlocking(p.metrics().asScala.toMap)
+      override def metrics: Task[Map[MetricName, Metric]] = blocking.effectBlocking(p.metrics().asScala.toMap)
 
       private def serialize(r: ProducerRecord[K, V]): RIO[R, ByteRecord] =
         for {
@@ -196,21 +197,24 @@ package object producer {
 
     def live[R: Tag, K: Tag, V: Tag]: ZLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[
       ProducerSettings
-    ], Throwable, Producer[R, K, V]] =
-      ZLayer
-        .fromServicesManaged[Serializer[R, K], Serializer[R, V], ProducerSettings, Any, Throwable, Service[R, K, V]] {
-          (keySerializer, valueSerializer, settings) => make(settings, keySerializer, valueSerializer)
-        }
+    ] with Blocking, Throwable, Producer[R, K, V]] =
+      (for {
+        keySerializer   <- ZManaged.service[Serializer[R, K]]
+        valueSerializer <- ZManaged.service[Serializer[R, V]]
+        settings        <- ZManaged.service[ProducerSettings]
+        producer        <- make(settings, keySerializer, valueSerializer)
+      } yield producer).toLayer
 
     def make[R, K, V](
       settings: ProducerSettings,
       keySerializer: Serializer[R, K],
       valueSerializer: Serializer[R, V]
-    ): ZManaged[Any, Throwable, Service[R, K, V]] =
+    ): ZManaged[Blocking, Throwable, Service[R, K, V]] =
       (for {
-        props <- ZIO.effect(settings.driverSettings)
-        _     <- keySerializer.configure(props, isKey = true)
-        _     <- valueSerializer.configure(props, isKey = false)
+        props    <- ZIO.effect(settings.driverSettings)
+        _        <- keySerializer.configure(props, isKey = true)
+        _        <- valueSerializer.configure(props, isKey = false)
+        blocking <- ZIO.service[Blocking.Service]
         rawProducer <- ZIO.effect(
                         new KafkaProducer[Array[Byte], Array[Byte]](
                           props.asJava,
@@ -218,7 +222,7 @@ package object producer {
                           new ByteArraySerializer()
                         )
                       )
-      } yield Live(rawProducer, settings, keySerializer, valueSerializer)).toManaged(_.close)
+      } yield Live(rawProducer, settings, keySerializer, valueSerializer, blocking)).toManaged(_.close)
 
     def withProducerService[R: Tag, K: Tag, V: Tag, A](
       r: Producer.Service[R, K, V] => RIO[R with Blocking, A]

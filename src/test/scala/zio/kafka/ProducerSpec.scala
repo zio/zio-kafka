@@ -2,6 +2,7 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio._
+import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
@@ -67,6 +68,7 @@ object ProducerSpec extends DefaultRunnableSpec {
         } yield assert(metrics)(isNonEmpty)
       }
     ).provideSomeLayerShared[TestEnvironment](
-      ((Kafka.embedded >>> stringProducer) ++ Kafka.embedded).mapError(TestFailure.fail) ++ Clock.live
+      ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> stringProducer) ++ Kafka.embedded)
+        .mapError(TestFailure.fail) ++ Clock.live
     )
 }
