@@ -1,7 +1,6 @@
 package zio.kafka.admin
 
 import java.util.Optional
-
 import org.apache.kafka.clients.admin.{
   AdminClient => JAdminClient,
   AlterConsumerGroupOffsetsOptions => JAlterConsumerGroupOffsetsOptions,
@@ -16,15 +15,15 @@ import org.apache.kafka.clients.admin.{
 }
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata => JOffsetAndMetadata }
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ ConfigResource => JConfigResource }
 import org.apache.kafka.common.{
   KafkaFuture,
+  IsolationLevel => JIsolationLevel,
   Metric => JMetric,
   MetricName => JMetricName,
-  TopicPartitionInfo => JTopicPartitionInfo,
-  IsolationLevel => JIsolationLevel,
   Node => JNode,
-  TopicPartition => JTopicPartition
+  TopicPartition => JTopicPartition,
+  TopicPartitionInfo => JTopicPartitionInfo
 }
 import zio._
 import zio.blocking.Blocking
@@ -123,14 +122,16 @@ case class AdminClient(private val adminClient: JAdminClient) {
     configResources: Iterable[ConfigResource],
     @deprecatedName(Symbol("describeConfigsOptions")) options: Option[DescribeConfigsOptions] = None
   ): RIO[Blocking, Map[ConfigResource, KafkaConfig]] = {
-    val asJava = configResources.asJavaCollection
+    val asJava = configResources.map(_.asJava).asJavaCollection
     fromKafkaFuture {
       blocking.effectBlocking(
         options
           .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts))
           .all()
       )
-    }.map(_.asScala.view.mapValues(AdminClient.KafkaConfig(_)).toMap)
+    }.map(
+      _.asScala.view.map { case (configResource, config) => (ConfigResource(configResource), KafkaConfig(config)) }.toMap
+    )
   }
 
   private def describeCluster(options: Option[DescribeClusterOptions]): RIO[Blocking, DescribeClusterResult] =
@@ -262,6 +263,40 @@ object AdminClient {
 
   def fromKafkaFutureVoid[R](kfv: RIO[R, KafkaFuture[Void]]): RIO[R, Unit] =
     fromKafkaFuture(kfv).unit
+
+  case class ConfigResource(`type`: ConfigResourceType, name: String) {
+    lazy val asJava = new JConfigResource(`type`.asJava, name)
+  }
+
+  object ConfigResource {
+    def apply(jcr: JConfigResource): ConfigResource = ConfigResource(ConfigResourceType(jcr.`type`()), jcr.name())
+  }
+
+  trait ConfigResourceType {
+    def asJava: JConfigResource.Type
+  }
+
+  object ConfigResourceType {
+    case object BrokerLogger extends ConfigResourceType {
+      lazy val asJava = JConfigResource.Type.BROKER_LOGGER
+    }
+    case object Broker extends ConfigResourceType {
+      lazy val asJava = JConfigResource.Type.BROKER
+    }
+    case object Topic extends ConfigResourceType {
+      lazy val asJava = JConfigResource.Type.TOPIC
+    }
+    case object Unknown extends ConfigResourceType {
+      lazy val asJava = JConfigResource.Type.UNKNOWN
+    }
+
+    def apply(jcrt: JConfigResource.Type): ConfigResourceType = jcrt match {
+      case JConfigResource.Type.BROKER_LOGGER => BrokerLogger
+      case JConfigResource.Type.BROKER        => Broker
+      case JConfigResource.Type.TOPIC         => Topic
+      case JConfigResource.Type.UNKNOWN       => Unknown
+    }
+  }
 
   case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
 
