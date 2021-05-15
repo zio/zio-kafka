@@ -23,6 +23,7 @@ object AclOperation {
     jAclOperation match {
       case JAclOperation.UNKNOWN          => Unknown
       case JAclOperation.ANY              => Any
+      case JAclOperation.ALL              => All
       case JAclOperation.READ             => Read
       case JAclOperation.WRITE            => Write
       case JAclOperation.CREATE           => Create
