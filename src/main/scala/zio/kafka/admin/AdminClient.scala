@@ -327,10 +327,10 @@ object AdminClient {
       MetricName(jmn.name(), jmn.group(), jmn.description(), jmn.tags().asScala.toMap)
   }
 
-  case class Metric(name: MetricName, metricValue: Double)
+  case class Metric(name: MetricName, metricValue: AnyRef)
 
   object Metric {
-    def apply(jm: JMetric): Metric = Metric(MetricName(jm.metricName()), jm.value())
+    def apply(jm: JMetric): Metric = Metric(MetricName(jm.metricName()), jm.metricValue())
   }
 
   case class NewTopic(
