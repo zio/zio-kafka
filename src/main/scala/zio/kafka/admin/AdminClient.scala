@@ -1,7 +1,6 @@
 package zio.kafka.admin
 
 import java.util.Optional
-
 import org.apache.kafka.clients.admin.{
   AdminClient => JAdminClient,
   AlterConsumerGroupOffsetsOptions => JAlterConsumerGroupOffsetsOptions,
@@ -11,20 +10,24 @@ import org.apache.kafka.clients.admin.{
   NewTopic => JNewTopic,
   OffsetSpec => JOffsetSpec,
   TopicDescription => JTopicDescription,
+  TopicListing => JTopicListing,
+  CreatePartitionsOptions => JCreatePartitionsOptions,
+  DescribeClusterOptions => JDescribeClusterOptions,
+  DescribeConfigsOptions => JDescribeConfigsOptions,
+  CreateTopicsOptions => JCreateTopicsOptions,
   _
 }
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata => JOffsetAndMetadata }
-import org.apache.kafka.common.acl.AclOperation
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ ConfigResource => JConfigResource }
 import org.apache.kafka.common.{
   KafkaFuture,
-  Metric,
-  MetricName,
-  Node,
-  TopicPartitionInfo,
   IsolationLevel => JIsolationLevel,
-  TopicPartition => JTopicPartition
+  Metric => JMetric,
+  MetricName => JMetricName,
+  Node => JNode,
+  TopicPartition => JTopicPartition,
+  TopicPartitionInfo => JTopicPartitionInfo
 }
 import zio._
 import zio.blocking.{ blocking, Blocking }
@@ -53,7 +56,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
       blocking
         .effectBlocking(
           options
-            .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts))
+            .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts.asJava))
             .all()
         )
     }
@@ -63,7 +66,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
    * Create a single topic.
    */
   def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit] =
-    createTopics(List(newTopic), Some(new CreateTopicsOptions().validateOnly(validateOnly)))
+    createTopics(List(newTopic), Some(CreateTopicsOptions(validateOnly)))
 
   /**
    * Delete multiple topics.
@@ -97,7 +100,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
       blocking.effectBlocking(
         listTopicsOptions.fold(adminClient.listTopics())(opts => adminClient.listTopics(opts)).namesToListings()
       )
-    }.map(_.asScala.toMap)
+    }.map(_.asScala.toMap.view.mapValues(TopicListing.apply).toMap)
 
   /**
    * Describe the specified topics.
@@ -123,19 +126,21 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
     configResources: Iterable[ConfigResource],
     @deprecatedName(Symbol("describeConfigsOptions")) options: Option[DescribeConfigsOptions] = None
   ): Task[Map[ConfigResource, KafkaConfig]] = {
-    val asJava = configResources.asJavaCollection
+    val asJava = configResources.map(_.asJava).asJavaCollection
     fromKafkaFuture {
       blocking.effectBlocking(
         options
-          .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts))
+          .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts.asJava))
           .all()
       )
-    }.map(_.asScala.view.mapValues(AdminClient.KafkaConfig(_)).toMap)
+    }.map(
+      _.asScala.view.map { case (configResource, config) => (ConfigResource(configResource), KafkaConfig(config)) }.toMap
+    )
   }
 
-  private def describeCluster(options: Option[DescribeClusterOptions]) =
+  private def describeCluster(options: Option[DescribeClusterOptions]): Task[DescribeClusterResult] =
     blocking.effectBlocking(
-      options.fold(adminClient.describeCluster())(opts => adminClient.describeCluster(opts))
+      options.fold(adminClient.describeCluster())(opts => adminClient.describeCluster(opts.asJava))
     )
 
   /**
@@ -144,7 +149,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
   def describeClusterNodes(options: Option[DescribeClusterOptions] = None): Task[List[Node]] =
     fromKafkaFuture(
       describeCluster(options).map(_.nodes())
-    ).map(_.asScala.toList)
+    ).map(_.asScala.toList.map(Node.apply))
 
   /**
    * Get the cluster controller.
@@ -152,7 +157,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
   def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Node] =
     fromKafkaFuture(
       describeCluster(options).map(_.controller())
-    )
+    ).map(Node.apply)
 
   /**
    * Get the cluster id.
@@ -169,10 +174,11 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
     options: Option[DescribeClusterOptions] = None
   ): Task[Set[AclOperation]] =
     for {
-      res <- describeCluster(options)
-      opt <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
-      lst <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
-    } yield lst
+      res           <- describeCluster(options)
+      opt           <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
+      lst           <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
+      aclOperations = lst.map(AclOperation.apply)
+    } yield aclOperations
 
   /**
    * Add new partitions to a topic.
@@ -185,7 +191,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
     fromKafkaFutureVoid {
       blocking.effectBlocking(
         options
-          .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts))
+          .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts.asJava))
           .all()
       )
     }
@@ -236,7 +242,10 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
    */
   def metrics: Task[Map[MetricName, Metric]] =
     blocking.effectBlocking(
-      adminClient.metrics().asScala.toMap
+      adminClient.metrics().asScala.toMap.map {
+        case (metricName, metric) =>
+          (MetricName(metricName), Metric(metric))
+      }
     )
 }
 
@@ -258,6 +267,71 @@ object AdminClient {
 
   def fromKafkaFutureVoid[R](kfv: RIO[R, KafkaFuture[Void]]): RIO[R, Unit] =
     fromKafkaFuture(kfv).unit
+
+  case class ConfigResource(`type`: ConfigResourceType, name: String) {
+    lazy val asJava = new JConfigResource(`type`.asJava, name)
+  }
+
+  object ConfigResource {
+    def apply(jcr: JConfigResource): ConfigResource = ConfigResource(ConfigResourceType(jcr.`type`()), jcr.name())
+  }
+
+  trait ConfigResourceType {
+    def asJava: JConfigResource.Type
+  }
+
+  object ConfigResourceType {
+    case object BrokerLogger extends ConfigResourceType {
+      lazy val asJava = JConfigResource.Type.BROKER_LOGGER
+    }
+    case object Broker extends ConfigResourceType {
+      lazy val asJava = JConfigResource.Type.BROKER
+    }
+    case object Topic extends ConfigResourceType {
+      lazy val asJava = JConfigResource.Type.TOPIC
+    }
+    case object Unknown extends ConfigResourceType {
+      lazy val asJava = JConfigResource.Type.UNKNOWN
+    }
+
+    def apply(jcrt: JConfigResource.Type): ConfigResourceType = jcrt match {
+      case JConfigResource.Type.BROKER_LOGGER => BrokerLogger
+      case JConfigResource.Type.BROKER        => Broker
+      case JConfigResource.Type.TOPIC         => Topic
+      case JConfigResource.Type.UNKNOWN       => Unknown
+    }
+  }
+
+  case class CreatePartitionsOptions(validateOnly: Boolean) {
+    lazy val asJava: JCreatePartitionsOptions = new JCreatePartitionsOptions().validateOnly(validateOnly)
+  }
+
+  case class CreateTopicsOptions(validateOnly: Boolean) {
+    lazy val asJava: JCreateTopicsOptions = new JCreateTopicsOptions().validateOnly(validateOnly)
+  }
+
+  case class DescribeConfigsOptions(includeSynonyms: Boolean, includeDocumentation: Boolean) {
+    lazy val asJava: JDescribeConfigsOptions =
+      new JDescribeConfigsOptions().includeSynonyms(includeSynonyms).includeDocumentation(includeDocumentation)
+  }
+
+  case class DescribeClusterOptions(includeAuthorizedOperations: Boolean) {
+    lazy val asJava: JDescribeClusterOptions =
+      new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
+  }
+
+  case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
+
+  object MetricName {
+    def apply(jmn: JMetricName): MetricName =
+      MetricName(jmn.name(), jmn.group(), jmn.description(), jmn.tags().asScala.toMap)
+  }
+
+  case class Metric(name: MetricName, metricValue: Double)
+
+  object Metric {
+    def apply(jm: JMetric): Metric = Metric(MetricName(jm.metricName()), jm.value())
+  }
 
   case class NewTopic(
     name: String,
@@ -285,6 +359,14 @@ object AdminClient {
       else JNewPartitions.increaseTo(totalCount)
   }
 
+  case class Node(id: Int, host: String, port: Int, rack: Option[String] = None) {
+    lazy val asJava = rack.fold(new JNode(id, host, port))(rack => new JNode(id, host, port, rack))
+  }
+
+  object Node {
+    def apply(jNode: JNode): Node = Node(jNode.id(), jNode.host(), jNode.port, Option(jNode.rack()))
+  }
+
   case class TopicDescription(
     name: String,
     internal: Boolean,
@@ -295,8 +377,36 @@ object AdminClient {
   object TopicDescription {
     def apply(jt: JTopicDescription): TopicDescription = {
       val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet)
-      TopicDescription(jt.name, jt.isInternal, jt.partitions.asScala.toList, authorizedOperations)
+      TopicDescription(
+        jt.name,
+        jt.isInternal,
+        jt.partitions.asScala.toList.map(TopicPartitionInfo.apply),
+        authorizedOperations.map(_.map(AclOperation.apply))
+      )
     }
+  }
+
+  case class TopicPartitionInfo(partition: Int, leader: Node, replicas: List[Node], isr: List[Node]) {
+    lazy val asJava =
+      new JTopicPartitionInfo(partition, leader.asJava, replicas.map(_.asJava).asJava, isr.map(_.asJava).asJava)
+  }
+
+  object TopicPartitionInfo {
+    def apply(jtpi: JTopicPartitionInfo): TopicPartitionInfo =
+      TopicPartitionInfo(
+        jtpi.partition(),
+        Node(jtpi.leader()),
+        jtpi.replicas().asScala.map(Node.apply).toList,
+        jtpi.isr().asScala.map(Node.apply).toList
+      )
+  }
+
+  case class TopicListing(name: String, isInternal: Boolean) {
+    def asJava = new JTopicListing(name, isInternal)
+  }
+
+  object TopicListing {
+    def apply(jtl: JTopicListing): TopicListing = TopicListing(jtl.name(), jtl.isInternal)
   }
 
   case class TopicPartition(
