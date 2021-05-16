@@ -4,7 +4,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio._
-import zio.blocking.{ blocking, Blocking }
+import zio.blocking.Blocking
 import zio.kafka.consumer.ConsumerSettings
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 

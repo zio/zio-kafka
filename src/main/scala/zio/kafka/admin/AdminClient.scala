@@ -30,7 +30,7 @@ import org.apache.kafka.common.{
   TopicPartitionInfo => JTopicPartitionInfo
 }
 import zio._
-import zio.blocking.{ blocking, Blocking }
+import zio.blocking.Blocking
 import zio.duration.Duration
 
 import scala.collection.compat._

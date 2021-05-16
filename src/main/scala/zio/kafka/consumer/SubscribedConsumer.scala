@@ -2,7 +2,6 @@ package zio.kafka.consumer
 
 import org.apache.kafka.common.TopicPartition
 import zio.{ RIO, Task }
-import zio.clock.Clock
 import zio.stream.{ Stream, ZStream }
 import zio.kafka.serde.Deserializer
 

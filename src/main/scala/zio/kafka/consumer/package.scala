@@ -320,9 +320,9 @@ package object consumer {
                   )
       } yield Live(wrapper, settings, runloop)
 
-    def withConsumerService[R, A](
-      r: Service => RIO[R, A]
-    ): RIO[R with Consumer, A] =
+    def withConsumerService[A](
+      r: Service => Task[A]
+    ): RIO[Consumer, A] =
       ZIO.accessM(env => r(env.get[Service]))
 
     /**
