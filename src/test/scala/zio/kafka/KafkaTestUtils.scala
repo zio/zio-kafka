@@ -22,8 +22,9 @@ object KafkaTestUtils {
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO.access[Kafka](_.get[Kafka.Service].bootstrapServers).map(ProducerSettings(_))
 
-  val stringProducer: ZLayer[Kafka, Throwable, StringProducer] =
-    (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
+  val stringProducer: ZLayer[Kafka with Blocking, Throwable, StringProducer] =
+    (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) ++ ZLayer
+      .identity[Blocking] >>>
       Producer.live[Any, String, String]
 
   def produceOne(

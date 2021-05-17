@@ -2,7 +2,7 @@ package zio.kafka.consumer
 
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.common.TopicPartition
-import zio.{ Promise, Ref, Task, ZIO }
+import zio.{ Chunk, Promise, Ref, Task, ZIO, ZLayer }
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
@@ -17,7 +17,6 @@ import zio.test.TestAspect._
 import zio.test.environment._
 import zio.test.{ DefaultRunnableSpec, _ }
 import zio.stream.ZTransducer
-import zio.Chunk
 
 object ConsumerSpec extends DefaultRunnableSpec {
   override def spec: ZSpec[TestEnvironment, Throwable] =
@@ -482,6 +481,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
         } yield assert(partitions)(isEmpty)
       }
     ).provideSomeLayerShared[TestEnvironment](
-      ((Kafka.embedded >>> stringProducer) ++ Kafka.embedded).mapError(TestFailure.fail) ++ Clock.live
+      ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> stringProducer) ++ Kafka.embedded)
+        .mapError(TestFailure.fail) ++ Clock.live
     ) @@ timeout(180.seconds)
 }
