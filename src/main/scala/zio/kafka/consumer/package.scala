@@ -25,12 +25,12 @@ package object consumer {
        *
        * This is subject to consumer rebalancing, unless using a manual subscription.
        */
-      def assignment: RIO[Blocking, Set[TopicPartition]]
+      def assignment: Task[Set[TopicPartition]]
 
       def beginningOffsets(
         partitions: Set[TopicPartition],
         timeout: Duration = Duration.Infinity
-      ): RIO[Blocking, Map[TopicPartition, Long]]
+      ): Task[Map[TopicPartition, Long]]
 
       /**
        * Retrieve the last committed offset for the given topic-partitions
@@ -38,14 +38,14 @@ package object consumer {
       def committed(
         partitions: Set[TopicPartition],
         timeout: Duration = Duration.Infinity
-      ): RIO[Blocking, Map[TopicPartition, Option[OffsetAndMetadata]]]
+      ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]]
 
       def endOffsets(
         partitions: Set[TopicPartition],
         timeout: Duration = Duration.Infinity
-      ): RIO[Blocking, Map[TopicPartition, Long]]
+      ): Task[Map[TopicPartition, Long]]
 
-      def listTopics(timeout: Duration = Duration.Infinity): RIO[Blocking, Map[String, List[PartitionInfo]]]
+      def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]]
 
       /**
        * Create a stream with messages on the subscribed topic-partitions by topic-partition
@@ -60,8 +60,7 @@ package object consumer {
       def partitionedStream[R, K, V](
         keyDeserializer: Deserializer[R, K],
         valueDeserializer: Deserializer[R, V]
-      ): ZStream[
-        Clock with Blocking,
+      ): Stream[
         Throwable,
         (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
       ]
@@ -80,7 +79,7 @@ package object consumer {
         keyDeserializer: Deserializer[R, K],
         valueDeserializer: Deserializer[R, V],
         outputBuffer: Int = 4
-      ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]]
+      ): ZStream[R, Throwable, CommittableRecord[K, V]]
 
       /**
        * Stops consumption of data, drains buffered records, and ends the attached
@@ -98,11 +97,11 @@ package object consumer {
         commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
       )(
         f: (K, V) => URIO[RC, Unit]
-      ): ZIO[R with RC with Blocking with Clock, Throwable, Unit]
+      ): ZIO[R with RC with Clock, Throwable, Unit]
 
-      def subscribe(subscription: Subscription): RIO[Blocking, Unit]
+      def subscribe(subscription: Subscription): Task[Unit]
 
-      def unsubscribe: RIO[Blocking, Unit]
+      def unsubscribe: Task[Unit]
 
       /**
        * Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the
@@ -114,20 +113,20 @@ package object consumer {
       def offsetsForTimes(
         timestamps: Map[TopicPartition, Long],
         timeout: Duration = Duration.Infinity
-      ): RIO[Blocking, Map[TopicPartition, OffsetAndTimestamp]]
+      ): Task[Map[TopicPartition, OffsetAndTimestamp]]
 
-      def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): RIO[Blocking, List[PartitionInfo]]
+      def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): Task[List[PartitionInfo]]
 
-      def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): RIO[Blocking, Long]
+      def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): Task[Long]
 
       def subscribeAnd(subscription: Subscription): SubscribedConsumer
 
-      def subscription: RIO[Blocking, Set[String]]
+      def subscription: Task[Set[String]]
 
       /**
        * Expose internal consumer metrics
        */
-      def metrics: RIO[Blocking, Map[MetricName, Metric]]
+      def metrics: Task[Map[MetricName, Metric]]
     }
 
     final case class Live(
@@ -136,13 +135,13 @@ package object consumer {
       private val runloop: Runloop
     ) extends Service {
 
-      override def assignment: RIO[Blocking, Set[TopicPartition]] =
+      override def assignment: Task[Set[TopicPartition]] =
         consumer.withConsumer(_.assignment().asScala.toSet)
 
       override def beginningOffsets(
         partitions: Set[TopicPartition],
         timeout: Duration = Duration.Infinity
-      ): RIO[Blocking, Map[TopicPartition, Long]] =
+      ): Task[Map[TopicPartition, Long]] =
         consumer.withConsumer(
           _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.view.mapValues(_.longValue()).toMap
         )
@@ -150,7 +149,7 @@ package object consumer {
       override def committed(
         partitions: Set[TopicPartition],
         timeout: Duration = Duration.Infinity
-      ): RIO[Blocking, Map[TopicPartition, Option[OffsetAndMetadata]]] =
+      ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]] =
         consumer.withConsumer(
           _.committed(partitions.asJava, timeout.asJava).asScala.toMap.view.mapValues(Option.apply).toMap
         )
@@ -158,7 +157,7 @@ package object consumer {
       override def endOffsets(
         partitions: Set[TopicPartition],
         timeout: Duration = Duration.Infinity
-      ): RIO[Blocking, Map[TopicPartition, Long]] =
+      ): Task[Map[TopicPartition, Long]] =
         consumer.withConsumer { eo =>
           val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
           offs.asScala.view.mapValues(_.longValue()).toMap
@@ -171,13 +170,13 @@ package object consumer {
       override def stopConsumption: UIO[Unit] =
         runloop.gracefulShutdown
 
-      override def listTopics(timeout: Duration = Duration.Infinity): RIO[Blocking, Map[String, List[PartitionInfo]]] =
+      override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
         consumer.withConsumer(_.listTopics(timeout.asJava).asScala.view.mapValues(_.asScala.toList).toMap)
 
       override def offsetsForTimes(
         timestamps: Map[TopicPartition, Long],
         timeout: Duration = Duration.Infinity
-      ): RIO[Blocking, Map[TopicPartition, OffsetAndTimestamp]] =
+      ): Task[Map[TopicPartition, OffsetAndTimestamp]] =
         consumer.withConsumer(
           _.offsetsForTimes(timestamps.view.mapValues(Long.box).toMap.asJava, timeout.asJava).asScala.toMap
           // If a partition doesn't exist yet, the map will have 'null' as entry.
@@ -189,7 +188,7 @@ package object consumer {
         keyDeserializer: Deserializer[R, K],
         valueDeserializer: Deserializer[R, V]
       ): ZStream[
-        Clock with Blocking,
+        Any,
         Throwable,
         (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
       ] = {
@@ -216,20 +215,20 @@ package object consumer {
       override def partitionsFor(
         topic: String,
         timeout: Duration = Duration.Infinity
-      ): RIO[Blocking, List[PartitionInfo]] =
+      ): Task[List[PartitionInfo]] =
         consumer.withConsumer { c =>
           val partitions = c.partitionsFor(topic, timeout.asJava)
           if (partitions eq null) List.empty else partitions.asScala.toList
         }
 
-      override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): RIO[Blocking, Long] =
+      override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): Task[Long] =
         consumer.withConsumer(_.position(partition, timeout.asJava))
 
       override def plainStream[R, K, V](
         keyDeserializer: Deserializer[R, K],
         valueDeserializer: Deserializer[R, V],
         outputBuffer: Int
-      ): ZStream[R with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+      ): ZStream[R, Throwable, CommittableRecord[K, V]] =
         partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, outputBuffer = outputBuffer)(
           _._2
         )
@@ -237,7 +236,7 @@ package object consumer {
       override def subscribeAnd(subscription: Subscription): SubscribedConsumer =
         new SubscribedConsumer(subscribe(subscription).as(this))
 
-      override def subscription: RIO[Blocking, Set[String]] =
+      override def subscription: Task[Set[String]] =
         consumer.withConsumer(_.subscription().asScala.toSet)
 
       override def consumeWith[R, RC, K, V](
@@ -247,7 +246,7 @@ package object consumer {
         commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
       )(
         f: (K, V) => URIO[RC, Unit]
-      ): ZIO[R with RC with Blocking with Clock, Throwable, Unit] =
+      ): ZIO[R with RC with Clock, Throwable, Unit] =
         ZStream
           .fromEffect(subscribe(subscription))
           .flatMap { _ =>
@@ -264,7 +263,7 @@ package object consumer {
           .mapM(_.commitOrRetry(commitRetryPolicy))
           .runDrain
 
-      override def subscribe(subscription: Subscription): RIO[Blocking, Unit] =
+      override def subscribe(subscription: Subscription): Task[Unit] =
         ZIO.runtime[Any].flatMap { runtime =>
           consumer.withConsumerM { c =>
             subscription match {
@@ -289,10 +288,10 @@ package object consumer {
           }
         }
 
-      override def unsubscribe: RIO[Blocking, Unit] =
+      override def unsubscribe: Task[Unit] =
         consumer.withConsumer(_.unsubscribe())
 
-      override def metrics: RIO[Blocking, Map[MetricName, Metric]] =
+      override def metrics: Task[Map[MetricName, Metric]] =
         consumer.withConsumer(_.metrics().asScala.toMap)
     }
 
@@ -300,9 +299,11 @@ package object consumer {
       ZTransducer.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
     def live: ZLayer[Clock with Blocking with Has[ConsumerSettings] with Has[Diagnostics], Throwable, Consumer] =
-      ZLayer.fromServicesManaged[ConsumerSettings, Diagnostics, Clock with Blocking, Throwable, Service] {
-        (settings, diagnostics) => make(settings, diagnostics)
-      }
+      (for {
+        settings    <- ZManaged.service[ConsumerSettings]
+        diagnostics <- ZManaged.service[Diagnostics]
+        consumer    <- make(settings, diagnostics)
+      } yield consumer).toLayer
 
     def make(
       settings: ConsumerSettings,
@@ -319,15 +320,15 @@ package object consumer {
                   )
       } yield Live(wrapper, settings, runloop)
 
-    def withConsumerService[R, A](
-      r: Service => RIO[R with Blocking, A]
-    ): RIO[R with Blocking with Consumer, A] =
+    def withConsumerService[A](
+      r: Service => Task[A]
+    ): RIO[Consumer, A] =
       ZIO.accessM(env => r(env.get[Service]))
 
     /**
      * Accessor method for [[Service.assignment]]
      */
-    def assignment: RIO[Blocking with Consumer, Set[TopicPartition]] =
+    def assignment: RIO[Consumer, Set[TopicPartition]] =
       withConsumerService(_.assignment)
 
     /**
@@ -336,7 +337,7 @@ package object consumer {
     def beginningOffsets(
       partitions: Set[TopicPartition],
       timeout: Duration = Duration.Infinity
-    ): RIO[Blocking with Consumer, Map[TopicPartition, Long]] =
+    ): RIO[Consumer, Map[TopicPartition, Long]] =
       withConsumerService(_.beginningOffsets(partitions, timeout))
 
     /**
@@ -345,7 +346,7 @@ package object consumer {
     def committed(
       partitions: Set[TopicPartition],
       timeout: Duration = Duration.Infinity
-    ): RIO[Blocking with Consumer, Map[TopicPartition, Option[OffsetAndMetadata]]] =
+    ): RIO[Consumer, Map[TopicPartition, Option[OffsetAndMetadata]]] =
       withConsumerService(_.committed(partitions, timeout))
 
     /**
@@ -354,7 +355,7 @@ package object consumer {
     def endOffsets(
       partitions: Set[TopicPartition],
       timeout: Duration = Duration.Infinity
-    ): RIO[Blocking with Consumer, Map[TopicPartition, Long]] =
+    ): RIO[Consumer, Map[TopicPartition, Long]] =
       withConsumerService(_.endOffsets(partitions, timeout))
 
     /**
@@ -362,7 +363,7 @@ package object consumer {
      */
     def listTopics(
       timeout: Duration = Duration.Infinity
-    ): RIO[Blocking with Consumer, Map[String, List[PartitionInfo]]] =
+    ): RIO[Consumer, Map[String, List[PartitionInfo]]] =
       withConsumerService(_.listTopics(timeout))
 
     /**
@@ -372,7 +373,7 @@ package object consumer {
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
     ): ZStream[
-      Consumer with Clock with Blocking,
+      Consumer,
       Throwable,
       (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
     ] =
@@ -385,7 +386,7 @@ package object consumer {
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V],
       outputBuffer: Int = 4
-    ): ZStream[R with Consumer with Clock with Blocking, Throwable, CommittableRecord[K, V]] =
+    ): ZStream[R with Consumer, Throwable, CommittableRecord[K, V]] =
       ZStream.accessStream(_.get[Service].plainStream(keyDeserializer, valueDeserializer, outputBuffer))
 
     /**
@@ -452,13 +453,13 @@ package object consumer {
     /**
      * Accessor method for [[Service.subscribe]]
      */
-    def subscribe(subscription: Subscription): RIO[Blocking with Consumer, Unit] =
+    def subscribe(subscription: Subscription): RIO[Consumer, Unit] =
       withConsumerService(_.subscribe(subscription))
 
     /**
      * Accessor method for [[Service.unsubscribe]]
      */
-    def unsubscribe: RIO[Blocking with Consumer, Unit] =
+    def unsubscribe: RIO[Consumer, Unit] =
       withConsumerService(_.unsubscribe)
 
     /**
@@ -467,7 +468,7 @@ package object consumer {
     def offsetsForTimes(
       timestamps: Map[TopicPartition, Long],
       timeout: Duration = Duration.Infinity
-    ): RIO[Blocking with Consumer, Map[TopicPartition, OffsetAndTimestamp]] =
+    ): RIO[Consumer, Map[TopicPartition, OffsetAndTimestamp]] =
       withConsumerService(_.offsetsForTimes(timestamps, timeout))
 
     /**
@@ -476,7 +477,7 @@ package object consumer {
     def partitionsFor(
       topic: String,
       timeout: Duration = Duration.Infinity
-    ): RIO[Blocking with Consumer, List[PartitionInfo]] =
+    ): RIO[Consumer, List[PartitionInfo]] =
       withConsumerService(_.partitionsFor(topic, timeout))
 
     /**
@@ -485,7 +486,7 @@ package object consumer {
     def position(
       partition: TopicPartition,
       timeout: Duration = Duration.Infinity
-    ): RIO[Blocking with Consumer, Long] =
+    ): RIO[Consumer, Long] =
       withConsumerService(_.position(partition, timeout))
 
     /**
@@ -504,13 +505,13 @@ package object consumer {
     /**
      * Accessor method for [[Service.subscription]]
      */
-    def subscription: RIO[Blocking with Consumer, Set[String]] =
+    def subscription: RIO[Consumer, Set[String]] =
       withConsumerService(_.subscription)
 
     /**
      * Accessor method for [[Service.metrics]]
      */
-    def metrics: RIO[Blocking with Consumer, Map[MetricName, Metric]] =
+    def metrics: RIO[Consumer, Map[MetricName, Metric]] =
       withConsumerService(_.metrics)
 
     sealed trait OffsetRetrieval
