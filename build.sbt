@@ -3,10 +3,11 @@ import sbt.Keys.{ fork, parallelExecution }
 lazy val scala211  = "2.11.12"
 lazy val scala212  = "2.12.11"
 lazy val scala213  = "2.13.3"
+lazy val scala3    = "3.0.0"
 lazy val mainScala = scala213
-lazy val allScala  = Seq(scala211, scala212, mainScala)
+lazy val allScala  = Seq(scala211, scala212, scala3, mainScala)
 
-lazy val zioVersion   = "1.0.4"
+lazy val zioVersion   = "1.0.8"
 lazy val kafkaVersion = "2.6.0"
 
 // Allows to silence scalac compilation warnings selectively by code block or file path
@@ -19,6 +20,12 @@ lazy val silencer = {
     "com.github.ghik" % "silencer-lib" % Version % Provided cross CrossVersion.full
   )
 }
+
+lazy val kindProjector = Seq(
+  compilerPlugin("org.typelevel" % "kind-projector" % "0.11.3" cross CrossVersion.full)
+)
+
+lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % kafkaVersion % "test"
 
 inThisBuild(
   List(
@@ -58,6 +65,7 @@ lazy val kafka =
       Compile / compile / scalacOptions ++= {
         if (scalaBinaryVersion.value == "2.13") Seq("-P:silencer:globalFilters=[import scala.collection.compat._]")
         else if (scalaBinaryVersion.value == "2.11") Seq("-Xmax-classfile-name", "242")
+        else if (scalaBinaryVersion.value == "3") Seq("-Ykind-projector")
         else Seq.empty
       },
       // workaround for bad constant pool issue
@@ -87,15 +95,20 @@ lazy val kafka =
         "org.apache.kafka"           % "kafka-clients"            % kafkaVersion,
         "com.fasterxml.jackson.core" % "jackson-databind"         % "2.12.3",
         "ch.qos.logback"             % "logback-classic"          % "1.2.3" % "test",
-        "org.scala-lang.modules"     %% "scala-collection-compat" % "2.4.3",
-        compilerPlugin("org.typelevel" % "kind-projector" % "0.11.3" cross CrossVersion.full)
+        "org.scala-lang.modules"     %% "scala-collection-compat" % "2.4.4"
       ) ++ {
         if (scalaBinaryVersion.value == "2.13") silencer
         else if (scalaBinaryVersion.value == "2.12") silencer
         else Seq.empty
       } ++ {
         if (scalaBinaryVersion.value == "2.11") Seq.empty
-        else Seq("io.github.embeddedkafka" %% "embedded-kafka" % kafkaVersion % "test")
+        else if (scalaBinaryVersion.value == "3") Seq(embeddedKafka.cross(CrossVersion.for3Use2_13))
+        else Seq(embeddedKafka)
+      } ++ {
+        if(scalaBinaryVersion.value == "2.13") kindProjector
+        else if(scalaBinaryVersion.value == "2.12") kindProjector
+        else if(scalaBinaryVersion.value == "2.11") kindProjector
+        else Seq.empty
       },
       testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
     )
