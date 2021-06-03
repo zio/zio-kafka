@@ -2,21 +2,22 @@ package zio.kafka.consumer
 
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.common.TopicPartition
-import zio.{ Chunk, Promise, Ref, Task, ZIO, ZLayer }
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
-import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.KafkaTestUtils._
+import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
-import zio.stream.{ ZSink, ZStream }
+import zio.stream.{ ZSink, ZStream, ZTransducer }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test.environment._
 import zio.test.{ DefaultRunnableSpec, _ }
-import zio.stream.ZTransducer
+import zio.{ Chunk, Promise, Ref, Schedule, Task, ZIO, ZLayer }
+
+import scala.collection.mutable.ListBuffer
 
 object ConsumerSpec extends DefaultRunnableSpec {
   override def spec: ZSpec[TestEnvironment, Throwable] =
@@ -479,7 +480,102 @@ object ConsumerSpec extends DefaultRunnableSpec {
                            consumer(group, client, allowAutoCreateTopics = false)
                          )
         } yield assert(partitions)(isEmpty)
-      }
+      },
+      testM("should close old stream during rebalancing under load") {
+        val nrMessages   = 50000
+        val nrPartitions = 3
+        val partitions   = (0 until nrPartitions).toList
+        val waitTimeout  = 15.seconds
+
+        case class ValidAssignmentsNotSeen(st: String) extends RuntimeException(s"Valid assignment not seen: $st")
+
+        def run(instance: Int, topic: String, allAssignments: Ref[Map[Int, ListBuffer[Int]]]) = {
+          val subscription = Subscription.topics(topic)
+          Consumer
+            .subscribeAnd(subscription)
+            .partitionedStream(Serde.string, Serde.string)
+            .map {
+              case (tp, partStream) =>
+                ZStream.fromEffect(allAssignments.update({ current =>
+                  current.get(instance) match {
+                    case Some(currentList) => current.updated(instance, currentList :+ tp.partition())
+                    case None              => current.updated(instance, ListBuffer(tp.partition()))
+                  }
+                })) ++ partStream.fixed(10.millis) ++ ZStream.fromEffect(allAssignments.update({ current =>
+                  current.get(instance) match {
+                    case Some(currentList) =>
+                      val idx = currentList.indexOf(tp.partition())
+                      if (idx != -1) currentList.remove(idx)
+                      current
+                    case None => current
+                  }
+                }))
+            }
+            .flattenParUnbounded()
+            .runDrain
+        }
+
+        def checkAssignments(allAssignments: Ref[Map[Int, ListBuffer[Int]]])(instances: Set[Int]) =
+          ZStream
+            .repeatEffectWith(allAssignments.get, Schedule.spaced(30.millis))
+            .filter { state =>
+              state.keySet == instances &&
+              instances.forall(instance => state.get(instance).exists(_.nonEmpty)) &&
+              state.values.toList.flatten.sorted == partitions
+            }
+            .runHead
+            .timeoutFail(ValidAssignmentsNotSeen(allAssignments.unsafeGet.toString))(waitTimeout)
+
+        for {
+          // Produce messages on several partitions
+          topic          <- randomTopic.map(_.take(14))
+          group          <- randomGroup.map(_.take(14))
+          client1        <- randomThing("client-1").map(_.take(17))
+          client2        <- randomThing("client-2").map(_.take(17))
+          client3        <- randomThing("client-3").map(_.take(17))
+          _              <- Task.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _              <- produceMany(topic, kvs = (0 until nrMessages).map(n => s"key-$n" -> s"value->$n"))
+          allAssignments <- Ref.make(Map.empty[Int, ListBuffer[Int]])
+          check          = checkAssignments(allAssignments)(_)
+          fiber0 <- run(0, topic, allAssignments)
+                     .provideSomeLayer[Kafka with Blocking with Clock](
+                       consumer(
+                         group,
+                         client1,
+                         offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
+                       )
+                     )
+                     .fork
+          _ <- check(Set(0))
+          fiber1 <- run(1, topic, allAssignments)
+                     .provideSomeLayer[Kafka with Blocking with Clock](
+                       consumer(
+                         group,
+                         client2,
+                         offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
+                       )
+                     )
+                     .fork
+          _ <- check(Set(0, 1))
+          fiber2 <- run(2, topic, allAssignments)
+                     .provideSomeLayer[Kafka with Blocking with Clock](
+                       consumer(
+                         group,
+                         client3,
+                         offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
+                       )
+                     )
+                     .fork
+          _ <- check(Set(0, 1, 2))
+          _ <- fiber2.interrupt
+          _ <- allAssignments.update(_ - 2)
+          _ <- check(Set(0, 1))
+          _ <- fiber1.interrupt
+          _ <- allAssignments.update(_ - 1)
+          _ <- check(Set(0))
+          _ <- fiber0.interrupt
+        } yield assertCompletes
+      } @@ flaky(5)
     ).provideSomeLayerShared[TestEnvironment](
       ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> stringProducer) ++ Kafka.embedded)
         .mapError(TestFailure.fail) ++ Clock.live
