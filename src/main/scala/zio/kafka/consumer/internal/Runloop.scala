@@ -121,10 +121,10 @@ private[consumer] final class Runloop(
 
   /**
    * Does all needed to end revoked partitions:
-   * 1. Complete the emitted streams continuation promises
-   * 2. Remove from the list of pending requets
+   * 1. Complete the revoked assigned streams
+   * 2. Remove from the list of pending requests
    * 3. Remove from buffered records
-   * @return New pending requests and new buffered records
+   * @return New pending requests, new buffered records and active assigned streams
    */
   private def endRevoked(
     reqs: Chunk[Runloop.Request],
