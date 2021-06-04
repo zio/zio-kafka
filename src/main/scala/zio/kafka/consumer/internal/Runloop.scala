@@ -221,7 +221,7 @@ private[consumer] final class Runloop(
     offsetRetrieval match {
       case OffsetRetrieval.Manual(getOffsets) =>
         getOffsets(tps)
-          .flatMap(offsets => ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) })
+          .tap(offsets => ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) })
           .when(tps.nonEmpty)
 
       case OffsetRetrieval.Auto(_) =>
