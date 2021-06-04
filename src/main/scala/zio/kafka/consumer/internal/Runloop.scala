@@ -55,7 +55,7 @@ private[consumer] final class Runloop(
       _        <- partitions.offer(Exit.fail(None)).when(!shutdown)
     } yield ()
 
-  val rebalanceListener = {
+  val rebalanceListener: RebalanceListener = {
     val trackRebalancing = RebalanceListener(
       onAssigned = _ => rebalancingRef.set(false),
       onRevoked = _ => rebalancingRef.set(true)
@@ -66,10 +66,7 @@ private[consumer] final class Runloop(
       revoked => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked))
     )
 
-    val pausePartitionsOnRevoke =
-      RebalanceListener.onRevoked(revoked => Task(consumer.consumer.pause(revoked.asJavaCollection)))
-
-    trackRebalancing ++ emitDiagnostics ++ pausePartitionsOnRevoke
+    trackRebalancing ++ emitDiagnostics
   }
 
   private def commit(offsets: Map[TopicPartition, Long]): ZIO[Any, Throwable, Unit] =
