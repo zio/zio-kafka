@@ -1,7 +1,7 @@
 package zio.kafka.consumer.internal
 
 import zio._
-import zio.stream.ZStream
+import zio.stream.{ UStream, ZStream }
 
 /**
  * A queue-like construct for buffering requests. Allows to take all of the
@@ -16,11 +16,11 @@ private[internal] class RequestBuffer(ref: Ref[RequestBuffer.State]) {
   def offer(request: Runloop.Request): UIO[Any] =
     ref.modify {
       case Shutdown      => ZIO.interrupt      -> Shutdown
-      case Empty(notify) => notify.succeed(()) -> Filled(List(request))
-      case Filled(items) => UIO.unit           -> Filled(request :: items)
+      case Empty(notify) => notify.succeed(()) -> Filled(Chunk(request))
+      case Filled(items) => UIO.unit           -> Filled(request +: items)
     }.flatten
 
-  def takeAll: UIO[List[Runloop.Request]] =
+  def takeAll: UIO[Chunk[Runloop.Request]] =
     Promise
       .make[Nothing, Unit]
       .flatMap { p =>
@@ -32,7 +32,7 @@ private[internal] class RequestBuffer(ref: Ref[RequestBuffer.State]) {
       }
       .flatten
 
-  def stream: ZStream[Any, Nothing, List[Runloop.Request]] =
+  def stream: UStream[Chunk[Runloop.Request]] =
     ZStream.repeatEffectOption {
       takeAll.catchAllCause(cause => if (cause.interrupted) ZIO.fail(None) else ZIO.halt(cause))
     }
@@ -46,7 +46,7 @@ private[internal] object RequestBuffer {
   object State {
     case object Shutdown                                 extends State
     case class Empty(notifyFill: Promise[Nothing, Unit]) extends State
-    case class Filled(items: List[Runloop.Request])      extends State
+    case class Filled(items: Chunk[Runloop.Request])     extends State
   }
 
   def make: UIO[RequestBuffer] =

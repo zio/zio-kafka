@@ -195,9 +195,9 @@ package object producer {
       private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout))
     }
 
-    def live[R: Tag, K: Tag, V: Tag]: ZLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[
+    def live[R: Tag, K: Tag, V: Tag]: RLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[
       ProducerSettings
-    ] with Blocking, Throwable, Producer[R, K, V]] =
+    ] with Blocking, Producer[R, K, V]] =
       (for {
         keySerializer   <- ZManaged.service[Serializer[R, K]]
         valueSerializer <- ZManaged.service[Serializer[R, V]]
@@ -209,7 +209,7 @@ package object producer {
       settings: ProducerSettings,
       keySerializer: Serializer[R, K],
       valueSerializer: Serializer[R, V]
-    ): ZManaged[Blocking, Throwable, Service[R, K, V]] =
+    ): RManaged[Blocking, Service[R, K, V]] =
       (for {
         props    <- ZIO.effect(settings.driverSettings)
         _        <- keySerializer.configure(props, isKey = true)
@@ -295,13 +295,13 @@ package object producer {
     /**
      * Accessor method for [[Service.flush]]
      */
-    def flush[R: Tag, K: Tag, V: Tag]: ZIO[R with Producer[R, K, V], Throwable, Unit] =
+    def flush[R: Tag, K: Tag, V: Tag]: RIO[R with Producer[R, K, V], Unit] =
       withProducerService(_.flush)
 
     /**
      * Accessor method for [[Service.metrics]]
      */
-    def metrics[R: Tag, K: Tag, V: Tag]: ZIO[R with Producer[R, K, V], Throwable, Map[MetricName, Metric]] =
+    def metrics[R: Tag, K: Tag, V: Tag]: RIO[R with Producer[R, K, V], Map[MetricName, Metric]] =
       withProducerService(_.metrics)
   }
 }
