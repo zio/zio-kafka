@@ -250,12 +250,14 @@ private[consumer] final class Runloop(
         if (requestedPartitions.nonEmpty) this.pollTimeout.asJava
         else 0.millis.asJava
 
-      c.poll(pollTimeout)
+      val records = c.poll(pollTimeout)
+
+      if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
     } catch {
       // The consumer will throw an IllegalStateException if no call to subscribe
       // has been made yet, so we just ignore that. We have to poll even if c.subscription()
       // is empty because pattern subscriptions start out as empty.
-      case _: IllegalStateException => null
+      case _: IllegalStateException => ConsumerRecords.empty[Array[Byte], Array[Byte]]()
     }
 
   private def pauseAllPartitions(c: ByteArrayKafkaConsumer) = ZIO.effectTotal {
@@ -279,17 +281,6 @@ private[consumer] final class Runloop(
                        isShutdown.flatMap { shutdown =>
                          if (shutdown) {
                            pauseAllPartitions(c).as(
-                             (
-                               Set(),
-                               (
-                                 state.pendingRequests,
-                                 Map[TopicPartition, Chunk[ByteArrayConsumerRecord]](),
-                                 Map[TopicPartition, Promise[Throwable, Unit]]()
-                               )
-                             )
-                           )
-                         } else if (records eq null) {
-                           ZIO.succeed(
                              (
                                Set(),
                                (
