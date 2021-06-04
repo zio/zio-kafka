@@ -1,6 +1,6 @@
 package zio.kafka.consumer
 
-import net.manub.embeddedkafka.EmbeddedKafka
+import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.common.TopicPartition
 import zio.{ Chunk, Promise, Ref, Task, ZIO, ZLayer }
 import zio.blocking.Blocking
