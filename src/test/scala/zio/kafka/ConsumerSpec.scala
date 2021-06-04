@@ -479,6 +479,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                          )
         } yield assert(partitions)(isEmpty)
       },
+      // Test backported from fs2-kafka: https://github.com/fd4s/fs2-kafka/blob/1bd0c1f3d46b543277fce1a3cc743154c162ef09/modules/core/src/test/scala/fs2/kafka/KafkaConsumerSpec.scala#L592
       testM("should close old stream during rebalancing under load") {
         val nrMessages   = 50000
         val nrPartitions = 3
