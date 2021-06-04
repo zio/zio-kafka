@@ -17,8 +17,6 @@ import zio.test.environment._
 import zio.test.{ DefaultRunnableSpec, _ }
 import zio.{ Chunk, Promise, Ref, Schedule, Task, ZIO, ZLayer }
 
-import scala.collection.mutable.ListBuffer
-
 object ConsumerSpec extends DefaultRunnableSpec {
   override def spec: ZSpec[TestEnvironment, Throwable] =
     suite("Consumer Streaming")(
@@ -489,7 +487,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
 
         case class ValidAssignmentsNotSeen(st: String) extends RuntimeException(s"Valid assignment not seen: $st")
 
-        def run(instance: Int, topic: String, allAssignments: Ref[Map[Int, ListBuffer[Int]]]) = {
+        def run(instance: Int, topic: String, allAssignments: Ref[Map[Int, List[Int]]]) = {
           val subscription = Subscription.topics(topic)
           Consumer
             .subscribeAnd(subscription)
@@ -499,14 +497,14 @@ object ConsumerSpec extends DefaultRunnableSpec {
                 ZStream.fromEffect(allAssignments.update({ current =>
                   current.get(instance) match {
                     case Some(currentList) => current.updated(instance, currentList :+ tp.partition())
-                    case None              => current.updated(instance, ListBuffer(tp.partition()))
+                    case None              => current.updated(instance, List(tp.partition()))
                   }
                 })) ++ partStream.fixed(10.millis) ++ ZStream.fromEffect(allAssignments.update({ current =>
                   current.get(instance) match {
                     case Some(currentList) =>
                       val idx = currentList.indexOf(tp.partition())
-                      if (idx != -1) currentList.remove(idx)
-                      current
+                      if (idx != -1) current.updated(instance, currentList.patch(idx, Nil, 1))
+                      else current
                     case None => current
                   }
                 }))
@@ -515,7 +513,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
             .runDrain
         }
 
-        def checkAssignments(allAssignments: Ref[Map[Int, ListBuffer[Int]]])(instances: Set[Int]) =
+        def checkAssignments(allAssignments: Ref[Map[Int, List[Int]]])(instances: Set[Int]) =
           ZStream
             .repeatEffectWith(allAssignments.get, Schedule.spaced(30.millis))
             .filter { state =>
@@ -528,14 +526,14 @@ object ConsumerSpec extends DefaultRunnableSpec {
 
         for {
           // Produce messages on several partitions
-          topic          <- randomTopic.map(_.take(14))
-          group          <- randomGroup.map(_.take(14))
-          client1        <- randomThing("client-1").map(_.take(17))
-          client2        <- randomThing("client-2").map(_.take(17))
-          client3        <- randomThing("client-3").map(_.take(17))
+          topic          <- randomTopic
+          group          <- randomGroup
+          client1        <- randomThing("client-1")
+          client2        <- randomThing("client-2")
+          client3        <- randomThing("client-3")
           _              <- Task.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _              <- produceMany(topic, kvs = (0 until nrMessages).map(n => s"key-$n" -> s"value->$n"))
-          allAssignments <- Ref.make(Map.empty[Int, ListBuffer[Int]])
+          allAssignments <- Ref.make(Map.empty[Int, List[Int]])
           check          = checkAssignments(allAssignments)(_)
           fiber0 <- run(0, topic, allAssignments)
                      .provideSomeLayer[Kafka with Blocking with Clock](
@@ -575,7 +573,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
           _ <- check(Set(0))
           _ <- fiber0.interrupt
         } yield assertCompletes
-      } @@ flaky(5)
+      }
     ).provideSomeLayerShared[TestEnvironment](
       ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> stringProducer) ++ Kafka.embedded)
         .mapError(TestFailure.fail) ++ Clock.live
