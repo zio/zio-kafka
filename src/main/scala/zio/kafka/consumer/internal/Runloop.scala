@@ -144,10 +144,7 @@ private[consumer] final class Runloop(
 
     val (revokedStreams, assignedStreams) = currentAssignedStreams.partition(es => revoked(es._1))
 
-    val revokeAction: UIO[Unit] =
-      revokedStreams.foldLeft(UIO.unit) {
-        case (revokeAction, (_, p)) => revokeAction *> p.succeed(()).unit
-      }
+    val revokeAction: UIO[Unit] = ZIO.foreach_(revokedStreams) { case (_, p) => p.succeed(()) }
 
     val reqsIt = reqs.iterator
     while (reqsIt.hasNext) {
