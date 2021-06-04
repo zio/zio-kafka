@@ -321,18 +321,18 @@ private[consumer] final class Runloop(
     } yield State(unfulfilledRequests, newPendingCommits, bufferedRecords)
 
   private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): URIO[Blocking, State] =
-    consumer
-      .withConsumer(_.assignment.asScala)
-      .flatMap { assignment =>
-        ZIO.ifM(isRebalancing)(
-          UIO.succeed(state.addRequests(reqs)),
+    ZIO.ifM(isRebalancing)(
+      UIO.succeed(state.addRequests(reqs)),
+      consumer
+        .withConsumer(_.assignment.asScala)
+        .flatMap { assignment =>
           ZIO.foldLeft(reqs)(state) { (state, req) =>
             if (assignment.contains(req.tp)) UIO.succeed(state.addRequest(req))
             else req.cont.fail(None).as(state)
           }
-        )
-      }
-      .orElse(UIO.succeed(state.addRequests(reqs)))
+        }
+        .orElseSucceed(state.addRequests(reqs))
+    )
 
   private def handleCommit(state: State, cmd: Command.Commit): URIO[Blocking, State] =
     ZIO.ifM(isRebalancing)(
