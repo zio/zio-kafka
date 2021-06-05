@@ -18,12 +18,12 @@ private[consumer] class ConsumerAccess(
   def withConsumer[A](f: ByteArrayKafkaConsumer => A): Task[A] =
     withConsumerM[Any, A](c => ZIO(f(c)))
 
-  def withConsumerM[R, A](f: ByteArrayKafkaConsumer => ZIO[R, Throwable, A]): ZIO[R, Throwable, A] =
+  def withConsumerM[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
     access.withPermit(withConsumerNoPermit(f))
 
   private[consumer] def withConsumerNoPermit[R, A](
-    f: ByteArrayKafkaConsumer => ZIO[R, Throwable, A]
-  ): ZIO[R, Throwable, A] =
+    f: ByteArrayKafkaConsumer => RIO[R, A]
+  ): RIO[R, A] =
     blocking
       .blocking(ZIO.effectSuspend(f(consumer)))
       .catchSome {
@@ -36,18 +36,16 @@ private[consumer] class ConsumerAccess(
 private[consumer] object ConsumerAccess {
   type ByteArrayKafkaConsumer = KafkaConsumer[Array[Byte], Array[Byte]]
 
-  def make(settings: ConsumerSettings) =
+  def make(settings: ConsumerSettings): RManaged[Blocking, ConsumerAccess] =
     for {
       access   <- Semaphore.make(1).toManaged_
       blocking <- ZManaged.service[Blocking.Service]
-      consumer <- blocking.blocking {
-                   ZIO {
-                     new KafkaConsumer[Array[Byte], Array[Byte]](
-                       settings.driverSettings.asJava,
-                       new ByteArrayDeserializer(),
-                       new ByteArrayDeserializer()
-                     )
-                   }
+      consumer <- blocking.effectBlocking {
+                   new KafkaConsumer[Array[Byte], Array[Byte]](
+                     settings.driverSettings.asJava,
+                     new ByteArrayDeserializer(),
+                     new ByteArrayDeserializer()
+                   )
                  }.toManaged(c => blocking.blocking(access.withPermit(UIO(c.close(settings.closeTimeout)))))
     } yield new ConsumerAccess(consumer, access, blocking)
 }
