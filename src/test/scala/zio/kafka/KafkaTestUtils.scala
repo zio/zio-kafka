@@ -40,8 +40,8 @@ object KafkaTestUtils {
     kvs: Iterable[(String, String)]
   ): ZIO[Blocking with StringProducer, Throwable, Chunk[RecordMetadata]] =
     Producer
-      .produceChunk[Any, String, String](Chunk.fromIterable(kvs.map {
-        case (k, v) => new ProducerRecord(topic, partition, null, k, v)
+      .produceChunk[Any, String, String](Chunk.fromIterable(kvs.map { case (k, v) =>
+        new ProducerRecord(topic, partition, null, k, v)
       }))
 
   def produceMany(
@@ -49,8 +49,8 @@ object KafkaTestUtils {
     kvs: Iterable[(String, String)]
   ): ZIO[Blocking with StringProducer, Throwable, Chunk[RecordMetadata]] =
     Producer
-      .produceChunk[Any, String, String](Chunk.fromIterable(kvs.map {
-        case (k, v) => new ProducerRecord(topic, k, v)
+      .produceChunk[Any, String, String](Chunk.fromIterable(kvs.map { case (k, v) =>
+        new ProducerRecord(topic, k, v)
       }))
 
   def consumerSettings(
@@ -105,10 +105,10 @@ object KafkaTestUtils {
   def withAdmin[T](f: AdminClient => RIO[Clock with Kafka with Blocking, T]) =
     for {
       settings <- adminSettings
-      fRes <- AdminClient
-               .make(settings)
-               .use(client => f(client))
-               .provideSomeLayer[Kafka](Clock.live ++ Blocking.live)
+      fRes     <- AdminClient
+                    .make(settings)
+                    .use(client => f(client))
+                    .provideSomeLayer[Kafka](Clock.live ++ Blocking.live)
     } yield fRes
 
   def randomThing(prefix: String): Task[String] =

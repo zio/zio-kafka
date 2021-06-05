@@ -134,7 +134,9 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
           .all()
       )
     }.map(
-      _.asScala.view.map { case (configResource, config) => (ConfigResource(configResource), KafkaConfig(config)) }.toMap
+      _.asScala.view.map { case (configResource, config) =>
+        (ConfigResource(configResource), KafkaConfig(config))
+      }.toMap
     )
   }
 
@@ -174,9 +176,9 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
     options: Option[DescribeClusterOptions] = None
   ): Task[Set[AclOperation]] =
     for {
-      res           <- describeCluster(options)
-      opt           <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
-      lst           <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
+      res          <- describeCluster(options)
+      opt          <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
+      lst          <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
       aclOperations = lst.map(AclOperation.apply)
     } yield aclOperations
 
@@ -238,13 +240,11 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
 
   /**
    * Retrieves metrics for the underlying AdminClient
-   *
    */
   def metrics: Task[Map[MetricName, Metric]] =
     blocking.effectBlocking(
-      adminClient.metrics().asScala.toMap.map {
-        case (metricName, metric) =>
-          (MetricName(metricName), Metric(metric))
+      adminClient.metrics().asScala.toMap.map { case (metricName, metric) =>
+        (MetricName(metricName), Metric(metric))
       }
     )
 }
@@ -284,13 +284,13 @@ object AdminClient {
     case object BrokerLogger extends ConfigResourceType {
       lazy val asJava = JConfigResource.Type.BROKER_LOGGER
     }
-    case object Broker extends ConfigResourceType {
+    case object Broker       extends ConfigResourceType {
       lazy val asJava = JConfigResource.Type.BROKER
     }
-    case object Topic extends ConfigResourceType {
+    case object Topic        extends ConfigResourceType {
       lazy val asJava = JConfigResource.Type.TOPIC
     }
-    case object Unknown extends ConfigResourceType {
+    case object Unknown      extends ConfigResourceType {
       lazy val asJava = JConfigResource.Type.UNKNOWN
     }
 

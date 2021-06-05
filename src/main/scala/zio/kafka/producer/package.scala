@@ -115,19 +115,19 @@ package object producer {
           done             <- Promise.make[Throwable, RecordMetadata]
           serializedRecord <- serialize(record)
           runtime          <- ZIO.runtime[Any]
-          _ <- blocking.effectBlocking {
-                p.send(
-                  serializedRecord,
-                  new Callback {
-                    def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
-                      if (err != null) runtime.unsafeRun(done.fail(err))
-                      else runtime.unsafeRun(done.succeed(metadata))
+          _                <- blocking.effectBlocking {
+                                p.send(
+                                  serializedRecord,
+                                  new Callback {
+                                    def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
+                                      if (err != null) runtime.unsafeRun(done.fail(err))
+                                      else runtime.unsafeRun(done.succeed(metadata))
 
-                      ()
-                    }
-                  }
-                )
-              }
+                                      ()
+                                    }
+                                  }
+                                )
+                              }
         } yield done.await
 
       override def produceChunkAsync(
@@ -139,32 +139,32 @@ package object producer {
             done              <- Promise.make[Throwable, Chunk[RecordMetadata]]
             runtime           <- ZIO.runtime[Any]
             serializedRecords <- ZIO.foreach(records.toSeq)(serialize)
-            _ <- blocking.effectBlocking {
-                  val it: Iterator[(ByteRecord, Int)] =
-                    serializedRecords.iterator.zipWithIndex
-                  val res: Array[RecordMetadata] = new Array[RecordMetadata](records.length)
-                  val count: AtomicLong          = new AtomicLong
+            _                 <- blocking.effectBlocking {
+                                   val it: Iterator[(ByteRecord, Int)] =
+                                     serializedRecords.iterator.zipWithIndex
+                                   val res: Array[RecordMetadata]      = new Array[RecordMetadata](records.length)
+                                   val count: AtomicLong               = new AtomicLong
 
-                  while (it.hasNext) {
-                    val (rec, idx): (ByteRecord, Int) = it.next
+                                   while (it.hasNext) {
+                                     val (rec, idx): (ByteRecord, Int) = it.next
 
-                    p.send(
-                      rec,
-                      new Callback {
-                        def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
-                          if (err != null) runtime.unsafeRun(done.fail(err))
-                          else {
-                            res(idx) = metadata
-                            if (count.incrementAndGet == records.length)
-                              runtime.unsafeRun(done.succeed(Chunk.fromArray(res)))
-                          }
+                                     p.send(
+                                       rec,
+                                       new Callback {
+                                         def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
+                                           if (err != null) runtime.unsafeRun(done.fail(err))
+                                           else {
+                                             res(idx) = metadata
+                                             if (count.incrementAndGet == records.length)
+                                               runtime.unsafeRun(done.succeed(Chunk.fromArray(res)))
+                                           }
 
-                          ()
-                        }
-                      }
-                    )
-                  }
-                }
+                                           ()
+                                         }
+                                       }
+                                     )
+                                   }
+                                 }
           } yield done.await
         }
 
@@ -195,9 +195,9 @@ package object producer {
       private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout))
     }
 
-    def live[R: Tag, K: Tag, V: Tag]: ZLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[
+    def live[R: Tag, K: Tag, V: Tag]: RLayer[Has[Serializer[R, K]] with Has[Serializer[R, V]] with Has[
       ProducerSettings
-    ] with Blocking, Throwable, Producer[R, K, V]] =
+    ] with Blocking, Producer[R, K, V]] =
       (for {
         keySerializer   <- ZManaged.service[Serializer[R, K]]
         valueSerializer <- ZManaged.service[Serializer[R, V]]
@@ -209,19 +209,19 @@ package object producer {
       settings: ProducerSettings,
       keySerializer: Serializer[R, K],
       valueSerializer: Serializer[R, V]
-    ): ZManaged[Blocking, Throwable, Service[R, K, V]] =
+    ): RManaged[Blocking, Service[R, K, V]] =
       (for {
-        props    <- ZIO.effect(settings.driverSettings)
-        _        <- keySerializer.configure(props, isKey = true)
-        _        <- valueSerializer.configure(props, isKey = false)
-        blocking <- ZIO.service[Blocking.Service]
+        props       <- ZIO.effect(settings.driverSettings)
+        _           <- keySerializer.configure(props, isKey = true)
+        _           <- valueSerializer.configure(props, isKey = false)
+        blocking    <- ZIO.service[Blocking.Service]
         rawProducer <- ZIO.effect(
-                        new KafkaProducer[Array[Byte], Array[Byte]](
-                          props.asJava,
-                          new ByteArraySerializer(),
-                          new ByteArraySerializer()
-                        )
-                      )
+                         new KafkaProducer[Array[Byte], Array[Byte]](
+                           props.asJava,
+                           new ByteArraySerializer(),
+                           new ByteArraySerializer()
+                         )
+                       )
       } yield Live(rawProducer, settings, keySerializer, valueSerializer, blocking)).toManaged(_.close)
 
     def withProducerService[R: Tag, K: Tag, V: Tag, A](
@@ -253,7 +253,7 @@ package object producer {
     def produceAll[R: Tag, K: Tag, V: Tag]
       : ZTransducer[R with Producer[R, K, V], Throwable, ProducerRecord[K, V], RecordMetadata] =
       ZTransducer.fromPush {
-        case None => UIO.succeed(Chunk.empty)
+        case None        => UIO.succeed(Chunk.empty)
         case Some(chunk) =>
           produceChunk[R, K, V](chunk)
       }
@@ -295,13 +295,13 @@ package object producer {
     /**
      * Accessor method for [[Service.flush]]
      */
-    def flush[R: Tag, K: Tag, V: Tag]: ZIO[R with Producer[R, K, V], Throwable, Unit] =
+    def flush[R: Tag, K: Tag, V: Tag]: RIO[R with Producer[R, K, V], Unit] =
       withProducerService(_.flush)
 
     /**
      * Accessor method for [[Service.metrics]]
      */
-    def metrics[R: Tag, K: Tag, V: Tag]: ZIO[R with Producer[R, K, V], Throwable, Map[MetricName, Metric]] =
+    def metrics[R: Tag, K: Tag, V: Tag]: RIO[R with Producer[R, K, V], Map[MetricName, Metric]] =
       withProducerService(_.metrics)
   }
 }

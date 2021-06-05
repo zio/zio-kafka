@@ -23,9 +23,9 @@ object ProducerSpec extends DefaultRunnableSpec {
       testM("a non-empty chunk of records") {
         import Subscription._
 
-        val (topic1, key1, value1) = ("topic1", "boo", "baa")
-        val (topic2, key2, value2) = ("topic2", "baa", "boo")
-        val chunks = Chunk.fromIterable(
+        val (topic1, key1, value1)                                               = ("topic1", "boo", "baa")
+        val (topic2, key2, value2)                                               = ("topic2", "baa", "boo")
+        val chunks                                                               = Chunk.fromIterable(
           List(new ProducerRecord(topic1, key1, value1), new ProducerRecord(topic2, key2, value2))
         )
         def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
@@ -36,25 +36,23 @@ object ProducerSpec extends DefaultRunnableSpec {
         for {
           outcome  <- Producer.produceChunk[Any, String, String](chunks)
           settings <- consumerSettings("testGroup", "testClient")
-          record1 <- withConsumer(Topics(Set(topic1)), settings).use { consumer =>
-                      for {
-                        messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
-                        record = messages
-                          .filter(rec => rec.record.key == key1 && rec.record.value == value1)
-                          .toSeq
-                      } yield record
-                    }
-          record2 <- withConsumer(Topics(Set(topic2)), settings).use { consumer =>
-                      for {
-                        messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
-                        record   = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
-                      } yield record
-                    }
-        } yield {
-          assert(outcome.length)(equalTo(2)) &&
+          record1  <- withConsumer(Topics(Set(topic1)), settings).use { consumer =>
+                        for {
+                          messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
+                          record    = messages
+                                        .filter(rec => rec.record.key == key1 && rec.record.value == value1)
+                                        .toSeq
+                        } yield record
+                      }
+          record2  <- withConsumer(Topics(Set(topic2)), settings).use { consumer =>
+                        for {
+                          messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
+                          record    = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
+                        } yield record
+                      }
+        } yield assert(outcome.length)(equalTo(2)) &&
           assert(record1)(isNonEmpty) &&
           assert(record2.length)(isGreaterThan(0))
-        }
       },
       testM("an empty chunk of records") {
         val chunks = Chunk.fromIterable(List.empty)
