@@ -1,6 +1,6 @@
 package zio.kafka.consumer
 
-import net.manub.embeddedkafka.EmbeddedKafka
+import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.common.TopicPartition
 import zio.blocking.Blocking
 import zio.clock.Clock
