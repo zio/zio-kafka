@@ -25,7 +25,7 @@ lazy val kindProjector = Seq(
   compilerPlugin("org.typelevel" % "kind-projector" % "0.13.0" cross CrossVersion.full)
 )
 
-lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % kafkaVersion % "test"
+lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion % "test"
 
 inThisBuild(
   List(
