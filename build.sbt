@@ -82,13 +82,13 @@ lazy val kafka =
     .settings(
       resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
       libraryDependencies ++= Seq(
-        "dev.zio"                    %% "zio-streams"             % zioVersion,
-        "dev.zio"                    %% "zio-test"                % zioVersion % "test",
-        "dev.zio"                    %% "zio-test-sbt"            % zioVersion % "test",
-        "org.apache.kafka"           % "kafka-clients"            % kafkaVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind"         % "2.12.3",
-        "ch.qos.logback"             % "logback-classic"          % "1.2.3" % "test",
-        "org.scala-lang.modules"     %% "scala-collection-compat" % "2.4.4",
+        "dev.zio"                   %% "zio-streams"             % zioVersion,
+        "dev.zio"                   %% "zio-test"                % zioVersion % "test",
+        "dev.zio"                   %% "zio-test-sbt"            % zioVersion % "test",
+        "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
+        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.12.3",
+        "ch.qos.logback"             % "logback-classic"         % "1.2.3"    % "test",
+        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.4.4",
         compilerPlugin("org.typelevel" % "kind-projector" % "0.13.0" cross CrossVersion.full)
       ) ++ {
         if (scalaBinaryVersion.value == "2.13") silencer

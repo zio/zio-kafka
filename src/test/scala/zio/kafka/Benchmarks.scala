@@ -19,8 +19,8 @@ object PopulateTopic extends App {
       .chunkN(500)
 
   def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] =
-    dataStream(872000).map {
-      case (k, v) => new ProducerRecord("inputs-topic", null, null, k, v)
+    dataStream(872000).map { case (k, v) =>
+      new ProducerRecord("inputs-topic", null, null, k, v)
     }.mapChunksM(Producer.produceChunkAsync[Any, String, String](_).map(Chunk(_)))
       .mapMPar(5)(_.flatMap(chunk => console.putStrLn(s"Wrote chunk of ${chunk.size}")))
       .runDrain
@@ -81,7 +81,7 @@ object ZIOKafka extends App {
 
   def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] = {
     val expectedCount = 1000000
-    val settings = ConsumerSettings(List("localhost:9092"))
+    val settings      = ConsumerSettings(List("localhost:9092"))
       .withGroupId(s"zio-kafka-${scala.util.Random.nextInt()}")
       .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       .withProperty("fetch.min.bytes", "128000")
@@ -100,7 +100,7 @@ object ZIOKafka extends App {
             .mapChunks { recordChunk =>
               val messageCount = recordChunk.size
               println(s"Got chunk of ${messageCount}")
-              val lengthCount = recordChunk.foldLeft(0)(_ + _.value.length)
+              val lengthCount  = recordChunk.foldLeft(0)(_ + _.value.length)
 
               Chunk(messageCount -> lengthCount)
             }

@@ -66,6 +66,6 @@ object Subscription {
    * @param partition
    * @return
    */
-  def manual(topic: String, partition: Int): Manual =
+  def manual(topic: String, partition: Int): Manual   =
     manual((topic, partition))
 }
