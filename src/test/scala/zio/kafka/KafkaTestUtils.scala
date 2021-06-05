@@ -59,7 +59,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
   ) =
-    ZIO.access[Kafka] { kafka: Kafka =>
+    ZIO.access[Kafka] { (kafka: Kafka) =>
       ConsumerSettings(kafka.get.bootstrapServers)
         .withGroupId(groupId)
         .withClientId(clientId)
