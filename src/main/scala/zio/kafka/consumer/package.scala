@@ -276,7 +276,7 @@ package object consumer {
                   ZIO.foreach_(topicPartitions)(runloop.newPartitionStream) *> {
                     settings.offsetRetrieval match {
                       case OffsetRetrieval.Manual(getOffsets) =>
-                        getOffsets(topicPartitions, consumer).flatMap { offsets =>
+                        getOffsets(topicPartitions, ConsumerForAdminAccess(consumer)).flatMap { offsets =>
                           ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
                         }
                       case OffsetRetrieval.Auto(_)            => ZIO.unit
@@ -512,6 +512,38 @@ package object consumer {
     def metrics: RIO[Consumer, Map[MetricName, Metric]] =
       withConsumerService(_.metrics)
 
+    final class ConsumerForAdminAccess private (consumer: ConsumerAccess) {
+      // Basically clone of Consumer.Live#endOffsets
+      def endOffsets(
+        partitions: Set[TopicPartition],
+        timeout: Duration = Duration.Infinity
+      ): Task[Map[TopicPartition, Long]] =
+        consumer.withConsumer { eo =>
+          val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
+          offs.asScala.view.mapValues(_.longValue()).toMap
+        }
+
+      // Basically clone of Consumer.Live#offsetsForTimes
+      def offsetsForTimes(
+        timestamps: Map[TopicPartition, Long],
+        timeout: Duration = Duration.Infinity
+      ): Task[Map[TopicPartition, OffsetAndTimestamp]] =
+        consumer.withConsumer(
+          _.offsetsForTimes(
+            timestamps.view.mapValues(Long.box).toMap.asJava,
+            timeout.asJava
+          ).asScala.toMap
+            // If a partition doesn't exist yet, the map will have 'null' as entry.
+            // It's more idiomatic scala to then simply not have that map entry.
+            .filter(_._2 != null)
+        )
+    }
+
+    object ConsumerForAdminAccess {
+      def apply(consumer: ConsumerAccess): ConsumerForAdminAccess =
+        new ConsumerForAdminAccess(consumer)
+    }
+
     sealed trait OffsetRetrieval
 
     object OffsetRetrieval {
@@ -519,7 +551,7 @@ package object consumer {
         reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest
       ) extends OffsetRetrieval
       final case class Manual(
-        getOffsets: (Set[TopicPartition], ConsumerAccess) => Task[Map[TopicPartition, Long]]
+        getOffsets: (Set[TopicPartition], ConsumerForAdminAccess) => Task[Map[TopicPartition, Long]]
       ) extends OffsetRetrieval
     }
 

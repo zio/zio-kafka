@@ -8,7 +8,7 @@ import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
-import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.consumer.Consumer.{ ConsumerForAdminAccess, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.CommittableRecord
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
@@ -222,7 +222,7 @@ private[consumer] final class Runloop(
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Unit] =
     offsetRetrieval match {
       case OffsetRetrieval.Manual(getOffsets) =>
-        getOffsets(tps, consumer)
+        getOffsets(tps, ConsumerForAdminAccess(consumer))
           .tap(offsets => ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) })
           .when(tps.nonEmpty)
 
