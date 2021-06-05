@@ -222,7 +222,7 @@ private[consumer] final class Runloop(
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Unit] =
     offsetRetrieval match {
       case OffsetRetrieval.Manual(getOffsets) =>
-        getOffsets(tps)
+        getOffsets(tps, consumer)
           .tap(offsets => ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) })
           .when(tps.nonEmpty)
 

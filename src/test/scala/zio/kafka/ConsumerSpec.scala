@@ -124,7 +124,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
           _              <- ZIO.foreach(1 to nrPartitions) { i =>
                               produceMany(topic, partition = i % nrPartitions, kvs = (0 to 9).map(j => s"key$i-$j" -> s"msg$i-$j"))
                             }
-          offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+          offsetRetrieval = OffsetRetrieval.Manual((tps, _) => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
           record         <- Consumer
                               .subscribeAnd(Subscription.manual(topic, partition = 2))
                               .plainStream(Serde.string, Serde.string)
@@ -413,7 +413,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                               .runCollect
                               .provideSomeLayer[Kafka with Blocking with Clock](consumer("group1", "client1"))
           // Start a new consumer with manual offset before the committed offset
-          offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+          offsetRetrieval = OffsetRetrieval.Manual((tps, _) => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
           secondResults  <- Consumer
                               .subscribeAnd(Subscription.topics(topic))
                               .plainStream(Serde.string, Serde.string)

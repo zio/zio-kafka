@@ -276,7 +276,7 @@ package object consumer {
                   ZIO.foreach_(topicPartitions)(runloop.newPartitionStream) *> {
                     settings.offsetRetrieval match {
                       case OffsetRetrieval.Manual(getOffsets) =>
-                        getOffsets(topicPartitions).flatMap { offsets =>
+                        getOffsets(topicPartitions, consumer).flatMap { offsets =>
                           ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
                         }
                       case OffsetRetrieval.Auto(_)            => ZIO.unit
@@ -515,9 +515,12 @@ package object consumer {
     sealed trait OffsetRetrieval
 
     object OffsetRetrieval {
-      final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest) extends OffsetRetrieval
-      final case class Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]])
-          extends OffsetRetrieval
+      final case class Auto(
+        reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest
+      ) extends OffsetRetrieval
+      final case class Manual(
+        getOffsets: (Set[TopicPartition], ConsumerAccess) => Task[Map[TopicPartition, Long]]
+      ) extends OffsetRetrieval
     }
 
     sealed trait AutoOffsetStrategy { self =>
