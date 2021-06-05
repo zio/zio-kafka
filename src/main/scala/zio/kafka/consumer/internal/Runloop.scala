@@ -22,7 +22,7 @@ private[consumer] final class Runloop(
   consumer: ConsumerAccess,
   pollFrequency: Duration,
   pollTimeout: Duration,
-  requestQueue: RequestBuffer,
+  requestQueue: Queue[Runloop.Request],
   commitQueue: Queue[Command.Commit],
   val partitions: Queue[Exit[Option[Throwable], (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
   rebalancingRef: Ref[Boolean],
@@ -385,7 +385,7 @@ private[consumer] final class Runloop(
     ZStream
       .mergeAll(3, 1)(
         ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency)),
-        requestQueue.stream.map(Command.Requests(_)),
+        ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
         ZStream.fromQueue(commitQueue)
       )
       .foldM(State.initial) { (state, cmd) =>
@@ -419,7 +419,7 @@ private[consumer] object Runloop {
   ): RManaged[Blocking with Clock, Runloop] =
     for {
       rebalancingRef <- Ref.make(false).toManaged_
-      requestQueue   <- RequestBuffer.make.toManaged(_.shutdown)
+      requestQueue   <- Queue.unbounded[Runloop.Request].toManaged(_.shutdown)
       commitQueue    <- Queue.unbounded[Command.Commit].toManaged(_.shutdown)
       partitions <- Queue
                      .unbounded[
