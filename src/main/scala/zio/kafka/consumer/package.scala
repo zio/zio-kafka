@@ -547,12 +547,17 @@ package object consumer {
     sealed trait OffsetRetrieval
 
     object OffsetRetrieval {
-      final case class Auto(
-        reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest
-      ) extends OffsetRetrieval
-      final case class Manual(
-        getOffsets: (Set[TopicPartition], ConsumerForAdminAccess) => Task[Map[TopicPartition, Long]]
-      ) extends OffsetRetrieval
+      type GetOffsets = (Set[TopicPartition], ConsumerForAdminAccess) => Task[Map[TopicPartition, Long]]
+
+      private val defaultManualOffsetRetrieval: GetOffsets =
+        (partitions, consumer) => consumer.endOffsets(partitions)
+
+      final case class Manual(getOffsets: GetOffsets) extends OffsetRetrieval
+      object Manual {
+        val default: Manual = Manual(defaultManualOffsetRetrieval)
+      }
+
+      final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest) extends OffsetRetrieval
     }
 
     sealed trait AutoOffsetStrategy { self =>
