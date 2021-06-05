@@ -1,5 +1,5 @@
 [![Project stage][Stage]][Stage-Page]
-[![Release Artifacts][Badge-SonatypeReleases]][Link-SonatypeReleases]
+[![Release Artifacts][Badge-SonatypeReleases]][Link-SonatypeReleases] [![Sonatype Nexus (Snapshots)](https://img.shields.io/nexus/s/dev.zio/zio-kafka_2.13?server=https%3A%2F%2Foss.sonatype.org)](https://oss.sonatype.org/content/repositories/snapshots/dev/zio/zio-kafka_2.13/)
 
 # Welcome to ZIO Kafka
 
