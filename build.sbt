@@ -1,10 +1,9 @@
 import sbt.Keys.{ fork, parallelExecution }
 
-lazy val scala211  = "2.11.12"
 lazy val scala212  = "2.12.14"
 lazy val scala213  = "2.13.6"
 lazy val mainScala = scala213
-lazy val allScala  = Seq(scala211, scala212, mainScala)
+lazy val allScala  = Seq(scala212, mainScala)
 
 lazy val zioVersion           = "1.0.9"
 lazy val kafkaVersion         = "2.8.0"
@@ -58,17 +57,12 @@ lazy val kafka =
       scalafmtOnCompile := true,
       Compile / compile / scalacOptions ++= {
         if (scalaBinaryVersion.value == "2.13") Seq("-P:silencer:globalFilters=[import scala.collection.compat._]")
-        else if (scalaBinaryVersion.value == "2.11") Seq("-Xmax-classfile-name", "242")
         else Seq.empty
       },
       // workaround for bad constant pool issue
       (Compile / doc) := Def.taskDyn {
         val default = (Compile / doc).taskValue
-        if (scalaBinaryVersion.value == "2.11") {
-          (Compile / doc / target).toTask
-        } else {
-          Def.task(default.value)
-        }
+        Def.task(default.value)
       }.value,
       Compile / doc / scalacOptions ++= {
         if (scalaBinaryVersion.value == "2.13") Seq("-P:silencer:globalFilters=[import scala.collection.compat._]")
@@ -83,20 +77,18 @@ lazy val kafka =
       resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
       libraryDependencies ++= Seq(
         "dev.zio"                   %% "zio-streams"             % zioVersion,
-        "dev.zio"                   %% "zio-test"                % zioVersion % "test",
-        "dev.zio"                   %% "zio-test-sbt"            % zioVersion % "test",
+        "dev.zio"                   %% "zio-test"                % zioVersion           % "test",
+        "dev.zio"                   %% "zio-test-sbt"            % zioVersion           % "test",
         "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
         "com.fasterxml.jackson.core" % "jackson-databind"        % "2.12.3",
-        "ch.qos.logback"             % "logback-classic"         % "1.2.3"    % "test",
+        "ch.qos.logback"             % "logback-classic"         % "1.2.3"              % "test",
         "org.scala-lang.modules"    %% "scala-collection-compat" % "2.4.4",
+        "io.github.embeddedkafka"   %% "embedded-kafka"          % embeddedKafkaVersion % "test",
         compilerPlugin("org.typelevel" % "kind-projector" % "0.13.0" cross CrossVersion.full)
       ) ++ {
         if (scalaBinaryVersion.value == "2.13") silencer
         else if (scalaBinaryVersion.value == "2.12") silencer
         else Seq.empty
-      } ++ {
-        if (scalaBinaryVersion.value == "2.11") Seq.empty
-        else Seq("io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion % "test")
       },
       testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
     )
