@@ -15,7 +15,7 @@ private[consumer] final case class RebalanceListener(
   /**
    * Combine with another [[RebalanceListener]] and execute their actions sequentially
    */
-  def ++(that: RebalanceListener) =
+  def ++(that: RebalanceListener): RebalanceListener =
     RebalanceListener(
       assigned => onAssigned(assigned) *> that.onAssigned(assigned),
       revoked => onRevoked(revoked) *> that.onRevoked(revoked)
@@ -34,9 +34,4 @@ private[consumer] final case class RebalanceListener(
       }
     }
 
-}
-
-object RebalanceListener {
-  def onRevoked(action: Set[TopicPartition] => Task[Unit]): RebalanceListener =
-    RebalanceListener(_ => Task.unit, action)
 }

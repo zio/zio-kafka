@@ -22,8 +22,9 @@ object KafkaTestUtils {
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO.access[Kafka](_.get[Kafka.Service].bootstrapServers).map(ProducerSettings(_))
 
-  val stringProducer: ZLayer[Kafka, Throwable, StringProducer] =
-    (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
+  val stringProducer: ZLayer[Kafka with Blocking, Throwable, StringProducer] =
+    (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) ++ ZLayer
+      .identity[Blocking] >>>
       Producer.live[Any, String, String]
 
   def produceOne(
@@ -52,18 +53,24 @@ object KafkaTestUtils {
         case (k, v) => new ProducerRecord(topic, k, v)
       }))
 
-  def consumerSettings(groupId: String, clientId: String, offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()) =
+  def consumerSettings(
+    groupId: String,
+    clientId: String,
+    allowAutoCreateTopics: Boolean = true,
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
+  ) =
     ZIO.access[Kafka] { kafka: Kafka =>
       ConsumerSettings(kafka.get.bootstrapServers)
         .withGroupId(groupId)
         .withClientId(clientId)
         .withCloseTimeout(5.seconds)
         .withProperties(
-          ConsumerConfig.AUTO_OFFSET_RESET_CONFIG     -> "earliest",
-          ConsumerConfig.METADATA_MAX_AGE_CONFIG      -> "100",
-          ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG    -> "1000",
-          ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG -> "250",
-          ConsumerConfig.MAX_POLL_RECORDS_CONFIG      -> "10"
+          ConsumerConfig.AUTO_OFFSET_RESET_CONFIG        -> "earliest",
+          ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",
+          ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "1000",
+          ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "250",
+          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "10",
+          ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
         .withPerPartitionChunkPrefetch(16)
         .withOffsetRetrieval(offsetRetrieval)
@@ -73,9 +80,10 @@ object KafkaTestUtils {
     groupId: String,
     clientId: String,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+    allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZLayer[Kafka with Clock with Blocking, Throwable, Consumer] =
-    (ZLayer.fromEffect(consumerSettings(groupId, clientId, offsetRetrieval)) ++
+    (consumerSettings(groupId, clientId, allowAutoCreateTopics, offsetRetrieval).toLayer ++
       ZLayer.requires[Clock with Blocking] ++
       ZLayer.succeed(diagnostics)) >>> Consumer.live
 
