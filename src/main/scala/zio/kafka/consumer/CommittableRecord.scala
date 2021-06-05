@@ -13,23 +13,21 @@ final case class CommittableRecord[K, V](record: ConsumerRecord[K, V], offset: O
     for {
       key   <- keyDeserializer.deserialize(record.topic(), record.headers(), record.key())
       value <- valueDeserializer.deserialize(record.topic(), record.headers(), record.value())
-    } yield {
-      copy(
-        record = new ConsumerRecord[K1, V1](
-          record.topic(),
-          record.partition(),
-          record.offset(),
-          record.timestamp(),
-          record.timestampType(),
-          ConsumerRecord.NULL_CHECKSUM, // Checksum is deprecated
-          record.serializedKeySize(),
-          record.serializedValueSize(),
-          key,
-          value,
-          record.headers()
-        )
+    } yield copy(
+      record = new ConsumerRecord[K1, V1](
+        record.topic(),
+        record.partition(),
+        record.offset(),
+        record.timestamp(),
+        record.timestampType(),
+        ConsumerRecord.NULL_CHECKSUM, // Checksum is deprecated
+        record.serializedKeySize(),
+        record.serializedValueSize(),
+        key,
+        value,
+        record.headers()
       )
-    }
+    )
 
   def key: K          = record.key
   def value: V        = record.value()

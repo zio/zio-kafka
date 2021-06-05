@@ -16,10 +16,8 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
             fiber  <- AdminClient.fromKafkaFuture(ZIO.effectTotal(f)).fork
             _      <- ZIO.effectTotal(f.complete(true))
             result <- fiber.await
-          } yield {
-            assert(result)(equalTo(Exit.succeed(true))) &&
+          } yield assert(result)(equalTo(Exit.succeed(true))) &&
             assert(f.isDone)(equalTo(true) ?? "Kafka future is done")
-          }
         }
       },
       testM("completes with failure") {
@@ -29,10 +27,8 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
             fiber  <- AdminClient.fromKafkaFuture(ZIO.effectTotal(f)).fork
             _      <- ZIO.effectTotal(f.completeExceptionally(t))
             result <- fiber.await
-          } yield {
-            assert(result)(equalTo(Exit.fail(t))) &&
+          } yield assert(result)(equalTo(Exit.fail(t))) &&
             assert(f.isDone)(equalTo(true) ?? "Kafka future is done")
-          }
         }
       },
       testM("future is cancelled") {
@@ -41,11 +37,9 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
             fiber  <- AdminClient.fromKafkaFuture(ZIO.effectTotal(f)).fork
             _      <- ZIO.effectTotal(f.cancel(true))
             result <- fiber.await
-          } yield {
-            assert(result.interrupted)(equalTo(true) ?? "fiber was interrupted") &&
+          } yield assert(result.interrupted)(equalTo(true) ?? "fiber was interrupted") &&
             assert(f.isCancelled)(equalTo(true) ?? "Kafka future was cancelled") &&
             assert(f.isDone)(equalTo(true) ?? "Kafka future is done")
-          }
         }
       },
       testM("interrupted") {
@@ -55,11 +49,9 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
             fiber  <- AdminClient.fromKafkaFuture(latch.succeed(()) *> ZIO.effectTotal(f)).fork
             _      <- latch.await
             result <- fiber.interrupt
-          } yield {
-            assert(result.interrupted)(equalTo(true) ?? "fiber was interrupted") &&
+          } yield assert(result.interrupted)(equalTo(true) ?? "fiber was interrupted") &&
             assert(f.isCancelled)(equalTo(true) ?? "Kafka future was cancelled") &&
             assert(f.isDone)(equalTo(true) ?? "Kafka future is done")
-          }
         }
       } @@ flaky
     )

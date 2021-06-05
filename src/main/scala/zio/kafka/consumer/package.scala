@@ -56,7 +56,7 @@ package object consumer {
        * streams may be completed.
        *
        * All streams can be completed by calling [[stopConsumption]].
-     **/
+       */
       def partitionedStream[R, K, V](
         keyDeserializer: Deserializer[R, K],
         valueDeserializer: Deserializer[R, V]
@@ -179,8 +179,8 @@ package object consumer {
       ): Task[Map[TopicPartition, OffsetAndTimestamp]] =
         consumer.withConsumer(
           _.offsetsForTimes(timestamps.view.mapValues(Long.box).toMap.asJava, timeout.asJava).asScala.toMap
-          // If a partition doesn't exist yet, the map will have 'null' as entry.
-          // It's more idiomatic scala to then simply not have that map entry.
+            // If a partition doesn't exist yet, the map will have 'null' as entry.
+            // It's more idiomatic scala to then simply not have that map entry.
             .filter(_._2 != null)
         )
 
@@ -202,13 +202,12 @@ package object consumer {
           ZStream
             .fromQueue(runloop.partitions)
             .flattenExitOption
-            .map {
-              case (tp, partition) =>
-                val partitionStream =
-                  if (settings.perPartitionChunkPrefetch <= 0) partition
-                  else partition.buffer(settings.perPartitionChunkPrefetch)
+            .map { case (tp, partition) =>
+              val partitionStream =
+                if (settings.perPartitionChunkPrefetch <= 0) partition
+                else partition.buffer(settings.perPartitionChunkPrefetch)
 
-                tp -> partitionStream.mapChunksM(_.mapM(_.deserializeWith(keyDeserializer, valueDeserializer)))
+              tp -> partitionStream.mapChunksM(_.mapM(_.deserializeWith(keyDeserializer, valueDeserializer)))
             }
       }
 
@@ -253,9 +252,8 @@ package object consumer {
             partitionedStream(keyDeserializer, valueDeserializer)
               .flatMapPar(Int.MaxValue, outputBuffer = settings.perPartitionChunkPrefetch) {
                 case (_, partitionStream) =>
-                  partitionStream.mapChunksM(_.mapM {
-                    case CommittableRecord(record, offset) =>
-                      f(record.key(), record.value()).as(offset)
+                  partitionStream.mapChunksM(_.mapM { case CommittableRecord(record, offset) =>
+                    f(record.key(), record.value()).as(offset)
                   })
               }
           }
@@ -267,23 +265,23 @@ package object consumer {
         ZIO.runtime[Any].flatMap { runtime =>
           consumer.withConsumerM { c =>
             subscription match {
-              case Subscription.Pattern(pattern) =>
+              case Subscription.Pattern(pattern)        =>
                 ZIO(c.subscribe(pattern.pattern, runloop.rebalanceListener.toKafka(runtime)))
-              case Subscription.Topics(topics) =>
+              case Subscription.Topics(topics)          =>
                 ZIO(c.subscribe(topics.asJava, runloop.rebalanceListener.toKafka(runtime)))
 
               // For manual subscriptions we have to do some manual work before starting the run loop
               case Subscription.Manual(topicPartitions) =>
                 ZIO(c.assign(topicPartitions.asJava)) *>
                   ZIO.foreach_(topicPartitions)(runloop.newPartitionStream) *> {
-                  settings.offsetRetrieval match {
-                    case OffsetRetrieval.Manual(getOffsets) =>
-                      getOffsets(topicPartitions).flatMap { offsets =>
-                        ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
-                      }
-                    case OffsetRetrieval.Auto(_) => ZIO.unit
+                    settings.offsetRetrieval match {
+                      case OffsetRetrieval.Manual(getOffsets) =>
+                        getOffsets(topicPartitions).flatMap { offsets =>
+                          ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
+                        }
+                      case OffsetRetrieval.Auto(_)            => ZIO.unit
+                    }
                   }
-                }
             }
           }
         }
@@ -312,12 +310,12 @@ package object consumer {
       for {
         wrapper <- ConsumerAccess.make(settings)
         runloop <- Runloop(
-                    wrapper,
-                    settings.pollInterval,
-                    settings.pollTimeout,
-                    diagnostics,
-                    settings.offsetRetrieval
-                  )
+                     wrapper,
+                     settings.pollInterval,
+                     settings.pollTimeout,
+                     diagnostics,
+                     settings.offsetRetrieval
+                   )
       } yield Live(wrapper, settings, runloop)
 
     def withConsumerService[A](

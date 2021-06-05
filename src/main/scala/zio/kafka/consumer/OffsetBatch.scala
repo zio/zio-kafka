@@ -39,11 +39,10 @@ private final case class OffsetBatchImpl(
   def merge(otherOffsets: OffsetBatch): OffsetBatch = {
     val newOffsets = Map.newBuilder[TopicPartition, Long]
     newOffsets ++= offsets
-    otherOffsets.offsets.foreach {
-      case (tp, offset) =>
-        val existing = offsets.getOrElse(tp, -1L)
-        if (existing < offset)
-          newOffsets += tp -> offset
+    otherOffsets.offsets.foreach { case (tp, offset) =>
+      val existing = offsets.getOrElse(tp, -1L)
+      if (existing < offset)
+        newOffsets += tp -> offset
     }
 
     copy(offsets = newOffsets.result())

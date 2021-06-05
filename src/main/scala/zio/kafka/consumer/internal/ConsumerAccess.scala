@@ -26,8 +26,8 @@ private[consumer] class ConsumerAccess(
   ): RIO[R, A] =
     blocking
       .blocking(ZIO.effectSuspend(f(consumer)))
-      .catchSome {
-        case _: WakeupException => ZIO.interrupt
+      .catchSome { case _: WakeupException =>
+        ZIO.interrupt
       }
       .fork
       .flatMap(fib => fib.join.onInterrupt(ZIO.effectTotal(consumer.wakeup()) *> fib.interrupt))
@@ -41,11 +41,11 @@ private[consumer] object ConsumerAccess {
       access   <- Semaphore.make(1).toManaged_
       blocking <- ZManaged.service[Blocking.Service]
       consumer <- blocking.effectBlocking {
-                   new KafkaConsumer[Array[Byte], Array[Byte]](
-                     settings.driverSettings.asJava,
-                     new ByteArrayDeserializer(),
-                     new ByteArrayDeserializer()
-                   )
-                 }.toManaged(c => blocking.blocking(access.withPermit(UIO(c.close(settings.closeTimeout)))))
+                    new KafkaConsumer[Array[Byte], Array[Byte]](
+                      settings.driverSettings.asJava,
+                      new ByteArrayDeserializer(),
+                      new ByteArrayDeserializer()
+                    )
+                  }.toManaged(c => blocking.blocking(access.withPermit(UIO(c.close(settings.closeTimeout)))))
     } yield new ConsumerAccess(consumer, access, blocking)
 }
