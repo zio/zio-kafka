@@ -1,4 +1,4 @@
-import sbt.Keys.{ fork, parallelExecution }
+import sbt.Keys.{fork, parallelExecution}
 
 lazy val scala212  = "2.12.14"
 lazy val scala213  = "2.13.6"
@@ -64,7 +64,6 @@ lazy val kafka =
       scalafmtOnCompile := true,
       Compile / compile / scalacOptions ++= {
         if (scalaBinaryVersion.value == "2.13") Seq("-P:silencer:globalFilters=[import scala.collection.compat._]")
-        else if (scalaBinaryVersion.value == "3") Seq("-Ykind-projector")
         else Seq.empty
       },
       // workaround for bad constant pool issue
@@ -85,12 +84,12 @@ lazy val kafka =
       resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
       libraryDependencies ++= Seq(
         "dev.zio"                   %% "zio-streams"             % zioVersion,
-        "dev.zio"                   %% "zio-test"                % zioVersion           % "test",
-        "dev.zio"                   %% "zio-test-sbt"            % zioVersion           % "test",
+        "dev.zio"                   %% "zio-test"                % zioVersion % "test",
+        "dev.zio"                   %% "zio-test-sbt"            % zioVersion % "test",
         "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
         "com.fasterxml.jackson.core" % "jackson-databind"        % "2.12.3",
-        "ch.qos.logback"             % "logback-classic"         % "1.2.3"              % "test",
-        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.4.4",
+        "ch.qos.logback"             % "logback-classic"         % "1.2.3"    % "test",
+        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.4.4"
       ) ++ {
         if (scalaBinaryVersion.value == "2.13") silencer
         else if (scalaBinaryVersion.value == "2.12") silencer
