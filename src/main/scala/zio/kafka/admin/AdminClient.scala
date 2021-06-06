@@ -423,15 +423,15 @@ object AdminClient {
   sealed abstract class OffsetSpec { def asJava: JOffsetSpec }
 
   object OffsetSpec {
-    final case object EarliestSpec extends OffsetSpec {
+    case object EarliestSpec extends OffsetSpec {
       override def asJava = JOffsetSpec.earliest()
     }
 
-    final case object LatestSpec extends OffsetSpec {
+    case object LatestSpec extends OffsetSpec {
       override def asJava = JOffsetSpec.latest()
     }
 
-    final case class TimestampSpec(timestamp: Long) extends OffsetSpec {
+    case class TimestampSpec(timestamp: Long) extends OffsetSpec {
       override def asJava = JOffsetSpec.forTimestamp(timestamp)
     }
   }
@@ -439,11 +439,11 @@ object AdminClient {
   sealed abstract class IsolationLevel { def asJava: JIsolationLevel }
 
   object IsolationLevel {
-    final case object ReadUncommitted extends IsolationLevel {
+    case object ReadUncommitted extends IsolationLevel {
       override def asJava = JIsolationLevel.READ_UNCOMMITTED
     }
 
-    final case object ReadCommitted extends IsolationLevel {
+    case object ReadCommitted extends IsolationLevel {
       override def asJava = JIsolationLevel.READ_COMMITTED
     }
   }
