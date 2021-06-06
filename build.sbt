@@ -1,4 +1,4 @@
-import sbt.Keys.{fork, parallelExecution}
+import sbt.Keys.{ fork, parallelExecution }
 
 lazy val scala212  = "2.12.14"
 lazy val scala213  = "2.13.6"
