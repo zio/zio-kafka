@@ -6,6 +6,7 @@ import org.apache.kafka.clients.admin.{
   AlterConsumerGroupOffsetsOptions => JAlterConsumerGroupOffsetsOptions,
   Config => JConfig,
   ListOffsetsOptions => JListOffsetsOptions,
+  ListConsumerGroupOffsetsOptions => JListConsumerGroupOffsetsOptions,
   NewPartitions => JNewPartitions,
   NewTopic => JNewTopic,
   OffsetSpec => JOffsetSpec,
@@ -215,6 +216,24 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
       )
     }
   }.map(_.asScala.toMap.bimap(TopicPartition(_), ListOffsetsResultInfo(_)))
+
+  /**
+   * List Consumer Group offsets for the specified partitions.
+   */
+  def listConsumerGroupOffsets(
+    groupId: String,
+    options: Option[ListConsumerGroupOffsetsOptions] = None
+  ): Task[Map[TopicPartition, OffsetAndMetadata]] =
+    fromKafkaFuture {
+      blocking.effectBlocking(
+        options
+          .fold(adminClient.listConsumerGroupOffsets(groupId))(opts =>
+            adminClient.listConsumerGroupOffsets(groupId, opts.asJava)
+          )
+          .partitionsToOffsetAndMetadata()
+      )
+    }
+      .map(_.asScala.filterNot { case (_, om) => om eq null }.toMap.bimap(TopicPartition(_), OffsetAndMetadata(_)))
 
   /**
    * Alter offsets for the specified partitions and consumer group.
@@ -469,12 +488,24 @@ object AdminClient {
       ListOffsetsResultInfo(lo.offset(), lo.timestamp(), lo.leaderEpoch().toScala.map(_.toInt))
   }
 
+  case class ListConsumerGroupOffsetsOptions(partitions: Chunk[TopicPartition]) {
+    def asJava = {
+      val opts = new JListConsumerGroupOffsetsOptions
+      if (partitions.isEmpty) opts else opts.topicPartitions(partitions.map(_.asJava).asJava)
+    }
+  }
+
   case class OffsetAndMetadata(
     offset: Long,
     leaderEpoch: Option[Int] = None,
     metadata: Option[String] = None
   ) {
     def asJava = new JOffsetAndMetadata(offset, leaderEpoch.map(Int.box).toJava, metadata.orNull)
+  }
+
+  object OffsetAndMetadata {
+    def apply(om: JOffsetAndMetadata): OffsetAndMetadata =
+      OffsetAndMetadata(om.offset(), om.leaderEpoch().toScala.map(_.toInt), Some(om.metadata()))
   }
 
   case class AlterConsumerGroupOffsetsOptions(

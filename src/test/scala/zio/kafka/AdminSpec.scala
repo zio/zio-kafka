@@ -6,7 +6,14 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.kafka.KafkaTestUtils
 import zio.kafka.KafkaTestUtils._
-import zio.kafka.admin.AdminClient.{ ConfigResource, ConfigResourceType, OffsetAndMetadata, OffsetSpec, TopicPartition }
+import zio.kafka.admin.AdminClient.{
+  ConfigResource,
+  ConfigResourceType,
+  ListConsumerGroupOffsetsOptions,
+  OffsetAndMetadata,
+  OffsetSpec,
+  TopicPartition
+}
 import zio.kafka.consumer.{ Consumer, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
@@ -197,6 +204,54 @@ object AdminSpec extends DefaultRunnableSpec {
               equalTo(records(1))
             ) &&
             assert(recordsAfterAltering.get(2))(isNone)
+        }
+      },
+      testM("list consumer group offsets") {
+
+        def consumeAndCommit(count: Long, topic: String, groupId: String) =
+          Consumer
+            .subscribeAnd(Subscription.Topics(Set(topic)))
+            .plainStream[Kafka with Blocking with Clock, String, String](Serde.string, Serde.string)
+            .take(count)
+            .foreach(_.offset.commit)
+            .provideSomeLayer[Kafka with Blocking with Clock](consumer(groupId, topic))
+
+        KafkaTestUtils.withAdmin { client =>
+          for {
+            topic                 <- randomTopic
+            groupId               <- randomGroup
+            invalidTopic          <- randomTopic
+            invalidGroupId        <- randomGroup
+            msgCount               = 20
+            msgConsume             = 15
+            kvs                    = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
+            _                     <- client.createTopics(List(AdminClient.NewTopic(topic, 1, 1)))
+            _                     <- produceMany(topic, kvs).provideSomeLayer[Kafka with Blocking](stringProducer)
+            _                     <- consumeAndCommit(msgConsume.toLong, topic, groupId)
+            offsets               <- client.listConsumerGroupOffsets(
+                                       groupId,
+                                       Some(ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 0))))
+                                     )
+            invalidTopicOffsets   <- client.listConsumerGroupOffsets(
+                                       groupId,
+                                       Some(
+                                         ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(invalidTopic, 0)))
+                                       )
+                                     )
+            invalidTpOffsets      <- client.listConsumerGroupOffsets(
+                                       groupId,
+                                       Some(
+                                         ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 1)))
+                                       )
+                                     )
+            invalidGroupIdOffsets <- client.listConsumerGroupOffsets(
+                                       invalidGroupId,
+                                       Some(ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 0))))
+                                     )
+          } yield assert(offsets.get(TopicPartition(topic, 0)).map(_.offset))(isSome(equalTo(msgConsume.toLong))) &&
+            assert(invalidTopicOffsets)(isEmpty) &&
+            assert(invalidTpOffsets)(isEmpty) &&
+            assert(invalidGroupIdOffsets)(isEmpty)
         }
       }
     ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
