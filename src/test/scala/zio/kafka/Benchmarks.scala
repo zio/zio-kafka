@@ -21,7 +21,7 @@ object PopulateTopic extends App {
   def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] =
     dataStream(872000).map { case (k, v) =>
       new ProducerRecord("inputs-topic", null, null, k, v)
-    }.mapChunksM(Producer.produceChunkAsync[Any, String, String](_).map(Chunk(_)))
+    }.mapChunksM(Producer.produceChunkAsync[Any, String, String](_, Serde.string, Serde.string).map(Chunk(_)))
       .mapMPar(5)(_.flatMap(chunk => console.putStrLn(s"Wrote chunk of ${chunk.size}")))
       .runDrain
       .provideCustomLayer(
@@ -29,9 +29,7 @@ object PopulateTopic extends App {
           Producer.make(
             ProducerSettings(List("localhost:9092"))
               .withProperty(ProducerConfig.ACKS_CONFIG, "1")
-              .withProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4"),
-            Serde.string,
-            Serde.string
+              .withProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4")
           )
         )
       )
