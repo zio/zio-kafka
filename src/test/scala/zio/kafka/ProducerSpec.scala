@@ -17,7 +17,7 @@ object ProducerSpec extends DefaultRunnableSpec {
     suite("producer test suite")(
       testM("one record") {
         for {
-          _ <- Producer.produce[Any, String, String](new ProducerRecord("topic", "boo", "baa"))
+          _ <- Producer.produce(new ProducerRecord("topic", "boo", "baa"), Serde.string, Serde.string)
         } yield assertCompletes
       },
       testM("a non-empty chunk of records") {
@@ -34,7 +34,7 @@ object ProducerSpec extends DefaultRunnableSpec {
           }
 
         for {
-          outcome  <- Producer.produceChunk[Any, String, String](chunks)
+          outcome  <- Producer.produceChunk(chunks, Serde.string, Serde.string)
           settings <- consumerSettings("testGroup", "testClient")
           record1  <- withConsumer(Topics(Set(topic1)), settings).use { consumer =>
                         for {
@@ -57,16 +57,16 @@ object ProducerSpec extends DefaultRunnableSpec {
       testM("an empty chunk of records") {
         val chunks = Chunk.fromIterable(List.empty)
         for {
-          outcome <- Producer.produceChunk[Any, String, String](chunks)
+          outcome <- Producer.produceChunk(chunks, Serde.string, Serde.string)
         } yield assert(outcome.length)(equalTo(0))
       },
       testM("export metrics") {
         for {
-          metrics <- Producer.metrics[Any, String, String]
+          metrics <- Producer.metrics
         } yield assert(metrics)(isNonEmpty)
       }
     ).provideSomeLayerShared[TestEnvironment](
-      ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> stringProducer) ++ Kafka.embedded)
+      ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> producer) ++ Kafka.embedded)
         .mapError(TestFailure.fail) ++ Clock.live
     )
 }
