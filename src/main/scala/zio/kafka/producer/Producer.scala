@@ -130,7 +130,7 @@ trait Producer {
 
 object Producer {
 
-  final case class Live(
+  private final case class Live(
     p: KafkaProducer[Array[Byte], Array[Byte]],
     producerSettings: ProducerSettings,
     blocking: Blocking.Service
