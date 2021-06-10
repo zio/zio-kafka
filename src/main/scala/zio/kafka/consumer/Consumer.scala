@@ -127,7 +127,7 @@ trait Consumer {
 
 object Consumer {
 
-  final case class Live(
+  private final case class Live(
     private val consumer: ConsumerAccess,
     private val settings: ConsumerSettings,
     private val runloop: Runloop,
