@@ -65,8 +65,8 @@ object KafkaTestUtils {
     clientId: String,
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
-  ) =
-    ZIO.access[Has[Kafka]] { kafka: Has[Kafka] =>
+  ): URIO[Has[Kafka], ConsumerSettings] =
+    ZIO.access[Has[Kafka]] { (kafka: Has[Kafka]) =>
       ConsumerSettings(kafka.get.bootstrapServers)
         .withGroupId(groupId)
         .withClientId(clientId)
