@@ -21,10 +21,6 @@ lazy val silencer = {
   )
 }
 
-lazy val kindProjector = Seq(
-  compilerPlugin("org.typelevel" % "kind-projector" % "0.13.0" cross CrossVersion.full)
-)
-
 lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion % "test"
 
 inThisBuild(
@@ -97,10 +93,6 @@ lazy val kafka =
       } ++ {
         if (scalaBinaryVersion.value == "3") Seq(embeddedKafka.cross(CrossVersion.for3Use2_13))
         else Seq(embeddedKafka)
-      } ++ {
-        if (scalaBinaryVersion.value == "2.13") kindProjector
-        else if (scalaBinaryVersion.value == "2.12") kindProjector
-        else Seq.empty
       },
       testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
     )
