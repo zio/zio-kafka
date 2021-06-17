@@ -5,19 +5,19 @@ import org.apache.kafka.common.acl.{ AclOperation => JAclOperation }
 sealed trait AclOperation
 
 object AclOperation {
-  final object Unknown         extends AclOperation
-  final object Any             extends AclOperation
-  final object All             extends AclOperation
-  final object Read            extends AclOperation
-  final object Write           extends AclOperation
-  final object Create          extends AclOperation
-  final object Delete          extends AclOperation
-  final object Alter           extends AclOperation
-  final object Describe        extends AclOperation
-  final object ClusterAction   extends AclOperation
-  final object DescribeConfigs extends AclOperation
-  final object AlterConfigs    extends AclOperation
-  final object IdempotentWrite extends AclOperation
+  object Unknown         extends AclOperation
+  object Any             extends AclOperation
+  object All             extends AclOperation
+  object Read            extends AclOperation
+  object Write           extends AclOperation
+  object Create          extends AclOperation
+  object Delete          extends AclOperation
+  object Alter           extends AclOperation
+  object Describe        extends AclOperation
+  object ClusterAction   extends AclOperation
+  object DescribeConfigs extends AclOperation
+  object AlterConfigs    extends AclOperation
+  object IdempotentWrite extends AclOperation
 
   def apply(jAclOperation: JAclOperation): AclOperation =
     jAclOperation match {

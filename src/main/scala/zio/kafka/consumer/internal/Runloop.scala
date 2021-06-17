@@ -1,7 +1,6 @@
 package zio.kafka.consumer.internal
 
 import java.util
-
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import zio._
@@ -185,7 +184,7 @@ private[consumer] final class Runloop(
       } else {
         val concatenatedChunk = bufferedChunk ++
           Chunk.fromArray(
-            reqRecs.toArray(Array.ofDim[ByteArrayConsumerRecord](reqRecs.size))
+            reqRecs.toArray[ByteArrayConsumerRecord](Array.ofDim[ByteArrayConsumerRecord](reqRecs.size))
           )
 
         fulfillAction = fulfillAction *> req.cont.succeed(

@@ -21,7 +21,7 @@ object Kafka {
   }
 
   val embedded: ZLayer[Any, Throwable, Has[Kafka]] = ZLayer.fromManaged {
-    implicit val embeddedKafkaConfig = EmbeddedKafkaConfig(
+    implicit val embeddedKafkaConfig: EmbeddedKafkaConfig = EmbeddedKafkaConfig(
       customBrokerProperties = Map("group.min.session.timeout.ms" -> "500", "group.initial.rebalance.delay.ms" -> "0")
     )
     ZManaged.make(ZIO.effect(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())

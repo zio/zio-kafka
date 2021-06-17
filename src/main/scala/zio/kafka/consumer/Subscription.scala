@@ -37,7 +37,7 @@ object Subscription {
    * @return The created subscription or failure when the pattern is invalid
    */
   def pattern(pattern: String): Task[Subscription] =
-    Task.effect(new Regex(pattern)).map(Pattern)
+    Task.effect(new Regex(pattern)).map(Pattern.apply)
 
   /**
    * Create a subscription for all topics matching the given pattern
