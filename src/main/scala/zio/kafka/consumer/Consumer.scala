@@ -44,6 +44,20 @@ trait Consumer {
   def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]]
 
   /**
+   * Create a stream that emits chunks whenever new partitions are assigned to this consumer.
+   *
+   * The top-level stream will emit chunks whenever the consumer rebalances, unless a manual subscription
+   * was made. When rebalancing occurs, new topic-partition streams may be emitted and existing
+   * streams may be completed.
+   *
+   * All streams can be completed by calling [[stopConsumption]].
+   */
+  def partitionedAssignmentStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
+
+  /**
    * Create a stream with messages on the subscribed topic-partitions by topic-partition
    *
    * The top-level stream will emit new topic-partition streams for each topic-partition that is assigned
@@ -56,10 +70,7 @@ trait Consumer {
   def partitionedStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): Stream[
-    Throwable,
-    (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
-  ]
+  ): Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
 
   /**
    * Create a stream with all messages on the subscribed topic-partitions
@@ -183,6 +194,28 @@ object Consumer {
           .filter(_._2 != null)
       )
 
+    override def partitionedAssignmentStream[R, K, V](
+      keyDeserializer: Deserializer[R, K],
+      valueDeserializer: Deserializer[R, V]
+    ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] =
+      ZStream.fromEffect {
+        keyDeserializer.configure(settings.driverSettings, isKey = true) *>
+          valueDeserializer.configure(settings.driverSettings, isKey = false)
+      } *>
+        ZStream
+          .fromQueue(runloop.partitions)
+          .map(_.exit)
+          .flattenExitOption
+          .map {
+            _.map { case (tp, partition) =>
+              val partitionStream =
+                if (settings.perPartitionChunkPrefetch <= 0) partition
+                else partition.buffer(settings.perPartitionChunkPrefetch)
+
+              tp -> partitionStream.mapChunksM(_.mapM(_.deserializeWith(keyDeserializer, valueDeserializer)))
+            }
+          }
+
     override def partitionedStream[R, K, V](
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
@@ -190,25 +223,7 @@ object Consumer {
       Any,
       Throwable,
       (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
-    ] = {
-      val configureDeserializers =
-        ZStream.fromEffect {
-          keyDeserializer.configure(settings.driverSettings, isKey = true) *>
-            valueDeserializer.configure(settings.driverSettings, isKey = false)
-        }
-
-      configureDeserializers *>
-        ZStream
-          .fromQueue(runloop.partitions)
-          .flattenExitOption
-          .map { case (tp, partition) =>
-            val partitionStream =
-              if (settings.perPartitionChunkPrefetch <= 0) partition
-              else partition.buffer(settings.perPartitionChunkPrefetch)
-
-            tp -> partitionStream.mapChunksM(_.mapM(_.deserializeWith(keyDeserializer, valueDeserializer)))
-          }
-    }
+    ] = partitionedAssignmentStream(keyDeserializer, valueDeserializer).flattenChunks
 
     override def partitionsFor(
       topic: String,
@@ -277,7 +292,15 @@ object Consumer {
             // For manual subscriptions we have to do some manual work before starting the run loop
             case Subscription.Manual(topicPartitions) =>
               ZIO(c.assign(topicPartitions.asJava)) *>
-                ZIO.foreach_(topicPartitions)(runloop.newPartitionStream) *> {
+                ZIO.foreach(topicPartitions)(runloop.newPartitionStream).flatMap { partitionStreams =>
+                  runloop.partitions.offer(
+                    Take.chunk(
+                      Chunk.fromIterable(partitionStreams.map { case (tp, _, stream) =>
+                        tp -> stream
+                      })
+                    )
+                  )
+                } *> {
                   settings.offsetRetrieval match {
                     case OffsetRetrieval.Manual(getOffsets) =>
                       getOffsets(topicPartitions).flatMap { offsets =>
