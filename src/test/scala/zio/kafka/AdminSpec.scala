@@ -1,14 +1,16 @@
 package zio.kafka.admin
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import zio.{ Chunk, Has }
+import zio.{ Chunk, Has, Schedule }
 import zio.blocking.Blocking
 import zio.clock.Clock
+import zio.duration.Duration
 import zio.kafka.KafkaTestUtils
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.admin.AdminClient.{
   ConfigResource,
   ConfigResourceType,
+  ConsumerGroupDescription,
   ListConsumerGroupOffsetsOptions,
   OffsetAndMetadata,
   OffsetSpec,
@@ -252,6 +254,36 @@ object AdminSpec extends DefaultRunnableSpec {
             assert(invalidTopicOffsets)(isEmpty) &&
             assert(invalidTpOffsets)(isEmpty) &&
             assert(invalidGroupIdOffsets)(isEmpty)
+        }
+      },
+      testM("describe consumer groups") {
+        KafkaTestUtils.withAdmin { admin =>
+          for {
+            topicName   <- randomTopic
+            _           <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 10, replicationFactor = 1))
+            groupId     <- randomGroup
+            _           <- Consumer
+                             .subscribeAnd(Subscription.topics(topicName))
+                             .plainStream(Serde.string, Serde.string)
+                             .runCollect
+                             .provideSomeLayer(consumer(groupId, "consumer1"))
+                             .fork
+            _           <- Consumer
+                             .subscribeAnd(Subscription.topics(topicName))
+                             .plainStream(Serde.string, Serde.string)
+                             .runCollect
+                             .provideSomeLayer(consumer(groupId, "consumer2"))
+                             .fork
+            description <- admin
+                             .describeConsumerGroups(groupId)
+                             .map(_.head._2)
+                             .repeat(
+                               (Schedule.recurs(5) && Schedule.fixed(Duration.fromMillis(500)) && Schedule
+                                 .recurUntil[ConsumerGroupDescription](
+                                   _.state == AdminClient.ConsumerGroupState.Stable
+                                 )).map(_._2)
+                             )
+          } yield assert(description.groupId)(equalTo(groupId)) && assert(description.members.length)(equalTo(2))
         }
       }
     ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential

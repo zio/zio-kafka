@@ -16,6 +16,8 @@ import org.apache.kafka.clients.admin.{
   DescribeClusterOptions => JDescribeClusterOptions,
   DescribeConfigsOptions => JDescribeConfigsOptions,
   CreateTopicsOptions => JCreateTopicsOptions,
+  ConsumerGroupDescription => JConsumerGroupDescription,
+  MemberDescription => JMemberDescription,
   _
 }
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
@@ -28,7 +30,8 @@ import org.apache.kafka.common.{
   MetricName => JMetricName,
   Node => JNode,
   TopicPartition => JTopicPartition,
-  TopicPartitionInfo => JTopicPartitionInfo
+  TopicPartitionInfo => JTopicPartitionInfo,
+  ConsumerGroupState => JConsumerGroupState
 }
 import zio._
 import zio.blocking.Blocking
@@ -266,6 +269,13 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
         (MetricName(metricName), Metric(metric))
       }
     )
+
+  def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]] =
+    fromKafkaFuture(
+      blocking.effectBlocking(
+        adminClient.describeConsumerGroups(groupIds.asJavaCollection).all
+      )
+    ).map(_.asScala.view.mapValues(ConsumerGroupDescription.apply).toMap)
 }
 
 object AdminClient {
@@ -319,6 +329,88 @@ object AdminClient {
       case JConfigResource.Type.TOPIC         => Topic
       case JConfigResource.Type.UNKNOWN       => Unknown
     }
+  }
+
+  sealed trait ConsumerGroupState {
+    def asJava: JConsumerGroupState
+  }
+
+  object ConsumerGroupState {
+    case object Unknown extends ConsumerGroupState {
+      override def asJava: JConsumerGroupState = JConsumerGroupState.UNKNOWN
+    }
+
+    case object PreparingRebalance extends ConsumerGroupState {
+      override def asJava: JConsumerGroupState = JConsumerGroupState.PREPARING_REBALANCE
+    }
+
+    case object CompletingRebalance extends ConsumerGroupState {
+      override def asJava: JConsumerGroupState = JConsumerGroupState.COMPLETING_REBALANCE
+    }
+
+    case object Stable extends ConsumerGroupState {
+      override def asJava: JConsumerGroupState = JConsumerGroupState.STABLE
+    }
+
+    case object Dead extends ConsumerGroupState {
+      override def asJava: JConsumerGroupState = JConsumerGroupState.DEAD
+    }
+
+    case object Empty extends ConsumerGroupState {
+      override def asJava: JConsumerGroupState = JConsumerGroupState.EMPTY
+    }
+
+    def apply(state: JConsumerGroupState): ConsumerGroupState = state match {
+      case JConsumerGroupState.UNKNOWN              => ConsumerGroupState.Unknown
+      case JConsumerGroupState.PREPARING_REBALANCE  => ConsumerGroupState.PreparingRebalance
+      case JConsumerGroupState.COMPLETING_REBALANCE => ConsumerGroupState.CompletingRebalance
+      case JConsumerGroupState.STABLE               => ConsumerGroupState.Stable
+      case JConsumerGroupState.DEAD                 => ConsumerGroupState.Dead
+      case JConsumerGroupState.EMPTY                => ConsumerGroupState.Empty
+    }
+  }
+
+  case class MemberDescription(
+    consumerId: String,
+    groupInstanceId: Option[String],
+    clientId: String,
+    host: String,
+    assignment: Set[TopicPartition]
+  )
+
+  object MemberDescription {
+    def apply(desc: JMemberDescription): MemberDescription = MemberDescription(
+      desc.consumerId,
+      desc.groupInstanceId.toScala,
+      desc.clientId(),
+      desc.host(),
+      desc.assignment.topicPartitions().asScala.map(TopicPartition.apply).toSet
+    )
+  }
+
+  case class ConsumerGroupDescription(
+    groupId: String,
+    isSimpleConsumerGroup: Boolean,
+    members: List[MemberDescription],
+    partitionAssignor: String,
+    state: ConsumerGroupState,
+    coordinator: Node,
+    authorizedOperations: Set[AclOperation]
+  )
+
+  object ConsumerGroupDescription {
+
+    def apply(description: JConsumerGroupDescription): ConsumerGroupDescription =
+      ConsumerGroupDescription(
+        description.groupId,
+        description.isSimpleConsumerGroup,
+        description.members.asScala.map(MemberDescription.apply).toList,
+        description.partitionAssignor,
+        ConsumerGroupState(description.state),
+        Node(description.coordinator()),
+        Option(description.authorizedOperations())
+          .fold(Set.empty[AclOperation])(_.asScala.map(AclOperation.apply).toSet)
+      )
   }
 
   case class CreatePartitionsOptions(validateOnly: Boolean) {
