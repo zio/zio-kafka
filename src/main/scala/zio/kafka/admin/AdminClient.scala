@@ -276,6 +276,15 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
         adminClient.describeConsumerGroups(groupIds.asJavaCollection).all
       )
     ).map(_.asScala.view.mapValues(ConsumerGroupDescription.apply).toMap)
+
+  def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit] = {
+    val options = new RemoveMembersFromConsumerGroupOptions(membersToRemove.map(new MemberToRemove(_)).asJavaCollection)
+    fromKafkaFuture(
+      blocking.effectBlocking(
+        adminClient.removeMembersFromConsumerGroup(groupId, options).all()
+      )
+    ).unit
+  }
 }
 
 object AdminClient {

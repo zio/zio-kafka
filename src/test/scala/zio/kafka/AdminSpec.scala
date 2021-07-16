@@ -1,7 +1,7 @@
 package zio.kafka.admin
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import zio.{ Chunk, Has, Schedule }
+import zio.{ Chunk, Has, Schedule, ZIO }
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration.Duration
@@ -257,34 +257,62 @@ object AdminSpec extends DefaultRunnableSpec {
         }
       },
       testM("describe consumer groups") {
-        KafkaTestUtils.withAdmin { admin =>
+        KafkaTestUtils.withAdmin { implicit admin =>
           for {
             topicName   <- randomTopic
             _           <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 10, replicationFactor = 1))
             groupId     <- randomGroup
-            _           <- Consumer
-                             .subscribeAnd(Subscription.topics(topicName))
-                             .plainStream(Serde.string, Serde.string)
-                             .runCollect
-                             .provideSomeLayer(consumer(groupId, "consumer1"))
-                             .fork
-            _           <- Consumer
-                             .subscribeAnd(Subscription.topics(topicName))
-                             .plainStream(Serde.string, Serde.string)
-                             .runCollect
-                             .provideSomeLayer(consumer(groupId, "consumer2"))
-                             .fork
-            description <- admin
-                             .describeConsumerGroups(groupId)
-                             .map(_.head._2)
-                             .repeat(
-                               (Schedule.recurs(5) && Schedule.fixed(Duration.fromMillis(500)) && Schedule
-                                 .recurUntil[ConsumerGroupDescription](
-                                   _.state == AdminClient.ConsumerGroupState.Stable
-                                 )).map(_._2)
-                             )
+            _           <- consumeNoop(topicName, groupId, "consumer1").fork
+            _           <- consumeNoop(topicName, groupId, "consumer2").fork
+            description <- getStableConsumerGroupDescription(groupId)
           } yield assert(description.groupId)(equalTo(groupId)) && assert(description.members.length)(equalTo(2))
+        }
+      },
+      testM("remove members from consumer groups") {
+        KafkaTestUtils.withAdmin { implicit admin =>
+          for {
+            topicName   <- randomTopic
+            _           <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 10, replicationFactor = 1))
+            groupId     <- randomGroup
+            _           <- consumeNoop(topicName, groupId, "consumer1", Some("instance1")).fork
+            consumer2   <- consumeNoop(topicName, groupId, "consumer2", Some("instance2")).fork
+            _           <- getStableConsumerGroupDescription(groupId)
+            _           <- consumer2.interrupt
+            _           <- admin.removeMembersFromConsumerGroup(groupId, Set("instance2"))
+            description <- getStableConsumerGroupDescription(groupId)
+          } yield assert(description.groupId)(equalTo(groupId)) && assert(description.members.length)(equalTo(1))
         }
       }
     ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
+
+  private def consumeNoop(
+    topicName: String,
+    groupId: String,
+    clientId: String,
+    groupInstanceId: Option[String] = None
+  ): ZIO[Has[Kafka] with Clock with Blocking, Throwable, Unit] = Consumer
+    .subscribeAnd(Subscription.topics(topicName))
+    .plainStream(Serde.string, Serde.string)
+    .foreach(_.offset.commit)
+    .provideSomeLayer(consumer(groupId, clientId, groupInstanceId))
+
+  private def getStableConsumerGroupDescription(
+    groupId: String
+  )(implicit adminClient: AdminClient): ZIO[Clock, Throwable, ConsumerGroupDescription] =
+    adminClient
+      .describeConsumerGroups(groupId)
+      .map(_.head._2)
+      .repeat(
+        (Schedule.recurs(5) && Schedule.fixed(Duration.fromMillis(500)) && Schedule
+          .recurUntil[ConsumerGroupDescription](
+            _.state == AdminClient.ConsumerGroupState.Stable
+          )).map(_._2)
+      )
+      .flatMap(desc =>
+        if (desc.state == AdminClient.ConsumerGroupState.Stable) {
+          ZIO.succeed(desc)
+        } else {
+          ZIO.fail(new IllegalStateException(s"Client is not in stable state: $desc"))
+        }
+      )
 }
