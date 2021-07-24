@@ -15,7 +15,7 @@ import scala.jdk.CollectionConverters._
 trait Producer {
 
   /**
-   * Produces a single record and await broker acknowledgement. See [[produceAsync(record*]] for
+   * Produces a single record and await broker acknowledgement. See [[produceAsync[R,K,V](record*]] for
    * version that allows to avoid round-trip-time penalty for each record.
    */
   def produce[R, K, V](
@@ -25,7 +25,7 @@ trait Producer {
   ): RIO[R, RecordMetadata]
 
   /**
-   * Produces a single record and await broker acknowledgement. See [[produceAsync(topic*]] for
+   * Produces a single record and await broker acknowledgement. See [[produceAsync[R,K,V](topic:String* ]] for
    * version that allows to avoid round-trip-time penalty for each record.
    */
   def produce[R, K, V](
@@ -59,7 +59,7 @@ trait Producer {
    * It is usually recommended to not await the inner layer of every individual record,
    * but enqueue a batch of records and await all of their acknowledgements at once. That
    * amortizes the cost of sending requests to Kafka and increases throughput.
-   * See [[produce(record*]] for version that awaits broker acknowledgement.
+   * See [[produce[R,K,V](record*]] for version that awaits broker acknowledgement.
    */
   def produceAsync[R, K, V](
     record: ProducerRecord[K, V],
@@ -78,7 +78,7 @@ trait Producer {
    * It is usually recommended to not await the inner layer of every individual record,
    * but enqueue a batch of records and await all of their acknowledgements at once. That
    * amortizes the cost of sending requests to Kafka and increases throughput.
-   * See [[produce(topic*]] for version that awaits broker acknowledgement.
+   * See [[produce[R,K,V](topic*]] for version that awaits broker acknowledgement.
    */
   def produceAsync[R, K, V](
     topic: String,
@@ -274,7 +274,7 @@ object Producer {
     ZIO.accessM[R with Has[Producer]](env => r(env.get[Producer]))
 
   /**
-   * Accessor method for [[Service.produce(record*]]
+   * Accessor method for [[Producer!.produce[R,K,V](record*]]
    */
   def produce[R, K, V](
     record: ProducerRecord[K, V],
@@ -284,7 +284,7 @@ object Producer {
     withProducerService(_.produce(record, keySerializer, valueSerializer))
 
   /**
-   * Accessor method for [[Service.produce(topic*]]
+   * Accessor method for [[Producer!.produce[R,K,V](topic*]]
    */
   def produce[R, K, V](
     topic: String,
@@ -309,7 +309,7 @@ object Producer {
     }
 
   /**
-   * Accessor method for [[Service.produceAsync(record*]]
+   * Accessor method for [[Producer!.produceAsync[R,K,V](record*]]
    */
   def produceAsync[R, K, V](
     record: ProducerRecord[K, V],
@@ -319,7 +319,7 @@ object Producer {
     withProducerService(_.produceAsync(record, keySerializer, valueSerializer))
 
   /**
-   * Accessor method for [[Service.produceAsync(topic*]]
+   * Accessor method for [[Producer.produceAsync[R,K,V](topic*]]
    */
   def produceAsync[R, K, V](
     topic: String,
@@ -331,7 +331,7 @@ object Producer {
     withProducerService(_.produceAsync(topic, key, value, keySerializer, valueSerializer))
 
   /**
-   * Accessor method for [[Service.produceChunkAsync]]
+   * Accessor method for [[Producer.produceChunkAsync]]
    */
   def produceChunkAsync[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -341,7 +341,7 @@ object Producer {
     withProducerService(_.produceChunkAsync(records, keySerializer, valueSerializer))
 
   /**
-   * Accessor method for [[Service.produceChunk]]
+   * Accessor method for [[Producer.produceChunk]]
    */
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -351,13 +351,13 @@ object Producer {
     withProducerService(_.produceChunk(records, keySerializer, valueSerializer))
 
   /**
-   * Accessor method for [[Service.flush]]
+   * Accessor method for [[Producer.flush]]
    */
   val flush: RIO[Has[Producer], Unit] =
     ZIO.serviceWith(_.flush)
 
   /**
-   * Accessor method for [[Service.metrics]]
+   * Accessor method for [[Producer.metrics]]
    */
   val metrics: RIO[Has[Producer], Map[MetricName, Metric]] =
     ZIO.serviceWith(_.metrics)

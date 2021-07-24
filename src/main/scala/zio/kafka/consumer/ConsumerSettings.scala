@@ -36,6 +36,9 @@ case class ConsumerSettings(
   def withGroupId(groupId: String): ConsumerSettings =
     withProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
 
+  def withGroupInstanceId(groupInstanceId: String): ConsumerSettings =
+    withProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
+
   def withOffsetRetrieval(retrieval: OffsetRetrieval): ConsumerSettings =
     copy(offsetRetrieval = retrieval)
 
