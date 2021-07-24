@@ -2,7 +2,7 @@ import sbt.Keys.{ fork, parallelExecution }
 
 lazy val scala212  = "2.12.14"
 lazy val scala213  = "2.13.6"
-lazy val scala3    = "3.0.0"
+lazy val scala3    = "3.0.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
@@ -85,7 +85,7 @@ lazy val kafka =
         "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
         "com.fasterxml.jackson.core" % "jackson-databind"        % "2.12.4",
         "ch.qos.logback"             % "logback-classic"         % "1.2.4"    % "test",
-        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.4.4"
+        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.5.0"
       ) ++ {
         if (scalaBinaryVersion.value == "2.13") silencer
         else if (scalaBinaryVersion.value == "2.12") silencer
