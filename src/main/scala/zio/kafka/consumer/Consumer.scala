@@ -347,13 +347,13 @@ object Consumer {
     } yield Live(wrapper, settings, runloop, clock)
 
   /**
-   * Accessor method for [[Service.assignment]]
+   * Accessor method for [[Consumer.assignment]]
    */
   def assignment: RIO[Has[Consumer], Set[TopicPartition]] =
     ZIO.serviceWith(_.assignment)
 
   /**
-   * Accessor method for [[Service.beginningOffsets]]
+   * Accessor method for [[Consumer.beginningOffsets]]
    */
   def beginningOffsets(
     partitions: Set[TopicPartition],
@@ -362,7 +362,7 @@ object Consumer {
     ZIO.serviceWith(_.beginningOffsets(partitions, timeout))
 
   /**
-   * Accessor method for [[Service.committed]]
+   * Accessor method for [[Consumer.committed]]
    */
   def committed(
     partitions: Set[TopicPartition],
@@ -371,7 +371,7 @@ object Consumer {
     ZIO.serviceWith(_.committed(partitions, timeout))
 
   /**
-   * Accessor method for [[Service.endOffsets]]
+   * Accessor method for [[Consumer.endOffsets]]
    */
   def endOffsets(
     partitions: Set[TopicPartition],
@@ -380,7 +380,7 @@ object Consumer {
     ZIO.serviceWith(_.endOffsets(partitions, timeout))
 
   /**
-   * Accessor method for [[Service.listTopics]]
+   * Accessor method for [[Consumer.listTopics]]
    */
   def listTopics(
     timeout: Duration = Duration.Infinity
@@ -388,7 +388,7 @@ object Consumer {
     ZIO.serviceWith(_.listTopics(timeout))
 
   /**
-   * Accessor method for [[Service.partitionedStream]]
+   * Accessor method for [[Consumer.partitionedStream]]
    */
   def partitionedStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
@@ -401,7 +401,7 @@ object Consumer {
     ZStream.accessStream(_.get[Consumer].partitionedStream(keyDeserializer, valueDeserializer))
 
   /**
-   * Accessor method for [[Service.plainStream]]
+   * Accessor method for [[Consumer.plainStream]]
    */
   def plainStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
@@ -411,7 +411,7 @@ object Consumer {
     ZStream.accessStream(_.get[Consumer].plainStream(keyDeserializer, valueDeserializer, outputBuffer))
 
   /**
-   * Accessor method for [[Service.stopConsumption]]
+   * Accessor method for [[Consumer.stopConsumption]]
    */
   def stopConsumption: RIO[Has[Consumer], Unit] =
     ZIO.serviceWith(_.stopConsumption)
@@ -470,19 +470,19 @@ object Consumer {
       .use(_.consumeWith(subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
 
   /**
-   * Accessor method for [[Service.subscribe]]
+   * Accessor method for [[Consumer.subscribe]]
    */
   def subscribe(subscription: Subscription): RIO[Has[Consumer], Unit] =
     ZIO.serviceWith(_.subscribe(subscription))
 
   /**
-   * Accessor method for [[Service.unsubscribe]]
+   * Accessor method for [[Consumer.unsubscribe]]
    */
   def unsubscribe: RIO[Has[Consumer], Unit] =
     ZIO.serviceWith(_.unsubscribe)
 
   /**
-   * Accessor method for [[Service.offsetsForTimes]]
+   * Accessor method for [[Consumer.offsetsForTimes]]
    */
   def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
@@ -491,7 +491,7 @@ object Consumer {
     ZIO.serviceWith(_.offsetsForTimes(timestamps, timeout))
 
   /**
-   * Accessor method for [[Service.partitionsFor]]
+   * Accessor method for [[Consumer.partitionsFor]]
    */
   def partitionsFor(
     topic: String,
@@ -500,7 +500,7 @@ object Consumer {
     ZIO.serviceWith(_.partitionsFor(topic, timeout))
 
   /**
-   * Accessor method for [[Service.position]]
+   * Accessor method for [[Consumer.position]]
    */
   def position(
     partition: TopicPartition,
@@ -509,7 +509,7 @@ object Consumer {
     ZIO.serviceWith(_.position(partition, timeout))
 
   /**
-   * Accessor method for [[Service.subscribeAnd]]
+   * Accessor method for [[Consumer.subscribeAnd]]
    */
   def subscribeAnd(
     subscription: Subscription
@@ -522,13 +522,13 @@ object Consumer {
     )
 
   /**
-   * Accessor method for [[Service.subscription]]
+   * Accessor method for [[Consumer.subscription]]
    */
   def subscription: RIO[Has[Consumer], Set[String]] =
     ZIO.serviceWith(_.subscription)
 
   /**
-   * Accessor method for [[Service.metrics]]
+   * Accessor method for [[Consumer.metrics]]
    */
   def metrics: RIO[Has[Consumer], Map[MetricName, Metric]] =
     ZIO.serviceWith(_.metrics)
