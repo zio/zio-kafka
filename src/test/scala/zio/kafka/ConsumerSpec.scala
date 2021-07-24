@@ -131,7 +131,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                               .take(1)
                               .runHead
                               .provideSomeLayer[Has[Kafka] with Blocking with Clock](
-                                consumer("group150", "client150", offsetRetrieval)
+                                consumer("group150", "client150", offsetRetrieval = offsetRetrieval)
                               )
           kvOut           = record.map(r => (r.record.key, r.record.value))
         } yield assert(kvOut)(isSome(equalTo("key2-3" -> "msg2-3")))
@@ -421,7 +421,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                               .map(_.record)
                               .runCollect
                               .provideSomeLayer[Has[Kafka] with Blocking with Clock](
-                                consumer("group1", "client2", offsetRetrieval)
+                                consumer("group1", "client2", offsetRetrieval = offsetRetrieval)
                               )
           // Check that we only got the records starting from the manually seek'd offset
         } yield assert(secondResults.map(rec => rec.key() -> rec.value()).toList)(equalTo(data.drop(manualOffsetSeek)))

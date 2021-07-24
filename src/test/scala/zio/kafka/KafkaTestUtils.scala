@@ -63,41 +63,44 @@ object KafkaTestUtils {
   def consumerSettings(
     groupId: String,
     clientId: String,
+    clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
   ): URIO[Has[Kafka], ConsumerSettings] =
     ZIO.access[Has[Kafka]] { (kafka: Has[Kafka]) =>
-      ConsumerSettings(kafka.get.bootstrapServers)
+      val settings = ConsumerSettings(kafka.get.bootstrapServers)
         .withGroupId(groupId)
         .withClientId(clientId)
         .withCloseTimeout(5.seconds)
         .withProperties(
           ConsumerConfig.AUTO_OFFSET_RESET_CONFIG        -> "earliest",
           ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",
-          ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "1000",
+          ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "3000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "250",
           ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "10",
           ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
         .withPerPartitionChunkPrefetch(16)
         .withOffsetRetrieval(offsetRetrieval)
+      clientInstanceId.fold(settings)(settings.withGroupInstanceId)
     }
 
   def consumer(
     groupId: String,
     clientId: String,
+    clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZLayer[Has[Kafka] with Clock with Blocking, Throwable, Has[Consumer]] =
-    (consumerSettings(groupId, clientId, allowAutoCreateTopics, offsetRetrieval).toLayer ++
+    (consumerSettings(groupId, clientId, clientInstanceId, allowAutoCreateTopics, offsetRetrieval).toLayer ++
       ZLayer.requires[Clock with Blocking] ++
       ZLayer.succeed(diagnostics)) >>> Consumer.live
 
   def consumeWithStrings[RC](groupId: String, clientId: String, subscription: Subscription)(
     r: (String, String) => URIO[RC, Unit]
   ): RIO[RC with Has[Kafka] with Blocking with Clock, Unit] =
-    consumerSettings(groupId, clientId).flatMap { settings =>
+    consumerSettings(groupId, clientId, None).flatMap { settings =>
       Consumer.consumeWith(
         settings,
         subscription,
