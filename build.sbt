@@ -91,7 +91,11 @@ lazy val kafka =
         else if (scalaBinaryVersion.value == "2.12") silencer
         else Seq.empty
       } ++ {
-        if (scalaBinaryVersion.value == "3") Seq(embeddedKafka.cross(CrossVersion.for3Use2_13))
+        if (scalaBinaryVersion.value == "3")
+          Seq(
+            embeddedKafka
+              .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
+          )
         else Seq(embeddedKafka)
       },
       testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
