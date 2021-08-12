@@ -6,7 +6,7 @@ lazy val scala3    = "3.0.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-lazy val zioVersion           = "1.0.9"
+lazy val zioVersion           = "1.0.10"
 lazy val kafkaVersion         = "2.8.0"
 lazy val embeddedKafkaVersion = "2.8.0" // Should be the same as kafkaVersion, except for the patch part
 
@@ -91,7 +91,11 @@ lazy val kafka =
         else if (scalaBinaryVersion.value == "2.12") silencer
         else Seq.empty
       } ++ {
-        if (scalaBinaryVersion.value == "3") Seq(embeddedKafka.cross(CrossVersion.for3Use2_13))
+        if (scalaBinaryVersion.value == "3")
+          Seq(
+            embeddedKafka
+              .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
+          )
         else Seq(embeddedKafka)
       },
       testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
