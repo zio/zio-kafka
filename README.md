@@ -207,7 +207,7 @@ import zio.kafka.serde._
 import scala.util.{Try, Success, Failure}
 import zio._
 
-val consumer = Consumer.make(consumerSettings)
+val consumer = Consumer.make(consumerSettings).toLayer
 
 val stream = Consumer
   .subscribeAnd(Subscription.topics("topic150"))
