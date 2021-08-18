@@ -40,11 +40,7 @@ import zio.duration.Duration
 import scala.collection.compat._
 import scala.jdk.CollectionConverters._
 
-/**
- * Thin wrapper around apache java AdminClient. See java api for descriptions
- * @param adminClient
- */
-case class AdminClient(private val adminClient: JAdminClient, private val blocking: Blocking.Service) {
+trait AdminClient {
   import AdminClient._
 
   /**
@@ -53,24 +49,12 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
   def createTopics(
     newTopics: Iterable[NewTopic],
     @deprecatedName(Symbol("createTopicOptions")) options: Option[CreateTopicsOptions] = None
-  ): Task[Unit] = {
-    val asJava = newTopics.map(_.asJava).asJavaCollection
-
-    fromKafkaFutureVoid {
-      blocking
-        .effectBlocking(
-          options
-            .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts.asJava))
-            .all()
-        )
-    }
-  }
+  ): Task[Unit]
 
   /**
    * Create a single topic.
    */
-  def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit] =
-    createTopics(List(newTopic), Some(CreateTopicsOptions(validateOnly)))
+  def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit]
 
   /**
    * Delete multiple topics.
@@ -78,33 +62,17 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
   def deleteTopics(
     topics: Iterable[String],
     @deprecatedName(Symbol("deleteTopicsOptions")) options: Option[DeleteTopicsOptions] = None
-  ): Task[Unit] = {
-    val asJava = topics.asJavaCollection
-    fromKafkaFutureVoid {
-      blocking
-        .effectBlocking(
-          options
-            .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts))
-            .all()
-        )
-    }
-  }
+  ): Task[Unit]
 
   /**
    * Delete a single topic.
    */
-  def deleteTopic(topic: String): Task[Unit] =
-    deleteTopics(List(topic))
+  def deleteTopic(topic: String): Task[Unit]
 
   /**
    * List the topics in the cluster.
    */
-  def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): Task[Map[String, TopicListing]] =
-    fromKafkaFuture {
-      blocking.effectBlocking(
-        listTopicsOptions.fold(adminClient.listTopics())(opts => adminClient.listTopics(opts)).namesToListings()
-      )
-    }.map(_.asScala.toMap.view.mapValues(TopicListing.apply).toMap)
+  def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): Task[Map[String, TopicListing]]
 
   /**
    * Describe the specified topics.
@@ -112,16 +80,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
   def describeTopics(
     topicNames: Iterable[String],
     @deprecatedName(Symbol("describeTopicsOptions")) options: Option[DescribeTopicsOptions] = None
-  ): Task[Map[String, TopicDescription]] = {
-    val asJava = topicNames.asJavaCollection
-    fromKafkaFuture {
-      blocking.effectBlocking(
-        options
-          .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
-          .all()
-      )
-    }.map(_.asScala.view.mapValues(AdminClient.TopicDescription(_)).toMap)
-  }
+  ): Task[Map[String, TopicDescription]]
 
   /**
    * Get the configuration for the specified resources.
@@ -129,62 +88,29 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
   def describeConfigs(
     configResources: Iterable[ConfigResource],
     @deprecatedName(Symbol("describeConfigsOptions")) options: Option[DescribeConfigsOptions] = None
-  ): Task[Map[ConfigResource, KafkaConfig]] = {
-    val asJava = configResources.map(_.asJava).asJavaCollection
-    fromKafkaFuture {
-      blocking.effectBlocking(
-        options
-          .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts.asJava))
-          .all()
-      )
-    }.map(
-      _.asScala.view.map { case (configResource, config) =>
-        (ConfigResource(configResource), KafkaConfig(config))
-      }.toMap
-    )
-  }
-
-  private def describeCluster(options: Option[DescribeClusterOptions]): Task[DescribeClusterResult] =
-    blocking.effectBlocking(
-      options.fold(adminClient.describeCluster())(opts => adminClient.describeCluster(opts.asJava))
-    )
+  ): Task[Map[ConfigResource, KafkaConfig]]
 
   /**
    * Get the cluster nodes.
    */
-  def describeClusterNodes(options: Option[DescribeClusterOptions] = None): Task[List[Node]] =
-    fromKafkaFuture(
-      describeCluster(options).map(_.nodes())
-    ).map(_.asScala.toList.map(Node.apply))
+  def describeClusterNodes(options: Option[DescribeClusterOptions] = None): Task[List[Node]]
 
   /**
    * Get the cluster controller.
    */
-  def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Node] =
-    fromKafkaFuture(
-      describeCluster(options).map(_.controller())
-    ).map(Node.apply)
+  def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Node]
 
   /**
    * Get the cluster id.
    */
-  def describeClusterId(options: Option[DescribeClusterOptions] = None): Task[String] =
-    fromKafkaFuture(
-      describeCluster(options).map(_.clusterId())
-    )
+  def describeClusterId(options: Option[DescribeClusterOptions] = None): Task[String]
 
   /**
    * Get the cluster authorized operations.
    */
   def describeClusterAuthorizedOperations(
     options: Option[DescribeClusterOptions] = None
-  ): Task[Set[AclOperation]] =
-    for {
-      res          <- describeCluster(options)
-      opt          <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
-      lst          <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
-      aclOperations = lst.map(AclOperation.apply)
-    } yield aclOperations
+  ): Task[Set[AclOperation]]
 
   /**
    * Add new partitions to a topic.
@@ -192,16 +118,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
   def createPartitions(
     newPartitions: Map[String, NewPartitions],
     @deprecatedName(Symbol("createPartitionsOptions")) options: Option[CreatePartitionsOptions] = None
-  ): Task[Unit] = {
-    val asJava = newPartitions.view.mapValues(_.asJava).toMap.asJava
-    fromKafkaFutureVoid {
-      blocking.effectBlocking(
-        options
-          .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts.asJava))
-          .all()
-      )
-    }
-  }
+  ): Task[Unit]
 
   /**
    * List offset for the specified partitions.
@@ -209,16 +126,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
   def listOffsets(
     topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
     @deprecatedName(Symbol("listOffsetOptions")) options: Option[ListOffsetsOptions] = None
-  ): Task[Map[TopicPartition, ListOffsetsResultInfo]] = {
-    val asJava = topicPartitionOffsets.bimap(_.asJava, _.asJava).asJava
-    fromKafkaFuture {
-      blocking.effectBlocking(
-        options
-          .fold(adminClient.listOffsets(asJava))(opts => adminClient.listOffsets(asJava, opts.asJava))
-          .all()
-      )
-    }
-  }.map(_.asScala.toMap.bimap(TopicPartition(_), ListOffsetsResultInfo(_)))
+  ): Task[Map[TopicPartition, ListOffsetsResultInfo]]
 
   /**
    * List Consumer Group offsets for the specified partitions.
@@ -226,17 +134,7 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
   def listConsumerGroupOffsets(
     groupId: String,
     options: Option[ListConsumerGroupOffsetsOptions] = None
-  ): Task[Map[TopicPartition, OffsetAndMetadata]] =
-    fromKafkaFuture {
-      blocking.effectBlocking(
-        options
-          .fold(adminClient.listConsumerGroupOffsets(groupId))(opts =>
-            adminClient.listConsumerGroupOffsets(groupId, opts.asJava)
-          )
-          .partitionsToOffsetAndMetadata()
-      )
-    }
-      .map(_.asScala.filterNot { case (_, om) => om eq null }.toMap.bimap(TopicPartition(_), OffsetAndMetadata(_)))
+  ): Task[Map[TopicPartition, OffsetAndMetadata]]
 
   /**
    * Alter offsets for the specified partitions and consumer group.
@@ -247,47 +145,271 @@ case class AdminClient(private val adminClient: JAdminClient, private val blocki
     @deprecatedName(Symbol("alterConsumerGroupOffsetsOptions")) options: Option[
       AlterConsumerGroupOffsetsOptions
     ] = None
-  ): Task[Unit] = {
-    val asJava = offsets.bimap(_.asJava, _.asJava).asJava
-    fromKafkaFutureVoid {
-      blocking.effectBlocking(
-        options
-          .fold(adminClient.alterConsumerGroupOffsets(groupId, asJava))(opts =>
-            adminClient.alterConsumerGroupOffsets(groupId, asJava, opts.asJava)
-          )
-          .all()
-      )
-    }
-  }
+  ): Task[Unit]
 
   /**
    * Retrieves metrics for the underlying AdminClient
    */
-  def metrics: Task[Map[MetricName, Metric]] =
-    blocking.effectBlocking(
-      adminClient.metrics().asScala.toMap.map { case (metricName, metric) =>
-        (MetricName(metricName), Metric(metric))
-      }
-    )
+  def metrics: Task[Map[MetricName, Metric]]
 
-  def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]] =
-    fromKafkaFuture(
-      blocking.effectBlocking(
-        adminClient.describeConsumerGroups(groupIds.asJavaCollection).all
-      )
-    ).map(_.asScala.view.mapValues(ConsumerGroupDescription.apply).toMap)
+  def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]]
 
-  def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit] = {
-    val options = new RemoveMembersFromConsumerGroupOptions(membersToRemove.map(new MemberToRemove(_)).asJavaCollection)
-    fromKafkaFuture(
-      blocking.effectBlocking(
-        adminClient.removeMembersFromConsumerGroup(groupId, options).all()
-      )
-    ).unit
-  }
+  def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit]
 }
 
 object AdminClient {
+
+  /**
+   * Thin wrapper around apache java AdminClient. See java api for descriptions
+   * @param adminClient
+   */
+  private final case class LiveAdminClient(
+    private[admin] val adminClient: JAdminClient,
+    private val blocking: Blocking.Service
+  ) extends AdminClient {
+
+    /**
+     * Create multiple topics.
+     */
+    override def createTopics(
+      newTopics: Iterable[NewTopic],
+      @deprecatedName(Symbol("createTopicOptions")) options: Option[CreateTopicsOptions] = None
+    ): Task[Unit] = {
+      val asJava = newTopics.map(_.asJava).asJavaCollection
+
+      fromKafkaFutureVoid {
+        blocking
+          .effectBlocking(
+            options
+              .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts.asJava))
+              .all()
+          )
+      }
+    }
+
+    /**
+     * Create a single topic.
+     */
+    override def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit] =
+      createTopics(List(newTopic), Some(CreateTopicsOptions(validateOnly)))
+
+    /**
+     * Delete multiple topics.
+     */
+    override def deleteTopics(
+      topics: Iterable[String],
+      @deprecatedName(Symbol("deleteTopicsOptions")) options: Option[DeleteTopicsOptions] = None
+    ): Task[Unit] = {
+      val asJava = topics.asJavaCollection
+      fromKafkaFutureVoid {
+        blocking
+          .effectBlocking(
+            options
+              .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts))
+              .all()
+          )
+      }
+    }
+
+    /**
+     * Delete a single topic.
+     */
+    override def deleteTopic(topic: String): Task[Unit] =
+      deleteTopics(List(topic))
+
+    /**
+     * List the topics in the cluster.
+     */
+    override def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): Task[Map[String, TopicListing]] =
+      fromKafkaFuture {
+        blocking.effectBlocking(
+          listTopicsOptions.fold(adminClient.listTopics())(opts => adminClient.listTopics(opts)).namesToListings()
+        )
+      }.map(_.asScala.toMap.view.mapValues(TopicListing.apply).toMap)
+
+    /**
+     * Describe the specified topics.
+     */
+    override def describeTopics(
+      topicNames: Iterable[String],
+      @deprecatedName(Symbol("describeTopicsOptions")) options: Option[DescribeTopicsOptions] = None
+    ): Task[Map[String, TopicDescription]] = {
+      val asJava = topicNames.asJavaCollection
+      fromKafkaFuture {
+        blocking.effectBlocking(
+          options
+            .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
+            .all()
+        )
+      }.map(_.asScala.view.mapValues(AdminClient.TopicDescription(_)).toMap)
+    }
+
+    /**
+     * Get the configuration for the specified resources.
+     */
+    override def describeConfigs(
+      configResources: Iterable[ConfigResource],
+      @deprecatedName(Symbol("describeConfigsOptions")) options: Option[DescribeConfigsOptions] = None
+    ): Task[Map[ConfigResource, KafkaConfig]] = {
+      val asJava = configResources.map(_.asJava).asJavaCollection
+      fromKafkaFuture {
+        blocking.effectBlocking(
+          options
+            .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts.asJava))
+            .all()
+        )
+      }.map(
+        _.asScala.view.map { case (configResource, config) =>
+          (ConfigResource(configResource), KafkaConfig(config))
+        }.toMap
+      )
+    }
+
+    private def describeCluster(options: Option[DescribeClusterOptions]): Task[DescribeClusterResult] =
+      blocking.effectBlocking(
+        options.fold(adminClient.describeCluster())(opts => adminClient.describeCluster(opts.asJava))
+      )
+
+    /**
+     * Get the cluster nodes.
+     */
+    override def describeClusterNodes(options: Option[DescribeClusterOptions] = None): Task[List[Node]] =
+      fromKafkaFuture(
+        describeCluster(options).map(_.nodes())
+      ).map(_.asScala.toList.map(Node.apply))
+
+    /**
+     * Get the cluster controller.
+     */
+    override def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Node] =
+      fromKafkaFuture(
+        describeCluster(options).map(_.controller())
+      ).map(Node.apply)
+
+    /**
+     * Get the cluster id.
+     */
+    override def describeClusterId(options: Option[DescribeClusterOptions] = None): Task[String] =
+      fromKafkaFuture(
+        describeCluster(options).map(_.clusterId())
+      )
+
+    /**
+     * Get the cluster authorized operations.
+     */
+    override def describeClusterAuthorizedOperations(
+      options: Option[DescribeClusterOptions] = None
+    ): Task[Set[AclOperation]] =
+      for {
+        res          <- describeCluster(options)
+        opt          <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
+        lst          <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
+        aclOperations = lst.map(AclOperation.apply)
+      } yield aclOperations
+
+    /**
+     * Add new partitions to a topic.
+     */
+    override def createPartitions(
+      newPartitions: Map[String, NewPartitions],
+      @deprecatedName(Symbol("createPartitionsOptions")) options: Option[CreatePartitionsOptions] = None
+    ): Task[Unit] = {
+      val asJava = newPartitions.view.mapValues(_.asJava).toMap.asJava
+      fromKafkaFutureVoid {
+        blocking.effectBlocking(
+          options
+            .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts.asJava))
+            .all()
+        )
+      }
+    }
+
+    /**
+     * List offset for the specified partitions.
+     */
+    override def listOffsets(
+      topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
+      @deprecatedName(Symbol("listOffsetOptions")) options: Option[ListOffsetsOptions] = None
+    ): Task[Map[TopicPartition, ListOffsetsResultInfo]] = {
+      val asJava = topicPartitionOffsets.bimap(_.asJava, _.asJava).asJava
+      fromKafkaFuture {
+        blocking.effectBlocking(
+          options
+            .fold(adminClient.listOffsets(asJava))(opts => adminClient.listOffsets(asJava, opts.asJava))
+            .all()
+        )
+      }
+    }.map(_.asScala.toMap.bimap(TopicPartition(_), ListOffsetsResultInfo(_)))
+
+    /**
+     * List Consumer Group offsets for the specified partitions.
+     */
+    override def listConsumerGroupOffsets(
+      groupId: String,
+      options: Option[ListConsumerGroupOffsetsOptions] = None
+    ): Task[Map[TopicPartition, OffsetAndMetadata]] =
+      fromKafkaFuture {
+        blocking.effectBlocking(
+          options
+            .fold(adminClient.listConsumerGroupOffsets(groupId))(opts =>
+              adminClient.listConsumerGroupOffsets(groupId, opts.asJava)
+            )
+            .partitionsToOffsetAndMetadata()
+        )
+      }
+        .map(_.asScala.filterNot { case (_, om) => om eq null }.toMap.bimap(TopicPartition(_), OffsetAndMetadata(_)))
+
+    /**
+     * Alter offsets for the specified partitions and consumer group.
+     */
+    override def alterConsumerGroupOffsets(
+      groupId: String,
+      offsets: Map[TopicPartition, OffsetAndMetadata],
+      @deprecatedName(Symbol("alterConsumerGroupOffsetsOptions")) options: Option[
+        AlterConsumerGroupOffsetsOptions
+      ] = None
+    ): Task[Unit] = {
+      val asJava = offsets.bimap(_.asJava, _.asJava).asJava
+      fromKafkaFutureVoid {
+        blocking.effectBlocking(
+          options
+            .fold(adminClient.alterConsumerGroupOffsets(groupId, asJava))(opts =>
+              adminClient.alterConsumerGroupOffsets(groupId, asJava, opts.asJava)
+            )
+            .all()
+        )
+      }
+    }
+
+    /**
+     * Retrieves metrics for the underlying AdminClient
+     */
+    override def metrics: Task[Map[MetricName, Metric]] =
+      blocking.effectBlocking(
+        adminClient.metrics().asScala.toMap.map { case (metricName, metric) =>
+          (MetricName(metricName), Metric(metric))
+        }
+      )
+
+    override def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]] =
+      fromKafkaFuture(
+        blocking.effectBlocking(
+          adminClient.describeConsumerGroups(groupIds.asJavaCollection).all
+        )
+      ).map(_.asScala.view.mapValues(ConsumerGroupDescription.apply).toMap)
+
+    override def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit] = {
+      val options = new RemoveMembersFromConsumerGroupOptions(
+        membersToRemove.map(new MemberToRemove(_)).asJavaCollection
+      )
+      fromKafkaFuture(
+        blocking.effectBlocking(
+          adminClient.removeMembersFromConsumerGroup(groupId, options).all()
+        )
+      ).unit
+    }
+  }
+
   def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] =
     kfv.flatMap { f =>
       Task.effectAsyncInterrupt[T] { cb =>
@@ -622,10 +744,10 @@ object AdminClient {
       KafkaConfig(jConfig.entries().asScala.map(e => e.name() -> e).toMap)
   }
 
-  def make(settings: AdminClientSettings) =
+  def make(settings: AdminClientSettings): ZManaged[Has[Blocking.Service], Throwable, AdminClient] =
     ZManaged.service[Blocking.Service].flatMap { blocking =>
       ZManaged.make(
-        ZIO(JAdminClient.create(settings.driverSettings.asJava)).map(ac => AdminClient(ac, blocking))
+        ZIO(JAdminClient.create(settings.driverSettings.asJava)).map(ac => LiveAdminClient(ac, blocking))
       )(client => ZIO.effectTotal(client.adminClient.close(settings.closeTimeout)))
     }
 
