@@ -410,6 +410,12 @@ object AdminClient {
     }
   }
 
+  def live: ZLayer[Has[Blocking.Service] with Has[AdminClientSettings], Throwable, Has[AdminClient]] =
+    (for {
+      settings <- ZManaged.service[AdminClientSettings]
+      admin    <- make(settings)
+    } yield admin).toLayer
+
   def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] =
     kfv.flatMap { f =>
       Task.effectAsyncInterrupt[T] { cb =>
