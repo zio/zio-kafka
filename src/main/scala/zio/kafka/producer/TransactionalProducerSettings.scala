@@ -3,7 +3,7 @@ package zio.kafka.producer
 import org.apache.kafka.clients.producer.ProducerConfig
 import zio.duration.{ durationInt, Duration }
 
-class TransactionalProducerSettings private[producer] (
+class TransactionalProducerSettings private (
   override val bootstrapServers: List[String],
   override val closeTimeout: Duration,
   override val properties: Map[String, AnyRef]

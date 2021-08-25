@@ -130,7 +130,7 @@ trait Producer {
 
 object Producer {
 
-  private[producer] final case class Live(
+  private[producer] class Live(
     p: KafkaProducer[Array[Byte], Array[Byte]],
     producerSettings: ProducerSettings,
     blocking: Blocking.Service
@@ -266,7 +266,7 @@ object Producer {
                          new ByteArraySerializer()
                        )
                      )
-    } yield Live(rawProducer, settings, blocking)).toManaged(_.close)
+    } yield new Live(rawProducer, settings, blocking)).toManaged(_.close)
 
   def withProducerService[R, A](
     r: Producer => RIO[R, A]
