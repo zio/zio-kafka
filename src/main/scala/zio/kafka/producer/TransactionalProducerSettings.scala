@@ -11,14 +11,18 @@ class TransactionalProducerSettings private[producer] (
 
 object TransactionalProducerSettings {
   def apply(bootstrapServers: List[String], transactionalId: String): TransactionalProducerSettings =
-    new TransactionalProducerSettings(bootstrapServers, 30.seconds, Map(ProducerConfig.TRANSACTIONAL_ID_CONFIG -> transactionalId))
+    new TransactionalProducerSettings(
+      bootstrapServers,
+      30.seconds,
+      Map(ProducerConfig.TRANSACTIONAL_ID_CONFIG -> transactionalId)
+    )
 
   def apply(
     bootstrapServers: List[String],
     closeTimeout: Duration,
     properties: Map[String, AnyRef],
     transactionalId: String
-  ): TransactionalProducerSettings                                                                  =
+  ): TransactionalProducerSettings =
     new TransactionalProducerSettings(
       bootstrapServers,
       closeTimeout,
