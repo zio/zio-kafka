@@ -1,7 +1,5 @@
 package zio.kafka
 
-import java.util.UUID
-
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio._
@@ -13,8 +11,10 @@ import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.embedded.Kafka
-import zio.kafka.serde.{ Deserializer, Serde, Serializer }
 import zio.kafka.producer._
+import zio.kafka.serde.{ Deserializer, Serde, Serializer }
+
+import java.util.UUID
 
 object KafkaTestUtils {
 
@@ -25,6 +25,16 @@ object KafkaTestUtils {
     (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) ++ ZLayer
       .identity[Blocking] >>>
       Producer.live
+
+  val transactionalProducerSettings: ZIO[Has[Kafka], Nothing, TransactionalProducerSettings] =
+    ZIO.access[Has[Kafka]](_.get[Kafka].bootstrapServers).map(TransactionalProducerSettings(_, "test-transaction"))
+
+  val transactionalProducer: ZLayer[Has[Kafka] with Blocking, Throwable, Has[TransactionalProducer]] =
+    (ZLayer.fromEffect(transactionalProducerSettings) ++ ZLayer.succeed(
+      Serde.string: Serializer[Any, String]
+    )) ++ ZLayer
+      .identity[Blocking] >>>
+      TransactionalProducer.live
 
   def produceOne(
     topic: String,
@@ -78,7 +88,8 @@ object KafkaTestUtils {
           ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "3000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "250",
           ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "10",
-          ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
+          ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString,
+          ConsumerConfig.ISOLATION_LEVEL_CONFIG          -> "read_committed" // TODO: create separate config for transaction testing? or maybe even a transactional consumer?
         )
         .withPerPartitionChunkPrefetch(16)
         .withOffsetRetrieval(offsetRetrieval)

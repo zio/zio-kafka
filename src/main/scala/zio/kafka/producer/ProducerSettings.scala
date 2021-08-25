@@ -3,10 +3,10 @@ package zio.kafka.producer
 import org.apache.kafka.clients.producer.ProducerConfig
 import zio.duration._
 
-case class ProducerSettings(
-  bootstrapServers: List[String],
-  closeTimeout: Duration,
-  properties: Map[String, AnyRef]
+class ProducerSettings private[producer] (
+  val bootstrapServers: List[String],
+  val closeTimeout: Duration,
+  val properties: Map[String, AnyRef]
 ) {
   def driverSettings: Map[String, AnyRef] =
     Map(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers.mkString(",")) ++
@@ -29,6 +29,13 @@ case class ProducerSettings(
 
   def withProperties(kvs: Map[String, AnyRef]): ProducerSettings =
     copy(properties = properties ++ kvs)
+
+  private final def copy(
+    bootstrapServers: List[String] = bootstrapServers,
+    closeTimeout: Duration = closeTimeout,
+    properties: Map[String, AnyRef] = properties
+  ) =
+    new ProducerSettings(bootstrapServers, closeTimeout, properties)
 }
 
 object ProducerSettings {
