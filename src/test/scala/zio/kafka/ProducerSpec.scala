@@ -123,7 +123,36 @@ object ProducerSpec extends DefaultRunnableSpec {
                            } yield record
                          }
         } yield assert(recordChunk.map(_.value).last)(equalTo(0))
-      }
+      },
+      testM("serialize concurrent transactions") {
+        import Subscription._
+
+        val initialAliceAccount                                                  = new ProducerRecord("accounts", "alice", 20)
+        val initialBobAccount                                                    = new ProducerRecord("accounts", "bob", 0)
+        def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
+          Consumer.make(settings).flatMap { c =>
+            c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.int).toQueue()
+          }
+
+        val transaction1 = TransactionalProducer.createTransaction.use { t =>
+          t.produce(initialAliceAccount, Serde.string, Serde.int)
+        }
+        val transaction2 = TransactionalProducer.createTransaction.use { t =>
+          t.produce(initialBobAccount, Serde.string, Serde.int)
+        }
+
+        for {
+          _           <- transaction1 <&> transaction2
+          settings    <- consumerSettings("testGroup", "testClient")
+          recordChunk <- withConsumer(Topics(Set("accounts")), settings).use { consumer =>
+            for {
+              messages <- consumer.take
+                .flatMap(_.done)
+                .mapError(_.getOrElse(new NoSuchElementException))
+            } yield messages
+          }
+        } yield assert(recordChunk.map(_.value))(contains(0) && contains(20))
+      },
     ).provideSomeLayerShared[TestEnvironment](
       ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> producer) ++
         (Kafka.embedded ++ ZLayer.identity[Blocking] >>> transactionalProducer) ++

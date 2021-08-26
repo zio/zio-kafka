@@ -10,9 +10,8 @@ final private case class TransactionState(
 
 final private[producer] class Transaction(
   private val producer: Producer,
-  private[producer] val state: RefM[
-    TransactionState
-  ] // TODO: check this is not reachable from tests otherwise create accessor
+  private[producer] val state: RefM[TransactionState]
+  // TODO: check state is not reachable from tests otherwise create accessor
 ) { // TODO: we can achieve higher typesafety by returning a zstate instead of a zio to forbid some compositions at typelevel
   // for example no more produce after abort
   def produce[R, K, V](

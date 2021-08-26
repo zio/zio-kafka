@@ -3,7 +3,7 @@ package zio.kafka.producer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.blocking.Blocking
-import zio.{ Has, IO, RLayer, RManaged, RefM, ZIO, ZManaged }
+import zio.{ Has, IO, RLayer, RManaged, RefM, Semaphore, ZIO, ZManaged }
 
 import scala.jdk.CollectionConverters._
 
@@ -15,23 +15,26 @@ object TransactionalProducer {
   private class LiveTransactionalProducer(
     p: KafkaProducer[Array[Byte], Array[Byte]],
     producerSettings: ProducerSettings,
-    blocking: Blocking.Service
+    blocking: Blocking.Service,
+    semaphore: Semaphore
   ) extends Producer.Live(p, producerSettings, blocking)
       with TransactionalProducer {
     override def createTransaction: ZManaged[Any, Throwable, Transaction] =
-      ZManaged.make {
-        for {
-          _     <- IO(p.beginTransaction())
-          state <- RefM.make(TransactionState())
-        } yield new Transaction(producer = this, state)
-      } { transaction =>
-        transaction.state.get.flatMap(state =>
-          if (state.abortScheduled) {
-            IO(p.abortTransaction()).retryN(5).orDie
-          } else {
-            IO(p.commitTransaction()).retryN(5).orDie
-          }
-        )
+      semaphore.withPermitManaged *> {
+        ZManaged.make {
+          for {
+            _     <- IO(p.beginTransaction())
+            state <- RefM.make(TransactionState())
+          } yield new Transaction(producer = this, state)
+        } { transaction =>
+          transaction.state.get.flatMap(state =>
+            if (state.abortScheduled) {
+              IO(p.abortTransaction()).retryN(5).orDie
+            } else {
+              IO(p.commitTransaction()).retryN(5).orDie
+            }
+          )
+        }
       }
   }
 
@@ -56,5 +59,6 @@ object TransactionalProducer {
                        )
                      )
       _           <- blocking.effectBlocking(rawProducer.initTransactions())
-    } yield new LiveTransactionalProducer(rawProducer, settings, blocking)).toManaged(_.close)
+      semaphore   <- Semaphore.make(1)
+    } yield new LiveTransactionalProducer(rawProducer, settings, blocking, semaphore)).toManaged(_.close)
 }
