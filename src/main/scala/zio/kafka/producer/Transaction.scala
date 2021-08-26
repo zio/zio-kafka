@@ -28,14 +28,7 @@ final private[producer] class Transaction(
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
   ): RIO[R, RecordMetadata] =
-    state
-      .mapM(ts =>
-        if (ts.abortScheduled)
-          ZIO.fail(new RuntimeException("Cannot produce after abort")) // TODO: maybe better a noop?
-        else
-          producer.produce[R, K, V](producerRecord, keySerializer, valueSerializer)
-      )
-      .get
+    producer.produce[R, K, V](producerRecord, keySerializer, valueSerializer)
 
   def abort: IO[Nothing, Unit] = state.set(TransactionState(abortScheduled = true))
 }

@@ -2,8 +2,8 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.serialization.ByteArraySerializer
-import zio.blocking.Blocking
-import zio.{ Has, IO, RLayer, RManaged, RefM, Semaphore, ZIO, ZManaged }
+import zio.blocking.{Blocking, effectBlocking}
+import zio.{Exit, Has, IO, RLayer, RManaged, RefM, Semaphore, ZIO, ZManaged}
 
 import scala.jdk.CollectionConverters._
 
@@ -21,19 +21,22 @@ object TransactionalProducer {
       with TransactionalProducer {
     override def createTransaction: ZManaged[Any, Throwable, Transaction] =
       semaphore.withPermitManaged *> {
-        ZManaged.make {
+        ZManaged.makeExit {
           for {
             _     <- IO(p.beginTransaction())
             state <- RefM.make(TransactionState())
           } yield new Transaction(producer = this, state)
-        } { transaction =>
+        } {
+          case (transaction, Exit.Success(_)) =>
           transaction.state.get.flatMap(state =>
             if (state.abortScheduled) {
-              IO(p.abortTransaction()).retryN(5).orDie
+              blocking.effectBlocking(p.abortTransaction()).retryN(5).orDie
             } else {
-              IO(p.commitTransaction()).retryN(5).orDie
+              blocking.effectBlocking(p.commitTransaction()).retryN(5).orDie
             }
           )
+          case (_, Exit.Failure(_)) =>
+            blocking.effectBlocking(p.abortTransaction()).retryN(5).orDie
         }
       }
   }

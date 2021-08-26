@@ -9,10 +9,16 @@ import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
 import zio.test.Assertion._
+import zio.test.TestAspect.ignore
 import zio.test._
 import zio.test.environment.TestEnvironment
 
 object ProducerSpec extends DefaultRunnableSpec {
+  def withConsumerInt(subscription: Subscription, settings: ConsumerSettings) =
+    Consumer.make(settings).flatMap { c =>
+      c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.int).toQueue()
+    }
+
   override def spec =
     suite("producer test suite")(
       testM("one record") {
@@ -68,20 +74,16 @@ object ProducerSpec extends DefaultRunnableSpec {
       testM("a simple transaction") {
         import Subscription._
 
-        val initialAliceAccount                                                  = new ProducerRecord("accounts", "alice", 20)
-        val initialBobAccount                                                    = new ProducerRecord("accounts", "bob", 0)
-        def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
-          Consumer.make(settings).flatMap { c =>
-            c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.int).toQueue()
-          }
+        val initialAliceAccount = new ProducerRecord("accounts0", "alice", 20)
+        val initialBobAccount   = new ProducerRecord("accounts0", "bob", 0)
 
         for {
           _           <- TransactionalProducer.createTransaction.use { t =>
                            t.produce(initialBobAccount, Serde.string, Serde.int) *>
                              t.produce(initialAliceAccount, Serde.string, Serde.int)
                          }
-          settings    <- consumerSettings("testGroup", "testClient")
-          recordChunk <- withConsumer(Topics(Set("accounts")), settings).use { consumer =>
+          settings    <- consumerSettings("testGroup0", "testClient0")
+          recordChunk <- withConsumerInt(Topics(Set("accounts0")), settings).use { consumer =>
                            for {
                              messages <- consumer.take
                                            .flatMap(_.done)
@@ -94,14 +96,10 @@ object ProducerSpec extends DefaultRunnableSpec {
       testM("an aborted transaction should not be read") {
         import Subscription._
 
-        val initialAliceAccount                                                  = new ProducerRecord("accounts", "alice", 20)
-        val initialBobAccount                                                    = new ProducerRecord("accounts", "bob", 0)
-        val aliceGives20                                                         = new ProducerRecord("accounts", "alice", 0)
-        val bobReceives20                                                        = new ProducerRecord("accounts", "bob", 20)
-        def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
-          Consumer.make(settings).flatMap { c =>
-            c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.int).toQueue()
-          }
+        val initialAliceAccount = new ProducerRecord("accounts1", "alice", 20)
+        val initialBobAccount   = new ProducerRecord("accounts1", "bob", 0)
+        val aliceGives20        = new ProducerRecord("accounts1", "alice", 0)
+        val bobReceives20       = new ProducerRecord("accounts1", "bob", 20)
 
         for {
           _           <- TransactionalProducer.createTransaction.use { t =>
@@ -113,8 +111,8 @@ object ProducerSpec extends DefaultRunnableSpec {
                              t.produce(bobReceives20, Serde.string, Serde.int) *>
                              t.abort
                          }
-          settings    <- consumerSettings("testGroup", "testClient")
-          recordChunk <- withConsumer(Topics(Set("accounts")), settings).use { consumer =>
+          settings    <- consumerSettings("testGroup1", "testClient1")
+          recordChunk <- withConsumerInt(Topics(Set("accounts1")), settings).use { consumer =>
                            for {
                              messages <- consumer.take
                                            .flatMap(_.done)
@@ -127,12 +125,8 @@ object ProducerSpec extends DefaultRunnableSpec {
       testM("serialize concurrent transactions") {
         import Subscription._
 
-        val initialAliceAccount                                                  = new ProducerRecord("accounts", "alice", 20)
-        val initialBobAccount                                                    = new ProducerRecord("accounts", "bob", 0)
-        def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
-          Consumer.make(settings).flatMap { c =>
-            c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.int).toQueue()
-          }
+        val initialAliceAccount = new ProducerRecord("accounts2", "alice", 20)
+        val initialBobAccount   = new ProducerRecord("accounts2", "bob", 0)
 
         val transaction1 = TransactionalProducer.createTransaction.use { t =>
           t.produce(initialAliceAccount, Serde.string, Serde.int)
@@ -143,16 +137,28 @@ object ProducerSpec extends DefaultRunnableSpec {
 
         for {
           _           <- transaction1 <&> transaction2
-          settings    <- consumerSettings("testGroup", "testClient")
-          recordChunk <- withConsumer(Topics(Set("accounts")), settings).use { consumer =>
-            for {
-              messages <- consumer.take
-                .flatMap(_.done)
-                .mapError(_.getOrElse(new NoSuchElementException))
-            } yield messages
-          }
+          settings    <- consumerSettings("testGroup2", "testClient2")
+          recordChunk <- withConsumerInt(Topics(Set("accounts2")), settings).use { consumer =>
+                           for {
+                             messages <- consumer.take
+                                           .flatMap(_.done)
+                                           .mapError(_.getOrElse(new NoSuchElementException))
+                           } yield messages
+                         }
         } yield assert(recordChunk.map(_.value))(contains(0) && contains(20))
       },
+      testM("exception management") {
+        val initialBobAccount   = new ProducerRecord("accounts3", "bob", 0)
+
+        val failingTransaction1 = TransactionalProducer.createTransaction.use { t =>
+          t.produce(initialBobAccount, Serde.string, Serde.int.contramap((_: Int) => throw new RuntimeException("test")))
+        }
+
+        val failingBob = for {
+          _           <- failingTransaction1
+        } yield ()
+        assertM(failingBob.run)(dies(hasMessage(equalTo("test"))))
+      }
     ).provideSomeLayerShared[TestEnvironment](
       ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> producer) ++
         (Kafka.embedded ++ ZLayer.identity[Blocking] >>> transactionalProducer) ++
