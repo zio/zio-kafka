@@ -2,11 +2,12 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.ProducerConfig
 import zio.duration._
+import zio.prelude.Subtype
 
-class ProducerSettings private[producer] (
-  val bootstrapServers: List[String],
-  val closeTimeout: Duration,
-  val properties: Map[String, AnyRef]
+case class ProducerSettings private[producer] (
+  bootstrapServers: List[String],
+  closeTimeout: Duration,
+  properties: Map[String, AnyRef]
 ) {
   def driverSettings: Map[String, AnyRef] =
     Map(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers.mkString(",")) ++
@@ -29,16 +30,24 @@ class ProducerSettings private[producer] (
 
   def withProperties(kvs: Map[String, AnyRef]): ProducerSettings =
     copy(properties = properties ++ kvs)
-
-  private final def copy(
-    bootstrapServers: List[String] = bootstrapServers,
-    closeTimeout: Duration = closeTimeout,
-    properties: Map[String, AnyRef] = properties
-  ) =
-    new ProducerSettings(bootstrapServers, closeTimeout, properties)
 }
 
 object ProducerSettings {
   def apply(bootstrapServers: List[String]): ProducerSettings =
     new ProducerSettings(bootstrapServers, 30.seconds, Map())
+
+  object TransactionalProducerSettings extends Subtype[ProducerSettings] {
+    def apply(
+      bootstrapServers: List[String],
+      closeTimeout: Duration,
+      properties: Map[String, AnyRef],
+      transactionalId: String
+    ): TransactionalProducerSettings = TransactionalProducerSettings.wrap(
+      ProducerSettings(
+        bootstrapServers,
+        closeTimeout,
+        properties.updated(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
+      )
+    )
+  }
 }

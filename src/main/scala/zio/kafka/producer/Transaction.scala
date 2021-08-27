@@ -2,10 +2,10 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio.kafka.producer.TransactionalProducer.UserInitiatedAbort
-import zio.{ Cause, IO, RIO, RefM, ZIO }
 import zio.kafka.serde.Serializer
+import zio.{ Cause, IO, RIO, ZIO }
 
-final private[producer] class Transaction(
+final class Transaction private[producer] (
   private val producer: Producer
   // TODO: check state is not reachable from tests otherwise create accessor
 ) { // TODO: we can achieve higher typesafety by returning a zstate instead of a zio to forbid some compositions at typelevel

@@ -3,8 +3,8 @@ package zio.kafka.producer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
-import zio.blocking.{ effectBlocking, Blocking }
-import zio.{ Exit, Has, IO, RLayer, RManaged, RefM, Semaphore, Task, UIO, ZIO, ZManaged }
+import zio.blocking.Blocking
+import zio.{Exit, Has, IO, RLayer, RManaged, Semaphore, Task, ZIO, ZManaged}
 
 import scala.jdk.CollectionConverters._
 
@@ -13,6 +13,7 @@ trait TransactionalProducer extends Producer {
 }
 
 object TransactionalProducer {
+
   case object UserInitiatedAbort
 
   private class LiveTransactionalProducer(

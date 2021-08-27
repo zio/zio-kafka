@@ -80,6 +80,7 @@ lazy val kafka =
       resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
       libraryDependencies ++= Seq(
         "dev.zio"                   %% "zio-streams"             % zioVersion,
+        "dev.zio"                   %% "zio-prelude"             % "latest.integration",
         "dev.zio"                   %% "zio-test"                % zioVersion % "test",
         "dev.zio"                   %% "zio-test-sbt"            % zioVersion % "test",
         "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
