@@ -2,8 +2,9 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.serialization.ByteArraySerializer
-import zio.blocking.{Blocking, effectBlocking}
-import zio.{Exit, Has, IO, RLayer, RManaged, RefM, Semaphore, ZIO, ZManaged}
+import zio.Cause.Fail
+import zio.blocking.{ effectBlocking, Blocking }
+import zio.{ Exit, Has, IO, RLayer, RManaged, RefM, Semaphore, Task, UIO, ZIO, ZManaged }
 
 import scala.jdk.CollectionConverters._
 
@@ -12,6 +13,8 @@ trait TransactionalProducer extends Producer {
 }
 
 object TransactionalProducer {
+  case object UserInitiatedAbort
+
   private class LiveTransactionalProducer(
     p: KafkaProducer[Array[Byte], Array[Byte]],
     producerSettings: ProducerSettings,
@@ -19,24 +22,19 @@ object TransactionalProducer {
     semaphore: Semaphore
   ) extends Producer.Live(p, producerSettings, blocking)
       with TransactionalProducer {
+    val abortTransaction: Task[Unit]  = blocking.effectBlocking(p.abortTransaction())
+    val commitTransaction: Task[Unit] = blocking.effectBlocking(p.commitTransaction())
+
     override def createTransaction: ZManaged[Any, Throwable, Transaction] =
       semaphore.withPermitManaged *> {
         ZManaged.makeExit {
           for {
-            _     <- IO(p.beginTransaction())
-            state <- RefM.make(TransactionState())
-          } yield new Transaction(producer = this, state)
+            _ <- IO(p.beginTransaction())
+          } yield new Transaction(producer = this)
         } {
-          case (transaction, Exit.Success(_)) =>
-          transaction.state.get.flatMap(state =>
-            if (state.abortScheduled) {
-              blocking.effectBlocking(p.abortTransaction()).retryN(5).orDie
-            } else {
-              blocking.effectBlocking(p.commitTransaction()).retryN(5).orDie
-            }
-          )
-          case (_, Exit.Failure(_)) =>
-            blocking.effectBlocking(p.abortTransaction()).retryN(5).orDie
+          case (_, Exit.Success(_))                        => commitTransaction.retryN(5).orDie
+          case (_, Exit.Failure(Fail(UserInitiatedAbort))) => abortTransaction.retryN(5).orDie
+          case (_, Exit.Failure(_))                        => abortTransaction.retryN(5).orDie
         }
       }
   }

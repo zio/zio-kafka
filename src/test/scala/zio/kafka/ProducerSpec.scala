@@ -7,6 +7,7 @@ import zio.clock.Clock
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
+import zio.kafka.producer.TransactionalProducer.UserInitiatedAbort
 import zio.kafka.serde.Serde
 import zio.test.Assertion._
 import zio.test.TestAspect.ignore
@@ -110,6 +111,8 @@ object ProducerSpec extends DefaultRunnableSpec {
                            t.produce(aliceGives20, Serde.string, Serde.int) *>
                              t.produce(bobReceives20, Serde.string, Serde.int) *>
                              t.abort
+                         }.catchSome { case UserInitiatedAbort =>
+                           ZIO.unit // silences the abort
                          }
           settings    <- consumerSettings("testGroup1", "testClient1")
           recordChunk <- withConsumerInt(Topics(Set("accounts1")), settings).use { consumer =>
@@ -148,14 +151,18 @@ object ProducerSpec extends DefaultRunnableSpec {
         } yield assert(recordChunk.map(_.value))(contains(0) && contains(20))
       },
       testM("exception management") {
-        val initialBobAccount   = new ProducerRecord("accounts3", "bob", 0)
+        val initialBobAccount = new ProducerRecord("accounts3", "bob", 0)
 
         val failingTransaction1 = TransactionalProducer.createTransaction.use { t =>
-          t.produce(initialBobAccount, Serde.string, Serde.int.contramap((_: Int) => throw new RuntimeException("test")))
+          t.produce(
+            initialBobAccount,
+            Serde.string,
+            Serde.int.contramap((_: Int) => throw new RuntimeException("test"))
+          )
         }
 
         val failingBob = for {
-          _           <- failingTransaction1
+          _ <- failingTransaction1
         } yield ()
         assertM(failingBob.run)(dies(hasMessage(equalTo("test"))))
       }
