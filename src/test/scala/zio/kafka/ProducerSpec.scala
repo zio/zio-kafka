@@ -10,7 +10,6 @@ import zio.kafka.embedded.Kafka
 import zio.kafka.producer.TransactionalProducer.UserInitiatedAbort
 import zio.kafka.serde.Serde
 import zio.test.Assertion._
-import zio.test.TestAspect.ignore
 import zio.test._
 import zio.test.environment.TestEnvironment
 
