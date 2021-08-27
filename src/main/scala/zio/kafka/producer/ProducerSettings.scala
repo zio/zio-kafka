@@ -37,6 +37,15 @@ object ProducerSettings {
     new ProducerSettings(bootstrapServers, 30.seconds, Map())
 
   object TransactionalProducerSettings extends Subtype[ProducerSettings] {
+    def apply(bootstrapServers: List[String], transactionalId: String) =
+      TransactionalProducerSettings.wrap(
+        new ProducerSettings(
+          bootstrapServers,
+          30.seconds,
+          Map(ProducerConfig.TRANSACTIONAL_ID_CONFIG -> transactionalId)
+        )
+      )
+
     def apply(
       bootstrapServers: List[String],
       closeTimeout: Duration,

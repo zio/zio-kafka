@@ -4,7 +4,7 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio.blocking.Blocking
-import zio.{Exit, Has, IO, RLayer, RManaged, Semaphore, Task, ZIO, ZManaged}
+import zio.{ Exit, Has, IO, RLayer, RManaged, Semaphore, Task, ZIO, ZManaged }
 
 import scala.jdk.CollectionConverters._
 
