@@ -126,6 +126,8 @@ trait Producer {
    * Expose internal producer metrics
    */
   def metrics: Task[Map[MetricName, Metric]]
+
+  val underlying: KafkaProducer[Array[Byte], Array[Byte]]
 }
 
 object Producer {
@@ -247,6 +249,8 @@ object Producer {
       } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
 
     private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout))
+
+    override val underlying: KafkaProducer[Array[Byte], Array[Byte]] = p
   }
 
   val live: RLayer[Has[ProducerSettings] with Blocking, Has[Producer]] =
