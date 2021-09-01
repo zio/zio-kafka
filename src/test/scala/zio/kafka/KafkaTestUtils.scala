@@ -88,13 +88,26 @@ object KafkaTestUtils {
           ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "3000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "250",
           ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "10",
-          ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString,
-          ConsumerConfig.ISOLATION_LEVEL_CONFIG          -> "read_committed" // TODO: create separate config for transaction testing? or maybe even a transactional consumer?
+          ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
         .withPerPartitionChunkPrefetch(16)
         .withOffsetRetrieval(offsetRetrieval)
       clientInstanceId.fold(settings)(settings.withGroupInstanceId)
     }
+
+  def transactionalConsumerSettings(
+    groupId: String,
+    clientId: String,
+    clientInstanceId: Option[String] = None,
+    allowAutoCreateTopics: Boolean = true,
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
+  ): URIO[Has[Kafka], ConsumerSettings] =
+    consumerSettings(groupId, clientId, clientInstanceId, allowAutoCreateTopics, offsetRetrieval)
+      .map(
+        _.withProperties(
+          ConsumerConfig.ISOLATION_LEVEL_CONFIG -> "read_committed"
+        )
+      )
 
   def consumer(
     groupId: String,

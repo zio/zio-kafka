@@ -82,7 +82,7 @@ object ProducerSpec extends DefaultRunnableSpec {
                            t.produce(initialBobAccount, Serde.string, Serde.int) *>
                              t.produce(initialAliceAccount, Serde.string, Serde.int)
                          }
-          settings    <- consumerSettings("testGroup0", "testClient0")
+          settings    <- transactionalConsumerSettings("testGroup0", "testClient0")
           recordChunk <- withConsumerInt(Topics(Set("accounts0")), settings).use { consumer =>
                            for {
                              messages <- consumer.take
@@ -113,7 +113,7 @@ object ProducerSpec extends DefaultRunnableSpec {
                          }.catchSome { case UserInitiatedAbort =>
                            ZIO.unit // silences the abort
                          }
-          settings    <- consumerSettings("testGroup1", "testClient1")
+          settings    <- transactionalConsumerSettings("testGroup1", "testClient1")
           recordChunk <- withConsumerInt(Topics(Set("accounts1")), settings).use { consumer =>
                            for {
                              messages <- consumer.take
@@ -139,7 +139,7 @@ object ProducerSpec extends DefaultRunnableSpec {
 
         for {
           _           <- transaction1 <&> transaction2
-          settings    <- consumerSettings("testGroup2", "testClient2")
+          settings    <- transactionalConsumerSettings("testGroup2", "testClient2")
           recordChunk <- withConsumerInt(Topics(Set("accounts2")), settings).use { consumer =>
                            for {
                              messages <- consumer.take
@@ -164,6 +164,99 @@ object ProducerSpec extends DefaultRunnableSpec {
           _ <- failingTransaction1
         } yield ()
         assertM(failingBob.run)(dies(hasMessage(equalTo("test"))))
+      },
+      testM("interleaving transaction with non-transactional consumer") {
+        import Subscription._
+
+        val initialAliceAccount = new ProducerRecord("accounts4", "alice", 20)
+        val initialBobAccount   = new ProducerRecord("accounts4", "bob", 0)
+        val nonTransactional    = new ProducerRecord("accounts4", "no one", -1)
+        val aliceGives20        = new ProducerRecord("accounts4", "alice", 0)
+
+        for {
+          _         <- TransactionalProducer.createTransaction.use { t =>
+                         t.produce(initialBobAccount, Serde.string, Serde.int) *>
+                           t.produce(initialAliceAccount, Serde.string, Serde.int)
+                       }
+          assertion <- TransactionalProducer.createTransaction.use { t =>
+                         for {
+                           _           <- t.produce(aliceGives20, Serde.string, Serde.int)
+                           _           <- Producer.produce(nonTransactional, Serde.string, Serde.int)
+                           settings    <- consumerSettings("testGroup4", "testClient4")
+                           recordChunk <- withConsumerInt(Topics(Set("accounts4")), settings).use { consumer =>
+                                            for {
+                                              messages <- consumer.take
+                                                            .flatMap(_.done)
+                                                            .mapError(_.getOrElse(new NoSuchElementException))
+                                              record    = messages.filter(rec => rec.record.key == "no one")
+                                            } yield record
+                                          }
+                         } yield assert(recordChunk)(isNonEmpty)
+                       }
+        } yield assertion
+      },
+      testM("interleaving transaction with transactional consumer should not be read during transaction") {
+        import Subscription._
+
+        val initialAliceAccount = new ProducerRecord("accounts5", "alice", 20)
+        val initialBobAccount   = new ProducerRecord("accounts5", "bob", 0)
+        val nonTransactional    = new ProducerRecord("accounts5", "no one", -1)
+        val aliceGives20        = new ProducerRecord("accounts5", "alice", 0)
+
+        for {
+          _         <- TransactionalProducer.createTransaction.use { t =>
+                         t.produce(initialBobAccount, Serde.string, Serde.int) *>
+                           t.produce(initialAliceAccount, Serde.string, Serde.int)
+                       }
+          assertion <- TransactionalProducer.createTransaction.use { t =>
+                         for {
+                           _           <- t.produce(aliceGives20, Serde.string, Serde.int)
+                           _           <- Producer.produce(nonTransactional, Serde.string, Serde.int)
+                           settings    <- transactionalConsumerSettings("testGroup5", "testClient5")
+                           recordChunk <- withConsumerInt(Topics(Set("accounts5")), settings).use { consumer =>
+                                            for {
+                                              messages <- consumer.take
+                                                            .flatMap(_.done)
+                                                            .mapError(_.getOrElse(new NoSuchElementException))
+                                              record    = messages.filter(rec => rec.record.key == "no one")
+                                            } yield record
+                                          }
+                         } yield assert(recordChunk)(isEmpty)
+                       }
+        } yield assertion
+      },
+      testM("interleaving transaction with transactional consumer when aborted") {
+        import Subscription._
+
+        val initialAliceAccount = new ProducerRecord("accounts6", "alice", 20)
+        val initialBobAccount   = new ProducerRecord("accounts6", "bob", 0)
+        val aliceGives20        = new ProducerRecord("accounts6", "alice", 0)
+        val nonTransactional    = new ProducerRecord("accounts6", "no one", -1)
+        val bobReceives20       = new ProducerRecord("accounts6", "bob", 20)
+
+        for {
+          _           <- TransactionalProducer.createTransaction.use { t =>
+                           t.produce(initialBobAccount, Serde.string, Serde.int) *>
+                             t.produce(initialAliceAccount, Serde.string, Serde.int)
+                         }
+          _           <- TransactionalProducer.createTransaction.use { t =>
+                           t.produce(aliceGives20, Serde.string, Serde.int) *>
+                             Producer.produce(nonTransactional, Serde.string, Serde.int) *>
+                             t.produce(bobReceives20, Serde.string, Serde.int) *>
+                             t.abort
+                         }.catchSome { case UserInitiatedAbort =>
+                           ZIO.unit // silences the abort
+                         }
+          settings    <- transactionalConsumerSettings("testGroup6", "testClient6")
+          recordChunk <- withConsumerInt(Topics(Set("accounts6")), settings).use { consumer =>
+                           for {
+                             messages <- consumer.take
+                                           .flatMap(_.done)
+                                           .mapError(_.getOrElse(new NoSuchElementException))
+                             record    = messages.filter(rec => rec.record.key == "no one")
+                           } yield record
+                         }
+        } yield assert(recordChunk)(isNonEmpty)
       }
     ).provideSomeLayerShared[TestEnvironment](
       ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> producer) ++
