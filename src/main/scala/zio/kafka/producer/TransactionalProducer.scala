@@ -59,6 +59,6 @@ object TransactionalProducer {
                      )
       _           <- blocking.effectBlocking(rawProducer.initTransactions())
       semaphore   <- Semaphore.make(1)
-      live = Producer.Live(rawProducer, settings.producerSettings, blocking)
+      live         = Producer.Live(rawProducer, settings.producerSettings, blocking)
     } yield LiveTransactionalProducer(live, blocking, semaphore)).toManaged(_.live.close)
 }
