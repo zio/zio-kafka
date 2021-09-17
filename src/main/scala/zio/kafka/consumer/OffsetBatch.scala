@@ -9,6 +9,7 @@ sealed trait OffsetBatch {
   def commit: Task[Unit]
   def merge(offset: Offset): OffsetBatch
   def merge(offsets: OffsetBatch): OffsetBatch
+  def consumerGroupId: String
 
   /**
    * Attempts to commit and retries according to the given policy when the commit fails
@@ -26,7 +27,8 @@ object OffsetBatch {
 
 private final case class OffsetBatchImpl(
   offsets: Map[TopicPartition, Long],
-  commitHandle: Map[TopicPartition, Long] => Task[Unit]
+  commitHandle: Map[TopicPartition, Long] => Task[Unit],
+  consumerGroupId: String
 ) extends OffsetBatch {
   def commit: Task[Unit] = commitHandle(offsets)
 
@@ -54,4 +56,5 @@ case object EmptyOffsetBatch extends OffsetBatch {
   val commit: Task[Unit]                       = Task.unit
   def merge(offset: Offset): OffsetBatch       = offset.batch
   def merge(offsets: OffsetBatch): OffsetBatch = offsets
+  def consumerGroupId: String                  = ""
 }

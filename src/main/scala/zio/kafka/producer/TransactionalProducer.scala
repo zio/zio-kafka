@@ -1,10 +1,12 @@
 package zio.kafka.producer
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio.blocking.{ effectBlocking, Blocking }
-import zio.{ Exit, Has, IO, RLayer, RManaged, RefM, Semaphore, Task, UIO, ZIO, ZManaged }
+import zio.kafka.consumer.OffsetBatch
+import zio.{ Exit, Has, IO, RLayer, RManaged, Ref, RefM, Semaphore, Task, UIO, ZIO, ZManaged }
 
 import scala.jdk.CollectionConverters._
 
@@ -20,17 +22,30 @@ object TransactionalProducer {
     blocking: Blocking.Service,
     semaphore: Semaphore
   ) extends TransactionalProducer {
-    val abortTransaction: Task[Unit]  = blocking.effectBlocking(live.p.abortTransaction())
-    val commitTransaction: Task[Unit] = blocking.effectBlocking(live.p.commitTransaction())
+    val abortTransaction: Task[Unit]                                       = blocking.effectBlocking(live.p.abortTransaction())
+    def commitTransactionWithOffsets(offsetBatch: OffsetBatch): Task[Unit] =
+      blocking.effectBlocking(
+        live.p.sendOffsetsToTransaction(
+          offsetBatch.offsets.map { case (topicPartition, offset) =>
+            topicPartition -> new OffsetAndMetadata(offset + 1)
+          }.asJava,
+          offsetBatch.consumerGroupId
+        )
+      ) *>
+        blocking.effectBlocking(live.p.commitTransaction())
 
     def createTransaction: ZManaged[Any, Throwable, Transaction] =
       semaphore.withPermitManaged *> {
         ZManaged.makeExit {
           for {
-            _ <- IO(live.p.beginTransaction())
-          } yield new Transaction(producer = live)
+            offsetBatchRef <- Ref.make(OffsetBatch.empty)
+            _              <- IO(live.p.beginTransaction())
+          } yield new Transaction(producer = live, offsetBatchRef = offsetBatchRef)
         } {
-          case (_, Exit.Success(_))                        => commitTransaction.retryN(5).orDie
+          case (transaction: Transaction, Exit.Success(_)) =>
+            transaction.offsetBatchRef.get.flatMap(offsetBatch =>
+              commitTransactionWithOffsets(offsetBatch).retryN(5).orDie
+            )
           case (_, Exit.Failure(Fail(UserInitiatedAbort))) => abortTransaction.retryN(5).orDie
           case (_, Exit.Failure(_))                        => abortTransaction.retryN(5).orDie
         }

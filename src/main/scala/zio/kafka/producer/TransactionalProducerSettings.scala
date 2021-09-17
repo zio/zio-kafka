@@ -8,6 +8,11 @@ case class TransactionalProducerSettings private (
 )
 
 object TransactionalProducerSettings {
+  def apply(producerSettings: ProducerSettings, transactionalId: String): TransactionalProducerSettings =
+    new TransactionalProducerSettings(
+      producerSettings.withProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
+    )
+
   def apply(bootstrapServers: List[String], transactionalId: String): TransactionalProducerSettings =
     new TransactionalProducerSettings(
       ProducerSettings(
