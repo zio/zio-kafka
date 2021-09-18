@@ -4,9 +4,9 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
-import zio.blocking.{ effectBlocking, Blocking }
+import zio.blocking.Blocking
 import zio.kafka.consumer.OffsetBatch
-import zio.{ Exit, Has, IO, RLayer, RManaged, Ref, RefM, Semaphore, Task, UIO, ZIO, ZManaged }
+import zio.{Exit, Has, IO, RLayer, RManaged, Ref, Semaphore, Task, ZIO, ZManaged}
 
 import scala.jdk.CollectionConverters._
 
