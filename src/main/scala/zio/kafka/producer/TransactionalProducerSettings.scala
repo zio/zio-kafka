@@ -13,7 +13,7 @@ object TransactionalProducerSettings {
       producerSettings.withProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
     ) {}
 
-  def apply(bootstrapServers: List[String], transactionalId: String): TransactionalProducerSettings =
+  def apply(bootstrapServers: List[String], transactionalId: String): TransactionalProducerSettings     =
     new TransactionalProducerSettings(
       ProducerSettings(
         bootstrapServers,
@@ -27,7 +27,7 @@ object TransactionalProducerSettings {
     closeTimeout: Duration,
     properties: Map[String, AnyRef],
     transactionalId: String
-  ): TransactionalProducerSettings =
+  ): TransactionalProducerSettings                                                                      =
     new TransactionalProducerSettings(
       ProducerSettings(
         bootstrapServers,
