@@ -40,7 +40,7 @@ object TransactionalProducer {
           for {
             offsetBatchRef <- Ref.make(OffsetBatch.empty)
             _              <- IO(live.p.beginTransaction())
-          } yield new Transaction(producer = live, offsetBatchRef = offsetBatchRef)
+          } yield new TransactionImpl(producer = live, offsetBatchRef = offsetBatchRef)
         } {
           case (transaction: Transaction, Exit.Success(_)) =>
             transaction.offsetBatchRef.get.flatMap(offsetBatch =>

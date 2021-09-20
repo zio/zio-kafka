@@ -6,10 +6,37 @@ import zio.kafka.producer.TransactionalProducer.UserInitiatedAbort
 import zio.{ Cause, Chunk, IO, RIO, Ref, ZIO }
 import zio.kafka.serde.Serializer
 
-final class Transaction private[producer] (
+trait Transaction {
+  def produce[R, K, V](
+    topic: String,
+    key: K,
+    value: V,
+    keySerializer: Serializer[R, K],
+    valueSerializer: Serializer[R, V],
+    offset: Option[Offset]
+  ): RIO[R, RecordMetadata]
+
+  def produce[R, K, V](
+    producerRecord: ProducerRecord[K, V],
+    keySerializer: Serializer[R, K],
+    valueSerializer: Serializer[R, V],
+    offset: Option[Offset]
+  ): RIO[R, RecordMetadata]
+
+  def produceChunk[R, K, V](
+    records: Chunk[ProducerRecord[K, V]],
+    keySerializer: Serializer[R, K],
+    valueSerializer: Serializer[R, V],
+    offset: Option[Offset]
+  ): RIO[R, Chunk[RecordMetadata]]
+
+  def abort: IO[TransactionalProducer.UserInitiatedAbort.type, Nothing]
+}
+
+final private[producer] class TransactionImpl(
   private val producer: Producer,
   private[producer] val offsetBatchRef: Ref[OffsetBatch]
-) {
+) extends Transaction {
   def produce[R, K, V](
     topic: String,
     key: K,
