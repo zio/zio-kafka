@@ -29,7 +29,7 @@ object TransactionalProducer {
           offsetBatch.offsets.map { case (topicPartition, offset) =>
             topicPartition -> new OffsetAndMetadata(offset + 1)
           }.asJava,
-          offsetBatch.consumerGroupId
+          offsetBatch.consumerGroupMetadata
         )
       ) *>
         blocking.effectBlocking(live.p.commitTransaction())

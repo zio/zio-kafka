@@ -1,8 +1,8 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.RetriableCommitFailedException
+import org.apache.kafka.clients.consumer.{ConsumerGroupMetadata, RetriableCommitFailedException}
 import org.apache.kafka.common.TopicPartition
-import zio.{ RIO, Schedule, Task }
+import zio.{RIO, Schedule, Task}
 import zio.clock.Clock
 
 sealed trait Offset {
@@ -10,7 +10,7 @@ sealed trait Offset {
   def offset: Long
   def commit: Task[Unit]
   def batch: OffsetBatch
-  def consumerGroupId: String
+  def consumerGroupMetadata: ConsumerGroupMetadata
 
   /**
    * Attempts to commit and retries according to the given policy when the commit fails
@@ -37,8 +37,8 @@ private final case class OffsetImpl(
   topicPartition: TopicPartition,
   offset: Long,
   commitHandle: Map[TopicPartition, Long] => Task[Unit],
-  consumerGroupId: String
+  consumerGroupMetadata: ConsumerGroupMetadata
 ) extends Offset {
   def commit: Task[Unit] = commitHandle(Map(topicPartition -> offset))
-  def batch: OffsetBatch = OffsetBatchImpl(Map(topicPartition -> offset), commitHandle, consumerGroupId)
+  def batch: OffsetBatch = OffsetBatchImpl(Map(topicPartition -> offset), commitHandle, consumerGroupMetadata)
 }

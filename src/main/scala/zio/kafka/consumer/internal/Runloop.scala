@@ -181,7 +181,7 @@ private[consumer] final class Runloop(
           )
 
         fulfillAction = fulfillAction *> req.cont.succeed(
-          concatenatedChunk.map(CommittableRecord(_, commit(_), consumer.consumer.groupMetadata().groupId()))
+          concatenatedChunk.map(CommittableRecord(_, commit(_), consumer.consumer.groupMetadata()))
         )
         buf -= req.tp
       }
