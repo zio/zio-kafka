@@ -340,10 +340,10 @@ object ProducerSpec extends DefaultRunnableSpec {
         val test = for {
           transactionThief <- Ref.make(Option.empty[Transaction])
           _                <- TransactionalProducer.createTransaction.use { t =>
-            transactionThief.set(Some(t))
-          }
+                                transactionThief.set(Some(t))
+                              }
           t                <- transactionThief.get
-          _ <- t.get.produce("any-topic", 0, 0, Serde.int, Serde.int, None)
+          _                <- t.get.produce("any-topic", 0, 0, Serde.int, Serde.int, None)
         } yield ()
         assertM(test.run)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
       },
@@ -354,7 +354,7 @@ object ProducerSpec extends DefaultRunnableSpec {
                                 transactionThief.set(Some(t))
                               }
           t                <- transactionThief.get
-          _            <- TransactionalProducer.createTransaction.use { _ =>
+          _                <- TransactionalProducer.createTransaction.use { _ =>
                                 t.get.produce("any-topic", 0, 0, Serde.int, Serde.int, None)
                               }
         } yield ()
