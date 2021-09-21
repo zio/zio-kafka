@@ -16,6 +16,7 @@ trait TransactionalProducer {
 
 object TransactionalProducer {
   case object UserInitiatedAbort
+  case class TransactionLeaked(offsetBatch: OffsetBatch) extends Throwable
 
   private case class LiveTransactionalProducer(
     live: Producer.Live,
@@ -39,15 +40,16 @@ object TransactionalProducer {
         ZManaged.makeExit {
           for {
             offsetBatchRef <- Ref.make(OffsetBatch.empty)
+            closedRef      <- Ref.make(false)
             _              <- IO(live.p.beginTransaction())
-          } yield new TransactionImpl(producer = live, offsetBatchRef = offsetBatchRef)
+          } yield new TransactionImpl(producer = live, offsetBatchRef = offsetBatchRef, closed = closedRef)
         } {
-          case (transaction: Transaction, Exit.Success(_)) =>
+          case (transaction: TransactionImpl, Exit.Success(_)) =>
             transaction.offsetBatchRef.get.flatMap(offsetBatch =>
               commitTransactionWithOffsets(offsetBatch).retryN(5).orDie
-            )
-          case (_, Exit.Failure(Fail(UserInitiatedAbort))) => abortTransaction.retryN(5).orDie
-          case (_, Exit.Failure(_))                        => abortTransaction.retryN(5).orDie
+            ) *> transaction.markAsClosed
+          case (_, Exit.Failure(Fail(UserInitiatedAbort)))     => abortTransaction.retryN(5).orDie
+          case (_, Exit.Failure(_))                            => abortTransaction.retryN(5).orDie
         }
       }
   }

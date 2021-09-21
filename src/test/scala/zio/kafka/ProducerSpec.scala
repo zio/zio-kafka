@@ -6,9 +6,9 @@ import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.kafka.KafkaTestUtils._
-import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
+import zio.kafka.consumer.{ Consumer, ConsumerSettings, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
-import zio.kafka.producer.TransactionalProducer.UserInitiatedAbort
+import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
 import zio.kafka.serde.Serde
 import zio.test.Assertion._
 import zio.test._
@@ -162,10 +162,7 @@ object ProducerSpec extends DefaultRunnableSpec {
           )
         }
 
-        val failingBob = for {
-          _ <- failingTransaction1
-        } yield ()
-        assertM(failingBob.run)(dies(hasMessage(equalTo("test"))))
+        assertM(failingTransaction1.unit.run)(dies(hasMessage(equalTo("test"))))
       },
       testM("interleaving transaction with non-transactional consumer") {
         import Subscription._
@@ -338,6 +335,30 @@ object ProducerSpec extends DefaultRunnableSpec {
                              }
 
         } yield assert(committedOffset)(isNone)
+      },
+      testM("fails if transaction leaks") {
+        val test = for {
+          transactionThief <- Ref.make(Option.empty[Transaction])
+          _                <- TransactionalProducer.createTransaction.use { t =>
+            transactionThief.set(Some(t))
+          }
+          t                <- transactionThief.get
+          _ <- t.get.produce("any-topic", 0, 0, Serde.int, Serde.int, None)
+        } yield ()
+        assertM(test.run)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
+      },
+      testM("fails if transaction leaks in an open transaction") {
+        val test = for {
+          transactionThief <- Ref.make(Option.empty[Transaction])
+          _                <- TransactionalProducer.createTransaction.use { t =>
+                                transactionThief.set(Some(t))
+                              }
+          t                <- transactionThief.get
+          _            <- TransactionalProducer.createTransaction.use { _ =>
+                                t.get.produce("any-topic", 0, 0, Serde.int, Serde.int, None)
+                              }
+        } yield ()
+        assertM(test.run)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
       }
     ).provideSomeLayerShared[TestEnvironment](
       ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> producer) ++
