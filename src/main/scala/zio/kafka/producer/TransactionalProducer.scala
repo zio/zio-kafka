@@ -6,7 +6,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio.blocking.Blocking
 import zio.kafka.consumer.OffsetBatch
-import zio.{ Exit, Has, IO, RLayer, RManaged, Ref, Semaphore, Task, ZIO, ZManaged }
+import zio.{ Exit, Has, IO, RLayer, RManaged, Ref, Semaphore, Task, UIO, URIO, ZIO, ZManaged }
 
 import scala.jdk.CollectionConverters._
 
@@ -35,22 +35,23 @@ object TransactionalProducer {
       ) *>
         blocking.effectBlocking(live.p.commitTransaction())
 
+    def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): UIO[Unit] = exit match {
+      case Exit.Success(_)                        =>
+        transaction.offsetBatchRef.get
+          .flatMap(offsetBatch => commitTransactionWithOffsets(offsetBatch).retryN(5).orDie)
+      case Exit.Failure(Fail(UserInitiatedAbort)) => abortTransaction.retryN(5).orDie
+      case Exit.Failure(_)                        => abortTransaction.retryN(5).orDie
+    }
+
     def createTransaction: ZManaged[Any, Throwable, Transaction] =
       semaphore.withPermitManaged *> {
         ZManaged.makeExit {
           for {
             offsetBatchRef <- Ref.make(OffsetBatch.empty)
             closedRef      <- Ref.make(false)
-            _              <- IO(live.p.beginTransaction())
+            _              <- blocking.effectBlocking(live.p.beginTransaction())
           } yield new TransactionImpl(producer = live, offsetBatchRef = offsetBatchRef, closed = closedRef)
-        } {
-          case (transaction: TransactionImpl, Exit.Success(_)) =>
-            transaction.offsetBatchRef.get.flatMap(offsetBatch =>
-              commitTransactionWithOffsets(offsetBatch).retryN(5).orDie
-            ) *> transaction.markAsClosed
-          case (_, Exit.Failure(Fail(UserInitiatedAbort)))     => abortTransaction.retryN(5).orDie
-          case (_, Exit.Failure(_))                            => abortTransaction.retryN(5).orDie
-        }
+        } { case (transaction: TransactionImpl, exit) => transaction.markAsClosed *> commitOrAbort(transaction, exit) }
       }
   }
 
