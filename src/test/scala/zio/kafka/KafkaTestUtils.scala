@@ -1,7 +1,7 @@
 package zio.kafka
 
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
+import org.apache.kafka.clients.producer.{ ProducerConfig, ProducerRecord, RecordMetadata }
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -18,23 +18,29 @@ import java.util.UUID
 
 object KafkaTestUtils {
 
-  val producerSettings: ZIO[Has[Kafka], Nothing, ProducerSettings] =
-    ZIO.access[Has[Kafka]](_.get[Kafka].bootstrapServers).map(ProducerSettings(_))
+  val transactionalProducerSettings: ZIO[Has[Kafka], Nothing, ProducerSettings] =
+    ZIO
+      .access[Has[Kafka]](_.get[Kafka].bootstrapServers)
+      .map(ProducerSettings(_).withProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "test-transaction"))
 
-  val producer: ZLayer[Has[Kafka] with Blocking, Throwable, Has[Producer]] =
-    (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) ++ ZLayer
-      .identity[Blocking] >>>
-      Producer.live
-
-  val transactionalProducerSettings: ZIO[Has[Kafka], Nothing, TransactionalProducerSettings] =
-    ZIO.access[Has[Kafka]](_.get[Kafka].bootstrapServers).map(TransactionalProducerSettings(_, "test-transaction"))
-
-  val transactionalProducer: ZLayer[Has[Kafka] with Blocking, Throwable, Has[TransactionalProducer]] =
+  val transactionalProducer: ZLayer[Has[Kafka] with Blocking, Throwable, Has[Producer]] =
     (ZLayer.fromEffect(transactionalProducerSettings) ++ ZLayer.succeed(
       Serde.string: Serializer[Any, String]
     )) ++ ZLayer
       .identity[Blocking] >>>
-      TransactionalProducer.live
+      Producer.live
+
+  val producerSettings: ZIO[Has[Kafka], Nothing, ProducerSettings] =
+    ZIO
+      .access[Has[Kafka]](_.get[Kafka].bootstrapServers)
+      .map(ProducerSettings(_))
+
+  val producer: ZLayer[Has[Kafka] with Blocking, Throwable, Has[Producer]] =
+    (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(
+      Serde.string: Serializer[Any, String]
+    )) ++ ZLayer
+      .identity[Blocking] >>>
+      Producer.live
 
   def produceOne(
     topic: String,

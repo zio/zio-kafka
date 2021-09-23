@@ -2,9 +2,11 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio.kafka.consumer.{ Offset, OffsetBatch }
-import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
+import zio.kafka.producer.UserInitiatedAbort
 import zio.kafka.serde.Serializer
 import zio.{ Chunk, IO, RIO, Ref, UIO, ZIO }
+
+case class TransactionLeaked(offsetBatch: OffsetBatch) extends Exception
 
 trait Transaction {
   def produce[R, K, V](
@@ -30,7 +32,7 @@ trait Transaction {
     offset: Option[Offset]
   ): RIO[R, Chunk[RecordMetadata]]
 
-  def abort: IO[TransactionalProducer.UserInitiatedAbort.type, Nothing]
+  def abort: IO[UserInitiatedAbort.type, Nothing]
 }
 
 final private[producer] class TransactionImpl(
@@ -68,7 +70,7 @@ final private[producer] class TransactionImpl(
       ZIO.whenCase(offset) { case Some(offset) => offsetBatchRef.update(_ merge offset) } *>
       producer.produceChunk[R, K, V](records, keySerializer, valueSerializer)
 
-  def abort: IO[TransactionalProducer.UserInitiatedAbort.type, Nothing] =
+  def abort: IO[UserInitiatedAbort.type, Nothing] =
     ZIO.fail(UserInitiatedAbort)
 
   private[producer] def markAsClosed: UIO[Unit] = closed.set(true)

@@ -1,12 +1,15 @@
 package zio.kafka.producer
 
-import java.util.concurrent.atomic.AtomicLong
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 
-import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
+import java.util.concurrent.atomic.AtomicLong
+import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.{ Metric, MetricName }
 import org.apache.kafka.common.serialization.ByteArraySerializer
+import zio.Cause.Fail
 import zio._
 import zio.blocking._
+import zio.kafka.consumer.OffsetBatch
 import zio.kafka.serde.Serializer
 import zio.stream.ZTransducer
 
@@ -117,6 +120,14 @@ trait Producer {
   ): RIO[R, Chunk[RecordMetadata]]
 
   /**
+   * This opens a new transaction, blocking the fiber until all previous transactions
+   * are closed and calls `initTransactions` for the first transaction.
+   * It will fail with `NonTransactionalProducer` if the configuration does not contain
+   * a transactional id.
+   */
+  def beginTransaction: TaskManaged[Transaction]
+
+  /**
    * Flushes the producer's internal buffer. This will guarantee that all records
    * currently buffered will be transmitted to the broker.
    */
@@ -128,12 +139,17 @@ trait Producer {
   def metrics: Task[Map[MetricName, Metric]]
 }
 
+case object UserInitiatedAbort
+case object NonTransactionalProducer extends Exception("No transaction id was not configured for a producer")
+
 object Producer {
 
   private[producer] final case class Live(
     p: KafkaProducer[Array[Byte], Array[Byte]],
     producerSettings: ProducerSettings,
-    blocking: Blocking.Service
+    blocking: Blocking.Service,
+    transactionSemaphore: Semaphore,
+    canTransact: Ref[Boolean]
   ) extends Producer {
 
     override def produceAsync[R, K, V](
@@ -232,6 +248,20 @@ object Producer {
     ): RIO[R, Chunk[RecordMetadata]] =
       produceChunkAsync(records, keySerializer, valueSerializer).flatten
 
+    override def beginTransaction: TaskManaged[Transaction] =
+      transactionSemaphore.withPermitManaged *>
+        makeTransactionalOrFail.toManaged_ *> {
+          ZManaged.makeExit {
+            for {
+              offsetBatchRef <- Ref.make(OffsetBatch.empty)
+              closedRef      <- Ref.make(false)
+              _              <- blocking.effectBlocking(p.beginTransaction())
+            } yield new TransactionImpl(producer = this, offsetBatchRef = offsetBatchRef, closed = closedRef)
+          } { case (transaction: TransactionImpl, exit) =>
+            transaction.markAsClosed *> commitOrAbort(transaction, exit)
+          }
+        }
+
     override def flush: Task[Unit] = blocking.effectBlocking(p.flush())
 
     override def metrics: Task[Map[MetricName, Metric]] = blocking.effectBlocking(p.metrics().asScala.toMap)
@@ -247,6 +277,36 @@ object Producer {
       } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
 
     private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout))
+
+    private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): UIO[Unit] = exit match {
+      case Exit.Success(_)                        =>
+        transaction.offsetBatchRef.get
+          .flatMap(offsetBatch => commitTransactionWithOffsets(offsetBatch).retryN(5).orDie)
+      case Exit.Failure(Fail(UserInitiatedAbort)) => abortTransaction.retryN(5).orDie
+      case Exit.Failure(_)                        => abortTransaction.retryN(5).orDie
+    }
+
+    private def commitTransactionWithOffsets(offsetBatch: OffsetBatch): Task[Unit] =
+      blocking.effectBlocking(
+        p.sendOffsetsToTransaction(
+          offsetBatch.offsets.map { case (topicPartition, offset) =>
+            topicPartition -> new OffsetAndMetadata(offset + 1)
+          }.asJava,
+          offsetBatch.consumerGroupMetadata
+        )
+      ) *>
+        blocking.effectBlocking(p.commitTransaction())
+
+    private def makeTransactionalOrFail: Task[Unit] = ZIO.whenM(canTransact.get.map(_ == false)) {
+      if (producerSettings.properties.contains(ProducerConfig.TRANSACTIONAL_ID_CONFIG)) {
+        blocking.effectBlocking(p.initTransactions()) *>
+          canTransact.set(true)
+      } else {
+        IO.fail(NonTransactionalProducer)
+      }
+    }
+
+    val abortTransaction: Task[Unit] = blocking.effectBlocking(p.abortTransaction())
   }
 
   val live: RLayer[Has[ProducerSettings] with Blocking, Has[Producer]] =
@@ -259,6 +319,8 @@ object Producer {
     (for {
       props       <- ZIO.effect(settings.driverSettings)
       blocking    <- ZIO.service[Blocking.Service]
+      semaphore   <- Semaphore.make(1)
+      canTransact <- Ref.make(false)
       rawProducer <- ZIO.effect(
                        new KafkaProducer[Array[Byte], Array[Byte]](
                          props.asJava,
@@ -266,7 +328,7 @@ object Producer {
                          new ByteArraySerializer()
                        )
                      )
-    } yield Live(rawProducer, settings, blocking)).toManaged(_.close)
+    } yield Live(rawProducer, settings, blocking, semaphore, canTransact)).toManaged(_.close)
 
   def withProducerService[R, A](
     r: Producer => RIO[R, A]
@@ -349,6 +411,12 @@ object Producer {
     valueSerializer: Serializer[R, V]
   ): RIO[R with Has[Producer], Chunk[RecordMetadata]] =
     withProducerService(_.produceChunk(records, keySerializer, valueSerializer))
+
+  /**
+   * Accessor method for [[Producer.beginTransaction]]
+   */
+  def beginTransaction: RManaged[Has[Producer], Transaction] =
+    ZManaged.service[Producer].flatMap(_.beginTransaction)
 
   /**
    * Accessor method for [[Producer.flush]]
