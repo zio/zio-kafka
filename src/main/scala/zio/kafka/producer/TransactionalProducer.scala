@@ -6,7 +6,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio.blocking.Blocking
 import zio.kafka.consumer.OffsetBatch
-import zio.{ Exit, Has, IO, RLayer, RManaged, Ref, Semaphore, Task, UIO, URIO, ZIO, ZManaged }
+import zio.{ Exit, Has, RLayer, RManaged, Ref, Semaphore, Task, UIO, ZIO, ZManaged }
 
 import scala.jdk.CollectionConverters._
 
