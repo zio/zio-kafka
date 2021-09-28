@@ -25,14 +25,16 @@ object TransactionalProducer {
   ) extends TransactionalProducer {
     val abortTransaction: Task[Unit]                                       = blocking.effectBlocking(live.p.abortTransaction())
     def commitTransactionWithOffsets(offsetBatch: OffsetBatch): Task[Unit] =
-      blocking.effectBlocking(
-        live.p.sendOffsetsToTransaction(
-          offsetBatch.offsets.map { case (topicPartition, offset) =>
-            topicPartition -> new OffsetAndMetadata(offset + 1)
-          }.asJava,
-          offsetBatch.consumerGroupMetadata
+      blocking
+        .effectBlocking(
+          live.p.sendOffsetsToTransaction(
+            offsetBatch.offsets.map { case (topicPartition, offset) =>
+              topicPartition -> new OffsetAndMetadata(offset + 1)
+            }.asJava,
+            offsetBatch.consumerGroupMetadata
+          )
         )
-      ) *>
+        .unless(offsetBatch.offsets.isEmpty) *>
         blocking.effectBlocking(live.p.commitTransaction())
 
     def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): UIO[Unit] = exit match {
