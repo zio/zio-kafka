@@ -4,9 +4,9 @@ import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Deserializer => KafkaDeserializer }
 import zio.{ RIO, Task, ZIO }
 
-import scala.annotation.nowarn
 import scala.util.{ Failure, Success, Try }
 import scala.jdk.CollectionConverters._
+import scala.annotation.nowarn
 
 /**
  * Deserializer from byte array to a value of some type T
