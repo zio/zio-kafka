@@ -1,7 +1,5 @@
 package zio.kafka
 
-import java.util.UUID
-
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio._
@@ -13,8 +11,10 @@ import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.embedded.Kafka
-import zio.kafka.serde.{ Deserializer, Serde, Serializer }
 import zio.kafka.producer._
+import zio.kafka.serde.{ Deserializer, Serde, Serializer }
+
+import java.util.UUID
 
 object KafkaTestUtils {
 
@@ -25,6 +25,16 @@ object KafkaTestUtils {
     (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) ++ ZLayer
       .identity[Blocking] >>>
       Producer.live
+
+  val transactionalProducerSettings: ZIO[Has[Kafka], Nothing, TransactionalProducerSettings] =
+    ZIO.access[Has[Kafka]](_.get[Kafka].bootstrapServers).map(TransactionalProducerSettings(_, "test-transaction"))
+
+  val transactionalProducer: ZLayer[Has[Kafka] with Blocking, Throwable, Has[TransactionalProducer]] =
+    (ZLayer.fromEffect(transactionalProducerSettings) ++ ZLayer.succeed(
+      Serde.string: Serializer[Any, String]
+    )) ++ ZLayer
+      .identity[Blocking] >>>
+      TransactionalProducer.live
 
   def produceOne(
     topic: String,
@@ -84,6 +94,20 @@ object KafkaTestUtils {
         .withOffsetRetrieval(offsetRetrieval)
       clientInstanceId.fold(settings)(settings.withGroupInstanceId)
     }
+
+  def transactionalConsumerSettings(
+    groupId: String,
+    clientId: String,
+    clientInstanceId: Option[String] = None,
+    allowAutoCreateTopics: Boolean = true,
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
+  ): URIO[Has[Kafka], ConsumerSettings] =
+    consumerSettings(groupId, clientId, clientInstanceId, allowAutoCreateTopics, offsetRetrieval)
+      .map(
+        _.withProperties(
+          ConsumerConfig.ISOLATION_LEVEL_CONFIG -> "read_committed"
+        )
+      )
 
   def consumer(
     groupId: String,
