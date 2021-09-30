@@ -54,7 +54,7 @@ case class ConsumerSettings(
   def withProperty(key: String, value: AnyRef): ConsumerSettings =
     copy(properties = properties + (key -> value))
 
-  def withProperties(kvs: (String, AnyRef)*): ConsumerSettings   =
+  def withProperties(kvs: (String, AnyRef)*): ConsumerSettings =
     withProperties(kvs.toMap)
 
   def withProperties(kvs: Map[String, AnyRef]): ConsumerSettings =

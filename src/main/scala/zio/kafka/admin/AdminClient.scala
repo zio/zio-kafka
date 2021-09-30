@@ -5,33 +5,33 @@ import org.apache.kafka.clients.admin.{
   AdminClient => JAdminClient,
   AlterConsumerGroupOffsetsOptions => JAlterConsumerGroupOffsetsOptions,
   Config => JConfig,
-  ListOffsetsOptions => JListOffsetsOptions,
+  ConsumerGroupDescription => JConsumerGroupDescription,
+  CreatePartitionsOptions => JCreatePartitionsOptions,
+  CreateTopicsOptions => JCreateTopicsOptions,
+  DescribeClusterOptions => JDescribeClusterOptions,
+  DescribeConfigsOptions => JDescribeConfigsOptions,
   ListConsumerGroupOffsetsOptions => JListConsumerGroupOffsetsOptions,
+  ListOffsetsOptions => JListOffsetsOptions,
+  MemberDescription => JMemberDescription,
   NewPartitions => JNewPartitions,
   NewTopic => JNewTopic,
   OffsetSpec => JOffsetSpec,
   TopicDescription => JTopicDescription,
   TopicListing => JTopicListing,
-  CreatePartitionsOptions => JCreatePartitionsOptions,
-  DescribeClusterOptions => JDescribeClusterOptions,
-  DescribeConfigsOptions => JDescribeConfigsOptions,
-  CreateTopicsOptions => JCreateTopicsOptions,
-  ConsumerGroupDescription => JConsumerGroupDescription,
-  MemberDescription => JMemberDescription,
   _
 }
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata => JOffsetAndMetadata }
 import org.apache.kafka.common.config.{ ConfigResource => JConfigResource }
 import org.apache.kafka.common.{
-  KafkaFuture,
+  ConsumerGroupState => JConsumerGroupState,
   IsolationLevel => JIsolationLevel,
+  KafkaFuture,
   Metric => JMetric,
   MetricName => JMetricName,
   Node => JNode,
   TopicPartition => JTopicPartition,
-  TopicPartitionInfo => JTopicPartitionInfo,
-  ConsumerGroupState => JConsumerGroupState
+  TopicPartitionInfo => JTopicPartitionInfo
 }
 import zio._
 import zio.blocking.Blocking
@@ -298,9 +298,9 @@ object AdminClient {
       options: Option[DescribeClusterOptions] = None
     ): Task[Set[AclOperation]] =
       for {
-        res          <- describeCluster(options)
-        opt          <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
-        lst          <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
+        res <- describeCluster(options)
+        opt <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
+        lst <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
         aclOperations = lst.map(AclOperation.apply)
       } yield aclOperations
 
@@ -445,13 +445,13 @@ object AdminClient {
     case object BrokerLogger extends ConfigResourceType {
       lazy val asJava = JConfigResource.Type.BROKER_LOGGER
     }
-    case object Broker       extends ConfigResourceType {
+    case object Broker extends ConfigResourceType {
       lazy val asJava = JConfigResource.Type.BROKER
     }
-    case object Topic        extends ConfigResourceType {
+    case object Topic extends ConfigResourceType {
       lazy val asJava = JConfigResource.Type.TOPIC
     }
-    case object Unknown      extends ConfigResourceType {
+    case object Unknown extends ConfigResourceType {
       lazy val asJava = JConfigResource.Type.UNKNOWN
     }
 

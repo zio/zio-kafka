@@ -15,8 +15,8 @@ import scala.jdk.CollectionConverters._
 trait Producer {
 
   /**
-   * Produces a single record and await broker acknowledgement. See [[produceAsync[R,K,V](record*]] for
-   * version that allows to avoid round-trip-time penalty for each record.
+   * Produces a single record and await broker acknowledgement. See [[produceAsync[R,K,V](record*]] for version that
+   * allows to avoid round-trip-time penalty for each record.
    */
   def produce[R, K, V](
     record: ProducerRecord[K, V],
@@ -25,8 +25,8 @@ trait Producer {
   ): RIO[R, RecordMetadata]
 
   /**
-   * Produces a single record and await broker acknowledgement. See [[produceAsync[R,K,V](topic:String* ]] for
-   * version that allows to avoid round-trip-time penalty for each record.
+   * Produces a single record and await broker acknowledgement. See [[produceAsync[R,K,V](topic:String*]] for version
+   * that allows to avoid round-trip-time penalty for each record.
    */
   def produce[R, K, V](
     topic: String,
@@ -49,17 +49,14 @@ trait Producer {
     }
 
   /**
-   * Produces a single record. The effect returned from this method has two layers and
-   * describes the completion of two actions:
-   * 1. The outer layer describes the enqueueing of the record to the Producer's internal
-   *    buffer.
-   * 2. The inner layer describes receiving an acknowledgement from the broker for the
-   *    transmission of the record.
+   * Produces a single record. The effect returned from this method has two layers and describes the completion of two
+   * actions:
+   *   1. The outer layer describes the enqueueing of the record to the Producer's internal buffer. 2. The inner layer
+   *      describes receiving an acknowledgement from the broker for the transmission of the record.
    *
-   * It is usually recommended to not await the inner layer of every individual record,
-   * but enqueue a batch of records and await all of their acknowledgements at once. That
-   * amortizes the cost of sending requests to Kafka and increases throughput.
-   * See [[produce[R,K,V](record*]] for version that awaits broker acknowledgement.
+   * It is usually recommended to not await the inner layer of every individual record, but enqueue a batch of records
+   * and await all of their acknowledgements at once. That amortizes the cost of sending requests to Kafka and increases
+   * throughput. See [[produce[R,K,V](record*]] for version that awaits broker acknowledgement.
    */
   def produceAsync[R, K, V](
     record: ProducerRecord[K, V],
@@ -68,17 +65,14 @@ trait Producer {
   ): RIO[R, Task[RecordMetadata]]
 
   /**
-   * Produces a single record. The effect returned from this method has two layers and
-   * describes the completion of two actions:
-   * 1. The outer layer describes the enqueueing of the record to the Producer's internal
-   *    buffer.
-   * 2. The inner layer describes receiving an acknowledgement from the broker for the
-   *    transmission of the record.
+   * Produces a single record. The effect returned from this method has two layers and describes the completion of two
+   * actions:
+   *   1. The outer layer describes the enqueueing of the record to the Producer's internal buffer. 2. The inner layer
+   *      describes receiving an acknowledgement from the broker for the transmission of the record.
    *
-   * It is usually recommended to not await the inner layer of every individual record,
-   * but enqueue a batch of records and await all of their acknowledgements at once. That
-   * amortizes the cost of sending requests to Kafka and increases throughput.
-   * See [[produce[R,K,V](topic*]] for version that awaits broker acknowledgement.
+   * It is usually recommended to not await the inner layer of every individual record, but enqueue a batch of records
+   * and await all of their acknowledgements at once. That amortizes the cost of sending requests to Kafka and increases
+   * throughput. See [[produce[R,K,V](topic*]] for version that awaits broker acknowledgement.
    */
   def produceAsync[R, K, V](
     topic: String,
@@ -89,16 +83,14 @@ trait Producer {
   ): RIO[R, Task[RecordMetadata]]
 
   /**
-   * Produces a chunk of records. The effect returned from this method has two layers
-   * and describes the completion of two actions:
-   * 1. The outer layer describes the enqueueing of all the records to the Producer's
-   *    internal buffer.
-   * 2. The inner layer describes receiving an acknowledgement from the broker for the
-   *    transmission of the records.
+   * Produces a chunk of records. The effect returned from this method has two layers and describes the completion of
+   * two actions:
+   *   1. The outer layer describes the enqueueing of all the records to the Producer's internal buffer. 2. The inner
+   *      layer describes receiving an acknowledgement from the broker for the transmission of the records.
    *
-   * It is possible that for chunks that exceed the producer's internal buffer size, the
-   * outer layer will also signal the transmission of part of the chunk. Regardless,
-   * awaiting the inner layer guarantees the transmission of the entire chunk.
+   * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
+   * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
+   * entire chunk.
    */
   def produceChunkAsync[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -107,8 +99,8 @@ trait Producer {
   ): RIO[R, Task[Chunk[RecordMetadata]]]
 
   /**
-   * Produces a chunk of records. See [[produceChunkAsync]] for version that allows
-   * to avoid round-trip-time penalty for each chunk.
+   * Produces a chunk of records. See [[produceChunkAsync]] for version that allows to avoid round-trip-time penalty for
+   * each chunk.
    */
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -117,8 +109,8 @@ trait Producer {
   ): RIO[R, Chunk[RecordMetadata]]
 
   /**
-   * Flushes the producer's internal buffer. This will guarantee that all records
-   * currently buffered will be transmitted to the broker.
+   * Flushes the producer's internal buffer. This will guarantee that all records currently buffered will be transmitted
+   * to the broker.
    */
   def flush: Task[Unit]
 
@@ -145,19 +137,19 @@ object Producer {
         done             <- Promise.make[Throwable, RecordMetadata]
         serializedRecord <- serialize(record, keySerializer, valueSerializer)
         runtime          <- ZIO.runtime[Any]
-        _                <- blocking.effectBlocking {
-                              p.send(
-                                serializedRecord,
-                                new Callback {
-                                  def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
-                                    if (err != null) runtime.unsafeRun(done.fail(err))
-                                    else runtime.unsafeRun(done.succeed(metadata))
+        _ <- blocking.effectBlocking {
+               p.send(
+                 serializedRecord,
+                 new Callback {
+                   def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
+                     if (err != null) runtime.unsafeRun(done.fail(err))
+                     else runtime.unsafeRun(done.succeed(metadata))
 
-                                    ()
-                                  }
-                                }
-                              )
-                            }
+                     ()
+                   }
+                 }
+               )
+             }
       } yield done.await
 
     override def produceChunkAsync[R, K, V](
@@ -171,32 +163,32 @@ object Producer {
           done              <- Promise.make[Throwable, Chunk[RecordMetadata]]
           runtime           <- ZIO.runtime[Any]
           serializedRecords <- ZIO.foreach(records.toSeq)(serialize(_, keySerializer, valueSerializer))
-          _                 <- blocking.effectBlocking {
-                                 val it: Iterator[(ByteRecord, Int)] =
-                                   serializedRecords.iterator.zipWithIndex
-                                 val res: Array[RecordMetadata]      = new Array[RecordMetadata](records.length)
-                                 val count: AtomicLong               = new AtomicLong
+          _ <- blocking.effectBlocking {
+                 val it: Iterator[(ByteRecord, Int)] =
+                   serializedRecords.iterator.zipWithIndex
+                 val res: Array[RecordMetadata] = new Array[RecordMetadata](records.length)
+                 val count: AtomicLong          = new AtomicLong
 
-                                 while (it.hasNext) {
-                                   val (rec, idx): (ByteRecord, Int) = it.next()
+                 while (it.hasNext) {
+                   val (rec, idx): (ByteRecord, Int) = it.next()
 
-                                   p.send(
-                                     rec,
-                                     new Callback {
-                                       def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
-                                         if (err != null) runtime.unsafeRun(done.fail(err))
-                                         else {
-                                           res(idx) = metadata
-                                           if (count.incrementAndGet == records.length)
-                                             runtime.unsafeRun(done.succeed(Chunk.fromArray(res)))
-                                         }
+                   p.send(
+                     rec,
+                     new Callback {
+                       def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
+                         if (err != null) runtime.unsafeRun(done.fail(err))
+                         else {
+                           res(idx) = metadata
+                           if (count.incrementAndGet == records.length)
+                             runtime.unsafeRun(done.succeed(Chunk.fromArray(res)))
+                         }
 
-                                         ()
-                                       }
-                                     }
-                                   )
-                                 }
-                               }
+                         ()
+                       }
+                     }
+                   )
+                 }
+               }
         } yield done.await
       }
 
@@ -257,8 +249,8 @@ object Producer {
 
   def make(settings: ProducerSettings): RManaged[Blocking, Producer] =
     (for {
-      props       <- ZIO.effect(settings.driverSettings)
-      blocking    <- ZIO.service[Blocking.Service]
+      props    <- ZIO.effect(settings.driverSettings)
+      blocking <- ZIO.service[Blocking.Service]
       rawProducer <- ZIO.effect(
                        new KafkaProducer[Array[Byte], Array[Byte]](
                          props.asJava,
@@ -303,7 +295,7 @@ object Producer {
     valueSerializer: Serializer[R, V]
   ): ZTransducer[R with Has[Producer], Throwable, ProducerRecord[K, V], RecordMetadata] =
     ZTransducer.fromPush {
-      case None        => UIO.succeed(Chunk.empty)
+      case None => UIO.succeed(Chunk.empty)
       case Some(chunk) =>
         produceChunk[R, K, V](chunk, keySerializer, valueSerializer)
     }

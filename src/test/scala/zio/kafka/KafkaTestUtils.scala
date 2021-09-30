@@ -139,10 +139,10 @@ object KafkaTestUtils {
   def withAdmin[T](f: AdminClient => RIO[Clock with Has[Kafka] with Blocking, T]) =
     for {
       settings <- adminSettings
-      fRes     <- AdminClient
-                    .make(settings)
-                    .use(client => f(client))
-                    .provideSomeLayer[Has[Kafka]](Clock.live ++ Blocking.live)
+      fRes <- AdminClient
+                .make(settings)
+                .use(client => f(client))
+                .provideSomeLayer[Has[Kafka]](Clock.live ++ Blocking.live)
     } yield fRes
 
   def randomThing(prefix: String): Task[String] =

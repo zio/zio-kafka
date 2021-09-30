@@ -24,7 +24,7 @@ case class ProducerSettings(
   def withProperty(key: String, value: AnyRef): ProducerSettings =
     copy(properties = properties + (key -> value))
 
-  def withProperties(kvs: (String, AnyRef)*): ProducerSettings   =
+  def withProperties(kvs: (String, AnyRef)*): ProducerSettings =
     withProperties(kvs.toMap)
 
   def withProperties(kvs: Map[String, AnyRef]): ProducerSettings =

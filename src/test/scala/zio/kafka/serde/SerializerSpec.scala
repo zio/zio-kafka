@@ -5,7 +5,7 @@ import zio.test.Assertion._
 import zio.test._
 
 object SerializerSpec extends DefaultRunnableSpec {
-  override def spec                                          = suite("Serializer")(
+  override def spec = suite("Serializer")(
     suite("asOption")(
       testM("serialize None values to null") {
         assertM(stringSerializer.asOption.serialize("topic1", new RecordHeaders, None))(isNull)

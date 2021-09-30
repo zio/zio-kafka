@@ -61,12 +61,12 @@ object Plain {
         lengthCounter += record.value().size
       }
 
-      println(s"messageCounter = ${messageCounter}")
+      println(s"messageCounter = $messageCounter")
     }
 
     val duration = System.currentTimeMillis() - startTime
     println(
-      s"Done in ${duration} ms; rate = ${(messageCounter / duration) * 1000} messages/s or ${((messageCounter * 144) / duration) * 1000} bytes/s"
+      s"Done in $duration ms; rate = ${(messageCounter / duration) * 1000} messages/s or ${((messageCounter * 144) / duration) * 1000} bytes/s"
     )
 
     consumer.close()
@@ -79,7 +79,7 @@ object ZIOKafka extends App {
 
   def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] = {
     val expectedCount = 1000000
-    val settings      = ConsumerSettings(List("localhost:9092"))
+    val settings = ConsumerSettings(List("localhost:9092"))
       .withGroupId(s"zio-kafka-${scala.util.Random.nextInt()}")
       .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       .withProperty("fetch.min.bytes", "128000")
@@ -97,8 +97,8 @@ object ZIOKafka extends App {
             .take(expectedCount.toLong)
             .mapChunks { recordChunk =>
               val messageCount = recordChunk.size
-              println(s"Got chunk of ${messageCount}")
-              val lengthCount  = recordChunk.foldLeft(0)(_ + _.value.length)
+              println(s"Got chunk of $messageCount")
+              val lengthCount = recordChunk.foldLeft(0)(_ + _.value.length)
 
               Chunk(messageCount -> lengthCount)
             }
@@ -106,7 +106,7 @@ object ZIOKafka extends App {
             clock.currentTime(TimeUnit.MILLISECONDS).flatMap { endTime =>
               val duration = endTime - startTime
               console.putStrLn(
-                s"Done in ${duration} ms; rate = ${(expectedCount / duration) * 1000} messages/s or ${((expectedCount * 144) / duration) * 1000} bytes/s"
+                s"Done in $duration ms; rate = ${(expectedCount / duration) * 1000} messages/s or ${((expectedCount * 144) / duration) * 1000} bytes/s"
               )
             }
         })
