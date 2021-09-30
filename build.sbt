@@ -2,7 +2,7 @@ import sbt.Keys.{ fork, parallelExecution }
 
 lazy val scala212  = "2.12.14"
 lazy val scala213  = "2.13.6"
-lazy val scala3    = "3.0.1"
+lazy val scala3    = "3.0.2"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
