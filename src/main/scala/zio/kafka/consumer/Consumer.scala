@@ -11,7 +11,6 @@ import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
 import zio.stream._
 
-import scala.collection.compat._
 import scala.jdk.CollectionConverters._
 
 trait Consumer {
@@ -153,7 +152,9 @@ object Consumer {
       timeout: Duration = Duration.Infinity
     ): Task[Map[TopicPartition, Long]] =
       consumer.withConsumer(
-        _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.view.mapValues(_.longValue()).toMap
+        _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.map { case (tp, l) =>
+          tp -> l.longValue()
+        }.toMap
       )
 
     override def committed(
@@ -161,7 +162,7 @@ object Consumer {
       timeout: Duration = Duration.Infinity
     ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]] =
       consumer.withConsumer(
-        _.committed(partitions.asJava, timeout.asJava).asScala.toMap.view.mapValues(Option.apply).toMap
+        _.committed(partitions.asJava, timeout.asJava).asScala.map { case (k, v) => k -> Option(v) }.toMap
       )
 
     override def endOffsets(
@@ -170,7 +171,7 @@ object Consumer {
     ): Task[Map[TopicPartition, Long]] =
       consumer.withConsumer { eo =>
         val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
-        offs.asScala.view.mapValues(_.longValue()).toMap
+        offs.asScala.map { case (k, v) => k -> v.longValue() }.toMap
       }
 
     /**
@@ -181,14 +182,14 @@ object Consumer {
       runloop.gracefulShutdown
 
     override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
-      consumer.withConsumer(_.listTopics(timeout.asJava).asScala.view.mapValues(_.asScala.toList).toMap)
+      consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)
 
     override def offsetsForTimes(
       timestamps: Map[TopicPartition, Long],
       timeout: Duration = Duration.Infinity
-    ): Task[Map[TopicPartition, OffsetAndTimestamp]] =
+    ): Task[Map[TopicPartition, OffsetAndTimestamp]]                                                       =
       consumer.withConsumer(
-        _.offsetsForTimes(timestamps.view.mapValues(Long.box).toMap.asJava, timeout.asJava).asScala.toMap
+        _.offsetsForTimes(timestamps.map { case (k, v) => k -> Long.box(v) }.toMap.asJava, timeout.asJava).asScala.toMap
           // If a partition doesn't exist yet, the map will have 'null' as entry.
           // It's more idiomatic scala to then simply not have that map entry.
           .filter(_._2 != null)

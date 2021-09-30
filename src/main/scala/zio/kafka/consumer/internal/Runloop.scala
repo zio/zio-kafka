@@ -141,7 +141,7 @@ private[consumer] final class Runloop(
 
     val reqsIt = reqs.iterator
     while (reqsIt.hasNext) {
-      val req = reqsIt.next
+      val req = reqsIt.next()
       if (revoked(req.tp)) {
         buf -= req.tp
       } else acc :+= req
@@ -168,7 +168,7 @@ private[consumer] final class Runloop(
 
     val reqsIt = pendingRequests.iterator
     while (reqsIt.hasNext) {
-      val req           = reqsIt.next
+      val req           = reqsIt.next()
       val bufferedChunk = buf.getOrElse(req.tp, Chunk.empty)
       val reqRecs       = records.records(req.tp)
 
@@ -181,7 +181,7 @@ private[consumer] final class Runloop(
           )
 
         fulfillAction = fulfillAction *> req.cont.succeed(
-          concatenatedChunk.map(CommittableRecord(_, commit(_)))
+          concatenatedChunk.map(CommittableRecord(_, commit(_), consumer.consumer.groupMetadata()))
         )
         buf -= req.tp
       }
@@ -199,7 +199,7 @@ private[consumer] final class Runloop(
 
     val tpsIt = unrequestedTps.iterator
     while (tpsIt.hasNext) {
-      val tp   = tpsIt.next
+      val tp   = tpsIt.next()
       val recs = records.records(tp)
 
       if (recs.size > 0)
