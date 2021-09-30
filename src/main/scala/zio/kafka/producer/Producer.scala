@@ -178,7 +178,7 @@ object Producer {
                                  val count: AtomicLong               = new AtomicLong
 
                                  while (it.hasNext) {
-                                   val (rec, idx): (ByteRecord, Int) = it.next
+                                   val (rec, idx): (ByteRecord, Int) = it.next()
 
                                    p.send(
                                      rec,

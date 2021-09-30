@@ -37,7 +37,6 @@ import zio._
 import zio.blocking.Blocking
 import zio.duration.Duration
 
-import scala.collection.compat._
 import scala.jdk.CollectionConverters._
 
 trait AdminClient {
@@ -48,7 +47,7 @@ trait AdminClient {
    */
   def createTopics(
     newTopics: Iterable[NewTopic],
-    @deprecatedName(Symbol("createTopicOptions")) options: Option[CreateTopicsOptions] = None
+    options: Option[CreateTopicsOptions] = None
   ): Task[Unit]
 
   /**
@@ -61,7 +60,7 @@ trait AdminClient {
    */
   def deleteTopics(
     topics: Iterable[String],
-    @deprecatedName(Symbol("deleteTopicsOptions")) options: Option[DeleteTopicsOptions] = None
+    options: Option[DeleteTopicsOptions] = None
   ): Task[Unit]
 
   /**
@@ -79,7 +78,7 @@ trait AdminClient {
    */
   def describeTopics(
     topicNames: Iterable[String],
-    @deprecatedName(Symbol("describeTopicsOptions")) options: Option[DescribeTopicsOptions] = None
+    options: Option[DescribeTopicsOptions] = None
   ): Task[Map[String, TopicDescription]]
 
   /**
@@ -87,7 +86,7 @@ trait AdminClient {
    */
   def describeConfigs(
     configResources: Iterable[ConfigResource],
-    @deprecatedName(Symbol("describeConfigsOptions")) options: Option[DescribeConfigsOptions] = None
+    options: Option[DescribeConfigsOptions] = None
   ): Task[Map[ConfigResource, KafkaConfig]]
 
   /**
@@ -117,7 +116,7 @@ trait AdminClient {
    */
   def createPartitions(
     newPartitions: Map[String, NewPartitions],
-    @deprecatedName(Symbol("createPartitionsOptions")) options: Option[CreatePartitionsOptions] = None
+    options: Option[CreatePartitionsOptions] = None
   ): Task[Unit]
 
   /**
@@ -125,7 +124,7 @@ trait AdminClient {
    */
   def listOffsets(
     topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
-    @deprecatedName(Symbol("listOffsetOptions")) options: Option[ListOffsetsOptions] = None
+    options: Option[ListOffsetsOptions] = None
   ): Task[Map[TopicPartition, ListOffsetsResultInfo]]
 
   /**
@@ -142,9 +141,7 @@ trait AdminClient {
   def alterConsumerGroupOffsets(
     groupId: String,
     offsets: Map[TopicPartition, OffsetAndMetadata],
-    @deprecatedName(Symbol("alterConsumerGroupOffsetsOptions")) options: Option[
-      AlterConsumerGroupOffsetsOptions
-    ] = None
+    options: Option[AlterConsumerGroupOffsetsOptions] = None
   ): Task[Unit]
 
   /**
@@ -173,7 +170,7 @@ object AdminClient {
      */
     override def createTopics(
       newTopics: Iterable[NewTopic],
-      @deprecatedName(Symbol("createTopicOptions")) options: Option[CreateTopicsOptions] = None
+      options: Option[CreateTopicsOptions] = None
     ): Task[Unit] = {
       val asJava = newTopics.map(_.asJava).asJavaCollection
 
@@ -198,7 +195,7 @@ object AdminClient {
      */
     override def deleteTopics(
       topics: Iterable[String],
-      @deprecatedName(Symbol("deleteTopicsOptions")) options: Option[DeleteTopicsOptions] = None
+      options: Option[DeleteTopicsOptions] = None
     ): Task[Unit] = {
       val asJava = topics.asJavaCollection
       fromKafkaFutureVoid {
@@ -225,14 +222,14 @@ object AdminClient {
         blocking.effectBlocking(
           listTopicsOptions.fold(adminClient.listTopics())(opts => adminClient.listTopics(opts)).namesToListings()
         )
-      }.map(_.asScala.toMap.view.mapValues(TopicListing.apply).toMap)
+      }.map(_.asScala.map { case (k, v) => k -> TopicListing(v) }.toMap)
 
     /**
      * Describe the specified topics.
      */
     override def describeTopics(
       topicNames: Iterable[String],
-      @deprecatedName(Symbol("describeTopicsOptions")) options: Option[DescribeTopicsOptions] = None
+      options: Option[DescribeTopicsOptions] = None
     ): Task[Map[String, TopicDescription]] = {
       val asJava = topicNames.asJavaCollection
       fromKafkaFuture {
@@ -241,7 +238,7 @@ object AdminClient {
             .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
             .all()
         )
-      }.map(_.asScala.view.mapValues(AdminClient.TopicDescription(_)).toMap)
+      }.map(_.asScala.map { case (k, v) => k -> AdminClient.TopicDescription(v) }.toMap)
     }
 
     /**
@@ -249,7 +246,7 @@ object AdminClient {
      */
     override def describeConfigs(
       configResources: Iterable[ConfigResource],
-      @deprecatedName(Symbol("describeConfigsOptions")) options: Option[DescribeConfigsOptions] = None
+      options: Option[DescribeConfigsOptions] = None
     ): Task[Map[ConfigResource, KafkaConfig]] = {
       val asJava = configResources.map(_.asJava).asJavaCollection
       fromKafkaFuture {
@@ -312,9 +309,9 @@ object AdminClient {
      */
     override def createPartitions(
       newPartitions: Map[String, NewPartitions],
-      @deprecatedName(Symbol("createPartitionsOptions")) options: Option[CreatePartitionsOptions] = None
+      options: Option[CreatePartitionsOptions] = None
     ): Task[Unit] = {
-      val asJava = newPartitions.view.mapValues(_.asJava).toMap.asJava
+      val asJava = newPartitions.map { case (k, v) => k -> v.asJava }.asJava
       fromKafkaFutureVoid {
         blocking.effectBlocking(
           options
@@ -329,7 +326,7 @@ object AdminClient {
      */
     override def listOffsets(
       topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
-      @deprecatedName(Symbol("listOffsetOptions")) options: Option[ListOffsetsOptions] = None
+      options: Option[ListOffsetsOptions] = None
     ): Task[Map[TopicPartition, ListOffsetsResultInfo]] = {
       val asJava = topicPartitionOffsets.bimap(_.asJava, _.asJava).asJava
       fromKafkaFuture {
@@ -365,9 +362,7 @@ object AdminClient {
     override def alterConsumerGroupOffsets(
       groupId: String,
       offsets: Map[TopicPartition, OffsetAndMetadata],
-      @deprecatedName(Symbol("alterConsumerGroupOffsetsOptions")) options: Option[
-        AlterConsumerGroupOffsetsOptions
-      ] = None
+      options: Option[AlterConsumerGroupOffsetsOptions] = None
     ): Task[Unit] = {
       val asJava = offsets.bimap(_.asJava, _.asJava).asJava
       fromKafkaFutureVoid {
@@ -396,7 +391,7 @@ object AdminClient {
         blocking.effectBlocking(
           adminClient.describeConsumerGroups(groupIds.asJavaCollection).all
         )
-      ).map(_.asScala.view.mapValues(ConsumerGroupDescription.apply).toMap)
+      ).map(_.asScala.map { case (k, v) => k -> ConsumerGroupDescription(v) }.toMap)
 
     override def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit] = {
       val options = new RemoveMembersFromConsumerGroupOptions(
