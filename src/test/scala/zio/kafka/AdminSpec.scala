@@ -46,7 +46,7 @@ object AdminSpec extends DefaultRunnableSpec {
         KafkaTestUtils.withAdmin { client =>
           for {
             list1 <- client.listTopics()
-            _     <- client.createTopics(List(AdminClient.NewTopic("topic2", 1, 1), AdminClient.NewTopic("topic3", 4, 1)))
+            _ <- client.createTopics(List(AdminClient.NewTopic("topic2", 1, 1), AdminClient.NewTopic("topic3", 4, 1)))
             list2 <- client.listTopics()
             _     <- client.deleteTopic("topic2")
             list3 <- client.listTopics()
@@ -70,8 +70,8 @@ object AdminSpec extends DefaultRunnableSpec {
       testM("create, describe, delete multiple topic") {
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1        <- client.listTopics()
-            _            <- client.createTopics(List(AdminClient.NewTopic("topic4", 1, 1), AdminClient.NewTopic("topic5", 4, 1)))
+            list1 <- client.listTopics()
+            _ <- client.createTopics(List(AdminClient.NewTopic("topic4", 1, 1), AdminClient.NewTopic("topic5", 4, 1)))
             descriptions <- client.describeTopics(List("topic4", "topic5"))
             _            <- client.deleteTopics(List("topic4", "topic5"))
             list3        <- client.listTopics()
@@ -84,16 +84,16 @@ object AdminSpec extends DefaultRunnableSpec {
       testM("create, describe topic config, delete multiple topic") {
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1   <- client.listTopics()
-            _       <- client.createTopics(List(AdminClient.NewTopic("topic6", 1, 1), AdminClient.NewTopic("topic7", 4, 1)))
+            list1 <- client.listTopics()
+            _ <- client.createTopics(List(AdminClient.NewTopic("topic6", 1, 1), AdminClient.NewTopic("topic7", 4, 1)))
             configs <- client.describeConfigs(
                          List(
                            ConfigResource(ConfigResourceType.Topic, "topic6"),
                            ConfigResource(ConfigResourceType.Topic, "topic7")
                          )
                        )
-            _       <- client.deleteTopics(List("topic6", "topic7"))
-            list3   <- client.listTopics()
+            _     <- client.deleteTopics(List("topic6", "topic7"))
+            list3 <- client.listTopics()
           } yield assert(list1.size)(equalTo(0)) &&
             assert(configs.size)(equalTo(2)) &&
             assert(list3.size)(equalTo(0))
@@ -145,8 +145,8 @@ object AdminSpec extends DefaultRunnableSpec {
           val kvs      = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
 
           for {
-            _       <- client.createTopics(List(AdminClient.NewTopic("topic8", 3, 1)))
-            _       <- produceMany(topic, kvs).provideSomeLayer[Has[Kafka] with Blocking with Clock](producer)
+            _ <- client.createTopics(List(AdminClient.NewTopic("topic8", 3, 1)))
+            _ <- produceMany(topic, kvs).provideSomeLayer[Has[Kafka] with Blocking with Clock](producer)
             offsets <- client.listOffsets(
                          (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
                        )
@@ -172,7 +172,7 @@ object AdminSpec extends DefaultRunnableSpec {
               .take(count)
               .transduce(ZTransducer.collectAllN(Int.MaxValue))
               .mapConcatM { committableRecords =>
-                val records     = committableRecords.map(_.record)
+                val records = committableRecords.map(_.record)
                 val offsetBatch =
                   committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
 
@@ -188,17 +188,17 @@ object AdminSpec extends DefaultRunnableSpec {
               .map { case (k, vs) => (k, vs.map(_._2).sortBy(_._1)) }
 
           for {
-            _                    <- client.createTopics(List(AdminClient.NewTopic(topic, partitionCount, 1)))
-            _                    <- produceMany(topic, kvs).provideSomeLayer[Has[Kafka] with Blocking with Clock](producer)
-            records              <- consumeAndCommit(msgCount.toLong).map(toMap)
-            endOffsets           <- client.listOffsets((0 until partitionCount).map(i => p(i) -> OffsetSpec.LatestSpec).toMap)
-            _                    <- client.alterConsumerGroupOffsets(
-                                      consumerGroupID,
-                                      Map(
-                                        p(0) -> OffsetAndMetadata(0), // from the beginning
-                                        p(1) -> OffsetAndMetadata(endOffsets(p(1)).offset - partitionResetBy) // re-read two messages
-                                      )
-                                    )
+            _          <- client.createTopics(List(AdminClient.NewTopic(topic, partitionCount, 1)))
+            _          <- produceMany(topic, kvs).provideSomeLayer[Has[Kafka] with Blocking with Clock](producer)
+            records    <- consumeAndCommit(msgCount.toLong).map(toMap)
+            endOffsets <- client.listOffsets((0 until partitionCount).map(i => p(i) -> OffsetSpec.LatestSpec).toMap)
+            _ <- client.alterConsumerGroupOffsets(
+                   consumerGroupID,
+                   Map(
+                     p(0) -> OffsetAndMetadata(0),                                         // from the beginning
+                     p(1) -> OffsetAndMetadata(endOffsets(p(1)).offset - partitionResetBy) // re-read two messages
+                   )
+                 )
             expectedMsgsToConsume = endOffsets(p(0)).offset + partitionResetBy
             recordsAfterAltering <- consumeAndCommit(expectedMsgsToConsume.toLong).map(toMap)
           } yield assert(recordsAfterAltering(0))(equalTo(records(0))) &&
@@ -220,32 +220,32 @@ object AdminSpec extends DefaultRunnableSpec {
 
         KafkaTestUtils.withAdmin { client =>
           for {
-            topic                 <- randomTopic
-            groupId               <- randomGroup
-            invalidTopic          <- randomTopic
-            invalidGroupId        <- randomGroup
-            msgCount               = 20
-            msgConsume             = 15
-            kvs                    = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
-            _                     <- client.createTopics(List(AdminClient.NewTopic(topic, 1, 1)))
-            _                     <- produceMany(topic, kvs).provideSomeLayer[Has[Kafka] with Blocking](producer)
-            _                     <- consumeAndCommit(msgConsume.toLong, topic, groupId)
-            offsets               <- client.listConsumerGroupOffsets(
-                                       groupId,
-                                       Some(ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 0))))
+            topic          <- randomTopic
+            groupId        <- randomGroup
+            invalidTopic   <- randomTopic
+            invalidGroupId <- randomGroup
+            msgCount   = 20
+            msgConsume = 15
+            kvs        = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
+            _ <- client.createTopics(List(AdminClient.NewTopic(topic, 1, 1)))
+            _ <- produceMany(topic, kvs).provideSomeLayer[Has[Kafka] with Blocking](producer)
+            _ <- consumeAndCommit(msgConsume.toLong, topic, groupId)
+            offsets <- client.listConsumerGroupOffsets(
+                         groupId,
+                         Some(ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 0))))
+                       )
+            invalidTopicOffsets <- client.listConsumerGroupOffsets(
+                                     groupId,
+                                     Some(
+                                       ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(invalidTopic, 0)))
                                      )
-            invalidTopicOffsets   <- client.listConsumerGroupOffsets(
-                                       groupId,
-                                       Some(
-                                         ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(invalidTopic, 0)))
-                                       )
-                                     )
-            invalidTpOffsets      <- client.listConsumerGroupOffsets(
-                                       groupId,
-                                       Some(
-                                         ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 1)))
-                                       )
-                                     )
+                                   )
+            invalidTpOffsets <- client.listConsumerGroupOffsets(
+                                  groupId,
+                                  Some(
+                                    ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 1)))
+                                  )
+                                )
             invalidGroupIdOffsets <- client.listConsumerGroupOffsets(
                                        invalidGroupId,
                                        Some(ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 0))))

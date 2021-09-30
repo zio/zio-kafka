@@ -11,8 +11,10 @@ import scala.annotation.nowarn
 /**
  * Deserializer from byte array to a value of some type T
  *
- * @tparam R Environment available to the deserializer
- * @tparam T Value type
+ * @tparam R
+ *   Environment available to the deserializer
+ * @tparam T
+ *   Value type
  */
 trait Deserializer[-R, +T] {
   def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T]

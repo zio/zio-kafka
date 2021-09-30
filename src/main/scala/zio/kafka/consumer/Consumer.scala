@@ -45,9 +45,8 @@ trait Consumer {
   /**
    * Create a stream that emits chunks whenever new partitions are assigned to this consumer.
    *
-   * The top-level stream will emit chunks whenever the consumer rebalances, unless a manual subscription
-   * was made. When rebalancing occurs, new topic-partition streams may be emitted and existing
-   * streams may be completed.
+   * The top-level stream will emit chunks whenever the consumer rebalances, unless a manual subscription was made. When
+   * rebalancing occurs, new topic-partition streams may be emitted and existing streams may be completed.
    *
    * All streams can be completed by calling [[stopConsumption]].
    */
@@ -59,10 +58,9 @@ trait Consumer {
   /**
    * Create a stream with messages on the subscribed topic-partitions by topic-partition
    *
-   * The top-level stream will emit new topic-partition streams for each topic-partition that is assigned
-   * to this consumer. This is subject to consumer rebalancing, unless a manual subscription
-   * was made. When rebalancing occurs, new topic-partition streams may be emitted and existing
-   * streams may be completed.
+   * The top-level stream will emit new topic-partition streams for each topic-partition that is assigned to this
+   * consumer. This is subject to consumer rebalancing, unless a manual subscription was made. When rebalancing occurs,
+   * new topic-partition streams may be emitted and existing streams may be completed.
    *
    * All streams can be completed by calling [[stopConsumption]].
    */
@@ -74,8 +72,8 @@ trait Consumer {
   /**
    * Create a stream with all messages on the subscribed topic-partitions
    *
-   * The stream will emit messages from all topic-partitions interleaved. Per-partition
-   * record order is guaranteed, but the topic-partition interleaving is non-deterministic.
+   * The stream will emit messages from all topic-partitions interleaved. Per-partition record order is guaranteed, but
+   * the topic-partition interleaving is non-deterministic.
    *
    * Up to `outputBuffer` chunks may be buffered in memory by this operator.
    *
@@ -88,8 +86,8 @@ trait Consumer {
   ): ZStream[R, Throwable, CommittableRecord[K, V]]
 
   /**
-   * Stops consumption of data, drains buffered records, and ends the attached
-   * streams while still serving commit requests.
+   * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
+   * requests.
    */
   def stopConsumption: UIO[Unit]
 
@@ -110,11 +108,11 @@ trait Consumer {
   def unsubscribe: Task[Unit]
 
   /**
-   * Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the
-   * earliest offset whose timestamp is greater than or equal to the given timestamp in the corresponding partition.
+   * Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the earliest
+   * offset whose timestamp is greater than or equal to the given timestamp in the corresponding partition.
    *
-   * The consumer does not have to be assigned the partitions.
-   * If no messages exist yet for a partition, it will not exist in the returned map.
+   * The consumer does not have to be assigned the partitions. If no messages exist yet for a partition, it will not
+   * exist in the returned map.
    */
   def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
@@ -175,8 +173,8 @@ object Consumer {
       }
 
     /**
-     * Stops consumption of data, drains buffered records, and ends the attached
-     * streams while still serving commit requests.
+     * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
+     * requests.
      */
     override def stopConsumption: UIO[Unit] =
       runloop.gracefulShutdown
@@ -187,7 +185,7 @@ object Consumer {
     override def offsetsForTimes(
       timestamps: Map[TopicPartition, Long],
       timeout: Duration = Duration.Infinity
-    ): Task[Map[TopicPartition, OffsetAndTimestamp]]                                                       =
+    ): Task[Map[TopicPartition, OffsetAndTimestamp]] =
       consumer.withConsumer(
         _.offsetsForTimes(timestamps.map { case (k, v) => k -> Long.box(v) }.toMap.asJava, timeout.asJava).asScala.toMap
           // If a partition doesn't exist yet, the map will have 'null' as entry.
@@ -285,9 +283,9 @@ object Consumer {
       ZIO.runtime[Any].flatMap { runtime =>
         consumer.withConsumerM { c =>
           subscription match {
-            case Subscription.Pattern(pattern)        =>
+            case Subscription.Pattern(pattern) =>
               ZIO(c.subscribe(pattern.pattern, runloop.rebalanceListener.toKafka(runtime)))
-            case Subscription.Topics(topics)          =>
+            case Subscription.Topics(topics) =>
               ZIO(c.subscribe(topics.asJava, runloop.rebalanceListener.toKafka(runtime)))
 
             // For manual subscriptions we have to do some manual work before starting the run loop
@@ -307,7 +305,7 @@ object Consumer {
                       getOffsets(topicPartitions).flatMap { offsets =>
                         ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
                       }
-                    case OffsetRetrieval.Auto(_)            => ZIO.unit
+                    case OffsetRetrieval.Auto(_) => ZIO.unit
                   }
                 }
           }
@@ -344,7 +342,7 @@ object Consumer {
                    diagnostics,
                    settings.offsetRetrieval
                  )
-      clock   <- ZManaged.service[Clock.Service]
+      clock <- ZManaged.service[Clock.Service]
     } yield Live(wrapper, settings, runloop, clock)
 
   /**
@@ -422,18 +420,18 @@ object Consumer {
    *
    * This method is the easiest way of processing messages on a Kafka topic.
    *
-   * Messages on a single partition are processed sequentially, while the processing of
-   * multiple partitions happens in parallel.
+   * Messages on a single partition are processed sequentially, while the processing of multiple partitions happens in
+   * parallel.
    *
-   * Offsets are committed after execution of the effect. They are batched when a commit action is in progress
-   * to avoid backpressuring the stream. When commits fail due to a org.apache.kafka.clients.consumer.RetriableCommitFailedException they are
-   * retried according to commitRetryPolicy
+   * Offsets are committed after execution of the effect. They are batched when a commit action is in progress to avoid
+   * backpressuring the stream. When commits fail due to a
+   * org.apache.kafka.clients.consumer.RetriableCommitFailedException they are retried according to commitRetryPolicy
    *
-   * The effect should absorb any failures. Failures should be handled by retries or ignoring the
-   * error, which will result in the Kafka message being skipped.
+   * The effect should absorb any failures. Failures should be handled by retries or ignoring the error, which will
+   * result in the Kafka message being skipped.
    *
-   * Messages are processed with 'at least once' consistency: it is not guaranteed that every message
-   * that is processed by the effect has a corresponding offset commit before stream termination.
+   * Messages are processed with 'at least once' consistency: it is not guaranteed that every message that is processed
+   * by the effect has a corresponding offset commit before stream termination.
    *
    * Usage example:
    *
@@ -447,17 +445,28 @@ object Consumer {
    * }
    * }}}
    *
-   * @param settings Settings for creating a [[Consumer]]
-   * @param subscription Topic subscription parameters
-   * @param keyDeserializer Deserializer for the key of the messages
-   * @param valueDeserializer Deserializer for the value of the messages
-   * @param commitRetryPolicy Retry commits that failed due to a RetriableCommitFailedException according to this schedule
-   * @param f Function that returns the effect to execute for each message. It is passed the key and value
-   * @tparam R Environment for the consuming effect
-   * @tparam R1 Environment for the deserializers
-   * @tparam K Type of keys (an implicit `Deserializer` should be in scope)
-   * @tparam V Type of values (an implicit `Deserializer` should be in scope)
-   * @return Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
+   * @param settings
+   *   Settings for creating a [[Consumer]]
+   * @param subscription
+   *   Topic subscription parameters
+   * @param keyDeserializer
+   *   Deserializer for the key of the messages
+   * @param valueDeserializer
+   *   Deserializer for the value of the messages
+   * @param commitRetryPolicy
+   *   Retry commits that failed due to a RetriableCommitFailedException according to this schedule
+   * @param f
+   *   Function that returns the effect to execute for each message. It is passed the key and value
+   * @tparam R
+   *   Environment for the consuming effect
+   * @tparam R1
+   *   Environment for the deserializers
+   * @tparam K
+   *   Type of keys (an implicit `Deserializer` should be in scope)
+   * @tparam V
+   *   Type of values (an implicit `Deserializer` should be in scope)
+   * @return
+   *   Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
    */
   def consumeWith[R, R1, K, V](
     settings: ConsumerSettings,

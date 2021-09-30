@@ -2,7 +2,7 @@ package zio.kafka.consumer.diagnostics
 
 import zio.{ Managed, Queue, UIO }
 
-trait Diagnostics  {
+trait Diagnostics {
   val enabled: Boolean = true
 
   def emitIfEnabled(event: => DiagnosticEvent): UIO[Unit] =

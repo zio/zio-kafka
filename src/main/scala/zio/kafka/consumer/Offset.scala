@@ -13,8 +13,8 @@ sealed trait Offset {
   def consumerGroupMetadata: ConsumerGroupMetadata
 
   /**
-   * Attempts to commit and retries according to the given policy when the commit fails
-   * with a RetriableCommitFailedException
+   * Attempts to commit and retries according to the given policy when the commit fails with a
+   * RetriableCommitFailedException
    */
   def commitOrRetry[R](policy: Schedule[R, Throwable, Any]): RIO[R with Clock, Unit] =
     Offset.commitOrRetry(commit, policy)

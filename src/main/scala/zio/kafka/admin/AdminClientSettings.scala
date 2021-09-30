@@ -15,7 +15,7 @@ case class AdminClientSettings(
   def withProperty(key: String, value: AnyRef): AdminClientSettings =
     copy(properties = properties + (key -> value))
 
-  def withProperties(kvs: (String, AnyRef)*): AdminClientSettings   =
+  def withProperties(kvs: (String, AnyRef)*): AdminClientSettings =
     withProperties(kvs.toMap)
 
   def withProperties(kvs: Map[String, AnyRef]): AdminClientSettings =

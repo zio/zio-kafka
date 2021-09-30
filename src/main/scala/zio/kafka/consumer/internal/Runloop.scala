@@ -37,14 +37,14 @@ private[consumer] final class Runloop(
   ): UIO[(TopicPartition, Promise[Throwable, Unit], ZStream[Any, Throwable, ByteArrayCommittableRecord])] =
     for {
       interruptionPromise <- Promise.make[Throwable, Unit]
-      stream               = ZStream.repeatEffectChunkOption {
-                               for {
-                                 request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-                                 _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
-                                 _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
-                                 result  <- request.await
-                               } yield result
-                             }.interruptWhen(interruptionPromise)
+      stream = ZStream.repeatEffectChunkOption {
+                 for {
+                   request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
+                   _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
+                   _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
+                   result  <- request.await
+                 } yield result
+               }.interruptWhen(interruptionPromise)
     } yield (tp, interruptionPromise, stream)
 
   def gracefulShutdown: UIO[Unit] =
@@ -120,10 +120,10 @@ private[consumer] final class Runloop(
 
   /**
    * Does all needed to end revoked partitions:
-   * 1. Complete the revoked assigned streams
-   * 2. Remove from the list of pending requests
-   * 3. Remove from buffered records
-   * @return New pending requests, new buffered records and active assigned streams
+   *   1. Complete the revoked assigned streams 2. Remove from the list of pending requests 3. Remove from buffered
+   *      records
+   * @return
+   *   New pending requests, new buffered records and active assigned streams
    */
   private def endRevoked(
     reqs: Chunk[Runloop.Request],
@@ -153,7 +153,8 @@ private[consumer] final class Runloop(
   /**
    * Fulfill pending requests with records retrieved from poll() call + buffered records
    *
-   * @return Remaining pending requests and remaining/new buffered records
+   * @return
+   *   Remaining pending requests and remaining/new buffered records
    */
   private def fulfillRequests(
     pendingRequests: Chunk[Runloop.Request],
@@ -258,7 +259,7 @@ private[consumer] final class Runloop(
 
   private def handlePoll(state: State): RIO[Blocking, State] =
     for {
-      pollResult         <-
+      pollResult <-
         consumer.withConsumerM { c =>
           Task.effectSuspend {
 
@@ -279,29 +280,29 @@ private[consumer] final class Runloop(
                   Map[TopicPartition, Promise[Throwable, Unit]]()
                 )
               ), {
-                val tpsInResponse      = records.partitions.asScala.toSet
-                val currentAssigned    = c.assignment().asScala.toSet
-                val newlyAssigned      = currentAssigned -- prevAssigned
+                val tpsInResponse   = records.partitions.asScala.toSet
+                val currentAssigned = c.assignment().asScala.toSet
+                val newlyAssigned   = currentAssigned -- prevAssigned
                 val unrequestedRecords =
                   bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
 
                 for {
-                  _             <- doSeekForNewPartitions(c, newlyAssigned)
-                  revokeResult  <- endRevoked(
-                                     state.pendingRequests,
-                                     state.addBufferedRecords(unrequestedRecords).bufferedRecords,
-                                     state.assignedStreams,
-                                     !currentAssigned(_)
-                                   )
+                  _ <- doSeekForNewPartitions(c, newlyAssigned)
+                  revokeResult <- endRevoked(
+                                    state.pendingRequests,
+                                    state.addBufferedRecords(unrequestedRecords).bufferedRecords,
+                                    state.assignedStreams,
+                                    !currentAssigned(_)
+                                  )
                   fulfillResult <-
                     fulfillRequests(revokeResult.unfulfilledRequests, revokeResult.bufferedRecords, records)
-                  _             <- diagnostics.emitIfEnabled(
-                                     DiagnosticEvent.Poll(
-                                       requestedPartitions,
-                                       fulfillResult.bufferedRecords.keySet,
-                                       fulfillResult.unfulfilledRequests.map(_.tp).toSet
-                                     )
-                                   )
+                  _ <- diagnostics.emitIfEnabled(
+                         DiagnosticEvent.Poll(
+                           requestedPartitions,
+                           fulfillResult.bufferedRecords.keySet,
+                           fulfillResult.unfulfilledRequests.map(_.tp).toSet
+                         )
+                       )
                 } yield Runloop.PollResult(
                   newlyAssigned,
                   fulfillResult.unfulfilledRequests,
@@ -328,7 +329,7 @@ private[consumer] final class Runloop(
             .map(_.map { case (tp, interruptionPromise, _) =>
               tp -> interruptionPromise
             })
-      newPendingCommits  <-
+      newPendingCommits <-
         ZIO.ifM(isRebalancing)(
           UIO.succeed(state.pendingCommits),
           doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).as(Chunk.empty)
@@ -363,19 +364,18 @@ private[consumer] final class Runloop(
     )
 
   /**
-   * After shutdown, we end all pending requests (ending their partition streams) and pause
-   * all partitions, but keep executing commits and polling
+   * After shutdown, we end all pending requests (ending their partition streams) and pause all partitions, but keep
+   * executing commits and polling
    *
-   * Buffered records for paused partitions will be removed to drain the stream
-   * as fast as possible.
+   * Buffered records for paused partitions will be removed to drain the stream as fast as possible.
    */
   private def handleShutdown(state: State, cmd: Command): RIO[Blocking, State] =
     cmd match {
-      case Command.Poll()             =>
+      case Command.Poll() =>
         // End all pending requests
         ZIO.foreach_(state.pendingRequests)(_.cont.fail(None)) *>
           handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = Map.empty))
-      case Command.Requests(reqs)     =>
+      case Command.Requests(reqs) =>
         ZIO.foreach_(reqs)(_.cont.fail(None)).as(state)
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
@@ -383,9 +383,9 @@ private[consumer] final class Runloop(
 
   private def handleOperational(state: State, cmd: Command): RIO[Blocking, State] =
     cmd match {
-      case Command.Poll()             =>
+      case Command.Poll() =>
         handlePoll(state)
-      case Command.Requests(reqs)     =>
+      case Command.Requests(reqs) =>
         handleRequests(state, reqs).flatMap { state =>
           // Optimization: eagerly poll if we have pending requests instead of waiting
           // for the next scheduled poll.
@@ -451,35 +451,35 @@ private[consumer] object Runloop {
       rebalancingRef <- Ref.make(false).toManaged_
       requestQueue   <- Queue.unbounded[Runloop.Request].toManaged(_.shutdown)
       commitQueue    <- Queue.unbounded[Command.Commit].toManaged(_.shutdown)
-      partitions     <- Queue
-                          .unbounded[
-                            Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
-                          ]
-                          .map { queue =>
-                            queue
-                              .mapM(
-                                _.fold(
-                                  queue.shutdown.as(Take.end),
-                                  cause => UIO.succeed(Take.halt(cause)),
-                                  chunk => UIO.succeed(Take.chunk(chunk))
-                                )
-                              )
-                          }
-                          .toManaged(_.shutdown)
-      shutdownRef    <- Ref.make(false).toManaged_
-      runloop         = new Runloop(
-                          consumer,
-                          pollFrequency,
-                          pollTimeout,
-                          requestQueue,
-                          commitQueue,
-                          partitions,
-                          rebalancingRef,
-                          diagnostics,
-                          shutdownRef,
-                          offsetRetrieval
-                        )
-      _              <- runloop.run
+      partitions <- Queue
+                      .unbounded[
+                        Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
+                      ]
+                      .map { queue =>
+                        queue
+                          .mapM(
+                            _.fold(
+                              queue.shutdown.as(Take.end),
+                              cause => UIO.succeed(Take.halt(cause)),
+                              chunk => UIO.succeed(Take.chunk(chunk))
+                            )
+                          )
+                      }
+                      .toManaged(_.shutdown)
+      shutdownRef <- Ref.make(false).toManaged_
+      runloop = new Runloop(
+                  consumer,
+                  pollFrequency,
+                  pollTimeout,
+                  requestQueue,
+                  commitQueue,
+                  partitions,
+                  rebalancingRef,
+                  diagnostics,
+                  shutdownRef,
+                  offsetRetrieval
+                )
+      _ <- runloop.run
     } yield runloop
 }
 
@@ -489,9 +489,9 @@ private[internal] final case class State(
   bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
   assignedStreams: Map[TopicPartition, Promise[Throwable, Unit]]
 ) {
-  def addCommit(c: Command.Commit)                                                  = copy(pendingCommits = c +: pendingCommits)
-  def addRequest(c: Runloop.Request)                                                = copy(pendingRequests = c +: pendingRequests)
-  def addRequests(c: Chunk[Runloop.Request])                                        = copy(pendingRequests = c ++ pendingRequests)
+  def addCommit(c: Command.Commit)           = copy(pendingCommits = c +: pendingCommits)
+  def addRequest(c: Runloop.Request)         = copy(pendingRequests = c +: pendingRequests)
+  def addRequests(c: Chunk[Runloop.Request]) = copy(pendingRequests = c ++ pendingRequests)
   def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
     copy(
       bufferedRecords = recs.foldLeft(bufferedRecords) { case (acc, (tp, recs)) =>

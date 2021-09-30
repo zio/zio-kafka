@@ -14,18 +14,18 @@ lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embedde
 
 inThisBuild(
   List(
-    organization := "dev.zio",
-    homepage := Some(url("https://github.com/zio/zio-kafka")),
-    licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
-    useCoursier := false,
-    scalaVersion := mainScala,
-    crossScalaVersions := allScala,
+    organization             := "dev.zio",
+    homepage                 := Some(url("https://github.com/zio/zio-kafka")),
+    licenses                 := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
+    useCoursier              := false,
+    scalaVersion             := mainScala,
+    crossScalaVersions       := allScala,
     Test / parallelExecution := false,
-    Test / fork := true,
-    run / fork := true,
-    pgpPublicRing := file("/tmp/public.asc"),
-    pgpSecretRing := file("/tmp/secret.asc"),
-    pgpPassphrase := sys.env.get("PGP_PASSWORD").map(_.toArray),
+    Test / fork              := true,
+    run / fork               := true,
+    pgpPublicRing            := file("/tmp/public.asc"),
+    pgpSecretRing            := file("/tmp/secret.asc"),
+    pgpPassphrase            := sys.env.get("PGP_PASSWORD").map(_.toArray),
     scmInfo := Some(
       ScmInfo(url("https://github.com/zio/zio-kafka/"), "scm:git:git@github.com:zio/zio-kafka.git")
     ),
@@ -45,7 +45,7 @@ lazy val kafka =
     .in(file("."))
     .enablePlugins(BuildInfoPlugin)
     .settings(
-      name := "zio-kafka",
+      name              := "zio-kafka",
       scalafmtOnCompile := true,
       Compile / compile / scalacOptions ++= {
         if (scalaBinaryVersion.value == "2.13") Seq("-Wconf:cat=unused-nowarn:s")
@@ -58,7 +58,7 @@ lazy val kafka =
       }.value
     )
     .settings(
-      buildInfoKeys := Seq[BuildInfoKey](organization, name, version, scalaVersion, sbtVersion, isSnapshot),
+      buildInfoKeys    := Seq[BuildInfoKey](organization, name, version, scalaVersion, sbtVersion, isSnapshot),
       buildInfoPackage := "zio.kafka"
     )
     .settings(

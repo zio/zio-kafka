@@ -23,7 +23,7 @@ object TransactionalProducer {
     blocking: Blocking.Service,
     semaphore: Semaphore
   ) extends TransactionalProducer {
-    val abortTransaction: Task[Unit]                                       = blocking.effectBlocking(live.p.abortTransaction())
+    val abortTransaction: Task[Unit] = blocking.effectBlocking(live.p.abortTransaction())
     def commitTransactionWithOffsets(offsetBatch: OffsetBatch): Task[Unit] =
       blocking
         .effectBlocking(
@@ -38,7 +38,7 @@ object TransactionalProducer {
         blocking.effectBlocking(live.p.commitTransaction())
 
     def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): UIO[Unit] = exit match {
-      case Exit.Success(_)                        =>
+      case Exit.Success(_) =>
         transaction.offsetBatchRef.get
           .flatMap(offsetBatch => commitTransactionWithOffsets(offsetBatch).retryN(5).orDie)
       case Exit.Failure(Fail(UserInitiatedAbort)) => abortTransaction.retryN(5).orDie
@@ -68,8 +68,8 @@ object TransactionalProducer {
 
   def make(settings: TransactionalProducerSettings): RManaged[Blocking, TransactionalProducer] =
     (for {
-      props       <- ZIO.effect(settings.producerSettings.driverSettings)
-      blocking    <- ZIO.service[Blocking.Service]
+      props    <- ZIO.effect(settings.producerSettings.driverSettings)
+      blocking <- ZIO.service[Blocking.Service]
       rawProducer <- ZIO.effect(
                        new KafkaProducer[Array[Byte], Array[Byte]](
                          props.asJava,
@@ -77,8 +77,8 @@ object TransactionalProducer {
                          new ByteArraySerializer()
                        )
                      )
-      _           <- blocking.effectBlocking(rawProducer.initTransactions())
-      semaphore   <- Semaphore.make(1)
-      live         = Producer.Live(rawProducer, settings.producerSettings, blocking)
+      _         <- blocking.effectBlocking(rawProducer.initTransactions())
+      semaphore <- Semaphore.make(1)
+      live = Producer.Live(rawProducer, settings.producerSettings, blocking)
     } yield LiveTransactionalProducer(live, blocking, semaphore)).toManaged(_.live.close)
 }

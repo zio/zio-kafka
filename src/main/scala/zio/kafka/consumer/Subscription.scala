@@ -16,8 +16,10 @@ object Subscription {
   /**
    * Create a subscription for one or more topics
    *
-   * @param name Topic to subscribe to
-   * @param names Additional topics to subscribe to
+   * @param name
+   *   Topic to subscribe to
+   * @param names
+   *   Additional topics to subscribe to
    */
   def topics(name: String, names: String*): Subscription =
     Topics(Set(name) ++ names.toSet)
@@ -25,7 +27,8 @@ object Subscription {
   /**
    * Create a subscription for all topics matching the given pattern
    *
-   * @param pattern Pattern
+   * @param pattern
+   *   Pattern
    */
   def pattern(pattern: Regex): Subscription =
     Pattern(pattern)
@@ -33,8 +36,10 @@ object Subscription {
   /**
    * Create a subscription for all topics matching the given pattern
    *
-   * @param pattern Pattern to be converted to a Regex
-   * @return The created subscription or failure when the pattern is invalid
+   * @param pattern
+   *   Pattern to be converted to a Regex
+   * @return
+   *   The created subscription or failure when the pattern is invalid
    */
   def pattern(pattern: String): Task[Subscription] =
     Task.effect(new Regex(pattern)).map(Pattern.apply)
@@ -42,7 +47,8 @@ object Subscription {
   /**
    * Create a subscription for all topics matching the given pattern
    *
-   * @param pattern Pattern
+   * @param pattern
+   *   Pattern
    */
   def pattern(pattern: JPattern): Subscription =
     Pattern(new Regex(pattern.pattern()))
@@ -52,7 +58,8 @@ object Subscription {
    *
    * A consumer with this type of subscription does not perform consumer rebalancing
    *
-   * @param topicPartitions Tuples of topic and partition
+   * @param topicPartitions
+   *   Tuples of topic and partition
    */
   def manual(topicPartitions: (String, Int)*): Manual =
     Manual(topicPartitions.map { case (topic, partition) => new TopicPartition(topic, partition) }.toSet)
@@ -66,6 +73,6 @@ object Subscription {
    * @param partition
    * @return
    */
-  def manual(topic: String, partition: Int): Manual   =
+  def manual(topic: String, partition: Int): Manual =
     manual((topic, partition))
 }
