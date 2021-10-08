@@ -8,7 +8,7 @@ lazy val allScala  = Seq(scala212, scala3, mainScala)
 
 lazy val zioVersion           = "1.0.12"
 lazy val kafkaVersion         = "2.8.1"
-lazy val embeddedKafkaVersion = "2.8.1" // Should be the same as kafkaVersion, except for the patch part
+lazy val embeddedKafkaVersion = "3.0.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion % "test"
 
