@@ -179,7 +179,7 @@ object AdminSpec extends DefaultRunnableSpec {
                 offsetBatch.commit.as(records)
               }
               .runCollect
-              .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer(consumerGroupID, "topic9"))
+              .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("topic9", Some(consumerGroupID)))
 
           def toMap(records: Chunk[ConsumerRecord[String, String]]): Map[Int, List[(Long, String, String)]] =
             records.toList
@@ -216,7 +216,7 @@ object AdminSpec extends DefaultRunnableSpec {
             .plainStream[Has[Kafka] with Blocking with Clock, String, String](Serde.string, Serde.string)
             .take(count)
             .foreach(_.offset.commit)
-            .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer(groupId, topic))
+            .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer(topic, Some(groupId)))
 
         KafkaTestUtils.withAdmin { client =>
           for {
@@ -294,7 +294,7 @@ object AdminSpec extends DefaultRunnableSpec {
     .subscribeAnd(Subscription.topics(topicName))
     .plainStream(Serde.string, Serde.string)
     .foreach(_.offset.commit)
-    .provideSomeLayer(consumer(groupId, clientId, groupInstanceId))
+    .provideSomeLayer(consumer(clientId, Some(groupId), groupInstanceId))
 
   private def getStableConsumerGroupDescription(
     groupId: String

@@ -39,7 +39,7 @@ object CommittableRecord {
   def apply[K, V](
     record: ConsumerRecord[K, V],
     commitHandle: Map[TopicPartition, Long] => Task[Unit],
-    consumerGroupMetadata: ConsumerGroupMetadata
+    consumerGroupMetadata: Option[ConsumerGroupMetadata]
   ): CommittableRecord[K, V] =
     CommittableRecord(
       record,

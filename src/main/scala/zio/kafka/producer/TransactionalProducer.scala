@@ -2,6 +2,7 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.common.errors.InvalidGroupIdException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio.blocking.Blocking
@@ -32,6 +33,11 @@ object TransactionalProducer {
               topicPartition -> new OffsetAndMetadata(offset + 1)
             }.asJava,
             offsetBatch.consumerGroupMetadata
+              .getOrElse(
+                throw new InvalidGroupIdException(
+                  "To use the group management or offset commit APIs, you must provide a valid group.id in the consumer configuration."
+                )
+              )
           )
         )
         .unless(offsetBatch.offsets.isEmpty) *>
