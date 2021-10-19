@@ -93,7 +93,7 @@ object KafkaTestUtils {
         .withOffsetRetrieval(offsetRetrieval)
 
       val withClientInstanceId = clientInstanceId.fold(settings)(settings.withGroupInstanceId)
-      groupId.fold(withClientInstanceId)(settings.withGroupId)
+      groupId.fold(withClientInstanceId)(withClientInstanceId.withGroupId)
     }
 
   def transactionalConsumerSettings(
