@@ -67,7 +67,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                        .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client160", Some("group160")))
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
-      },
+      } @@ TestAspect.flaky,
       testM("Consumer.subscribeAnd manual subscription without groupId works properly") {
         val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
         for {
@@ -82,7 +82,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
               .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer(clientId = "client160"))
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
-      },
+      } @@ TestAspect.flaky,
       testM("Consuming+provideCustomLayer") {
         val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
         for {
