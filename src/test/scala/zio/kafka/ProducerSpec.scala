@@ -42,7 +42,7 @@ object ProducerSpec extends DefaultRunnableSpec {
 
         for {
           outcome  <- Producer.produceChunk(chunks, Serde.string, Serde.string)
-          settings <- consumerSettings("testGroup", "testClient")
+          settings <- consumerSettings("testClient", Some("testGroup"))
           record1 <- withConsumer(Topics(Set(topic1)), settings).use { consumer =>
                        for {
                          messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
@@ -181,7 +181,7 @@ object ProducerSpec extends DefaultRunnableSpec {
                          for {
                            _        <- t.produce(aliceGives20, Serde.string, Serde.int, None)
                            _        <- Producer.produce(nonTransactional, Serde.string, Serde.int)
-                           settings <- consumerSettings("testGroup4", "testClient4")
+                           settings <- consumerSettings("testClient4", Some("testGroup4"))
                            recordChunk <- withConsumerInt(Topics(Set("accounts4")), settings).use { consumer =>
                                             for {
                                               messages <- consumer.take

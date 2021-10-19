@@ -10,7 +10,7 @@ sealed trait Offset {
   def offset: Long
   def commit: Task[Unit]
   def batch: OffsetBatch
-  def consumerGroupMetadata: ConsumerGroupMetadata
+  def consumerGroupMetadata: Option[ConsumerGroupMetadata]
 
   /**
    * Attempts to commit and retries according to the given policy when the commit fails with a
@@ -37,7 +37,7 @@ private final case class OffsetImpl(
   topicPartition: TopicPartition,
   offset: Long,
   commitHandle: Map[TopicPartition, Long] => Task[Unit],
-  consumerGroupMetadata: ConsumerGroupMetadata
+  consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) extends Offset {
   def commit: Task[Unit] = commitHandle(Map(topicPartition -> offset))
   def batch: OffsetBatch = OffsetBatchImpl(Map(topicPartition -> offset), commitHandle, consumerGroupMetadata)

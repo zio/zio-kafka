@@ -10,7 +10,7 @@ sealed trait OffsetBatch {
   def commit: Task[Unit]
   def merge(offset: Offset): OffsetBatch
   def merge(offsets: OffsetBatch): OffsetBatch
-  def consumerGroupMetadata: ConsumerGroupMetadata
+  def consumerGroupMetadata: Option[ConsumerGroupMetadata]
 
   /**
    * Attempts to commit and retries according to the given policy when the commit fails with a
@@ -29,7 +29,7 @@ object OffsetBatch {
 private final case class OffsetBatchImpl(
   offsets: Map[TopicPartition, Long],
   commitHandle: Map[TopicPartition, Long] => Task[Unit],
-  consumerGroupMetadata: ConsumerGroupMetadata
+  consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) extends OffsetBatch {
   def commit: Task[Unit] = commitHandle(offsets)
 
@@ -53,9 +53,9 @@ private final case class OffsetBatchImpl(
 }
 
 case object EmptyOffsetBatch extends OffsetBatch {
-  val offsets: Map[TopicPartition, Long]           = Map()
-  val commit: Task[Unit]                           = Task.unit
-  def merge(offset: Offset): OffsetBatch           = offset.batch
-  def merge(offsets: OffsetBatch): OffsetBatch     = offsets
-  def consumerGroupMetadata: ConsumerGroupMetadata = new ConsumerGroupMetadata("")
+  val offsets: Map[TopicPartition, Long]                   = Map()
+  val commit: Task[Unit]                                   = Task.unit
+  def merge(offset: Offset): OffsetBatch                   = offset.batch
+  def merge(offsets: OffsetBatch): OffsetBatch             = offsets
+  def consumerGroupMetadata: Option[ConsumerGroupMetadata] = None
 }

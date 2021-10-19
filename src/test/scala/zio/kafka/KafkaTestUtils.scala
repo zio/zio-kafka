@@ -71,15 +71,14 @@ object KafkaTestUtils {
       )
 
   def consumerSettings(
-    groupId: String,
     clientId: String,
+    groupId: Option[String] = None,
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
   ): URIO[Has[Kafka], ConsumerSettings] =
     ZIO.access[Has[Kafka]] { (kafka: Has[Kafka]) =>
       val settings = ConsumerSettings(kafka.get.bootstrapServers)
-        .withGroupId(groupId)
         .withClientId(clientId)
         .withCloseTimeout(5.seconds)
         .withProperties(
@@ -92,7 +91,9 @@ object KafkaTestUtils {
         )
         .withPerPartitionChunkPrefetch(16)
         .withOffsetRetrieval(offsetRetrieval)
-      clientInstanceId.fold(settings)(settings.withGroupInstanceId)
+
+      val withClientInstanceId = clientInstanceId.fold(settings)(settings.withGroupInstanceId)
+      groupId.fold(withClientInstanceId)(withClientInstanceId.withGroupId)
     }
 
   def transactionalConsumerSettings(
@@ -102,7 +103,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
   ): URIO[Has[Kafka], ConsumerSettings] =
-    consumerSettings(groupId, clientId, clientInstanceId, allowAutoCreateTopics, offsetRetrieval)
+    consumerSettings(clientId, Some(groupId), clientInstanceId, allowAutoCreateTopics, offsetRetrieval)
       .map(
         _.withProperties(
           ConsumerConfig.ISOLATION_LEVEL_CONFIG -> "read_committed"
@@ -110,21 +111,21 @@ object KafkaTestUtils {
       )
 
   def consumer(
-    groupId: String,
     clientId: String,
+    groupId: Option[String] = None,
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZLayer[Has[Kafka] with Clock with Blocking, Throwable, Has[Consumer]] =
-    (consumerSettings(groupId, clientId, clientInstanceId, allowAutoCreateTopics, offsetRetrieval).toLayer ++
+    (consumerSettings(clientId, groupId, clientInstanceId, allowAutoCreateTopics, offsetRetrieval).toLayer ++
       ZLayer.requires[Clock with Blocking] ++
       ZLayer.succeed(diagnostics)) >>> Consumer.live
 
-  def consumeWithStrings[RC](groupId: String, clientId: String, subscription: Subscription)(
-    r: (String, String) => URIO[RC, Unit]
-  ): RIO[RC with Has[Kafka] with Blocking with Clock, Unit] =
-    consumerSettings(groupId, clientId, None).flatMap { settings =>
+  def consumeWithStrings[RC](clientId: String, groupId: Option[String] = None, subscription: Subscription)(
+    r: (String, String) => URIO[Any, Unit]
+  ): RIO[Any with Has[Kafka] with Blocking with Clock, Unit] =
+    consumerSettings(clientId, groupId, None).flatMap { settings =>
       Consumer.consumeWith(
         settings,
         subscription,

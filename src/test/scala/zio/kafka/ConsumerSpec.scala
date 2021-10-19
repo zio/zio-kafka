@@ -23,7 +23,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
       testM("export metrics") {
         for {
           metrics <- Consumer.metrics
-                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("group1289", "client150"))
+                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client150", Some("group1289")))
         } yield assert(metrics)(isNonEmpty)
       },
       testM("plainStream emits messages for a topic subscription") {
@@ -36,7 +36,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                        .plainStream(Serde.string, Serde.string)
                        .take(5)
                        .runCollect
-                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("group150", "client150"))
+                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client150", Some("group150")))
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
@@ -51,7 +51,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                      .take(100)
                      .mapChunks(c => Chunk(c.size))
                      .runCollect
-                     .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("group1289", "client150"))
+                     .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client150", Some("group1289")))
         } yield assert(sizes)(forall(isGreaterThan(1)))
       },
       testM("Consumer.subscribeAnd works properly") {
@@ -64,7 +64,22 @@ object ConsumerSpec extends DefaultRunnableSpec {
                        .plainStream(Serde.string, Serde.string)
                        .take(5)
                        .runCollect
-                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("group160", "client160"))
+                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client160", Some("group160")))
+          kvOut = records.map(r => (r.record.key, r.record.value)).toList
+        } yield assert(kvOut)(equalTo(kvs))
+      },
+      testM("Consumer.subscribeAnd manual subscription without groupId works properly") {
+        val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          _ <- produceMany("topic161", kvs)
+
+          records <-
+            Consumer
+              .subscribeAnd(Subscription.Manual(Set(new org.apache.kafka.common.TopicPartition("topic161", 0))))
+              .plainStream(Serde.string, Serde.string)
+              .take(5)
+              .runCollect
+              .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer(clientId = "client161"))
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
@@ -78,7 +93,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                        .plainStream(Serde.string, Serde.string)
                        .take(100)
                        .runCollect
-                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("group170", "client170"))
+                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client170", Some("group170")))
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
@@ -91,7 +106,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                        .plainStream(Serde.string, Serde.string)
                        .take(5)
                        .runCollect
-                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("group150", "client150"))
+                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client150", Some("group150")))
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
@@ -109,7 +124,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                       .plainStream(Serde.string, Serde.string)
                       .take(1)
                       .runHead
-                      .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("group150", "client150"))
+                      .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client150", Some("group150")))
           kvOut = record.map(r => (r.record.key, r.record.value))
         } yield assert(kvOut)(isSome(equalTo("key2" -> "msg2")))
       },
@@ -131,7 +146,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                       .take(1)
                       .runHead
                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](
-                        consumer("group150", "client150", offsetRetrieval = offsetRetrieval)
+                        consumer("client150", Some("group150"), offsetRetrieval = offsetRetrieval)
                       )
           kvOut = record.map(r => (r.record.key, r.record.value))
         } yield assert(kvOut)(isSome(equalTo("key2-3" -> "msg2-3")))
@@ -157,7 +172,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                                          }
                                          .runCollect
                                          .provideSomeLayer[Has[Kafka] with Blocking with Clock](
-                                           consumer("group1", "first")
+                                           consumer("first", Some("group1"))
                                          )
                           } yield results
           secondResults <- for {
@@ -176,7 +191,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                                           }
                                           .runCollect
                                           .provideSomeLayer[Has[Kafka] with Blocking with Clock](
-                                            consumer("group1", "second")
+                                            consumer("second", Some("group1"))
                                           )
                            } yield results
         } yield assert((firstResults ++ secondResults).map(rec => rec.key() -> rec.value()).toList)(equalTo(data))
@@ -206,7 +221,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                    }
                    .take(nrMessages.toLong)
                    .runDrain
-                   .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer(group, "client3"))
+                   .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client3", Some(group)))
                    .fork
           _                    <- fib.join
           messagesPerPartition <- ZIO.foreach(messagesReceived.values)(_.get)
@@ -221,7 +236,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
 
         for {
           _ <- produceMany(topic, messages)
-          consumeResult <- consumeWithStrings("group3", "client3", subscription) { case (_, _) =>
+          consumeResult <- consumeWithStrings("client3", Some("group3"), subscription) { case (_, _) =>
                              ZIO.fail(new IllegalArgumentException("consumeWith failure")).orDie
                            }.run
         } yield consumeResult.fold(
@@ -241,7 +256,9 @@ object ConsumerSpec extends DefaultRunnableSpec {
                  .zipWithIndex
                  .tap { case (_, idx) => Consumer.stopConsumption.when(idx == 3) }
                  .runDrain
-                 .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer(group, "client150")) *> keepProducing
+                 .provideSomeLayer[Has[Kafka] with Blocking with Clock](
+                   consumer("client150", Some(group))
+                 ) *> keepProducing
                  .set(false)
         } yield assertCompletes
       },
@@ -265,7 +282,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                       .mapM(_.commit)
                       .runDrain *>
                       Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head))
-                      .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer(group, "client150"))
+                      .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client150", Some(group)))
         } yield assert(offset.map(_.offset))(isSome(isLessThanEqualTo(10L)))
       } @@ TestAspect.ignore, // Not sure how to test this currently
       testM("offset batching collects the latest offset for all partitions") {
@@ -294,7 +311,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                        .mapM(_.commit)
                        .runDrain *>
                        Consumer.committed((0 until nrPartitions).map(new TopicPartition(topic, _)).toSet))
-                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer(group, "client3"))
+                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client3", Some(group)))
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / nrPartitions))))
       },
       testM("handle rebalancing by completing topic-partition streams") {
@@ -322,7 +339,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                          }
                          .take(nrPartitions.toLong / 2)
                          .runDrain
-                         .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer(group, "client1"))
+                         .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client1", Some(group)))
                          .fork
           _ <- Live.live(ZIO.sleep(5.seconds))
           consumer2 <- Consumer
@@ -330,7 +347,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                          .partitionedStream(Serde.string, Serde.string)
                          .take(nrPartitions.toLong / 2)
                          .runDrain
-                         .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer(group, "client2"))
+                         .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client2", Some(group)))
                          .fork
           _ <- consumer1.join
           _ <- consumer2.join
@@ -365,7 +382,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                              .take(nrPartitions.toLong / 2)
                              .runDrain
                              .provideSomeLayer[Has[Kafka] with Blocking with Clock](
-                               consumer(group, "client1", diagnostics = diagnostics)
+                               consumer("client1", Some(group), diagnostics = diagnostics)
                              )
                              .fork
               diagnosticStream <- ZStream
@@ -379,7 +396,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                              .partitionedStream(Serde.string, Serde.string)
                              .take(nrPartitions.toLong / 2)
                              .runDrain
-                             .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer(group, "client2"))
+                             .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client2", Some(group)))
                              .fork
               _ <- consumer1.join
               _ <- consumer1.join
@@ -411,7 +428,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                    offsetBatch.commit.as(records)
                  }
                  .runCollect
-                 .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("group1", "client1"))
+                 .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client1", Some("group1")))
           // Start a new consumer with manual offset before the committed offset
           offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
           secondResults <- Consumer
@@ -421,7 +438,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                              .map(_.record)
                              .runCollect
                              .provideSomeLayer[Has[Kafka] with Blocking with Clock](
-                               consumer("group1", "client2", offsetRetrieval = offsetRetrieval)
+                               consumer("client2", Some("group1"), offsetRetrieval = offsetRetrieval)
                              )
           // Check that we only got the records starting from the manually seek'd offset
         } yield assert(secondResults.map(rec => rec.key() -> rec.value()).toList)(equalTo(data.drop(manualOffsetSeek)))
@@ -433,7 +450,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
         val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
 
         def consumeIt(messagesReceived: Ref[List[(String, String)]], done: Promise[Nothing, Unit]) =
-          consumeWithStrings("group3", "client3", subscription)({ (key, value) =>
+          consumeWithStrings("client3", Some("group3"), subscription)({ (key, value) =>
             (for {
               messagesSoFar <- messagesReceived.updateAndGet(_ :+ (key -> value))
               _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
@@ -459,7 +476,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                           .run(ZSink.collectAll[(String, String)])
                           .map(_.head)
                           .orDie)
-                          .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("group3", "client3"))
+                          .provideSomeLayer[Has[Kafka] with Blocking with Clock](consumer("client3", Some("group3")))
           consumedMessages <- messagesReceived.get
         } yield assert(consumedMessages)(contains(newMessage).negate)
       },
@@ -471,7 +488,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
           partitions <- Consumer
                           .partitionsFor(topic)
                           .provideSomeLayer[Has[Kafka] with Blocking with Clock](
-                            consumer(group, client, allowAutoCreateTopics = false)
+                            consumer(client, Some(group), allowAutoCreateTopics = false)
                           )
         } yield assert(partitions)(isEmpty)
       },
@@ -534,8 +551,8 @@ object ConsumerSpec extends DefaultRunnableSpec {
           fiber0 <- run(0, topic, allAssignments)
                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](
                         consumer(
-                          group,
                           client1,
+                          Some(group),
                           offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
                         )
                       )
@@ -544,8 +561,8 @@ object ConsumerSpec extends DefaultRunnableSpec {
           fiber1 <- run(1, topic, allAssignments)
                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](
                         consumer(
-                          group,
                           client2,
+                          Some(group),
                           offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
                         )
                       )
@@ -554,8 +571,8 @@ object ConsumerSpec extends DefaultRunnableSpec {
           fiber2 <- run(2, topic, allAssignments)
                       .provideSomeLayer[Has[Kafka] with Blocking with Clock](
                         consumer(
-                          group,
                           client3,
+                          Some(group),
                           offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
                         )
                       )
