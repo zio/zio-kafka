@@ -11,7 +11,9 @@ import zio.kafka.admin.AdminClient.{
   ConfigResource,
   ConfigResourceType,
   ConsumerGroupDescription,
+  ConsumerGroupState,
   ListConsumerGroupOffsetsOptions,
+  ListConsumerGroupsOptions,
   OffsetAndMetadata,
   OffsetSpec,
   TopicPartition
@@ -206,6 +208,18 @@ object AdminSpec extends DefaultRunnableSpec {
               equalTo(records(1))
             ) &&
             assert(recordsAfterAltering.get(2))(isNone)
+        }
+      },
+      testM("list consumer groups") {
+        KafkaTestUtils.withAdmin { implicit admin =>
+          for {
+            topicName <- randomTopic
+            _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 10, replicationFactor = 1))
+            groupId   <- randomGroup
+            _         <- consumeNoop(topicName, groupId, "consumer1", Some("instance1")).fork
+            _         <- getStableConsumerGroupDescription(groupId)
+            list      <- admin.listConsumerGroups(Some(ListConsumerGroupsOptions(Set(ConsumerGroupState.Stable))))
+          } yield assert(list)(exists(hasField("groupId", _.groupId, equalTo(groupId))))
         }
       },
       testM("list consumer group offsets") {

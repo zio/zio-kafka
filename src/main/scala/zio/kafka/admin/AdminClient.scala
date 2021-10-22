@@ -6,11 +6,13 @@ import org.apache.kafka.clients.admin.{
   AlterConsumerGroupOffsetsOptions => JAlterConsumerGroupOffsetsOptions,
   Config => JConfig,
   ConsumerGroupDescription => JConsumerGroupDescription,
+  ConsumerGroupListing => JConsumerGroupListing,
   CreatePartitionsOptions => JCreatePartitionsOptions,
   CreateTopicsOptions => JCreateTopicsOptions,
   DescribeClusterOptions => JDescribeClusterOptions,
   DescribeConfigsOptions => JDescribeConfigsOptions,
   ListConsumerGroupOffsetsOptions => JListConsumerGroupOffsetsOptions,
+  ListConsumerGroupsOptions => JListConsumerGroupsOptions,
   ListOffsetsOptions => JListOffsetsOptions,
   MemberDescription => JMemberDescription,
   NewPartitions => JNewPartitions,
@@ -149,8 +151,19 @@ trait AdminClient {
    */
   def metrics: Task[Map[MetricName, Metric]]
 
+  /**
+   * List the consumer groups in the cluster.
+   */
+  def listConsumerGroups(options: Option[ListConsumerGroupsOptions] = None): Task[List[ConsumerGroupListing]]
+
+  /**
+   * Describe the specified consumer groups.
+   */
   def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]]
 
+  /**
+   * Remove the specified members from a consumer group.
+   */
   def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit]
 }
 
@@ -386,6 +399,23 @@ object AdminClient {
         }
       )
 
+    /**
+     * List the consumer groups in the cluster.
+     */
+    override def listConsumerGroups(
+      options: Option[ListConsumerGroupsOptions] = None
+    ): Task[List[ConsumerGroupListing]] =
+      fromKafkaFuture {
+        blocking.effectBlocking(
+          options
+            .fold(adminClient.listConsumerGroups())(opts => adminClient.listConsumerGroups(opts.asJava))
+            .all()
+        )
+      }.map(_.asScala.map(ConsumerGroupListing(_)).toList)
+
+    /**
+     * Describe the specified consumer groups.
+     */
     override def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]] =
       fromKafkaFuture(
         blocking.effectBlocking(
@@ -393,6 +423,9 @@ object AdminClient {
         )
       ).map(_.asScala.map { case (k, v) => k -> ConsumerGroupDescription(v) }.toMap)
 
+    /**
+     * Remove the specified members from a consumer group.
+     */
     override def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit] = {
       val options = new RemoveMembersFromConsumerGroupOptions(
         membersToRemove.map(new MemberToRemove(_)).asJavaCollection
@@ -736,6 +769,16 @@ object AdminClient {
     timeout: Duration
   ) {
     def asJava = new JAlterConsumerGroupOffsetsOptions().timeoutMs(timeout.toMillis.toInt)
+  }
+
+  case class ListConsumerGroupsOptions(states: Set[ConsumerGroupState]) {
+    def asJava = new JListConsumerGroupsOptions().inStates(states.map(_.asJava).asJava)
+  }
+
+  case class ConsumerGroupListing(groupId: String, isSimple: Boolean, state: Option[ConsumerGroupState])
+  object ConsumerGroupListing {
+    def apply(cg: JConsumerGroupListing): ConsumerGroupListing =
+      ConsumerGroupListing(cg.groupId(), cg.isSimpleConsumerGroup, cg.state().toScala.map(ConsumerGroupState(_)))
   }
 
   case class KafkaConfig(entries: Map[String, ConfigEntry])
