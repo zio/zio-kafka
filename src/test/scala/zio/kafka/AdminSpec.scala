@@ -296,6 +296,21 @@ object AdminSpec extends DefaultRunnableSpec {
             description <- getStableConsumerGroupDescription(groupId)
           } yield assert(description.groupId)(equalTo(groupId)) && assert(description.members.length)(equalTo(1))
         }
+      },
+      testM("describe log dirs") {
+        KafkaTestUtils.withAdmin { implicit admin =>
+          for {
+            topicName <- randomTopic
+            _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
+            node      <- admin.describeClusterNodes().head.orElseFail(new NoSuchElementException())
+            logDirs   <- admin.describeLogDirs(List(node.id))
+          } yield assert(logDirs)(
+            hasKey(
+              node.id,
+              hasValues(exists(hasField("replicaInfos", _.replicaInfos, hasKey(TopicPartition(topicName, 0)))))
+            )
+          )
+        }
       }
     ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
 
