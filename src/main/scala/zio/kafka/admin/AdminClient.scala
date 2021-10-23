@@ -14,10 +14,12 @@ import org.apache.kafka.clients.admin.{
   ListConsumerGroupOffsetsOptions => JListConsumerGroupOffsetsOptions,
   ListConsumerGroupsOptions => JListConsumerGroupsOptions,
   ListOffsetsOptions => JListOffsetsOptions,
+  LogDirDescription => JLogDirDescription,
   MemberDescription => JMemberDescription,
   NewPartitions => JNewPartitions,
   NewTopic => JNewTopic,
   OffsetSpec => JOffsetSpec,
+  ReplicaInfo => JReplicaInfo,
   TopicDescription => JTopicDescription,
   TopicListing => JTopicListing,
   _
@@ -25,6 +27,7 @@ import org.apache.kafka.clients.admin.{
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata => JOffsetAndMetadata }
 import org.apache.kafka.common.config.{ ConfigResource => JConfigResource }
+import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.{
   ConsumerGroupState => JConsumerGroupState,
   IsolationLevel => JIsolationLevel,
@@ -165,6 +168,13 @@ trait AdminClient {
    * Remove the specified members from a consumer group.
    */
   def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit]
+
+  /**
+   * Describe the log directories of the specified brokers
+   */
+  def describeLogDirs(
+    brokersId: Iterable[Int]
+  ): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]]
 }
 
 object AdminClient {
@@ -436,6 +446,17 @@ object AdminClient {
         )
       ).unit
     }
+
+    override def describeLogDirs(
+      brokersId: Iterable[Int]
+    ): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]] =
+      fromKafkaFuture(
+        blocking.effectBlocking(
+          adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).allDescriptions()
+        )
+      ).map(
+        _.asScala.toMap.bimap(_.intValue, _.asScala.toMap.bimap(identity, LogDirDescription(_)))
+      )
   }
 
   val live: ZLayer[Has[Blocking.Service] with Has[AdminClientSettings], Throwable, Has[AdminClient]] =
@@ -786,6 +807,19 @@ object AdminClient {
   object KafkaConfig {
     def apply(jConfig: JConfig): KafkaConfig =
       KafkaConfig(jConfig.entries().asScala.map(e => e.name() -> e).toMap)
+  }
+
+  case class LogDirDescription(error: ApiException, replicaInfos: Map[TopicPartition, ReplicaInfo])
+
+  object LogDirDescription {
+    def apply(ld: JLogDirDescription): LogDirDescription =
+      LogDirDescription(ld.error(), ld.replicaInfos().asScala.toMap.bimap(TopicPartition(_), ReplicaInfo(_)))
+  }
+
+  case class ReplicaInfo(size: Long, offsetLag: Long, isFuture: Boolean)
+
+  object ReplicaInfo {
+    def apply(ri: JReplicaInfo): ReplicaInfo = ReplicaInfo(ri.size(), ri.offsetLag(), ri.isFuture)
   }
 
   def make(settings: AdminClientSettings): ZManaged[Has[Blocking.Service], Throwable, AdminClient] =
