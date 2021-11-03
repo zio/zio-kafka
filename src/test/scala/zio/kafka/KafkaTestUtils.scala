@@ -3,9 +3,6 @@ package zio.kafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio._
-import zio.blocking.Blocking
-import zio.clock.Clock
-import zio.duration._
 import zio.kafka.admin._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer._
@@ -21,33 +18,31 @@ object KafkaTestUtils {
   val producerSettings: ZIO[Has[Kafka], Nothing, ProducerSettings] =
     ZIO.access[Has[Kafka]](_.get[Kafka].bootstrapServers).map(ProducerSettings(_))
 
-  val producer: ZLayer[Has[Kafka] with Blocking, Throwable, Has[Producer]] =
-    (ZLayer.fromEffect(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) ++ ZLayer
-      .identity[Blocking] >>>
+  val producer: ZLayer[Has[Kafka], Throwable, Has[Producer]] =
+    (ZLayer.fromZIO(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
       Producer.live
 
   val transactionalProducerSettings: ZIO[Has[Kafka], Nothing, TransactionalProducerSettings] =
     ZIO.access[Has[Kafka]](_.get[Kafka].bootstrapServers).map(TransactionalProducerSettings(_, "test-transaction"))
 
-  val transactionalProducer: ZLayer[Has[Kafka] with Blocking, Throwable, Has[TransactionalProducer]] =
-    (ZLayer.fromEffect(transactionalProducerSettings) ++ ZLayer.succeed(
+  val transactionalProducer: ZLayer[Has[Kafka], Throwable, Has[TransactionalProducer]] =
+    (ZLayer.fromZIO(transactionalProducerSettings) ++ ZLayer.succeed(
       Serde.string: Serializer[Any, String]
-    )) ++ ZLayer
-      .identity[Blocking] >>>
+    )) >>>
       TransactionalProducer.live
 
   def produceOne(
     topic: String,
     key: String,
     message: String
-  ): ZIO[Blocking with Has[Producer], Throwable, RecordMetadata] =
+  ): ZIO[Has[Producer], Throwable, RecordMetadata] =
     Producer.produce[Any, String, String](new ProducerRecord(topic, key, message), Serde.string, Serde.string)
 
   def produceMany(
     topic: String,
     partition: Int,
     kvs: Iterable[(String, String)]
-  ): ZIO[Blocking with Has[Producer], Throwable, Chunk[RecordMetadata]] =
+  ): ZIO[Has[Producer], Throwable, Chunk[RecordMetadata]] =
     Producer
       .produceChunk[Any, String, String](
         Chunk.fromIterable(kvs.map { case (k, v) =>
@@ -60,7 +55,7 @@ object KafkaTestUtils {
   def produceMany(
     topic: String,
     kvs: Iterable[(String, String)]
-  ): ZIO[Blocking with Has[Producer], Throwable, Chunk[RecordMetadata]] =
+  ): ZIO[Has[Producer], Throwable, Chunk[RecordMetadata]] =
     Producer
       .produceChunk[Any, String, String](
         Chunk.fromIterable(kvs.map { case (k, v) =>
@@ -117,14 +112,14 @@ object KafkaTestUtils {
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZLayer[Has[Kafka] with Clock with Blocking, Throwable, Has[Consumer]] =
+  ): ZLayer[Has[Kafka] with Has[Clock], Throwable, Has[Consumer]] =
     (consumerSettings(clientId, groupId, clientInstanceId, allowAutoCreateTopics, offsetRetrieval).toLayer ++
-      ZLayer.requires[Clock with Blocking] ++
+      ZLayer.environment[Has[Clock]] ++
       ZLayer.succeed(diagnostics)) >>> Consumer.live
 
   def consumeWithStrings[RC](clientId: String, groupId: Option[String] = None, subscription: Subscription)(
     r: (String, String) => URIO[Any, Unit]
-  ): RIO[Any with Has[Kafka] with Blocking with Clock, Unit] =
+  ): RIO[Has[Kafka] with Has[Clock], Unit] =
     consumerSettings(clientId, groupId, None).flatMap { settings =>
       Consumer.consumeWith(
         settings,
@@ -137,13 +132,13 @@ object KafkaTestUtils {
   def adminSettings: ZIO[Has[Kafka], Nothing, AdminClientSettings] =
     ZIO.access[Has[Kafka]](_.get[Kafka].bootstrapServers).map(AdminClientSettings(_))
 
-  def withAdmin[T](f: AdminClient => RIO[Clock with Has[Kafka] with Blocking, T]) =
+  def withAdmin[T](f: AdminClient => RIO[Has[Clock] with Has[Kafka], T]) =
     for {
       settings <- adminSettings
       fRes <- AdminClient
                 .make(settings)
                 .use(client => f(client))
-                .provideSomeLayer[Has[Kafka]](Clock.live ++ Blocking.live)
+                .provideSomeLayer[Has[Kafka]](Clock.live)
     } yield fRes
 
   def randomThing(prefix: String): Task[String] =

@@ -1,7 +1,7 @@
 package zio.kafka
 
 import org.apache.kafka.clients.producer.ProducerRecord
-import zio._, zio.stream._
+import zio.{ System => _, _ }, zio.stream._
 import zio.kafka.producer._
 import zio.kafka.serde._
 import org.apache.kafka.clients.producer.ProducerConfig
@@ -11,18 +11,18 @@ import java.time.Duration
 import org.apache.kafka.common.serialization.StringDeserializer
 import java.util.concurrent.TimeUnit
 
-object PopulateTopic extends App {
+object PopulateTopic extends ZIOAppDefault {
   def dataStream(length: Long) =
     ZStream
-      .repeatEffect(random.nextString(16) <*> random.nextString(128))
+      .repeatZIO(Random.nextString(16) <*> Random.nextString(128))
       .take(length)
-      .chunkN(500)
+      .rechunk(500)
 
-  def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] =
+  override def run: ZIO[zio.ZEnv, Nothing, ExitCode] =
     dataStream(872000).map { case (k, v) =>
       new ProducerRecord("inputs-topic", null, null, k, v)
-    }.mapChunksM(Producer.produceChunkAsync[Any, String, String](_, Serde.string, Serde.string).map(Chunk(_)))
-      .mapMPar(5)(_.flatMap(chunk => console.putStrLn(s"Wrote chunk of ${chunk.size}")))
+    }.mapChunksZIO(Producer.produceChunkAsync[Any, String, String](_, Serde.string, Serde.string).map(Chunk(_)))
+      .mapZIOPar(5)(_.flatMap(chunk => Console.printLine(s"Wrote chunk of ${chunk.size}")))
       .runDrain
       .provideCustomLayer(
         ZLayer.fromManaged(
@@ -73,11 +73,10 @@ object Plain {
   }
 }
 
-object ZIOKafka extends App {
+object ZIOKafka extends ZIOAppDefault {
   import zio.kafka.consumer._
-  import zio.duration._
 
-  def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] = {
+  override def run: ZIO[zio.ZEnv, Nothing, ExitCode] = {
     val expectedCount = 1000000
     val settings = ConsumerSettings(List("localhost:9092"))
       .withGroupId(s"zio-kafka-${scala.util.Random.nextInt()}")
@@ -87,8 +86,8 @@ object ZIOKafka extends App {
       .withPollTimeout(50.millis)
       .withPerPartitionChunkPrefetch(4)
 
-    (console.getStrLn *>
-      clock
+    (Console.readLine *>
+      Clock
         .currentTime(TimeUnit.MILLISECONDS)
         .flatMap { startTime =>
           Consumer
@@ -103,9 +102,9 @@ object ZIOKafka extends App {
               Chunk(messageCount -> lengthCount)
             }
             .runDrain *>
-            clock.currentTime(TimeUnit.MILLISECONDS).flatMap { endTime =>
+            Clock.currentTime(TimeUnit.MILLISECONDS).flatMap { endTime =>
               val duration = endTime - startTime
-              console.putStrLn(
+              Console.printLine(
                 s"Done in $duration ms; rate = ${(expectedCount / duration) * 1000} messages/s or ${((expectedCount * 144) / duration) * 1000} bytes/s"
               )
             }

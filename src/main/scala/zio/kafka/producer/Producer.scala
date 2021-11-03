@@ -6,7 +6,6 @@ import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerReco
 import org.apache.kafka.common.{ Metric, MetricName }
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio._
-import zio.blocking._
 import zio.kafka.serde.Serializer
 import zio.stream.ZTransducer
 
@@ -124,8 +123,7 @@ object Producer {
 
   private[producer] final case class Live(
     p: KafkaProducer[Array[Byte], Array[Byte]],
-    producerSettings: ProducerSettings,
-    blocking: Blocking.Service
+    producerSettings: ProducerSettings
   ) extends Producer {
 
     override def produceAsync[R, K, V](
@@ -137,7 +135,7 @@ object Producer {
         done             <- Promise.make[Throwable, RecordMetadata]
         serializedRecord <- serialize(record, keySerializer, valueSerializer)
         runtime          <- ZIO.runtime[Any]
-        _ <- blocking.effectBlocking {
+        _ <- ZIO.attemptBlocking {
                p.send(
                  serializedRecord,
                  new Callback {
@@ -163,7 +161,7 @@ object Producer {
           done              <- Promise.make[Throwable, Chunk[RecordMetadata]]
           runtime           <- ZIO.runtime[Any]
           serializedRecords <- ZIO.foreach(records.toSeq)(serialize(_, keySerializer, valueSerializer))
-          _ <- blocking.effectBlocking {
+          _ <- ZIO.attemptBlocking {
                  val it: Iterator[(ByteRecord, Int)] =
                    serializedRecords.iterator.zipWithIndex
                  val res: Array[RecordMetadata] = new Array[RecordMetadata](records.length)
@@ -224,9 +222,9 @@ object Producer {
     ): RIO[R, Chunk[RecordMetadata]] =
       produceChunkAsync(records, keySerializer, valueSerializer).flatten
 
-    override def flush: Task[Unit] = blocking.effectBlocking(p.flush())
+    override def flush: Task[Unit] = ZIO.attemptBlocking(p.flush())
 
-    override def metrics: Task[Map[MetricName, Metric]] = blocking.effectBlocking(p.metrics().asScala.toMap)
+    override def metrics: Task[Map[MetricName, Metric]] = ZIO.attemptBlocking(p.metrics().asScala.toMap)
 
     private def serialize[R, K, V](
       r: ProducerRecord[K, V],
@@ -241,29 +239,28 @@ object Producer {
     private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout))
   }
 
-  val live: RLayer[Has[ProducerSettings] with Blocking, Has[Producer]] =
+  val live: RLayer[Has[ProducerSettings] with Any, Has[Producer]] =
     (for {
       settings <- ZManaged.service[ProducerSettings]
       producer <- make(settings)
     } yield producer).toLayer
 
-  def make(settings: ProducerSettings): RManaged[Blocking, Producer] =
+  def make(settings: ProducerSettings): RManaged[Any, Producer] =
     (for {
-      props    <- ZIO.effect(settings.driverSettings)
-      blocking <- ZIO.service[Blocking.Service]
-      rawProducer <- ZIO.effect(
+      props <- ZIO.attempt(settings.driverSettings)
+      rawProducer <- ZIO.attempt(
                        new KafkaProducer[Array[Byte], Array[Byte]](
                          props.asJava,
                          new ByteArraySerializer(),
                          new ByteArraySerializer()
                        )
                      )
-    } yield Live(rawProducer, settings, blocking)).toManaged(_.close)
+    } yield Live(rawProducer, settings)).toManagedWith(_.close)
 
   def withProducerService[R, A](
     r: Producer => RIO[R, A]
   ): RIO[R with Has[Producer], A] =
-    ZIO.accessM[R with Has[Producer]](env => r(env.get[Producer]))
+    ZIO.accessZIO[R with Has[Producer]](env => r(env.get[Producer]))
 
   /**
    * Accessor method for [[Producer!.produce[R,K,V](record*]]

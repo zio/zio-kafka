@@ -39,8 +39,6 @@ import org.apache.kafka.common.{
   TopicPartitionInfo => JTopicPartitionInfo
 }
 import zio._
-import zio.blocking.Blocking
-import zio.duration.Duration
 
 import scala.jdk.CollectionConverters._
 
@@ -184,8 +182,7 @@ object AdminClient {
    * @param adminClient
    */
   private final case class LiveAdminClient(
-    private[admin] val adminClient: JAdminClient,
-    private val blocking: Blocking.Service
+    private[admin] val adminClient: JAdminClient
   ) extends AdminClient {
 
     /**
@@ -198,12 +195,11 @@ object AdminClient {
       val asJava = newTopics.map(_.asJava).asJavaCollection
 
       fromKafkaFutureVoid {
-        blocking
-          .effectBlocking(
-            options
-              .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts.asJava))
-              .all()
-          )
+        ZIO.attemptBlocking(
+          options
+            .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts.asJava))
+            .all()
+        )
       }
     }
 
@@ -222,12 +218,11 @@ object AdminClient {
     ): Task[Unit] = {
       val asJava = topics.asJavaCollection
       fromKafkaFutureVoid {
-        blocking
-          .effectBlocking(
-            options
-              .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts))
-              .all()
-          )
+        ZIO.attemptBlocking(
+          options
+            .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts))
+            .all()
+        )
       }
     }
 
@@ -242,7 +237,7 @@ object AdminClient {
      */
     override def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): Task[Map[String, TopicListing]] =
       fromKafkaFuture {
-        blocking.effectBlocking(
+        ZIO.attemptBlocking(
           listTopicsOptions.fold(adminClient.listTopics())(opts => adminClient.listTopics(opts)).namesToListings()
         )
       }.map(_.asScala.map { case (k, v) => k -> TopicListing(v) }.toMap)
@@ -256,7 +251,7 @@ object AdminClient {
     ): Task[Map[String, TopicDescription]] = {
       val asJava = topicNames.asJavaCollection
       fromKafkaFuture {
-        blocking.effectBlocking(
+        ZIO.attemptBlocking(
           options
             .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
             .all()
@@ -273,7 +268,7 @@ object AdminClient {
     ): Task[Map[ConfigResource, KafkaConfig]] = {
       val asJava = configResources.map(_.asJava).asJavaCollection
       fromKafkaFuture {
-        blocking.effectBlocking(
+        ZIO.attemptBlocking(
           options
             .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts.asJava))
             .all()
@@ -286,7 +281,7 @@ object AdminClient {
     }
 
     private def describeCluster(options: Option[DescribeClusterOptions]): Task[DescribeClusterResult] =
-      blocking.effectBlocking(
+      ZIO.attemptBlocking(
         options.fold(adminClient.describeCluster())(opts => adminClient.describeCluster(opts.asJava))
       )
 
@@ -336,7 +331,7 @@ object AdminClient {
     ): Task[Unit] = {
       val asJava = newPartitions.map { case (k, v) => k -> v.asJava }.asJava
       fromKafkaFutureVoid {
-        blocking.effectBlocking(
+        ZIO.attemptBlocking(
           options
             .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts.asJava))
             .all()
@@ -353,7 +348,7 @@ object AdminClient {
     ): Task[Map[TopicPartition, ListOffsetsResultInfo]] = {
       val asJava = topicPartitionOffsets.bimap(_.asJava, _.asJava).asJava
       fromKafkaFuture {
-        blocking.effectBlocking(
+        ZIO.attemptBlocking(
           options
             .fold(adminClient.listOffsets(asJava))(opts => adminClient.listOffsets(asJava, opts.asJava))
             .all()
@@ -369,7 +364,7 @@ object AdminClient {
       options: Option[ListConsumerGroupOffsetsOptions] = None
     ): Task[Map[TopicPartition, OffsetAndMetadata]] =
       fromKafkaFuture {
-        blocking.effectBlocking(
+        ZIO.attemptBlocking(
           options
             .fold(adminClient.listConsumerGroupOffsets(groupId))(opts =>
               adminClient.listConsumerGroupOffsets(groupId, opts.asJava)
@@ -389,7 +384,7 @@ object AdminClient {
     ): Task[Unit] = {
       val asJava = offsets.bimap(_.asJava, _.asJava).asJava
       fromKafkaFutureVoid {
-        blocking.effectBlocking(
+        ZIO.attemptBlocking(
           options
             .fold(adminClient.alterConsumerGroupOffsets(groupId, asJava))(opts =>
               adminClient.alterConsumerGroupOffsets(groupId, asJava, opts.asJava)
@@ -403,7 +398,7 @@ object AdminClient {
      * Retrieves metrics for the underlying AdminClient
      */
     override def metrics: Task[Map[MetricName, Metric]] =
-      blocking.effectBlocking(
+      ZIO.attemptBlocking(
         adminClient.metrics().asScala.toMap.map { case (metricName, metric) =>
           (MetricName(metricName), Metric(metric))
         }
@@ -416,7 +411,7 @@ object AdminClient {
       options: Option[ListConsumerGroupsOptions] = None
     ): Task[List[ConsumerGroupListing]] =
       fromKafkaFuture {
-        blocking.effectBlocking(
+        ZIO.attemptBlocking(
           options
             .fold(adminClient.listConsumerGroups())(opts => adminClient.listConsumerGroups(opts.asJava))
             .all()
@@ -428,7 +423,7 @@ object AdminClient {
      */
     override def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]] =
       fromKafkaFuture(
-        blocking.effectBlocking(
+        ZIO.attemptBlocking(
           adminClient.describeConsumerGroups(groupIds.asJavaCollection).all
         )
       ).map(_.asScala.map { case (k, v) => k -> ConsumerGroupDescription(v) }.toMap)
@@ -441,7 +436,7 @@ object AdminClient {
         membersToRemove.map(new MemberToRemove(_)).asJavaCollection
       )
       fromKafkaFuture(
-        blocking.effectBlocking(
+        ZIO.attemptBlocking(
           adminClient.removeMembersFromConsumerGroup(groupId, options).all()
         )
       ).unit
@@ -451,7 +446,7 @@ object AdminClient {
       brokersId: Iterable[Int]
     ): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]] =
       fromKafkaFuture(
-        blocking.effectBlocking(
+        ZIO.attemptBlocking(
           adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).allDescriptions()
         )
       ).map(
@@ -459,7 +454,7 @@ object AdminClient {
       )
   }
 
-  val live: ZLayer[Has[Blocking.Service] with Has[AdminClientSettings], Throwable, Has[AdminClient]] =
+  val live: ZLayer[Has[AdminClientSettings], Throwable, Has[AdminClient]] =
     (for {
       settings <- ZManaged.service[AdminClientSettings]
       admin    <- make(settings)
@@ -467,16 +462,16 @@ object AdminClient {
 
   def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] =
     kfv.flatMap { f =>
-      Task.effectAsyncInterrupt[T] { cb =>
+      Task.asyncInterrupt[T] { cb =>
         f.whenComplete {
           new KafkaFuture.BiConsumer[T, Throwable] {
             def accept(t: T, e: Throwable): Unit =
-              if (f.isCancelled) cb(ZIO.fiberId.flatMap(id => Task.halt(Cause.interrupt(id))))
+              if (f.isCancelled) cb(ZIO.fiberId.flatMap(id => Task.failCause(Cause.interrupt(id))))
               else if (e ne null) cb(Task.fail(e))
               else cb(Task.succeed(t))
           }
         }
-        Left(ZIO.effectTotal(f.cancel(true)))
+        Left(ZIO.succeed(f.cancel(true)))
       }
     }
 
@@ -822,12 +817,10 @@ object AdminClient {
     def apply(ri: JReplicaInfo): ReplicaInfo = ReplicaInfo(ri.size(), ri.offsetLag(), ri.isFuture)
   }
 
-  def make(settings: AdminClientSettings): ZManaged[Has[Blocking.Service], Throwable, AdminClient] =
-    ZManaged.service[Blocking.Service].flatMap { blocking =>
-      ZManaged.make(
-        ZIO(JAdminClient.create(settings.driverSettings.asJava)).map(ac => LiveAdminClient(ac, blocking))
-      )(client => ZIO.effectTotal(client.adminClient.close(settings.closeTimeout)))
-    }
+  def make(settings: AdminClientSettings): TaskManaged[AdminClient] =
+    ZManaged.acquireReleaseWith(
+      ZIO(JAdminClient.create(settings.driverSettings.asJava)).map(ac => LiveAdminClient(ac))
+    )(client => ZIO.succeed(client.adminClient.close(settings.closeTimeout)))
 
   implicit class MapOps[K1, V1](val v: Map[K1, V1]) extends AnyVal {
     def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2) = v.map(kv => fk(kv._1) -> fv(kv._2))

@@ -4,9 +4,6 @@ import java.util
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import zio._
-import zio.blocking.Blocking
-import zio.clock.Clock
-import zio.duration._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.CommittableRecord
@@ -38,7 +35,7 @@ private[consumer] final class Runloop(
   ): UIO[(TopicPartition, Promise[Throwable, Unit], ZStream[Any, Throwable, ByteArrayCommittableRecord])] =
     for {
       interruptionPromise <- Promise.make[Throwable, Unit]
-      stream = ZStream.repeatEffectChunkOption {
+      stream = ZStream.repeatZIOChunkOption {
                  for {
                    request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
                    _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
@@ -76,9 +73,9 @@ private[consumer] final class Runloop(
       _ <- p.await
     } yield ()
 
-  private def doCommit(cmds: Chunk[Command.Commit]): URIO[Blocking, Unit] = {
+  private def doCommit(cmds: Chunk[Command.Commit]): URIO[Any, Unit] = {
     val offsets   = aggregateOffsets(cmds)
-    val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreach_(cmds)(_.cont.done(e))
+    val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(cmds)(_.cont.done(e))
     val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
     val onFailure = (err: Throwable) =>
       cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
@@ -138,7 +135,7 @@ private[consumer] final class Runloop(
 
     val (revokedStreams, assignedStreams) = currentAssignedStreams.partition(es => revoked(es._1))
 
-    val revokeAction: UIO[Unit] = ZIO.foreach_(revokedStreams) { case (_, p) => p.succeed(()) }
+    val revokeAction: UIO[Unit] = ZIO.foreachDiscard(revokedStreams) { case (_, p) => p.succeed(()) }
 
     val reqsIt = reqs.iterator
     while (reqsIt.hasNext) {
@@ -217,8 +214,9 @@ private[consumer] final class Runloop(
     offsetRetrieval match {
       case OffsetRetrieval.Manual(getOffsets) =>
         getOffsets(tps)
-          .tap(offsets => ZIO.foreach_(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) })
+          .tap(offsets => ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) })
           .when(tps.nonEmpty)
+          .unit
 
       case OffsetRetrieval.Auto(_) =>
         ZIO.unit
@@ -253,16 +251,16 @@ private[consumer] final class Runloop(
       case _: IllegalStateException => ConsumerRecords.empty[Array[Byte], Array[Byte]]()
     }
 
-  private def pauseAllPartitions(c: ByteArrayKafkaConsumer) = ZIO.effectTotal {
+  private def pauseAllPartitions(c: ByteArrayKafkaConsumer) = ZIO.succeed {
     val currentAssigned = c.assignment()
     c.pause(currentAssigned)
   }
 
-  private def handlePoll(state: State): RIO[Blocking, State] =
+  private def handlePoll(state: State): RIO[Any, State] =
     for {
       pollResult <-
         consumer.withConsumerM { c =>
-          Task.effectSuspend {
+          Task.suspend {
 
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
@@ -272,7 +270,7 @@ private[consumer] final class Runloop(
             val records = doPoll(c, requestedPartitions)
 
             // Check shutdown again after polling (which takes up to the poll timeout)
-            ZIO.ifM(isShutdown)(
+            ZIO.ifZIO(isShutdown)(
               pauseAllPartitions(c).as(
                 Runloop.PollResult(
                   Set(),
@@ -331,7 +329,7 @@ private[consumer] final class Runloop(
               tp -> interruptionPromise
             })
       newPendingCommits <-
-        ZIO.ifM(isRebalancing)(
+        ZIO.ifZIO(isRebalancing)(
           UIO.succeed(state.pendingCommits),
           doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).as(Chunk.empty)
         )
@@ -342,8 +340,8 @@ private[consumer] final class Runloop(
       pollResult.assignedStreams ++ newAssignedStreams
     )
 
-  private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): URIO[Blocking, State] =
-    ZIO.ifM(isRebalancing)(
+  private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): URIO[Any, State] =
+    ZIO.ifZIO(isRebalancing)(
       UIO.succeed(state.addRequests(reqs)),
       consumer
         .withConsumer(_.assignment.asScala)
@@ -358,8 +356,8 @@ private[consumer] final class Runloop(
         .orElseSucceed(state.addRequests(reqs))
     )
 
-  private def handleCommit(state: State, cmd: Command.Commit): URIO[Blocking, State] =
-    ZIO.ifM(isRebalancing)(
+  private def handleCommit(state: State, cmd: Command.Commit): URIO[Any, State] =
+    ZIO.ifZIO(isRebalancing)(
       UIO.succeed(state.addCommit(cmd)),
       doCommit(Chunk(cmd)).as(state)
     )
@@ -370,19 +368,19 @@ private[consumer] final class Runloop(
    *
    * Buffered records for paused partitions will be removed to drain the stream as fast as possible.
    */
-  private def handleShutdown(state: State, cmd: Command): RIO[Blocking, State] =
+  private def handleShutdown(state: State, cmd: Command): RIO[Any, State] =
     cmd match {
       case Command.Poll() =>
         // End all pending requests
-        ZIO.foreach_(state.pendingRequests)(_.cont.fail(None)) *>
+        ZIO.foreachDiscard(state.pendingRequests)(_.cont.fail(None)) *>
           handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = Map.empty))
       case Command.Requests(reqs) =>
-        ZIO.foreach_(reqs)(_.cont.fail(None)).as(state)
+        ZIO.foreachDiscard(reqs)(_.cont.fail(None)).as(state)
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
     }
 
-  private def handleOperational(state: State, cmd: Command): RIO[Blocking, State] =
+  private def handleOperational(state: State, cmd: Command): RIO[Any, State] =
     cmd match {
       case Command.Poll() =>
         handlePoll(state)
@@ -397,19 +395,19 @@ private[consumer] final class Runloop(
         handleCommit(state, cmd)
     }
 
-  def run: URManaged[Blocking with Clock, Fiber.Runtime[Throwable, Unit]] =
+  def run: URManaged[Any with Has[Clock], Fiber.Runtime[Throwable, Unit]] =
     ZStream
       .mergeAll(3, 1)(
         ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency)),
         ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
         ZStream.fromQueue(commitQueue)
       )
-      .foldM(State.initial) { (state, cmd) =>
-        RIO.ifM(isShutdown)(handleShutdown(state, cmd), handleOperational(state, cmd))
+      .foldZIO(State.initial) { (state, cmd) =>
+        RIO.ifZIO(isShutdown)(handleShutdown(state, cmd), handleOperational(state, cmd))
       }
-      .onError(cause => partitions.offer(Take.halt(cause)))
+      .onError(cause => partitions.offer(Take.failCause(cause)))
       .unit
-      .toManaged_
+      .toManaged
       .fork
 }
 
@@ -447,27 +445,27 @@ private[consumer] object Runloop {
     pollTimeout: Duration,
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval
-  ): RManaged[Blocking with Clock, Runloop] =
+  ): RManaged[Any with Has[Clock], Runloop] =
     for {
-      rebalancingRef <- Ref.make(false).toManaged_
-      requestQueue   <- Queue.unbounded[Runloop.Request].toManaged(_.shutdown)
-      commitQueue    <- Queue.unbounded[Command.Commit].toManaged(_.shutdown)
+      rebalancingRef <- Ref.make(false).toManaged
+      requestQueue   <- Queue.unbounded[Runloop.Request].toManagedWith(_.shutdown)
+      commitQueue    <- Queue.unbounded[Command.Commit].toManagedWith(_.shutdown)
       partitions <- Queue
                       .unbounded[
                         Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
                       ]
                       .map { queue =>
                         queue
-                          .mapM(
+                          .mapZIO(
                             _.fold(
                               queue.shutdown.as(Take.end),
-                              cause => UIO.succeed(Take.halt(cause)),
+                              cause => UIO.succeed(Take.failCause(cause)),
                               chunk => UIO.succeed(Take.chunk(chunk))
                             )
                           )
                       }
-                      .toManaged(_.shutdown)
-      shutdownRef <- Ref.make(false).toManaged_
+                      .toManagedWith(_.shutdown)
+      shutdownRef <- Ref.make(false).toManaged
       runloop = new Runloop(
                   consumer,
                   pollFrequency,

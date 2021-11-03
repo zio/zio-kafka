@@ -76,5 +76,6 @@ final private[producer] class TransactionImpl(
   private def haltIfClosed: IO[TransactionLeaked, Unit] =
     offsetBatchRef.get
       .flatMap(offsetBatch => ZIO.fail(TransactionLeaked(offsetBatch)))
-      .whenM(closed.get)
+      .whenZIO(closed.get)
+      .unit
 }

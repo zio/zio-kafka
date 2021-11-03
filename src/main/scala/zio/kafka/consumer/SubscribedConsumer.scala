@@ -13,7 +13,7 @@ class SubscribedConsumer(
     Throwable,
     (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
   ] =
-    ZStream.fromEffect(underlying).flatMap(_.partitionedStream(keyDeserializer, valueDeserializer))
+    ZStream.fromZIO(underlying).flatMap(_.partitionedStream(keyDeserializer, valueDeserializer))
 
   def plainStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
@@ -34,7 +34,7 @@ class SubscribedConsumerFromEnvironment(
     Throwable,
     (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
   ] =
-    ZStream.fromEffect(underlying).flatMap(_.partitionedStream(keyDeserializer, valueDeserializer))
+    ZStream.fromZIO(underlying).flatMap(_.partitionedStream(keyDeserializer, valueDeserializer))
 
   def plainStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
