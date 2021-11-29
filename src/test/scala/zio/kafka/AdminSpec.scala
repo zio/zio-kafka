@@ -1,7 +1,7 @@
 package zio.kafka.admin
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import zio.{ Chunk, Clock, Duration, Has, Schedule, ZIO }
+import zio.{ Chunk, Clock, Duration, Schedule, ZIO }
 import zio.kafka.KafkaTestUtils
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.admin.AdminClient.{
@@ -15,14 +15,13 @@ import zio.kafka.admin.AdminClient.{
   OffsetSpec,
   TopicPartition
 }
-import zio.kafka.consumer.{ Consumer, OffsetBatch, Subscription }
+import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
-import zio.stream.ZTransducer
+import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio.test.environment.TestEnvironment
 
 object AdminSpec extends DefaultRunnableSpec {
   override def spec =
@@ -145,7 +144,7 @@ object AdminSpec extends DefaultRunnableSpec {
 
           for {
             _ <- client.createTopics(List(AdminClient.NewTopic("topic8", 3, 1)))
-            _ <- produceMany(topic, kvs).provideSomeLayer[Has[Kafka] with Has[Clock]](producer)
+            _ <- produceMany(topic, kvs).provideSome[Kafka with Clock](producer)
             offsets <- client.listOffsets(
                          (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
                        )
@@ -166,10 +165,10 @@ object AdminSpec extends DefaultRunnableSpec {
           def consumeAndCommit(count: Long) =
             Consumer
               .subscribeAnd(Subscription.Topics(Set(topic)))
-              .partitionedStream[Has[Kafka] with Has[Clock], String, String](Serde.string, Serde.string)
+              .partitionedStream[Kafka with Clock, String, String](Serde.string, Serde.string)
               .flatMapPar(partitionCount)(_._2)
               .take(count)
-              .transduce(ZTransducer.collectAllN(Int.MaxValue))
+              .transduce(ZSink.collectAllN[CommittableRecord[String, String]](Int.MaxValue))
               .mapConcatZIO { committableRecords =>
                 val records = committableRecords.map(_.record)
                 val offsetBatch =
@@ -178,7 +177,7 @@ object AdminSpec extends DefaultRunnableSpec {
                 offsetBatch.commit.as(records)
               }
               .runCollect
-              .provideSomeLayer[Has[Kafka] with Has[Clock]](consumer("topic9", Some(consumerGroupID)))
+              .provideSome[Kafka with Clock](consumer("topic9", Some(consumerGroupID)))
 
           def toMap(records: Chunk[ConsumerRecord[String, String]]): Map[Int, List[(Long, String, String)]] =
             records.toList
@@ -188,7 +187,7 @@ object AdminSpec extends DefaultRunnableSpec {
 
           for {
             _          <- client.createTopics(List(AdminClient.NewTopic(topic, partitionCount, 1)))
-            _          <- produceMany(topic, kvs).provideSomeLayer[Has[Kafka] with Has[Clock]](producer)
+            _          <- produceMany(topic, kvs).provideSome[Kafka with Clock](producer)
             records    <- consumeAndCommit(msgCount.toLong).map(toMap)
             endOffsets <- client.listOffsets((0 until partitionCount).map(i => p(i) -> OffsetSpec.LatestSpec).toMap)
             _ <- client.alterConsumerGroupOffsets(
@@ -224,10 +223,10 @@ object AdminSpec extends DefaultRunnableSpec {
         def consumeAndCommit(count: Long, topic: String, groupId: String) =
           Consumer
             .subscribeAnd(Subscription.Topics(Set(topic)))
-            .plainStream[Has[Kafka] with Has[Clock], String, String](Serde.string, Serde.string)
+            .plainStream[Kafka with Clock, String, String](Serde.string, Serde.string)
             .take(count)
             .foreach(_.offset.commit)
-            .provideSomeLayer[Has[Kafka] with Has[Clock]](consumer(topic, Some(groupId)))
+            .provideSome[Kafka with Clock](consumer(topic, Some(groupId)))
 
         KafkaTestUtils.withAdmin { client =>
           for {
@@ -239,7 +238,7 @@ object AdminSpec extends DefaultRunnableSpec {
             msgConsume = 15
             kvs        = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
             _ <- client.createTopics(List(AdminClient.NewTopic(topic, 1, 1)))
-            _ <- produceMany(topic, kvs).provideSomeLayer[Has[Kafka]](producer)
+            _ <- produceMany(topic, kvs).provideSome[Kafka](producer)
             _ <- consumeAndCommit(msgConsume.toLong, topic, groupId)
             offsets <- client.listConsumerGroupOffsets(
                          groupId,
@@ -309,22 +308,22 @@ object AdminSpec extends DefaultRunnableSpec {
           )
         }
       }
-    ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
+    ).provideSomeShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
 
   private def consumeNoop(
     topicName: String,
     groupId: String,
     clientId: String,
     groupInstanceId: Option[String] = None
-  ): ZIO[Has[Kafka] with Has[Clock], Throwable, Unit] = Consumer
+  ): ZIO[Kafka with Clock, Throwable, Unit] = Consumer
     .subscribeAnd(Subscription.topics(topicName))
     .plainStream(Serde.string, Serde.string)
     .foreach(_.offset.commit)
-    .provideSomeLayer(consumer(clientId, Some(groupId), groupInstanceId))
+    .provideSome(consumer(clientId, Some(groupId), groupInstanceId))
 
   private def getStableConsumerGroupDescription(
     groupId: String
-  )(implicit adminClient: AdminClient): ZIO[Has[Clock], Throwable, ConsumerGroupDescription] =
+  )(implicit adminClient: AdminClient): ZIO[Clock, Throwable, ConsumerGroupDescription] =
     adminClient
       .describeConsumerGroups(groupId)
       .map(_.head._2)

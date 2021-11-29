@@ -63,9 +63,9 @@ import zio.Clock, zio.ZLayer, zio.ZManaged
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 
 val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
-val consumerManaged: ZManaged[Has[Clock], Throwable, Consumer.Service] =
+val consumerManaged: ZManaged[Clock, Throwable, Consumer] =
   Consumer.make(consumerSettings)
-val consumer: ZLayer[Has[Clock], Throwable, Consumer] =
+val consumer: ZLayer[Clock, Throwable, Consumer] =
   ZLayer.fromManaged(consumerManaged)
 ```
 
@@ -78,7 +78,7 @@ import zio._
 import zio.kafka.consumer._
 import zio.kafka.serde._
 
-val data: RIO[Has[Clock], 
+val data: RIO[Clock, 
               Chunk[CommittableRecord[String, String]]] = 
   (Consumer.subscribe(Subscription.topics("topic")) *>
   Consumer.plainStream(Serde.string, Serde.string).take(50).runCollect)

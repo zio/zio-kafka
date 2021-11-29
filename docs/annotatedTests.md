@@ -32,7 +32,7 @@ object ProducerSpec extends DefaultRunnableSpec {
 }
 ```
 
-First note the `.provideSomeLayerShared`. This gives the tests a `Kafka` service
+First note the `.provideSomeShared`. This gives the tests a `Kafka` service
 added to a full `TestEnvironment` (this is needed because we want to provide both
 Live clock and the Kafka service)
 
@@ -57,14 +57,14 @@ object Kafka {
     override def stop(): UIO[Unit]              = UIO.unit
   }
 
-  val embedded: ZLayer[Any, Throwable, Has[Kafka]] = ZLayer.fromManaged {
+  val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.fromManaged {
     implicit val embeddedKafkaConfig: EmbeddedKafkaConfig = EmbeddedKafkaConfig(
       customBrokerProperties = Map("group.min.session.timeout.ms" -> "500", "group.initial.rebalance.delay.ms" -> "0")
     )
     ZManaged.acquireReleaseWith(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
   }
 
-  val local: ZLayer[Any, Nothing, Has[Kafka]] = ZLayer.succeed(DefaultLocal)
+  val local: ZLayer[Any, Nothing, Kafka] = ZLayer.succeed(DefaultLocal)
 ```
 
 In fact there are 2 provided implementations of service. The first is for the unit
@@ -81,17 +81,17 @@ Note the use of ZManaged to ensure the service is also stopped.
 ```scala
 object KafkaTestUtils {
 
-  val producerSettings: ZIO[Has[Kafka], Nothing, ProducerSettings] =
-    ZIO.access[Has[Kafka]](_.get[Kafka].bootstrapServers).map(ProducerSettings(_))
+  val producerSettings: ZIO[[Kafka], Nothing, ProducerSettings] =
+    ZIO.serviceWith[Kafka](_.bootstrapServers).map(ProducerSettings(_))
 
-  val producer: ZLayer[Has[Kafka], Throwable, Has[Producer]] =
+  val producer: ZLayer[[Kafka], Throwable, [Producer]] =
     (ZLayer.fromZIO(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
       Producer.live
 
-  val transactionalProducerSettings: ZIO[Has[Kafka], Nothing, TransactionalProducerSettings] =
-    ZIO.access[Has[Kafka]](_.get[Kafka].bootstrapServers).map(TransactionalProducerSettings(_, "test-transaction"))
+  val transactionalProducerSettings: ZIO[[Kafka], Nothing, TransactionalProducerSettings] =
+    ZIO.serviceWith[Kafka](_.bootstrapServers).map(TransactionalProducerSettings(_, "test-transaction"))
 
-  val transactionalProducer: ZLayer[Has[Kafka], Throwable, Has[TransactionalProducer]] =
+  val transactionalProducer: ZLayer[Kafka, Throwable, TransactionalProducer] =
     (ZLayer.fromZIO(transactionalProducerSettings) ++ ZLayer.succeed(
       Serde.string: Serializer[Any, String]
     )) >>>

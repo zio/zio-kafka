@@ -6,7 +6,7 @@ import org.apache.kafka.common.errors.InvalidGroupIdException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio.kafka.consumer.OffsetBatch
-import zio.{ Exit, Has, RLayer, RManaged, Ref, Semaphore, Task, UIO, ZIO, ZManaged }
+import zio._
 
 import scala.jdk.CollectionConverters._
 
@@ -45,8 +45,8 @@ object TransactionalProducer {
       case Exit.Success(_) =>
         transaction.offsetBatchRef.get
           .flatMap(offsetBatch => commitTransactionWithOffsets(offsetBatch).retryN(5).orDie)
-      case Exit.Failure(Fail(UserInitiatedAbort)) => abortTransaction.retryN(5).orDie
-      case Exit.Failure(_)                        => abortTransaction.retryN(5).orDie
+      case Exit.Failure(Fail(UserInitiatedAbort, _)) => abortTransaction.retryN(5).orDie
+      case Exit.Failure(_)                           => abortTransaction.retryN(5).orDie
     }
 
     def createTransaction: ZManaged[Any, Throwable, Transaction] =
@@ -61,16 +61,16 @@ object TransactionalProducer {
       }
   }
 
-  def createTransaction: RManaged[Has[TransactionalProducer], Transaction] =
+  def createTransaction: RManaged[TransactionalProducer, Transaction] =
     ZManaged.service[TransactionalProducer].flatMap(_.createTransaction)
 
-  val live: RLayer[Has[TransactionalProducerSettings], Has[TransactionalProducer]] =
+  val live: RLayer[TransactionalProducerSettings, TransactionalProducer] =
     (for {
       settings <- ZManaged.service[TransactionalProducerSettings]
       producer <- make(settings)
     } yield producer).toLayer
 
-  def make(settings: TransactionalProducerSettings): RManaged[Any, TransactionalProducer] =
+  def make(settings: TransactionalProducerSettings): TaskManaged[TransactionalProducer] =
     (for {
       props <- ZIO.attempt(settings.producerSettings.driverSettings)
       rawProducer <- ZIO.attempt(

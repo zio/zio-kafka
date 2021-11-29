@@ -4,7 +4,7 @@ lazy val scala3    = "3.0.2"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-lazy val zioVersion           = "2.0.0-M4"
+lazy val zioVersion           = "2.0.0-M6-2+20-33b93506-SNAPSHOT"
 lazy val kafkaVersion         = "2.8.1"
 lazy val embeddedKafkaVersion = "2.8.1" // Should be the same as kafkaVersion, except for the patch part
 
@@ -60,6 +60,8 @@ lazy val kafka =
       buildInfoPackage := "zio.kafka"
     )
     .settings(
+      scalacOptions -= "-Xfatal-warnings", // TODO: fix ZLayer warning for TestEnvironment autoTrace
+      resolvers += Resolver.sonatypeRepo("snapshots"),
       libraryDependencies ++= Seq(
         "dev.zio"                   %% "zio-streams"             % zioVersion,
         "dev.zio"                   %% "zio-test"                % zioVersion % "test",

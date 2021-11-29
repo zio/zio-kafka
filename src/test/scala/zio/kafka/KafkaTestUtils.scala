@@ -15,17 +15,17 @@ import java.util.UUID
 
 object KafkaTestUtils {
 
-  val producerSettings: ZIO[Has[Kafka], Nothing, ProducerSettings] =
-    ZIO.access[Has[Kafka]](_.get[Kafka].bootstrapServers).map(ProducerSettings(_))
+  val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
+    ZIO.serviceWith[Kafka](_.bootstrapServers).map(ProducerSettings(_))
 
-  val producer: ZLayer[Has[Kafka], Throwable, Has[Producer]] =
+  val producer: ZLayer[Kafka, Throwable, Producer] =
     (ZLayer.fromZIO(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
       Producer.live
 
-  val transactionalProducerSettings: ZIO[Has[Kafka], Nothing, TransactionalProducerSettings] =
-    ZIO.access[Has[Kafka]](_.get[Kafka].bootstrapServers).map(TransactionalProducerSettings(_, "test-transaction"))
+  val transactionalProducerSettings: ZIO[Kafka, Nothing, TransactionalProducerSettings] =
+    ZIO.serviceWith[Kafka](_.bootstrapServers).map(TransactionalProducerSettings(_, "test-transaction"))
 
-  val transactionalProducer: ZLayer[Has[Kafka], Throwable, Has[TransactionalProducer]] =
+  val transactionalProducer: ZLayer[Kafka, Throwable, TransactionalProducer] =
     (ZLayer.fromZIO(transactionalProducerSettings) ++ ZLayer.succeed(
       Serde.string: Serializer[Any, String]
     )) >>>
@@ -35,14 +35,14 @@ object KafkaTestUtils {
     topic: String,
     key: String,
     message: String
-  ): ZIO[Has[Producer], Throwable, RecordMetadata] =
+  ): ZIO[Producer, Throwable, RecordMetadata] =
     Producer.produce[Any, String, String](new ProducerRecord(topic, key, message), Serde.string, Serde.string)
 
   def produceMany(
     topic: String,
     partition: Int,
     kvs: Iterable[(String, String)]
-  ): ZIO[Has[Producer], Throwable, Chunk[RecordMetadata]] =
+  ): ZIO[Producer, Throwable, Chunk[RecordMetadata]] =
     Producer
       .produceChunk[Any, String, String](
         Chunk.fromIterable(kvs.map { case (k, v) =>
@@ -55,7 +55,7 @@ object KafkaTestUtils {
   def produceMany(
     topic: String,
     kvs: Iterable[(String, String)]
-  ): ZIO[Has[Producer], Throwable, Chunk[RecordMetadata]] =
+  ): ZIO[Producer, Throwable, Chunk[RecordMetadata]] =
     Producer
       .produceChunk[Any, String, String](
         Chunk.fromIterable(kvs.map { case (k, v) =>
@@ -71,9 +71,9 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
-  ): URIO[Has[Kafka], ConsumerSettings] =
-    ZIO.access[Has[Kafka]] { (kafka: Has[Kafka]) =>
-      val settings = ConsumerSettings(kafka.get.bootstrapServers)
+  ): URIO[Kafka, ConsumerSettings] =
+    ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
+      val settings = ConsumerSettings(kafka.bootstrapServers)
         .withClientId(clientId)
         .withCloseTimeout(5.seconds)
         .withProperties(
@@ -97,7 +97,7 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
-  ): URIO[Has[Kafka], ConsumerSettings] =
+  ): URIO[Kafka, ConsumerSettings] =
     consumerSettings(clientId, Some(groupId), clientInstanceId, allowAutoCreateTopics, offsetRetrieval)
       .map(
         _.withProperties(
@@ -112,14 +112,14 @@ object KafkaTestUtils {
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZLayer[Has[Kafka] with Has[Clock], Throwable, Has[Consumer]] =
+  ): ZLayer[Kafka with Clock, Throwable, Consumer] =
     (consumerSettings(clientId, groupId, clientInstanceId, allowAutoCreateTopics, offsetRetrieval).toLayer ++
-      ZLayer.environment[Has[Clock]] ++
+      ZLayer.environment[Clock] ++
       ZLayer.succeed(diagnostics)) >>> Consumer.live
 
   def consumeWithStrings[RC](clientId: String, groupId: Option[String] = None, subscription: Subscription)(
     r: (String, String) => URIO[Any, Unit]
-  ): RIO[Has[Kafka] with Has[Clock], Unit] =
+  ): RIO[Kafka with Clock, Unit] =
     consumerSettings(clientId, groupId, None).flatMap { settings =>
       Consumer.consumeWith(
         settings,
@@ -129,16 +129,16 @@ object KafkaTestUtils {
       )(r)
     }
 
-  def adminSettings: ZIO[Has[Kafka], Nothing, AdminClientSettings] =
-    ZIO.access[Has[Kafka]](_.get[Kafka].bootstrapServers).map(AdminClientSettings(_))
+  def adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
+    ZIO.serviceWith[Kafka](_.bootstrapServers).map(AdminClientSettings(_))
 
-  def withAdmin[T](f: AdminClient => RIO[Has[Clock] with Has[Kafka], T]) =
+  def withAdmin[T](f: AdminClient => RIO[Clock with Kafka, T]) =
     for {
       settings <- adminSettings
       fRes <- AdminClient
                 .make(settings)
                 .use(client => f(client))
-                .provideSomeLayer[Has[Kafka]](Clock.live)
+                .provideSome[Kafka](Clock.live)
     } yield fRes
 
   def randomThing(prefix: String): Task[String] =

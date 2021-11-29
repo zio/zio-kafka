@@ -34,7 +34,7 @@ private[consumer] class ConsumerAccess(
 private[consumer] object ConsumerAccess {
   type ByteArrayKafkaConsumer = KafkaConsumer[Array[Byte], Array[Byte]]
 
-  def make(settings: ConsumerSettings): RManaged[Any, ConsumerAccess] =
+  def make(settings: ConsumerSettings): TaskManaged[ConsumerAccess] =
     for {
       access <- Semaphore.make(1).toManaged
       consumer <- ZIO.attemptBlocking {

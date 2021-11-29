@@ -10,7 +10,6 @@ import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiat
 import zio.kafka.serde.Serde
 import zio.test.Assertion._
 import zio.test._
-import zio.test.environment.TestEnvironment
 
 object ProducerSpec extends DefaultRunnableSpec {
   def withConsumerInt(subscription: Subscription, settings: ConsumerSettings) =
@@ -358,7 +357,7 @@ object ProducerSpec extends DefaultRunnableSpec {
         } yield ()
         assertM(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
       }
-    ).provideSomeLayerShared[TestEnvironment](
+    ).provideSomeShared[TestEnvironment](
       ((Kafka.embedded >>> producer) ++
         (Kafka.embedded >>> transactionalProducer) ++
         Kafka.embedded)

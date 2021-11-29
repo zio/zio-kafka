@@ -454,7 +454,7 @@ object AdminClient {
       )
   }
 
-  val live: ZLayer[Has[AdminClientSettings], Throwable, Has[AdminClient]] =
+  val live: ZLayer[AdminClientSettings, Throwable, AdminClient] =
     (for {
       settings <- ZManaged.service[AdminClientSettings]
       admin    <- make(settings)

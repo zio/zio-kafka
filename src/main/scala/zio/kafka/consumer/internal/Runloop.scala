@@ -73,7 +73,7 @@ private[consumer] final class Runloop(
       _ <- p.await
     } yield ()
 
-  private def doCommit(cmds: Chunk[Command.Commit]): URIO[Any, Unit] = {
+  private def doCommit(cmds: Chunk[Command.Commit]): UIO[Unit] = {
     val offsets   = aggregateOffsets(cmds)
     val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(cmds)(_.cont.done(e))
     val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
@@ -256,7 +256,7 @@ private[consumer] final class Runloop(
     c.pause(currentAssigned)
   }
 
-  private def handlePoll(state: State): RIO[Any, State] =
+  private def handlePoll(state: State): Task[State] =
     for {
       pollResult <-
         consumer.withConsumerM { c =>
@@ -340,7 +340,7 @@ private[consumer] final class Runloop(
       pollResult.assignedStreams ++ newAssignedStreams
     )
 
-  private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): URIO[Any, State] =
+  private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
       UIO.succeed(state.addRequests(reqs)),
       consumer
@@ -356,7 +356,7 @@ private[consumer] final class Runloop(
         .orElseSucceed(state.addRequests(reqs))
     )
 
-  private def handleCommit(state: State, cmd: Command.Commit): URIO[Any, State] =
+  private def handleCommit(state: State, cmd: Command.Commit): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
       UIO.succeed(state.addCommit(cmd)),
       doCommit(Chunk(cmd)).as(state)
@@ -368,7 +368,7 @@ private[consumer] final class Runloop(
    *
    * Buffered records for paused partitions will be removed to drain the stream as fast as possible.
    */
-  private def handleShutdown(state: State, cmd: Command): RIO[Any, State] =
+  private def handleShutdown(state: State, cmd: Command): Task[State] =
     cmd match {
       case Command.Poll() =>
         // End all pending requests
@@ -380,7 +380,7 @@ private[consumer] final class Runloop(
         handleCommit(state, cmd)
     }
 
-  private def handleOperational(state: State, cmd: Command): RIO[Any, State] =
+  private def handleOperational(state: State, cmd: Command): Task[State] =
     cmd match {
       case Command.Poll() =>
         handlePoll(state)
@@ -395,14 +395,14 @@ private[consumer] final class Runloop(
         handleCommit(state, cmd)
     }
 
-  def run: URManaged[Any with Has[Clock], Fiber.Runtime[Throwable, Unit]] =
+  def run: URManaged[Clock, Fiber.Runtime[Throwable, Unit]] =
     ZStream
       .mergeAll(3, 1)(
         ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency)),
         ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
         ZStream.fromQueue(commitQueue)
       )
-      .foldZIO(State.initial) { (state, cmd) =>
+      .runFoldZIO(State.initial) { (state, cmd) =>
         RIO.ifZIO(isShutdown)(handleShutdown(state, cmd), handleOperational(state, cmd))
       }
       .onError(cause => partitions.offer(Take.failCause(cause)))
@@ -445,7 +445,7 @@ private[consumer] object Runloop {
     pollTimeout: Duration,
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval
-  ): RManaged[Any with Has[Clock], Runloop] =
+  ): RManaged[Clock, Runloop] =
     for {
       rebalancingRef <- Ref.make(false).toManaged
       requestQueue   <- Queue.unbounded[Runloop.Request].toManagedWith(_.shutdown)

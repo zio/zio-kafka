@@ -1,7 +1,7 @@
 package zio.kafka.consumer
 
 import org.apache.kafka.common.TopicPartition
-import zio.{ Has, RIO, Task }
+import zio.{ RIO, Task }
 import zio.stream.{ Stream, ZStream }
 import zio.kafka.serde.Deserializer
 
@@ -18,19 +18,19 @@ class SubscribedConsumer(
   def plainStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    outputBuffer: Int = 4
+    bufferSize: Int = 4
   ): ZStream[R, Throwable, CommittableRecord[K, V]] =
-    partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, outputBuffer = outputBuffer)(
+    partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(
       _._2
     )
 }
 
 class SubscribedConsumerFromEnvironment(
-  private val underlying: RIO[Has[Consumer], Consumer]
+  private val underlying: RIO[Consumer, Consumer]
 ) {
 
   def partitionedStream[R, K, V](keyDeserializer: Deserializer[R, K], valueDeserializer: Deserializer[R, V]): ZStream[
-    Has[Consumer],
+    Consumer,
     Throwable,
     (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
   ] =
@@ -39,9 +39,9 @@ class SubscribedConsumerFromEnvironment(
   def plainStream[R, K, V](
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    outputBuffer: Int = 4
-  ): ZStream[R with Has[Consumer], Throwable, CommittableRecord[K, V]] =
-    partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, outputBuffer = outputBuffer)(
+    bufferSize: Int = 4
+  ): ZStream[R with Consumer, Throwable, CommittableRecord[K, V]] =
+    partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(
       _._2
     )
 }

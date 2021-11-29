@@ -7,7 +7,7 @@ import org.apache.kafka.common.{ Metric, MetricName }
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio._
 import zio.kafka.serde.Serializer
-import zio.stream.ZTransducer
+import zio.stream.ZPipeline
 
 import scala.jdk.CollectionConverters._
 
@@ -36,16 +36,13 @@ trait Producer {
   ): RIO[R, RecordMetadata]
 
   /**
-   * A stream transducer that produces all records from the stream.
+   * A stream pipeline that produces all records from the stream.
    */
   def produceAll[R, K, V](
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): ZTransducer[R, Throwable, ProducerRecord[K, V], RecordMetadata] =
-    ZTransducer.fromPush {
-      case None        => UIO.succeed(Chunk.empty)
-      case Some(chunk) => produceChunk(chunk, keySerializer, valueSerializer)
-    }
+  ): ZPipeline[Any, R with Producer, Throwable, Throwable, RecordMetadata, ProducerRecord[K, V]] =
+    ZPipeline.mapChunksZIO(records => produceChunk(records, keySerializer, valueSerializer))
 
   /**
    * Produces a single record. The effect returned from this method has two layers and describes the completion of two
@@ -239,13 +236,13 @@ object Producer {
     private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout))
   }
 
-  val live: RLayer[Has[ProducerSettings] with Any, Has[Producer]] =
+  val live: RLayer[ProducerSettings, Producer] =
     (for {
       settings <- ZManaged.service[ProducerSettings]
       producer <- make(settings)
     } yield producer).toLayer
 
-  def make(settings: ProducerSettings): RManaged[Any, Producer] =
+  def make(settings: ProducerSettings): TaskManaged[Producer] =
     (for {
       props <- ZIO.attempt(settings.driverSettings)
       rawProducer <- ZIO.attempt(
@@ -259,8 +256,8 @@ object Producer {
 
   def withProducerService[R, A](
     r: Producer => RIO[R, A]
-  ): RIO[R with Has[Producer], A] =
-    ZIO.accessZIO[R with Has[Producer]](env => r(env.get[Producer]))
+  ): RIO[R with Producer, A] =
+    ZIO.environmentWithZIO[R with Producer](env => r(env.get[Producer]))
 
   /**
    * Accessor method for [[Producer!.produce[R,K,V](record*]]
@@ -269,7 +266,7 @@ object Producer {
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R with Has[Producer], RecordMetadata] =
+  ): RIO[R with Producer, RecordMetadata] =
     withProducerService(_.produce(record, keySerializer, valueSerializer))
 
   /**
@@ -281,21 +278,17 @@ object Producer {
     value: V,
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R with Has[Producer], RecordMetadata] =
+  ): RIO[R with Producer, RecordMetadata] =
     withProducerService(_.produce(topic, key, value, keySerializer, valueSerializer))
 
   /**
-   * A stream transducer that produces all records from the stream.
+   * A stream pipeline that produces all records from the stream.
    */
   def produceAll[R, K, V](
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): ZTransducer[R with Has[Producer], Throwable, ProducerRecord[K, V], RecordMetadata] =
-    ZTransducer.fromPush {
-      case None => UIO.succeed(Chunk.empty)
-      case Some(chunk) =>
-        produceChunk[R, K, V](chunk, keySerializer, valueSerializer)
-    }
+  ): ZPipeline[Any, R with Producer, Throwable, Throwable, RecordMetadata, ProducerRecord[K, V]] =
+    ZPipeline.mapChunksZIO(records => produceChunk(records, keySerializer, valueSerializer))
 
   /**
    * Accessor method for [[Producer!.produceAsync[R,K,V](record*]]
@@ -304,7 +297,7 @@ object Producer {
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R with Has[Producer], Task[RecordMetadata]] =
+  ): RIO[R with Producer, Task[RecordMetadata]] =
     withProducerService(_.produceAsync(record, keySerializer, valueSerializer))
 
   /**
@@ -316,7 +309,7 @@ object Producer {
     value: V,
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R with Has[Producer], Task[RecordMetadata]] =
+  ): RIO[R with Producer, Task[RecordMetadata]] =
     withProducerService(_.produceAsync(topic, key, value, keySerializer, valueSerializer))
 
   /**
@@ -326,7 +319,7 @@ object Producer {
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R with Has[Producer], Task[Chunk[RecordMetadata]]] =
+  ): RIO[R with Producer, Task[Chunk[RecordMetadata]]] =
     withProducerService(_.produceChunkAsync(records, keySerializer, valueSerializer))
 
   /**
@@ -336,18 +329,18 @@ object Producer {
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R with Has[Producer], Chunk[RecordMetadata]] =
+  ): RIO[R with Producer, Chunk[RecordMetadata]] =
     withProducerService(_.produceChunk(records, keySerializer, valueSerializer))
 
   /**
    * Accessor method for [[Producer.flush]]
    */
-  val flush: RIO[Has[Producer], Unit] =
-    ZIO.serviceWith(_.flush)
+  val flush: RIO[Producer, Unit] =
+    ZIO.serviceWithZIO(_.flush)
 
   /**
    * Accessor method for [[Producer.metrics]]
    */
-  val metrics: RIO[Has[Producer], Map[MetricName, Metric]] =
-    ZIO.serviceWith(_.metrics)
+  val metrics: RIO[Producer, Map[MetricName, Metric]] =
+    ZIO.serviceWithZIO(_.metrics)
 }
