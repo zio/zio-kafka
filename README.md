@@ -139,7 +139,7 @@ val producerSettings: ProducerSettings = ProducerSettings(List("localhost:9092")
 
 val consumerAndProducer = 
   ZLayer.fromManaged(Consumer.make(consumerSettings)) ++
-    ZLayer.fromManaged(Producer.make(producerSettings, Serde.int, Serde.string))
+    ZLayer.fromManaged(Producer.make(producerSettings))
 
 val consumeProduceStream = Consumer
   .subscribeAnd(Subscription.topics("my-input-topic"))
@@ -156,7 +156,7 @@ val consumeProduceStream = Consumer
     val records     = chunk.map(_._1)
     val offsetBatch = OffsetBatch(chunk.map(_._2).toSeq)
 
-    Producer.produceChunk[Any, Int, String](records) *> offsetBatch.commit.as(Chunk(()))
+    Producer.produceChunk[Any, Int, String](records, Serde.int, Serde.string) *> offsetBatch.commit.as(Chunk(()))
   }
   .runDrain
   .provideSomeLayer(consumerAndProducer)
