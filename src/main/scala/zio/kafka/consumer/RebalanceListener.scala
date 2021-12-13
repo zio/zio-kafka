@@ -6,7 +6,7 @@ import zio.{ Runtime, Task, UIO }
 import scala.jdk.CollectionConverters._
 
 /**
- * ZIO wrapper around Kafka's [[ConsumerRebalanceListener]] to work with Scala collection types and ZIO effects
+ * ZIO wrapper around Kafka's `ConsumerRebalanceListener` to work with Scala collection types and ZIO effects
  */
 final case class RebalanceListener(
   onAssigned: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
