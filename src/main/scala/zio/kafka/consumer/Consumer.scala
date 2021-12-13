@@ -139,7 +139,8 @@ object Consumer {
     private val consumer: ConsumerAccess,
     private val settings: ConsumerSettings,
     private val runloop: Runloop,
-    private val clock: Clock.Service
+    private val clock: Clock.Service,
+    private val blocking: Blocking.Service
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
@@ -278,11 +279,13 @@ object Consumer {
     override def subscribe(subscription: Subscription): Task[Unit] =
       ZIO.runtime[Any].flatMap { runtime =>
         consumer.withConsumerM { c =>
+          val rc = RebalanceConsumer.Live(blocking, c)
+
           subscription match {
             case Subscription.Pattern(pattern) =>
-              ZIO(c.subscribe(pattern.pattern, runloop.rebalanceListener.toKafka(runtime)))
+              ZIO(c.subscribe(pattern.pattern, runloop.rebalanceListener.toKafka(runtime, rc)))
             case Subscription.Topics(topics) =>
-              ZIO(c.subscribe(topics.asJava, runloop.rebalanceListener.toKafka(runtime)))
+              ZIO(c.subscribe(topics.asJava, runloop.rebalanceListener.toKafka(runtime, rc)))
 
             // For manual subscriptions we have to do some manual work before starting the run loop
             case Subscription.Manual(topicPartitions) =>
@@ -336,10 +339,12 @@ object Consumer {
                    settings.pollInterval,
                    settings.pollTimeout,
                    diagnostics,
-                   settings.offsetRetrieval
+                   settings.offsetRetrieval,
+                   settings.rebalanceListener
                  )
-      clock <- ZManaged.service[Clock.Service]
-    } yield Live(wrapper, settings, runloop, clock)
+      clock    <- ZManaged.service[Clock.Service]
+      blocking <- ZManaged.service[Blocking.Service]
+    } yield Live(wrapper, settings, runloop, clock, blocking)
 
   /**
    * Accessor method for [[Consumer.assignment]]
