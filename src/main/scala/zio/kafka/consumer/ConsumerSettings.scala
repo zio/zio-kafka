@@ -11,7 +11,8 @@ case class ConsumerSettings(
   pollInterval: Duration,
   pollTimeout: Duration,
   perPartitionChunkPrefetch: Int,
-  offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
+  offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+  rebalanceListener: RebalanceListener = RebalanceListener.noop
 ) {
   private[this] def autoOffsetResetConfig = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
@@ -59,6 +60,9 @@ case class ConsumerSettings(
 
   def withProperties(kvs: Map[String, AnyRef]): ConsumerSettings =
     copy(properties = properties ++ kvs)
+
+  def withRebalanceListener(listener: RebalanceListener): ConsumerSettings =
+    copy(rebalanceListener = listener)
 }
 
 object ConsumerSettings {
