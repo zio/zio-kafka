@@ -319,6 +319,7 @@ object AdminSpec extends DefaultRunnableSpec {
     .subscribeAnd(Subscription.topics(topicName))
     .plainStream(Serde.string, Serde.string)
     .foreach(_.offset.commit)
+    // NOTE: layer error on Scala 3, reverting to provideSomeLayer fixes it... :thinking:
     .provideSome(consumer(clientId, Some(groupId), groupInstanceId))
 
   private def getStableConsumerGroupDescription(
