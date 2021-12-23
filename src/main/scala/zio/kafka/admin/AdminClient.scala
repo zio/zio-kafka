@@ -967,7 +967,6 @@ object AdminClient {
   }
 
   final case class ConsumerGroupListing(groupId: String, isSimple: Boolean, state: Option[ConsumerGroupState])
-
   object ConsumerGroupListing {
     def apply(cg: JConsumerGroupListing): ConsumerGroupListing =
       ConsumerGroupListing(cg.groupId(), cg.isSimpleConsumerGroup, cg.state().toScala.map(ConsumerGroupState(_)))
