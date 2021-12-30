@@ -689,15 +689,13 @@ object AdminClient {
     lazy val asJava = new JNode(id, host.getOrElse(""), port.getOrElse(-1), rack.orNull)
   }
   object Node {
-    def apply(jNode: JNode): Option[Node] = Option(jNode).flatMap { jNode =>
-      Option.when(jNode.id() != JNode.noNode().id()) {
-        Node(
-          id = jNode.id(),
-          host = Option(jNode.host()).filterNot(_.isEmpty),
-          port = Option.when(jNode.port() >= 0)(jNode.port()),
-          rack = Option(jNode.rack())
-        )
-      }
+    def apply(jNode: JNode): Option[Node] = Option(jNode).filter(_.id() >= 0).map { jNode =>
+      Node(
+        id = jNode.id(),
+        host = Option(jNode.host()).filterNot(_.isEmpty),
+        port = Option(jNode.port()).filter(_ >= 0),
+        rack = Option(jNode.rack())
+      )
     }
   }
 
