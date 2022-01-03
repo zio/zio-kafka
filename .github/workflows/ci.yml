@@ -3,11 +3,12 @@ name: CI
 on:
   pull_request:
   push:
-    branches: ['master', 'series/0.x']
+    branches: ['conduktor-master']
   release:
     types:
       - published
-
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 jobs:
   lint:
     runs-on: ubuntu-20.04
@@ -70,9 +71,4 @@ jobs:
           java-version: 17
           check-latest: true
       - name: Release artifacts
-        run: sbt ci-release
-        env:
-          PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
-          PGP_SECRET: ${{ secrets.PGP_SECRET }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+        run: sbt publish

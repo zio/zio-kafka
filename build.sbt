@@ -12,6 +12,7 @@ lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embedde
 
 inThisBuild(
   List(
+    version                  := "0.17.4-cdk",
     organization             := "dev.zio",
     homepage                 := Some(url("https://github.com/zio/zio-kafka")),
     licenses                 := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
@@ -59,8 +60,12 @@ lazy val kafka =
       }.value
     )
     .settings(
-      buildInfoKeys    := Seq[BuildInfoKey](organization, name, version, scalaVersion, sbtVersion, isSnapshot),
-      buildInfoPackage := "zio.kafka"
+      buildInfoKeys     := Seq[BuildInfoKey](organization, name, version, scalaVersion, sbtVersion, isSnapshot),
+      buildInfoPackage  := "zio.kafka",
+      githubOwner       := "conduktor",
+      githubRepository  := "zio-kafka",
+      githubTokenSource := TokenSource.Environment("GITHUB_TOKEN") || TokenSource.GitConfig("github.token"),
+      publishTo         := githubPublishTo.value
     )
     .settings(
       libraryDependencies ++= Seq(
