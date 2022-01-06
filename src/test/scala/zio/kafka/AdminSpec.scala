@@ -1,6 +1,7 @@
 package zio.kafka.admin
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.{ Node => JNode }
 import zio.{ Chunk, Has, Schedule, ZIO }
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -311,6 +312,36 @@ object AdminSpec extends DefaultRunnableSpec {
             )
           )
         }
+      },
+      test("should correctly handle no node (null) when converting JNode to Node") {
+        assert(AdminClient.Node.apply(null))(isNone)
+      },
+      test("should correctly handle noNode when converting JNode to Node") {
+        assert(AdminClient.Node.apply(JNode.noNode()))(isNone)
+      },
+      testM("should correctly keep all information when converting a valid jNode to Node") {
+        val posIntGen = Gen.int(0, Int.MaxValue)
+        check(posIntGen, Gen.string1(Gen.anyChar), posIntGen, Gen.option(Gen.anyString)) { (id, host, port, rack) =>
+          val jNode = new JNode(id, host, port, rack.orNull)
+          assert(AdminClient.Node.apply(jNode).map(_.asJava))(
+            equalTo(Some(jNode))
+          )
+        }
+      },
+      testM("will replace invalid port by None") {
+        val posIntGen = Gen.int(0, Int.MaxValue)
+        check(posIntGen, Gen.string1(Gen.anyChar), Gen.anyInt, Gen.option(Gen.anyString)) { (id, host, port, rack) =>
+          val jNode = new JNode(id, host, port, rack.orNull)
+          assert(AdminClient.Node.apply(jNode).map(_.port.isEmpty))(
+            equalTo(Some(port < 0))
+          )
+        }
+      },
+      test("will replace empty host by None") {
+        val jNode = new JNode(0, "", 9092, null)
+        assert(AdminClient.Node.apply(jNode).map(_.host.isEmpty))(
+          equalTo(Some(true))
+        )
       }
     ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
 

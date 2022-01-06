@@ -45,6 +45,7 @@ import zio.duration.Duration
 import scala.jdk.CollectionConverters._
 
 trait AdminClient {
+
   import AdminClient._
 
   /**
@@ -181,6 +182,7 @@ object AdminClient {
 
   /**
    * Thin wrapper around apache java AdminClient. See java api for descriptions
+   *
    * @param adminClient
    */
   private final case class LiveAdminClient(
@@ -261,7 +263,13 @@ object AdminClient {
             .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
             .all()
         )
-      }.map(_.asScala.map { case (k, v) => k -> AdminClient.TopicDescription(v) }.toMap)
+      }.flatMap { jTopicDescriptions =>
+        Task
+          .foreach(jTopicDescriptions.asScala.toSeq) { case (k, v) =>
+            AdminClient.TopicDescription(v).map(k -> _)
+          }
+          .map(_.toMap)
+      }
     }
 
     /**
@@ -296,7 +304,14 @@ object AdminClient {
     override def describeClusterNodes(options: Option[DescribeClusterOptions] = None): Task[List[Node]] =
       fromKafkaFuture(
         describeCluster(options).map(_.nodes())
-      ).map(_.asScala.toList.map(Node.apply))
+      ).flatMap { nodes =>
+        Task.foreach(nodes.asScala.toList) { jNode =>
+          ZIO
+            .getOrFailWith(new RuntimeException("NoNode not expected when listing cluster nodes"))(
+              Node(jNode)
+            )
+        }
+      }
 
     /**
      * Get the cluster controller.
@@ -304,7 +319,10 @@ object AdminClient {
     override def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Node] =
       fromKafkaFuture(
         describeCluster(options).map(_.controller())
-      ).map(Node.apply)
+      ).flatMap { jNode =>
+        ZIO
+          .getOrFailWith(new RuntimeException("Empty/NoNode not expected when listing cluster nodes"))(Node(jNode))
+      }
 
     /**
      * Get the cluster id.
@@ -499,12 +517,15 @@ object AdminClient {
     case object BrokerLogger extends ConfigResourceType {
       lazy val asJava = JConfigResource.Type.BROKER_LOGGER
     }
+
     case object Broker extends ConfigResourceType {
       lazy val asJava = JConfigResource.Type.BROKER
     }
+
     case object Topic extends ConfigResourceType {
       lazy val asJava = JConfigResource.Type.TOPIC
     }
+
     case object Unknown extends ConfigResourceType {
       lazy val asJava = JConfigResource.Type.UNKNOWN
     }
@@ -580,7 +601,7 @@ object AdminClient {
     members: List[MemberDescription],
     partitionAssignor: String,
     state: ConsumerGroupState,
-    coordinator: Node,
+    coordinator: Option[Node],
     authorizedOperations: Set[AclOperation]
   )
 
@@ -656,12 +677,26 @@ object AdminClient {
       else JNewPartitions.increaseTo(totalCount)
   }
 
-  case class Node(id: Int, host: String, port: Int, rack: Option[String] = None) {
-    lazy val asJava = rack.fold(new JNode(id, host, port))(rack => new JNode(id, host, port, rack))
+  /**
+   * @param id
+   *   >= 0
+   * @param host
+   *   can't be empty string if present
+   * @param port
+   *   can't be negative if present
+   */
+  case class Node(id: Int, host: Option[String], port: Option[Int], rack: Option[String] = None) {
+    lazy val asJava = new JNode(id, host.getOrElse(""), port.getOrElse(-1), rack.orNull)
   }
-
   object Node {
-    def apply(jNode: JNode): Node = Node(jNode.id(), jNode.host(), jNode.port, Option(jNode.rack()))
+    def apply(jNode: JNode): Option[Node] = Option(jNode).filter(_.id() >= 0).map { jNode =>
+      Node(
+        id = jNode.id(),
+        host = Option(jNode.host()).filterNot(_.isEmpty),
+        port = Option(jNode.port()).filter(_ >= 0),
+        rack = Option(jNode.rack())
+      )
+    }
   }
 
   case class TopicDescription(
@@ -672,30 +707,59 @@ object AdminClient {
   )
 
   object TopicDescription {
-    def apply(jt: JTopicDescription): TopicDescription = {
+    def apply(jt: JTopicDescription): Task[TopicDescription] = {
       val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet)
-      TopicDescription(
-        jt.name,
-        jt.isInternal,
-        jt.partitions.asScala.toList.map(TopicPartitionInfo.apply),
-        authorizedOperations.map(_.map(AclOperation.apply))
-      )
+      Task.foreach(jt.partitions.asScala.toList)(TopicPartitionInfo.apply).map { partitions =>
+        TopicDescription(
+          jt.name,
+          jt.isInternal,
+          partitions,
+          authorizedOperations.map(_.map(AclOperation.apply))
+        )
+      }
     }
   }
 
-  case class TopicPartitionInfo(partition: Int, leader: Node, replicas: List[Node], isr: List[Node]) {
+  case class TopicPartitionInfo(partition: Int, leader: Option[Node], replicas: List[Node], isr: List[Node]) {
     lazy val asJava =
-      new JTopicPartitionInfo(partition, leader.asJava, replicas.map(_.asJava).asJava, isr.map(_.asJava).asJava)
+      new JTopicPartitionInfo(
+        partition,
+        leader.map(_.asJava).getOrElse(JNode.noNode()),
+        replicas.map(_.asJava).asJava,
+        isr.map(_.asJava).asJava
+      )
   }
 
   object TopicPartitionInfo {
-    def apply(jtpi: JTopicPartitionInfo): TopicPartitionInfo =
-      TopicPartitionInfo(
+    def apply(jtpi: JTopicPartitionInfo): Task[TopicPartitionInfo] = {
+      val replicas = Task.foreach(
+        jtpi
+          .replicas()
+          .asScala
+          .toList
+      ) { jNode =>
+        ZIO.getOrFailWith(new RuntimeException("NoNode node not expected among topic replicas"))(Node(jNode))
+      }
+
+      val inSyncReplicas = Task.foreach(
+        jtpi
+          .isr()
+          .asScala
+          .toList
+      ) { jNode =>
+        ZIO.getOrFailWith(new RuntimeException("NoNode node not expected among topic in sync replicas"))(Node(jNode))
+      }
+
+      for {
+        replicas       <- replicas
+        inSyncReplicas <- inSyncReplicas
+      } yield TopicPartitionInfo(
         jtpi.partition(),
         Node(jtpi.leader()),
-        jtpi.replicas().asScala.map(Node.apply).toList,
-        jtpi.isr().asScala.map(Node.apply).toList
+        replicas,
+        inSyncReplicas
       )
+    }
   }
 
   case class TopicListing(name: String, isInternal: Boolean) {
@@ -717,7 +781,9 @@ object AdminClient {
     def apply(tp: JTopicPartition): TopicPartition = new TopicPartition(tp.topic(), tp.partition())
   }
 
-  sealed abstract class OffsetSpec { def asJava: JOffsetSpec }
+  sealed abstract class OffsetSpec {
+    def asJava: JOffsetSpec
+  }
 
   object OffsetSpec {
     case object EarliestSpec extends OffsetSpec {
@@ -733,7 +799,9 @@ object AdminClient {
     }
   }
 
-  sealed abstract class IsolationLevel { def asJava: JIsolationLevel }
+  sealed abstract class IsolationLevel {
+    def asJava: JIsolationLevel
+  }
 
   object IsolationLevel {
     case object ReadUncommitted extends IsolationLevel {
@@ -797,6 +865,7 @@ object AdminClient {
   }
 
   case class ConsumerGroupListing(groupId: String, isSimple: Boolean, state: Option[ConsumerGroupState])
+
   object ConsumerGroupListing {
     def apply(cg: JConsumerGroupListing): ConsumerGroupListing =
       ConsumerGroupListing(cg.groupId(), cg.isSimpleConsumerGroup, cg.state().toScala.map(ConsumerGroupState(_)))
