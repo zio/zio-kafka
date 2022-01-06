@@ -24,6 +24,8 @@ jobs:
         uses: coursier/cache-action@v5
       - name: Lint code
         run: sbt check
+      - name: Mdocs check
+        run: sbt docs/mdoc
 
   test:
     runs-on: ubuntu-20.04
