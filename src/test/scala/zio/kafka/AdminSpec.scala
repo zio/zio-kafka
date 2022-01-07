@@ -113,7 +113,7 @@ object AdminSpec extends DefaultRunnableSpec {
         KafkaTestUtils.withAdmin { client =>
           for {
             controller <- client.describeClusterController()
-          } yield assert(controller.id)(equalTo(0))
+          } yield assert(controller.map(_.id))(isSome(equalTo(0)))
         }
       },
       testM("get cluster id") {
