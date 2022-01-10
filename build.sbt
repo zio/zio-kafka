@@ -14,7 +14,7 @@ lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embedde
 
 inThisBuild(
   List(
-    version                  := "0.17.4-cdk",
+    version                  := "0.17.5-cdk",
     organization             := "dev.zio",
     homepage                 := Some(url("https://github.com/zio/zio-kafka")),
     licenses                 := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
