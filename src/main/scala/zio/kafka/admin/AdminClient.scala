@@ -186,7 +186,7 @@ object AdminClient {
    * @param adminClient
    */
   private final case class LiveAdminClient(
-    private[admin] val adminClient: JAdminClient,
+    adminClient: JAdminClient,
     private val blocking: Blocking.Service
   ) extends AdminClient {
 
