@@ -103,7 +103,7 @@ trait AdminClient {
   /**
    * Get the cluster controller.
    */
-  def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Node]
+  def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Option[Node]]
 
   /**
    * Get the cluster id.
@@ -316,13 +316,10 @@ object AdminClient {
     /**
      * Get the cluster controller.
      */
-    override def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Node] =
+    override def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Option[Node]] =
       fromKafkaFuture(
         describeCluster(options).map(_.controller())
-      ).flatMap { jNode =>
-        ZIO
-          .getOrFailWith(new RuntimeException("Empty/NoNode not expected when listing cluster nodes"))(Node(jNode))
-      }
+      ).map(Node(_))
 
     /**
      * Get the cluster id.
