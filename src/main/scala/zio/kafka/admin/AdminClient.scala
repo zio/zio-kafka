@@ -75,6 +75,14 @@ trait AdminClient {
   def deleteTopic(topic: String): Task[Unit]
 
   /**
+   * Delete records.
+   */
+  def deleteRecords(
+    recordsToDelete: Map[TopicPartition, RecordsToDelete],
+    deleteRecordsOptions: Option[DeleteRecordsOptions] = None
+  ): Task[Unit]
+
+  /**
    * List the topics in the cluster.
    */
   def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): Task[Map[String, TopicListing]]
@@ -238,6 +246,23 @@ object AdminClient {
      */
     override def deleteTopic(topic: String): Task[Unit] =
       deleteTopics(List(topic))
+
+    /**
+     * Delete records.
+     */
+    override def deleteRecords(
+      recordsToDelete: Map[TopicPartition, RecordsToDelete],
+      deleteRecordsOptions: Option[DeleteRecordsOptions] = None
+    ): Task[Unit] = {
+      val records = recordsToDelete.map { case (k, v) => k.asJava -> v }.asJava
+      fromKafkaFutureVoid {
+        blocking.effectBlocking(
+          deleteRecordsOptions
+            .fold(adminClient.deleteRecords(records))(opts => adminClient.deleteRecords(records, opts))
+            .all()
+        )
+      }
+    }
 
     /**
      * List the topics in the cluster.
