@@ -193,8 +193,8 @@ object AdminClient {
    *
    * @param adminClient
    */
-  private final case class LiveAdminClient(
-    private[admin] val adminClient: JAdminClient,
+  private final class LiveAdminClient(
+    private val adminClient: JAdminClient,
     private val blocking: Blocking.Service
   ) extends AdminClient {
 
@@ -913,12 +913,23 @@ object AdminClient {
     def apply(ri: JReplicaInfo): ReplicaInfo = ReplicaInfo(ri.size(), ri.offsetLag(), ri.isFuture)
   }
 
-  def make(settings: AdminClientSettings): ZManaged[Has[Blocking.Service], Throwable, AdminClient] =
-    ZManaged.service[Blocking.Service].flatMap { blocking =>
-      ZManaged.make(
-        ZIO(JAdminClient.create(settings.driverSettings.asJava)).map(ac => LiveAdminClient(ac, blocking))
-      )(client => ZIO.effectTotal(client.adminClient.close(settings.closeTimeout)))
+  def make(settings: AdminClientSettings): ZManaged[Blocking, Throwable, AdminClient] =
+    fromManagedJavaClient(javaClientFromSettings(settings))
+
+  def fromJavaClient(javaClient: JAdminClient): URIO[Blocking, AdminClient] =
+    ZIO.service[Blocking.Service].map { blocking =>
+      new LiveAdminClient(javaClient, blocking)
     }
+
+  def fromManagedJavaClient[R, E](
+    managedJavaClient: ZManaged[R, E, JAdminClient]
+  ): ZManaged[Blocking & R, E, AdminClient] =
+    managedJavaClient.flatMap { javaClient =>
+      ZManaged.fromEffect(fromJavaClient(javaClient))
+    }
+
+  def javaClientFromSettings(settings: AdminClientSettings): ZManaged[Any, Throwable, JAdminClient] =
+    ZManaged.makeEffect(JAdminClient.create(settings.driverSettings.asJava))(_.close(settings.closeTimeout))
 
   implicit class MapOps[K1, V1](val v: Map[K1, V1]) extends AnyVal {
     def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2) = v.map(kv => fk(kv._1) -> fv(kv._2))
