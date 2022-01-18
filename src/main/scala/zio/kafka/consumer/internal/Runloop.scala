@@ -252,7 +252,7 @@ private[consumer] final class Runloop(
       // The consumer will throw an IllegalStateException if no call to subscribe
       // has been made yet, so we just ignore that. We have to poll even if c.subscription()
       // is empty because pattern subscriptions start out as empty.
-      case _: IllegalStateException => ConsumerRecords.empty[Array[Byte], Array[Byte]]()
+      case _: IllegalStateException if c.subscription.isEmpty => ConsumerRecords.empty[Array[Byte], Array[Byte]]()
     }
 
   private def pauseAllPartitions(c: ByteArrayKafkaConsumer) = ZIO.effectTotal {
