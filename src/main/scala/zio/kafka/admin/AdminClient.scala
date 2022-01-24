@@ -187,7 +187,7 @@ trait AdminClient {
   ): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]]
 }
 
-object AdminClient {
+object AdminClient extends Accessible[AdminClient] {
 
   /**
    * Thin wrapper around apache java AdminClient. See java api for descriptions
