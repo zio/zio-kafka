@@ -1,16 +1,16 @@
 import sbt.Keys.{ fork, parallelExecution }
 
 lazy val scala212  = "2.12.15"
-lazy val scala213  = "2.13.6"
-lazy val scala3    = "3.0.2"
+lazy val scala213  = "2.13.8"
+lazy val scala3    = "3.1.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-lazy val zioVersion           = "1.0.12"
+lazy val zioVersion           = "1.0.13"
 lazy val kafkaVersion         = "2.8.1"
 lazy val embeddedKafkaVersion = "2.8.1" // Should be the same as kafkaVersion, except for the patch part
 
-lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion % "test"
+lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion % Test
 
 inThisBuild(
   List(
@@ -65,11 +65,11 @@ lazy val kafka =
       resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
       libraryDependencies ++= Seq(
         "dev.zio"                   %% "zio-streams"             % zioVersion,
-        "dev.zio"                   %% "zio-test"                % zioVersion % "test",
-        "dev.zio"                   %% "zio-test-sbt"            % zioVersion % "test",
+        "dev.zio"                   %% "zio-test"                % zioVersion % Test,
+        "dev.zio"                   %% "zio-test-sbt"            % zioVersion % Test,
         "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.1",
-        "ch.qos.logback"             % "logback-classic"         % "1.2.10"   % "test",
+        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.12.6",
+        "ch.qos.logback"             % "logback-classic"         % "1.2.10"   % Test,
         "org.scala-lang.modules"    %% "scala-collection-compat" % "2.6.0"
       ) ++ {
         if (scalaBinaryVersion.value == "3")
