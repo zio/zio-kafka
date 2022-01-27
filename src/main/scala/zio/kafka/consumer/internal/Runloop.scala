@@ -386,6 +386,7 @@ private[consumer] final class Runloop(
   private def handleOperational(state: State, cmd: Command): RIO[Blocking, State] =
     cmd match {
       case Command.Poll() =>
+        // The consumer will throw an IllegalStateException if no call to subscribe
         ZIO.ifM(subscribedRef.get)(handlePoll(state), UIO(state))
       case Command.Requests(reqs) =>
         handleRequests(state, reqs).flatMap { state =>
