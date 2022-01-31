@@ -419,28 +419,28 @@ private[consumer] object Runloop {
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
   type ByteArrayConsumerRecord    = ConsumerRecord[Array[Byte], Array[Byte]]
 
-  case class Request(tp: TopicPartition, cont: Promise[Option[Throwable], Chunk[ByteArrayCommittableRecord]])
-  case class PollResult(
+  final case class Request(tp: TopicPartition, cont: Promise[Option[Throwable], Chunk[ByteArrayCommittableRecord]])
+  final case class PollResult(
     newlyAssigned: Set[TopicPartition],
     unfulfilledRequests: Chunk[Runloop.Request],
     bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
     assignedStreams: Map[TopicPartition, Promise[Throwable, Unit]]
   )
-  case class RevokeResult(
+  final case class RevokeResult(
     unfulfilledRequests: Chunk[Runloop.Request],
     bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
     assignedStreams: Map[TopicPartition, Promise[Throwable, Unit]]
   )
-  case class FulfillResult(
+  final case class FulfillResult(
     unfulfilledRequests: Chunk[Runloop.Request],
     bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]
   )
 
   sealed abstract class Command
   object Command {
-    case class Requests(requests: Chunk[Request])                                         extends Command
-    case class Poll()                                                                     extends Command
-    case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
+    final case class Requests(requests: Chunk[Request])                                         extends Command
+    final case class Poll()                                                                     extends Command
+    final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
   }
 
   def apply(

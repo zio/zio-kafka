@@ -16,7 +16,7 @@ object Diagnostics {
     override def emit(event: DiagnosticEvent): UIO[Unit] = UIO.unit
   }
 
-  case class SlidingQueue(queue: Queue[DiagnosticEvent]) extends Diagnostics {
+  final case class SlidingQueue(queue: Queue[DiagnosticEvent]) extends Diagnostics {
     override def emit(event: DiagnosticEvent): UIO[Unit] = queue.offer(event).unit
   }
 
