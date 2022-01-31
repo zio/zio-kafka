@@ -41,7 +41,7 @@ object Kafka {
     def bootstrapServers: List[String]
     def stop(): UIO[Unit]
   }
-  case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka.Service {
+  final case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka.Service {
     override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
     override def stop(): UIO[Unit] = ZIO.effectTotal(embeddedK.stop(true))
   }
