@@ -4,7 +4,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio.duration._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 
-case class ConsumerSettings(
+final case class ConsumerSettings(
   bootstrapServers: List[String],
   properties: Map[String, AnyRef],
   closeTimeout: Duration,

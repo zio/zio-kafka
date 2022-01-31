@@ -36,7 +36,8 @@ import org.apache.kafka.common.{
   MetricName => JMetricName,
   Node => JNode,
   TopicPartition => JTopicPartition,
-  TopicPartitionInfo => JTopicPartitionInfo
+  TopicPartitionInfo => JTopicPartitionInfo,
+  Uuid
 }
 import zio._
 import zio.blocking.Blocking
@@ -287,7 +288,7 @@ object AdminClient extends Accessible[AdminClient] {
         blocking.effectBlocking(
           options
             .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
-            .all()
+            .allTopicNames()
         )
       }.flatMap { jTopicDescriptions =>
         Task
@@ -524,7 +525,7 @@ object AdminClient extends Accessible[AdminClient] {
   def fromKafkaFutureVoid[R](kfv: RIO[R, KafkaFuture[Void]]): RIO[R, Unit] =
     fromKafkaFuture(kfv).unit
 
-  case class ConfigResource(`type`: ConfigResourceType, name: String) {
+  final case class ConfigResource(`type`: ConfigResourceType, name: String) {
     lazy val asJava = new JConfigResource(`type`.asJava, name)
   }
 
@@ -600,7 +601,7 @@ object AdminClient extends Accessible[AdminClient] {
     }
   }
 
-  case class MemberDescription(
+  final case class MemberDescription(
     consumerId: String,
     groupInstanceId: Option[String],
     clientId: String,
@@ -618,7 +619,7 @@ object AdminClient extends Accessible[AdminClient] {
     )
   }
 
-  case class ConsumerGroupDescription(
+  final case class ConsumerGroupDescription(
     groupId: String,
     isSimpleConsumerGroup: Boolean,
     members: List[MemberDescription],
@@ -643,38 +644,38 @@ object AdminClient extends Accessible[AdminClient] {
       )
   }
 
-  case class CreatePartitionsOptions(validateOnly: Boolean) {
+  final case class CreatePartitionsOptions(validateOnly: Boolean) {
     lazy val asJava: JCreatePartitionsOptions = new JCreatePartitionsOptions().validateOnly(validateOnly)
   }
 
-  case class CreateTopicsOptions(validateOnly: Boolean) {
+  final case class CreateTopicsOptions(validateOnly: Boolean) {
     lazy val asJava: JCreateTopicsOptions = new JCreateTopicsOptions().validateOnly(validateOnly)
   }
 
-  case class DescribeConfigsOptions(includeSynonyms: Boolean, includeDocumentation: Boolean) {
+  final case class DescribeConfigsOptions(includeSynonyms: Boolean, includeDocumentation: Boolean) {
     lazy val asJava: JDescribeConfigsOptions =
       new JDescribeConfigsOptions().includeSynonyms(includeSynonyms).includeDocumentation(includeDocumentation)
   }
 
-  case class DescribeClusterOptions(includeAuthorizedOperations: Boolean) {
+  final case class DescribeClusterOptions(includeAuthorizedOperations: Boolean) {
     lazy val asJava: JDescribeClusterOptions =
       new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
   }
 
-  case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
+  final case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
 
   object MetricName {
     def apply(jmn: JMetricName): MetricName =
       MetricName(jmn.name(), jmn.group(), jmn.description(), jmn.tags().asScala.toMap)
   }
 
-  case class Metric(name: MetricName, metricValue: AnyRef)
+  final case class Metric(name: MetricName, metricValue: AnyRef)
 
   object Metric {
     def apply(jm: JMetric): Metric = Metric(MetricName(jm.metricName()), jm.metricValue())
   }
 
-  case class NewTopic(
+  final case class NewTopic(
     name: String,
     numPartitions: Int,
     replicationFactor: Short,
@@ -690,7 +691,7 @@ object AdminClient extends Accessible[AdminClient] {
     }
   }
 
-  case class NewPartitions(
+  final case class NewPartitions(
     totalCount: Int,
     newAssignments: List[List[Int]] = Nil
   ) {
@@ -708,7 +709,7 @@ object AdminClient extends Accessible[AdminClient] {
    * @param port
    *   can't be negative if present
    */
-  case class Node(id: Int, host: Option[String], port: Option[Int], rack: Option[String] = None) {
+  final case class Node(id: Int, host: Option[String], port: Option[Int], rack: Option[String] = None) {
     lazy val asJava = new JNode(id, host.getOrElse(""), port.getOrElse(-1), rack.orNull)
   }
   object Node {
@@ -722,7 +723,7 @@ object AdminClient extends Accessible[AdminClient] {
     }
   }
 
-  case class TopicDescription(
+  final case class TopicDescription(
     name: String,
     internal: Boolean,
     partitions: List[TopicPartitionInfo],
@@ -743,7 +744,7 @@ object AdminClient extends Accessible[AdminClient] {
     }
   }
 
-  case class TopicPartitionInfo(partition: Int, leader: Option[Node], replicas: List[Node], isr: List[Node]) {
+  final case class TopicPartitionInfo(partition: Int, leader: Option[Node], replicas: List[Node], isr: List[Node]) {
     lazy val asJava =
       new JTopicPartitionInfo(
         partition,
@@ -785,15 +786,15 @@ object AdminClient extends Accessible[AdminClient] {
     }
   }
 
-  case class TopicListing(name: String, isInternal: Boolean) {
-    def asJava = new JTopicListing(name, isInternal)
+  final case class TopicListing(name: String, topicId: Uuid, isInternal: Boolean) {
+    def asJava = new JTopicListing(name, topicId, isInternal)
   }
 
   object TopicListing {
-    def apply(jtl: JTopicListing): TopicListing = TopicListing(jtl.name(), jtl.isInternal)
+    def apply(jtl: JTopicListing): TopicListing = TopicListing(jtl.name(), jtl.topicId(), jtl.isInternal)
   }
 
-  case class TopicPartition(
+  final case class TopicPartition(
     name: String,
     partition: Int
   ) {
@@ -817,7 +818,7 @@ object AdminClient extends Accessible[AdminClient] {
       override def asJava = JOffsetSpec.latest()
     }
 
-    case class TimestampSpec(timestamp: Long) extends OffsetSpec {
+    final case class TimestampSpec(timestamp: Long) extends OffsetSpec {
       override def asJava = JOffsetSpec.forTimestamp(timestamp)
     }
   }
@@ -836,14 +837,14 @@ object AdminClient extends Accessible[AdminClient] {
     }
   }
 
-  case class DeleteRecordsOptions(timeout: Option[Duration]) {
+  final case class DeleteRecordsOptions(timeout: Option[Duration]) {
     def asJava = {
       val offsetOpt = new JDeleteRecordsOptions()
       timeout.fold(offsetOpt)(timeout => offsetOpt.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  case class ListOffsetsOptions(
+  final case class ListOffsetsOptions(
     isolationLevel: IsolationLevel = IsolationLevel.ReadUncommitted,
     timeout: Option[Duration]
   ) {
@@ -853,7 +854,7 @@ object AdminClient extends Accessible[AdminClient] {
     }
   }
 
-  case class ListOffsetsResultInfo(
+  final case class ListOffsetsResultInfo(
     offset: Long,
     timestamp: Long,
     leaderEpoch: Option[Int]
@@ -864,14 +865,14 @@ object AdminClient extends Accessible[AdminClient] {
       ListOffsetsResultInfo(lo.offset(), lo.timestamp(), lo.leaderEpoch().toScala.map(_.toInt))
   }
 
-  case class ListConsumerGroupOffsetsOptions(partitions: Chunk[TopicPartition]) {
+  final case class ListConsumerGroupOffsetsOptions(partitions: Chunk[TopicPartition]) {
     def asJava = {
       val opts = new JListConsumerGroupOffsetsOptions
       if (partitions.isEmpty) opts else opts.topicPartitions(partitions.map(_.asJava).asJava)
     }
   }
 
-  case class OffsetAndMetadata(
+  final case class OffsetAndMetadata(
     offset: Long,
     leaderEpoch: Option[Int] = None,
     metadata: Option[String] = None
@@ -884,38 +885,38 @@ object AdminClient extends Accessible[AdminClient] {
       OffsetAndMetadata(om.offset(), om.leaderEpoch().toScala.map(_.toInt), Some(om.metadata()))
   }
 
-  case class AlterConsumerGroupOffsetsOptions(
+  final case class AlterConsumerGroupOffsetsOptions(
     timeout: Duration
   ) {
     def asJava = new JAlterConsumerGroupOffsetsOptions().timeoutMs(timeout.toMillis.toInt)
   }
 
-  case class ListConsumerGroupsOptions(states: Set[ConsumerGroupState]) {
+  final case class ListConsumerGroupsOptions(states: Set[ConsumerGroupState]) {
     def asJava = new JListConsumerGroupsOptions().inStates(states.map(_.asJava).asJava)
   }
 
-  case class ConsumerGroupListing(groupId: String, isSimple: Boolean, state: Option[ConsumerGroupState])
+  final case class ConsumerGroupListing(groupId: String, isSimple: Boolean, state: Option[ConsumerGroupState])
 
   object ConsumerGroupListing {
     def apply(cg: JConsumerGroupListing): ConsumerGroupListing =
       ConsumerGroupListing(cg.groupId(), cg.isSimpleConsumerGroup, cg.state().toScala.map(ConsumerGroupState(_)))
   }
 
-  case class KafkaConfig(entries: Map[String, ConfigEntry])
+  final case class KafkaConfig(entries: Map[String, ConfigEntry])
 
   object KafkaConfig {
     def apply(jConfig: JConfig): KafkaConfig =
       KafkaConfig(jConfig.entries().asScala.map(e => e.name() -> e).toMap)
   }
 
-  case class LogDirDescription(error: ApiException, replicaInfos: Map[TopicPartition, ReplicaInfo])
+  final case class LogDirDescription(error: ApiException, replicaInfos: Map[TopicPartition, ReplicaInfo])
 
   object LogDirDescription {
     def apply(ld: JLogDirDescription): LogDirDescription =
       LogDirDescription(ld.error(), ld.replicaInfos().asScala.toMap.bimap(TopicPartition(_), ReplicaInfo(_)))
   }
 
-  case class ReplicaInfo(size: Long, offsetLag: Long, isFuture: Boolean)
+  final case class ReplicaInfo(size: Long, offsetLag: Long, isFuture: Boolean)
 
   object ReplicaInfo {
     def apply(ri: JReplicaInfo): ReplicaInfo = ReplicaInfo(ri.size(), ri.offsetLag(), ri.isFuture)

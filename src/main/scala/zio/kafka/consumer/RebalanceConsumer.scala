@@ -15,7 +15,7 @@ trait RebalanceConsumer {
 }
 
 object RebalanceConsumer {
-  case class Live(blocking: zio.blocking.Blocking.Service, consumer: KafkaConsumer[Array[Byte], Array[Byte]])
+  final case class Live(blocking: zio.blocking.Blocking.Service, consumer: KafkaConsumer[Array[Byte], Array[Byte]])
       extends RebalanceConsumer {
     def commit(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit] =
       blocking.effectBlocking(consumer.commitSync(offsets.asJava))

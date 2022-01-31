@@ -20,12 +20,12 @@ final case class CommittableRecord[K, V](record: ConsumerRecord[K, V], offset: O
         record.offset(),
         record.timestamp(),
         record.timestampType(),
-        ConsumerRecord.NULL_CHECKSUM, // Checksum is deprecated
         record.serializedKeySize(),
         record.serializedValueSize(),
         key,
         value,
-        record.headers()
+        record.headers(),
+        record.leaderEpoch()
       )
     )
 
