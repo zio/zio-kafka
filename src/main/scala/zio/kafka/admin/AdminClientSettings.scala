@@ -3,7 +3,7 @@ package zio.kafka.admin
 import org.apache.kafka.clients.admin.AdminClientConfig
 import zio.duration._
 
-case class AdminClientSettings(
+final case class AdminClientSettings(
   bootstrapServers: List[String],
   closeTimeout: Duration,
   properties: Map[String, AnyRef]
