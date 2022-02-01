@@ -1,3 +1,8 @@
+import sbt.Keys.{ fork, parallelExecution }
+import scala.sys.process._
+
+import scala.util.Try
+
 lazy val scala212  = "2.12.15"
 lazy val scala213  = "2.13.8"
 lazy val scala3    = "3.1.2"
@@ -10,9 +15,15 @@ lazy val embeddedKafkaVersion = "3.2.0" // Should be the same as kafkaVersion, e
 
 lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion % Test
 
+val GITHUB_OWNER   = "conduktor"
+val GITHUB_PROJECT = "zio-kafka"
+
+def env(v: String): Option[String] = sys.env.get(v)
+
 inThisBuild(
   List(
-    version                  := "0.17.8-cdk",
+    version := sys.env
+      .getOrElse("RELEASE_VERSION", "0.0.1-SNAPSHOT"), // "RELEASE_VERSION" comes from .github/workflows/release.yml
     organization             := "dev.zio",
     homepage                 := Some(url("https://github.com/zio/zio-kafka")),
     licenses                 := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
@@ -35,6 +46,23 @@ inThisBuild(
         "iravid@iravid.com",
         url("https://github.com/iravid")
       )
+    ),
+    // CDK publishing settings
+    publishMavenStyle := true,
+    publishTo := Some(
+      s"GitHub $GITHUB_OWNER Apache Maven Packages of $GITHUB_PROJECT" at s"https://maven.pkg.github.com/$GITHUB_OWNER/$GITHUB_PROJECT"
+    ),
+    credentials += Credentials(
+      "GitHub Package Registry",
+      "maven.pkg.github.com",
+      GITHUB_OWNER,
+      (env("GH_PACKAGES_TOKEN") orElse env("GH_READ_PACKAGES") orElse env("GITHUB_TOKEN"))
+        .orElse(Try(s"git config github.token".!!).map(_.trim).toOption)
+        .getOrElse(
+          throw new RuntimeException(
+            "Missing env variable: `GH_PACKAGES_TOKEN` or `GH_READ_PACKAGES` or `GITHUB_TOKEN` or git config option: `github.token`"
+          )
+        )
     )
   )
 )
@@ -60,12 +88,8 @@ lazy val kafka =
       }.value
     )
     .settings(
-      buildInfoKeys     := Seq[BuildInfoKey](organization, name, version, scalaVersion, sbtVersion, isSnapshot),
-      buildInfoPackage  := "zio.kafka",
-      githubOwner       := "conduktor",
-      githubRepository  := "zio-kafka",
-      githubTokenSource := TokenSource.Environment("GITHUB_TOKEN") || TokenSource.GitConfig("github.token"),
-      publishTo         := githubPublishTo.value
+      buildInfoKeys    := Seq[BuildInfoKey](organization, name, version, scalaVersion, sbtVersion, isSnapshot),
+      buildInfoPackage := "zio.kafka"
     )
     .settings(
       libraryDependencies ++= Seq(
