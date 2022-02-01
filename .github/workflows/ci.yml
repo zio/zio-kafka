@@ -1,12 +1,13 @@
 name: CI
 
 on:
-  pull_request:
   push:
-    branches: ['conduktor-master']
-  release:
-    types:
-      - published
+    branches:
+      - cdk-master
+      - main
+  pull_request:
+    types: [ opened, reopened, synchronize ]
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 jobs:
@@ -31,7 +32,7 @@ jobs:
         run: sbt docs/mdoc
 
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
