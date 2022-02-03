@@ -10,7 +10,7 @@ lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
 lazy val zioVersion           = "1.0.13"
-lazy val kafkaVersion         = "3.1.0"
+lazy val kafkaClientsVersion  = "3.1.0-cdk"
 lazy val embeddedKafkaVersion = "3.1.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion % Test
@@ -49,6 +49,7 @@ inThisBuild(
     publishTo := Some(
       s"GitHub $GITHUB_OWNER Apache Maven Packages of $GITHUB_PROJECT" at s"https://maven.pkg.github.com/$GITHUB_OWNER/$GITHUB_PROJECT"
     ),
+    resolvers += s"GitHub $GITHUB_OWNER Apache Maven Packages" at s"https://maven.pkg.github.com/$GITHUB_OWNER/_/",
     credentials += Credentials(
       "GitHub Package Registry",
       "maven.pkg.github.com",
@@ -91,7 +92,7 @@ lazy val kafka =
         "dev.zio"                   %% "zio-streams"             % zioVersion,
         "dev.zio"                   %% "zio-test"                % zioVersion % Test,
         "dev.zio"                   %% "zio-test-sbt"            % zioVersion % Test,
-        "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
+        "io.conduktor.kafka"         % "kafka-clients"           % kafkaClientsVersion,
         "com.fasterxml.jackson.core" % "jackson-databind"        % "2.12.6",
         "ch.qos.logback"             % "logback-classic"         % "1.2.10"   % Test,
         "org.scala-lang.modules"    %% "scala-collection-compat" % "2.6.0"
