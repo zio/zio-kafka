@@ -659,7 +659,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
           messagesPerPartition  <- ZIO.foreach(messagesReceived.values)(_.get)
 
         } yield assert(messagesPerPartition0)(forall(equalTo(nrMessages / nrPartitions))) &&
-          assert(messagesPerPartition)(forall(isGreaterThan(0) && isLessThan(nrMessages / nrPartitions)))
+          assert(messagesPerPartition)(forall(isGreaterThan(0) && isLessThanEqualTo(nrMessages / nrPartitions)))
       }
     ).provideSomeLayerShared[TestEnvironment](
       ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> producer) ++ Kafka.embedded)
