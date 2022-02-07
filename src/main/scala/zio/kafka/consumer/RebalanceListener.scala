@@ -10,7 +10,8 @@ import scala.jdk.CollectionConverters._
  */
 final case class RebalanceListener(
   onAssigned: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
-  onRevoked: (Set[TopicPartition], RebalanceConsumer) => Task[Unit]
+  onRevoked: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
+  onLost: (Set[TopicPartition], RebalanceConsumer) => Task[Unit]
 ) {
 
   /**
@@ -19,18 +20,33 @@ final case class RebalanceListener(
   def ++(that: RebalanceListener): RebalanceListener =
     RebalanceListener(
       (assigned, consumer) => onAssigned(assigned, consumer) *> that.onAssigned(assigned, consumer),
-      (revoked, consumer) => onRevoked(revoked, consumer) *> that.onRevoked(revoked, consumer)
+      (revoked, consumer) => onRevoked(revoked, consumer) *> that.onRevoked(revoked, consumer),
+      (lost, consumer) => onLost(lost, consumer) *> that.onLost(lost, consumer)
     )
 
-  def toKafka(runtime: Runtime[Any], consumer: RebalanceConsumer): ConsumerRebalanceListener =
+  def toKafka(
+    runtime: Runtime[Any],
+    consumer: RebalanceConsumer
+  ): ConsumerRebalanceListener =
     new ConsumerRebalanceListener {
-      override def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
+      override def onPartitionsRevoked(
+        partitions: java.util.Collection[TopicPartition]
+      ): Unit = {
         runtime.unsafeRun(onRevoked(partitions.asScala.toSet, consumer))
         ()
       }
 
-      override def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
+      override def onPartitionsAssigned(
+        partitions: java.util.Collection[TopicPartition]
+      ): Unit = {
         runtime.unsafeRun(onAssigned(partitions.asScala.toSet, consumer))
+        ()
+      }
+
+      override def onPartitionsLost(
+        partitions: java.util.Collection[TopicPartition]
+      ): Unit = {
+        runtime.unsafeRun(onLost(partitions.asScala.toSet, consumer))
         ()
       }
     }
@@ -38,5 +54,15 @@ final case class RebalanceListener(
 }
 
 object RebalanceListener {
-  val noop = RebalanceListener((_, _) => UIO.unit, (_, _) => UIO.unit)
+  def apply(
+    onAssigned: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
+    onRevoked: (Set[TopicPartition], RebalanceConsumer) => Task[Unit]
+  ): RebalanceListener =
+    RebalanceListener(onAssigned, onRevoked, onRevoked)
+
+  val noop = RebalanceListener(
+    (_, _) => UIO.unit,
+    (_, _) => UIO.unit,
+    (_, _) => UIO.unit
+  )
 }
