@@ -586,6 +586,80 @@ object ConsumerSpec extends DefaultRunnableSpec {
           _ <- check(Set(0))
           _ <- fiber0.interrupt
         } yield assertCompletes
+      },
+      testM("restartStreamsOnRebalancing mode closes all partition streams") {
+        val nrPartitions = 5
+        val nrMessages   = 100
+
+        for {
+          // Produce messages on several partitions
+          topic <- randomTopic
+          group <- randomGroup
+          _     <- Task.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreach_(1 to nrMessages) { i =>
+                 produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+               }
+
+          // Consume messages
+          messagesReceived <-
+            ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
+          drainCount <- Ref.make(0)
+          subscription = Subscription.topics(topic)
+          fib <- Consumer
+                   .subscribeAnd(subscription)
+                   .partitionedAssignmentStream(Serde.string, Serde.string)
+                   .mapM { partitions =>
+                     ZStream
+                       .fromIterable(partitions.map(_._2))
+                       .flatMapPar(Int.MaxValue)(s => s)
+                       .mapM(record => messagesReceived(record.partition).update(_ + 1).as(record))
+                       .mapM(record => record.offset.commit)
+                       .runDrain
+                   }
+                   .mapM(_ =>
+                     drainCount.updateAndGet(_ + 1).flatMap {
+                       case 2 => Consumer.stopConsumption
+                       case _ => ZIO.unit
+                     }
+                   )
+                   .runDrain
+                   .provideSomeLayer[Has[Kafka] with Blocking with Clock](
+                     consumer("client1", Some(group), restartStreamOnRebalancing = true)
+                   )
+                   .fork
+          _ <- ZIO
+                 .foreach(messagesReceived.values)(_.get)
+                 .map(_.sum)
+                 .repeat(Schedule.recurUntil((n: Int) => n == nrMessages) && Schedule.fixed(10.millis))
+          messagesReceived0 <-
+            ZIO
+              .foreach((0 until nrPartitions).toList) { i =>
+                messagesReceived(i).get.flatMap { v =>
+                  Ref.make(v).map(r => v -> r)
+                } <* messagesReceived(i).set(0)
+              }
+              .map(_.toMap)
+
+          fib2 <- Consumer
+                    .subscribeAnd(subscription)
+                    .plainStream(Serde.string, Serde.string)
+                    .take(20)
+                    .runDrain
+                    .provideSomeLayer[Has[Kafka] with Blocking with Clock](
+                      consumer("client2", Some(group))
+                    )
+                    .fork
+
+          _ <- ZIO.foreach_((nrMessages + 1) to (2 * nrMessages)) { i =>
+                 produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+               }
+          _                     <- fib2.join
+          _                     <- fib.join
+          messagesPerPartition0 <- ZIO.foreach(messagesReceived0.values)(_.get)
+          messagesPerPartition  <- ZIO.foreach(messagesReceived.values)(_.get)
+
+        } yield assert(messagesPerPartition0)(forall(equalTo(nrMessages / nrPartitions))) &&
+          assert(messagesPerPartition)(forall(isGreaterThan(0) && isLessThan(nrMessages / nrPartitions)))
       }
     ).provideSomeLayerShared[TestEnvironment](
       ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> producer) ++ Kafka.embedded)

@@ -41,6 +41,18 @@ class SubscribedConsumerFromEnvironment(
   private val underlying: RIO[Has[Consumer], Consumer]
 ) {
 
+  def partitionedAssignmentStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStream[Has[Consumer], Throwable, Chunk[
+    (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
+  ]] =
+    ZStream
+      .fromEffect(underlying)
+      .flatMap(
+        _.partitionedAssignmentStream(keyDeserializer, valueDeserializer)
+      )
+
   def partitionedStream[R, K, V](keyDeserializer: Deserializer[R, K], valueDeserializer: Deserializer[R, V]): ZStream[
     Has[Consumer],
     Throwable,
