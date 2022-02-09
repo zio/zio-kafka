@@ -91,6 +91,8 @@ object KafkaTestUtils {
         )
         .withPerPartitionChunkPrefetch(16)
         .withOffsetRetrieval(offsetRetrieval)
+//        .withPollInterval(500.millis)
+        .withPollTimeout(20.seconds)
 
       val withClientInstanceId = clientInstanceId.fold(settings)(settings.withGroupInstanceId)
       groupId.fold(withClientInstanceId)(withClientInstanceId.withGroupId)

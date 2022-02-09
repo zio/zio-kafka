@@ -64,12 +64,17 @@ lazy val kafka =
     .settings(
       resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
       libraryDependencies ++= Seq(
-        "dev.zio"                   %% "zio-streams"             % zioVersion,
-        "dev.zio"                   %% "zio-test"                % zioVersion % Test,
-        "dev.zio"                   %% "zio-test-sbt"            % zioVersion % Test,
+        "dev.zio" %% "zio-streams"       % zioVersion,
+        "dev.zio" %% "zio-test"          % zioVersion % Test,
+        "dev.zio" %% "zio-test-sbt"      % zioVersion % Test,
+        "dev.zio" %% "zio-test-sbt"      % zioVersion % Test,
+        "dev.zio" %% "zio-logging"       % "0.5.14"   % Test,
+        "dev.zio" %% "zio-logging-slf4j" % "0.5.14"   % Test,
+//        "org.slf4j"                  % "slf4j-api"               % "1.7.35",
+//        "ch.qos.logback"             % "logback-classic"         % "1.2.10",
         "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
         "com.fasterxml.jackson.core" % "jackson-databind"        % "2.12.6",
-        "ch.qos.logback"             % "logback-classic"         % "1.2.10"   % Test,
+        "ch.qos.logback"             % "logback-classic"         % "1.2.10" % Test,
         "org.scala-lang.modules"    %% "scala-collection-compat" % "2.6.0"
       ) ++ {
         if (scalaBinaryVersion.value == "3")

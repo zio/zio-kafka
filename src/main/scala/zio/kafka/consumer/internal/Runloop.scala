@@ -15,6 +15,7 @@ import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, ByteArr
 import zio.kafka.consumer.RebalanceListener
 import zio.stream._
 
+import java.time.Instant
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.Try
@@ -240,8 +241,14 @@ private[consumer] final class Runloop(
     val toResume = assignment intersect requestedPartitions
     val toPause  = assignment -- requestedPartitions
 
-    if (toResume.nonEmpty) c.resume(toResume.asJava)
-    if (toPause.nonEmpty) c.pause(toPause.asJava)
+    if (toResume.nonEmpty) {
+      println(s"Resuming ${toResume.mkString(",")}")
+      c.resume(toResume.asJava)
+    }
+    if (toPause.nonEmpty) {
+      println(s"Pausing ${toPause.mkString(",")}")
+      c.pause(toPause.asJava)
+    }
   }
 
   private def doPoll(c: ByteArrayKafkaConsumer, requestedPartitions: Set[TopicPartition]) = {
@@ -249,9 +256,15 @@ private[consumer] final class Runloop(
       if (requestedPartitions.nonEmpty) this.pollTimeout.asJava
       else 0.millis.asJava
 
+    println(s"${Instant.now()}: Executing poll with timeout ${pollTimeout.toMillis}ms")
     val records = c.poll(pollTimeout)
+    println(s"${Instant.now()}: Executing poll done")
 
-    if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
+    val result = if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
+
+    println(s"Got ${result.count()} records")
+
+    result
   }
 
   private def pauseAllPartitions(c: ByteArrayKafkaConsumer) = ZIO.effectTotal {
@@ -268,9 +281,11 @@ private[consumer] final class Runloop(
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
+            println("Begin handlePoll")
             resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
             val records = doPoll(c, requestedPartitions)
+            println("End handlePoll")
 
             // Check shutdown again after polling (which takes up to the poll timeout)
             ZIO.ifM(isShutdown)(
@@ -402,7 +417,9 @@ private[consumer] final class Runloop(
   def run: URManaged[Blocking with Clock, Fiber.Runtime[Throwable, Unit]] =
     ZStream
       .mergeAll(3, 1)(
-        ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency)),
+        ZStream(Command.Poll())
+          .tap(_ => UIO(println("Enqueueing poll command")))
+          .repeat(Schedule.spaced(pollFrequency)),
         ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
         ZStream.fromQueue(commitQueue)
       )

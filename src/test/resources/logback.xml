@@ -5,13 +5,13 @@
         </encoder>
     </appender>
 
-    <logger name="org.apache.kafka" level="ERROR" />
+    <logger name="org.apache.kafka" level="INFO" />
 
-    <logger name="kafka" level="WARN" />
+    <logger name="kafka" level="DEBUG" />
 
     <logger name="org.apache.zookeeper" level="ERROR" />
 
-    <root level="INFO">
+    <root level="DEBUG">
         <appender-ref ref="STDOUT" />
     </root>
 </configuration>

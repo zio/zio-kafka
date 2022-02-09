@@ -8,7 +8,13 @@ final case class ConsumerSettings(
   bootstrapServers: List[String],
   properties: Map[String, AnyRef],
   closeTimeout: Duration,
+  /**
+   * The interval used internally by zio-kafka at which to call KafkaConsumer#poll()
+   */
   pollInterval: Duration,
+  /**
+   * The timeout passed to KafkaConsumer#poll: the maximum time a poll call will wait for new records.
+   */
   pollTimeout: Duration,
   perPartitionChunkPrefetch: Int,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
