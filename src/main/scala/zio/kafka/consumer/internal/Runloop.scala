@@ -23,6 +23,7 @@ private[consumer] final class Runloop(
   consumer: ConsumerAccess,
   pollFrequency: Duration,
   pollTimeout: Duration,
+  pollQueue: Queue[Command.Poll],
   requestQueue: Queue[Runloop.Request],
   commitQueue: Queue[Command.Commit],
   val partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
@@ -373,10 +374,13 @@ private[consumer] final class Runloop(
    */
   private def handleShutdown(state: State, cmd: Command): RIO[Blocking, State] =
     cmd match {
-      case Command.Poll() =>
+      case Command.Poll(cont) =>
         // End all pending requests
         ZIO.foreach_(state.pendingRequests)(_.cont.fail(None)) *>
-          handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = Map.empty))
+          (handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = Map.empty)) *> cont.succeed(()))
+            .catchAll(cont.fail)
+            .as(state)
+
       case Command.Requests(reqs) =>
         ZIO.foreach_(reqs)(_.cont.fail(None)).as(state)
       case cmd @ Command.Commit(_, _) =>
@@ -385,15 +389,14 @@ private[consumer] final class Runloop(
 
   private def handleOperational(state: State, cmd: Command): RIO[Blocking, State] =
     cmd match {
-      case Command.Poll() =>
+      case Command.Poll(cont) =>
         // The consumer will throw an IllegalStateException if no call to subscribe
-        ZIO.ifM(subscribedRef.get)(handlePoll(state), UIO(state))
+        (ZIO.ifM(subscribedRef.get)(handlePoll(state), UIO(state)) *> cont.succeed(())).catchAll(cont.fail).as(state)
       case Command.Requests(reqs) =>
-        handleRequests(state, reqs).flatMap { state =>
+        handleRequests(state, reqs) <* {
           // Optimization: eagerly poll if we have pending requests instead of waiting
           // for the next scheduled poll.
-          if (state.pendingRequests.nonEmpty) handlePoll(state)
-          else UIO.succeed(state)
+          Promise.make[Throwable, Unit].map(Command.Poll).flatMap(pollQueue.offer).when(state.pendingRequests.nonEmpty)
         }
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
@@ -401,18 +404,26 @@ private[consumer] final class Runloop(
 
   def run: URManaged[Blocking with Clock, Fiber.Runtime[Throwable, Unit]] =
     ZStream
-      .mergeAll(3, 1)(
-        ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency)),
-        ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
-        ZStream.fromQueue(commitQueue)
-      )
-      .foldM(State.initial) { (state, cmd) =>
-        RIO.ifM(isShutdown)(handleShutdown(state, cmd), handleOperational(state, cmd))
-      }
+      .fromEffect(Promise.make[Throwable, Unit].map(Command.Poll))
+      .tap(pollQueue.offer)
+      .tap(_.cont.await)
+      .repeat(Schedule.spaced(pollFrequency))
+      .runDrain
       .onError(cause => partitions.offer(Take.halt(cause)))
-      .unit
-      .toManaged_
-      .fork
+      .forkManaged *>
+      ZStream
+        .mergeAll(3, 1)(
+          ZStream.fromQueue(pollQueue),
+          ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
+          ZStream.fromQueue(commitQueue)
+        )
+        .foldM(State.initial) { (state, cmd) =>
+          RIO.ifM(isShutdown)(handleShutdown(state, cmd), handleOperational(state, cmd))
+        }
+        .onError(cause => partitions.offer(Take.halt(cause)))
+        .unit
+        .toManaged_
+        .fork
 }
 
 private[consumer] object Runloop {
@@ -439,7 +450,7 @@ private[consumer] object Runloop {
   sealed abstract class Command
   object Command {
     final case class Requests(requests: Chunk[Request])                                         extends Command
-    final case class Poll()                                                                     extends Command
+    final case class Poll(cont: Promise[Throwable, Unit])                                       extends Command
     final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
   }
 
@@ -455,6 +466,7 @@ private[consumer] object Runloop {
       rebalancingRef <- Ref.make(false).toManaged_
       requestQueue   <- Queue.unbounded[Runloop.Request].toManaged(_.shutdown)
       commitQueue    <- Queue.unbounded[Command.Commit].toManaged(_.shutdown)
+      pollQueue      <- Queue.unbounded[Command.Poll].toManaged(_.shutdown)
       partitions <- Queue
                       .unbounded[
                         Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
@@ -476,6 +488,7 @@ private[consumer] object Runloop {
                   consumer,
                   pollFrequency,
                   pollTimeout,
+                  pollQueue,
                   requestQueue,
                   commitQueue,
                   partitions,
