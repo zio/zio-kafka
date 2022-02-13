@@ -396,7 +396,11 @@ private[consumer] final class Runloop(
         handleRequests(state, reqs) <* {
           // Optimization: eagerly poll if we have pending requests instead of waiting
           // for the next scheduled poll.
-          Promise.make[Throwable, Unit].map(Command.Poll).flatMap(pollQueue.offer).when(state.pendingRequests.nonEmpty)
+          Promise
+            .make[Throwable, Unit]
+            .map(Command.Poll(_))
+            .flatMap(pollQueue.offer)
+            .when(state.pendingRequests.nonEmpty)
         }
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
@@ -404,7 +408,7 @@ private[consumer] final class Runloop(
 
   def run: URManaged[Blocking with Clock, Fiber.Runtime[Throwable, Unit]] =
     ZStream
-      .fromEffect(Promise.make[Throwable, Unit].map(Command.Poll))
+      .fromEffect(Promise.make[Throwable, Unit].map(Command.Poll(_)))
       .tap(pollQueue.offer)
       .tap(_.cont.await)
       .repeat(Schedule.spaced(pollFrequency))
