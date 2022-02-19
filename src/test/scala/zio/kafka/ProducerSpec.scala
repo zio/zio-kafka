@@ -1,4 +1,4 @@
-package zio.kafka.producer
+package zio.kafka
 
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -6,6 +6,7 @@ import zio._
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
+import zio.kafka.producer.{ Producer, Transaction, TransactionalProducer }
 import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
 import zio.kafka.serde.Serde
 import zio.test.Assertion._

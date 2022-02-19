@@ -495,7 +495,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
         val partitions   = (0 until nrPartitions).toList
         val waitTimeout  = 15.seconds
 
-        case class ValidAssignmentsNotSeen(st: String) extends RuntimeException(s"Valid assignment not seen: $st")
+        final case class ValidAssignmentsNotSeen(st: String) extends RuntimeException(s"Valid assignment not seen: $st")
 
         def run(instance: Int, topic: String, allAssignments: Ref[Map[Int, List[Int]]]) = {
           val subscription = Subscription.topics(topic)

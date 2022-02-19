@@ -1,14 +1,14 @@
 lazy val scala212  = "2.12.15"
-lazy val scala213  = "2.13.6"
-lazy val scala3    = "3.1.0"
+lazy val scala213  = "2.13.8"
+lazy val scala3    = "3.1.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-lazy val zioVersion           = "2.0.0-RC1"
-lazy val kafkaVersion         = "2.8.1"
-lazy val embeddedKafkaVersion = "2.8.1" // Should be the same as kafkaVersion, except for the patch part
+lazy val zioVersion           = "2.0.0-RC2"
+lazy val kafkaVersion         = "3.1.0"
+lazy val embeddedKafkaVersion = "3.1.0" // Should be the same as kafkaVersion, except for the patch part
 
-lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion % "test"
+lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion % Test
 
 inThisBuild(
   List(
@@ -63,12 +63,12 @@ lazy val kafka =
       scalacOptions -= "-Xfatal-warnings", // TODO: fix ZLayer warning for TestEnvironment autoTrace
       libraryDependencies ++= Seq(
         "dev.zio"                   %% "zio-streams"             % zioVersion,
-        "dev.zio"                   %% "zio-test"                % zioVersion % "test",
-        "dev.zio"                   %% "zio-test-sbt"            % zioVersion % "test",
+        "dev.zio"                   %% "zio-test"                % zioVersion % Test,
+        "dev.zio"                   %% "zio-test-sbt"            % zioVersion % Test,
         "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.12.5",
-        "ch.qos.logback"             % "logback-classic"         % "1.2.6"    % "test",
-        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.5.0"
+        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.12.6",
+        "ch.qos.logback"             % "logback-classic"         % "1.2.10"   % Test,
+        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.6.0"
       ) ++ {
         if (scalaBinaryVersion.value == "3")
           Seq(
@@ -79,6 +79,17 @@ lazy val kafka =
       },
       testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
     )
+
+lazy val docs = project
+  .in(file("zio-kafka-docs"))
+  .dependsOn(kafka)
+  .settings(
+    // Version will only appear on the generated target file replacing @VERSION@
+    mdocVariables := Map(
+      "VERSION" -> version.value
+    )
+  )
+  .enablePlugins(MdocPlugin)
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")

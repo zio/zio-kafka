@@ -11,38 +11,44 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-20.04
-    strategy:
-      fail-fast: false
     steps:
       - name: Checkout current branch
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Setup Scala and Java
-        uses: olafurpg/setup-scala@v10
       - name: Cache scala dependencies
-        uses: coursier/cache-action@v5
+        uses: coursier/cache-action@v6
+      - name: Setup Java
+        uses: actions/setup-java@v2.5.0
+        with:
+          distribution: temurin
+          java-version: 17
+          check-latest: true
       - name: Lint code
         run: sbt check
+      - name: Mdocs check
+        run: sbt docs/mdoc
 
   test:
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
-        java: ['adopt@1.8', 'adopt@1.11']
-        scala: ['2.12.15', '2.13.6', '3.1.0']
+        java: [ '8', '11', '17' ]
+        scala: [ '2.12.15', '2.13.8', '3.1.1' ]
     steps:
       - name: Checkout current branch
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Setup Scala and Java
-        uses: olafurpg/setup-scala@v10
-        with:
-          java-version: ${{ matrix.java }}
       - name: Cache scala dependencies
-        uses: coursier/cache-action@v5
+        uses: coursier/cache-action@v6
+      - name: Setup Java
+        uses: actions/setup-java@v2.5.0
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          check-latest: true
       - name: Run tests
         run: sbt ++${{ matrix.scala }}! test
 
@@ -52,13 +58,17 @@ jobs:
     if: github.event_name != 'pull_request'
     steps:
       - name: Checkout current branch
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Setup Scala and Java
-        uses: olafurpg/setup-scala@v10
       - name: Cache scala dependencies
-        uses: coursier/cache-action@v5
+        uses: coursier/cache-action@v6
+      - name: Setup Java
+        uses: actions/setup-java@v2.5.0
+        with:
+          distribution: temurin
+          java-version: 17
+          check-latest: true
       - name: Release artifacts
         run: sbt ci-release
         env:

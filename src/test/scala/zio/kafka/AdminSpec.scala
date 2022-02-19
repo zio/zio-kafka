@@ -1,7 +1,8 @@
 package zio.kafka.admin
 
+import org.apache.kafka.clients.admin.RecordsToDelete
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import zio.{ Chunk, Clock, Duration, Schedule, ZIO }
+import org.apache.kafka.common.{ Node => JNode }
 import zio.kafka.KafkaTestUtils
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.admin.AdminClient.{
@@ -22,6 +23,9 @@ import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
+import zio.{ Chunk, Clock, Duration, Schedule, ZIO }
+
+import java.util.UUID
 
 object AdminSpec extends DefaultRunnableSpec {
   override def spec =
@@ -108,7 +112,7 @@ object AdminSpec extends DefaultRunnableSpec {
         KafkaTestUtils.withAdmin { client =>
           for {
             controller <- client.describeClusterController()
-          } yield assert(controller.id)(equalTo(0))
+          } yield assert(controller.map(_.id))(isSome(equalTo(0)))
         }
       },
       test("get cluster id") {
@@ -204,6 +208,24 @@ object AdminSpec extends DefaultRunnableSpec {
               equalTo(records(1))
             ) &&
             assert(recordsAfterAltering.get(2))(isNone)
+        }
+      },
+      test("create, produce, delete records from a topic") {
+        KafkaTestUtils.withAdmin { client =>
+          type Env = Kafka with Clock
+          val topicName      = UUID.randomUUID().toString
+          val topicPartition = TopicPartition(topicName, 0)
+
+          for {
+            _             <- client.createTopic(AdminClient.NewTopic(topicName, 1, 1))
+            _             <- produceOne(topicName, "key", "message").provideSomeLayer[Env](producer)
+            offsetsBefore <- client.listOffsets(Map(topicPartition -> OffsetSpec.EarliestSpec))
+            _             <- client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(1L)))
+            offsetsAfter  <- client.listOffsets(Map(topicPartition -> OffsetSpec.EarliestSpec))
+            _             <- client.deleteTopic(topicName)
+          } yield assert(offsetsBefore.get(topicPartition).map(_.offset))(isSome(equalTo(0L))) &&
+            assert(offsetsAfter.get(topicPartition).map(_.offset))(isSome(equalTo(1L)))
+
         }
       },
       test("list consumer groups") {
@@ -307,6 +329,36 @@ object AdminSpec extends DefaultRunnableSpec {
             )
           )
         }
+      },
+      test("should correctly handle no node (null) when converting JNode to Node") {
+        assert(AdminClient.Node.apply(null))(isNone)
+      },
+      test("should correctly handle noNode when converting JNode to Node") {
+        assert(AdminClient.Node.apply(JNode.noNode()))(isNone)
+      },
+      test("should correctly keep all information when converting a valid jNode to Node") {
+        val posIntGen = Gen.int(0, Int.MaxValue)
+        check(posIntGen, Gen.string1(Gen.char), posIntGen, Gen.option(Gen.string)) { (id, host, port, rack) =>
+          val jNode = new JNode(id, host, port, rack.orNull)
+          assert(AdminClient.Node.apply(jNode).map(_.asJava))(
+            equalTo(Some(jNode))
+          )
+        }
+      },
+      test("will replace invalid port by None") {
+        val posIntGen = Gen.int(0, Int.MaxValue)
+        check(posIntGen, Gen.string1(Gen.char), Gen.int, Gen.option(Gen.string)) { (id, host, port, rack) =>
+          val jNode = new JNode(id, host, port, rack.orNull)
+          assert(AdminClient.Node.apply(jNode).map(_.port.isEmpty))(
+            equalTo(Some(port < 0))
+          )
+        }
+      },
+      test("will replace empty host by None") {
+        val jNode = new JNode(0, "", 9092, null)
+        assert(AdminClient.Node.apply(jNode).map(_.host.isEmpty))(
+          equalTo(Some(true))
+        )
       }
     ).provideSomeShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
 

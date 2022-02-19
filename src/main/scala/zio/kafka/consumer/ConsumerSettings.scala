@@ -5,7 +5,7 @@ import zio._
 
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 
-case class ConsumerSettings(
+final case class ConsumerSettings(
   bootstrapServers: List[String],
   properties: Map[String, AnyRef],
   closeTimeout: Duration,

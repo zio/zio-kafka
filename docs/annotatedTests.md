@@ -47,7 +47,11 @@ trait Kafka {
 }
 
 object Kafka {
-  case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka.Service {
+  trait Service {
+    def bootstrapServers: List[String]
+    def stop(): UIO[Unit]
+  }
+  final case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka.Service {
     override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
     override def stop(): UIO[Unit]              = ZIO.succeed(embeddedK.stop(true))
   }

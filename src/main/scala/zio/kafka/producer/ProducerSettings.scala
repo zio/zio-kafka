@@ -3,7 +3,7 @@ package zio.kafka.producer
 import org.apache.kafka.clients.producer.ProducerConfig
 import zio._
 
-case class ProducerSettings(
+final case class ProducerSettings(
   bootstrapServers: List[String],
   closeTimeout: Duration,
   properties: Map[String, AnyRef]

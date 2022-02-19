@@ -16,9 +16,9 @@ trait TransactionalProducer {
 
 object TransactionalProducer {
   case object UserInitiatedAbort
-  case class TransactionLeaked(offsetBatch: OffsetBatch) extends Throwable
+  final case class TransactionLeaked(offsetBatch: OffsetBatch) extends Throwable
 
-  private case class LiveTransactionalProducer(
+  private final case class LiveTransactionalProducer(
     live: Producer.Live,
     semaphore: Semaphore
   ) extends TransactionalProducer {
