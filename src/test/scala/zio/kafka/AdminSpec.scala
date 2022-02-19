@@ -148,7 +148,7 @@ object AdminSpec extends DefaultRunnableSpec {
 
           for {
             _ <- client.createTopics(List(AdminClient.NewTopic("topic8", 3, 1)))
-            _ <- produceMany(topic, kvs).provideSome[Kafka with Clock](producer)
+            _ <- produceMany(topic, kvs).provideSome[Kafka with Clock](KafkaTestUtils.producer)
             offsets <- client.listOffsets(
                          (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
                        )
@@ -191,7 +191,7 @@ object AdminSpec extends DefaultRunnableSpec {
 
           for {
             _          <- client.createTopics(List(AdminClient.NewTopic(topic, partitionCount, 1)))
-            _          <- produceMany(topic, kvs).provideSome[Kafka with Clock](producer)
+            _          <- produceMany(topic, kvs).provideSome[Kafka with Clock](KafkaTestUtils.producer)
             records    <- consumeAndCommit(msgCount.toLong).map(toMap)
             endOffsets <- client.listOffsets((0 until partitionCount).map(i => p(i) -> OffsetSpec.LatestSpec).toMap)
             _ <- client.alterConsumerGroupOffsets(
@@ -218,7 +218,7 @@ object AdminSpec extends DefaultRunnableSpec {
 
           for {
             _             <- client.createTopic(AdminClient.NewTopic(topicName, 1, 1))
-            _             <- produceOne(topicName, "key", "message").provideSomeLayer[Env](producer)
+            _             <- produceOne(topicName, "key", "message").provideSomeLayer[Env](KafkaTestUtils.producer)
             offsetsBefore <- client.listOffsets(Map(topicPartition -> OffsetSpec.EarliestSpec))
             _             <- client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(1L)))
             offsetsAfter  <- client.listOffsets(Map(topicPartition -> OffsetSpec.EarliestSpec))
@@ -260,7 +260,7 @@ object AdminSpec extends DefaultRunnableSpec {
             msgConsume = 15
             kvs        = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
             _ <- client.createTopics(List(AdminClient.NewTopic(topic, 1, 1)))
-            _ <- produceMany(topic, kvs).provideSome[Kafka](producer)
+            _ <- produceMany(topic, kvs).provideSome[Kafka](KafkaTestUtils.producer)
             _ <- consumeAndCommit(msgConsume.toLong, topic, groupId)
             offsets <- client.listConsumerGroupOffsets(
                          groupId,
