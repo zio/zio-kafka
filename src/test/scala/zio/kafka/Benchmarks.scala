@@ -24,7 +24,7 @@ object PopulateTopic extends ZIOAppDefault {
     }.mapChunksZIO(Producer.produceChunkAsync[Any, String, String](_, Serde.string, Serde.string).map(Chunk(_)))
       .mapZIOPar(5)(_.flatMap(chunk => Console.printLine(s"Wrote chunk of ${chunk.size}")))
       .runDrain
-      .provideCustom(
+      .provideCustomLayer(
         ZLayer.fromManaged(
           Producer.make(
             ProducerSettings(List("localhost:9092"))
@@ -109,7 +109,7 @@ object ZIOKafka extends ZIOAppDefault {
               )
             }
         })
-      .provideCustom(ZLayer.fromManaged(Consumer.make(settings)))
+      .provideCustomLayer(ZLayer.fromManaged(Consumer.make(settings)))
       .exitCode
 
   }

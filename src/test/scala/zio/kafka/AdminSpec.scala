@@ -148,7 +148,7 @@ object AdminSpec extends DefaultRunnableSpec {
 
           for {
             _ <- client.createTopics(List(AdminClient.NewTopic("topic8", 3, 1)))
-            _ <- produceMany(topic, kvs).provideSome[Kafka with Clock](KafkaTestUtils.producer)
+            _ <- produceMany(topic, kvs).provideSomeLayer[Kafka with Clock](KafkaTestUtils.producer)
             offsets <- client.listOffsets(
                          (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
                        )
@@ -181,7 +181,7 @@ object AdminSpec extends DefaultRunnableSpec {
                 offsetBatch.commit.as(records)
               }
               .runCollect
-              .provideSome[Kafka with Clock](consumer("topic9", Some(consumerGroupID)))
+              .provideSomeLayer[Kafka with Clock](consumer("topic9", Some(consumerGroupID)))
 
           def toMap(records: Chunk[ConsumerRecord[String, String]]): Map[Int, List[(Long, String, String)]] =
             records.toList
@@ -191,7 +191,7 @@ object AdminSpec extends DefaultRunnableSpec {
 
           for {
             _          <- client.createTopics(List(AdminClient.NewTopic(topic, partitionCount, 1)))
-            _          <- produceMany(topic, kvs).provideSome[Kafka with Clock](KafkaTestUtils.producer)
+            _          <- produceMany(topic, kvs).provideSomeLayer[Kafka with Clock](KafkaTestUtils.producer)
             records    <- consumeAndCommit(msgCount.toLong).map(toMap)
             endOffsets <- client.listOffsets((0 until partitionCount).map(i => p(i) -> OffsetSpec.LatestSpec).toMap)
             _ <- client.alterConsumerGroupOffsets(
@@ -248,7 +248,7 @@ object AdminSpec extends DefaultRunnableSpec {
             .plainStream[Kafka with Clock, String, String](Serde.string, Serde.string)
             .take(count)
             .foreach(_.offset.commit)
-            .provideSome[Kafka with Clock](consumer(topic, Some(groupId)))
+            .provideSomeLayer[Kafka with Clock](consumer(topic, Some(groupId)))
 
         KafkaTestUtils.withAdmin { client =>
           for {
@@ -260,7 +260,7 @@ object AdminSpec extends DefaultRunnableSpec {
             msgConsume = 15
             kvs        = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
             _ <- client.createTopics(List(AdminClient.NewTopic(topic, 1, 1)))
-            _ <- produceMany(topic, kvs).provideSome[Kafka](KafkaTestUtils.producer)
+            _ <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
             _ <- consumeAndCommit(msgConsume.toLong, topic, groupId)
             offsets <- client.listConsumerGroupOffsets(
                          groupId,
@@ -360,7 +360,7 @@ object AdminSpec extends DefaultRunnableSpec {
           equalTo(Some(true))
         )
       }
-    ).provideSomeShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
+    ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
 
   private def consumeNoop(
     topicName: String,
@@ -372,7 +372,7 @@ object AdminSpec extends DefaultRunnableSpec {
     .plainStream(Serde.string, Serde.string)
     .foreach(_.offset.commit)
     // NOTE: layer error on Scala 3, reverting to provideSomeLayer fixes it... :thinking:
-    .provideSome(consumer(clientId, Some(groupId), groupInstanceId))
+    .provideSomeLayer(consumer(clientId, Some(groupId), groupInstanceId))
 
   private def getStableConsumerGroupDescription(
     groupId: String

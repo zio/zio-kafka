@@ -138,7 +138,7 @@ object KafkaTestUtils {
       fRes <- AdminClient
                 .make(settings)
                 .use(client => f(client))
-                .provideSome[Kafka](Clock.live)
+                .provideSomeLayer[Kafka](Clock.live)
     } yield fRes
 
   def randomThing(prefix: String): Task[String] =
