@@ -473,7 +473,7 @@ object Consumer {
   )(f: (K, V) => URIO[R1, Unit]): RIO[R with R1 with Clock, Unit] =
     Consumer
       .make(settings)
-      .use(_.consumeWith(subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
+      .use(_.consumeWith[R, R1, K, V](subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
 
   /**
    * Accessor method for [[Consumer.subscribe]]

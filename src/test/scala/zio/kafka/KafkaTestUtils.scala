@@ -121,7 +121,7 @@ object KafkaTestUtils {
     r: (String, String) => URIO[Any, Unit]
   ): RIO[Kafka with Clock, Unit] =
     consumerSettings(clientId, groupId, None).flatMap { settings =>
-      Consumer.consumeWith(
+      Consumer.consumeWith[Any, Any, String, String](
         settings,
         subscription,
         Deserializer.string,
