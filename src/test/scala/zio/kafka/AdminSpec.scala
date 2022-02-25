@@ -172,7 +172,7 @@ object AdminSpec extends DefaultRunnableSpec {
               .partitionedStream[Kafka with Clock, String, String](Serde.string, Serde.string)
               .flatMapPar(partitionCount)(_._2)
               .take(count)
-              .transduce(ZSink.collectAllN[CommittableRecord[String, String]](Int.MaxValue))
+              .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
               .mapConcatZIO { committableRecords =>
                 val records = committableRecords.map(_.record)
                 val offsetBatch =

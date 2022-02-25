@@ -158,7 +158,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                                          .filter(_._1 == new TopicPartition("topic1", 0))
                                          .flatMap(_._2)
                                          .take(5)
-                                         .transduce(ZSink.collectAllN[CommittableRecord[String, String]](Int.MaxValue))
+                                         .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
                                          .mapConcatZIO { committableRecords =>
                                            val records = committableRecords.map(_.record)
                                            val offsetBatch =
@@ -177,7 +177,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                                           .partitionedStream(Serde.string, Serde.string)
                                           .flatMap(_._2)
                                           .take(5)
-                                          .transduce(ZSink.collectAllN[CommittableRecord[String, String]](Int.MaxValue))
+                                          .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
                                           .mapConcatZIO { committableRecords =>
                                             val records = committableRecords.map(_.record)
                                             val offsetBatch =
@@ -415,7 +415,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                  .subscribeAnd(Subscription.topics(topic))
                  .plainStream(Serde.string, Serde.string)
                  .take(5)
-                 .transduce(ZSink.collectAllN[CommittableRecord[String, String]](Int.MaxValue))
+                 .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
                  .mapConcatZIO { committableRecords =>
                    val records = committableRecords.map(_.record)
                    val offsetBatch =
