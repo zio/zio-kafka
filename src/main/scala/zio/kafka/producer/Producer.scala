@@ -257,7 +257,7 @@ object Producer {
   def withProducerService[R, A](
     r: Producer => RIO[R, A]
   ): RIO[R with Producer, A] =
-    ZIO.environmentWithZIO[R with Producer](env => r(env.get[Producer]))
+    ZIO.serviceWithZIO[Producer](r)
 
   /**
    * Accessor method for [[Producer!.produce[R,K,V](record*]]

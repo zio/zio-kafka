@@ -13,6 +13,7 @@ at present). Relevant portions of the KafkaTestUtils will be introduced as we wo
 through the tests.
 
 # First Producer Test
+
 ```scala
 object ProducerSpec extends DefaultRunnableSpec {
   override def spec =
@@ -24,15 +25,13 @@ object ProducerSpec extends DefaultRunnableSpec {
       },
       // ...
     ).provideSomeLayerShared[TestEnvironment](
-      ((Kafka.embedded >>> producer) ++
-        (Kafka.embedded >>> transactionalProducer) ++
-        Kafka.embedded)
+      (Kafka.embedded >+> (producer ++ transactionalProducer))
         .mapError(TestFailure.fail) ++ Clock.live
     )
 }
 ```
 
-First note the `.provideSomeShared`. This gives the tests a `Kafka` service
+First note the `.provideSomeLayerShared`. This gives the tests a `Kafka` service
 added to a full `TestEnvironment` (this is needed because we want to provide both
 Live clock and the Kafka service)
 

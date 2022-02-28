@@ -359,9 +359,7 @@ object ProducerSpec extends DefaultRunnableSpec {
         assertM(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
       }
     ).provideSomeLayerShared[TestEnvironment](
-      ((Kafka.embedded >>> KafkaTestUtils.producer) ++
-        (Kafka.embedded >>> transactionalProducer) ++
-        Kafka.embedded)
+      (Kafka.embedded >+> (KafkaTestUtils.producer ++ transactionalProducer))
         .mapError(TestFailure.fail) ++ Clock.live
     )
 }
