@@ -202,7 +202,7 @@ object Consumer {
           _.map { case (tp, partition) =>
             val partitionStream =
               if (settings.perPartitionChunkPrefetch <= 0) partition
-              else partition.buffer(settings.perPartitionChunkPrefetch)
+              else partition.bufferChunks(settings.perPartitionChunkPrefetch)
 
             tp -> partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
           }
