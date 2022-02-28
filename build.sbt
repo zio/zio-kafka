@@ -60,7 +60,6 @@ lazy val kafka =
       buildInfoPackage := "zio.kafka"
     )
     .settings(
-      scalacOptions -= "-Xfatal-warnings", // TODO: fix ZLayer warning for TestEnvironment autoTrace
       libraryDependencies ++= Seq(
         "dev.zio"                   %% "zio-streams"             % zioVersion,
         "dev.zio"                   %% "zio-test"                % zioVersion % Test,
