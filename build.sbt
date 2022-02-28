@@ -61,6 +61,7 @@ lazy val kafka =
     )
     .settings(
       scalacOptions -= "-Xfatal-warnings", // TODO: fix ZLayer warning for TestEnvironment autoTrace
+      resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
       libraryDependencies ++= Seq(
         "dev.zio"                   %% "zio-streams"             % zioVersion,
         "dev.zio"                   %% "zio-test"                % zioVersion % Test,
