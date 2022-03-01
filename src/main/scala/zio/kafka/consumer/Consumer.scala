@@ -340,7 +340,8 @@ object Consumer {
                    settings.pollTimeout,
                    diagnostics,
                    settings.offsetRetrieval,
-                   settings.rebalanceListener
+                   settings.rebalanceListener,
+                   settings.restartStreamOnRebalancing
                  )
       clock    <- ZManaged.service[Clock.Service]
       blocking <- ZManaged.service[Blocking.Service]
@@ -475,10 +476,19 @@ object Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
-  )(f: (K, V) => URIO[R1, Unit]): RIO[R with R1 with Blocking with Clock, Unit] =
+  )(
+    f: (K, V) => URIO[R1, Unit]
+  ): RIO[R with R1 with Blocking with Clock, Unit] =
     Consumer
       .make(settings)
-      .use(_.consumeWith(subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
+      .use(
+        _.consumeWith(
+          subscription,
+          keyDeserializer,
+          valueDeserializer,
+          commitRetryPolicy
+        )(f)
+      )
 
   /**
    * Accessor method for [[Consumer.subscribe]]

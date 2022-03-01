@@ -1,13 +1,25 @@
 package zio.kafka.consumer
 
 import org.apache.kafka.common.TopicPartition
-import zio.{ Has, RIO, Task }
+import zio.{ Chunk, Has, RIO, Task }
 import zio.stream.{ Stream, ZStream }
 import zio.kafka.serde.Deserializer
 
 class SubscribedConsumer(
   private val underlying: Task[Consumer]
 ) {
+
+  def partitionedAssignmentStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): Stream[Throwable, Chunk[
+    (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
+  ]] =
+    ZStream
+      .fromEffect(underlying)
+      .flatMap(
+        _.partitionedAssignmentStream(keyDeserializer, valueDeserializer)
+      )
 
   def partitionedStream[R, K, V](keyDeserializer: Deserializer[R, K], valueDeserializer: Deserializer[R, V]): Stream[
     Throwable,
@@ -28,6 +40,18 @@ class SubscribedConsumer(
 class SubscribedConsumerFromEnvironment(
   private val underlying: RIO[Has[Consumer], Consumer]
 ) {
+
+  def partitionedAssignmentStream[R, K, V](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStream[Has[Consumer], Throwable, Chunk[
+    (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
+  ]] =
+    ZStream
+      .fromEffect(underlying)
+      .flatMap(
+        _.partitionedAssignmentStream(keyDeserializer, valueDeserializer)
+      )
 
   def partitionedStream[R, K, V](keyDeserializer: Deserializer[R, K], valueDeserializer: Deserializer[R, V]): ZStream[
     Has[Consumer],

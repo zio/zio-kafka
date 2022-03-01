@@ -1,6 +1,5 @@
 package zio.kafka.consumer.internal
 
-import java.util
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import zio._
@@ -8,13 +7,13 @@ import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.consumer.CommittableRecord
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, ByteArrayConsumerRecord, Command }
-import zio.kafka.consumer.RebalanceListener
 import zio.stream._
 
+import java.util
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.Try
@@ -25,13 +24,17 @@ private[consumer] final class Runloop(
   pollTimeout: Duration,
   requestQueue: Queue[Runloop.Request],
   commitQueue: Queue[Command.Commit],
+  lastRevokeResult: RefM[Option[Runloop.RevokeResult]],
+  lastRebalanceEvent: Ref[Option[Runloop.RebalanceEvent]],
   val partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
   rebalancingRef: Ref[Boolean],
   diagnostics: Diagnostics,
   shutdownRef: Ref[Boolean],
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
-  subscribedRef: Ref[Boolean]
+  subscribedRef: Ref[Boolean],
+  restartStreamsOnRebalancing: Boolean,
+  currentState: Ref[State]
 ) {
   private val isRebalancing = rebalancingRef.get
   private val isShutdown    = shutdownRef.get
@@ -68,7 +71,33 @@ private[consumer] final class Runloop(
       (revoked, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked))
     )
 
-    trackRebalancing ++ emitDiagnostics ++ userRebalanceListener
+    lazy val revokeTopics = RebalanceListener(
+      onAssigned = (assigned, _) =>
+        lastRevokeResult.update {
+          case None => ZIO.none
+          case Some(revokeResult) =>
+            lastRebalanceEvent
+              .set(Some(Runloop.RebalanceEvent(revokeResult, assigned)))
+              .as(None)
+        },
+      onRevoked = (_, _) =>
+        currentState.get.flatMap { state =>
+          endRevoked(
+            state.pendingRequests,
+            Map.empty,
+            state.assignedStreams,
+            _ => true
+          ).flatMap { result =>
+            lastRevokeResult.set(Some(result))
+          }
+        }
+    )
+
+    if (restartStreamsOnRebalancing) {
+      trackRebalancing ++ emitDiagnostics ++ revokeTopics ++ userRebalanceListener
+    } else {
+      trackRebalancing ++ emitDiagnostics ++ userRebalanceListener
+    }
   }
 
   def markSubscribed: UIO[Unit] = subscribedRef.set(true)
@@ -143,9 +172,12 @@ private[consumer] final class Runloop(
     val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
     buf ++= bufferedRecords
 
-    val (revokedStreams, assignedStreams) = currentAssignedStreams.partition(es => revoked(es._1))
+    val (revokedStreams, assignedStreams) =
+      currentAssignedStreams.partition(es => revoked(es._1))
 
-    val revokeAction: UIO[Unit] = ZIO.foreach_(revokedStreams) { case (_, p) => p.succeed(()) }
+    val revokeAction: UIO[Unit] = ZIO.foreach_(revokedStreams) { case (_, p) =>
+      p.succeed(())
+    }
 
     val reqsIt = reqs.iterator
     while (reqsIt.hasNext) {
@@ -261,6 +293,7 @@ private[consumer] final class Runloop(
 
   private def handlePoll(state: State): RIO[Blocking, State] =
     for {
+      _ <- currentState.set(state)
       pollResult <-
         consumer.withConsumerM { c =>
           Task.effectSuspend {
@@ -284,20 +317,43 @@ private[consumer] final class Runloop(
               ), {
                 val tpsInResponse   = records.partitions.asScala.toSet
                 val currentAssigned = c.assignment().asScala.toSet
-                val newlyAssigned   = currentAssigned -- prevAssigned
                 val unrequestedRecords =
-                  bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
+                  bufferRecordsForUnrequestedPartitions(
+                    records,
+                    tpsInResponse -- requestedPartitions
+                  )
 
                 for {
+                  rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
+
+                  newlyAssigned = rebalanceEvent match {
+                                    case Some(event) => event.newlyAssigned
+                                    case None        => currentAssigned -- prevAssigned
+                                  }
+
                   _ <- doSeekForNewPartitions(c, newlyAssigned)
-                  revokeResult <- endRevoked(
-                                    state.pendingRequests,
-                                    state.addBufferedRecords(unrequestedRecords).bufferedRecords,
-                                    state.assignedStreams,
-                                    !currentAssigned(_)
-                                  )
+
+                  revokeResult <-
+                    rebalanceEvent match {
+                      case Some(event) =>
+                        ZIO.succeed(event.revokeResult)
+                      case None =>
+                        endRevoked(
+                          state.pendingRequests,
+                          state
+                            .addBufferedRecords(unrequestedRecords)
+                            .bufferedRecords,
+                          state.assignedStreams,
+                          tp => !currentAssigned(tp)
+                        )
+                    }
+
                   fulfillResult <-
-                    fulfillRequests(revokeResult.unfulfilledRequests, revokeResult.bufferedRecords, records)
+                    fulfillRequests(
+                      revokeResult.unfulfilledRequests,
+                      revokeResult.bufferedRecords,
+                      records
+                    )
                   _ <- diagnostics.emitIfEnabled(
                          DiagnosticEvent.Poll(
                            requestedPartitions,
@@ -436,6 +492,11 @@ private[consumer] object Runloop {
     bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]
   )
 
+  case class RebalanceEvent(
+    revokeResult: Runloop.RevokeResult,
+    newlyAssigned: Set[TopicPartition]
+  )
+
   sealed abstract class Command
   object Command {
     final case class Requests(requests: Chunk[Request])                                         extends Command
@@ -449,15 +510,23 @@ private[consumer] object Runloop {
     pollTimeout: Duration,
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval,
-    userRebalanceListener: RebalanceListener
+    userRebalanceListener: RebalanceListener,
+    restartStreamsOnRebalancing: Boolean
   ): RManaged[Blocking with Clock, Runloop] =
     for {
-      rebalancingRef <- Ref.make(false).toManaged_
-      requestQueue   <- Queue.unbounded[Runloop.Request].toManaged(_.shutdown)
-      commitQueue    <- Queue.unbounded[Command.Commit].toManaged(_.shutdown)
+      rebalancingRef   <- Ref.make(false).toManaged_
+      requestQueue     <- Queue.unbounded[Runloop.Request].toManaged(_.shutdown)
+      commitQueue      <- Queue.unbounded[Command.Commit].toManaged(_.shutdown)
+      lastRevokeResult <- RefM.makeManaged[Option[Runloop.RevokeResult]](None)
+      lastRebalanceEvent <- Ref.makeManaged[Option[Runloop.RebalanceEvent]](
+                              None
+                            )
       partitions <- Queue
                       .unbounded[
-                        Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
+                        Take[
+                          Throwable,
+                          (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])
+                        ]
                       ]
                       .map { queue =>
                         queue
@@ -470,21 +539,26 @@ private[consumer] object Runloop {
                           )
                       }
                       .toManaged(_.shutdown)
-      shutdownRef   <- Ref.make(false).toManaged_
-      subscribedRef <- Ref.make(false).toManaged_
+      shutdownRef     <- Ref.make(false).toManaged_
+      currentStateRef <- Ref.make(State.initial).toManaged_
+      subscribedRef   <- Ref.make(false).toManaged_
       runloop = new Runloop(
                   consumer,
                   pollFrequency,
                   pollTimeout,
                   requestQueue,
                   commitQueue,
+                  lastRevokeResult,
+                  lastRebalanceEvent,
                   partitions,
                   rebalancingRef,
                   diagnostics,
                   shutdownRef,
                   offsetRetrieval,
                   userRebalanceListener,
-                  subscribedRef
+                  subscribedRef,
+                  restartStreamsOnRebalancing,
+                  currentStateRef
                 )
       _ <- runloop.run
     } yield runloop
