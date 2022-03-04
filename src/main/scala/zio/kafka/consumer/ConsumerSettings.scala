@@ -5,7 +5,7 @@ import zio._
 
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 
-final case class ConsumerSettings(
+case class ConsumerSettings(
   bootstrapServers: List[String],
   properties: Map[String, AnyRef],
   closeTimeout: Duration,
@@ -13,7 +13,8 @@ final case class ConsumerSettings(
   pollTimeout: Duration,
   perPartitionChunkPrefetch: Int,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
-  rebalanceListener: RebalanceListener = RebalanceListener.noop
+  rebalanceListener: RebalanceListener = RebalanceListener.noop,
+  restartStreamOnRebalancing: Boolean = false
 ) {
   private[this] def autoOffsetResetConfig = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
@@ -64,6 +65,9 @@ final case class ConsumerSettings(
 
   def withRebalanceListener(listener: RebalanceListener): ConsumerSettings =
     copy(rebalanceListener = listener)
+
+  def withRestartStreamOnRebalancing(value: Boolean): ConsumerSettings =
+    copy(restartStreamOnRebalancing = value)
 }
 
 object ConsumerSettings {

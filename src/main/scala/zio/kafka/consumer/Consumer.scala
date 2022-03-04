@@ -336,7 +336,8 @@ object Consumer {
                    settings.pollTimeout,
                    diagnostics,
                    settings.offsetRetrieval,
-                   settings.rebalanceListener
+                   settings.rebalanceListener,
+                   settings.restartStreamOnRebalancing
                  )
       clock <- ZManaged.service[Clock]
     } yield Live(wrapper, settings, runloop, clock)

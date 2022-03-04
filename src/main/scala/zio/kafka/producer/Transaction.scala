@@ -30,6 +30,13 @@ trait Transaction {
     offset: Option[Offset]
   ): RIO[R, Chunk[RecordMetadata]]
 
+  def produceChunkBatch[R, K, V](
+    records: Chunk[ProducerRecord[K, V]],
+    keySerializer: Serializer[R, K],
+    valueSerializer: Serializer[R, V],
+    offsets: OffsetBatch
+  ): RIO[R, Chunk[RecordMetadata]]
+
   def abort: IO[TransactionalProducer.UserInitiatedAbort.type, Nothing]
 }
 
@@ -66,6 +73,16 @@ final private[producer] class TransactionImpl(
   ): RIO[R, Chunk[RecordMetadata]] =
     haltIfClosed *>
       ZIO.whenCase(offset) { case Some(offset) => offsetBatchRef.update(_ merge offset) } *>
+      producer.produceChunk[R, K, V](records, keySerializer, valueSerializer)
+
+  def produceChunkBatch[R, K, V](
+    records: Chunk[ProducerRecord[K, V]],
+    keySerializer: Serializer[R, K],
+    valueSerializer: Serializer[R, V],
+    offsets: OffsetBatch
+  ): RIO[R, Chunk[RecordMetadata]] =
+    haltIfClosed *>
+      offsetBatchRef.update(_ merge offsets) *>
       producer.produceChunk[R, K, V](records, keySerializer, valueSerializer)
 
   def abort: IO[TransactionalProducer.UserInitiatedAbort.type, Nothing] =
