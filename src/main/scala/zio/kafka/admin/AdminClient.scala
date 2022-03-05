@@ -223,7 +223,7 @@ object AdminClient extends Accessible[AdminClient] {
      * Create a single topic.
      */
     override def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit] =
-      createTopics(List(newTopic), Some(CreateTopicsOptions(timeout = Option.empty, validateOnly = validateOnly)))
+      createTopics(List(newTopic), Some(CreateTopicsOptions(validateOnly = validateOnly, timeout = Option.empty)))
 
     /**
      * Delete multiple topics.
@@ -661,9 +661,9 @@ object AdminClient extends Accessible[AdminClient] {
   }
 
   final case class CreatePartitionsOptions(
-    timeout: Option[Duration],
     validateOnly: Boolean = false,
-    retryOnQuotaViolation: Boolean = true
+    retryOnQuotaViolation: Boolean = true,
+    timeout: Option[Duration]
   ) {
     def asJava: JCreatePartitionsOptions = {
       val opts = new JCreatePartitionsOptions()
@@ -674,28 +674,28 @@ object AdminClient extends Accessible[AdminClient] {
     }
   }
 
-  final case class CreateTopicsOptions(timeout: Option[Duration], validateOnly: Boolean) {
+  final case class CreateTopicsOptions(validateOnly: Boolean, timeout: Option[Duration]) {
     def asJava: JCreateTopicsOptions = {
       val opts = new JCreateTopicsOptions().validateOnly(validateOnly)
       timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  final case class DeleteTopicsOptions(timeout: Option[Duration], retryOnQuotaViolation: Boolean = true) {
+  final case class DeleteTopicsOptions(retryOnQuotaViolation: Boolean = true, timeout: Option[Duration]) {
     def asJava: JDeleteTopicsOptions = {
       val opts = new JDeleteTopicsOptions().retryOnQuotaViolation(retryOnQuotaViolation)
       timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  final case class ListTopicsOptions(timeout: Option[Duration], listInternal: Boolean = false) {
+  final case class ListTopicsOptions(listInternal: Boolean = false, timeout: Option[Duration]) {
     def asJava: JListTopicsOptions = {
       val opts = new JListTopicsOptions().listInternal(listInternal)
       timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  final case class DescribeTopicsOptions(timeout: Option[Duration], includeAuthorizedOperations: Boolean) {
+  final case class DescribeTopicsOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
     def asJava: JDescribeTopicsOptions = {
       val opts = new JDescribeTopicsOptions().includeAuthorizedOperations(includeAuthorizedOperations)
       timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
@@ -703,9 +703,9 @@ object AdminClient extends Accessible[AdminClient] {
   }
 
   final case class DescribeConfigsOptions(
-    timeout: Option[Duration],
     includeSynonyms: Boolean = false,
-    includeDocumentation: Boolean = false
+    includeDocumentation: Boolean = false,
+    timeout: Option[Duration]
   ) {
     def asJava: JDescribeConfigsOptions = {
       val opts = new JDescribeConfigsOptions()
@@ -716,7 +716,7 @@ object AdminClient extends Accessible[AdminClient] {
     }
   }
 
-  final case class DescribeClusterOptions(timeout: Option[Duration], includeAuthorizedOperations: Boolean) {
+  final case class DescribeClusterOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
     lazy val asJava: JDescribeClusterOptions = {
       val opts = new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
       timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
