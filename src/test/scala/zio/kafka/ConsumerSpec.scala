@@ -608,6 +608,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
           fib <- Consumer
                    .subscribeAnd(subscription)
                    .partitionedAssignmentStream(Serde.string, Serde.string)
+                   .rechunk(1)
                    .mapZIO { partitions =>
                      ZStream
                        .fromIterable(partitions.map(_._2))
