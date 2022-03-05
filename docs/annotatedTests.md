@@ -13,29 +13,38 @@ at present). Relevant portions of the KafkaTestUtils will be introduced as we wo
 through the tests.
 
 # First Producer Test
+
 ```scala
-object ProducerTest
-    extends DefaultRunnableSpec(
-      suite("consumer test suite")(
-        testM("one record") {
-          withProducerStrings { producer =>
-            for {
-              _ <- producer.produce(new ProducerRecord("topic", "boo", "baa"))
-            } yield assertCompletes
-          }
-        }
-      ).provideManagedShared(KafkaTestUtils.embeddedKafkaEnvironment)
+object ProducerSpec extends DefaultRunnableSpec {
+  override def spec =
+    suite("producer test suite")(
+      test("one record") {
+        for {
+          _ <- Producer.produce(new ProducerRecord("topic", "boo", "baa"), Serde.string, Serde.string)
+        } yield assertCompletes
+      },
+      // ...
+    ).provideSomeLayerShared[TestEnvironment](
+      (Kafka.embedded >+> (producer ++ transactionalProducer))
+        .mapError(TestFailure.fail) ++ Clock.live
     )
+}
 ```
 
-First note the .provideManagedShared. This gives the tests a Kafka.Service
-added to a full TestEnvironment (this is needed because we want to provide both
+First note the `.provideSomeLayerShared`. This gives the tests a `Kafka` service
+added to a full `TestEnvironment` (this is needed because we want to provide both
 Live clock and the Kafka service)
 
-### Kafka.Service
+### Kafka service
 
-This follows the module pattern (see main zio docs)
+This follows the module pattern (see main ZIO docs)
+
 ```scala
+trait Kafka {
+  def bootstrapServers: List[String]
+  def stop(): UIO[Unit]
+}
+
 object Kafka {
   trait Service {
     def bootstrapServers: List[String]
@@ -43,104 +52,70 @@ object Kafka {
   }
   final case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka.Service {
     override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
-    override def stop(): UIO[Unit] = ZIO.effectTotal(embeddedK.stop(true))
+    override def stop(): UIO[Unit]              = ZIO.succeed(embeddedK.stop(true))
   }
 
   case object DefaultLocal extends Kafka.Service {
     override def bootstrapServers: List[String] = List(s"localhost:9092")
-
-    override def stop(): UIO[Unit] = UIO.unit
+    override def stop(): UIO[Unit]              = UIO.unit
   }
 
-  val makeEmbedded: Managed[Nothing, Kafka] =
-    ZManaged.make(ZIO.effectTotal(new Kafka {
-      override val kafka: Service = EmbeddedKafkaService(EmbeddedKafka.start())
-    }))(_.kafka.stop())
+  val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.fromManaged {
+    implicit val embeddedKafkaConfig: EmbeddedKafkaConfig = EmbeddedKafkaConfig(
+      customBrokerProperties = Map("group.min.session.timeout.ms" -> "500", "group.initial.rebalance.delay.ms" -> "0")
+    )
+    ZManaged.acquireReleaseWith(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
+  }
 
-  val makeLocal: Managed[Nothing, Kafka] =
-    ZManaged.make(ZIO.effectTotal(new Kafka {
-      override val kafka: Service = DefaultLocal
-    }))(_.kafka.stop())
+  val local: ZLayer[Any, Nothing, Kafka] = ZLayer.succeed(DefaultLocal)
 ```
 
 In fact there are 2 provided implementations of service. The first is for the unit
 tests and makes use of [EmbeddedKafka](https://github.com/embeddedkafka/embedded-kafka)
 
 The second uses the default local port and is suitable for a stand-alone kafka
-(I used docker installation). You could create your own Kafka.Service for testing
-against remove servers (but security would need to be added).
+(I used docker installation). You could create your own `Kafka` service for testing
+against remote servers (but security would need to be added).
 
 Note the use of ZManaged to ensure the service is also stopped.
 
-### KafkaTestEnvironment
+### Kafka Test Environment
 
 ```scala
 object KafkaTestUtils {
 
- def kafkaEnvironment(kafkaE: Managed[Nothing, Kafka]): Managed[Nothing, KafkaTestEnvironment] =
-    for {
-      testEnvironment <- TestEnvironment.Value
-      kafkaS <- kafkaE
-    } yield new TestEnvironment(
-      testEnvironment.blocking,
-      testEnvironment.clock,
-      testEnvironment.console,
-      testEnvironment.live,
-      testEnvironment.random,
-      testEnvironment.sized,
-      testEnvironment.system
-    ) with Kafka {
-      val kafka = kafkaS.kafka
-    }
+  val producerSettings: ZIO[[Kafka], Nothing, ProducerSettings] =
+    ZIO.serviceWith[Kafka](_.bootstrapServers).map(ProducerSettings(_))
 
-  val embeddedKafkaEnvironment: Managed[Nothing, KafkaTestEnvironment] =
-    kafkaEnvironment(Kafka.makeEmbedded)
+  val producer: ZLayer[[Kafka], Throwable, [Producer]] =
+    (ZLayer.fromZIO(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
+      Producer.live
+
+  val transactionalProducerSettings: ZIO[[Kafka], Nothing, TransactionalProducerSettings] =
+    ZIO.serviceWith[Kafka](_.bootstrapServers).map(TransactionalProducerSettings(_, "test-transaction"))
+
+  val transactionalProducer: ZLayer[Kafka, Throwable, TransactionalProducer] =
+    (ZLayer.fromZIO(transactionalProducerSettings) ++ ZLayer.succeed(
+      Serde.string: Serializer[Any, String]
+    )) >>>
+      TransactionalProducer.live
+
+  // ...
 ```
 
-## Back to the producer
-The producer function is wrapped in a withProducerStrings:
+#### Back to the producer
 
-```scala
-  def producerSettings =
-    for {
-      servers <- ZIO.access[Kafka](_.kafka.bootstrapServers)
-    } yield ProducerSettings(
-      servers,
-      5.seconds,
-      Map.empty
-    )
-
-  def withProducer[A, K, V](
-    r: Producer[Any, K, V] => RIO[Any with Clock with Kafka with Blocking, A],
-    kSerde: Serde[Any, K],
-    vSerde: Serde[Any, V]
-  ): RIO[KafkaTestEnvironment, A] =
-    for {
-      settings <- producerSettings
-      producer = Producer.make(settings, kSerde, vSerde)
-      lcb      <- Kafka.liveClockBlocking
-      produced <- producer.use { p =>
-                   r(p).provide(lcb)
-                 }
-    } yield produced
-
-  def withProducerStrings[A](r: Producer[Any, String, String] => RIO[Any with Clock with Kafka with Blocking, A]) =
-    withProducer(r, Serde.string, Serde.string)
-```
-withProducerStrings simply wraps withProducer with the (String, String) type
-
-withProducer creates settings and a ZManaged\[Producer\]. It then creates liveClockBlocking - a
-zio environment with the Live clock (which is essential when running code that
+These `ZLayer`s are provided to the ZIO environment for the `ProducerSpec` shown
+above, along with the Live clock (which is essential when running code that
 uses scheduling or other timing features - as does much of zio-kafka)
 
-The actual producer operation function is simply wrapped in the producer.use
+With the resource management encapsulated in the layers, the actual producer
+operation function is simply used from the environment
 ```scala
-              _ <- producer.produce(new ProducerRecord("topic", "boo", "baa"))
+        for {
+          _ <- Producer.produce(new ProducerRecord("topic", "boo", "baa"), Serde.string, Serde.string)
+        } yield // ...
 ```
-producer.produce takes a ProducerRecord (defined in the java kafka client on which
-this library ios based). In this case the topic is "topic" and the key and value
-boo and baa
-
-
-
-
+`Producer.produce` takes a `ProducerRecord` (defined in the Java Kafka client on which
+this library is based). In this case the topic is "topic" and the key and value
+"boo" and "baa", corresponding to the given string de/serializers.

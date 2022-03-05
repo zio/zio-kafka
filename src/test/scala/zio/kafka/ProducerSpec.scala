@@ -1,33 +1,31 @@
-package zio.kafka.producer
+package zio.kafka
 
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
-import zio.blocking.Blocking
-import zio.clock.Clock
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
+import zio.kafka.producer.{ Producer, Transaction, TransactionalProducer }
 import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
 import zio.kafka.serde.Serde
 import zio.test.Assertion._
 import zio.test._
-import zio.test.environment.TestEnvironment
 
 object ProducerSpec extends DefaultRunnableSpec {
   def withConsumerInt(subscription: Subscription, settings: ConsumerSettings) =
     Consumer.make(settings).flatMap { c =>
-      c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.int).toQueue()
+      c.subscribe(subscription).toManaged *> c.plainStream(Serde.string, Serde.int).toQueue()
     }
 
   override def spec =
     suite("producer test suite")(
-      testM("one record") {
+      test("one record") {
         for {
           _ <- Producer.produce(new ProducerRecord("topic", "boo", "baa"), Serde.string, Serde.string)
         } yield assertCompletes
       },
-      testM("a non-empty chunk of records") {
+      test("a non-empty chunk of records") {
         import Subscription._
 
         val (topic1, key1, value1) = ("topic1", "boo", "baa")
@@ -37,7 +35,7 @@ object ProducerSpec extends DefaultRunnableSpec {
         )
         def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
           Consumer.make(settings).flatMap { c =>
-            (c.subscribe(subscription).toManaged_ *> c.plainStream(Serde.string, Serde.string).toQueue())
+            (c.subscribe(subscription).toManaged *> c.plainStream(Serde.string, Serde.string).toQueue())
           }
 
         for {
@@ -57,22 +55,22 @@ object ProducerSpec extends DefaultRunnableSpec {
                          record = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
                        } yield record
                      }
-        } yield assert(outcome.length)(equalTo(2)) &&
-          assert(record1)(isNonEmpty) &&
-          assert(record2.length)(isGreaterThan(0))
+        } yield assertTrue(outcome.length == 2) &&
+          assertTrue(record1.nonEmpty) &&
+          assertTrue(record2.length > 0)
       },
-      testM("an empty chunk of records") {
+      test("an empty chunk of records") {
         val chunks = Chunk.fromIterable(List.empty)
         for {
           outcome <- Producer.produceChunk(chunks, Serde.string, Serde.string)
-        } yield assert(outcome.length)(equalTo(0))
+        } yield assertTrue(outcome.length == 0)
       },
-      testM("export metrics") {
+      test("export metrics") {
         for {
           metrics <- Producer.metrics
-        } yield assert(metrics)(isNonEmpty)
+        } yield assertTrue(metrics.nonEmpty)
       },
-      testM("a simple transaction") {
+      test("a simple transaction") {
         import Subscription._
 
         val initialAliceAccount = new ProducerRecord("accounts0", "alice", 20)
@@ -92,9 +90,9 @@ object ProducerSpec extends DefaultRunnableSpec {
                              record = messages.filter(rec => rec.record.key == "bob")
                            } yield record
                          }
-        } yield assert(recordChunk.map(_.value).last)(equalTo(0))
+        } yield assertTrue(recordChunk.map(_.value).last == 0)
       },
-      testM("an aborted transaction should not be read") {
+      test("an aborted transaction should not be read") {
         import Subscription._
 
         val initialAliceAccount = new ProducerRecord("accounts1", "alice", 20)
@@ -123,9 +121,9 @@ object ProducerSpec extends DefaultRunnableSpec {
                              record = messages.filter(rec => rec.record.key == "bob")
                            } yield record
                          }
-        } yield assert(recordChunk.map(_.value).last)(equalTo(0))
+        } yield assertTrue(recordChunk.map(_.value).last == 0)
       },
-      testM("serialize concurrent transactions") {
+      test("serialize concurrent transactions") {
         import Subscription._
 
         val initialAliceAccount = new ProducerRecord("accounts2", "alice", 20)
@@ -150,7 +148,7 @@ object ProducerSpec extends DefaultRunnableSpec {
                          }
         } yield assert(recordChunk.map(_.value))(contains(0) && contains(20))
       },
-      testM("exception management") {
+      test("exception management") {
         val initialBobAccount = new ProducerRecord("accounts3", "bob", 0)
 
         val failingTransaction1 = TransactionalProducer.createTransaction.use { t =>
@@ -162,9 +160,9 @@ object ProducerSpec extends DefaultRunnableSpec {
           )
         }
 
-        assertM(failingTransaction1.unit.run)(dies(hasMessage(equalTo("test"))))
+        assertM(failingTransaction1.unit.exit)(dies(hasMessage(equalTo("test"))))
       },
-      testM("interleaving transaction with non-transactional consumer") {
+      test("interleaving transaction with non-transactional consumer") {
         import Subscription._
 
         val initialAliceAccount = new ProducerRecord("accounts4", "alice", 20)
@@ -190,11 +188,11 @@ object ProducerSpec extends DefaultRunnableSpec {
                                               record = messages.filter(rec => rec.record.key == "no one")
                                             } yield record
                                           }
-                         } yield assert(recordChunk)(isNonEmpty)
+                         } yield assertTrue(recordChunk.nonEmpty)
                        }
         } yield assertion
       },
-      testM("interleaving transaction with transactional consumer should not be read during transaction") {
+      test("interleaving transaction with transactional consumer should not be read during transaction") {
         import Subscription._
 
         val initialAliceAccount = new ProducerRecord("accounts5", "alice", 20)
@@ -220,11 +218,11 @@ object ProducerSpec extends DefaultRunnableSpec {
                                               record = messages.filter(rec => rec.record.key == "no one")
                                             } yield record
                                           }
-                         } yield assert(recordChunk)(isEmpty)
+                         } yield assertTrue(recordChunk.isEmpty)
                        }
         } yield assertion
       },
-      testM("interleaving transaction with transactional consumer when aborted") {
+      test("interleaving transaction with transactional consumer when aborted") {
         import Subscription._
 
         val initialAliceAccount = new ProducerRecord("accounts6", "alice", 20)
@@ -255,9 +253,9 @@ object ProducerSpec extends DefaultRunnableSpec {
                              record = messages.filter(rec => rec.record.key == "no one")
                            } yield record
                          }
-        } yield assert(recordChunk)(isNonEmpty)
+        } yield assertTrue(recordChunk.nonEmpty)
       },
-      testM("committing offsets after a successful transaction") {
+      test("committing offsets after a successful transaction") {
         import Subscription._
 
         val initialAliceAccount  = new ProducerRecord("accounts7", "alice", 20)
@@ -293,9 +291,9 @@ object ProducerSpec extends DefaultRunnableSpec {
                 }
             }
 
-        } yield assert(committedOffset.get.offset())(equalTo(1L))
+        } yield assertTrue(committedOffset.get.offset() == 1L)
       },
-      testM("not committing offsets after a failed transaction") {
+      test("not committing offsets after a failed transaction") {
         import Subscription._
 
         val initialAliceAccount  = new ProducerRecord("accounts8", "alice", 20)
@@ -336,7 +334,7 @@ object ProducerSpec extends DefaultRunnableSpec {
 
         } yield assert(committedOffset)(isNone)
       },
-      testM("fails if transaction leaks") {
+      test("fails if transaction leaks") {
         val test = for {
           transactionThief <- Ref.make(Option.empty[Transaction])
           _ <- TransactionalProducer.createTransaction.use { t =>
@@ -345,9 +343,9 @@ object ProducerSpec extends DefaultRunnableSpec {
           t <- transactionThief.get
           _ <- t.get.produce("any-topic", 0, 0, Serde.int, Serde.int, None)
         } yield ()
-        assertM(test.run)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
+        assertM(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
       },
-      testM("fails if transaction leaks in an open transaction") {
+      test("fails if transaction leaks in an open transaction") {
         val test = for {
           transactionThief <- Ref.make(Option.empty[Transaction])
           _ <- TransactionalProducer.createTransaction.use { t =>
@@ -358,12 +356,10 @@ object ProducerSpec extends DefaultRunnableSpec {
                  t.get.produce("any-topic", 0, 0, Serde.int, Serde.int, None)
                }
         } yield ()
-        assertM(test.run)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
+        assertM(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
       }
     ).provideSomeLayerShared[TestEnvironment](
-      ((Kafka.embedded ++ ZLayer.identity[Blocking] >>> producer) ++
-        (Kafka.embedded ++ ZLayer.identity[Blocking] >>> transactionalProducer) ++
-        Kafka.embedded)
+      (Kafka.embedded >+> (KafkaTestUtils.producer ++ transactionalProducer))
         .mapError(TestFailure.fail) ++ Clock.live
     )
 }

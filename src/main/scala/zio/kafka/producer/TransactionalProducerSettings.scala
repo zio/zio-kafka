@@ -1,7 +1,7 @@
 package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.ProducerConfig
-import zio.duration.{ durationInt, Duration }
+import zio._
 
 sealed abstract case class TransactionalProducerSettings private (
   producerSettings: ProducerSettings

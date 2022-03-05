@@ -22,6 +22,6 @@ object Diagnostics {
 
   object SlidingQueue {
     def make(queueSize: Int = 16): Managed[Nothing, SlidingQueue] =
-      Queue.sliding[DiagnosticEvent](queueSize).toManaged(_.shutdown).map(SlidingQueue(_))
+      Queue.sliding[DiagnosticEvent](queueSize).toManagedWith(_.shutdown).map(SlidingQueue(_))
   }
 }

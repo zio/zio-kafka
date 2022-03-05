@@ -7,11 +7,11 @@ import zio.test._
 object SerializerSpec extends DefaultRunnableSpec {
   override def spec = suite("Serializer")(
     suite("asOption")(
-      testM("serialize None values to null") {
+      test("serialize None values to null") {
         assertM(stringSerializer.asOption.serialize("topic1", new RecordHeaders, None))(isNull)
       },
-      testM("serialize Some values") {
-        checkM(Gen.anyString) { string =>
+      test("serialize Some values") {
+        check(Gen.string) { string =>
           assertM(
             stringSerializer.asOption.serialize("topic1", new RecordHeaders, Some(string)).map(new String(_, "UTF-8"))
           )(

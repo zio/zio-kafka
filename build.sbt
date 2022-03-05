@@ -1,12 +1,10 @@
-import sbt.Keys.{ fork, parallelExecution }
-
 lazy val scala212  = "2.12.15"
 lazy val scala213  = "2.13.8"
 lazy val scala3    = "3.1.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-lazy val zioVersion           = "1.0.13"
+lazy val zioVersion           = "2.0.0-RC2"
 lazy val kafkaVersion         = "3.1.0"
 lazy val embeddedKafkaVersion = "3.1.0" // Should be the same as kafkaVersion, except for the patch part
 
@@ -62,7 +60,6 @@ lazy val kafka =
       buildInfoPackage := "zio.kafka"
     )
     .settings(
-      resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
       libraryDependencies ++= Seq(
         "dev.zio"                   %% "zio-streams"             % zioVersion,
         "dev.zio"                   %% "zio-test"                % zioVersion % Test,

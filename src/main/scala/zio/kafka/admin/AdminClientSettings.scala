@@ -1,7 +1,7 @@
 package zio.kafka.admin
 
 import org.apache.kafka.clients.admin.AdminClientConfig
-import zio.duration._
+import zio._
 
 final case class AdminClientSettings(
   bootstrapServers: List[String],

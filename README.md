@@ -23,7 +23,8 @@ This library is heavily inspired and made possible by the research and implement
 
 ## Legal
 
-Copyright 2020 Itamar Ravid and the zio-kafka contributors. All rights reserved.
+Copyright 2021 Itamar Ravid and the zio-kafka contributors. All rights reserved.
+<!-- TODO: not all rights reserved, rather Apache 2... -->
 
 [Link-SonatypeReleases]: https://oss.sonatype.org/content/repositories/releases/dev/zio/zio-kafka_2.12/ "Sonatype Releases"
 [Badge-SonatypeReleases]: https://img.shields.io/nexus/r/https/oss.sonatype.org/dev.zio/zio-kafka_2.12.svg "Sonatype Releases"

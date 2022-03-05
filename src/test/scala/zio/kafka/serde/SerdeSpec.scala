@@ -8,16 +8,16 @@ import scala.reflect.ClassTag
 
 object SerdeSpec extends DefaultRunnableSpec {
   override def spec = suite("Serde")(
-    testSerde(Serde.string, Gen.anyString),
-    testSerde(Serde.int, Gen.anyInt),
-    testSerde(Serde.short, Gen.anyShort),
-    testSerde(Serde.float, Gen.anyFloat),
-    testSerde(Serde.double, Gen.anyDouble),
-    testSerde(Serde.long, Gen.anyLong),
-    testSerde(Serde.uuid, Gen.anyUUID),
-    testSerde(Serde.byteArray, Gen.listOf(Gen.anyByte).map(_.toArray)),
+    testSerde(Serde.string, Gen.string),
+    testSerde(Serde.int, Gen.int),
+    testSerde(Serde.short, Gen.short),
+    testSerde(Serde.float, Gen.float),
+    testSerde(Serde.double, Gen.double),
+    testSerde(Serde.long, Gen.long),
+    testSerde(Serde.uuid, Gen.uuid),
+    testSerde(Serde.byteArray, Gen.listOf(Gen.byte).map(_.toArray)),
     suite("asOption")(
-      testM("serialize and deserialize None values to null and visa versa") {
+      test("serialize and deserialize None values to null and visa versa") {
         val serde = Serde.string.asOption
         for {
           serialized   <- serde.serialize("topic1", new RecordHeaders, None)
@@ -28,8 +28,8 @@ object SerdeSpec extends DefaultRunnableSpec {
   )
 
   private def testSerde[R, A](serde: Serde[Any, A], gen: Gen[R, A])(implicit clsTag: ClassTag[A]) =
-    testM(s"serialize and deserialize ${clsTag.runtimeClass.getSimpleName}") {
-      checkM(gen) { value =>
+    test(s"serialize and deserialize ${clsTag.runtimeClass.getSimpleName}") {
+      check(gen) { value =>
         for {
           serialized   <- serde.serialize("topic1", new RecordHeaders, value)
           deserialized <- serde.deserialize("topic1", new RecordHeaders, serialized)

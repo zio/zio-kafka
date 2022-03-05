@@ -4,7 +4,6 @@ import org.apache.kafka.common.serialization.{ Serde => KafkaSerde }
 import org.apache.kafka.common.header.Headers
 
 import zio.{ RIO, Task }
-import zio.blocking.Blocking
 
 import scala.util.Try
 import scala.jdk.CollectionConverters._
@@ -28,7 +27,7 @@ trait Serde[-R, T] extends Deserializer[R, T] with Serializer[R, T] {
   /**
    * Creates a new Serde that executes its serialization and deserialization functions on the blocking threadpool.
    */
-  override def blocking: Serde[R with Blocking, T] =
+  override def blocking: Serde[R, T] =
     Serde(super[Deserializer].blocking)(super[Serializer].blocking)
 
   /**
