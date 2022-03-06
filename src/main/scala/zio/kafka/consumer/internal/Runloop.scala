@@ -2,6 +2,7 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
@@ -109,7 +110,8 @@ private[consumer] final class Runloop(
       _ <- p.await
     } yield ()
 
-  private def doCommit(cmds: Chunk[Command.Commit]): UIO[Unit] = {
+  // Returns remaining commits that will have to be retried later
+  private def doCommit(cmds: Chunk[Command.Commit]): UIO[Chunk[Command.Commit]] = {
     val offsets   = aggregateOffsets(cmds)
     val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(cmds)(_.cont.done(e))
     val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
@@ -126,7 +128,12 @@ private[consumer] final class Runloop(
           ZIO(c.commitAsync(offsets.asJava, callback))
         }
       }
-      .catchAll(onFailure)
+      .as(Chunk.empty)
+      .catchSome {
+        case _: RebalanceInProgressException => // We cannot prevent this from occurring during cooperative rebalancing
+          ZIO.succeed(cmds)
+      }
+      .catchAll(onFailure(_).as(Chunk.empty))
   }
 
   // Returns the highest offset to commit per partition
@@ -386,7 +393,9 @@ private[consumer] final class Runloop(
       newPendingCommits <-
         ZIO.ifZIO(isRebalancing)(
           UIO.succeed(state.pendingCommits),
-          doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).as(Chunk.empty)
+          doCommit(state.pendingCommits)
+            .when(state.pendingCommits.nonEmpty)
+            .someOrElse(Chunk.empty: Chunk[Command.Commit])
         )
     } yield State(
       pollResult.unfulfilledRequests,
@@ -414,7 +423,7 @@ private[consumer] final class Runloop(
   private def handleCommit(state: State, cmd: Command.Commit): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
       UIO.succeed(state.addCommit(cmd)),
-      doCommit(Chunk(cmd)).as(state)
+      doCommit(Chunk(cmd)).map(state.addCommits)
     )
 
   /**
@@ -567,6 +576,7 @@ private[internal] final case class State(
   assignedStreams: Map[TopicPartition, Promise[Throwable, Unit]]
 ) {
   def addCommit(c: Command.Commit)           = copy(pendingCommits = c +: pendingCommits)
+  def addCommits(c: Chunk[Command.Commit])   = copy(pendingCommits = c ++ pendingCommits)
   def addRequest(c: Runloop.Request)         = copy(pendingRequests = c +: pendingRequests)
   def addRequests(c: Chunk[Runloop.Request]) = copy(pendingRequests = c ++ pendingRequests)
   def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
