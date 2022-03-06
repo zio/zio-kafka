@@ -94,7 +94,7 @@ lazy val kafka =
         "dev.zio"                   %% "zio-test-sbt"            % zioVersion % Test,
         "io.conduktor.kafka"         % "kafka-clients"           % kafkaClientsVersion,
         "com.fasterxml.jackson.core" % "jackson-databind"        % "2.12.6",
-        "ch.qos.logback"             % "logback-classic"         % "1.2.10"   % Test,
+        "ch.qos.logback"             % "logback-classic"         % "1.2.11"   % Test,
         "org.scala-lang.modules"    %% "scala-collection-compat" % "2.6.0"
       ) ++ {
         if (scalaBinaryVersion.value == "3")
