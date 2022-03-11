@@ -147,6 +147,51 @@ val consumeProduceStream = Consumer
   .provideSomeLayer(consumerAndProducer)
 ```
 
+## Example: consuming, producing and committing offset transactionally
+
+This example does the same as the previous, except that messages are produced in a transaction. A transactional message is committed by committing the corresponding consumer offset. Consumers that use the isolation strategy "read-committed", will only read committed messages.
+
+Again messages are consumed from topic `topic_a` and produced to `topic_b`. Also here processing is done in chunks for more efficiency.
+
+```scala
+import zio.Chunk
+import zio.ZLayer
+import zio.kafka.consumer._
+import zio.kafka.producer._
+import zio.kafka.serde._
+import org.apache.kafka.clients.producer.ProducerRecord
+
+val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
+val producerSettings: TransactionalProducerSettings =
+  TransactionalProducerSettings(List("localhost:9092"), "transaction-1")
+
+val consumerAndProducer =
+  ZLayer.fromManaged(Consumer.make(consumerSettings)) ++
+    ZLayer.fromManaged(TransactionalProducer.make(producerSettings))
+
+val consumeProduceStream = Consumer
+  .subscribeAnd(Subscription.topics("my-input-topic"))
+  .plainStream(Serde.int, Serde.long)
+  .map { record =>
+    val key: Int    = record.record.key()
+    val value: Long = record.record.value()
+    val newValue: String = value.toString
+
+    val producerRecord: ProducerRecord[Int, String] = new ProducerRecord("my-output-topic", key, newValue)
+    (producerRecord, record.offset)
+  }
+  .mapChunksZIO { chunk =>
+    val records     = chunk.map(_._1)
+    val offsetBatch = OffsetBatch(chunk.map(_._2).toSeq)
+
+    TransactionalProducer.createTransaction.use { t =>
+      t.produceChunkBatch[Any, Int, String](records, Serde.int, Serde.string, offsetBatch) *>
+      offsetBatch.commit.as(Chunk(()))
+  }
+  .runDrain
+  .provideSomeLayer(consumerAndProducer)
+```
+
 ## Partition assignment and offset retrieval
 
 `zio-kafka` offers several ways to control which Kafka topics and partitions are assigned to your application.
