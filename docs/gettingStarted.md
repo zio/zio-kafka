@@ -110,7 +110,7 @@ Consumer.subscribeAnd(Subscription.topics("topic150"))
 
 ## Example: consuming, producing and committing offset
 
-This example shows how to consume messages from topic `topic_a` and produce transformed messages to `topic_b`, after which consumer offsets are committed. Processing is done in chunks using `ZStreamChunk` for more efficiency.
+This example shows how to consume messages from topic `my-input-topic` and produce transformed messages to `my-output-topic`, after which consumer offsets are committed. Processing is done in chunks using `ZStreamChunk` for more efficiency.
 
 ```scala
 import zio.ZLayer
@@ -151,7 +151,7 @@ val consumeProduceStream = Consumer
 
 This example does the same as the previous, except that messages are produced in a transaction. A transactional message is committed by committing the corresponding consumer offset. Consumers that use the isolation strategy "read-committed", will only read committed messages.
 
-Again messages are consumed from topic `topic_a` and produced to `topic_b`. Also here processing is done in chunks for more efficiency.
+Messages are consumed from topic `my-input-topic` and produced to `my-output-topic`. Also here processing is done in chunks for more efficiency.
 
 ```scala
 import zio.Chunk
