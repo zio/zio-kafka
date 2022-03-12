@@ -161,7 +161,11 @@ import zio.kafka.producer._
 import zio.kafka.serde._
 import org.apache.kafka.clients.producer.ProducerRecord
 
-val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
+val consumerSettings: ConsumerSettings =
+  ConsumerSettings(List("localhost:9092"))
+    .withGroupId("group")
+    // Prevent commit problems after a re-balance (see https://github.com/zio/zio-kafka/pull/427)
+    .withRestartStreamOnRebalancing(true)
 val producerSettings: TransactionalProducerSettings =
   TransactionalProducerSettings(List("localhost:9092"), "transaction-1")
 
