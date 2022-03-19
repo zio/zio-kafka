@@ -11,7 +11,7 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
   override def spec =
     suite("kafka future conversion")(
       test("completes successfully") {
-        withKafkaFuture.use { f =>
+        withKafkaFuture { f =>
           for {
             fiber  <- AdminClient.fromKafkaFuture(ZIO.succeed(f)).fork
             _      <- ZIO.succeed(f.complete(true))
@@ -21,7 +21,7 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
         }
       },
       test("completes with failure") {
-        withKafkaFuture.use { f =>
+        withKafkaFuture { f =>
           val t = new RuntimeException("failure")
           for {
             fiber  <- AdminClient.fromKafkaFuture(ZIO.succeed(f)).fork
@@ -32,7 +32,7 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
         }
       },
       test("future is cancelled") {
-        withKafkaFuture.use { f =>
+        withKafkaFuture { f =>
           for {
             fiber  <- AdminClient.fromKafkaFuture(ZIO.succeed(f)).fork
             _      <- ZIO.succeed(f.cancel(true))
@@ -43,7 +43,7 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
         }
       },
       test("interrupted") {
-        withKafkaFuture.use { f =>
+        withKafkaFuture { f =>
           for {
             latch  <- Promise.make[Nothing, Unit]
             fiber  <- AdminClient.fromKafkaFuture(latch.succeed(()) *> ZIO.succeed(f)).fork
@@ -56,10 +56,14 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
       } @@ flaky
     )
 
-  def withKafkaFuture =
-    ZIO.succeed(new KafkaFutureImpl[Boolean]).toManagedWith { f =>
-      ZIO.succeed {
-        f.completeExceptionally(new RuntimeException("Kafka future was not completed"))
-      }
+  def withKafkaFuture[R, E, A](f: KafkaFutureImpl[Boolean] => ZIO[R, E, A]): ZIO[R, E, A] =
+    ZIO.scoped[R] {
+      ZIO
+        .acquireRelease(ZIO.succeed(new KafkaFutureImpl[Boolean])) { f =>
+          ZIO.succeed {
+            f.completeExceptionally(new RuntimeException("Kafka future was not completed"))
+          }
+        }
+        .flatMap(f)
     }
 }

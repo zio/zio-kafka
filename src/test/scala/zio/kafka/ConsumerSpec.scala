@@ -135,7 +135,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
           _ <- ZIO.foreach(1 to nrPartitions) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = (0 to 9).map(j => s"key$i-$j" -> s"msg$i-$j"))
                }
-          offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+          offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO.attempt(tps.map(_ -> manualOffsetSeek.toLong).toMap))
           record <- Consumer
                       .subscribeAnd(Subscription.manual(topic, partition = 2))
                       .plainStream(Serde.string, Serde.string)
@@ -200,7 +200,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
           // Produce messages on several partitions
           topic <- randomTopic
           group <- randomGroup
-          _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreach(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
@@ -289,7 +289,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
           // Produce messages on several partitions
           topic <- randomTopic
           group <- randomGroup
-          _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreach(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
@@ -318,7 +318,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
           // Produce messages on several partitions
           topic <- randomTopic
           group <- randomGroup
-          _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreach(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
@@ -353,53 +353,51 @@ object ConsumerSpec extends DefaultRunnableSpec {
         val nrMessages   = 50
         val nrPartitions = 6
 
-        Diagnostics.SlidingQueue
-          .make()
-          .use { diagnostics =>
-            for {
-              // Produce messages on several partitions
-              topic <- randomTopic
-              group <- randomGroup
-              _     <- Task(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-              _ <- ZIO.foreach(1 to nrMessages) { i =>
-                     produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
-                   }
+        ZIO.scoped {
+          for {
+            diagnostics <- Diagnostics.SlidingQueue.make()
+            // Produce messages on several partitions
+            topic <- randomTopic
+            group <- randomGroup
+            _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+            _ <- ZIO.foreach(1 to nrMessages) { i =>
+                   produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+                 }
 
-              // Consume messages
-              subscription = Subscription.topics(topic)
-              consumer1 <- Consumer
-                             .subscribeAnd(subscription)
-                             .partitionedStream(Serde.string, Serde.string)
-                             .flatMapPar(nrPartitions) { case (tp, partition) =>
-                               ZStream
-                                 .fromZIO(partition.runDrain)
-                                 .as(tp)
-                             }
-                             .take(nrPartitions.toLong / 2)
-                             .runDrain
-                             .provideSomeLayer[Kafka with Clock](
-                               consumer("client1", Some(group), diagnostics = diagnostics)
-                             )
-                             .fork
-              diagnosticStream <- ZStream
-                                    .fromQueue(diagnostics.queue)
-                                    .collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
-                                    .runCollect
-                                    .fork
-              _ <- ZIO.sleep(5.seconds)
-              consumer2 <- Consumer
-                             .subscribeAnd(subscription)
-                             .partitionedStream(Serde.string, Serde.string)
-                             .take(nrPartitions.toLong / 2)
-                             .runDrain
-                             .provideSomeLayer[Kafka with Clock](consumer("client2", Some(group)))
-                             .fork
-              _ <- consumer1.join
-              _ <- consumer1.join
-              _ <- consumer2.join
-            } yield diagnosticStream.join
-          }
-          .flatten
+            // Consume messages
+            subscription = Subscription.topics(topic)
+            consumer1 <- Consumer
+                           .subscribeAnd(subscription)
+                           .partitionedStream(Serde.string, Serde.string)
+                           .flatMapPar(nrPartitions) { case (tp, partition) =>
+                             ZStream
+                               .fromZIO(partition.runDrain)
+                               .as(tp)
+                           }
+                           .take(nrPartitions.toLong / 2)
+                           .runDrain
+                           .provideSomeLayer[Kafka with Clock](
+                             consumer("client1", Some(group), diagnostics = diagnostics)
+                           )
+                           .fork
+            diagnosticStream <- ZStream
+                                  .fromQueue(diagnostics.queue)
+                                  .collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
+                                  .runCollect
+                                  .fork
+            _ <- ZIO.sleep(5.seconds)
+            consumer2 <- Consumer
+                           .subscribeAnd(subscription)
+                           .partitionedStream(Serde.string, Serde.string)
+                           .take(nrPartitions.toLong / 2)
+                           .runDrain
+                           .provideSomeLayer[Kafka with Clock](consumer("client2", Some(group)))
+                           .fork
+            _ <- consumer1.join
+            _ <- consumer1.join
+            _ <- consumer2.join
+          } yield diagnosticStream.join
+        }.flatten
           .map(diagnosticEvents => assert(diagnosticEvents.size)(isGreaterThanEqualTo(2)))
       },
       test("support manual seeking") {
@@ -426,7 +424,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
                  .runCollect
                  .provideSomeLayer[Kafka with Clock](consumer("client1", Some("group1")))
           // Start a new consumer with manual offset before the committed offset
-          offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+          offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO.attempt(tps.map(_ -> manualOffsetSeek.toLong).toMap))
           secondResults <- Consumer
                              .subscribeAnd(Subscription.topics(topic))
                              .plainStream(Serde.string, Serde.string)
@@ -447,10 +445,10 @@ object ConsumerSpec extends DefaultRunnableSpec {
 
         def consumeIt(messagesReceived: Ref[List[(String, String)]], done: Promise[Nothing, Unit]) =
           consumeWithStrings("client3", Some("group3"), subscription)({ (key, value) =>
-            (for {
+            for {
               messagesSoFar <- messagesReceived.updateAndGet(_ :+ (key -> value))
               _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
-            } yield ()).orDie
+            } yield ()
           }).fork
 
         for {
