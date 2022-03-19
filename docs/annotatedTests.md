@@ -60,12 +60,12 @@ object Kafka {
     override def stop(): UIO[Unit]              = UIO.unit
   }
 
-  val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.fromManaged {
+  val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.fromAcquireRelease {
     implicit val embeddedKafkaConfig: EmbeddedKafkaConfig = EmbeddedKafkaConfig(
       customBrokerProperties = Map("group.min.session.timeout.ms" -> "500", "group.initial.rebalance.delay.ms" -> "0")
     )
-    ZManaged.acquireReleaseWith(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
-  }
+    ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start()))
+  }(_.stop())
 
   val local: ZLayer[Any, Nothing, Kafka] = ZLayer.succeed(DefaultLocal)
 ```
@@ -77,21 +77,21 @@ The second uses the default local port and is suitable for a stand-alone kafka
 (I used docker installation). You could create your own `Kafka` service for testing
 against remote servers (but security would need to be added).
 
-Note the use of ZManaged to ensure the service is also stopped.
+Note the use of `ZLayer.fromAcquireRelease` to ensure the service is also stopped.
 
 ### Kafka Test Environment
 
 ```scala
 object KafkaTestUtils {
 
-  val producerSettings: ZIO[[Kafka], Nothing, ProducerSettings] =
+  val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(ProducerSettings(_))
 
-  val producer: ZLayer[[Kafka], Throwable, [Producer]] =
+  val producer: ZLayer[Kafka, Throwable, Producer] =
     (ZLayer.fromZIO(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
       Producer.live
 
-  val transactionalProducerSettings: ZIO[[Kafka], Nothing, TransactionalProducerSettings] =
+  val transactionalProducerSettings: ZIO[Kafka, Nothing, TransactionalProducerSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(TransactionalProducerSettings(_, "test-transaction"))
 
   val transactionalProducer: ZLayer[Kafka, Throwable, TransactionalProducer] =
