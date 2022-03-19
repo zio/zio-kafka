@@ -120,9 +120,9 @@ object ProducerSpec extends DefaultRunnableSpec {
                    t.produce(aliceGives20, Serde.string, Serde.int, None) *>
                      t.produce(bobReceives20, Serde.string, Serde.int, None) *>
                      t.abort
-                 }.catchSome { case UserInitiatedAbort =>
-                   ZIO.unit // silences the abort
                  }
+               }.catchSome { case UserInitiatedAbort =>
+                 ZIO.unit // silences the abort
                }
           settings <- transactionalConsumerSettings("testGroup1", "testClient1")
           recordChunk <- ZIO.scoped {
