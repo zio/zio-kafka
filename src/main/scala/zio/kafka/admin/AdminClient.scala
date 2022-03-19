@@ -819,7 +819,7 @@ object AdminClient extends Accessible[AdminClient] {
 
   object TopicPartitionInfo {
     def apply(jtpi: JTopicPartitionInfo): Task[TopicPartitionInfo] = {
-      val replicas = Task.foreach(
+      val replicas: ZIO[Any, RuntimeException, List[Node]] = Task.foreach(
         jtpi
           .replicas()
           .asScala
@@ -828,7 +828,7 @@ object AdminClient extends Accessible[AdminClient] {
         ZIO.getOrFailWith(new RuntimeException("NoNode node not expected among topic replicas"))(Node(jNode))
       }
 
-      val inSyncReplicas = Task.foreach(
+      val inSyncReplicas: ZIO[Any, RuntimeException, List[Node]] = Task.foreach(
         jtpi
           .isr()
           .asScala
