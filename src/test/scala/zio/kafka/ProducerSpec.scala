@@ -353,6 +353,7 @@ object ProducerSpec extends DefaultRunnableSpec {
                                                      .flatMap(_.done)
                                                      .mapError(_.getOrElse(new NoSuchElementException))
                                      } yield messages.head
+
                                      for {
                                        aliceHadMoneyCommittableMessage <- readAliceAccount
                                        _ <- ZIO.scoped {
@@ -364,9 +365,9 @@ object ProducerSpec extends DefaultRunnableSpec {
                                                   Some(aliceHadMoneyCommittableMessage.offset)
                                                 ) *>
                                                   t.abort
-                                              }.catchSome { case UserInitiatedAbort =>
-                                                ZIO.unit // silences the abort
                                               }
+                                            }.catchSome { case UserInitiatedAbort =>
+                                              ZIO.unit // silences the abort
                                             }
                                        aliceTopicPartition =
                                          new TopicPartition("accounts8", aliceHadMoneyCommittableMessage.partition)
