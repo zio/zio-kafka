@@ -5,7 +5,7 @@ import zio._
 import zio.test.Assertion._
 import zio.test._
 
-object DeserializerSpec extends DefaultRunnableSpec {
+object DeserializerSpec extends ZIOSpecDefault {
   override def spec = suite("Deserializer")(
     suite("asOption")(
       test("deserialize to None when value is null") {

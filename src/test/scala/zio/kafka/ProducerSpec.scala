@@ -12,7 +12,7 @@ import zio.kafka.serde.Serde
 import zio.test.Assertion._
 import zio.test._
 
-object ProducerSpec extends DefaultRunnableSpec {
+object ProducerSpec extends ZIOSpecDefault {
   def withConsumerInt(subscription: Subscription, settings: ConsumerSettings) =
     Consumer.make(settings).flatMap { c =>
       c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.int).toQueue()
@@ -47,7 +47,6 @@ object ProducerSpec extends DefaultRunnableSpec {
                            messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
                            record = messages
                                       .filter(rec => rec.record.key == key1 && rec.record.value == value1)
-                                      .toSeq
                          } yield record
                        }
                      }

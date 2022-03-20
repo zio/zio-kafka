@@ -7,7 +7,7 @@ import zio.test._
 import zio.test.TestAspect.flaky
 import zio.test.Assertion._
 
-object KafkaFutureSpec extends DefaultRunnableSpec {
+object KafkaFutureSpec extends ZIOSpecDefault {
   override def spec =
     suite("kafka future conversion")(
       test("completes successfully") {
@@ -56,14 +56,12 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
       } @@ flaky
     )
 
-  def withKafkaFuture[R, E, A](f: KafkaFutureImpl[Boolean] => ZIO[R, E, A]): ZIO[R, E, A] =
-    ZIO.scoped[R] {
-      ZIO
-        .acquireRelease(ZIO.succeed(new KafkaFutureImpl[Boolean])) { f =>
-          ZIO.succeed {
-            f.completeExceptionally(new RuntimeException("Kafka future was not completed"))
-          }
+  def withKafkaFuture[R, E, A](f: KafkaFutureImpl[Boolean] => ZIO[R, E, A]): ZIO[Scope with R, E, A] =
+    ZIO
+      .acquireRelease(ZIO.succeed(new KafkaFutureImpl[Boolean])) { f =>
+        ZIO.succeed {
+          f.completeExceptionally(new RuntimeException("Kafka future was not completed"))
         }
-        .flatMap(f)
-    }
+      }
+      .flatMap(f)
 }

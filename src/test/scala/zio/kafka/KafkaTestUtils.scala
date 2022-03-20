@@ -142,14 +142,14 @@ object KafkaTestUtils {
   def adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(AdminClientSettings(_))
 
-  def withAdmin[T](f: AdminClient => RIO[Clock with Kafka, T]) =
-    ZIO.scoped {
+  def withAdmin[T](f: AdminClient => RIO[Clock with Kafka, T]): ZIO[Kafka with Scope, Throwable, T] =
+    (
       for {
         settings    <- adminSettings
         adminClient <- AdminClient.make(settings)
         fRes        <- f(adminClient)
       } yield fRes
-    }.provideSomeLayer[Kafka](Clock.live)
+    ).provideSomeLayer[Kafka with Scope](Clock.live)
 
   def randomThing(prefix: String): Task[String] =
     Task.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")

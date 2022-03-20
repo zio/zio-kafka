@@ -13,8 +13,8 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
-object ConsumerSpec extends DefaultRunnableSpec {
-  override def spec: ZSpec[TestEnvironment, Throwable] =
+object ConsumerSpec extends ZIOSpecDefault {
+  override def spec: ZSpec[TestEnvironment with Scope, Throwable] =
     suite("Consumer Streaming")(
       test("export metrics") {
         for {
@@ -353,52 +353,51 @@ object ConsumerSpec extends DefaultRunnableSpec {
         val nrMessages   = 50
         val nrPartitions = 6
 
-        ZIO.scoped {
-          for {
-            diagnostics <- Diagnostics.SlidingQueue.make()
-            // Produce messages on several partitions
-            topic <- randomTopic
-            group <- randomGroup
-            _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-            _ <- ZIO.foreach(1 to nrMessages) { i =>
-                   produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
-                 }
+        for {
+          diagnostics <- Diagnostics.SlidingQueue.make()
+          // Produce messages on several partitions
+          topic <- randomTopic
+          group <- randomGroup
+          _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreach(1 to nrMessages) { i =>
+                 produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+               }
 
-            // Consume messages
-            subscription = Subscription.topics(topic)
-            consumer1 <- Consumer
-                           .subscribeAnd(subscription)
-                           .partitionedStream(Serde.string, Serde.string)
-                           .flatMapPar(nrPartitions) { case (tp, partition) =>
-                             ZStream
-                               .fromZIO(partition.runDrain)
-                               .as(tp)
-                           }
-                           .take(nrPartitions.toLong / 2)
-                           .runDrain
-                           .provideSomeLayer[Kafka with Clock](
-                             consumer("client1", Some(group), diagnostics = diagnostics)
-                           )
-                           .fork
-            diagnosticStream <- ZStream
-                                  .fromQueue(diagnostics.queue)
-                                  .collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
-                                  .runCollect
-                                  .fork
-            _ <- ZIO.sleep(5.seconds)
-            consumer2 <- Consumer
-                           .subscribeAnd(subscription)
-                           .partitionedStream(Serde.string, Serde.string)
-                           .take(nrPartitions.toLong / 2)
-                           .runDrain
-                           .provideSomeLayer[Kafka with Clock](consumer("client2", Some(group)))
-                           .fork
-            _ <- consumer1.join
-            _ <- consumer1.join
-            _ <- consumer2.join
-          } yield diagnosticStream.join
-        }.flatten
-          .map(diagnosticEvents => assert(diagnosticEvents.size)(isGreaterThanEqualTo(2)))
+          // Consume messages
+          subscription = Subscription.topics(topic)
+          consumer1 <- Consumer
+                         .subscribeAnd(subscription)
+                         .partitionedStream(Serde.string, Serde.string)
+                         .flatMapPar(nrPartitions) { case (tp, partition) =>
+                           ZStream
+                             .fromZIO(partition.runDrain)
+                             .as(tp)
+                         }
+                         .take(nrPartitions.toLong / 2)
+                         .runDrain
+                         .provideSomeLayer[Kafka with Clock](
+                           consumer("client1", Some(group), diagnostics = diagnostics)
+                         )
+                         .fork
+          diagnosticStream <- ZStream
+                                .fromQueue(diagnostics.queue)
+                                .collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
+                                .runCollect
+                                .fork
+          _ <- ZIO.sleep(5.seconds)
+          consumer2 <- Consumer
+                         .subscribeAnd(subscription)
+                         .partitionedStream(Serde.string, Serde.string)
+                         .take(nrPartitions.toLong / 2)
+                         .runDrain
+                         .provideSomeLayer[Kafka with Clock](consumer("client2", Some(group)))
+                         .fork
+          _                <- consumer1.join
+          _                <- consumer1.join
+          _                <- consumer2.join
+          _                <- diagnostics.queue.shutdown
+          diagnosticEvents <- diagnosticStream.join
+        } yield assert(diagnosticEvents.size)(isGreaterThanEqualTo(2))
       },
       test("support manual seeking") {
         val nrRecords        = 10
@@ -660,7 +659,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
         } yield assert(messagesPerPartition0)(forall(equalTo(nrMessages / nrPartitions))) &&
           assert(messagesPerPartition)(forall(isGreaterThan(0) && isLessThanEqualTo(nrMessages / nrPartitions)))
       }
-    ).provideSomeLayerShared[TestEnvironment](
+    ).provideSomeLayerShared[TestEnvironment with Scope](
       ((Kafka.embedded >>> producer) ++ Kafka.embedded)
         .mapError(TestFailure.fail) ++ Clock.live
     ) @@ timeout(180.seconds)
