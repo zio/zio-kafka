@@ -527,7 +527,7 @@ object AdminClient extends Accessible[AdminClient] {
 
     kfv.flatMap(f =>
       Task.suspendSucceedWith { (p, _) =>
-        Task.asyncInterrupt[Any, Throwable, T] { cb =>
+        Task.asyncInterrupt { cb =>
           f.toCompletionStage.whenComplete { (v: T, t: Throwable) =>
             if (f.isCancelled) cb(ZIO.fiberId.flatMap(id => Task.failCause(Cause.interrupt(id))))
             else if (t ne null) cb(unwrapCompletionException(p.fatal)(t))
@@ -987,7 +987,7 @@ object AdminClient extends Accessible[AdminClient] {
   }
 
   def make(settings: AdminClientSettings): ZIO[Scope, Throwable, AdminClient] =
-    fromManagedJavaClient[Any, Throwable](javaClientFromSettings(settings))
+    fromManagedJavaClient(javaClientFromSettings(settings))
 
   def fromJavaClient(javaClient: JAdminClient): URIO[Any, AdminClient] =
     ZIO.succeed(new LiveAdminClient(javaClient))

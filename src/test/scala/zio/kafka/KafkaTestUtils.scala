@@ -144,11 +144,11 @@ object KafkaTestUtils {
 
   def withAdmin[T](f: AdminClient => RIO[Clock with Kafka, T]) =
     ZIO.scoped {
-      (for {
+      for {
         settings    <- adminSettings
         adminClient <- AdminClient.make(settings)
         fRes        <- f(adminClient)
-      } yield fRes)
+      } yield fRes
     }.provideSomeLayer[Kafka](Clock.live)
 
   def randomThing(prefix: String): Task[String] =

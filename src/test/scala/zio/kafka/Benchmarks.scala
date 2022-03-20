@@ -25,7 +25,7 @@ object PopulateTopic extends ZIOAppDefault {
       .mapZIOPar(5)(_.flatMap(chunk => Console.printLine(s"Wrote chunk of ${chunk.size}")))
       .runDrain
       .provideCustomLayer(
-        ZLayer.scoped[Any](
+        ZLayer.scoped(
           Producer.make(
             ProducerSettings(List("localhost:9092"))
               .withProperty(ProducerConfig.ACKS_CONFIG, "1")

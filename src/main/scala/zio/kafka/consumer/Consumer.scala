@@ -319,11 +319,11 @@ object Consumer {
 
   def live: RLayer[Clock with ConsumerSettings with Diagnostics, Consumer] =
     ZLayer.scoped {
-      (for {
+      for {
         settings    <- ZIO.service[ConsumerSettings]
         diagnostics <- ZIO.service[Diagnostics]
         consumer    <- make(settings, diagnostics)
-      } yield consumer)
+      } yield consumer
     }
 
   def make(
