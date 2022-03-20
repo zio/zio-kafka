@@ -279,13 +279,13 @@ object Consumer {
 
           subscription match {
             case Subscription.Pattern(pattern) =>
-              ZIO(c.subscribe(pattern.pattern, runloop.rebalanceListener.toKafka(runtime, rc)))
+              ZIO.attempt(c.subscribe(pattern.pattern, runloop.rebalanceListener.toKafka(runtime, rc)))
             case Subscription.Topics(topics) =>
-              ZIO(c.subscribe(topics.asJava, runloop.rebalanceListener.toKafka(runtime, rc)))
+              ZIO.attempt(c.subscribe(topics.asJava, runloop.rebalanceListener.toKafka(runtime, rc)))
 
             // For manual subscriptions we have to do some manual work before starting the run loop
             case Subscription.Manual(topicPartitions) =>
-              ZIO(c.assign(topicPartitions.asJava)) *>
+              ZIO.attempt(c.assign(topicPartitions.asJava)) *>
                 ZIO.foreach(topicPartitions)(runloop.newPartitionStream).flatMap { partitionStreams =>
                   runloop.partitions.offer(
                     Take.chunk(
@@ -298,7 +298,7 @@ object Consumer {
                   settings.offsetRetrieval match {
                     case OffsetRetrieval.Manual(getOffsets) =>
                       getOffsets(topicPartitions).flatMap { offsets =>
-                        ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) }
+                        ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) }
                       }
                     case OffsetRetrieval.Auto(_) => ZIO.unit
                   }
@@ -318,16 +318,18 @@ object Consumer {
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
   def live: RLayer[Clock with ConsumerSettings with Diagnostics, Consumer] =
-    (for {
-      settings    <- ZManaged.service[ConsumerSettings]
-      diagnostics <- ZManaged.service[Diagnostics]
-      consumer    <- make(settings, diagnostics)
-    } yield consumer).toLayer
+    ZLayer.scoped {
+      for {
+        settings    <- ZIO.service[ConsumerSettings]
+        diagnostics <- ZIO.service[Diagnostics]
+        consumer    <- make(settings, diagnostics)
+      } yield consumer
+    }
 
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): RManaged[Clock, Consumer] =
+  ): ZIO[Scope with Clock, Throwable, Consumer] =
     for {
       wrapper <- ConsumerAccess.make(settings)
       runloop <- Runloop(
@@ -339,7 +341,7 @@ object Consumer {
                    settings.rebalanceListener,
                    settings.restartStreamOnRebalancing
                  )
-      clock <- ZManaged.service[Clock]
+      clock <- ZIO.service[Clock]
     } yield Live(wrapper, settings, runloop, clock)
 
   /**
@@ -472,9 +474,11 @@ object Consumer {
     valueDeserializer: Deserializer[R, V],
     commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
   )(f: (K, V) => URIO[R1, Unit]): RIO[R with R1 with Clock, Unit] =
-    Consumer
-      .make(settings)
-      .use(_.consumeWith[R, R1, K, V](subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
+    ZIO.scoped[R with R1 with Clock] {
+      Consumer
+        .make(settings)
+        .flatMap(_.consumeWith[R, R1, K, V](subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
+    }
 
   /**
    * Accessor method for [[Consumer.subscribe]]

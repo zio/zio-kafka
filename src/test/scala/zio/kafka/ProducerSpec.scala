@@ -12,10 +12,10 @@ import zio.kafka.serde.Serde
 import zio.test.Assertion._
 import zio.test._
 
-object ProducerSpec extends DefaultRunnableSpec {
+object ProducerSpec extends ZIOSpecDefault {
   def withConsumerInt(subscription: Subscription, settings: ConsumerSettings) =
     Consumer.make(settings).flatMap { c =>
-      c.subscribe(subscription).toManaged *> c.plainStream(Serde.string, Serde.int).toQueue()
+      c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.int).toQueue()
     }
 
   override def spec =
@@ -35,29 +35,32 @@ object ProducerSpec extends DefaultRunnableSpec {
         )
         def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
           Consumer.make(settings).flatMap { c =>
-            (c.subscribe(subscription).toManaged *> c.plainStream(Serde.string, Serde.string).toQueue())
+            (c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.string).toQueue())
           }
 
         for {
           outcome  <- Producer.produceChunk(chunks, Serde.string, Serde.string)
           settings <- consumerSettings("testClient", Some("testGroup"))
-          record1 <- withConsumer(Topics(Set(topic1)), settings).use { consumer =>
-                       for {
-                         messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
-                         record = messages
-                                    .filter(rec => rec.record.key == key1 && rec.record.value == value1)
-                                    .toSeq
-                       } yield record
+          record1 <- ZIO.scoped {
+                       withConsumer(Topics(Set(topic1)), settings).flatMap { consumer =>
+                         for {
+                           messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
+                           record = messages
+                                      .filter(rec => rec.record.key == key1 && rec.record.value == value1)
+                         } yield record
+                       }
                      }
-          record2 <- withConsumer(Topics(Set(topic2)), settings).use { consumer =>
-                       for {
-                         messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
-                         record = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
-                       } yield record
+          record2 <- ZIO.scoped {
+                       withConsumer(Topics(Set(topic2)), settings).flatMap { consumer =>
+                         for {
+                           messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
+                           record = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
+                         } yield record
+                       }
                      }
         } yield assertTrue(outcome.length == 2) &&
           assertTrue(record1.nonEmpty) &&
-          assertTrue(record2.length > 0)
+          assertTrue(record2.nonEmpty)
       },
       test("an empty chunk of records") {
         val chunks = Chunk.fromIterable(List.empty)
@@ -77,18 +80,22 @@ object ProducerSpec extends DefaultRunnableSpec {
         val initialBobAccount   = new ProducerRecord("accounts0", "bob", 0)
 
         for {
-          _ <- TransactionalProducer.createTransaction.use { t =>
-                 t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
-                   t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+          _ <- ZIO.scoped {
+                 TransactionalProducer.createTransaction.flatMap { t =>
+                   t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
+                     t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+                 }
                }
           settings <- transactionalConsumerSettings("testGroup0", "testClient0")
-          recordChunk <- withConsumerInt(Topics(Set("accounts0")), settings).use { consumer =>
-                           for {
-                             messages <- consumer.take
-                                           .flatMap(_.done)
-                                           .mapError(_.getOrElse(new NoSuchElementException))
-                             record = messages.filter(rec => rec.record.key == "bob")
-                           } yield record
+          recordChunk <- ZIO.scoped {
+                           withConsumerInt(Topics(Set("accounts0")), settings).flatMap { consumer =>
+                             for {
+                               messages <- consumer.take
+                                             .flatMap(_.done)
+                                             .mapError(_.getOrElse(new NoSuchElementException))
+                               record = messages.filter(rec => rec.record.key == "bob")
+                             } yield record
+                           }
                          }
         } yield assertTrue(recordChunk.map(_.value).last == 0)
       },
@@ -101,25 +108,31 @@ object ProducerSpec extends DefaultRunnableSpec {
         val bobReceives20       = new ProducerRecord("accounts1", "bob", 20)
 
         for {
-          _ <- TransactionalProducer.createTransaction.use { t =>
-                 t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
-                   t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+          _ <- ZIO.scoped {
+                 TransactionalProducer.createTransaction.flatMap { t =>
+                   t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
+                     t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+                 }
                }
-          _ <- TransactionalProducer.createTransaction.use { t =>
-                 t.produce(aliceGives20, Serde.string, Serde.int, None) *>
-                   t.produce(bobReceives20, Serde.string, Serde.int, None) *>
-                   t.abort
+          _ <- ZIO.scoped {
+                 TransactionalProducer.createTransaction.flatMap { t =>
+                   t.produce(aliceGives20, Serde.string, Serde.int, None) *>
+                     t.produce(bobReceives20, Serde.string, Serde.int, None) *>
+                     t.abort
+                 }
                }.catchSome { case UserInitiatedAbort =>
                  ZIO.unit // silences the abort
                }
           settings <- transactionalConsumerSettings("testGroup1", "testClient1")
-          recordChunk <- withConsumerInt(Topics(Set("accounts1")), settings).use { consumer =>
-                           for {
-                             messages <- consumer.take
-                                           .flatMap(_.done)
-                                           .mapError(_.getOrElse(new NoSuchElementException))
-                             record = messages.filter(rec => rec.record.key == "bob")
-                           } yield record
+          recordChunk <- ZIO.scoped {
+                           withConsumerInt(Topics(Set("accounts1")), settings).flatMap { consumer =>
+                             for {
+                               messages <- consumer.take
+                                             .flatMap(_.done)
+                                             .mapError(_.getOrElse(new NoSuchElementException))
+                               record = messages.filter(rec => rec.record.key == "bob")
+                             } yield record
+                           }
                          }
         } yield assertTrue(recordChunk.map(_.value).last == 0)
       },
@@ -129,35 +142,43 @@ object ProducerSpec extends DefaultRunnableSpec {
         val initialAliceAccount = new ProducerRecord("accounts2", "alice", 20)
         val initialBobAccount   = new ProducerRecord("accounts2", "bob", 0)
 
-        val transaction1 = TransactionalProducer.createTransaction.use { t =>
-          t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+        val transaction1 = ZIO.scoped {
+          TransactionalProducer.createTransaction.flatMap { t =>
+            t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+          }
         }
-        val transaction2 = TransactionalProducer.createTransaction.use { t =>
-          t.produce(initialBobAccount, Serde.string, Serde.int, None)
+        val transaction2 = ZIO.scoped {
+          TransactionalProducer.createTransaction.flatMap { t =>
+            t.produce(initialBobAccount, Serde.string, Serde.int, None)
+          }
         }
 
         for {
           _        <- transaction1 <&> transaction2
           settings <- transactionalConsumerSettings("testGroup2", "testClient2")
-          recordChunk <- withConsumerInt(Topics(Set("accounts2")), settings).use { consumer =>
-                           for {
-                             messages <- consumer.take
-                                           .flatMap(_.done)
-                                           .mapError(_.getOrElse(new NoSuchElementException))
-                           } yield messages
+          recordChunk <- ZIO.scoped {
+                           withConsumerInt(Topics(Set("accounts2")), settings).flatMap { consumer =>
+                             for {
+                               messages <- consumer.take
+                                             .flatMap(_.done)
+                                             .mapError(_.getOrElse(new NoSuchElementException))
+                             } yield messages
+                           }
                          }
         } yield assert(recordChunk.map(_.value))(contains(0) && contains(20))
       },
       test("exception management") {
         val initialBobAccount = new ProducerRecord("accounts3", "bob", 0)
 
-        val failingTransaction1 = TransactionalProducer.createTransaction.use { t =>
-          t.produce(
-            initialBobAccount,
-            Serde.string,
-            Serde.int.contramap((_: Int) => throw new RuntimeException("test")),
-            None
-          )
+        val failingTransaction1 = ZIO.scoped {
+          TransactionalProducer.createTransaction.flatMap { t =>
+            t.produce(
+              initialBobAccount,
+              Serde.string,
+              Serde.int.contramap((_: Int) => throw new RuntimeException("test")),
+              None
+            )
+          }
         }
 
         assertM(failingTransaction1.unit.exit)(dies(hasMessage(equalTo("test"))))
@@ -171,24 +192,28 @@ object ProducerSpec extends DefaultRunnableSpec {
         val aliceGives20        = new ProducerRecord("accounts4", "alice", 0)
 
         for {
-          _ <- TransactionalProducer.createTransaction.use { t =>
-                 t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
-                   t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+          _ <- ZIO.scoped {
+                 TransactionalProducer.createTransaction.flatMap { t =>
+                   t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
+                     t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+                 }
                }
-          assertion <- TransactionalProducer.createTransaction.use { t =>
-                         for {
-                           _        <- t.produce(aliceGives20, Serde.string, Serde.int, None)
-                           _        <- Producer.produce(nonTransactional, Serde.string, Serde.int)
-                           settings <- consumerSettings("testClient4", Some("testGroup4"))
-                           recordChunk <- withConsumerInt(Topics(Set("accounts4")), settings).use { consumer =>
-                                            for {
-                                              messages <- consumer.take
-                                                            .flatMap(_.done)
-                                                            .mapError(_.getOrElse(new NoSuchElementException))
-                                              record = messages.filter(rec => rec.record.key == "no one")
-                                            } yield record
-                                          }
-                         } yield assertTrue(recordChunk.nonEmpty)
+          assertion <- ZIO.scoped {
+                         TransactionalProducer.createTransaction.flatMap { t =>
+                           for {
+                             _        <- t.produce(aliceGives20, Serde.string, Serde.int, None)
+                             _        <- Producer.produce(nonTransactional, Serde.string, Serde.int)
+                             settings <- consumerSettings("testClient4", Some("testGroup4"))
+                             recordChunk <- withConsumerInt(Topics(Set("accounts4")), settings).flatMap { consumer =>
+                                              for {
+                                                messages <- consumer.take
+                                                              .flatMap(_.done)
+                                                              .mapError(_.getOrElse(new NoSuchElementException))
+                                                record = messages.filter(rec => rec.record.key == "no one")
+                                              } yield record
+                                            }
+                           } yield assertTrue(recordChunk.nonEmpty)
+                         }
                        }
         } yield assertion
       },
@@ -201,24 +226,28 @@ object ProducerSpec extends DefaultRunnableSpec {
         val aliceGives20        = new ProducerRecord("accounts5", "alice", 0)
 
         for {
-          _ <- TransactionalProducer.createTransaction.use { t =>
-                 t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
-                   t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+          _ <- ZIO.scoped {
+                 TransactionalProducer.createTransaction.flatMap { t =>
+                   t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
+                     t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+                 }
                }
-          assertion <- TransactionalProducer.createTransaction.use { t =>
-                         for {
-                           _        <- t.produce(aliceGives20, Serde.string, Serde.int, None)
-                           _        <- Producer.produce(nonTransactional, Serde.string, Serde.int)
-                           settings <- transactionalConsumerSettings("testGroup5", "testClient5")
-                           recordChunk <- withConsumerInt(Topics(Set("accounts5")), settings).use { consumer =>
-                                            for {
-                                              messages <- consumer.take
-                                                            .flatMap(_.done)
-                                                            .mapError(_.getOrElse(new NoSuchElementException))
-                                              record = messages.filter(rec => rec.record.key == "no one")
-                                            } yield record
-                                          }
-                         } yield assertTrue(recordChunk.isEmpty)
+          assertion <- ZIO.scoped {
+                         TransactionalProducer.createTransaction.flatMap { t =>
+                           for {
+                             _        <- t.produce(aliceGives20, Serde.string, Serde.int, None)
+                             _        <- Producer.produce(nonTransactional, Serde.string, Serde.int)
+                             settings <- transactionalConsumerSettings("testGroup5", "testClient5")
+                             recordChunk <- withConsumerInt(Topics(Set("accounts5")), settings).flatMap { consumer =>
+                                              for {
+                                                messages <- consumer.take
+                                                              .flatMap(_.done)
+                                                              .mapError(_.getOrElse(new NoSuchElementException))
+                                                record = messages.filter(rec => rec.record.key == "no one")
+                                              } yield record
+                                            }
+                           } yield assertTrue(recordChunk.isEmpty)
+                         }
                        }
         } yield assertion
       },
@@ -232,26 +261,32 @@ object ProducerSpec extends DefaultRunnableSpec {
         val bobReceives20       = new ProducerRecord("accounts6", "bob", 20)
 
         for {
-          _ <- TransactionalProducer.createTransaction.use { t =>
-                 t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
-                   t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+          _ <- ZIO.scoped {
+                 TransactionalProducer.createTransaction.flatMap { t =>
+                   t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
+                     t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+                 }
                }
-          _ <- TransactionalProducer.createTransaction.use { t =>
-                 t.produce(aliceGives20, Serde.string, Serde.int, None) *>
-                   Producer.produce(nonTransactional, Serde.string, Serde.int) *>
-                   t.produce(bobReceives20, Serde.string, Serde.int, None) *>
-                   t.abort
-               }.catchSome { case UserInitiatedAbort =>
-                 ZIO.unit // silences the abort
+          _ <- ZIO.scoped {
+                 TransactionalProducer.createTransaction.flatMap { t =>
+                   t.produce(aliceGives20, Serde.string, Serde.int, None) *>
+                     Producer.produce(nonTransactional, Serde.string, Serde.int) *>
+                     t.produce(bobReceives20, Serde.string, Serde.int, None) *>
+                     t.abort
+                 }.catchSome { case UserInitiatedAbort =>
+                   ZIO.unit // silences the abort
+                 }
                }
           settings <- transactionalConsumerSettings("testGroup6", "testClient6")
-          recordChunk <- withConsumerInt(Topics(Set("accounts6")), settings).use { consumer =>
-                           for {
-                             messages <- consumer.take
-                                           .flatMap(_.done)
-                                           .mapError(_.getOrElse(new NoSuchElementException))
-                             record = messages.filter(rec => rec.record.key == "no one")
-                           } yield record
+          recordChunk <- ZIO.scoped {
+                           withConsumerInt(Topics(Set("accounts6")), settings).flatMap { consumer =>
+                             for {
+                               messages <- consumer.take
+                                             .flatMap(_.done)
+                                             .mapError(_.getOrElse(new NoSuchElementException))
+                               record = messages.filter(rec => rec.record.key == "no one")
+                             } yield record
+                           }
                          }
         } yield assertTrue(recordChunk.nonEmpty)
       },
@@ -265,30 +300,34 @@ object ProducerSpec extends DefaultRunnableSpec {
           _        <- Producer.produce(initialAliceAccount, Serde.string, Serde.int)
           settings <- transactionalConsumerSettings("testGroup7", "testClient7")
           committedOffset <-
-            Consumer.make(settings).use { c =>
-              c.subscribe(Topics(Set("accounts7"))) *> c
-                .plainStream(Serde.string, Serde.int)
-                .toQueue()
-                .use { q =>
-                  val readAliceAccount = for {
-                    messages <- q.take
-                                  .flatMap(_.done)
-                                  .mapError(_.getOrElse(new NoSuchElementException))
-                  } yield messages.head
-                  for {
-                    aliceHadMoneyCommittableMessage <- readAliceAccount
-                    _ <- TransactionalProducer.createTransaction.use { t =>
-                           t.produce(
-                             AliceAccountFeesPaid,
-                             Serde.string,
-                             Serde.int,
-                             Some(aliceHadMoneyCommittableMessage.offset)
-                           )
-                         }
-                    aliceTopicPartition = new TopicPartition("accounts7", aliceHadMoneyCommittableMessage.partition)
-                    committed <- c.committed(Set(aliceTopicPartition))
-                  } yield committed(aliceTopicPartition)
-                }
+            ZIO.scoped {
+              Consumer.make(settings).flatMap { c =>
+                c.subscribe(Topics(Set("accounts7"))) *> c
+                  .plainStream(Serde.string, Serde.int)
+                  .toQueue()
+                  .flatMap { q =>
+                    val readAliceAccount = for {
+                      messages <- q.take
+                                    .flatMap(_.done)
+                                    .mapError(_.getOrElse(new NoSuchElementException))
+                    } yield messages.head
+                    for {
+                      aliceHadMoneyCommittableMessage <- readAliceAccount
+                      _ <- ZIO.scoped {
+                             TransactionalProducer.createTransaction.flatMap { t =>
+                               t.produce(
+                                 AliceAccountFeesPaid,
+                                 Serde.string,
+                                 Serde.int,
+                                 Some(aliceHadMoneyCommittableMessage.offset)
+                               )
+                             }
+                           }
+                      aliceTopicPartition = new TopicPartition("accounts7", aliceHadMoneyCommittableMessage.partition)
+                      committed <- c.committed(Set(aliceTopicPartition))
+                    } yield committed(aliceTopicPartition)
+                  }
+              }
             }
 
         } yield assertTrue(committedOffset.get.offset() == 1L)
@@ -302,34 +341,39 @@ object ProducerSpec extends DefaultRunnableSpec {
         for {
           _        <- Producer.produce(initialAliceAccount, Serde.string, Serde.int)
           settings <- transactionalConsumerSettings("testGroup8", "testClient8")
-          committedOffset <- Consumer.make(settings).use { c =>
-                               c.subscribe(Topics(Set("accounts8"))) *> c
-                                 .plainStream(Serde.string, Serde.int)
-                                 .toQueue()
-                                 .use { q =>
-                                   val readAliceAccount = for {
-                                     messages <- q.take
-                                                   .flatMap(_.done)
-                                                   .mapError(_.getOrElse(new NoSuchElementException))
-                                   } yield messages.head
-                                   for {
-                                     aliceHadMoneyCommittableMessage <- readAliceAccount
-                                     _ <- TransactionalProducer.createTransaction.use { t =>
-                                            t.produce(
-                                              AliceAccountFeesPaid,
-                                              Serde.string,
-                                              Serde.int,
-                                              Some(aliceHadMoneyCommittableMessage.offset)
-                                            ) *>
-                                              t.abort
-                                          }.catchSome { case UserInitiatedAbort =>
-                                            ZIO.unit // silences the abort
-                                          }
-                                     aliceTopicPartition =
-                                       new TopicPartition("accounts8", aliceHadMoneyCommittableMessage.partition)
-                                     committed <- c.committed(Set(aliceTopicPartition))
-                                   } yield committed(aliceTopicPartition)
-                                 }
+          committedOffset <- ZIO.scoped {
+                               Consumer.make(settings).flatMap { c =>
+                                 c.subscribe(Topics(Set("accounts8"))) *> c
+                                   .plainStream(Serde.string, Serde.int)
+                                   .toQueue()
+                                   .flatMap { q =>
+                                     val readAliceAccount = for {
+                                       messages <- q.take
+                                                     .flatMap(_.done)
+                                                     .mapError(_.getOrElse(new NoSuchElementException))
+                                     } yield messages.head
+
+                                     for {
+                                       aliceHadMoneyCommittableMessage <- readAliceAccount
+                                       _ <- ZIO.scoped {
+                                              TransactionalProducer.createTransaction.flatMap { t =>
+                                                t.produce(
+                                                  AliceAccountFeesPaid,
+                                                  Serde.string,
+                                                  Serde.int,
+                                                  Some(aliceHadMoneyCommittableMessage.offset)
+                                                ) *>
+                                                  t.abort
+                                              }
+                                            }.catchSome { case UserInitiatedAbort =>
+                                              ZIO.unit // silences the abort
+                                            }
+                                       aliceTopicPartition =
+                                         new TopicPartition("accounts8", aliceHadMoneyCommittableMessage.partition)
+                                       committed <- c.committed(Set(aliceTopicPartition))
+                                     } yield committed(aliceTopicPartition)
+                                   }
+                               }
                              }
 
         } yield assert(committedOffset)(isNone)
@@ -337,8 +381,10 @@ object ProducerSpec extends DefaultRunnableSpec {
       test("fails if transaction leaks") {
         val test = for {
           transactionThief <- Ref.make(Option.empty[Transaction])
-          _ <- TransactionalProducer.createTransaction.use { t =>
-                 transactionThief.set(Some(t))
+          _ <- ZIO.scoped {
+                 TransactionalProducer.createTransaction.flatMap { t =>
+                   transactionThief.set(Some(t))
+                 }
                }
           t <- transactionThief.get
           _ <- t.get.produce("any-topic", 0, 0, Serde.int, Serde.int, None)
@@ -348,12 +394,16 @@ object ProducerSpec extends DefaultRunnableSpec {
       test("fails if transaction leaks in an open transaction") {
         val test = for {
           transactionThief <- Ref.make(Option.empty[Transaction])
-          _ <- TransactionalProducer.createTransaction.use { t =>
-                 transactionThief.set(Some(t))
+          _ <- ZIO.scoped {
+                 TransactionalProducer.createTransaction.flatMap { t =>
+                   transactionThief.set(Some(t))
+                 }
                }
           t <- transactionThief.get
-          _ <- TransactionalProducer.createTransaction.use { _ =>
-                 t.get.produce("any-topic", 0, 0, Serde.int, Serde.int, None)
+          _ <- ZIO.scoped {
+                 TransactionalProducer.createTransaction.flatMap { _ =>
+                   t.get.produce("any-topic", 0, 0, Serde.int, Serde.int, None)
+                 }
                }
         } yield ()
         assertM(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
