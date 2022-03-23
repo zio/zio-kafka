@@ -95,7 +95,7 @@ lazy val kafka =
         "io.conduktor.kafka"         % "kafka-clients"           % kafkaClientsVersion,
         "com.fasterxml.jackson.core" % "jackson-databind"        % "2.12.6",
         "ch.qos.logback"             % "logback-classic"         % "1.2.11"   % Test,
-        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.6.0"
+        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.7.0"
       ) ++ {
         if (scalaBinaryVersion.value == "3")
           Seq(
