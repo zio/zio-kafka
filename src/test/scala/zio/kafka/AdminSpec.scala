@@ -23,11 +23,11 @@ import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio.{ Chunk, Clock, Duration, Schedule, ZIO }
+import zio.{ Chunk, Clock, Duration, Schedule, Scope, ZIO }
 
 import java.util.UUID
 
-object AdminSpec extends DefaultRunnableSpec {
+object AdminSpec extends ZIOSpecDefault {
   override def spec =
     suite("client admin test")(
       test("create, list, delete single topic") {
@@ -360,7 +360,9 @@ object AdminSpec extends DefaultRunnableSpec {
           equalTo(Some(true))
         )
       }
-    ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
+    ).provideSomeLayerShared[TestEnvironment with Scope](
+      Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live
+    ) @@ sequential
 
   private def consumeNoop(
     topicName: String,

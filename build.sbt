@@ -4,7 +4,7 @@ lazy val scala3    = "3.1.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-lazy val zioVersion           = "2.0.0-RC2"
+lazy val zioVersion           = "2.0.0-RC3"
 lazy val kafkaVersion         = "3.1.0"
 lazy val embeddedKafkaVersion = "3.1.0" // Should be the same as kafkaVersion, except for the patch part
 
@@ -38,6 +38,8 @@ inThisBuild(
   )
 )
 
+val excludeInferAny = { options: Seq[String] => options.filterNot(Set("-Xlint:infer-any")) }
+
 lazy val kafka =
   project
     .in(file("."))
@@ -49,6 +51,7 @@ lazy val kafka =
         if (scalaBinaryVersion.value == "2.13") Seq("-Wconf:cat=unused-nowarn:s")
         else Seq()
       },
+      Compile / scalacOptions ~= excludeInferAny,
       // workaround for bad constant pool issue
       (Compile / doc) := Def.taskDyn {
         val default = (Compile / doc).taskValue
@@ -67,7 +70,7 @@ lazy val kafka =
         "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
         "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.2",
         "ch.qos.logback"             % "logback-classic"         % "1.2.11"   % Test,
-        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.6.0"
+        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.7.0"
       ) ++ {
         if (scalaBinaryVersion.value == "3")
           Seq(

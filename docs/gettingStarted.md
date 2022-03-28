@@ -52,10 +52,10 @@ import zio.Clock, zio.ZLayer, zio.ZManaged
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 
 val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
-val consumerManaged: ZManaged[Clock, Throwable, Consumer] =
+val consumerManaged: ZIO[Scope with Clock, Throwable, Consumer] =
   Consumer.make(consumerSettings)
 val consumer: ZLayer[Clock, Throwable, Consumer] =
-  ZLayer.fromManaged(consumerManaged)
+  ZLayer.scoped(consumerManaged)
 ```
 
 The consumer returned from `Consumer.make` is wrapped in a `ZLayer`
@@ -123,8 +123,8 @@ val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")
 val producerSettings: ProducerSettings = ProducerSettings(List("localhost:9092"))
 
 val consumerAndProducer = 
-  ZLayer.fromManaged(Consumer.make(consumerSettings)) ++
-    ZLayer.fromManaged(Producer.make(producerSettings, Serde.int, Serde.string))
+  ZLayer.scoped(Consumer.make(consumerSettings)) ++
+    ZLayer.scoped(Producer.make(producerSettings, Serde.int, Serde.string))
 
 val consumeProduceStream = Consumer
   .subscribeAnd(Subscription.topics("my-input-topic"))
@@ -239,7 +239,7 @@ import zio.kafka.consumer._
 import zio.kafka.serde._
 import scala.util.{Try, Success, Failure}
 
-val consumer = Consumer.make(consumerSettings).toLayer
+val consumer = ZLayer.scoped(Consumer.make(consumerSettings))
 
 val stream = Consumer
   .subscribeAnd(Subscription.topics("topic150"))
