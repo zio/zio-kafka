@@ -409,7 +409,7 @@ private[consumer] final class Runloop(
       }
       .onError(cause => partitions.offer(Take.failCause(cause)))
       .unit
-      .fork
+      .forkScoped
 }
 
 private[consumer] object Runloop {
