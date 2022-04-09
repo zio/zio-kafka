@@ -14,6 +14,8 @@ import zio.test.TestAspect.withLiveClock
 import zio.test._
 
 object ProducerSpec extends ZIOSpecWithKafka {
+  override val kafkaPrefix: String = "producerspec"
+
   def withConsumerInt(subscription: Subscription, settings: ConsumerSettings) =
     Consumer.make(settings).flatMap { c =>
       c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.int).toQueue()
@@ -23,14 +25,14 @@ object ProducerSpec extends ZIOSpecWithKafka {
     suite("producer test suite")(
       test("one record") {
         for {
-          _ <- Producer.produce(new ProducerRecord("topic", "boo", "baa"), Serde.string, Serde.string)
+          _ <- Producer.produce(new ProducerRecord("topic99", "boo", "baa"), Serde.string, Serde.string)
         } yield assertCompletes
       },
       test("a non-empty chunk of records") {
         import Subscription._
 
-        val (topic1, key1, value1) = ("topic1", "boo", "baa")
-        val (topic2, key2, value2) = ("topic2", "baa", "boo")
+        val (topic1, key1, value1) = ("topic991", "boo", "baa")
+        val (topic2, key2, value2) = ("topic992", "baa", "boo")
         val chunks = Chunk.fromIterable(
           List(new ProducerRecord(topic1, key1, value1), new ProducerRecord(topic2, key2, value2))
         )

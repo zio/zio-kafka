@@ -11,8 +11,6 @@ import zio.kafka.embedded.Kafka
 import zio.kafka.producer._
 import zio.kafka.serde.{ Deserializer, Serde, Serializer }
 
-import java.util.UUID
-
 object KafkaTestUtils {
 
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
@@ -140,12 +138,4 @@ object KafkaTestUtils {
                   .flatMap(client => f(client))
               }
     } yield fRes
-
-  def randomThing(prefix: String): Task[String] =
-    Task.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
-
-  def randomTopic: Task[String] = randomThing("topic")
-
-  def randomGroup: Task[String] = randomThing("group")
-
 }

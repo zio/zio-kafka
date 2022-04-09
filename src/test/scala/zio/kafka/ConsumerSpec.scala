@@ -15,6 +15,8 @@ import zio.test.TestAspect._
 import zio.test._
 
 object ConsumerSpec extends ZIOSpecWithKafka {
+  override val kafkaPrefix: String = "consumespec"
+
   override def spec: ZSpec[TestEnvironment with Kafka, Throwable] =
     suite("Consumer Streaming")(
       test("export metrics") {
@@ -151,12 +153,12 @@ object ConsumerSpec extends ZIOSpecWithKafka {
       test("restart from the committed position") {
         val data = (1 to 10).toList.map(i => s"key$i" -> s"msg$i")
         for {
-          _ <- produceMany("topic1", 0, data)
+          _ <- produceMany("topic1111", 0, data)
           firstResults <- for {
                             results <- Consumer
-                                         .subscribeAnd(Subscription.Topics(Set("topic1")))
+                                         .subscribeAnd(Subscription.Topics(Set("topic1111")))
                                          .partitionedStream(Serde.string, Serde.string)
-                                         .filter(_._1 == new TopicPartition("topic1", 0))
+                                         .filter(_._1 == new TopicPartition("topic1111", 0))
                                          .flatMap(_._2)
                                          .take(5)
                                          .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
@@ -174,7 +176,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                           } yield results
           secondResults <- for {
                              results <- Consumer
-                                          .subscribeAnd(Subscription.Topics(Set("topic1")))
+                                          .subscribeAnd(Subscription.Topics(Set("topic1111")))
                                           .partitionedStream(Serde.string, Serde.string)
                                           .flatMap(_._2)
                                           .take(5)
@@ -411,7 +413,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 
         for {
           topic <- randomTopic
-          _     <- produceMany(topic, 0, data)
+          _     <- randomGroup
           // Consume 5 records to have the offset committed at 5
           _ <- Consumer
                  .subscribeAnd(Subscription.topics(topic))

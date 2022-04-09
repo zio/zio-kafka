@@ -26,18 +26,25 @@ import zio.test._
 import zio.{ Chunk, Duration, Schedule, ZIO }
 
 import java.util.UUID
+import scala.collection.MapView
 
 object AdminSpec extends ZIOSpecWithKafka {
+
+  override val kafkaPrefix: String = "adminspec"
+
+  private def listTopicsFiltered(client: AdminClient): ZIO[Any, Throwable, MapView[String, AdminClient.TopicListing]] =
+    client.listTopics().map(_.view.filterKeys(_.startsWith("adminspec-")))
+
   override def spec =
     suite("client admin test")(
       test("create, list, delete single topic") {
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1 <- client.listTopics()
-            _     <- client.createTopic(AdminClient.NewTopic("topic1", 1, 1))
-            list2 <- client.listTopics()
-            _     <- client.deleteTopic("topic1")
-            list3 <- client.listTopics()
+            list1 <- listTopicsFiltered(client)
+            _     <- client.createTopic(AdminClient.NewTopic("adminspec-topic1", 1, 1))
+            list2 <- listTopicsFiltered(client)
+            _     <- client.deleteTopic("adminspec-topic1")
+            list3 <- listTopicsFiltered(client)
           } yield assert(list1.size)(equalTo(0)) &&
             assert(list2.size)(equalTo(1)) &&
             assert(list3.size)(equalTo(0))
@@ -47,13 +54,15 @@ object AdminSpec extends ZIOSpecWithKafka {
       test("create, list, delete multiple topic") {
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1 <- client.listTopics()
-            _ <- client.createTopics(List(AdminClient.NewTopic("topic2", 1, 1), AdminClient.NewTopic("topic3", 4, 1)))
-            list2 <- client.listTopics()
-            _     <- client.deleteTopic("topic2")
-            list3 <- client.listTopics()
-            _     <- client.deleteTopic("topic3")
-            list4 <- client.listTopics()
+            list1 <- listTopicsFiltered(client)
+            _ <- client.createTopics(
+                   List(AdminClient.NewTopic("adminspec-topic2", 1, 1), AdminClient.NewTopic("adminspec-topic3", 4, 1))
+                 )
+            list2 <- listTopicsFiltered(client)
+            _     <- client.deleteTopic("adminspec-topic2")
+            list3 <- listTopicsFiltered(client)
+            _     <- client.deleteTopic("adminspec-topic3")
+            list4 <- listTopicsFiltered(client)
           } yield assert(list1.size)(equalTo(0)) &&
             assert(list2.size)(equalTo(2)) &&
             assert(list3.size)(equalTo(1)) &&
@@ -64,7 +73,7 @@ object AdminSpec extends ZIOSpecWithKafka {
       test("just list") {
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1 <- client.listTopics()
+            list1 <- listTopicsFiltered(client)
           } yield assert(list1.size)(equalTo(0))
 
         }
@@ -72,11 +81,13 @@ object AdminSpec extends ZIOSpecWithKafka {
       test("create, describe, delete multiple topic") {
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1 <- client.listTopics()
-            _ <- client.createTopics(List(AdminClient.NewTopic("topic4", 1, 1), AdminClient.NewTopic("topic5", 4, 1)))
-            descriptions <- client.describeTopics(List("topic4", "topic5"))
-            _            <- client.deleteTopics(List("topic4", "topic5"))
-            list3        <- client.listTopics()
+            list1 <- listTopicsFiltered(client)
+            _ <- client.createTopics(
+                   List(AdminClient.NewTopic("adminspec-topic4", 1, 1), AdminClient.NewTopic("adminspec-topic5", 4, 1))
+                 )
+            descriptions <- client.describeTopics(List("adminspec-topic4", "adminspec-topic5"))
+            _            <- client.deleteTopics(List("adminspec-topic4", "adminspec-topic5"))
+            list3        <- listTopicsFiltered(client)
           } yield assert(list1.size)(equalTo(0)) &&
             assert(descriptions.size)(equalTo(2)) &&
             assert(list3.size)(equalTo(0))
@@ -86,16 +97,18 @@ object AdminSpec extends ZIOSpecWithKafka {
       test("create, describe topic config, delete multiple topic") {
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1 <- client.listTopics()
-            _ <- client.createTopics(List(AdminClient.NewTopic("topic6", 1, 1), AdminClient.NewTopic("topic7", 4, 1)))
+            list1 <- listTopicsFiltered(client)
+            _ <- client.createTopics(
+                   List(AdminClient.NewTopic("adminspec-topic6", 1, 1), AdminClient.NewTopic("adminspec-topic7", 4, 1))
+                 )
             configs <- client.describeConfigs(
                          List(
-                           ConfigResource(ConfigResourceType.Topic, "topic6"),
-                           ConfigResource(ConfigResourceType.Topic, "topic7")
+                           ConfigResource(ConfigResourceType.Topic, "adminspec-topic6"),
+                           ConfigResource(ConfigResourceType.Topic, "adminspec-topic7")
                          )
                        )
-            _     <- client.deleteTopics(List("topic6", "topic7"))
-            list3 <- client.listTopics()
+            _     <- client.deleteTopics(List("adminspec-topic6", "adminspec-topic7"))
+            list3 <- listTopicsFiltered(client)
           } yield assert(list1.size)(equalTo(0)) &&
             assert(configs.size)(equalTo(2)) &&
             assert(list3.size)(equalTo(0))
@@ -142,12 +155,12 @@ object AdminSpec extends ZIOSpecWithKafka {
       },
       test("list offsets") {
         KafkaTestUtils.withAdmin { client =>
-          val topic    = "topic8"
+          val topic    = "adminspec-topic8"
           val msgCount = 20
           val kvs      = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
 
           for {
-            _ <- client.createTopics(List(AdminClient.NewTopic("topic8", 3, 1)))
+            _ <- client.createTopics(List(AdminClient.NewTopic("adminspec-topic8", 3, 1)))
             _ <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
             offsets <- client.listOffsets(
                          (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
@@ -157,13 +170,13 @@ object AdminSpec extends ZIOSpecWithKafka {
       },
       test("alter offsets") {
         KafkaTestUtils.withAdmin { client =>
-          val topic            = "topic9"
-          val consumerGroupID  = "topic9"
+          val topic            = "adminspec-topic9"
+          val consumerGroupID  = "adminspec-topic9"
           val partitionCount   = 3
           val msgCount         = 20
           val partitionResetBy = 2
 
-          val p   = (0 until partitionCount).map(i => TopicPartition("topic9", i))
+          val p   = (0 until partitionCount).map(i => TopicPartition("adminspec-topic9", i))
           val kvs = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
 
           def consumeAndCommit(count: Long) =
@@ -181,7 +194,7 @@ object AdminSpec extends ZIOSpecWithKafka {
                 offsetBatch.commit.as(records)
               }
               .runCollect
-              .provideSomeLayer[Kafka](consumer("topic9", Some(consumerGroupID)))
+              .provideSomeLayer[Kafka](consumer("adminspec-topic9", Some(consumerGroupID)))
 
           def toMap(records: Chunk[ConsumerRecord[String, String]]): Map[Int, List[(Long, String, String)]] =
             records.toList
