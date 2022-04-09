@@ -49,6 +49,7 @@ lazy val kafka =
         if (scalaBinaryVersion.value == "2.13") Seq("-Wconf:cat=unused-nowarn:s")
         else Seq()
       },
+      scalacOptions -= "-Xlint:infer-any",
       // workaround for bad constant pool issue
       (Compile / doc) := Def.taskDyn {
         val default = (Compile / doc).taskValue
