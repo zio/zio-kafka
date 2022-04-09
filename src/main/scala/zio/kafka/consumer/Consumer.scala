@@ -6,6 +6,7 @@ import zio._
 import zio.kafka.serde.Deserializer
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
+import zio.stream.ZStream.Pull
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
@@ -198,7 +199,6 @@ object Consumer {
         ZStream.repeatZIOChunkOption {
           partitions
             .takeBetween(1, ZStream.DefaultChunkSize)
-            .map(Chunk.fromIterable)
             .flatMap { chunk =>
               ZIO.foreach(chunk) { take =>
                 take.fold(
@@ -208,6 +208,12 @@ object Consumer {
                 )
               }
             }
+            .catchAllCause((c: Cause[Nothing]) =>
+              partitions.isShutdown.flatMap { down =>
+                if (down && c.isInterrupted) Pull.end
+                else Pull.failCause(c)
+              }
+            )
         }
 
       stream.map(_.exit).flattenExitOption.map {
