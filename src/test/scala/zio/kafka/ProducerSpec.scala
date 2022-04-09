@@ -13,7 +13,7 @@ import zio.test.Assertion._
 import zio.test.TestAspect.withLiveClock
 import zio.test._
 
-object ProducerSpec extends ZIOSpecDefault {
+object ProducerSpec extends ZIOSpecWithKafka {
   def withConsumerInt(subscription: Subscription, settings: ConsumerSettings) =
     Consumer.make(settings).flatMap { c =>
       c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.int).toQueue()
@@ -416,8 +416,8 @@ object ProducerSpec extends ZIOSpecDefault {
         } yield ()
         assertM(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
       }
-    ).provideSomeLayerShared[TestEnvironment](
-      (Kafka.embedded >+> (KafkaTestUtils.producer ++ transactionalProducer))
+    ).provideSomeLayerShared[TestEnvironment with Kafka](
+      (KafkaTestUtils.producer ++ transactionalProducer)
         .mapError(TestFailure.fail)
     ) @@ withLiveClock
 }

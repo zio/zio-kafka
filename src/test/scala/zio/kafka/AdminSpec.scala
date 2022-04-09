@@ -3,7 +3,7 @@ package zio.kafka.admin
 import org.apache.kafka.clients.admin.RecordsToDelete
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{ Node => JNode }
-import zio.kafka.KafkaTestUtils
+import zio.kafka.{ KafkaTestUtils, ZIOSpecWithKafka }
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.admin.AdminClient.{
   ConfigResource,
@@ -27,7 +27,7 @@ import zio.{ Chunk, Duration, Schedule, ZIO }
 
 import java.util.UUID
 
-object AdminSpec extends ZIOSpecDefault {
+object AdminSpec extends ZIOSpecWithKafka {
   override def spec =
     suite("client admin test")(
       test("create, list, delete single topic") {
@@ -360,7 +360,7 @@ object AdminSpec extends ZIOSpecDefault {
           equalTo(Some(true))
         )
       }
-    ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail)) @@ withLiveClock @@ sequential
+    ) @@ withLiveClock @@ sequential
 
   private def consumeNoop(
     topicName: String,

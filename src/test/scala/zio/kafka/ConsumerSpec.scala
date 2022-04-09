@@ -4,6 +4,7 @@ import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.KafkaTestUtils._
+import zio.kafka.ZIOSpecWithKafka
 import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.embedded.Kafka
@@ -13,8 +14,8 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
-object ConsumerSpec extends ZIOSpecDefault {
-  override def spec: ZSpec[TestEnvironment, Throwable] =
+object ConsumerSpec extends ZIOSpecWithKafka {
+  override def spec: ZSpec[TestEnvironment with Kafka, Throwable] =
     suite("Consumer Streaming")(
       test("export metrics") {
         for {
@@ -588,8 +589,7 @@ object ConsumerSpec extends ZIOSpecDefault {
           _ <- fiber0.interrupt
         } yield assertCompletes
       }
-    ).provideSomeLayerShared[TestEnvironment](
-      ((Kafka.embedded >>> producer) ++ Kafka.embedded)
-        .mapError(TestFailure.fail)
+    ).provideSomeLayerShared[TestEnvironment with Kafka](
+      producer.mapError(TestFailure.fail)
     ) @@ withLiveClock @@ timeout(180.seconds)
 }
