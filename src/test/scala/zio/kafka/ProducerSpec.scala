@@ -121,9 +121,9 @@ object ProducerSpec extends ZIOSpecWithKafka {
                    t.produce(aliceGives20, Serde.string, Serde.int, None) *>
                      t.produce(bobReceives20, Serde.string, Serde.int, None) *>
                      t.abort
-                 }.catchSome { case UserInitiatedAbort =>
-                   ZIO.unit // silences the abort
                  }
+               }.catchSome { case UserInitiatedAbort =>
+                 ZIO.unit // silences the abort
                }
           settings <- transactionalConsumerSettings("testGroup1", "testClient1")
           recordChunk <- ZIO.scoped {
@@ -214,6 +214,7 @@ object ProducerSpec extends ZIOSpecWithKafka {
                                                                 .mapError(_.getOrElse(new NoSuchElementException))
                                                   record = messages.filter(rec => rec.record.key == "no one")
                                                 } yield record
+
                                               }
                                             }
                            } yield assertTrue(recordChunk.nonEmpty)
@@ -279,9 +280,9 @@ object ProducerSpec extends ZIOSpecWithKafka {
                      Producer.produce(nonTransactional, Serde.string, Serde.int) *>
                      t.produce(bobReceives20, Serde.string, Serde.int, None) *>
                      t.abort
-                 }.catchSome { case UserInitiatedAbort =>
-                   ZIO.unit // silences the abort
                  }
+               }.catchSome { case UserInitiatedAbort =>
+                 ZIO.unit // silences the abort
                }
           settings <- transactionalConsumerSettings("testGroup6", "testClient6")
           recordChunk <- ZIO.scoped {
@@ -310,7 +311,8 @@ object ProducerSpec extends ZIOSpecWithKafka {
               Consumer.make(settings).flatMap { c =>
                 c.subscribe(Topics(Set("accounts7"))) *>
                   ZIO.scoped {
-                    c.plainStream(Serde.string, Serde.int)
+                    c
+                      .plainStream(Serde.string, Serde.int)
                       .toQueue()
                       .flatMap { q =>
                         val readAliceAccount = for {
@@ -352,36 +354,34 @@ object ProducerSpec extends ZIOSpecWithKafka {
           settings <- transactionalConsumerSettings("testGroup8", "testClient8")
           committedOffset <- ZIO.scoped {
                                Consumer.make(settings).flatMap { c =>
-                                 c.subscribe(Topics(Set("accounts8"))) *>
-                                   ZIO.scoped {
-                                     c.plainStream(Serde.string, Serde.int)
-                                       .toQueue()
-                                       .flatMap { q =>
-                                         val readAliceAccount = for {
-                                           messages <- q.take
-                                                         .flatMap(_.done)
-                                                         .mapError(_.getOrElse(new NoSuchElementException))
-                                         } yield messages.head
-                                         for {
-                                           aliceHadMoneyCommittableMessage <- readAliceAccount
-                                           _ <- ZIO.scoped {
-                                                  TransactionalProducer.createTransaction.flatMap { t =>
-                                                    t.produce(
-                                                      AliceAccountFeesPaid,
-                                                      Serde.string,
-                                                      Serde.int,
-                                                      Some(aliceHadMoneyCommittableMessage.offset)
-                                                    ) *>
-                                                      t.abort
-                                                  }.catchSome { case UserInitiatedAbort =>
-                                                    ZIO.unit // silences the abort
-                                                  }
-                                                }
-                                           aliceTopicPartition =
-                                             new TopicPartition("accounts8", aliceHadMoneyCommittableMessage.partition)
-                                           committed <- c.committed(Set(aliceTopicPartition))
-                                         } yield committed(aliceTopicPartition)
-                                       }
+                                 c.subscribe(Topics(Set("accounts8"))) *> c
+                                   .plainStream(Serde.string, Serde.int)
+                                   .toQueue()
+                                   .flatMap { q =>
+                                     val readAliceAccount = for {
+                                       messages <- q.take
+                                                     .flatMap(_.done)
+                                                     .mapError(_.getOrElse(new NoSuchElementException))
+                                     } yield messages.head
+                                     for {
+                                       aliceHadMoneyCommittableMessage <- readAliceAccount
+                                       _ <- ZIO.scoped {
+                                              TransactionalProducer.createTransaction.flatMap { t =>
+                                                t.produce(
+                                                  AliceAccountFeesPaid,
+                                                  Serde.string,
+                                                  Serde.int,
+                                                  Some(aliceHadMoneyCommittableMessage.offset)
+                                                ) *>
+                                                  t.abort
+                                              }
+                                            }.catchSome { case UserInitiatedAbort =>
+                                              ZIO.unit // silences the abort
+                                            }
+                                       aliceTopicPartition =
+                                         new TopicPartition("accounts8", aliceHadMoneyCommittableMessage.partition)
+                                       committed <- c.committed(Set(aliceTopicPartition))
+                                     } yield committed(aliceTopicPartition)
                                    }
                                }
                              }
@@ -411,7 +411,9 @@ object ProducerSpec extends ZIOSpecWithKafka {
                }
           t <- transactionThief.get
           _ <- ZIO.scoped {
-                 TransactionalProducer.createTransaction *> t.get.produce("any-topic", 0, 0, Serde.int, Serde.int, None)
+                 TransactionalProducer.createTransaction.flatMap { _ =>
+                   t.get.produce("any-topic", 0, 0, Serde.int, Serde.int, None)
+                 }
                }
         } yield ()
         assertM(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))

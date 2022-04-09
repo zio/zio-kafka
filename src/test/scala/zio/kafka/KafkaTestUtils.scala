@@ -142,7 +142,7 @@ object KafkaTestUtils {
     } yield fRes
 
   def randomThing(prefix: String): Task[String] =
-    ZIO.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
+    Task.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
 
   def randomTopic: Task[String] = randomThing("topic")
 

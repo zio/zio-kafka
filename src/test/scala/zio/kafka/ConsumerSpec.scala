@@ -201,8 +201,8 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           // Produce messages on several partitions
           topic <- randomTopic
           group <- randomGroup
-          _     <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-          _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
+          _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreach(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
 
@@ -290,8 +290,8 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           // Produce messages on several partitions
           topic <- randomTopic
           group <- randomGroup
-          _     <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-          _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
+          _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreach(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
 
@@ -319,8 +319,8 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           // Produce messages on several partitions
           topic <- randomTopic
           group <- randomGroup
-          _     <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-          _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
+          _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreach(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
 
@@ -362,8 +362,8 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                 // Produce messages on several partitions
                 topic <- randomTopic
                 group <- randomGroup
-                _     <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-                _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
+                _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+                _ <- ZIO.foreach(1 to nrMessages) { i =>
                        produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                      }
 

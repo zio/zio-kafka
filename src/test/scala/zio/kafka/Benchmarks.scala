@@ -109,7 +109,7 @@ object ZIOKafka extends ZIOAppDefault {
               )
             }
         })
-      .provide(ZLayer.scoped(Consumer.make(settings)))
+      .provideLayer(ZLayer.scoped(Consumer.make(settings)))
       .exitCode
 
   }

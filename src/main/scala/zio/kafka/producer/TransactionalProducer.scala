@@ -73,17 +73,21 @@ object TransactionalProducer {
     }
 
   def make(settings: TransactionalProducerSettings): ZIO[Scope, Throwable, TransactionalProducer] =
-    for {
-      props <- ZIO.attempt(settings.producerSettings.driverSettings)
-      rawProducer <- ZIO.attempt(
-                       new KafkaProducer[Array[Byte], Array[Byte]](
-                         props.asJava,
-                         new ByteArraySerializer(),
-                         new ByteArraySerializer()
+    ZIO.acquireRelease {
+      for {
+        props <- ZIO.attempt(settings.producerSettings.driverSettings)
+        rawProducer <- ZIO.attempt(
+                         new KafkaProducer[Array[Byte], Array[Byte]](
+                           props.asJava,
+                           new ByteArraySerializer(),
+                           new ByteArraySerializer()
+                         )
                        )
-                     )
-      _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
-      semaphore <- Semaphore.make(1)
-      live      <- ZIO.acquireRelease(ZIO.succeed(Producer.Live(rawProducer, settings.producerSettings)))(_.close)
-    } yield LiveTransactionalProducer(live, semaphore)
+        _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
+        semaphore <- Semaphore.make(1)
+        live = Producer.Live(rawProducer, settings.producerSettings)
+      } yield LiveTransactionalProducer(live, semaphore)
+    } { producer =>
+      producer.live.close
+    }
 }

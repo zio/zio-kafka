@@ -360,7 +360,7 @@ object AdminClient extends Accessible[AdminClient] {
     ): Task[Set[AclOperation]] =
       for {
         res <- describeCluster(options)
-        opt <- fromKafkaFuture(ZIO.attempt(res.authorizedOperations())).map(Option(_))
+        opt <- fromKafkaFuture(Task.attempt(res.authorizedOperations())).map(Option(_))
         lst <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
         aclOperations = lst.map(AclOperation.apply)
       } yield aclOperations

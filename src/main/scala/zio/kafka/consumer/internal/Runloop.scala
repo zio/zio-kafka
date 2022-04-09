@@ -385,7 +385,7 @@ private[consumer] final class Runloop(
     cmd match {
       case Command.Poll() =>
         // The consumer will throw an IllegalStateException if no call to subscribe
-        ZIO.ifZIO(subscribedRef.get)(handlePoll(state), ZIO.succeed(state))
+        ZIO.ifZIO(subscribedRef.get)(handlePoll(state), UIO.succeed(state))
       case Command.Requests(reqs) =>
         handleRequests(state, reqs).flatMap { state =>
           // Optimization: eagerly poll if we have pending requests instead of waiting
@@ -409,7 +409,7 @@ private[consumer] final class Runloop(
       }
       .onError(cause => partitions.offer(Take.failCause(cause)))
       .unit
-      .fork
+      .forkScoped
 }
 
 private[consumer] object Runloop {

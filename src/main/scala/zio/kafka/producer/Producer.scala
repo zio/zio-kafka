@@ -245,17 +245,20 @@ object Producer {
     }
 
   def make(settings: ProducerSettings): ZIO[Scope, Throwable, Producer] =
-    for {
-      props <- ZIO.attempt(settings.driverSettings)
-      rawProducer <- ZIO.attempt(
-                       new KafkaProducer[Array[Byte], Array[Byte]](
-                         props.asJava,
-                         new ByteArraySerializer(),
-                         new ByteArraySerializer()
+    ZIO.acquireRelease {
+      for {
+        props <- ZIO.attempt(settings.driverSettings)
+        rawProducer <- ZIO.attempt(
+                         new KafkaProducer[Array[Byte], Array[Byte]](
+                           props.asJava,
+                           new ByteArraySerializer(),
+                           new ByteArraySerializer()
+                         )
                        )
-                     )
-      live <- ZIO.acquireRelease(ZIO.succeed(Live(rawProducer, settings)))(_.close)
-    } yield live
+      } yield Live(rawProducer, settings)
+    } { producer =>
+      producer.close
+    }
 
   def withProducerService[R, A](
     r: Producer => RIO[R, A]
