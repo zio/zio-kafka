@@ -24,9 +24,9 @@ private[zio] trait Serdes {
       val deserializer = serde.deserializer()
 
       override def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[Any, T] =
-        Task(deserializer.deserialize(topic, headers, data))
+        Task.attempt(deserializer.deserialize(topic, headers, data))
 
       override def serialize(topic: String, headers: Headers, value: T): RIO[Any, Array[Byte]] =
-        Task(serializer.serialize(topic, headers, value))
+        Task.attempt(serializer.serialize(topic, headers, value))
     }
 }

@@ -360,7 +360,7 @@ object AdminClient extends Accessible[AdminClient] {
     ): Task[Set[AclOperation]] =
       for {
         res <- describeCluster(options)
-        opt <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
+        opt <- fromKafkaFuture(Task.attempt(res.authorizedOperations())).map(Option(_))
         lst <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
         aclOperations = lst.map(AclOperation.apply)
       } yield aclOperations
@@ -498,10 +498,12 @@ object AdminClient extends Accessible[AdminClient] {
   }
 
   val live: ZLayer[AdminClientSettings, Throwable, AdminClient] =
-    (for {
-      settings <- ZManaged.service[AdminClientSettings]
-      admin    <- make(settings)
-    } yield admin).toLayer
+    ZLayer.scoped {
+      for {
+        settings <- ZIO.service[AdminClientSettings]
+        admin    <- make(settings)
+      } yield admin
+    }
 
   def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] = {
 
@@ -520,7 +522,7 @@ object AdminClient extends Accessible[AdminClient] {
 
     kfv.flatMap(f =>
       Task.suspendSucceedWith { (p, _) =>
-        Task.asyncInterrupt[T] { cb =>
+        Task.asyncInterrupt[Any, Throwable, T] { cb =>
           f.toCompletionStage.whenComplete { (v: T, t: Throwable) =>
             if (f.isCancelled) cb(ZIO.fiberId.flatMap(id => Task.failCause(Cause.interrupt(id))))
             else if (t ne null) cb(unwrapCompletionException(p.fatal)(t))
@@ -933,21 +935,21 @@ object AdminClient extends Accessible[AdminClient] {
     def apply(ri: JReplicaInfo): ReplicaInfo = ReplicaInfo(ri.size(), ri.offsetLag(), ri.isFuture)
   }
 
-  def make(settings: AdminClientSettings): TaskManaged[AdminClient] =
+  def make(settings: AdminClientSettings): ZIO[Scope, Throwable, AdminClient] =
     fromManagedJavaClient(javaClientFromSettings(settings))
 
   def fromJavaClient(javaClient: JAdminClient): URIO[Any, AdminClient] =
     ZIO.succeed(new LiveAdminClient(javaClient))
 
   def fromManagedJavaClient[R, E](
-    managedJavaClient: ZManaged[R, E, JAdminClient]
-  ): ZManaged[R, E, AdminClient] =
+    managedJavaClient: ZIO[R with Scope, E, JAdminClient]
+  ): ZIO[R with Scope, E, AdminClient] =
     managedJavaClient.flatMap { javaClient =>
-      ZManaged.fromZIO(fromJavaClient(javaClient))
+      fromJavaClient(javaClient)
     }
 
-  def javaClientFromSettings(settings: AdminClientSettings): ZManaged[Any, Throwable, JAdminClient] =
-    ZManaged.acquireReleaseWith(ZIO(JAdminClient.create(settings.driverSettings.asJava)))(client =>
+  def javaClientFromSettings(settings: AdminClientSettings): ZIO[Scope, Throwable, JAdminClient] =
+    ZIO.acquireRelease(ZIO.attempt(JAdminClient.create(settings.driverSettings.asJava)))(client =>
       ZIO.succeed(client.close(settings.closeTimeout))
     )
 
