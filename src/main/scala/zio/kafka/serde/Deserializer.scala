@@ -78,11 +78,12 @@ object Deserializer extends Serdes {
     props: Map[String, AnyRef],
     isKey: Boolean
   ): Task[Deserializer[Any, T]] =
-    Task(deserializer.configure(props.asJava, isKey))
+    Task
+      .attempt(deserializer.configure(props.asJava, isKey))
       .as(
         new Deserializer[Any, T] {
           override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Task[T] =
-            Task(deserializer.deserialize(topic, headers, data))
+            Task.attempt(deserializer.deserialize(topic, headers, data))
         }
       )
 }

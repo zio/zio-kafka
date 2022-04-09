@@ -11,7 +11,7 @@ import zio._
 import scala.jdk.CollectionConverters._
 
 trait TransactionalProducer {
-  def createTransaction: ZManaged[Any, Throwable, Transaction]
+  def createTransaction: ZIO[Scope, Throwable, Transaction]
 }
 
 object TransactionalProducer {
@@ -49,9 +49,9 @@ object TransactionalProducer {
       case Exit.Failure(_)                           => abortTransaction.retryN(5).orDie
     }
 
-    def createTransaction: ZManaged[Any, Throwable, Transaction] =
-      semaphore.withPermitManaged *> {
-        ZManaged.acquireReleaseExitWith {
+    def createTransaction: ZIO[Scope, Throwable, Transaction] =
+      semaphore.withPermitScoped *> {
+        ZIO.acquireReleaseExit {
           for {
             offsetBatchRef <- Ref.make(OffsetBatch.empty)
             closedRef      <- Ref.make(false)
@@ -61,27 +61,33 @@ object TransactionalProducer {
       }
   }
 
-  def createTransaction: RManaged[TransactionalProducer, Transaction] =
-    ZManaged.service[TransactionalProducer].flatMap(_.createTransaction)
+  def createTransaction: ZIO[TransactionalProducer with Scope, Throwable, Transaction] =
+    ZIO.service[TransactionalProducer].flatMap(_.createTransaction)
 
   val live: RLayer[TransactionalProducerSettings, TransactionalProducer] =
-    (for {
-      settings <- ZManaged.service[TransactionalProducerSettings]
-      producer <- make(settings)
-    } yield producer).toLayer
+    ZLayer.scoped {
+      for {
+        settings <- ZIO.service[TransactionalProducerSettings]
+        producer <- make(settings)
+      } yield producer
+    }
 
-  def make(settings: TransactionalProducerSettings): TaskManaged[TransactionalProducer] =
-    (for {
-      props <- ZIO.attempt(settings.producerSettings.driverSettings)
-      rawProducer <- ZIO.attempt(
-                       new KafkaProducer[Array[Byte], Array[Byte]](
-                         props.asJava,
-                         new ByteArraySerializer(),
-                         new ByteArraySerializer()
+  def make(settings: TransactionalProducerSettings): ZIO[Scope, Throwable, TransactionalProducer] =
+    ZIO.acquireRelease {
+      for {
+        props <- ZIO.attempt(settings.producerSettings.driverSettings)
+        rawProducer <- ZIO.attempt(
+                         new KafkaProducer[Array[Byte], Array[Byte]](
+                           props.asJava,
+                           new ByteArraySerializer(),
+                           new ByteArraySerializer()
+                         )
                        )
-                     )
-      _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
-      semaphore <- Semaphore.make(1)
-      live = Producer.Live(rawProducer, settings.producerSettings)
-    } yield LiveTransactionalProducer(live, semaphore)).toManagedWith(_.live.close)
+        _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
+        semaphore <- Semaphore.make(1)
+        live = Producer.Live(rawProducer, settings.producerSettings)
+      } yield LiveTransactionalProducer(live, semaphore)
+    } { producer =>
+      producer.live.close
+    }
 }

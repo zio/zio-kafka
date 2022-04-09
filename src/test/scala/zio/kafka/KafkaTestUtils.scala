@@ -135,14 +135,17 @@ object KafkaTestUtils {
   def withAdmin[T](f: AdminClient => RIO[Clock with Kafka, T]) =
     for {
       settings <- adminSettings
-      fRes <- AdminClient
-                .make(settings)
-                .use(client => f(client))
+      fRes <- ZIO
+                .scoped(
+                  AdminClient
+                    .make(settings)
+                    .flatMap(client => f(client))
+                )
                 .provideSomeLayer[Kafka](Clock.live)
     } yield fRes
 
   def randomThing(prefix: String): Task[String] =
-    Task(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
+    Task.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
 
   def randomTopic: Task[String] = randomThing("topic")
 
