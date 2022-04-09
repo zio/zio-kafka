@@ -7,11 +7,11 @@ import zio.test._
 import zio.test.TestAspect.flaky
 import zio.test.Assertion._
 
-object KafkaFutureSpec extends DefaultRunnableSpec {
+object KafkaFutureSpec extends ZIOSpecDefault {
   override def spec =
     suite("kafka future conversion")(
       test("completes successfully") {
-        withKafkaFuture.use { f =>
+        withKafkaFuture.flatMap { f =>
           for {
             fiber  <- AdminClient.fromKafkaFuture(ZIO.succeed(f)).fork
             _      <- ZIO.succeed(f.complete(true))
@@ -21,7 +21,7 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
         }
       },
       test("completes with failure") {
-        withKafkaFuture.use { f =>
+        withKafkaFuture.flatMap { f =>
           val t = new RuntimeException("failure")
           for {
             fiber  <- AdminClient.fromKafkaFuture(ZIO.succeed(f)).fork
@@ -32,7 +32,7 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
         }
       },
       test("future is cancelled") {
-        withKafkaFuture.use { f =>
+        withKafkaFuture.flatMap { f =>
           for {
             fiber  <- AdminClient.fromKafkaFuture(ZIO.succeed(f)).fork
             _      <- ZIO.succeed(f.cancel(true))
@@ -43,10 +43,10 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
         }
       },
       test("interrupted") {
-        withKafkaFuture.use { f =>
+        withKafkaFuture.flatMap { f =>
           for {
             latch  <- Promise.make[Nothing, Unit]
-            fiber  <- AdminClient.fromKafkaFuture(latch.succeed(()) *> ZIO.succeed(f)).fork
+            fiber  <- AdminClient.fromKafkaFuture(latch.succeed(()).as(f)).fork
             _      <- latch.await
             result <- fiber.interrupt
           } yield assert(result.isInterrupted)(equalTo(true) ?? "fiber was interrupted") &&
@@ -56,8 +56,8 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
       } @@ flaky
     )
 
-  def withKafkaFuture =
-    ZIO.succeed(new KafkaFutureImpl[Boolean]).toManagedWith { f =>
+  def withKafkaFuture: ZIO[Any with Scope, Nothing, KafkaFutureImpl[Boolean]] =
+    ZIO.acquireRelease(ZIO.succeed(new KafkaFutureImpl[Boolean])) { f =>
       ZIO.succeed {
         f.completeExceptionally(new RuntimeException("Kafka future was not completed"))
       }

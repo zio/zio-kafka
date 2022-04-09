@@ -60,11 +60,12 @@ object Serializer extends Serdes {
     props: Map[String, AnyRef],
     isKey: Boolean
   ): Task[Serializer[Any, T]] =
-    Task(serializer.configure(props.asJava, isKey))
+    ZIO
+      .attempt(serializer.configure(props.asJava, isKey))
       .as(
         new Serializer[Any, T] {
           override def serialize(topic: String, headers: Headers, value: T): Task[Array[Byte]] =
-            Task(serializer.serialize(topic, headers, value))
+            ZIO.attempt(serializer.serialize(topic, headers, value))
         }
       )
 

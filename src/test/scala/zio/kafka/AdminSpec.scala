@@ -23,11 +23,11 @@ import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio.{ Chunk, Clock, Duration, Schedule, ZIO }
+import zio.{ Chunk, Duration, Schedule, ZIO }
 
 import java.util.UUID
 
-object AdminSpec extends DefaultRunnableSpec {
+object AdminSpec extends ZIOSpecDefault {
   override def spec =
     suite("client admin test")(
       test("create, list, delete single topic") {
@@ -148,7 +148,7 @@ object AdminSpec extends DefaultRunnableSpec {
 
           for {
             _ <- client.createTopics(List(AdminClient.NewTopic("topic8", 3, 1)))
-            _ <- produceMany(topic, kvs).provideSomeLayer[Kafka with Clock](KafkaTestUtils.producer)
+            _ <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
             offsets <- client.listOffsets(
                          (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
                        )
@@ -169,7 +169,7 @@ object AdminSpec extends DefaultRunnableSpec {
           def consumeAndCommit(count: Long) =
             Consumer
               .subscribeAnd(Subscription.Topics(Set(topic)))
-              .partitionedStream[Kafka with Clock, String, String](Serde.string, Serde.string)
+              .partitionedStream[Kafka, String, String](Serde.string, Serde.string)
               .flatMapPar(partitionCount)(_._2)
               .take(count)
               .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
@@ -181,7 +181,7 @@ object AdminSpec extends DefaultRunnableSpec {
                 offsetBatch.commit.as(records)
               }
               .runCollect
-              .provideSomeLayer[Kafka with Clock](consumer("topic9", Some(consumerGroupID)))
+              .provideSomeLayer[Kafka](consumer("topic9", Some(consumerGroupID)))
 
           def toMap(records: Chunk[ConsumerRecord[String, String]]): Map[Int, List[(Long, String, String)]] =
             records.toList
@@ -191,7 +191,7 @@ object AdminSpec extends DefaultRunnableSpec {
 
           for {
             _          <- client.createTopics(List(AdminClient.NewTopic(topic, partitionCount, 1)))
-            _          <- produceMany(topic, kvs).provideSomeLayer[Kafka with Clock](KafkaTestUtils.producer)
+            _          <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
             records    <- consumeAndCommit(msgCount.toLong).map(toMap)
             endOffsets <- client.listOffsets((0 until partitionCount).map(i => p(i) -> OffsetSpec.LatestSpec).toMap)
             _ <- client.alterConsumerGroupOffsets(
@@ -212,7 +212,7 @@ object AdminSpec extends DefaultRunnableSpec {
       },
       test("create, produce, delete records from a topic") {
         KafkaTestUtils.withAdmin { client =>
-          type Env = Kafka with Clock
+          type Env = Kafka
           val topicName      = UUID.randomUUID().toString
           val topicPartition = TopicPartition(topicName, 0)
 
@@ -245,10 +245,10 @@ object AdminSpec extends DefaultRunnableSpec {
         def consumeAndCommit(count: Long, topic: String, groupId: String) =
           Consumer
             .subscribeAnd(Subscription.Topics(Set(topic)))
-            .plainStream[Kafka with Clock, String, String](Serde.string, Serde.string)
+            .plainStream[Kafka, String, String](Serde.string, Serde.string)
             .take(count)
             .foreach(_.offset.commit)
-            .provideSomeLayer[Kafka with Clock](consumer(topic, Some(groupId)))
+            .provideSomeLayer[Kafka](consumer(topic, Some(groupId)))
 
         KafkaTestUtils.withAdmin { client =>
           for {
@@ -360,14 +360,14 @@ object AdminSpec extends DefaultRunnableSpec {
           equalTo(Some(true))
         )
       }
-    ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
+    ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail)) @@ withLiveClock @@ sequential
 
   private def consumeNoop(
     topicName: String,
     groupId: String,
     clientId: String,
     groupInstanceId: Option[String] = None
-  ): ZIO[Kafka with Clock, Throwable, Unit] = Consumer
+  ): ZIO[Kafka, Throwable, Unit] = Consumer
     .subscribeAnd(Subscription.topics(topicName))
     .plainStream(Serde.string, Serde.string)
     .foreach(_.offset.commit)
@@ -375,7 +375,7 @@ object AdminSpec extends DefaultRunnableSpec {
 
   private def getStableConsumerGroupDescription(
     groupId: String
-  )(implicit adminClient: AdminClient): ZIO[Clock, Throwable, ConsumerGroupDescription] =
+  )(implicit adminClient: AdminClient): ZIO[Any, Throwable, ConsumerGroupDescription] =
     adminClient
       .describeConsumerGroups(groupId)
       .map(_.head._2)

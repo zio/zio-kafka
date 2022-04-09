@@ -233,17 +233,19 @@ object Producer {
         value <- valueSerializer.serialize(r.topic, r.headers, r.value())
       } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
 
-    private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout))
+    private[producer] def close: UIO[Unit] = UIO.succeed(p.close(producerSettings.closeTimeout))
   }
 
   val live: RLayer[ProducerSettings, Producer] =
-    (for {
-      settings <- ZManaged.service[ProducerSettings]
-      producer <- make(settings)
-    } yield producer).toLayer
+    ZLayer.scoped {
+      for {
+        settings <- ZIO.service[ProducerSettings]
+        producer <- make(settings)
+      } yield producer
+    }
 
-  def make(settings: ProducerSettings): TaskManaged[Producer] =
-    (for {
+  def make(settings: ProducerSettings): ZIO[Scope, Throwable, Producer] =
+    for {
       props <- ZIO.attempt(settings.driverSettings)
       rawProducer <- ZIO.attempt(
                        new KafkaProducer[Array[Byte], Array[Byte]](
@@ -252,7 +254,8 @@ object Producer {
                          new ByteArraySerializer()
                        )
                      )
-    } yield Live(rawProducer, settings)).toManagedWith(_.close)
+      live <- ZIO.acquireRelease(ZIO.succeed(Live(rawProducer, settings)))(_.close)
+    } yield live
 
   def withProducerService[R, A](
     r: Producer => RIO[R, A]

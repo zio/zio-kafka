@@ -94,7 +94,7 @@ private[consumer] final class Runloop(
         consumer.withConsumerM { c =>
           // We don't wait for the completion of the commit here, because it
           // will only complete once we poll again.
-          ZIO(c.commitAsync(offsets.asJava, callback))
+          ZIO.attempt(c.commitAsync(offsets.asJava, callback))
         }
       }
       .catchAll(onFailure)
@@ -221,7 +221,7 @@ private[consumer] final class Runloop(
     offsetRetrieval match {
       case OffsetRetrieval.Manual(getOffsets) =>
         getOffsets(tps)
-          .tap(offsets => ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO(c.seek(tp, offset)) })
+          .tap(offsets => ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) })
           .when(tps.nonEmpty)
           .unit
 
@@ -234,7 +234,7 @@ private[consumer] final class Runloop(
     c: ByteArrayKafkaConsumer,
     assignment: Set[TopicPartition],
     requestedPartitions: Set[TopicPartition]
-  ) = {
+  ): Unit = {
     val toResume = assignment intersect requestedPartitions
     val toPause  = assignment -- requestedPartitions
 
@@ -385,19 +385,19 @@ private[consumer] final class Runloop(
     cmd match {
       case Command.Poll() =>
         // The consumer will throw an IllegalStateException if no call to subscribe
-        ZIO.ifZIO(subscribedRef.get)(handlePoll(state), UIO(state))
+        ZIO.ifZIO(subscribedRef.get)(handlePoll(state), ZIO.succeed(state))
       case Command.Requests(reqs) =>
         handleRequests(state, reqs).flatMap { state =>
           // Optimization: eagerly poll if we have pending requests instead of waiting
           // for the next scheduled poll.
           if (state.pendingRequests.nonEmpty) handlePoll(state)
-          else UIO.succeed(state)
+          else ZIO.succeed(state)
         }
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
     }
 
-  def run: URManaged[Clock, Fiber.Runtime[Throwable, Unit]] =
+  def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Unit]] =
     ZStream
       .mergeAll(3, 1)(
         ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency)),
@@ -409,7 +409,6 @@ private[consumer] final class Runloop(
       }
       .onError(cause => partitions.offer(Take.failCause(cause)))
       .unit
-      .toManaged
       .fork
 }
 
@@ -448,28 +447,19 @@ private[consumer] object Runloop {
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener
-  ): RManaged[Clock, Runloop] =
+  ): ZIO[Scope, Throwable, Runloop] =
     for {
-      rebalancingRef <- Ref.make(false).toManaged
-      requestQueue   <- Queue.unbounded[Runloop.Request].toManagedWith(_.shutdown)
-      commitQueue    <- Queue.unbounded[Command.Commit].toManagedWith(_.shutdown)
-      partitions <- Queue
-                      .unbounded[
-                        Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
-                      ]
-                      .map { queue =>
-                        queue
-                          .mapZIO(
-                            _.fold(
-                              queue.shutdown.as(Take.end),
-                              cause => UIO.succeed(Take.failCause(cause)),
-                              chunk => UIO.succeed(Take.chunk(chunk))
-                            )
-                          )
-                      }
-                      .toManagedWith(_.shutdown)
-      shutdownRef   <- Ref.make(false).toManaged
-      subscribedRef <- Ref.make(false).toManaged
+      rebalancingRef <- Ref.make(false)
+      requestQueue   <- ZIO.acquireRelease(Queue.unbounded[Runloop.Request])(_.shutdown)
+      commitQueue    <- ZIO.acquireRelease(Queue.unbounded[Command.Commit])(_.shutdown)
+      partitions <- ZIO.acquireRelease(
+                      Queue
+                        .unbounded[
+                          Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
+                        ]
+                    )(_.shutdown)
+      shutdownRef   <- Ref.make(false)
+      subscribedRef <- Ref.make(false)
       runloop = new Runloop(
                   consumer,
                   pollFrequency,
