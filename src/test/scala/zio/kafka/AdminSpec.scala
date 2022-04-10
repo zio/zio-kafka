@@ -26,14 +26,13 @@ import zio.test._
 import zio.{ Chunk, Duration, Schedule, ZIO }
 
 import java.util.UUID
-import scala.collection.MapView
 
 object AdminSpec extends ZIOSpecWithKafka {
 
   override val kafkaPrefix: String = "adminspec"
 
-  private def listTopicsFiltered(client: AdminClient): ZIO[Any, Throwable, MapView[String, AdminClient.TopicListing]] =
-    client.listTopics().map(_.view.filterKeys(_.startsWith("adminspec-")))
+  private def listTopicsFiltered(client: AdminClient): ZIO[Any, Throwable, Map[String, AdminClient.TopicListing]] =
+    client.listTopics().map(_.filterKeys(_.startsWith("adminspec-")))
 
   override def spec =
     suite("client admin test")(
