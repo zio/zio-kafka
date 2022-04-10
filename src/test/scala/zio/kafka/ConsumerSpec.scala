@@ -413,7 +413,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 
         for {
           topic <- randomTopic
-          _     <- randomGroup
+          group     <- randomGroup
           // Consume 5 records to have the offset committed at 5
           _ <- Consumer
                  .subscribeAnd(Subscription.topics(topic))
@@ -428,7 +428,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                    offsetBatch.commit.as(records)
                  }
                  .runCollect
-                 .provideSomeLayer[Kafka](consumer("client1", Some("group1")))
+                 .provideSomeLayer[Kafka](consumer("client1", Some(group)))
           // Start a new consumer with manual offset before the committed offset
           offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO.attempt(tps.map(_ -> manualOffsetSeek.toLong).toMap))
           secondResults <- Consumer
@@ -438,7 +438,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                              .map(_.record)
                              .runCollect
                              .provideSomeLayer[Kafka](
-                               consumer("client2", Some("group1"), offsetRetrieval = offsetRetrieval)
+                               consumer("client2", Some(group), offsetRetrieval = offsetRetrieval)
                              )
           // Check that we only got the records starting from the manually seek'd offset
         } yield assert(secondResults.map(rec => rec.key() -> rec.value()).toList)(equalTo(data.drop(manualOffsetSeek)))
