@@ -10,11 +10,14 @@ import org.apache.kafka.clients.admin.{
   CreatePartitionsOptions => JCreatePartitionsOptions,
   CreateTopicsOptions => JCreateTopicsOptions,
   DeleteRecordsOptions => JDeleteRecordsOptions,
+  DeleteTopicsOptions => JDeleteTopicsOptions,
   DescribeClusterOptions => JDescribeClusterOptions,
   DescribeConfigsOptions => JDescribeConfigsOptions,
+  DescribeTopicsOptions => JDescribeTopicsOptions,
   ListConsumerGroupOffsetsOptions => JListConsumerGroupOffsetsOptions,
   ListConsumerGroupsOptions => JListConsumerGroupsOptions,
   ListOffsetsOptions => JListOffsetsOptions,
+  ListTopicsOptions => JListTopicsOptions,
   LogDirDescription => JLogDirDescription,
   MemberDescription => JMemberDescription,
   NewPartitions => JNewPartitions,
@@ -220,7 +223,7 @@ object AdminClient extends Accessible[AdminClient] {
      * Create a single topic.
      */
     override def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit] =
-      createTopics(List(newTopic), Some(CreateTopicsOptions(validateOnly)))
+      createTopics(List(newTopic), Some(CreateTopicsOptions(validateOnly = validateOnly, timeout = Option.empty)))
 
     /**
      * Delete multiple topics.
@@ -233,7 +236,7 @@ object AdminClient extends Accessible[AdminClient] {
       fromKafkaFutureVoid {
         ZIO.attemptBlocking(
           options
-            .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts))
+            .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts.asJava))
             .all()
         )
       }
@@ -268,7 +271,9 @@ object AdminClient extends Accessible[AdminClient] {
     override def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): Task[Map[String, TopicListing]] =
       fromKafkaFuture {
         ZIO.attemptBlocking(
-          listTopicsOptions.fold(adminClient.listTopics())(opts => adminClient.listTopics(opts)).namesToListings()
+          listTopicsOptions
+            .fold(adminClient.listTopics())(opts => adminClient.listTopics(opts.asJava))
+            .namesToListings()
         )
       }.map(_.asScala.map { case (k, v) => k -> TopicListing(v) }.toMap)
 
@@ -283,7 +288,7 @@ object AdminClient extends Accessible[AdminClient] {
       fromKafkaFuture {
         ZIO.attemptBlocking(
           options
-            .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts))
+            .fold(adminClient.describeTopics(asJava))(opts => adminClient.describeTopics(asJava, opts.asJava))
             .allTopicNames()
         )
       }.flatMap { jTopicDescriptions =>
@@ -657,22 +662,67 @@ object AdminClient extends Accessible[AdminClient] {
       )
   }
 
-  final case class CreatePartitionsOptions(validateOnly: Boolean) {
-    lazy val asJava: JCreatePartitionsOptions = new JCreatePartitionsOptions().validateOnly(validateOnly)
+  final case class CreatePartitionsOptions(
+    validateOnly: Boolean = false,
+    retryOnQuotaViolation: Boolean = true,
+    timeout: Option[Duration]
+  ) {
+    def asJava: JCreatePartitionsOptions = {
+      val opts = new JCreatePartitionsOptions()
+        .validateOnly(validateOnly)
+        .retryOnQuotaViolation(retryOnQuotaViolation)
+
+      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
+    }
   }
 
-  final case class CreateTopicsOptions(validateOnly: Boolean) {
-    lazy val asJava: JCreateTopicsOptions = new JCreateTopicsOptions().validateOnly(validateOnly)
+  final case class CreateTopicsOptions(validateOnly: Boolean, timeout: Option[Duration]) {
+    def asJava: JCreateTopicsOptions = {
+      val opts = new JCreateTopicsOptions().validateOnly(validateOnly)
+      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
+    }
   }
 
-  final case class DescribeConfigsOptions(includeSynonyms: Boolean, includeDocumentation: Boolean) {
-    lazy val asJava: JDescribeConfigsOptions =
-      new JDescribeConfigsOptions().includeSynonyms(includeSynonyms).includeDocumentation(includeDocumentation)
+  final case class DeleteTopicsOptions(retryOnQuotaViolation: Boolean = true, timeout: Option[Duration]) {
+    def asJava: JDeleteTopicsOptions = {
+      val opts = new JDeleteTopicsOptions().retryOnQuotaViolation(retryOnQuotaViolation)
+      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
+    }
   }
 
-  final case class DescribeClusterOptions(includeAuthorizedOperations: Boolean) {
-    lazy val asJava: JDescribeClusterOptions =
-      new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
+  final case class ListTopicsOptions(listInternal: Boolean = false, timeout: Option[Duration]) {
+    def asJava: JListTopicsOptions = {
+      val opts = new JListTopicsOptions().listInternal(listInternal)
+      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
+    }
+  }
+
+  final case class DescribeTopicsOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
+    def asJava: JDescribeTopicsOptions = {
+      val opts = new JDescribeTopicsOptions().includeAuthorizedOperations(includeAuthorizedOperations)
+      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
+    }
+  }
+
+  final case class DescribeConfigsOptions(
+    includeSynonyms: Boolean = false,
+    includeDocumentation: Boolean = false,
+    timeout: Option[Duration]
+  ) {
+    def asJava: JDescribeConfigsOptions = {
+      val opts = new JDescribeConfigsOptions()
+        .includeSynonyms(includeSynonyms)
+        .includeDocumentation(includeDocumentation)
+
+      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
+    }
+  }
+
+  final case class DescribeClusterOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
+    lazy val asJava: JDescribeClusterOptions = {
+      val opts = new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
+      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
+    }
   }
 
   final case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
@@ -769,7 +819,7 @@ object AdminClient extends Accessible[AdminClient] {
 
   object TopicPartitionInfo {
     def apply(jtpi: JTopicPartitionInfo): Task[TopicPartitionInfo] = {
-      val replicas = Task.foreach(
+      val replicas: ZIO[Any, RuntimeException, List[Node]] = Task.foreach(
         jtpi
           .replicas()
           .asScala
@@ -778,7 +828,7 @@ object AdminClient extends Accessible[AdminClient] {
         ZIO.getOrFailWith(new RuntimeException("NoNode node not expected among topic replicas"))(Node(jNode))
       }
 
-      val inSyncReplicas = Task.foreach(
+      val inSyncReplicas: ZIO[Any, RuntimeException, List[Node]] = Task.foreach(
         jtpi
           .isr()
           .asScala
@@ -852,8 +902,8 @@ object AdminClient extends Accessible[AdminClient] {
 
   final case class DeleteRecordsOptions(timeout: Option[Duration]) {
     def asJava = {
-      val offsetOpt = new JDeleteRecordsOptions()
-      timeout.fold(offsetOpt)(timeout => offsetOpt.timeoutMs(timeout.toMillis.toInt))
+      val deleteRecordsOpt = new JDeleteRecordsOptions()
+      timeout.fold(deleteRecordsOpt)(timeout => deleteRecordsOpt.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
@@ -898,10 +948,11 @@ object AdminClient extends Accessible[AdminClient] {
       OffsetAndMetadata(om.offset(), om.leaderEpoch().toScala.map(_.toInt), Some(om.metadata()))
   }
 
-  final case class AlterConsumerGroupOffsetsOptions(
-    timeout: Duration
-  ) {
-    def asJava = new JAlterConsumerGroupOffsetsOptions().timeoutMs(timeout.toMillis.toInt)
+  final case class AlterConsumerGroupOffsetsOptions(timeout: Option[Duration]) {
+    def asJava = {
+      val options = new JAlterConsumerGroupOffsetsOptions()
+      timeout.fold(options)(timeout => options.timeoutMs(timeout.toMillis.toInt))
+    }
   }
 
   final case class ListConsumerGroupsOptions(states: Set[ConsumerGroupState]) {

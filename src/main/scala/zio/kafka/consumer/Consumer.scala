@@ -356,7 +356,8 @@ object Consumer {
                    settings.pollTimeout,
                    diagnostics,
                    settings.offsetRetrieval,
-                   settings.rebalanceListener
+                   settings.rebalanceListener,
+                   settings.restartStreamOnRebalancing
                  )
     } yield Live(wrapper, settings, runloop)
 
