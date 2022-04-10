@@ -413,7 +413,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 
         for {
           topic <- randomTopic
-          group     <- randomGroup
+          group <- randomGroup
           // Consume 5 records to have the offset committed at 5
           _ <- Consumer
                  .subscribeAnd(Subscription.topics(topic))
