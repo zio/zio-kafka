@@ -20,4 +20,5 @@ trait ZIOSpecWithKafka extends ZIOSpec[TestEnvironment with Kafka] {
 
   def randomGroup: Task[String] = randomThing(s"$kafkaPrefix-group")
 
+  def randomClient: Task[String] = randomThing(s"$kafkaPrefix-client")
 }

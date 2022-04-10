@@ -21,91 +21,115 @@ object ConsumerSpec extends ZIOSpecWithKafka {
     suite("Consumer Streaming")(
       test("export metrics") {
         for {
+          client <- randomClient
+          group  <- randomGroup
           metrics <- Consumer.metrics
-                       .provideSomeLayer[Kafka](consumer("client150", Some("group1289")))
+                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(metrics)(isNonEmpty)
       },
       test("plainStream emits messages for a topic subscription") {
         val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
         for {
-          _ <- produceMany("topic150", kvs)
+          topic  <- randomTopic
+          client <- randomClient
+          group  <- randomGroup
+
+          _ <- produceMany(topic, kvs)
 
           records <- Consumer
-                       .subscribeAnd(Subscription.Topics(Set("topic150")))
+                       .subscribeAnd(Subscription.Topics(Set(topic)))
                        .plainStream(Serde.string, Serde.string)
                        .take(5)
                        .runCollect
-                       .provideSomeLayer[Kafka](consumer("client150", Some("group150")))
+                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
       test("chunk sizes") {
         val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
         for {
-          _ <- produceMany("topic1289", kvs)
+          topic  <- randomTopic
+          client <- randomClient
+          group  <- randomGroup
+
+          _ <- produceMany(topic, kvs)
 
           sizes <- Consumer
-                     .subscribeAnd(Subscription.Topics(Set("topic1289")))
+                     .subscribeAnd(Subscription.Topics(Set(topic)))
                      .plainStream(Serde.string, Serde.string)
                      .take(100)
                      .mapChunks(c => Chunk(c.size))
                      .runCollect
-                     .provideSomeLayer[Kafka](consumer("client150", Some("group1289")))
+                     .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(sizes)(forall(isGreaterThan(1)))
       },
       test("Consumer.subscribeAnd works properly") {
         val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
         for {
-          _ <- produceMany("topic160", kvs)
+          topic  <- randomTopic
+          client <- randomClient
+          group  <- randomGroup
+
+          _ <- produceMany(topic, kvs)
 
           records <- Consumer
-                       .subscribeAnd(Subscription.Topics(Set("topic160")))
+                       .subscribeAnd(Subscription.Topics(Set(topic)))
                        .plainStream(Serde.string, Serde.string)
                        .take(5)
                        .runCollect
-                       .provideSomeLayer[Kafka](consumer("client160", Some("group160")))
+                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
       test("Consumer.subscribeAnd manual subscription without groupId works properly") {
         val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
         for {
-          _ <- produceMany("topic161", kvs)
+          topic  <- randomTopic
+          client <- randomClient
+
+          _ <- produceMany(topic, kvs)
 
           records <-
             Consumer
-              .subscribeAnd(Subscription.Manual(Set(new org.apache.kafka.common.TopicPartition("topic161", 0))))
+              .subscribeAnd(Subscription.Manual(Set(new org.apache.kafka.common.TopicPartition(topic, 0))))
               .plainStream(Serde.string, Serde.string)
               .take(5)
               .runCollect
-              .provideSomeLayer[Kafka](consumer(clientId = "client161"))
+              .provideSomeLayer[Kafka](consumer(clientId = client))
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
       test("Consuming+provideCustomLayer") {
         val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
         for {
-          _ <- produceMany("topic170", kvs)
+          topic  <- randomTopic
+          client <- randomClient
+          group  <- randomGroup
+
+          _ <- produceMany(topic, kvs)
 
           records <- Consumer
-                       .subscribeAnd(Subscription.Topics(Set("topic170")))
+                       .subscribeAnd(Subscription.Topics(Set(topic)))
                        .plainStream(Serde.string, Serde.string)
                        .take(100)
                        .runCollect
-                       .provideSomeLayer[Kafka](consumer("client170", Some("group170")))
+                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
       test("plainStream emits messages for a pattern subscription") {
         val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
         for {
+          client <- randomClient
+          group  <- randomGroup
+
           _ <- produceMany("pattern150", kvs)
           records <- Consumer
                        .subscribeAnd(Subscription.Pattern("pattern[0-9]+".r))
                        .plainStream(Serde.string, Serde.string)
                        .take(5)
                        .runCollect
-                       .provideSomeLayer[Kafka](consumer("client150", Some("group150")))
+                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
@@ -114,6 +138,9 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         val topic        = "manual-topic0"
 
         for {
+          client <- randomClient
+          group  <- randomGroup
+
           _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreach(1 to nrPartitions) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
@@ -123,7 +150,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                       .plainStream(Serde.string, Serde.string)
                       .take(1)
                       .runHead
-                      .provideSomeLayer[Kafka](consumer("client150", Some("group150")))
+                      .provideSomeLayer[Kafka](consumer(client, Some(group)))
           kvOut = record.map(r => (r.record.key, r.record.value))
         } yield assert(kvOut)(isSome(equalTo("key2" -> "msg2")))
       },
@@ -134,6 +161,9 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         val manualOffsetSeek = 3
 
         for {
+          client <- randomClient
+          group  <- randomGroup
+
           _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreachDiscard(1 to nrPartitions) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = (0 to 9).map(j => s"key$i-$j" -> s"msg$i-$j"))
@@ -145,7 +175,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                       .take(1)
                       .runHead
                       .provideSomeLayer[Kafka](
-                        consumer("client150", Some("group150"), offsetRetrieval = offsetRetrieval)
+                        consumer(client, Some(group), offsetRetrieval = offsetRetrieval)
                       )
           kvOut = record.map(r => (r.record.key, r.record.value))
         } yield assert(kvOut)(isSome(equalTo("key2-3" -> "msg2-3")))
@@ -153,12 +183,17 @@ object ConsumerSpec extends ZIOSpecWithKafka {
       test("restart from the committed position") {
         val data = (1 to 10).toList.map(i => s"key$i" -> s"msg$i")
         for {
-          _ <- produceMany("topic1111", 0, data)
+          topic  <- randomTopic
+          group  <- randomGroup
+          first  <- randomClient
+          second <- randomClient
+
+          _ <- produceMany(topic, 0, data)
           firstResults <- for {
                             results <- Consumer
-                                         .subscribeAnd(Subscription.Topics(Set("topic1111")))
+                                         .subscribeAnd(Subscription.Topics(Set(topic)))
                                          .partitionedStream(Serde.string, Serde.string)
-                                         .filter(_._1 == new TopicPartition("topic1111", 0))
+                                         .filter(_._1 == new TopicPartition(topic, 0))
                                          .flatMap(_._2)
                                          .take(5)
                                          .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
@@ -171,12 +206,12 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                                          }
                                          .runCollect
                                          .provideSomeLayer[Kafka](
-                                           consumer("first", Some("group1"))
+                                           consumer(first, Some(group))
                                          )
                           } yield results
           secondResults <- for {
                              results <- Consumer
-                                          .subscribeAnd(Subscription.Topics(Set("topic1111")))
+                                          .subscribeAnd(Subscription.Topics(Set(topic)))
                                           .partitionedStream(Serde.string, Serde.string)
                                           .flatMap(_._2)
                                           .take(5)
@@ -190,7 +225,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                                           }
                                           .runCollect
                                           .provideSomeLayer[Kafka](
-                                            consumer("second", Some("group1"))
+                                            consumer(second, Some(group))
                                           )
                            } yield results
         } yield assert((firstResults ++ secondResults).map(rec => rec.key() -> rec.value()).toList)(equalTo(data))
@@ -201,9 +236,11 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 
         for {
           // Produce messages on several partitions
-          topic <- randomTopic
-          group <- randomGroup
-          _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          topic  <- randomTopic
+          group  <- randomGroup
+          client <- randomClient
+
+          _ <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreach(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
@@ -220,7 +257,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                    }
                    .take(nrMessages.toLong)
                    .runDrain
-                   .provideSomeLayer[Kafka](consumer("client3", Some(group)))
+                   .provideSomeLayer[Kafka](consumer(client, Some(group)))
                    .fork
           _                    <- fib.join
           messagesPerPartition <- ZIO.foreach(messagesReceived.values)(_.get)
@@ -228,14 +265,16 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         } yield assert(messagesPerPartition)(forall(equalTo(nrMessages / nrPartitions)))
       },
       test("fail when the consuming effect produces a failure") {
-        val topic        = "consumeWith3"
-        val subscription = Subscription.Topics(Set(topic))
-        val nrMessages   = 10
-        val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+        val nrMessages = 10
+        val messages   = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
 
         for {
+          topic  <- randomTopic
+          group  <- randomGroup
+          client <- randomClient
+          subscription = Subscription.Topics(Set(topic))
           _ <- produceMany(topic, messages)
-          consumeResult <- consumeWithStrings("client3", Some("group3"), subscription) { case (_, _) =>
+          consumeResult <- consumeWithStrings(client, Some(group), subscription) { case (_, _) =>
                              ZIO.die(new IllegalArgumentException("consumeWith failure"))
                            }.exit
         } yield consumeResult.fold(
@@ -245,8 +284,10 @@ object ConsumerSpec extends ZIOSpecWithKafka {
       } @@ timeout(10.seconds),
       test("stopConsumption must stop the stream") {
         for {
-          topic         <- randomTopic
-          group         <- randomGroup
+          topic  <- randomTopic
+          group  <- randomGroup
+          client <- randomClient
+
           keepProducing <- Ref.make(true)
           _             <- (produceOne(topic, "key", "value") *> keepProducing.get).repeatWhile(b => b).fork
           _ <- Consumer
@@ -256,7 +297,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                  .tap { case (_, idx) => Consumer.stopConsumption.when(idx == 3) }
                  .runDrain
                  .provideSomeLayer[Kafka](
-                   consumer("client150", Some(group))
+                   consumer(client, Some(group))
                  ) *> keepProducing
                  .set(false)
         } yield assertCompletes
@@ -266,6 +307,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         val topic = "test-outstanding-commits"
         for {
           group            <- randomGroup
+          client           <- randomClient
           _                <- produceMany(topic, kvs)
           messagesReceived <- Ref.make[Int](0)
           offset <- (Consumer
@@ -281,7 +323,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                       .mapZIO(_.commit)
                       .runDrain *>
                       Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head))
-                      .provideSomeLayer[Kafka](consumer("client150", Some(group)))
+                      .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(offset.map(_.offset))(isSome(isLessThanEqualTo(10L)))
       } @@ TestAspect.ignore, // Not sure how to test this currently
       test("offset batching collects the latest offset for all partitions") {
@@ -290,9 +332,10 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 
         for {
           // Produce messages on several partitions
-          topic <- randomTopic
-          group <- randomGroup
-          _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          topic  <- randomTopic
+          group  <- randomGroup
+          client <- randomClient
+          _      <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreach(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
@@ -310,7 +353,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                        .mapZIO(_.commit)
                        .runDrain *>
                        Consumer.committed((0 until nrPartitions).map(new TopicPartition(topic, _)).toSet))
-                       .provideSomeLayer[Kafka](consumer("client3", Some(group)))
+                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / nrPartitions))))
       },
       test("handle rebalancing by completing topic-partition streams") {
@@ -319,9 +362,12 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 
         for {
           // Produce messages on several partitions
-          topic <- randomTopic
-          group <- randomGroup
-          _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          topic   <- randomTopic
+          group   <- randomGroup
+          client1 <- randomClient
+          client2 <- randomClient
+
+          _ <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreach(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
@@ -338,7 +384,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                          }
                          .take(nrPartitions.toLong / 2)
                          .runDrain
-                         .provideSomeLayer[Kafka](consumer("client1", Some(group)))
+                         .provideSomeLayer[Kafka](consumer(client1, Some(group)))
                          .fork
           _ <- Live.live(ZIO.sleep(5.seconds))
           consumer2 <- Consumer
@@ -346,7 +392,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                          .partitionedStream(Serde.string, Serde.string)
                          .take(nrPartitions.toLong / 2)
                          .runDrain
-                         .provideSomeLayer[Kafka](consumer("client2", Some(group)))
+                         .provideSomeLayer[Kafka](consumer(client2, Some(group)))
                          .fork
           _ <- consumer1.join
           _ <- consumer2.join
@@ -362,9 +408,12 @@ object ConsumerSpec extends ZIOSpecWithKafka {
             .flatMap { diagnostics =>
               for {
                 // Produce messages on several partitions
-                topic <- randomTopic
-                group <- randomGroup
-                _     <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+                topic   <- randomTopic
+                group   <- randomGroup
+                client1 <- randomClient
+                client2 <- randomClient
+
+                _ <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
                 _ <- ZIO.foreach(1 to nrMessages) { i =>
                        produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                      }
@@ -382,7 +431,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                                .take(nrPartitions.toLong / 2)
                                .runDrain
                                .provideSomeLayer[Kafka](
-                                 consumer("client1", Some(group), diagnostics = diagnostics)
+                                 consumer(client1, Some(group), diagnostics = diagnostics)
                                )
                                .fork
                 diagnosticStream <- ZStream
@@ -396,7 +445,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                                .partitionedStream(Serde.string, Serde.string)
                                .take(nrPartitions.toLong / 2)
                                .runDrain
-                               .provideSomeLayer[Kafka](consumer("client2", Some(group)))
+                               .provideSomeLayer[Kafka](consumer(client2, Some(group)))
                                .fork
                 _ <- consumer1.join
                 _ <- consumer1.join
@@ -412,8 +461,12 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         val manualOffsetSeek = 3
 
         for {
-          topic <- randomTopic
-          group <- randomGroup
+          topic   <- randomTopic
+          group   <- randomGroup
+          client1 <- randomClient
+          client2 <- randomClient
+
+          _ <- produceMany(topic, 0, data)
           // Consume 5 records to have the offset committed at 5
           _ <- Consumer
                  .subscribeAnd(Subscription.topics(topic))
@@ -428,7 +481,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                    offsetBatch.commit.as(records)
                  }
                  .runCollect
-                 .provideSomeLayer[Kafka](consumer("client1", Some(group)))
+                 .provideSomeLayer[Kafka](consumer(client1, Some(group)))
           // Start a new consumer with manual offset before the committed offset
           offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO.attempt(tps.map(_ -> manualOffsetSeek.toLong).toMap))
           secondResults <- Consumer
@@ -438,19 +491,23 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                              .map(_.record)
                              .runCollect
                              .provideSomeLayer[Kafka](
-                               consumer("client2", Some(group), offsetRetrieval = offsetRetrieval)
+                               consumer(client2, Some(group), offsetRetrieval = offsetRetrieval)
                              )
           // Check that we only got the records starting from the manually seek'd offset
         } yield assert(secondResults.map(rec => rec.key() -> rec.value()).toList)(equalTo(data.drop(manualOffsetSeek)))
       },
       test("commit offsets for all consumed messages") {
-        val topic        = "consumeWith2"
-        val subscription = Subscription.Topics(Set(topic))
-        val nrMessages   = 50
-        val messages     = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+        val nrMessages = 50
+        val messages   = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
 
-        def consumeIt(messagesReceived: Ref[List[(String, String)]], done: Promise[Nothing, Unit]) =
-          consumeWithStrings("client3", Some("group3"), subscription)({ (key, value) =>
+        def consumeIt(
+          client: String,
+          group: String,
+          subscription: Subscription,
+          messagesReceived: Ref[List[(String, String)]],
+          done: Promise[Nothing, Unit]
+        ) =
+          consumeWithStrings(client, Some(group), subscription)({ (key, value) =>
             for {
               messagesSoFar <- messagesReceived.updateAndGet(_ :+ (key -> value))
               _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
@@ -458,10 +515,15 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           }).fork
 
         for {
+          topic  <- randomTopic
+          group  <- randomGroup
+          client <- randomClient
+          subscription = Subscription.Topics(Set(topic))
+
           done             <- Promise.make[Nothing, Unit]
           messagesReceived <- Ref.make(List.empty[(String, String)])
           _                <- produceMany(topic, messages)
-          fib              <- consumeIt(messagesReceived, done)
+          fib              <- consumeIt(client, group, subscription, messagesReceived, done)
           _ <-
             done.await *> Live
               .live(
@@ -476,7 +538,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                           .run(ZSink.collectAll[(String, String)])
                           .map(_.head)
                           .orDie)
-                          .provideSomeLayer[Kafka](consumer("client3", Some("group3")))
+                          .provideSomeLayer[Kafka](consumer(client, Some(group)))
           consumedMessages <- messagesReceived.get
         } yield assert(consumedMessages)(contains(newMessage).negate)
       },
@@ -484,7 +546,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         for {
           topic  <- randomTopic
           group  <- randomGroup
-          client <- randomThing("client")
+          client <- randomClient
           partitions <- Consumer
                           .partitionsFor(topic)
                           .provideSomeLayer[Kafka](

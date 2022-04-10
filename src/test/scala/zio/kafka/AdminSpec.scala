@@ -31,8 +31,8 @@ object AdminSpec extends ZIOSpecWithKafka {
 
   override val kafkaPrefix: String = "adminspec"
 
-  private def listTopicsFiltered(client: AdminClient): ZIO[Any, Throwable, Map[String, AdminClient.TopicListing]] =
-    client.listTopics().map(_.filterKeys(_.startsWith("adminspec-")))
+  private def listTopicsFiltered(client: AdminClient) =
+    client.listTopics().map(_.filter { case (key, _) => key.startsWith("adminspec-") })
 
   override def spec =
     suite("client admin test")(
