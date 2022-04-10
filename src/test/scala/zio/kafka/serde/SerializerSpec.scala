@@ -4,7 +4,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders
 import zio.test.Assertion._
 import zio.test._
 
-object SerializerSpec extends DefaultRunnableSpec {
+object SerializerSpec extends ZIOSpecDefault {
   override def spec = suite("Serializer")(
     suite("asOption")(
       test("serialize None values to null") {

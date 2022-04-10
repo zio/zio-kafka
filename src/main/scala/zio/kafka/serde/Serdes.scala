@@ -1,11 +1,11 @@
 package zio.kafka.serde
 
+import org.apache.kafka.common.header.Headers
+import org.apache.kafka.common.serialization.{ Serde => KafkaSerde, Serdes => KafkaSerdes }
+import zio.{ RIO, Task }
+
 import java.nio.ByteBuffer
 import java.util.UUID
-
-import org.apache.kafka.common.serialization.{ Serde => KafkaSerde, Serdes => KafkaSerdes }
-import org.apache.kafka.common.header.Headers
-import zio.{ RIO, Task }
 
 private[zio] trait Serdes {
   lazy val long: Serde[Any, Long]     = convertPrimitiveSerde(KafkaSerdes.Long()).inmap(Long2long)(long2Long)

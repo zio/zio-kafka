@@ -234,7 +234,7 @@ private[consumer] final class Runloop(
     c: ByteArrayKafkaConsumer,
     assignment: Set[TopicPartition],
     requestedPartitions: Set[TopicPartition]
-  ) = {
+  ): Unit = {
     val toResume = assignment intersect requestedPartitions
     val toPause  = assignment -- requestedPartitions
 
@@ -391,13 +391,13 @@ private[consumer] final class Runloop(
           // Optimization: eagerly poll if we have pending requests instead of waiting
           // for the next scheduled poll.
           if (state.pendingRequests.nonEmpty) handlePoll(state)
-          else UIO.succeed(state)
+          else ZIO.succeed(state)
         }
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
     }
 
-  def run: ZIO[Clock with Scope, Throwable, Fiber.Runtime[Throwable, Unit]] =
+  def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Unit]] =
     ZStream
       .mergeAll(3, 1)(
         ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency)),
@@ -447,29 +447,17 @@ private[consumer] object Runloop {
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener
-  ): ZIO[Clock with Scope, Throwable, Runloop] =
+  ): ZIO[Scope, Throwable, Runloop] =
     for {
       rebalancingRef <- Ref.make(false)
       requestQueue   <- ZIO.acquireRelease(Queue.unbounded[Runloop.Request])(_.shutdown)
       commitQueue    <- ZIO.acquireRelease(Queue.unbounded[Command.Commit])(_.shutdown)
-      partitions <- ZIO.acquireRelease {
+      partitions <- ZIO.acquireRelease(
                       Queue
                         .unbounded[
                           Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
                         ]
-                        .map { queue =>
-                          queue
-                            .mapZIO(
-                              _.fold(
-                                queue.shutdown.as(Take.end),
-                                cause => UIO.succeed(Take.failCause(cause)),
-                                chunk => UIO.succeed(Take.chunk(chunk))
-                              )
-                            )
-                        }
-                    } { queue =>
-                      queue.shutdown
-                    }
+                    )(_.shutdown)
       shutdownRef   <- Ref.make(false)
       subscribedRef <- Ref.make(false)
       runloop = new Runloop(

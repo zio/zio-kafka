@@ -6,6 +6,7 @@ import zio._
 import zio.kafka.serde.Deserializer
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
+import zio.stream.ZStream.Pull
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
@@ -95,7 +96,7 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+    commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
   )(
     f: (K, V) => URIO[R1, Unit]
   ): ZIO[R with R1, Throwable, Unit]
@@ -135,8 +136,7 @@ object Consumer {
   private final case class Live(
     private val consumer: ConsumerAccess,
     private val settings: ConsumerSettings,
-    private val runloop: Runloop,
-    private val clock: Clock
+    private val runloop: Runloop
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
@@ -193,20 +193,39 @@ object Consumer {
     override def partitionedAssignmentStream[R, K, V](
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
-    ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] =
-      ZStream
-        .fromQueue(runloop.partitions)
-        .map(_.exit)
-        .flattenExitOption
-        .map {
-          _.map { case (tp, partition) =>
-            val partitionStream =
-              if (settings.perPartitionChunkPrefetch <= 0) partition
-              else partition.bufferChunks(settings.perPartitionChunkPrefetch)
-
-            tp -> partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
-          }
+    ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
+      val partitions = runloop.partitions
+      val stream =
+        ZStream.repeatZIOChunkOption {
+          partitions
+            .takeBetween(1, ZStream.DefaultChunkSize)
+            .flatMap { chunk =>
+              ZIO.foreach(chunk) { take =>
+                take.fold(
+                  partitions.shutdown.as(Take.end),
+                  cause => UIO.succeed(Take.failCause(cause)),
+                  chunk => UIO.succeed(Take.chunk(chunk))
+                )
+              }
+            }
+            .catchAllCause((c: Cause[Nothing]) =>
+              partitions.isShutdown.flatMap { down =>
+                if (down && c.isInterrupted) Pull.end
+                else Pull.failCause(c)
+              }
+            )
         }
+
+      stream.map(_.exit).flattenExitOption.map {
+        _.map { case (tp, partition) =>
+          val partitionStream =
+            if (settings.perPartitionChunkPrefetch <= 0) partition
+            else partition.bufferChunks(settings.perPartitionChunkPrefetch)
+
+          tp -> partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
+        }
+      }
+    }
 
     override def partitionedStream[R, K, V](
       keyDeserializer: Deserializer[R, K],
@@ -248,7 +267,7 @@ object Consumer {
       subscription: Subscription,
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V],
-      commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+      commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
     )(
       f: (K, V) => URIO[R1, Unit]
     ): ZIO[R with R1, Throwable, Unit] =
@@ -268,7 +287,6 @@ object Consumer {
                .provideEnvironment(r)
                .aggregateAsync(offsetBatches)
                .mapZIO(_.commitOrRetry(commitRetryPolicy))
-               .provideEnvironment(ZEnvironment(clock))
                .runDrain
       } yield ()
 
@@ -317,7 +335,7 @@ object Consumer {
   val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
-  def live: RLayer[Clock with ConsumerSettings with Diagnostics, Consumer] =
+  def live: RLayer[ConsumerSettings with Diagnostics, Consumer] =
     ZLayer.scoped {
       for {
         settings    <- ZIO.service[ConsumerSettings]
@@ -329,7 +347,7 @@ object Consumer {
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZIO[Clock with Scope, Throwable, Consumer] =
+  ): ZIO[Scope, Throwable, Consumer] =
     for {
       wrapper <- ConsumerAccess.make(settings)
       runloop <- Runloop(
@@ -340,8 +358,7 @@ object Consumer {
                    settings.offsetRetrieval,
                    settings.rebalanceListener
                  )
-      clock <- ZIO.service[Clock]
-    } yield Live(wrapper, settings, runloop, clock)
+    } yield Live(wrapper, settings, runloop)
 
   /**
    * Accessor method for [[Consumer.assignment]]
@@ -471,9 +488,9 @@ object Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    commitRetryPolicy: Schedule[Clock, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
-  )(f: (K, V) => URIO[R1, Unit]): RIO[R with R1 with Clock, Unit] =
-    ZIO.scoped[R with R1 with Clock] {
+    commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+  )(f: (K, V) => URIO[R1, Unit]): RIO[R with R1, Unit] =
+    ZIO.scoped[R with R1] {
       Consumer
         .make(settings)
         .flatMap(_.consumeWith[R, R1, K, V](subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))

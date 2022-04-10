@@ -11,8 +11,6 @@ import zio.kafka.embedded.Kafka
 import zio.kafka.producer._
 import zio.kafka.serde.{ Deserializer, Serde, Serializer }
 
-import java.util.UUID
-
 object KafkaTestUtils {
 
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
@@ -112,14 +110,13 @@ object KafkaTestUtils {
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZLayer[Kafka with Clock, Throwable, Consumer] =
-    (consumerSettings(clientId, groupId, clientInstanceId, allowAutoCreateTopics, offsetRetrieval).toLayer ++
-      ZLayer.environment[Clock] ++
+  ): ZLayer[Kafka, Throwable, Consumer] =
+    (ZLayer(consumerSettings(clientId, groupId, clientInstanceId, allowAutoCreateTopics, offsetRetrieval)) ++
       ZLayer.succeed(diagnostics)) >>> Consumer.live
 
   def consumeWithStrings[RC](clientId: String, groupId: Option[String] = None, subscription: Subscription)(
     r: (String, String) => URIO[Any, Unit]
-  ): RIO[Kafka with Clock, Unit] =
+  ): RIO[Kafka, Unit] =
     consumerSettings(clientId, groupId, None).flatMap { settings =>
       Consumer.consumeWith[Any, Any, String, String](
         settings,
@@ -132,23 +129,13 @@ object KafkaTestUtils {
   def adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(AdminClientSettings(_))
 
-  def withAdmin[T](f: AdminClient => RIO[Clock with Kafka, T]) =
+  def withAdmin[T](f: AdminClient => RIO[Kafka, T]) =
     for {
       settings <- adminSettings
-      fRes <- ZIO
-                .scoped(
-                  AdminClient
-                    .make(settings)
-                    .flatMap(client => f(client))
-                )
-                .provideSomeLayer[Kafka](Clock.live)
+      fRes <- ZIO.scoped {
+                AdminClient
+                  .make(settings)
+                  .flatMap(client => f(client))
+              }
     } yield fRes
-
-  def randomThing(prefix: String): Task[String] =
-    Task.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
-
-  def randomTopic: Task[String] = randomThing("topic")
-
-  def randomGroup: Task[String] = randomThing("group")
-
 }

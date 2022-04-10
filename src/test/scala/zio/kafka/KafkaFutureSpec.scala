@@ -7,7 +7,7 @@ import zio.test._
 import zio.test.TestAspect.flaky
 import zio.test.Assertion._
 
-object KafkaFutureSpec extends DefaultRunnableSpec {
+object KafkaFutureSpec extends ZIOSpecDefault {
   override def spec =
     suite("kafka future conversion")(
       test("completes successfully") {
@@ -64,7 +64,7 @@ object KafkaFutureSpec extends DefaultRunnableSpec {
       } @@ flaky
     )
 
-  def withKafkaFuture =
+  def withKafkaFuture: ZIO[Scope, Nothing, KafkaFutureImpl[Boolean]] =
     ZIO.acquireRelease {
       ZIO.succeed(new KafkaFutureImpl[Boolean])
     } { f =>

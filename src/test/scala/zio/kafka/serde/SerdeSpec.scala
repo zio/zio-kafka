@@ -6,7 +6,7 @@ import zio.test._
 
 import scala.reflect.ClassTag
 
-object SerdeSpec extends DefaultRunnableSpec {
+object SerdeSpec extends ZIOSpecDefault {
   override def spec = suite("Serde")(
     testSerde(Serde.string, Gen.string),
     testSerde(Serde.int, Gen.int),

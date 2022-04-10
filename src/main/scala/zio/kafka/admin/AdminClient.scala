@@ -954,14 +954,14 @@ object AdminClient extends Accessible[AdminClient] {
     )
 
   implicit class MapOps[K1, V1](val v: Map[K1, V1]) extends AnyVal {
-    def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2) = v.map(kv => fk(kv._1) -> fv(kv._2))
+    def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): Map[K2, V2] = v.map(kv => fk(kv._1) -> fv(kv._2))
   }
 
   implicit class OptionalOps[T](val v: Optional[T]) extends AnyVal {
-    def toScala = if (v.isPresent) Some(v.get()) else None
+    def toScala: Option[T] = if (v.isPresent) Some(v.get()) else None
   }
 
   implicit class OptionOps[T](val v: Option[T]) extends AnyVal {
-    def toJava = v.fold(Optional.empty[T])(Optional.of)
+    def toJava: Optional[T] = v.fold(Optional.empty[T])(Optional.of)
   }
 }
