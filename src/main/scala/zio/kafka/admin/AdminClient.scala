@@ -504,10 +504,10 @@ object AdminClient extends Accessible[AdminClient] {
 
   val live: ZLayer[AdminClientSettings, Throwable, AdminClient] =
     ZLayer.scoped {
-      (for {
+      for {
         settings <- ZIO.service[AdminClientSettings]
         admin    <- make(settings)
-      } yield admin)
+      } yield admin
     }
 
   def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] = {
@@ -527,7 +527,7 @@ object AdminClient extends Accessible[AdminClient] {
 
     kfv.flatMap(f =>
       Task.suspendSucceedWith { (p, _) =>
-        Task.asyncInterrupt { cb =>
+        Task.asyncInterrupt[Any, Throwable, T] { cb =>
           f.toCompletionStage.whenComplete { (v: T, t: Throwable) =>
             if (f.isCancelled) cb(ZIO.fiberId.flatMap(id => Task.failCause(Cause.interrupt(id))))
             else if (t ne null) cb(unwrapCompletionException(p.fatal)(t))
@@ -993,8 +993,8 @@ object AdminClient extends Accessible[AdminClient] {
     ZIO.succeed(new LiveAdminClient(javaClient))
 
   def fromManagedJavaClient[R, E](
-    managedJavaClient: ZIO[Scope with R, E, JAdminClient]
-  ): ZIO[Scope with R, E, AdminClient] =
+    managedJavaClient: ZIO[R with Scope, E, JAdminClient]
+  ): ZIO[R with Scope, E, AdminClient] =
     managedJavaClient.flatMap { javaClient =>
       fromJavaClient(javaClient)
     }
@@ -1005,14 +1005,14 @@ object AdminClient extends Accessible[AdminClient] {
     )
 
   implicit class MapOps[K1, V1](val v: Map[K1, V1]) extends AnyVal {
-    def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2) = v.map(kv => fk(kv._1) -> fv(kv._2))
+    def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): Map[K2, V2] = v.map(kv => fk(kv._1) -> fv(kv._2))
   }
 
   implicit class OptionalOps[T](val v: Optional[T]) extends AnyVal {
-    def toScala = if (v.isPresent) Some(v.get()) else None
+    def toScala: Option[T] = if (v.isPresent) Some(v.get()) else None
   }
 
   implicit class OptionOps[T](val v: Option[T]) extends AnyVal {
-    def toJava = v.fold(Optional.empty[T])(Optional.of)
+    def toJava: Optional[T] = v.fold(Optional.empty[T])(Optional.of)
   }
 }

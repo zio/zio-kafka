@@ -37,12 +37,16 @@ private[consumer] object ConsumerAccess {
   def make(settings: ConsumerSettings): ZIO[Scope, Throwable, ConsumerAccess] =
     for {
       access <- Semaphore.make(1)
-      consumer <- ZIO.acquireRelease(ZIO.attemptBlocking {
-                    new KafkaConsumer[Array[Byte], Array[Byte]](
-                      settings.driverSettings.asJava,
-                      new ByteArrayDeserializer(),
-                      new ByteArrayDeserializer()
-                    )
-                  })(c => ZIO.blocking(access.withPermit(UIO.succeed(c.close(settings.closeTimeout)))))
+      consumer <- ZIO.acquireRelease {
+                    ZIO.attemptBlocking {
+                      new KafkaConsumer[Array[Byte], Array[Byte]](
+                        settings.driverSettings.asJava,
+                        new ByteArrayDeserializer(),
+                        new ByteArrayDeserializer()
+                      )
+                    }
+                  } { consumer =>
+                    ZIO.blocking(access.withPermit(UIO.succeed(consumer.close(settings.closeTimeout))))
+                  }
     } yield new ConsumerAccess(consumer, access)
 }
