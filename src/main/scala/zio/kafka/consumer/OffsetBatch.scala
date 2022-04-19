@@ -2,7 +2,7 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata
 import org.apache.kafka.common.TopicPartition
-import zio.{ Clock, RIO, Schedule, Task }
+import zio.{ RIO, Schedule, Task }
 
 sealed trait OffsetBatch {
   def offsets: Map[TopicPartition, Long]
@@ -15,7 +15,7 @@ sealed trait OffsetBatch {
    * Attempts to commit and retries according to the given policy when the commit fails with a
    * RetriableCommitFailedException
    */
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any]): RIO[R with Clock, Unit] =
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
     Offset.commitOrRetry(commit, policy)
 }
 

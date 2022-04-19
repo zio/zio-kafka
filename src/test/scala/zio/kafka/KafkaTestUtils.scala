@@ -11,8 +11,6 @@ import zio.kafka.embedded.Kafka
 import zio.kafka.producer._
 import zio.kafka.serde.{ Deserializer, Serde, Serializer }
 
-import java.util.UUID
-
 object KafkaTestUtils {
 
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
@@ -115,21 +113,21 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false
-  ): ZLayer[Kafka with Clock, Throwable, Consumer] =
-    (consumerSettings(
-      clientId,
-      groupId,
-      clientInstanceId,
-      allowAutoCreateTopics,
-      offsetRetrieval,
-      restartStreamOnRebalancing
-    ).toLayer ++
-      ZLayer.environment[Clock] ++
-      ZLayer.succeed(diagnostics)) >>> Consumer.live
+  ): ZLayer[Kafka, Throwable, Consumer] =
+    (ZLayer(
+      consumerSettings(
+        clientId,
+        groupId,
+        clientInstanceId,
+        allowAutoCreateTopics,
+        offsetRetrieval,
+        restartStreamOnRebalancing
+      )
+    ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
   def consumeWithStrings[RC](clientId: String, groupId: Option[String] = None, subscription: Subscription)(
     r: (String, String) => URIO[Any, Unit]
-  ): RIO[Kafka with Clock, Unit] =
+  ): RIO[Kafka, Unit] =
     consumerSettings(clientId, groupId, None).flatMap { settings =>
       Consumer.consumeWith[Any, Any, String, String](
         settings,
@@ -142,20 +140,13 @@ object KafkaTestUtils {
   def adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(AdminClientSettings(_))
 
-  def withAdmin[T](f: AdminClient => RIO[Clock with Kafka, T]): ZIO[Kafka with Scope, Throwable, T] =
-    (
-      for {
-        settings    <- adminSettings
-        adminClient <- AdminClient.make(settings)
-        fRes        <- f(adminClient)
-      } yield fRes
-    ).provideSomeLayer[Kafka with Scope](Clock.live)
-
-  def randomThing(prefix: String): Task[String] =
-    Task.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
-
-  def randomTopic: Task[String] = randomThing("topic")
-
-  def randomGroup: Task[String] = randomThing("group")
-
+  def withAdmin[T](f: AdminClient => RIO[Kafka, T]) =
+    for {
+      settings <- adminSettings
+      fRes <- ZIO.scoped {
+                AdminClient
+                  .make(settings)
+                  .flatMap(client => f(client))
+              }
+    } yield fRes
 }
