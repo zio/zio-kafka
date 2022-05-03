@@ -46,7 +46,7 @@ private[consumer] object ConsumerAccess {
                       )
                     }
                   } { consumer =>
-                    ZIO.blocking(access.withPermit(UIO.succeed(consumer.close(settings.closeTimeout))))
+                    ZIO.blocking(access.withPermit(ZIO.succeed(consumer.close(settings.closeTimeout))))
                   }
     } yield new ConsumerAccess(consumer, access)
 }

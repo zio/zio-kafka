@@ -200,7 +200,7 @@ private[consumer] final class Runloop(
     val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
     buf ++= bufferedRecords
 
-    var fulfillAction: UIO[_] = UIO.unit
+    var fulfillAction: UIO[_] = ZIO.unit
 
     val reqsIt = pendingRequests.iterator
     while (reqsIt.hasNext) {
@@ -292,7 +292,7 @@ private[consumer] final class Runloop(
       _ <- currentState.set(state)
       pollResult <-
         consumer.withConsumerM { c =>
-          Task.suspend {
+          ZIO.suspend {
 
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
@@ -385,7 +385,7 @@ private[consumer] final class Runloop(
             })
       newPendingCommits <-
         ZIO.ifZIO(isRebalancing)(
-          UIO.succeed(state.pendingCommits),
+          ZIO.succeed(state.pendingCommits),
           doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).as(Chunk.empty)
         )
     } yield State(
@@ -397,13 +397,13 @@ private[consumer] final class Runloop(
 
   private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
-      UIO.succeed(state.addRequests(reqs)),
+      ZIO.succeed(state.addRequests(reqs)),
       consumer
         .withConsumer(_.assignment.asScala)
         .flatMap { assignment =>
           ZIO.foldLeft(reqs)(state) { (state, req) =>
             if (assignment.contains(req.tp))
-              UIO.succeed(state.addRequest(req))
+              ZIO.succeed(state.addRequest(req))
             else
               req.cont.fail(None).as(state)
           }
@@ -413,7 +413,7 @@ private[consumer] final class Runloop(
 
   private def handleCommit(state: State, cmd: Command.Commit): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
-      UIO.succeed(state.addCommit(cmd)),
+      ZIO.succeed(state.addCommit(cmd)),
       doCommit(Chunk(cmd)).as(state)
     )
 
@@ -439,7 +439,7 @@ private[consumer] final class Runloop(
     cmd match {
       case Command.Poll() =>
         // The consumer will throw an IllegalStateException if no call to subscribe
-        ZIO.ifZIO(subscribedRef.get)(handlePoll(state), UIO.succeed(state))
+        ZIO.ifZIO(subscribedRef.get)(handlePoll(state), ZIO.succeed(state))
       case Command.Requests(reqs) =>
         handleRequests(state, reqs).flatMap { state =>
           // Optimization: eagerly poll if we have pending requests instead of waiting
@@ -459,7 +459,7 @@ private[consumer] final class Runloop(
         ZStream.fromQueue(commitQueue)
       )
       .runFoldZIO(State.initial) { (state, cmd) =>
-        RIO.ifZIO(isShutdown)(handleShutdown(state, cmd), handleOperational(state, cmd))
+        ZIO.ifZIO(isShutdown)(handleShutdown(state, cmd), handleOperational(state, cmd))
       }
       .onError(cause => partitions.offer(Take.failCause(cause)))
       .unit

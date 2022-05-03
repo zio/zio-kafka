@@ -2,7 +2,7 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 import org.apache.kafka.common.TopicPartition
-import zio.{ Runtime, Task, UIO }
+import zio.{ Runtime, Task, ZIO }
 import scala.jdk.CollectionConverters._
 
 /**
@@ -61,8 +61,8 @@ object RebalanceListener {
     RebalanceListener(onAssigned, onRevoked, onRevoked)
 
   val noop = RebalanceListener(
-    (_, _) => UIO.unit,
-    (_, _) => UIO.unit,
-    (_, _) => UIO.unit
+    (_, _) => ZIO.unit,
+    (_, _) => ZIO.unit,
+    (_, _) => ZIO.unit
   )
 }

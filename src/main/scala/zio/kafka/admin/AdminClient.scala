@@ -199,7 +199,7 @@ trait AdminClient {
   ): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]]
 }
 
-object AdminClient extends Accessible[AdminClient] {
+object AdminClient {
 
   /**
    * Thin wrapper around apache java AdminClient. See java api for descriptions
@@ -320,7 +320,7 @@ object AdminClient extends Accessible[AdminClient] {
             .allTopicNames()
         )
       }.flatMap { jTopicDescriptions =>
-        Task
+        ZIO
           .foreach(jTopicDescriptions.asScala.toSeq) { case (k, v) =>
             AdminClient.TopicDescription(v).map(k -> _)
           }
@@ -361,7 +361,7 @@ object AdminClient extends Accessible[AdminClient] {
       fromKafkaFuture(
         describeCluster(options).map(_.nodes())
       ).flatMap { nodes =>
-        Task.foreach(nodes.asScala.toList) { jNode =>
+        ZIO.foreach(nodes.asScala.toList) { jNode =>
           ZIO
             .getOrFailWith(new RuntimeException("NoNode not expected when listing cluster nodes"))(
               Node(jNode)
@@ -393,7 +393,7 @@ object AdminClient extends Accessible[AdminClient] {
     ): Task[Set[AclOperation]] =
       for {
         res <- describeCluster(options)
-        opt <- fromKafkaFuture(Task.attempt(res.authorizedOperations())).map(Option(_))
+        opt <- fromKafkaFuture(ZIO.attempt(res.authorizedOperations())).map(Option(_))
         lst <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
         aclOperations = lst.map(AclOperation.apply)
       } yield aclOperations
@@ -548,18 +548,18 @@ object AdminClient extends Accessible[AdminClient] {
      */
     def unwrapCompletionException(isFatal: Throwable => Boolean)(t: Throwable): Task[Nothing] =
       t match {
-        case e: CompletionException => Task.fail(e.getCause)
-        case e if !isFatal(e)       => Task.fail(e)
-        case e                      => Task.die(e)
+        case e: CompletionException => ZIO.fail(e.getCause)
+        case e if !isFatal(e)       => ZIO.fail(e)
+        case e                      => ZIO.die(e)
       }
 
     kfv.flatMap(f =>
-      Task.suspendSucceedWith { (p, _) =>
-        Task.asyncInterrupt[Any, Throwable, T] { cb =>
+      ZIO.isFatalWith { isFatal =>
+        ZIO.asyncInterrupt[Any, Throwable, T] { cb =>
           f.toCompletionStage.whenComplete { (v: T, t: Throwable) =>
-            if (f.isCancelled) cb(ZIO.fiberId.flatMap(id => Task.failCause(Cause.interrupt(id))))
-            else if (t ne null) cb(unwrapCompletionException(p.fatal)(t))
-            else cb(Task.succeed(v))
+            if (f.isCancelled) cb(ZIO.fiberId.flatMap(id => ZIO.failCause(Cause.interrupt(id))))
+            else if (t ne null) cb(unwrapCompletionException(isFatal)(t))
+            else cb(ZIO.succeed(v))
           }
 
           Left(ZIO.succeed(f.cancel(true)))
@@ -831,7 +831,7 @@ object AdminClient extends Accessible[AdminClient] {
   object TopicDescription {
     def apply(jt: JTopicDescription): Task[TopicDescription] = {
       val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet)
-      Task.foreach(jt.partitions.asScala.toList)(TopicPartitionInfo.apply).map { partitions =>
+      ZIO.foreach(jt.partitions.asScala.toList)(TopicPartitionInfo.apply).map { partitions =>
         TopicDescription(
           jt.name,
           jt.isInternal,
@@ -854,7 +854,7 @@ object AdminClient extends Accessible[AdminClient] {
 
   object TopicPartitionInfo {
     def apply(jtpi: JTopicPartitionInfo): Task[TopicPartitionInfo] = {
-      val replicas: ZIO[Any, RuntimeException, List[Node]] = Task.foreach(
+      val replicas: ZIO[Any, RuntimeException, List[Node]] = ZIO.foreach(
         jtpi
           .replicas()
           .asScala
@@ -863,7 +863,7 @@ object AdminClient extends Accessible[AdminClient] {
         ZIO.getOrFailWith(new RuntimeException("NoNode node not expected among topic replicas"))(Node(jNode))
       }
 
-      val inSyncReplicas: ZIO[Any, RuntimeException, List[Node]] = Task.foreach(
+      val inSyncReplicas: ZIO[Any, RuntimeException, List[Node]] = ZIO.foreach(
         jtpi
           .isr()
           .asScala

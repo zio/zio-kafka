@@ -152,7 +152,7 @@ object Producer {
       keySerializer: Serializer[R, K],
       valueSerializer: Serializer[R, V]
     ): RIO[R, Task[Chunk[RecordMetadata]]] =
-      if (records.isEmpty) ZIO.succeed(Task.succeed(Chunk.empty))
+      if (records.isEmpty) ZIO.succeed(ZIO.succeed(Chunk.empty))
       else {
         for {
           done              <- Promise.make[Throwable, Chunk[RecordMetadata]]
@@ -233,7 +233,7 @@ object Producer {
         value <- valueSerializer.serialize(r.topic, r.headers, r.value())
       } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
 
-    private[producer] def close: UIO[Unit] = UIO.succeed(p.close(producerSettings.closeTimeout))
+    private[producer] def close: UIO[Unit] = ZIO.succeed(p.close(producerSettings.closeTimeout))
   }
 
   val live: RLayer[ProducerSettings, Producer] =
