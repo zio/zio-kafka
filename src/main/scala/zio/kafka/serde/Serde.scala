@@ -20,7 +20,7 @@ trait Serde[-R, T] extends Deserializer[R, T] with Serializer[R, T] {
   /**
    * Creates a new Serde that uses optional values. Null data will be mapped to None values.
    */
-  def asOption(implicit ev: T <:< AnyRef, ev2: Null <:< T): Serde[R, Option[T]] =
+  override def asOption(implicit ev: T <:< AnyRef): Serde[R, Option[T]] =
     Serde(super[Deserializer].asOption)(super[Serializer].asOption)
 
   /**
