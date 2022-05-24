@@ -1,8 +1,8 @@
 package zio.kafka.serde
 
-import zio.{ RIO, Task, ZIO }
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Serializer => KafkaSerializer }
+import zio.{ RIO, Task, ZIO }
 
 import scala.jdk.CollectionConverters._
 
@@ -37,7 +37,7 @@ trait Serializer[-R, -T] {
   /**
    * Returns a new serializer that handles optional values and serializes them as nulls.
    */
-  def asOption[U <: T](implicit ev: Null <:< T): Serializer[R, Option[U]] =
+  def asOption[U <: T]: Serializer[R, Option[U]] =
     Serializer { (topic, headers, valueOpt) =>
       valueOpt match {
         case None        => ZIO.succeed(null)
