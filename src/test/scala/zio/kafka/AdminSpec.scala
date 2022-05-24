@@ -300,6 +300,34 @@ object AdminSpec extends ZIOSpecWithKafka {
             assert(invalidGroupIdOffsets)(isEmpty)
         }
       },
+      test("delete consumer group offsets") {
+
+        def consumeAndCommit(count: Long, topic: String, groupId: String) =
+          Consumer
+            .subscribeAnd(Subscription.Topics(Set(topic)))
+            .plainStream[Kafka, String, String](Serde.string, Serde.string)
+            .take(count)
+            .foreach(_.offset.commit)
+            .provideSomeLayer[Kafka](consumer(topic, Some(groupId)))
+
+        KafkaTestUtils.withAdmin { client =>
+          for {
+            topic   <- randomTopic
+            groupId <- randomGroup
+            msgCount   = 20
+            msgConsume = 15
+            kvs        = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
+            _ <- client.createTopics(List(AdminClient.NewTopic(topic, 1, 1)))
+            _ <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
+            _ <- consumeAndCommit(msgConsume.toLong, topic, groupId)
+            _ <- client.deleteConsumerGroups(Chunk.single(groupId))
+            offsets <- client.listConsumerGroupOffsets(
+                         groupId,
+                         Some(ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 0))))
+                       )
+          } yield assert(offsets.get(TopicPartition(topic, 0)).map(_.offset))(isNone)
+        }
+      },
       test("describe consumer groups") {
         KafkaTestUtils.withAdmin { implicit admin =>
           for {

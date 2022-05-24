@@ -9,6 +9,7 @@ import org.apache.kafka.clients.admin.{
   ConsumerGroupListing => JConsumerGroupListing,
   CreatePartitionsOptions => JCreatePartitionsOptions,
   CreateTopicsOptions => JCreateTopicsOptions,
+  DeleteConsumerGroupsOptions => JDeleteConsumerGroupsOptions,
   DeleteRecordsOptions => JDeleteRecordsOptions,
   DeleteTopicsOptions => JDeleteTopicsOptions,
   DescribeClusterOptions => JDescribeClusterOptions,
@@ -64,6 +65,14 @@ trait AdminClient {
    * Create a single topic.
    */
   def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit]
+
+  /**
+   * Delete consumer groups.
+   */
+  def deleteConsumerGroups(
+    groupIds: Iterable[String],
+    options: Option[DeleteConsumerGroupOptions] = None
+  ): Task[Unit]
 
   /**
    * Delete multiple topics.
@@ -224,6 +233,25 @@ object AdminClient extends Accessible[AdminClient] {
      */
     override def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit] =
       createTopics(List(newTopic), Some(CreateTopicsOptions(validateOnly = validateOnly, timeout = Option.empty)))
+
+    /**
+     * Delete consumer groups.
+     */
+    override def deleteConsumerGroups(
+      groupIds: Iterable[String],
+      options: Option[DeleteConsumerGroupOptions]
+    ): Task[Unit] = {
+      val asJava = groupIds.asJavaCollection
+      fromKafkaFutureVoid {
+        ZIO.attemptBlocking(
+          options
+            .fold(adminClient.deleteConsumerGroups(asJava))(opts =>
+              adminClient.deleteConsumerGroups(asJava, opts.asJava)
+            )
+            .all()
+        )
+      }
+    }
 
     /**
      * Delete multiple topics.
@@ -679,6 +707,13 @@ object AdminClient extends Accessible[AdminClient] {
   final case class CreateTopicsOptions(validateOnly: Boolean, timeout: Option[Duration]) {
     def asJava: JCreateTopicsOptions = {
       val opts = new JCreateTopicsOptions().validateOnly(validateOnly)
+      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
+    }
+  }
+
+  final case class DeleteConsumerGroupOptions(timeout: Option[Duration]) {
+    def asJava: JDeleteConsumerGroupsOptions = {
+      val opts = new JDeleteConsumerGroupsOptions()
       timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
     }
   }

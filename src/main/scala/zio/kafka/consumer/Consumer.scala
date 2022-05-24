@@ -101,7 +101,7 @@ trait Consumer {
     f: (K, V) => URIO[R1, Unit]
   ): ZIO[R with R1, Throwable, Unit]
 
-  def subscribe(subscripstion: Subscription): Task[Unit]
+  def subscribe(subscription: Subscription): Task[Unit]
 
   def unsubscribe: Task[Unit]
 
