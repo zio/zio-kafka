@@ -52,7 +52,7 @@ import zio.Clock, zio.ZLayer, zio.ZManaged
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 
 val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
-val consumerManaged: ZIO[Scope with Clock, Throwable, Consumer] =
+val consumerManaged: ZIO[Scope, Throwable, Consumer] =
   Consumer.make(consumerSettings)
 val consumer: ZLayer[Clock, Throwable, Consumer] =
   ZLayer.scoped(consumerManaged)

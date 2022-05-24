@@ -88,7 +88,7 @@ object KafkaTestUtils {
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(ProducerSettings(_))
 
   val producer: ZLayer[Kafka, Throwable, Producer] =
-    (ZLayer.fromZIO(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
+    (ZLayer(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
       Producer.live
 
   val transactionalProducerSettings: ZIO[Kafka, Nothing, TransactionalProducerSettings] =

@@ -1,12 +1,11 @@
 package zio.kafka.serde
 
-import org.apache.kafka.common.serialization.{ Serde => KafkaSerde }
 import org.apache.kafka.common.header.Headers
-
+import org.apache.kafka.common.serialization.{ Serde => KafkaSerde }
 import zio.{ RIO, Task }
 
-import scala.util.Try
 import scala.jdk.CollectionConverters._
+import scala.util.Try
 
 /**
  * A serializer and deserializer for values of type T

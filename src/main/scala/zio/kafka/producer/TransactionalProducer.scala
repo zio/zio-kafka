@@ -61,7 +61,7 @@ object TransactionalProducer {
       }
   }
 
-  def createTransaction: ZIO[Scope with TransactionalProducer, Throwable, Transaction] =
+  def createTransaction: ZIO[TransactionalProducer with Scope, Throwable, Transaction] =
     ZIO.service[TransactionalProducer].flatMap(_.createTransaction)
 
   val live: RLayer[TransactionalProducerSettings, TransactionalProducer] =
@@ -87,5 +87,7 @@ object TransactionalProducer {
         semaphore <- Semaphore.make(1)
         live = Producer.Live(rawProducer, settings.producerSettings)
       } yield LiveTransactionalProducer(live, semaphore)
-    }(_.live.close)
+    } { producer =>
+      producer.live.close
+    }
 }
