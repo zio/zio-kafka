@@ -38,7 +38,12 @@ trait Serializer[-R, -T] {
    * Returns a new serializer that handles optional values and serializes them as nulls.
    */
   def asOption[U <: T](implicit ev: Null <:< T): Serializer[R, Option[U]] =
-    contramap(_.orNull)
+    Serializer { (topic, headers, valueOpt) =>
+      valueOpt match {
+        case None        => ZIO.succeed(null)
+        case Some(value) => serialize(topic, headers, value)
+      }
+    }
 }
 
 object Serializer extends Serdes {
