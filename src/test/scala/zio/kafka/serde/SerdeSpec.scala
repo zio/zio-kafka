@@ -9,7 +9,7 @@ import scala.reflect.ClassTag
 object SerdeSpec extends ZIOSpecDefault {
   case class TestDataStructure(value: String)
 
-  val testDataStructureSerde = Serde.string.inmap[TestDataStructure](TestDataStructure)(_.value)
+  val testDataStructureSerde = Serde.string.inmap[TestDataStructure](TestDataStructure.apply)(_.value)
 
   override def spec = suite("Serde")(
     testSerde(Serde.string, Gen.string),
