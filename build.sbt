@@ -1,6 +1,6 @@
 lazy val scala212  = "2.12.15"
 lazy val scala213  = "2.13.8"
-lazy val scala3    = "3.1.1"
+lazy val scala3    = "3.1.2"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
@@ -8,8 +8,8 @@ resolvers +=
   "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
 
 lazy val zioVersion           = "2.0.0-RC6+36-1b27001b-SNAPSHOT"
-lazy val kafkaVersion         = "3.1.0"
-lazy val embeddedKafkaVersion = "3.1.0" // Should be the same as kafkaVersion, except for the patch part
+lazy val kafkaVersion         = "3.2.0"
+lazy val embeddedKafkaVersion = "3.2.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion % Test
 
@@ -71,7 +71,7 @@ lazy val kafka =
         "dev.zio"                   %% "zio-test"                % zioVersion % Test,
         "dev.zio"                   %% "zio-test-sbt"            % zioVersion % Test,
         "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.2",
+        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.3",
         "ch.qos.logback"             % "logback-classic"         % "1.2.11"   % Test,
         "org.scala-lang.modules"    %% "scala-collection-compat" % "2.7.0"
       ) ++ {
