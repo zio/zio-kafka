@@ -46,7 +46,6 @@ import org.apache.kafka.common.{
 import zio._
 
 import java.util.Optional
-import java.util.concurrent.CompletionException
 import scala.jdk.CollectionConverters._
 
 trait AdminClient {
@@ -538,35 +537,8 @@ object AdminClient extends Accessible[AdminClient] {
       } yield admin
     }
 
-  def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] = {
-
-    /*
-     * Inspired by the implementation of [[zio.interop.javaz.fromCompletionStage]].
-     *
-     * See:
-     *   - https://github.com/zio/zio/blob/v1.0.13/core/jvm/src/main/scala/zio/interop/javaz.scala#L47-L80
-     */
-    def unwrapCompletionException(isFatal: Throwable => Boolean)(t: Throwable): Task[Nothing] =
-      t match {
-        case e: CompletionException => Task.fail(e.getCause)
-        case e if !isFatal(e)       => Task.fail(e)
-        case e                      => Task.die(e)
-      }
-
-    kfv.flatMap(f =>
-      Task.suspendSucceedWith { (p, _) =>
-        Task.asyncInterrupt[Any, Throwable, T] { cb =>
-          f.toCompletionStage.whenComplete { (v: T, t: Throwable) =>
-            if (f.isCancelled) cb(ZIO.fiberId.flatMap(id => Task.failCause(Cause.interrupt(id))))
-            else if (t ne null) cb(unwrapCompletionException(p.fatal)(t))
-            else cb(Task.succeed(v))
-          }
-
-          Left(ZIO.succeed(f.cancel(true)))
-        }
-      }
-    )
-  }
+  def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] =
+    kfv.flatMap(f => ZIO.fromCompletionStage(f.toCompletionStage))
 
   def fromKafkaFutureVoid[R](kfv: RIO[R, KafkaFuture[Void]]): RIO[R, Unit] =
     fromKafkaFuture(kfv).unit
