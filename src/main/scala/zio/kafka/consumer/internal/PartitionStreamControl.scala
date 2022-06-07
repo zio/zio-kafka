@@ -4,7 +4,7 @@ import zio._
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.Take
 
-case class PartitionStreamControl(
+private case class PartitionStreamControl(
   interrupt: Promise[Throwable, Unit],
   drainQueue: Queue[Take[Nothing, ByteArrayCommittableRecord]]
 ) {
