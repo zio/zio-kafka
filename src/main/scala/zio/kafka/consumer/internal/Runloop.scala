@@ -8,7 +8,6 @@ import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, ByteArrayConsumerRecord, Command }
-import zio.stream.ZStream.TerminationStrategy
 import zio.stream._
 
 import java.util
@@ -51,11 +50,10 @@ private[consumer] final class Runloop(
                    result  <- request.await
                  } yield result
                }.interruptWhen(interruptionPromise)
-                 .merge(
+                 .concat(
                    ZStream
                      .fromQueue(drainQueue)
-                     .flattenTake,
-                   TerminationStrategy.Both
+                     .flattenTake
                  )
     } yield (tp, PartitionStreamControl(interruptionPromise, drainQueue), stream)
 
