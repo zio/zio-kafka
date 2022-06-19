@@ -349,7 +349,11 @@ private[consumer] final class Runloop(
                   revokeResult <-
                     rebalanceEvent match {
                       case Some(event) =>
-                        ZIO.succeed(event.revokeResult)
+                        ZIO.succeed(
+                          event.revokeResult.copy(
+                            bufferedRecords = event.revokeResult.bufferedRecords ++ unrequestedRecords
+                          )
+                        )
                       case None =>
                         endRevoked(
                           state.pendingRequests,
