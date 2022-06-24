@@ -4,10 +4,7 @@ lazy val scala3    = "3.1.2"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-resolvers +=
-  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
-
-lazy val zioVersion           = "2.0.0-RC6+36-1b27001b-SNAPSHOT"
+lazy val zioVersion           = "2.0.0"
 lazy val kafkaVersion         = "3.2.0"
 lazy val embeddedKafkaVersion = "3.2.0" // Should be the same as kafkaVersion, except for the patch part
 

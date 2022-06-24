@@ -136,12 +136,12 @@ object Producer {
                p.send(
                  serializedRecord,
                  new Callback {
-                   def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
-                     if (err != null) runtime.unsafeRun(done.fail(err))
-                     else runtime.unsafeRun(done.succeed(metadata))
-
-                     ()
-                   }
+                   def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
+                     Unsafe.unsafeCompat { implicit u =>
+                       if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
+                       else runtime.unsafe.run(done.succeed(metadata)).getOrThrowFiberFailure()
+                       ()
+                     }
                  }
                )
              }
@@ -170,16 +170,17 @@ object Producer {
                    p.send(
                      rec,
                      new Callback {
-                       def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
-                         if (err != null) runtime.unsafeRun(done.fail(err))
-                         else {
-                           res(idx) = metadata
-                           if (count.incrementAndGet == records.length)
-                             runtime.unsafeRun(done.succeed(Chunk.fromArray(res)))
-                         }
+                       def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
+                         Unsafe.unsafeCompat { implicit u =>
+                           if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
+                           else {
+                             res(idx) = metadata
+                             if (count.incrementAndGet == records.length)
+                               runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure()
+                           }
 
-                         ()
-                       }
+                           ()
+                         }
                      }
                    )
                  }
