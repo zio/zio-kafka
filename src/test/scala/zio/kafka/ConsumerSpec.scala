@@ -277,11 +277,10 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           consumeResult <- consumeWithStrings(client, Some(group), subscription) { case (_, _) =>
                              ZIO.die(new IllegalArgumentException("consumeWith failure"))
                            }.exit
-          result <- consumeResult.fold(
-                      _ => assertCompletes,
-                      _ => assert("result")(equalTo("Expected consumeWith to fail"))
-                    )
-        } yield result
+        } yield consumeResult.foldExit[TestResult](
+          _ => assertCompletes,
+          _ => assert("result")(equalTo("Expected consumeWith to fail"))
+        )
       } @@ timeout(10.seconds),
       test("stopConsumption must stop the stream") {
         for {
