@@ -9,15 +9,15 @@ object DeserializerSpec extends ZIOSpecDefault {
   override def spec = suite("Deserializer")(
     suite("asOption")(
       test("deserialize to None when value is null") {
-        assertM(stringDeserializer.asOption.deserialize("topic1", new RecordHeaders, null))(isNone)
+        assertZIO(stringDeserializer.asOption.deserialize("topic1", new RecordHeaders, null))(isNone)
       },
       test("deserialize to None when value is null also when underlying deserializer fails on null values") {
         val deserializer = Deserializer[Any, Nothing]((_, _, _) => ZIO.fail(new RuntimeException("cannot handle null")))
-        assertM(deserializer.asOption.deserialize("topic1", new RecordHeaders, null))(isNone)
+        assertZIO(deserializer.asOption.deserialize("topic1", new RecordHeaders, null))(isNone)
       },
       test("deserialize to Some when value is not null") {
         check(Gen.string) { string =>
-          assertM(stringDeserializer.asOption.deserialize("topic1", new RecordHeaders, string.getBytes("UTF-8")))(
+          assertZIO(stringDeserializer.asOption.deserialize("topic1", new RecordHeaders, string.getBytes("UTF-8")))(
             isSome(equalTo(string))
           )
         }

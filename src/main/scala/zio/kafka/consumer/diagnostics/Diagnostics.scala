@@ -6,14 +6,14 @@ trait Diagnostics {
   val enabled: Boolean = true
 
   def emitIfEnabled(event: => DiagnosticEvent): UIO[Unit] =
-    if (enabled) emit(event) else UIO.unit
+    if (enabled) emit(event) else ZIO.unit
 
   protected def emit(event: DiagnosticEvent): UIO[Unit]
 }
 object Diagnostics {
   case object NoOp extends Diagnostics {
     override val enabled: Boolean                        = false
-    override def emit(event: DiagnosticEvent): UIO[Unit] = UIO.unit
+    override def emit(event: DiagnosticEvent): UIO[Unit] = ZIO.unit
   }
 
   final case class SlidingQueue(queue: Queue[DiagnosticEvent]) extends Diagnostics {

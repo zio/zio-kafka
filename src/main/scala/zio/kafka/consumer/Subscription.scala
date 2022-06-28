@@ -1,6 +1,6 @@
 package zio.kafka.consumer
 
-import zio.Task
+import zio.{ Task, ZIO }
 
 import scala.util.matching.Regex
 import java.util.regex.{ Pattern => JPattern }
@@ -42,7 +42,7 @@ object Subscription {
    *   The created subscription or failure when the pattern is invalid
    */
   def pattern(pattern: String): Task[Subscription] =
-    Task.attempt(new Regex(pattern)).map(Pattern.apply)
+    ZIO.attempt(new Regex(pattern)).map(Pattern.apply)
 
   /**
    * Create a subscription for all topics matching the given pattern

@@ -17,7 +17,7 @@ import zio.test._
 object ConsumerSpec extends ZIOSpecWithKafka {
   override val kafkaPrefix: String = "consumespec"
 
-  override def spec: ZSpec[TestEnvironment with Kafka, Throwable] =
+  override def spec: Spec[TestEnvironment with Kafka, Throwable] =
     suite("Consumer Streaming")(
       test("export metrics") {
         for {
@@ -240,7 +240,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           group  <- randomGroup
           client <- randomClient
 
-          _ <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreach(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
@@ -277,7 +277,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           consumeResult <- consumeWithStrings(client, Some(group), subscription) { case (_, _) =>
                              ZIO.die(new IllegalArgumentException("consumeWith failure"))
                            }.exit
-        } yield consumeResult.fold(
+        } yield consumeResult.foldExit[TestResult](
           _ => assertCompletes,
           _ => assert("result")(equalTo("Expected consumeWith to fail"))
         )
@@ -335,7 +335,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           topic  <- randomTopic
           group  <- randomGroup
           client <- randomClient
-          _      <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _      <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreach(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
@@ -367,7 +367,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           client1 <- randomClient
           client2 <- randomClient
 
-          _ <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreach(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
@@ -413,7 +413,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                 client1 <- randomClient
                 client2 <- randomClient
 
-                _ <- Task.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+                _ <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
                 _ <- ZIO.foreach(1 to nrMessages) { i =>
                        produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                      }
@@ -510,7 +510,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           consumeWithStrings(client, Some(group), subscription)({ (key, value) =>
             for {
               messagesSoFar <- messagesReceived.updateAndGet(_ :+ (key -> value))
-              _             <- Task.when(messagesSoFar.size == nrMessages)(done.succeed(()))
+              _             <- ZIO.when(messagesSoFar.size == nrMessages)(done.succeed(()))
             } yield ()
           }).fork
 
@@ -585,7 +585,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                 }
               }))
 
-              registerAssignment.drain ++ partStream.fixed(10.millis) ++ deregisterAssignment.drain
+              registerAssignment.drain ++ partStream.schedule(Schedule.fixed(10.millis)) ++ deregisterAssignment.drain
             }
             .flattenParUnbounded()
             .runDrain
@@ -610,7 +610,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           client1        <- randomThing("client-1")
           client2        <- randomThing("client-2")
           client3        <- randomThing("client-3")
-          _              <- Task.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _              <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _              <- produceMany(topic, kvs = (0 until nrMessages).map(n => s"key-$n" -> s"value->$n"))
           allAssignments <- Ref.make(Map.empty[Int, List[Int]])
           check = checkAssignments(allAssignments)(_)
@@ -664,7 +664,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           client1 <- randomClient
           client2 <- randomClient
 
-          _ <- Task.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
@@ -731,7 +731,5 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         } yield assert(messagesPerPartition0)(forall(equalTo(nrMessages / nrPartitions))) &&
           assert(messagesPerPartition)(forall(isGreaterThan(0) && isLessThanEqualTo(nrMessages / nrPartitions)))
       }
-    ).provideSomeLayerShared[TestEnvironment with Kafka](
-      producer.mapError(TestFailure.fail)
-    ) @@ withLiveClock @@ timeout(180.seconds)
+    ).provideSomeLayerShared[TestEnvironment with Kafka](producer) @@ withLiveClock @@ timeout(180.seconds)
 }

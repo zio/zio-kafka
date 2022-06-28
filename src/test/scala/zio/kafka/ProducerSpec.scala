@@ -440,7 +440,7 @@ object ProducerSpec extends ZIOSpecWithKafka {
           t <- transactionThief.get
           _ <- t.get.produce(topic, 0, 0, Serde.int, Serde.int, None)
         } yield ()
-        assertM(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
+        assertZIO(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
       },
       test("fails if transaction leaks in an open transaction") {
         val test = for {
@@ -458,7 +458,7 @@ object ProducerSpec extends ZIOSpecWithKafka {
                  }
                }
         } yield ()
-        assertM(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
+        assertZIO(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
       }
     ).provideSomeLayerShared[TestEnvironment with Kafka](
       (KafkaTestUtils.producer ++ transactionalProducer)

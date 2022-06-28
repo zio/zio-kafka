@@ -2,7 +2,7 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata
 import org.apache.kafka.common.TopicPartition
-import zio.{ RIO, Schedule, Task }
+import zio.{ RIO, Schedule, Task, ZIO }
 
 sealed trait OffsetBatch {
   def offsets: Map[TopicPartition, Long]
@@ -53,7 +53,7 @@ private final case class OffsetBatchImpl(
 
 case object EmptyOffsetBatch extends OffsetBatch {
   val offsets: Map[TopicPartition, Long]                   = Map.empty
-  val commit: Task[Unit]                                   = Task.unit
+  val commit: Task[Unit]                                   = ZIO.unit
   def merge(offset: Offset): OffsetBatch                   = offset.batch
   def merge(offsets: OffsetBatch): OffsetBatch             = offsets
   def consumerGroupMetadata: Option[ConsumerGroupMetadata] = None

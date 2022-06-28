@@ -203,8 +203,8 @@ object Consumer {
               ZIO.foreach(chunk) { take =>
                 take.fold(
                   partitions.shutdown.as(Take.end),
-                  cause => UIO.succeed(Take.failCause(cause)),
-                  chunk => UIO.succeed(Take.chunk(chunk))
+                  cause => ZIO.succeed(Take.failCause(cause)),
+                  chunk => ZIO.succeed(Take.chunk(chunk))
                 )
               }
             }
