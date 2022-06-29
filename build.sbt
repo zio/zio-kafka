@@ -19,7 +19,6 @@ inThisBuild(
     scalaVersion             := mainScala,
     crossScalaVersions       := allScala,
     Test / parallelExecution := false,
-    Test / fork              := true,
     run / fork               := true,
     pgpPublicRing            := file("/tmp/public.asc"),
     pgpSecretRing            := file("/tmp/secret.asc"),
