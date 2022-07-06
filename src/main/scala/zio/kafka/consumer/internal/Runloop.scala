@@ -7,7 +7,12 @@ import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, ByteArrayConsumerRecord, Command }
+import zio.kafka.consumer.internal.Runloop.{
+  BufferedRecords,
+  ByteArrayCommittableRecord,
+  ByteArrayConsumerRecord,
+  Command
+}
 import zio.stream._
 
 import java.util
@@ -169,19 +174,19 @@ private[consumer] final class Runloop(
    */
   private def endRevoked(
     reqs: Chunk[Runloop.Request],
-    bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
+    bufferedRecords: BufferedRecords,
     currentAssignedStreams: Map[TopicPartition, PartitionStreamControl],
     revoked: TopicPartition => Boolean
   ): UIO[Runloop.RevokeResult] = {
     var acc = Chunk[Runloop.Request]()
     val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
-    buf ++= bufferedRecords
+    buf ++= bufferedRecords.recs
 
     val (revokedStreams, assignedStreams) =
       currentAssignedStreams.partition(es => revoked(es._1))
 
     val revokeAction: UIO[Unit] = ZIO.foreachDiscard(revokedStreams) { case (tp, control) =>
-      val remaining = bufferedRecords.getOrElse(tp, Chunk.empty)
+      val remaining = bufferedRecords.recs.getOrElse(tp, Chunk.empty)
       for {
         _ <- control.finishWith(
                remaining.map(
@@ -199,7 +204,7 @@ private[consumer] final class Runloop(
       } else acc :+= req
     }
 
-    revokeAction.as(Runloop.RevokeResult(acc, buf.toMap, assignedStreams))
+    revokeAction.as(Runloop.RevokeResult(acc, BufferedRecords.fromMutableMap(buf), assignedStreams))
   }
 
   /**
@@ -210,12 +215,12 @@ private[consumer] final class Runloop(
    */
   private def fulfillRequests(
     pendingRequests: Chunk[Runloop.Request],
-    bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
+    bufferedRecords: BufferedRecords,
     records: ConsumerRecords[Array[Byte], Array[Byte]]
   ): UIO[Runloop.FulfillResult] = {
     var acc = Chunk[Runloop.Request]()
     val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
-    buf ++= bufferedRecords
+    buf ++= bufferedRecords.recs
 
     var fulfillAction: UIO[_] = UIO.unit
 
@@ -240,13 +245,13 @@ private[consumer] final class Runloop(
       }
     }
 
-    fulfillAction.as(Runloop.FulfillResult(acc, buf.toMap))
+    fulfillAction.as(Runloop.FulfillResult(acc, BufferedRecords.fromMutableMap(buf)))
   }
 
   private def bufferRecordsForUnrequestedPartitions(
     records: ConsumerRecords[Array[Byte], Array[Byte]],
     unrequestedTps: Iterable[TopicPartition]
-  ): Map[TopicPartition, Chunk[ByteArrayConsumerRecord]] = {
+  ): BufferedRecords = {
     val builder = Map.newBuilder[TopicPartition, Chunk[ByteArrayConsumerRecord]]
     builder.sizeHint(unrequestedTps.size)
 
@@ -261,7 +266,7 @@ private[consumer] final class Runloop(
         ))
     }
 
-    builder.result()
+    BufferedRecords.fromMap(builder.result())
   }
 
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Unit] =
@@ -324,7 +329,7 @@ private[consumer] final class Runloop(
                 Runloop.PollResult(
                   Set(),
                   state.pendingRequests,
-                  Map[TopicPartition, Chunk[ByteArrayConsumerRecord]](),
+                  BufferedRecords.empty,
                   Map[TopicPartition, PartitionStreamControl]()
                 )
               ), {
@@ -374,7 +379,7 @@ private[consumer] final class Runloop(
                   _ <- diagnostics.emitIfEnabled(
                          DiagnosticEvent.Poll(
                            requestedPartitions,
-                           fulfillResult.bufferedRecords.keySet,
+                           fulfillResult.bufferedRecords.partitions,
                            fulfillResult.unfulfilledRequests.map(_.tp).toSet
                          )
                        )
@@ -449,7 +454,7 @@ private[consumer] final class Runloop(
       case Command.Poll() =>
         // End all pending requests
         ZIO.foreachDiscard(state.pendingRequests)(_.cont.fail(None)) *>
-          handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = Map.empty))
+          handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = BufferedRecords.empty))
       case Command.Requests(reqs) =>
         ZIO.foreachDiscard(reqs)(_.cont.fail(None)).as(state)
       case cmd @ Command.Commit(_, _) =>
@@ -495,17 +500,17 @@ private[consumer] object Runloop {
   final case class PollResult(
     newlyAssigned: Set[TopicPartition],
     unfulfilledRequests: Chunk[Runloop.Request],
-    bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
+    bufferedRecords: BufferedRecords,
     assignedStreams: Map[TopicPartition, PartitionStreamControl]
   )
   final case class RevokeResult(
     unfulfilledRequests: Chunk[Runloop.Request],
-    bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
+    bufferedRecords: BufferedRecords,
     assignedStreams: Map[TopicPartition, PartitionStreamControl]
   )
   final case class FulfillResult(
     unfulfilledRequests: Chunk[Runloop.Request],
-    bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]
+    bufferedRecords: BufferedRecords
   )
 
   case class RebalanceEvent(
@@ -518,6 +523,33 @@ private[consumer] object Runloop {
     final case class Requests(requests: Chunk[Request])                                         extends Command
     final case class Poll()                                                                     extends Command
     final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
+  }
+
+  final case class BufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) {
+    def partitions: Set[TopicPartition] = recs.keySet
+
+    def remove(partition: TopicPartition): BufferedRecords =
+      BufferedRecords(recs - partition)
+
+    def ++(newRecs: BufferedRecords): BufferedRecords =
+      BufferedRecords(newRecs.recs.foldLeft(recs) { case (acc, (tp, recs)) =>
+        acc.get(tp) match {
+          case Some(existingRecs) => acc + (tp -> (existingRecs ++ recs))
+          case None               => acc + (tp -> recs)
+        }
+      })
+  }
+
+  object BufferedRecords {
+    val empty: BufferedRecords = BufferedRecords(Map.empty)
+
+    def fromMap(map: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]): BufferedRecords =
+      BufferedRecords(map)
+
+    def fromMutableMap(
+      map: mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]
+    ): BufferedRecords =
+      BufferedRecords(map.toMap)
   }
 
   def apply(
@@ -569,26 +601,19 @@ private[consumer] object Runloop {
 private[internal] final case class State(
   pendingRequests: Chunk[Runloop.Request],
   pendingCommits: Chunk[Command.Commit],
-  bufferedRecords: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]],
+  bufferedRecords: BufferedRecords,
   assignedStreams: Map[TopicPartition, PartitionStreamControl]
 ) {
   def addCommit(c: Command.Commit)           = copy(pendingCommits = c +: pendingCommits)
   def addRequest(c: Runloop.Request)         = copy(pendingRequests = c +: pendingRequests)
   def addRequests(c: Chunk[Runloop.Request]) = copy(pendingRequests = c ++ pendingRequests)
-  def addBufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) =
-    copy(
-      bufferedRecords = recs.foldLeft(bufferedRecords) { case (acc, (tp, recs)) =>
-        acc.get(tp) match {
-          case Some(existingRecs) => acc + (tp -> (existingRecs ++ recs))
-          case None               => acc + (tp -> recs)
-        }
-      }
-    )
+  def addBufferedRecords(recs: BufferedRecords) =
+    copy(bufferedRecords = bufferedRecords ++ recs)
 
   def removeBufferedRecordsFor(tp: TopicPartition) =
-    copy(bufferedRecords = bufferedRecords - tp)
+    copy(bufferedRecords = bufferedRecords.remove(tp))
 }
 
 object State {
-  def initial: State = State(Chunk.empty, Chunk.empty, Map.empty, Map.empty)
+  def initial: State = State(Chunk.empty, Chunk.empty, BufferedRecords.empty, Map.empty)
 }
