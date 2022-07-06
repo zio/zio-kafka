@@ -335,11 +335,6 @@ private[consumer] final class Runloop(
               ), {
                 val tpsInResponse   = records.partitions.asScala.toSet
                 val currentAssigned = c.assignment().asScala.toSet
-                val unrequestedRecords =
-                  bufferRecordsForUnrequestedPartitions(
-                    records,
-                    tpsInResponse -- requestedPartitions
-                  )
 
                 for {
                   rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
@@ -348,6 +343,19 @@ private[consumer] final class Runloop(
                                     case Some(event) => event.newlyAssigned
                                     case None        => currentAssigned -- prevAssigned
                                   }
+                  remainingRequestedPartitions = rebalanceEvent match {
+                                                   case Some(_) =>
+                                                     // In case rebalancing restarted all partitions, we have to ignore
+                                                     // all the requests as their promise were for the previous partition streams
+                                                     Set.empty
+                                                   case None =>
+                                                     requestedPartitions
+                                                 }
+                  unrequestedRecords =
+                    bufferRecordsForUnrequestedPartitions(
+                      records,
+                      tpsInResponse -- remainingRequestedPartitions
+                    )
 
                   _ <- doSeekForNewPartitions(c, newlyAssigned)
 
