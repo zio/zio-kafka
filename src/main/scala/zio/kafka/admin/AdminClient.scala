@@ -116,6 +116,14 @@ trait AdminClient {
   ): Task[Map[ConfigResource, KafkaConfig]]
 
   /**
+   * Get the configuration for the specified resources async.
+   */
+  def describeConfigsAsync(
+    configResources: Iterable[ConfigResource],
+    options: Option[DescribeConfigsOptions] = None
+  ): Task[Map[ConfigResource, Task[KafkaConfig]]]
+
+  /**
    * Get the cluster nodes.
    */
   def describeClusterNodes(options: Option[DescribeClusterOptions] = None): Task[List[Node]]
@@ -346,6 +354,33 @@ object AdminClient {
           (ConfigResource(configResource), KafkaConfig(config))
         }.toMap
       )
+    }
+
+    /**
+     * Get the configuration for the specified resources async.
+     */
+    override def describeConfigsAsync(
+      configResources: Iterable[ConfigResource],
+      options: Option[DescribeConfigsOptions] = None
+    ): Task[Map[ConfigResource, Task[KafkaConfig]]] = {
+      val asJava = configResources.map(_.asJava).asJavaCollection
+      ZIO
+        .attemptBlocking(
+          options
+            .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts.asJava))
+            .values()
+        )
+        .map(
+          _.asScala.view.map { case (configResource, configFuture) =>
+            (
+              ConfigResource(configResource),
+              ZIO
+                .fromCompletionStage(configFuture.toCompletionStage)
+                .map(config => KafkaConfig(config))
+            )
+
+          }.toMap
+        )
     }
 
     private def describeCluster(options: Option[DescribeClusterOptions]): Task[DescribeClusterResult] =
