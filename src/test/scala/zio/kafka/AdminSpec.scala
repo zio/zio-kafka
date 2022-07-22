@@ -92,16 +92,22 @@ object AdminSpec extends DefaultRunnableSpec {
           for {
             list1 <- client.listTopics()
             _ <- client.createTopics(List(AdminClient.NewTopic("topic6", 1, 1), AdminClient.NewTopic("topic7", 4, 1)))
-            configs <- client.describeConfigs(
-                         List(
-                           ConfigResource(ConfigResourceType.Topic, "topic6"),
-                           ConfigResource(ConfigResourceType.Topic, "topic7")
-                         )
-                       )
+            configResources = List(
+                                ConfigResource(ConfigResourceType.Topic, "topic6"),
+                                ConfigResource(ConfigResourceType.Topic, "topic7")
+                              )
+            configsAsync = client.describeConfigsAsync(configResources).flatMap { configs =>
+                             ZIO.foreachPar(configs) { case (resource, configTask) =>
+                               configTask.map(config => (resource, config))
+                             }
+                           }
+            (configs, awaitedConfigsAsync) <- client.describeConfigs(configResources) <&> configsAsync
+
             _     <- client.deleteTopics(List("topic6", "topic7"))
             list3 <- client.listTopics()
           } yield assert(list1.size)(equalTo(0)) &&
             assert(configs.size)(equalTo(2)) &&
+            assert(awaitedConfigsAsync.size)(equalTo(2)) &&
             assert(list3.size)(equalTo(0))
         }
       },
@@ -142,6 +148,20 @@ object AdminSpec extends DefaultRunnableSpec {
                          )
                        )
           } yield assert(configs.size)(equalTo(1))
+        }
+      },
+      testM("describe broker config async") {
+        KafkaTestUtils.withAdmin { client =>
+          for {
+            configTasks <- client.describeConfigsAsync(
+                             List(
+                               ConfigResource(ConfigResourceType.Broker, "0")
+                             )
+                           )
+            configs <- ZIO.foreachPar(configTasks) { case (resource, configTask) =>
+                         configTask.map(config => (resource, config))
+                       }
+          } yield assertTrue(configs.size == 1)
         }
       },
       testM("list offsets") {
