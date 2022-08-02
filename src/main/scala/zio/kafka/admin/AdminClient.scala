@@ -152,6 +152,14 @@ trait AdminClient {
   ): Task[Map[TopicPartition, ListOffsetsResultInfo]]
 
   /**
+   * List offset for the specified partitions.
+   */
+  def listOffsetsAsync(
+    topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
+    options: Option[ListOffsetsOptions] = None
+  ): Task[Map[TopicPartition, Task[ListOffsetsResultInfo]]]
+
+  /**
    * List Consumer Group offsets for the specified partitions.
    */
   def listConsumerGroupOffsets(
@@ -444,6 +452,28 @@ object AdminClient extends Accessible[AdminClient] {
         )
       }
     }.map(_.asScala.toMap.bimap(TopicPartition(_), ListOffsetsResultInfo(_)))
+
+    /**
+     * List offset for the specified partitions.
+     */
+    override def listOffsetsAsync(
+      topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
+      options: Option[ListOffsetsOptions]
+    ): Task[Map[TopicPartition, Task[ListOffsetsResultInfo]]] = {
+      val topicPartitionOffsetsAsJava = topicPartitionOffsets.bimap(_.asJava, _.asJava)
+      val topicPartitionsAsJava       = topicPartitionOffsetsAsJava.keySet
+      val asJava                      = topicPartitionOffsetsAsJava.asJava
+      blocking.effectBlocking {
+        val listOffsetsResult = options
+          .fold(adminClient.listOffsets(asJava))(opts => adminClient.listOffsets(asJava, opts.asJava))
+        topicPartitionsAsJava.map(tp => tp -> listOffsetsResult.partitionResult(tp))
+      }
+    }.map(_.view.map { case (topicPartition, listOffsetResultInfoFuture) =>
+      (
+        TopicPartition(topicPartition),
+        ZIO.fromCompletionStage(listOffsetResultInfoFuture.toCompletionStage).map(ListOffsetsResultInfo(_))
+      )
+    }.toMap)
 
     /**
      * List Consumer Group offsets for the specified partitions.
