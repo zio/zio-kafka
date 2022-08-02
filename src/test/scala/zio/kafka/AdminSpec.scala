@@ -181,6 +181,24 @@ object AdminSpec extends ZIOSpecWithKafka {
           } yield assert(offsets.values.map(_.offset).sum)(equalTo(msgCount.toLong))
         }
       },
+      test("list offsets async") {
+        KafkaTestUtils.withAdmin { client =>
+          val topic = "topic9"
+          val msgCount = 20
+          val kvs = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
+
+          for {
+            _ <- client.createTopics(List(AdminClient.NewTopic("topic9", 3, 1)))
+            _ <- produceMany(topic, kvs).provideSomeLayer[Kafka](producer)
+            offsetTasks <- client.listOffsetsAsync(
+              (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
+            )
+            offsets <- ZIO.foreachPar(offsetTasks) { case (topicPartition, offsetTask) =>
+              offsetTask.map((topicPartition, _))
+            }
+          } yield assert(offsets.values.map(_.offset).sum)(equalTo(msgCount.toLong))
+        }
+      },
       test("alter offsets") {
         KafkaTestUtils.withAdmin { client =>
           val topic            = "adminspec-topic9"
