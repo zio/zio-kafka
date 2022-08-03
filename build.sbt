@@ -52,28 +52,33 @@ lazy val root = project
     zioKafkaTest
   )
 
+def buildInfoSettings(packageName: String) =
+  Seq(
+    buildInfoKeys := Seq[BuildInfoKey](organization, moduleName, name, version, scalaVersion, sbtVersion, isSnapshot),
+    buildInfoPackage := packageName
+  )
+
+def stdSettings(prjName: String) = Seq(
+  name := s"$prjName",
+  scalafmtOnCompile := true,
+  Compile / compile / scalacOptions ++= {
+    if (scalaBinaryVersion.value == "2.13") Seq("-Wconf:cat=unused-nowarn:s")
+    else Seq()
+  },
+  scalacOptions -= "-Xlint:infer-any",
+  // workaround for bad constant pool issue
+  (Compile / doc) := Def.taskDyn {
+    val default = (Compile / doc).taskValue
+    Def.task(default.value)
+  }.value
+)
+
 lazy val zioKafka =
   project
     .in(file("zio-kafka"))
     .enablePlugins(BuildInfoPlugin)
-    .settings(
-      name              := "zio-kafka",
-      scalafmtOnCompile := true,
-      Compile / compile / scalacOptions ++= {
-        if (scalaBinaryVersion.value == "2.13") Seq("-Wconf:cat=unused-nowarn:s")
-        else Seq()
-      },
-      scalacOptions -= "-Xlint:infer-any",
-      // workaround for bad constant pool issue
-      (Compile / doc) := Def.taskDyn {
-        val default = (Compile / doc).taskValue
-        Def.task(default.value)
-      }.value
-    )
-    .settings(
-      buildInfoKeys    := Seq[BuildInfoKey](organization, name, version, scalaVersion, sbtVersion, isSnapshot),
-      buildInfoPackage := "zio.kafka"
-    )
+    .settings(stdSettings("zio-kafka"))
+    .settings(buildInfoSettings("zio.kafka"))
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                   %% "zio-streams"             % zioVersion,
@@ -90,33 +95,43 @@ lazy val zioKafka =
               .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
           )
         else Seq(embeddedKafka)
-      },
-      testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
+      }
+    )
+
+lazy val zioKafkaTestUtils =
+  project
+    .in(file("zio-kafka-test-utils"))
+    .dependsOn(zioKafka)
+    .enablePlugins(BuildInfoPlugin)
+    .settings(stdSettings("zio-kafka-test-utils"))
+    .settings(buildInfoSettings("zio.kafka"))
+    .settings(
+      libraryDependencies ++= Seq(
+        "dev.zio"                   %% "zio-streams"             % zioVersion,
+        "dev.zio"                   %% "zio-test"                % zioVersion % Test,
+        "dev.zio"                   %% "zio-test-sbt"            % zioVersion % Test,
+        "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
+        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.3",
+        "ch.qos.logback"             % "logback-classic"         % "1.2.11"   % Test,
+        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.7.0"
+      ) ++ {
+        if (scalaBinaryVersion.value == "3")
+          Seq(
+            embeddedKafka
+              .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
+          )
+        else Seq(embeddedKafka)
+      }
     )
 
 lazy val zioKafkaTest =
   project
     .in(file("zio-kafka-test"))
-    .dependsOn(zioKafka)
+    .dependsOn(zioKafka, zioKafkaTestUtils)
     .enablePlugins(BuildInfoPlugin)
-    .settings(
-      name              := "zio-kafka-test",
-      scalafmtOnCompile := true,
-      Compile / compile / scalacOptions ++= {
-        if (scalaBinaryVersion.value == "2.13") Seq("-Wconf:cat=unused-nowarn:s")
-        else Seq()
-      },
-      scalacOptions -= "-Xlint:infer-any",
-      // workaround for bad constant pool issue
-      (Compile / doc) := Def.taskDyn {
-        val default = (Compile / doc).taskValue
-        Def.task(default.value)
-      }.value
-    )
-    .settings(
-      buildInfoKeys    := Seq[BuildInfoKey](organization, name, version, scalaVersion, sbtVersion, isSnapshot),
-      buildInfoPackage := "zio.kafka"
-    )
+    .settings(stdSettings("zio-kafka-test"))
+    .settings(buildInfoSettings("zio.kafka"))
+    .settings(publish / skip := true)
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                   %% "zio-streams"             % zioVersion,

@@ -2,7 +2,6 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio._
-
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.security.KafkaCredentialStore
 
