@@ -196,6 +196,13 @@ trait AdminClient {
   def describeLogDirs(
     brokersId: Iterable[Int]
   ): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]]
+
+  /**
+   * Describe the log directories of the specified brokers async
+   */
+  def describeLogDirsAsync(
+    brokersId: Iterable[Int]
+  ): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]]
 }
 
 object AdminClient {
@@ -527,6 +534,28 @@ object AdminClient {
       ).map(
         _.asScala.toMap.bimap(_.intValue, _.asScala.toMap.bimap(identity, LogDirDescription(_)))
       )
+
+    /**
+     * Describe the log directories of the specified brokers async
+     */
+    override def describeLogDirsAsync(
+      brokersId: Iterable[Int]
+    ): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]] =
+      ZIO
+        .attemptBlocking(
+          adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).descriptions()
+        )
+        .map(
+          _.asScala.view.map { case (brokerId, descriptionsFuture) =>
+            (
+              brokerId.intValue(),
+              ZIO
+                .fromCompletionStage(descriptionsFuture.toCompletionStage)
+                .map(_.asScala.toMap.map { case (k, v) => (k, LogDirDescription(v)) })
+            )
+
+          }.toMap
+        )
   }
 
   val live: ZLayer[AdminClientSettings, Throwable, AdminClient] =
