@@ -12,6 +12,7 @@ import org.apache.kafka.clients.admin.{
   DeleteRecordsOptions => JDeleteRecordsOptions,
   DescribeClusterOptions => JDescribeClusterOptions,
   DescribeConfigsOptions => JDescribeConfigsOptions,
+  DescribeConsumerGroupsOptions => JDescribeConsumerGroupsOptions,
   ListConsumerGroupOffsetsOptions => JListConsumerGroupOffsetsOptions,
   ListConsumerGroupsOptions => JListConsumerGroupsOptions,
   ListOffsetsOptions => JListOffsetsOptions,
@@ -190,6 +191,14 @@ trait AdminClient {
    * Describe the specified consumer groups.
    */
   def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]]
+
+  /**
+   * Describe the specified consumer groups.
+   */
+  def describeConsumerGroups(
+    groupIds: List[String],
+    options: Option[DescribeConsumerGroupsOptions]
+  ): Task[Map[String, ConsumerGroupDescription]]
 
   /**
    * Remove the specified members from a consumer group.
@@ -541,9 +550,22 @@ object AdminClient extends Accessible[AdminClient] {
      * Describe the specified consumer groups.
      */
     override def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]] =
+      describeConsumerGroups(groupIds.toList, options = None)
+
+    /**
+     * Describe the specified consumer groups.
+     */
+    override def describeConsumerGroups(
+      groupIds: List[String],
+      options: Option[DescribeConsumerGroupsOptions]
+    ): Task[Map[String, ConsumerGroupDescription]] =
       fromKafkaFuture(
         blocking.effectBlocking(
-          adminClient.describeConsumerGroups(groupIds.asJavaCollection).all
+          options
+            .fold(adminClient.describeConsumerGroups(groupIds.asJavaCollection))(opts =>
+              adminClient.describeConsumerGroups(groupIds.asJavaCollection, opts.asJava)
+            )
+            .all
         )
       ).map(_.asScala.map { case (k, v) => k -> ConsumerGroupDescription(v) }.toMap)
 
@@ -742,6 +764,14 @@ object AdminClient extends Accessible[AdminClient] {
   final case class DescribeClusterOptions(includeAuthorizedOperations: Boolean) {
     lazy val asJava: JDescribeClusterOptions =
       new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
+  }
+
+  final case class DescribeConsumerGroupsOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
+    lazy val asJava: JDescribeConsumerGroupsOptions = {
+      val jOpts = new JDescribeConsumerGroupsOptions()
+        .includeAuthorizedOperations(includeAuthorizedOperations)
+      timeout.fold(jOpts)(timeout => jOpts.timeoutMs(timeout.toMillis.toInt))
+    }
   }
 
   final case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
