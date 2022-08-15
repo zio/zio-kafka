@@ -2,7 +2,7 @@ package zio.kafka.admin
 
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
 import org.apache.kafka.clients.admin.{
-  AdminClient => JAdminClient,
+  Admin => JAdmin,
   AlterConsumerGroupOffsetsOptions => JAlterConsumerGroupOffsetsOptions,
   Config => JConfig,
   ConsumerGroupDescription => JConsumerGroupDescription,
@@ -228,7 +228,7 @@ object AdminClient extends Accessible[AdminClient] {
    * @param adminClient
    */
   private final class LiveAdminClient(
-    private val adminClient: JAdminClient,
+    private val adminClient: JAdmin,
     private val blocking: Blocking.Service
   ) extends AdminClient {
 
@@ -1036,20 +1036,20 @@ object AdminClient extends Accessible[AdminClient] {
   def make(settings: AdminClientSettings): ZManaged[Blocking, Throwable, AdminClient] =
     fromManagedJavaClient(javaClientFromSettings(settings))
 
-  def fromJavaClient(javaClient: JAdminClient): URIO[Blocking, AdminClient] =
+  def fromJavaClient(javaClient: JAdmin): URIO[Blocking, AdminClient] =
     ZIO.service[Blocking.Service].map { blocking =>
       new LiveAdminClient(javaClient, blocking)
     }
 
   def fromManagedJavaClient[R, E](
-    managedJavaClient: ZManaged[R, E, JAdminClient]
+    managedJavaClient: ZManaged[R, E, JAdmin]
   ): ZManaged[Blocking & R, E, AdminClient] =
     managedJavaClient.flatMap { javaClient =>
       ZManaged.fromEffect(fromJavaClient(javaClient))
     }
 
-  def javaClientFromSettings(settings: AdminClientSettings): ZManaged[Any, Throwable, JAdminClient] =
-    ZManaged.makeEffect(JAdminClient.create(settings.driverSettings.asJava))(_.close(settings.closeTimeout))
+  def javaClientFromSettings(settings: AdminClientSettings): ZManaged[Any, Throwable, JAdmin] =
+    ZManaged.makeEffect(JAdmin.create(settings.driverSettings.asJava))(_.close(settings.closeTimeout))
 
   implicit class MapOps[K1, V1](val v: Map[K1, V1]) extends AnyVal {
     def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2) = v.map(kv => fk(kv._1) -> fv(kv._2))
