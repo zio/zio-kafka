@@ -1,14 +1,19 @@
 package zio.kafka.producer
 
-import java.util.concurrent.atomic.AtomicLong
-
-import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
-import org.apache.kafka.common.{ Metric, MetricName }
+import org.apache.kafka.clients.producer.{
+  Callback,
+  KafkaProducer,
+  Producer => JProducer,
+  ProducerRecord,
+  RecordMetadata
+}
 import org.apache.kafka.common.serialization.ByteArraySerializer
+import org.apache.kafka.common.{ Metric, MetricName }
 import zio._
 import zio.kafka.serde.Serializer
 import zio.stream.ZPipeline
 
+import java.util.concurrent.atomic.AtomicLong
 import scala.jdk.CollectionConverters._
 
 trait Producer {
@@ -119,7 +124,7 @@ trait Producer {
 object Producer {
 
   private[producer] final case class Live(
-    p: KafkaProducer[Array[Byte], Array[Byte]],
+    p: JProducer[Array[Byte], Array[Byte]],
     producerSettings: ProducerSettings
   ) extends Producer {
 
