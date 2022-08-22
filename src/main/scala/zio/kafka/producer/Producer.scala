@@ -142,7 +142,7 @@ object Producer {
                  serializedRecord,
                  new Callback {
                    def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
-                     Unsafe.unsafeCompat { implicit u =>
+                     Unsafe.unsafe { implicit u =>
                        if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
                        else runtime.unsafe.run(done.succeed(metadata)).getOrThrowFiberFailure()
                        ()
@@ -176,7 +176,7 @@ object Producer {
                      rec,
                      new Callback {
                        def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
-                         Unsafe.unsafeCompat { implicit u =>
+                         Unsafe.unsafe { implicit u =>
                            if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
                            else {
                              res(idx) = metadata
