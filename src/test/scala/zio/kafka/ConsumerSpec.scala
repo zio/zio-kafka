@@ -731,5 +731,5 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         } yield assert(messagesPerPartition0)(forall(equalTo(nrMessages / nrPartitions))) &&
           assert(messagesPerPartition)(forall(isGreaterThan(0) && isLessThanEqualTo(nrMessages / nrPartitions)))
       }
-    ).provideSomeLayerShared[TestEnvironment with Kafka](producer) @@ withLiveClock @@ timeout(180.seconds)
+    ).provideSomeLayerShared[TestEnvironment with Kafka](producer) @@ withLiveClock @@ timeout(300.seconds)
 }
