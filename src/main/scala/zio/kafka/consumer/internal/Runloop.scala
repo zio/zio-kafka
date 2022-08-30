@@ -57,32 +57,24 @@ private[consumer] final class Runloop(
     for {
       interruptionPromise <- Promise.make[Throwable, Unit]
       drainQueue          <- ZQueue.unbounded[Take[Nothing, ByteArrayCommittableRecord]]
-      stream = ZStream.fromEffect(ZIO.debug(s"Partition stream $tp started")) *>
-                 ZStream.repeatEffectChunkOption {
-                   for {
-                     request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-                     _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
-                     _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
-                     result <- request.await.tapError { _ =>
-                                 // In case the stream is shutting down or failing we don't want want to
-                                 // wait for the drainQueue
-                                 drainQueue.offer(Take.end)
-                               }
-                   } yield result
-                 }
-                   .ensuring(ZIO.debug(s"Partition stream $tp interrupted"))
-                   .interruptWhen(interruptionPromise)
-                   .concat(
-                     ZStream.fromEffect(
-                       drainQueue.size.flatMap { count =>
-                         ZIO.debug(s"Partition stream $tp draining $count items")
-                       }
-                     ) *>
-                       ZStream
-                         .fromQueue(drainQueue)
-                         .flattenTake
-                   )
-                   .ensuring(ZIO.debug(s"Partition stream $tp stopped"))
+      stream = ZStream.repeatEffectChunkOption {
+                 for {
+                   request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
+                   _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
+                   _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
+                   result <- request.await.tapError { _ =>
+                               // In case the stream is shutting down or failing we don't want want to
+                               // wait for the drainQueue
+                               drainQueue.offer(Take.end)
+                             }
+                 } yield result
+               }
+                 .interruptWhen(interruptionPromise)
+                 .concat(
+                   ZStream
+                     .fromQueue(drainQueue)
+                     .flattenTake
+                 )
     } yield (tp, PartitionStreamControl(interruptionPromise, drainQueue), stream)
 
   def gracefulShutdown: UIO[Unit] =
@@ -229,11 +221,8 @@ private[consumer] final class Runloop(
 
     val revokeAction: UIO[Unit] = ZIO.foreach_(revokedStreams) { case (tp, control) =>
       val remaining = bufferedRecords.recs.getOrElse(tp, Chunk.empty)
+      val metadata  = if (remaining.nonEmpty) Try(consumer.consumer.groupMetadata()).toOption else None
       for {
-        _ <- ZIO
-               .debug(s"Sending ${remaining.size} buffered records to the drain queue for $tp")
-               .when(remaining.nonEmpty)
-        metadata = if (remaining.nonEmpty) Try(consumer.consumer.groupMetadata()).toOption else None
         _ <- control.finishWith(
                remaining.map(
                  CommittableRecord(_, commit(_), metadata)
@@ -397,9 +386,6 @@ private[consumer] final class Runloop(
 
                 for {
                   rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
-                  _ <- ZIO
-                         .debug(s"Last rebalance event after poll: $rebalanceEvent")
-                         .when(rebalanceEvent.nonEmpty)
 
                   newlyAssigned = rebalanceEvent match {
                                     case Some(Runloop.RebalanceEvent.Assigned(assigned)) =>
