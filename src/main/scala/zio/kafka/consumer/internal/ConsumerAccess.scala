@@ -1,14 +1,11 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.{ Consumer => JConsumer }
 import org.apache.kafka.common.errors.WakeupException
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio._
 import zio.blocking.Blocking
-import zio.kafka.consumer.ConsumerSettings
+import zio.duration.Duration
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-
-import scala.jdk.CollectionConverters._
 
 private[consumer] class ConsumerAccess(
   private[consumer] val consumer: ByteArrayKafkaConsumer,
@@ -31,21 +28,21 @@ private[consumer] class ConsumerAccess(
       }
       .fork
       .flatMap(fib => fib.join.onInterrupt(ZIO.effectTotal(consumer.wakeup()) *> fib.interrupt))
+
 }
 
 private[consumer] object ConsumerAccess {
-  type ByteArrayKafkaConsumer = KafkaConsumer[Array[Byte], Array[Byte]]
+  type ByteArrayKafkaConsumer = JConsumer[Array[Byte], Array[Byte]]
 
-  def make(settings: ConsumerSettings): RManaged[Blocking, ConsumerAccess] =
+  def fromJavaConsumer(
+    javaConsumer: => ByteArrayKafkaConsumer,
+    closeTimeout: Duration
+  ): RManaged[Blocking, ConsumerAccess] =
     for {
       access   <- Semaphore.make(1).toManaged_
       blocking <- ZManaged.service[Blocking.Service]
-      consumer <- blocking.effectBlocking {
-                    new KafkaConsumer[Array[Byte], Array[Byte]](
-                      settings.driverSettings.asJava,
-                      new ByteArrayDeserializer(),
-                      new ByteArrayDeserializer()
-                    )
-                  }.toManaged(c => blocking.blocking(access.withPermit(UIO(c.close(settings.closeTimeout)))))
+      consumer <- blocking
+                    .effectBlocking(javaConsumer)
+                    .toManaged(c => blocking.blocking(access.withPermit(UIO(c.close(closeTimeout)))))
     } yield new ConsumerAccess(consumer, access, blocking)
 }

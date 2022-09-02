@@ -1,13 +1,12 @@
 package zio.kafka.producer
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
-import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.{ Producer => JProducer }
 import org.apache.kafka.common.errors.InvalidGroupIdException
-import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio.blocking.Blocking
 import zio.kafka.consumer.OffsetBatch
-import zio.{ Exit, Has, RLayer, RManaged, Ref, Semaphore, Task, UIO, ZIO, ZManaged }
+import zio.{ Exit, Has, RIO, RLayer, RManaged, Ref, Semaphore, Task, UIO, ZIO, ZManaged }
 
 import scala.jdk.CollectionConverters._
 
@@ -73,18 +72,19 @@ object TransactionalProducer {
     } yield producer).toLayer
 
   def make(settings: TransactionalProducerSettings): RManaged[Blocking, TransactionalProducer] =
-    (for {
-      props    <- ZIO.effect(settings.producerSettings.driverSettings)
-      blocking <- ZIO.service[Blocking.Service]
-      rawProducer <- ZIO.effect(
-                       new KafkaProducer[Array[Byte], Array[Byte]](
-                         props.asJava,
-                         new ByteArraySerializer(),
-                         new ByteArraySerializer()
-                       )
-                     )
-      _         <- blocking.effectBlocking(rawProducer.initTransactions())
+    fromManagedJavaProducer(Producer.javaProducerFromSettings(settings.producerSettings))
+
+  def fromJavaProducer(javaProducer: => JProducer[Array[Byte], Array[Byte]]): RIO[Blocking, TransactionalProducer] =
+    for {
+      blocking  <- ZIO.service[Blocking.Service]
+      _         <- blocking.effectBlocking(javaProducer.initTransactions())
       semaphore <- Semaphore.make(1)
-      live = Producer.Live(rawProducer, settings.producerSettings, blocking)
-    } yield LiveTransactionalProducer(live, blocking, semaphore)).toManaged(_.live.close)
+      live = Producer.Live(javaProducer, blocking)
+    } yield LiveTransactionalProducer(live, blocking, semaphore)
+
+  def fromManagedJavaProducer[R](
+    managedJavaProducer: ZManaged[R, Throwable, JProducer[Array[Byte], Array[Byte]]]
+  ): ZManaged[R with Blocking, Throwable, TransactionalProducer] =
+    managedJavaProducer.flatMap(javaProducer => ZManaged.fromEffect(fromJavaProducer(javaProducer)))
+
 }

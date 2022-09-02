@@ -1061,17 +1061,13 @@ object AdminClient extends Accessible[AdminClient] {
   def make(settings: AdminClientSettings): ZManaged[Blocking, Throwable, AdminClient] =
     fromManagedJavaClient(javaClientFromSettings(settings))
 
-  def fromJavaClient(javaClient: JAdmin): URIO[Blocking, AdminClient] =
-    ZIO.service[Blocking.Service].map { blocking =>
-      new LiveAdminClient(javaClient, blocking)
-    }
+  def fromJavaClient(javaClient: => JAdmin): URIO[Blocking, AdminClient] =
+    ZIO.service[Blocking.Service].map(new LiveAdminClient(javaClient, _))
 
   def fromManagedJavaClient[R, E](
     managedJavaClient: ZManaged[R, E, JAdmin]
   ): ZManaged[Blocking & R, E, AdminClient] =
-    managedJavaClient.flatMap { javaClient =>
-      ZManaged.fromEffect(fromJavaClient(javaClient))
-    }
+    managedJavaClient.flatMap(javaClient => ZManaged.fromEffect(fromJavaClient(javaClient)))
 
   def javaClientFromSettings(settings: AdminClientSettings): ZManaged[Any, Throwable, JAdmin] =
     ZManaged.makeEffect(JAdmin.create(settings.driverSettings.asJava))(_.close(settings.closeTimeout))

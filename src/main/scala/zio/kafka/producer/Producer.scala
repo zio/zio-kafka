@@ -1,15 +1,20 @@
 package zio.kafka.producer
 
-import java.util.concurrent.atomic.AtomicLong
-
-import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
-import org.apache.kafka.common.{ Metric, MetricName }
+import org.apache.kafka.clients.producer.{
+  Callback,
+  KafkaProducer,
+  Producer => JProducer,
+  ProducerRecord,
+  RecordMetadata
+}
 import org.apache.kafka.common.serialization.ByteArraySerializer
+import org.apache.kafka.common.{ Metric, MetricName }
 import zio._
 import zio.blocking._
 import zio.kafka.serde.Serializer
 import zio.stream.ZTransducer
 
+import java.util.concurrent.atomic.AtomicLong
 import scala.jdk.CollectionConverters._
 
 trait Producer {
@@ -123,8 +128,7 @@ trait Producer {
 object Producer {
 
   private[producer] final case class Live(
-    p: KafkaProducer[Array[Byte], Array[Byte]],
-    producerSettings: ProducerSettings,
+    p: JProducer[Array[Byte], Array[Byte]],
     blocking: Blocking.Service
   ) extends Producer {
 
@@ -238,7 +242,6 @@ object Producer {
         value <- valueSerializer.serialize(r.topic, r.headers, r.value())
       } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
 
-    private[producer] def close: UIO[Unit] = UIO(p.close(producerSettings.closeTimeout))
   }
 
   val live: RLayer[Has[ProducerSettings] with Blocking, Has[Producer]] =
@@ -248,17 +251,26 @@ object Producer {
     } yield producer).toLayer
 
   def make(settings: ProducerSettings): RManaged[Blocking, Producer] =
-    (for {
-      props    <- ZIO.effect(settings.driverSettings)
-      blocking <- ZIO.service[Blocking.Service]
-      rawProducer <- ZIO.effect(
-                       new KafkaProducer[Array[Byte], Array[Byte]](
-                         props.asJava,
-                         new ByteArraySerializer(),
-                         new ByteArraySerializer()
-                       )
-                     )
-    } yield Live(rawProducer, settings, blocking)).toManaged(_.close)
+    fromManagedJavaProducer(javaProducerFromSettings(settings))
+
+  def fromJavaProducer(javaProducer: => JProducer[Array[Byte], Array[Byte]]): URIO[Blocking, Producer] =
+    ZIO.service[Blocking.Service].map(Live(javaProducer, _))
+
+  def fromManagedJavaProducer[R, E](
+    managedJavaProducer: ZManaged[R, E, JProducer[Array[Byte], Array[Byte]]]
+  ): ZManaged[R with Blocking, E, Producer] =
+    managedJavaProducer.flatMap(javaProducer => ZManaged.fromEffect(fromJavaProducer(javaProducer)))
+
+  def javaProducerFromSettings(
+    settings: ProducerSettings
+  ): ZManaged[Any, Throwable, JProducer[Array[Byte], Array[Byte]]] =
+    ZManaged.makeEffect(
+      new KafkaProducer[Array[Byte], Array[Byte]](
+        settings.driverSettings.asJava,
+        new ByteArraySerializer(),
+        new ByteArraySerializer()
+      )
+    )(_.close(settings.closeTimeout))
 
   def withProducerService[R, A](
     r: Producer => RIO[R, A]

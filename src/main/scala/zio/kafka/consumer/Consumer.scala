@@ -1,14 +1,15 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetAndTimestamp }
+import org.apache.kafka.clients.consumer.{ Consumer => JConsumer, KafkaConsumer, OffsetAndMetadata, OffsetAndTimestamp }
+import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition }
 import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
-import zio.kafka.serde.Deserializer
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
+import zio.kafka.serde.Deserializer
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
@@ -332,8 +333,14 @@ object Consumer {
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): RManaged[Clock with Blocking, Consumer] =
+    fromManagedJavaProducer(javaConsumerFromSettings(settings))(settings, diagnostics)
+
+  def fromJavaConsumer(javaConsumer: => JConsumer[Array[Byte], Array[Byte]])(
+    settings: ConsumerSettings,
+    diagnostics: Diagnostics = Diagnostics.NoOp
+  ): RManaged[Clock with Blocking, Consumer] =
     for {
-      wrapper <- ConsumerAccess.make(settings)
+      wrapper <- ConsumerAccess.fromJavaConsumer(javaConsumer, settings.closeTimeout)
       runloop <- Runloop(
                    wrapper,
                    settings.pollInterval,
@@ -345,6 +352,30 @@ object Consumer {
       clock    <- ZManaged.service[Clock.Service]
       blocking <- ZManaged.service[Blocking.Service]
     } yield Live(wrapper, settings, runloop, clock, blocking)
+
+  def fromManagedJavaProducer[R](
+    managedJavaConsumer: ZManaged[R, Throwable, JConsumer[Array[Byte], Array[Byte]]]
+  )(
+    settings: ConsumerSettings,
+    diagnostics: Diagnostics = Diagnostics.NoOp
+  ): ZManaged[Clock with Blocking with R, Throwable, Consumer] =
+    // Here, we "forget" the finalizer of the provided managed instance because we'll close the Consumer it contains by ourselves in the ConsumerAccess.
+    ZManaged.unwrap {
+      managedJavaConsumer.reserve.flatMap { reservation =>
+        reservation.acquire.map(fromJavaConsumer(_)(settings, diagnostics))
+      }
+    }
+
+  def javaConsumerFromSettings(
+    settings: ConsumerSettings
+  ): ZManaged[Any, Throwable, JConsumer[Array[Byte], Array[Byte]]] =
+    ZManaged.makeEffect(
+      new KafkaConsumer[Array[Byte], Array[Byte]](
+        settings.driverSettings.asJava,
+        new ByteArrayDeserializer(),
+        new ByteArrayDeserializer()
+      )
+    )(_.close(settings.closeTimeout))
 
   /**
    * Accessor method for [[Consumer.assignment]]
