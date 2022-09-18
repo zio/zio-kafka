@@ -251,6 +251,23 @@ object Producer {
     }
 
   def make(settings: ProducerSettings): ZIO[Scope, Throwable, Producer] =
+    fromManagedJavaProducer(javaProducerFromSettings(settings), settings)
+
+  def fromJavaProducer(
+    javaProducer: => JProducer[Array[Byte], Array[Byte]],
+    settings: ProducerSettings
+  ): UIO[Producer] =
+    ZIO.succeed(Live(javaProducer, settings))
+
+  def fromManagedJavaProducer[R, E](
+    managedJavaProducer: ZIO[R & Scope, E, JProducer[Array[Byte], Array[Byte]]],
+    settings: ProducerSettings
+  ): ZIO[R with Scope, E, Producer] =
+    managedJavaProducer.flatMap(javaProducer => fromJavaProducer(javaProducer, settings))
+
+  def javaProducerFromSettings(
+    settings: ProducerSettings
+  ): ZIO[Scope, Throwable, JProducer[Array[Byte], Array[Byte]]] =
     ZIO.acquireRelease {
       for {
         props <- ZIO.attempt(settings.driverSettings)
@@ -261,9 +278,9 @@ object Producer {
                            new ByteArraySerializer()
                          )
                        )
-      } yield Live(rawProducer, settings)
+      } yield rawProducer
     } { producer =>
-      producer.close
+      ZIO.attempt(producer.close()).orDie
     }
 
   def withProducerService[R, A](

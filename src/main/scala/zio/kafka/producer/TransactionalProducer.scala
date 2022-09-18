@@ -1,9 +1,8 @@
 package zio.kafka.producer
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
-import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.{ Producer => JProducer }
 import org.apache.kafka.common.errors.InvalidGroupIdException
-import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio.kafka.consumer.OffsetBatch
 import zio._
@@ -72,22 +71,23 @@ object TransactionalProducer {
       } yield producer
     }
 
-  def make(settings: TransactionalProducerSettings): ZIO[Scope, Throwable, TransactionalProducer] =
-    ZIO.acquireRelease {
-      for {
-        props <- ZIO.attempt(settings.producerSettings.driverSettings)
-        rawProducer <- ZIO.attempt(
-                         new KafkaProducer[Array[Byte], Array[Byte]](
-                           props.asJava,
-                           new ByteArraySerializer(),
-                           new ByteArraySerializer()
-                         )
-                       )
-        _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
-        semaphore <- Semaphore.make(1)
-        live = Producer.Live(rawProducer, settings.producerSettings)
-      } yield LiveTransactionalProducer(live, semaphore)
-    } { producer =>
-      producer.live.close
-    }
+  def make(settings: TransactionalProducerSettings): RIO[Scope, TransactionalProducer] =
+    fromManagedJavaProducer(Producer.javaProducerFromSettings(settings.producerSettings), settings.producerSettings)
+
+  def fromJavaProducer(
+    javaProducer: => JProducer[Array[Byte], Array[Byte]],
+    settings: ProducerSettings
+  ): Task[TransactionalProducer] =
+    for {
+      _         <- ZIO.attemptBlocking(javaProducer.initTransactions())
+      semaphore <- Semaphore.make(1)
+      live = Producer.Live(javaProducer, settings)
+    } yield LiveTransactionalProducer(live, semaphore)
+
+  def fromManagedJavaProducer[R](
+    managedJavaProducer: ZIO[R & Scope, Throwable, JProducer[Array[Byte], Array[Byte]]],
+    settings: ProducerSettings
+  ): ZIO[R & Scope, Throwable, TransactionalProducer] =
+    managedJavaProducer.flatMap(javaProducer => fromJavaProducer(javaProducer, settings))
+
 }

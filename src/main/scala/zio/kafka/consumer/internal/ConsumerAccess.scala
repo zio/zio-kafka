@@ -1,13 +1,9 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.{ Consumer => JConsumer, KafkaConsumer }
+import org.apache.kafka.clients.consumer.{ Consumer => JConsumer }
 import org.apache.kafka.common.errors.WakeupException
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio._
-import zio.kafka.consumer.ConsumerSettings
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-
-import scala.jdk.CollectionConverters._
 
 private[consumer] class ConsumerAccess(
   private[consumer] val consumer: ByteArrayKafkaConsumer,
@@ -34,19 +30,16 @@ private[consumer] class ConsumerAccess(
 private[consumer] object ConsumerAccess {
   type ByteArrayKafkaConsumer = JConsumer[Array[Byte], Array[Byte]]
 
-  def make(settings: ConsumerSettings): ZIO[Scope, Throwable, ConsumerAccess] =
+  def fromJavaConsumer(
+    javaConsumer: => ByteArrayKafkaConsumer,
+    closeTimeout: Duration
+  ): ZIO[Scope, Throwable, ConsumerAccess] =
     for {
       access <- Semaphore.make(1)
       consumer <- ZIO.acquireRelease {
-                    ZIO.attemptBlocking {
-                      new KafkaConsumer[Array[Byte], Array[Byte]](
-                        settings.driverSettings.asJava,
-                        new ByteArrayDeserializer(),
-                        new ByteArrayDeserializer()
-                      )
-                    }
+                    ZIO.attemptBlocking(javaConsumer)
                   } { consumer =>
-                    ZIO.blocking(access.withPermit(ZIO.succeed(consumer.close(settings.closeTimeout))))
+                    ZIO.blocking(access.withPermit(ZIO.succeed(consumer.close(closeTimeout))))
                   }
     } yield new ConsumerAccess(consumer, access)
 }
