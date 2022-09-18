@@ -14,6 +14,7 @@ import org.apache.kafka.clients.admin.{
   DeleteTopicsOptions => JDeleteTopicsOptions,
   DescribeClusterOptions => JDescribeClusterOptions,
   DescribeConfigsOptions => JDescribeConfigsOptions,
+  DescribeConsumerGroupsOptions => JDescribeConsumerGroupsOptions,
   DescribeTopicsOptions => JDescribeTopicsOptions,
   ListConsumerGroupOffsetsOptions => JListConsumerGroupOffsetsOptions,
   ListConsumerGroupsOptions => JListConsumerGroupsOptions,
@@ -202,6 +203,14 @@ trait AdminClient {
   def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]]
 
   /**
+   * Describe the specified consumer groups.
+   */
+  def describeConsumerGroups(
+    groupIds: List[String],
+    options: Option[DescribeConsumerGroupsOptions]
+  ): Task[Map[String, ConsumerGroupDescription]]
+
+  /**
    * Remove the specified members from a consumer group.
    */
   def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit]
@@ -379,8 +388,8 @@ object AdminClient {
       options: Option[DescribeConfigsOptions] = None
     ): Task[Map[ConfigResource, Task[KafkaConfig]]] = {
       val asJava = configResources.map(_.asJava).asJavaCollection
-      blocking
-        .effectBlocking(
+      ZIO
+        .attemptBlocking(
           options
             .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts.asJava))
             .values()
@@ -491,7 +500,7 @@ object AdminClient {
       val topicPartitionOffsetsAsJava = topicPartitionOffsets.bimap(_.asJava, _.asJava)
       val topicPartitionsAsJava       = topicPartitionOffsetsAsJava.keySet
       val asJava                      = topicPartitionOffsetsAsJava.asJava
-      blocking.effectBlocking {
+      ZIO.attemptBlocking {
         val listOffsetsResult = options
           .fold(adminClient.listOffsets(asJava))(opts => adminClient.listOffsets(asJava, opts.asJava))
         topicPartitionsAsJava.map(tp => tp -> listOffsetsResult.partitionResult(tp))
@@ -569,9 +578,22 @@ object AdminClient {
      * Describe the specified consumer groups.
      */
     override def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]] =
+      describeConsumerGroups(groupIds.toList, options = None)
+
+    /**
+     * Describe the specified consumer groups.
+     */
+    override def describeConsumerGroups(
+      groupIds: List[String],
+      options: Option[DescribeConsumerGroupsOptions]
+    ): Task[Map[String, ConsumerGroupDescription]] =
       fromKafkaFuture(
         ZIO.attemptBlocking(
-          adminClient.describeConsumerGroups(groupIds.asJavaCollection).all
+          options
+            .fold(adminClient.describeConsumerGroups(groupIds.asJavaCollection))(opts =>
+              adminClient.describeConsumerGroups(groupIds.asJavaCollection, opts.asJava)
+            )
+            .all
         )
       ).map(_.asScala.map { case (k, v) => k -> ConsumerGroupDescription(v) }.toMap)
 
@@ -606,8 +628,8 @@ object AdminClient {
     override def describeLogDirsAsync(
       brokersId: Iterable[Int]
     ): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]] =
-      blocking
-        .effectBlocking(
+      ZIO
+        .attemptBlocking(
           adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).descriptions()
         )
         .map(
@@ -823,6 +845,14 @@ object AdminClient {
     lazy val asJava: JDescribeClusterOptions = {
       val opts = new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
       timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
+    }
+  }
+
+  final case class DescribeConsumerGroupsOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
+    lazy val asJava: JDescribeConsumerGroupsOptions = {
+      val jOpts = new JDescribeConsumerGroupsOptions()
+        .includeAuthorizedOperations(includeAuthorizedOperations)
+      timeout.fold(jOpts)(timeout => jOpts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
