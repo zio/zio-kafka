@@ -1,6 +1,5 @@
 package zio.kafka.consumer.internal
 
-import java.util
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import zio._
@@ -9,17 +8,17 @@ import zio.clock.Clock
 import zio.duration._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.consumer.CommittableRecord
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, ByteArrayConsumerRecord, Command }
-import zio.kafka.consumer.RebalanceListener
+import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.stream._
 
+import java.util
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.util.Try
 
 private[consumer] final class Runloop(
+  hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollFrequency: Duration,
   pollTimeout: Duration,
@@ -189,9 +188,17 @@ private[consumer] final class Runloop(
             reqRecs.toArray[ByteArrayConsumerRecord](Array.ofDim[ByteArrayConsumerRecord](reqRecs.size))
           )
 
-        fulfillAction = fulfillAction *> req.cont.succeed(
-          concatenatedChunk.map(CommittableRecord(_, commit(_), Try(consumer.consumer.groupMetadata()).toOption))
-        )
+        fulfillAction = fulfillAction *> req.cont.succeed(concatenatedChunk.map { record =>
+          CommittableRecord(
+            record = record,
+            commitHandle = commit,
+            consumerGroupMetadata =
+              if (hasGroupId)
+                try Some(consumer.consumer.groupMetadata())
+                catch { case _: Throwable => None }
+              else None
+          )
+        })
         buf -= req.tp
       }
     }
@@ -444,6 +451,7 @@ private[consumer] object Runloop {
   }
 
   def apply(
+    hasGroupId: Boolean,
     consumer: ConsumerAccess,
     pollFrequency: Duration,
     pollTimeout: Duration,
@@ -473,6 +481,7 @@ private[consumer] object Runloop {
       shutdownRef   <- Ref.make(false).toManaged_
       subscribedRef <- Ref.make(false).toManaged_
       runloop = new Runloop(
+                  hasGroupId,
                   consumer,
                   pollFrequency,
                   pollTimeout,

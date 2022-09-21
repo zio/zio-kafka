@@ -37,6 +37,9 @@ final case class ConsumerSettings(
   def withGroupId(groupId: String): ConsumerSettings =
     withProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
 
+  private[consumer] def hasGroupId: Boolean =
+    properties.contains(ConsumerConfig.GROUP_ID_CONFIG)
+
   def withGroupInstanceId(groupInstanceId: String): ConsumerSettings =
     withProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
 

@@ -342,6 +342,7 @@ object Consumer {
     for {
       wrapper <- ConsumerAccess.fromJavaConsumer(javaConsumer, settings.closeTimeout)
       runloop <- Runloop(
+                   settings.hasGroupId,
                    wrapper,
                    settings.pollInterval,
                    settings.pollTimeout,
