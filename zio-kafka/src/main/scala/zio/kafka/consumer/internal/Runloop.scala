@@ -5,16 +5,22 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
-import zio.kafka.consumer.diagnostics.{DiagnosticEvent, Diagnostics}
+import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.Runloop.{BufferedRecords, ByteArrayCommittableRecord, ByteArrayConsumerRecord, Command}
-import zio.kafka.consumer.{CommittableRecord, RebalanceListener}
+import zio.kafka.consumer.internal.Runloop.{
+  BufferedRecords,
+  ByteArrayCommittableRecord,
+  ByteArrayConsumerRecord,
+  Command
+}
+import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.stream._
 
 import java.util
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.Try
+import scala.util.control.NonFatal
 
 private[consumer] final class Runloop(
   hasGroupId: Boolean,
@@ -259,7 +265,7 @@ private[consumer] final class Runloop(
             consumerGroupMetadata =
               if (hasGroupId)
                 try Some(consumer.consumer.groupMetadata())
-                catch { case _: Throwable => None }
+                catch { case NonFatal(_) => None }
               else None
           )
         })
