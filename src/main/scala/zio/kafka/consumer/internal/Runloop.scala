@@ -16,6 +16,7 @@ import zio.stream._
 import java.util
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
+import scala.util.control.NonFatal
 
 private[consumer] final class Runloop(
   hasGroupId: Boolean,
@@ -195,7 +196,7 @@ private[consumer] final class Runloop(
             consumerGroupMetadata =
               if (hasGroupId)
                 try Some(consumer.consumer.groupMetadata())
-                catch { case _: Throwable => None }
+                catch { case NonFatal(_) => None }
               else None
           )
         })
