@@ -1,6 +1,6 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.{ Consumer => JConsumer, KafkaConsumer }
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio._
@@ -32,7 +32,7 @@ private[consumer] class ConsumerAccess(
 }
 
 private[consumer] object ConsumerAccess {
-  type ByteArrayKafkaConsumer = KafkaConsumer[Array[Byte], Array[Byte]]
+  type ByteArrayKafkaConsumer = JConsumer[Array[Byte], Array[Byte]]
 
   def make(settings: ConsumerSettings): ZIO[Scope, Throwable, ConsumerAccess] =
     for {

@@ -7,6 +7,10 @@ import zio.test._
 import scala.reflect.ClassTag
 
 object SerdeSpec extends ZIOSpecDefault {
+  case class TestDataStructure(value: String)
+
+  val testDataStructureSerde = Serde.string.inmap[TestDataStructure](TestDataStructure.apply)(_.value)
+
   override def spec = suite("Serde")(
     testSerde(Serde.string, Gen.string),
     testSerde(Serde.int, Gen.int),
@@ -18,7 +22,7 @@ object SerdeSpec extends ZIOSpecDefault {
     testSerde(Serde.byteArray, Gen.listOf(Gen.byte).map(_.toArray)),
     suite("asOption")(
       test("serialize and deserialize None values to null and visa versa") {
-        val serde = Serde.string.asOption
+        val serde = testDataStructureSerde.asOption
         for {
           serialized   <- serde.serialize("topic1", new RecordHeaders, None)
           deserialized <- serde.deserialize("topic1", new RecordHeaders, serialized)
