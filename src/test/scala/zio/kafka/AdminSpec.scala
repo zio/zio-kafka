@@ -100,16 +100,21 @@ object AdminSpec extends ZIOSpecWithKafka {
             _ <- client.createTopics(
                    List(AdminClient.NewTopic("adminspec-topic6", 1, 1), AdminClient.NewTopic("adminspec-topic7", 4, 1))
                  )
-            configs <- client.describeConfigs(
-                         List(
-                           ConfigResource(ConfigResourceType.Topic, "adminspec-topic6"),
-                           ConfigResource(ConfigResourceType.Topic, "adminspec-topic7")
-                         )
-                       )
+            configResources = List(
+                                ConfigResource(ConfigResourceType.Topic, "adminspec-topic6"),
+                                ConfigResource(ConfigResourceType.Topic, "adminspec-topic7")
+                              )
+            configs <- client.describeConfigs(configResources) <&>
+                         client.describeConfigsAsync(configResources).flatMap { configs =>
+                           ZIO.foreachPar(configs) { case (resource, configTask) =>
+                             configTask.map(config => (resource, config))
+                           }
+                         }
             _     <- client.deleteTopics(List("adminspec-topic6", "adminspec-topic7"))
             list3 <- listTopicsFiltered(client)
           } yield assert(list1.size)(equalTo(0)) &&
-            assert(configs.size)(equalTo(2)) &&
+            assert(configs._1.size)(equalTo(2)) &&
+            assert(configs._2.size)(equalTo(2)) &&
             assert(list3.size)(equalTo(0))
         }
       },
@@ -152,6 +157,20 @@ object AdminSpec extends ZIOSpecWithKafka {
           } yield assert(configs.size)(equalTo(1))
         }
       },
+      test("describe broker config async") {
+        KafkaTestUtils.withAdmin { client =>
+          for {
+            configTasks <- client.describeConfigsAsync(
+                             List(
+                               ConfigResource(ConfigResourceType.Broker, "0")
+                             )
+                           )
+            configs <- ZIO.foreachPar(configTasks) { case (resource, configTask) =>
+                         configTask.map(config => (resource, config))
+                       }
+          } yield assertTrue(configs.size == 1)
+        }
+      },
       test("list offsets") {
         KafkaTestUtils.withAdmin { client =>
           val topic    = "adminspec-topic8"
@@ -167,15 +186,33 @@ object AdminSpec extends ZIOSpecWithKafka {
           } yield assert(offsets.values.map(_.offset).sum)(equalTo(msgCount.toLong))
         }
       },
+      test("list offsets async") {
+        KafkaTestUtils.withAdmin { client =>
+          val topic    = "adminspec-topic9"
+          val msgCount = 20
+          val kvs      = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
+
+          for {
+            _ <- client.createTopics(List(AdminClient.NewTopic("adminspec-topic9", 3, 1)))
+            _ <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
+            offsetTasks <- client.listOffsetsAsync(
+                             (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
+                           )
+            offsets <- ZIO.foreachPar(offsetTasks) { case (topicPartition, offsetTask) =>
+                         offsetTask.map((topicPartition, _))
+                       }
+          } yield assert(offsets.values.map(_.offset).sum)(equalTo(msgCount.toLong))
+        }
+      },
       test("alter offsets") {
         KafkaTestUtils.withAdmin { client =>
-          val topic            = "adminspec-topic9"
-          val consumerGroupID  = "adminspec-topic9"
+          val topic            = "adminspec-topic10"
+          val consumerGroupID  = "adminspec-topic10"
           val partitionCount   = 3
           val msgCount         = 20
           val partitionResetBy = 2
 
-          val p   = (0 until partitionCount).map(i => TopicPartition("adminspec-topic9", i))
+          val p   = (0 until partitionCount).map(i => TopicPartition("adminspec-topic10", i))
           val kvs = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
 
           def consumeAndCommit(count: Long) =
@@ -193,7 +230,7 @@ object AdminSpec extends ZIOSpecWithKafka {
                 offsetBatch.commit.as(records)
               }
               .runCollect
-              .provideSomeLayer[Kafka](consumer("adminspec-topic9", Some(consumerGroupID)))
+              .provideSomeLayer[Kafka](consumer("adminspec-topic10", Some(consumerGroupID)))
 
           def toMap(records: Chunk[ConsumerRecord[String, String]]): Map[Int, List[(Long, String, String)]] =
             records.toList
@@ -362,6 +399,26 @@ object AdminSpec extends ZIOSpecWithKafka {
             _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
             node      <- admin.describeClusterNodes().head.orElseFail(new NoSuchElementException())
             logDirs   <- admin.describeLogDirs(List(node.id))
+          } yield assert(logDirs)(
+            hasKey(
+              node.id,
+              hasValues(exists(hasField("replicaInfos", _.replicaInfos, hasKey(TopicPartition(topicName, 0)))))
+            )
+          )
+        }
+      },
+      test("describe log dirs async") {
+        KafkaTestUtils.withAdmin { implicit admin =>
+          for {
+            topicName <- randomTopic
+            _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
+            node      <- admin.describeClusterNodes().head.orElseFail(new NoSuchElementException())
+            logDirs <-
+              admin.describeLogDirsAsync(List(node.id)).flatMap { descriptions =>
+                ZIO.foreachPar(descriptions) { case (brokerId, descriptionAsync) =>
+                  descriptionAsync.map(description => (brokerId, description))
+                }
+              }
           } yield assert(logDirs)(
             hasKey(
               node.id,

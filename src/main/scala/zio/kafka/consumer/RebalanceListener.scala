@@ -31,21 +31,21 @@ final case class RebalanceListener(
     new ConsumerRebalanceListener {
       override def onPartitionsRevoked(
         partitions: java.util.Collection[TopicPartition]
-      ): Unit = Unsafe.unsafeCompat { implicit u =>
+      ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe.run(onRevoked(partitions.asScala.toSet, consumer)).getOrThrowFiberFailure()
         ()
       }
 
       override def onPartitionsAssigned(
         partitions: java.util.Collection[TopicPartition]
-      ): Unit = Unsafe.unsafeCompat { implicit u =>
+      ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe.run(onAssigned(partitions.asScala.toSet, consumer)).getOrThrowFiberFailure()
         ()
       }
 
       override def onPartitionsLost(
         partitions: java.util.Collection[TopicPartition]
-      ): Unit = Unsafe.unsafeCompat { implicit u =>
+      ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe.run(onLost(partitions.asScala.toSet, consumer)).getOrThrowFiberFailure()
         ()
       }
