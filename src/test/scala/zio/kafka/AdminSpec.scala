@@ -388,6 +388,26 @@ object AdminSpec extends ZIOSpecWithKafka {
           )
         }
       },
+      test("describe log dirs async") {
+        KafkaTestUtils.withAdmin { implicit admin =>
+          for {
+            topicName <- randomTopic
+            _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
+            node      <- admin.describeClusterNodes().head.orElseFail(new NoSuchElementException())
+            logDirs <-
+              admin.describeLogDirsAsync(List(node.id)).flatMap { descriptions =>
+                ZIO.foreachPar(descriptions) { case (brokerId, descriptionAsync) =>
+                  descriptionAsync.map(description => (brokerId, description))
+                }
+              }
+          } yield assert(logDirs)(
+            hasKey(
+              node.id,
+              hasValues(exists(hasField("replicaInfos", _.replicaInfos, hasKey(TopicPartition(topicName, 0)))))
+            )
+          )
+        }
+      },
       test("should correctly handle no node (null) when converting JNode to Node") {
         assert(AdminClient.Node.apply(null))(isNone)
       },
