@@ -33,7 +33,6 @@ object PopulateTopic extends ZIOAppDefault {
           )
         )
       )
-      .exitCode
 }
 
 object Plain {
@@ -110,7 +109,6 @@ object ZIOKafka extends ZIOAppDefault {
             }
         })
       .provideLayer(ZLayer.scoped(Consumer.make(settings)))
-      .exitCode
 
   }
 }
