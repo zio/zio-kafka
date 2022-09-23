@@ -727,7 +727,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
             ZIO
               .foreach((0 until nrPartitions).toList) { i =>
                 messagesReceived(i).get.flatMap { v =>
-                  Ref.make(v).map(r => v -> r)
+                  Ref.make(v).map(r => i -> r)
                 } <* messagesReceived(i).set(0)
               }
               .map(_.toMap)
