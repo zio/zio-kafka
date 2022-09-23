@@ -1,14 +1,19 @@
 package zio.kafka.producer
 
-import java.util.concurrent.atomic.AtomicLong
-
-import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
-import org.apache.kafka.common.{ Metric, MetricName }
+import org.apache.kafka.clients.producer.{
+  Callback,
+  KafkaProducer,
+  Producer => JProducer,
+  ProducerRecord,
+  RecordMetadata
+}
 import org.apache.kafka.common.serialization.ByteArraySerializer
+import org.apache.kafka.common.{ Metric, MetricName }
 import zio._
 import zio.kafka.serde.Serializer
 import zio.stream.ZPipeline
 
+import java.util.concurrent.atomic.AtomicLong
 import scala.jdk.CollectionConverters._
 
 trait Producer {
@@ -119,7 +124,7 @@ trait Producer {
 object Producer {
 
   private[producer] final case class Live(
-    p: KafkaProducer[Array[Byte], Array[Byte]],
+    p: JProducer[Array[Byte], Array[Byte]],
     producerSettings: ProducerSettings
   ) extends Producer {
 
@@ -137,7 +142,7 @@ object Producer {
                  serializedRecord,
                  new Callback {
                    def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
-                     Unsafe.unsafeCompat { implicit u =>
+                     Unsafe.unsafe { implicit u =>
                        if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
                        else runtime.unsafe.run(done.succeed(metadata)).getOrThrowFiberFailure()
                        ()
@@ -171,7 +176,7 @@ object Producer {
                      rec,
                      new Callback {
                        def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
-                         Unsafe.unsafeCompat { implicit u =>
+                         Unsafe.unsafe { implicit u =>
                            if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
                            else {
                              res(idx) = metadata
