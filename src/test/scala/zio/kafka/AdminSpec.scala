@@ -167,15 +167,33 @@ object AdminSpec extends ZIOSpecWithKafka {
           } yield assert(offsets.values.map(_.offset).sum)(equalTo(msgCount.toLong))
         }
       },
+      test("list offsets async") {
+        KafkaTestUtils.withAdmin { client =>
+          val topic    = "adminspec-topic9"
+          val msgCount = 20
+          val kvs      = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
+
+          for {
+            _ <- client.createTopics(List(AdminClient.NewTopic("adminspec-topic9", 3, 1)))
+            _ <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
+            offsetTasks <- client.listOffsetsAsync(
+                             (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
+                           )
+            offsets <- ZIO.foreachPar(offsetTasks) { case (topicPartition, offsetTask) =>
+                         offsetTask.map((topicPartition, _))
+                       }
+          } yield assert(offsets.values.map(_.offset).sum)(equalTo(msgCount.toLong))
+        }
+      },
       test("alter offsets") {
         KafkaTestUtils.withAdmin { client =>
-          val topic            = "adminspec-topic9"
-          val consumerGroupID  = "adminspec-topic9"
+          val topic            = "adminspec-topic10"
+          val consumerGroupID  = "adminspec-topic10"
           val partitionCount   = 3
           val msgCount         = 20
           val partitionResetBy = 2
 
-          val p   = (0 until partitionCount).map(i => TopicPartition("adminspec-topic9", i))
+          val p   = (0 until partitionCount).map(i => TopicPartition("adminspec-topic10", i))
           val kvs = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
 
           def consumeAndCommit(count: Long) =
@@ -193,7 +211,7 @@ object AdminSpec extends ZIOSpecWithKafka {
                 offsetBatch.commit.as(records)
               }
               .runCollect
-              .provideSomeLayer[Kafka](consumer("adminspec-topic9", Some(consumerGroupID)))
+              .provideSomeLayer[Kafka](consumer("adminspec-topic10", Some(consumerGroupID)))
 
           def toMap(records: Chunk[ConsumerRecord[String, String]]): Map[Int, List[(Long, String, String)]] =
             records.toList
