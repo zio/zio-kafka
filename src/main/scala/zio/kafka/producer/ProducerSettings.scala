@@ -3,6 +3,8 @@ package zio.kafka.producer
 import org.apache.kafka.clients.producer.ProducerConfig
 import zio._
 
+import zio.kafka.security.KafkaCredentialStore
+
 final case class ProducerSettings(
   bootstrapServers: List[String],
   closeTimeout: Duration,
@@ -29,6 +31,9 @@ final case class ProducerSettings(
 
   def withProperties(kvs: Map[String, AnyRef]): ProducerSettings =
     copy(properties = properties ++ kvs)
+
+  def withCredentials(credentialsStore: KafkaCredentialStore): ProducerSettings =
+    withProperties(credentialsStore.properties)
 }
 
 object ProducerSettings {
