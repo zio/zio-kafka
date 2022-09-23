@@ -1,14 +1,19 @@
 package zio.kafka.producer
 
-import java.util.concurrent.atomic.AtomicLong
-
-import org.apache.kafka.clients.producer.{ Callback, KafkaProducer, ProducerRecord, RecordMetadata }
-import org.apache.kafka.common.{ Metric, MetricName }
+import org.apache.kafka.clients.producer.{
+  Callback,
+  KafkaProducer,
+  Producer => JProducer,
+  ProducerRecord,
+  RecordMetadata
+}
 import org.apache.kafka.common.serialization.ByteArraySerializer
+import org.apache.kafka.common.{ Metric, MetricName }
 import zio._
 import zio.kafka.serde.Serializer
 import zio.stream.ZPipeline
 
+import java.util.concurrent.atomic.AtomicLong
 import scala.jdk.CollectionConverters._
 
 trait Producer {
@@ -119,7 +124,7 @@ trait Producer {
 object Producer {
 
   private[producer] final case class Live(
-    p: KafkaProducer[Array[Byte], Array[Byte]],
+    p: JProducer[Array[Byte], Array[Byte]],
     producerSettings: ProducerSettings
   ) extends Producer {
 
@@ -136,12 +141,12 @@ object Producer {
                p.send(
                  serializedRecord,
                  new Callback {
-                   def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
-                     if (err != null) runtime.unsafeRun(done.fail(err))
-                     else runtime.unsafeRun(done.succeed(metadata))
-
-                     ()
-                   }
+                   def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
+                     Unsafe.unsafe { implicit u =>
+                       if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
+                       else runtime.unsafe.run(done.succeed(metadata)).getOrThrowFiberFailure()
+                       ()
+                     }
                  }
                )
              }
@@ -152,7 +157,7 @@ object Producer {
       keySerializer: Serializer[R, K],
       valueSerializer: Serializer[R, V]
     ): RIO[R, Task[Chunk[RecordMetadata]]] =
-      if (records.isEmpty) ZIO.succeed(Task.succeed(Chunk.empty))
+      if (records.isEmpty) ZIO.succeed(ZIO.succeed(Chunk.empty))
       else {
         for {
           done              <- Promise.make[Throwable, Chunk[RecordMetadata]]
@@ -170,16 +175,17 @@ object Producer {
                    p.send(
                      rec,
                      new Callback {
-                       def onCompletion(metadata: RecordMetadata, err: Exception): Unit = {
-                         if (err != null) runtime.unsafeRun(done.fail(err))
-                         else {
-                           res(idx) = metadata
-                           if (count.incrementAndGet == records.length)
-                             runtime.unsafeRun(done.succeed(Chunk.fromArray(res)))
-                         }
+                       def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
+                         Unsafe.unsafe { implicit u =>
+                           if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
+                           else {
+                             res(idx) = metadata
+                             if (count.incrementAndGet == records.length)
+                               runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure()
+                           }
 
-                         ()
-                       }
+                           ()
+                         }
                      }
                    )
                  }
@@ -233,7 +239,7 @@ object Producer {
         value <- valueSerializer.serialize(r.topic, r.headers, r.value())
       } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
 
-    private[producer] def close: UIO[Unit] = UIO.succeed(p.close(producerSettings.closeTimeout))
+    private[producer] def close: UIO[Unit] = ZIO.succeed(p.close(producerSettings.closeTimeout))
   }
 
   val live: RLayer[ProducerSettings, Producer] =

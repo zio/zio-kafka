@@ -2,7 +2,7 @@ package zio.kafka.serde
 
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Serde => KafkaSerde }
-import zio.{ RIO, Task }
+import zio.{ RIO, Task, ZIO }
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try
@@ -73,7 +73,7 @@ object Serde extends Serdes {
    * Create a Serde from a Kafka Serde
    */
   def fromKafkaSerde[T](serde: KafkaSerde[T], props: Map[String, AnyRef], isKey: Boolean) =
-    Task
+    ZIO
       .attempt(serde.configure(props.asJava, isKey))
       .as(
         new Serde[Any, T] {
@@ -81,10 +81,10 @@ object Serde extends Serdes {
           val deserializer = serde.deserializer()
 
           override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Task[T] =
-            Task.attempt(deserializer.deserialize(topic, headers, data))
+            ZIO.attempt(deserializer.deserialize(topic, headers, data))
 
           override def serialize(topic: String, headers: Headers, value: T): Task[Array[Byte]] =
-            Task.attempt(serializer.serialize(topic, headers, value))
+            ZIO.attempt(serializer.serialize(topic, headers, value))
         }
       )
 
