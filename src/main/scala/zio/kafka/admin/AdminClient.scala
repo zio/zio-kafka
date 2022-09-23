@@ -14,6 +14,7 @@ import org.apache.kafka.clients.admin.{
   DeleteTopicsOptions => JDeleteTopicsOptions,
   DescribeClusterOptions => JDescribeClusterOptions,
   DescribeConfigsOptions => JDescribeConfigsOptions,
+  DescribeConsumerGroupsOptions => JDescribeConsumerGroupsOptions,
   DescribeTopicsOptions => JDescribeTopicsOptions,
   ListConsumerGroupOffsetsOptions => JListConsumerGroupOffsetsOptions,
   ListConsumerGroupsOptions => JListConsumerGroupsOptions,
@@ -116,6 +117,14 @@ trait AdminClient {
   ): Task[Map[ConfigResource, KafkaConfig]]
 
   /**
+   * Get the configuration for the specified resources async.
+   */
+  def describeConfigsAsync(
+    configResources: Iterable[ConfigResource],
+    options: Option[DescribeConfigsOptions] = None
+  ): Task[Map[ConfigResource, Task[KafkaConfig]]]
+
+  /**
    * Get the cluster nodes.
    */
   def describeClusterNodes(options: Option[DescribeClusterOptions] = None): Task[List[Node]]
@@ -154,6 +163,14 @@ trait AdminClient {
   ): Task[Map[TopicPartition, ListOffsetsResultInfo]]
 
   /**
+   * List offset for the specified partitions.
+   */
+  def listOffsetsAsync(
+    topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
+    options: Option[ListOffsetsOptions] = None
+  ): Task[Map[TopicPartition, Task[ListOffsetsResultInfo]]]
+
+  /**
    * List Consumer Group offsets for the specified partitions.
    */
   def listConsumerGroupOffsets(
@@ -186,6 +203,14 @@ trait AdminClient {
   def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]]
 
   /**
+   * Describe the specified consumer groups.
+   */
+  def describeConsumerGroups(
+    groupIds: List[String],
+    options: Option[DescribeConsumerGroupsOptions]
+  ): Task[Map[String, ConsumerGroupDescription]]
+
+  /**
    * Remove the specified members from a consumer group.
    */
   def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit]
@@ -196,6 +221,13 @@ trait AdminClient {
   def describeLogDirs(
     brokersId: Iterable[Int]
   ): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]]
+
+  /**
+   * Describe the log directories of the specified brokers async
+   */
+  def describeLogDirsAsync(
+    brokersId: Iterable[Int]
+  ): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]]
 }
 
 object AdminClient {
@@ -348,6 +380,33 @@ object AdminClient {
       )
     }
 
+    /**
+     * Get the configuration for the specified resources async.
+     */
+    override def describeConfigsAsync(
+      configResources: Iterable[ConfigResource],
+      options: Option[DescribeConfigsOptions] = None
+    ): Task[Map[ConfigResource, Task[KafkaConfig]]] = {
+      val asJava = configResources.map(_.asJava).asJavaCollection
+      ZIO
+        .attemptBlocking(
+          options
+            .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts.asJava))
+            .values()
+        )
+        .map(
+          _.asScala.view.map { case (configResource, configFuture) =>
+            (
+              ConfigResource(configResource),
+              ZIO
+                .fromCompletionStage(configFuture.toCompletionStage)
+                .map(config => KafkaConfig(config))
+            )
+
+          }.toMap
+        )
+    }
+
     private def describeCluster(options: Option[DescribeClusterOptions]): Task[DescribeClusterResult] =
       ZIO.attemptBlocking(
         options.fold(adminClient.describeCluster())(opts => adminClient.describeCluster(opts.asJava))
@@ -432,6 +491,28 @@ object AdminClient {
     }.map(_.asScala.toMap.bimap(TopicPartition(_), ListOffsetsResultInfo(_)))
 
     /**
+     * List offset for the specified partitions.
+     */
+    override def listOffsetsAsync(
+      topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
+      options: Option[ListOffsetsOptions]
+    ): Task[Map[TopicPartition, Task[ListOffsetsResultInfo]]] = {
+      val topicPartitionOffsetsAsJava = topicPartitionOffsets.bimap(_.asJava, _.asJava)
+      val topicPartitionsAsJava       = topicPartitionOffsetsAsJava.keySet
+      val asJava                      = topicPartitionOffsetsAsJava.asJava
+      ZIO.attemptBlocking {
+        val listOffsetsResult = options
+          .fold(adminClient.listOffsets(asJava))(opts => adminClient.listOffsets(asJava, opts.asJava))
+        topicPartitionsAsJava.map(tp => tp -> listOffsetsResult.partitionResult(tp))
+      }
+    }.map(_.view.map { case (topicPartition, listOffsetResultInfoFuture) =>
+      (
+        TopicPartition(topicPartition),
+        ZIO.fromCompletionStage(listOffsetResultInfoFuture.toCompletionStage).map(ListOffsetsResultInfo(_))
+      )
+    }.toMap)
+
+    /**
      * List Consumer Group offsets for the specified partitions.
      */
     override def listConsumerGroupOffsets(
@@ -497,9 +578,22 @@ object AdminClient {
      * Describe the specified consumer groups.
      */
     override def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]] =
+      describeConsumerGroups(groupIds.toList, options = None)
+
+    /**
+     * Describe the specified consumer groups.
+     */
+    override def describeConsumerGroups(
+      groupIds: List[String],
+      options: Option[DescribeConsumerGroupsOptions]
+    ): Task[Map[String, ConsumerGroupDescription]] =
       fromKafkaFuture(
         ZIO.attemptBlocking(
-          adminClient.describeConsumerGroups(groupIds.asJavaCollection).all
+          options
+            .fold(adminClient.describeConsumerGroups(groupIds.asJavaCollection))(opts =>
+              adminClient.describeConsumerGroups(groupIds.asJavaCollection, opts.asJava)
+            )
+            .all
         )
       ).map(_.asScala.map { case (k, v) => k -> ConsumerGroupDescription(v) }.toMap)
 
@@ -527,6 +621,28 @@ object AdminClient {
       ).map(
         _.asScala.toMap.bimap(_.intValue, _.asScala.toMap.bimap(identity, LogDirDescription(_)))
       )
+
+    /**
+     * Describe the log directories of the specified brokers async
+     */
+    override def describeLogDirsAsync(
+      brokersId: Iterable[Int]
+    ): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]] =
+      ZIO
+        .attemptBlocking(
+          adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).descriptions()
+        )
+        .map(
+          _.asScala.view.map { case (brokerId, descriptionsFuture) =>
+            (
+              brokerId.intValue(),
+              ZIO
+                .fromCompletionStage(descriptionsFuture.toCompletionStage)
+                .map(_.asScala.toMap.map { case (k, v) => (k, LogDirDescription(v)) })
+            )
+
+          }.toMap
+        )
   }
 
   val live: ZLayer[AdminClientSettings, Throwable, AdminClient] =
@@ -729,6 +845,14 @@ object AdminClient {
     lazy val asJava: JDescribeClusterOptions = {
       val opts = new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
       timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
+    }
+  }
+
+  final case class DescribeConsumerGroupsOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
+    lazy val asJava: JDescribeConsumerGroupsOptions = {
+      val jOpts = new JDescribeConsumerGroupsOptions()
+        .includeAuthorizedOperations(includeAuthorizedOperations)
+      timeout.fold(jOpts)(timeout => jOpts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 

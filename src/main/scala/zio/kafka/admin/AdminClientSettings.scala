@@ -3,6 +3,8 @@ package zio.kafka.admin
 import org.apache.kafka.clients.admin.AdminClientConfig
 import zio._
 
+import zio.kafka.security.KafkaCredentialStore
+
 final case class AdminClientSettings(
   bootstrapServers: List[String],
   closeTimeout: Duration,
@@ -20,6 +22,9 @@ final case class AdminClientSettings(
 
   def withProperties(kvs: Map[String, AnyRef]): AdminClientSettings =
     copy(properties = properties ++ kvs)
+
+  def withCredentials(credentialsStore: KafkaCredentialStore): AdminClientSettings =
+    withProperties(credentialsStore.properties)
 }
 
 object AdminClientSettings {
