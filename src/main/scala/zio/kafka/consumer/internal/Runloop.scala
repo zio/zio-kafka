@@ -152,8 +152,10 @@ private[consumer] final class Runloop(
       }
       .as(Chunk.empty)
       .catchAll {
-        case _: RebalanceInProgressException => // We cannot prevent this from occurring during cooperative rebalancing
-          ZIO.succeed(cmds)
+        case e: RebalanceInProgressException => // We cannot prevent this from occurring during cooperative rebalancing
+          println("YEAH!!! GOT REBALANCE!")
+          onFailure(e).as(Chunk.empty)
+//          ZIO.succeed(cmds)
         case e =>
           onFailure(e).as(Chunk.empty)
       }
