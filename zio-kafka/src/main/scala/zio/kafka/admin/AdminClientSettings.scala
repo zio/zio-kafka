@@ -2,7 +2,6 @@ package zio.kafka.admin
 
 import org.apache.kafka.clients.admin.AdminClientConfig
 import zio._
-
 import zio.kafka.security.KafkaCredentialStore
 
 final case class AdminClientSettings(

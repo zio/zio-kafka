@@ -2,7 +2,6 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.ProducerConfig
 import zio._
-
 import zio.kafka.security.KafkaCredentialStore
 
 final case class ProducerSettings(
