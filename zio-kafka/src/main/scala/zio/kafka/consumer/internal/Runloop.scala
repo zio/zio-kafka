@@ -132,33 +132,33 @@ private[consumer] final class Runloop(
       _ <- p.await
     } yield ()
 
-  // Returns remaining commits that will have to be retried later
-  private def doCommit(cmds: Chunk[Command.Commit]): UIO[Chunk[Command.Commit]] = {
+  private def doCommit(cmds: Chunk[Command.Commit]): UIO[Any] = {
     val offsets   = aggregateOffsets(cmds)
     val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(cmds)(_.cont.done(e))
     val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
-    val onFailure = (err: Throwable) =>
-      cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
+    val onFailure: Throwable => UIO[Unit] = {
+      case _: RebalanceInProgressException =>
+        ZIO.logInfo(s"Rebalance in progress, retrying ${cmds.size.toString} commits") *>
+          commitQueue.offerAll(cmds).unit
+      case err =>
+        cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
+    }
 
     ZIO
       .runtime[Any]
       .map(makeOffsetCommitCallback(onSuccess, onFailure))
       .flatMap { callback =>
-        consumer.withConsumerM { c =>
-          // We don't wait for the completion of the commit here, because it
-          // will only complete once we poll again.
-          ZIO.attempt(c.commitAsync(offsets.asJava, callback))
-        }
+        ZIO.logInfo(
+          s"doCommit for ${offsets.map { case (tp, off) => s"${tp.partition()}: ${off.offset()}" }.mkString(",")}"
+        ) *>
+          consumer.withConsumerM { c =>
+            // We don't wait for the completion of the commit here, because it
+            // will only complete once we poll again.
+            ZIO.attempt(c.commitAsync(offsets.asJava, callback))
+          }
       }
       .as(Chunk.empty)
-      .catchAll {
-        case e: RebalanceInProgressException => // We cannot prevent this from occurring during cooperative rebalancing
-          println("YEAH!!! GOT REBALANCE!")
-          onFailure(e).as(Chunk.empty)
-//          ZIO.succeed(cmds)
-        case e =>
-          onFailure(e).as(Chunk.empty)
-      }
+      .catchAll(onFailure)
   }
 
   // Returns the highest offset to commit per partition
@@ -468,7 +468,7 @@ private[consumer] final class Runloop(
       newPendingCommits <-
         ZIO.ifZIO(isRebalancing)(
           ZIO.succeed(state.pendingCommits),
-          doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).someOrElse(Chunk.empty[Command.Commit])
+          doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).as(Chunk.empty)
         )
     } yield State(
       pollResult.unfulfilledRequests,
@@ -500,7 +500,7 @@ private[consumer] final class Runloop(
   private def handleCommit(state: State, cmd: Command.Commit): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
       ZIO.succeed(state.addCommit(cmd)),
-      doCommit(Chunk(cmd)).map(remainingCommits => state.addCommits(remainingCommits))
+      doCommit(Chunk(cmd)).as(state)
     )
 
   /**
