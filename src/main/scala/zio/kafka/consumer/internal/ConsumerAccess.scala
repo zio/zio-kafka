@@ -1,6 +1,6 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.{ Consumer => JConsumer, KafkaConsumer }
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio._
@@ -14,7 +14,7 @@ private[consumer] class ConsumerAccess(
   access: Semaphore
 ) {
   def withConsumer[A](f: ByteArrayKafkaConsumer => A): Task[A] =
-    withConsumerM[Any, A](c => ZIO(f(c)))
+    withConsumerM[Any, A](c => ZIO.attempt(f(c)))
 
   def withConsumerM[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
     access.withPermit(withConsumerNoPermit(f))
@@ -32,17 +32,21 @@ private[consumer] class ConsumerAccess(
 }
 
 private[consumer] object ConsumerAccess {
-  type ByteArrayKafkaConsumer = KafkaConsumer[Array[Byte], Array[Byte]]
+  type ByteArrayKafkaConsumer = JConsumer[Array[Byte], Array[Byte]]
 
-  def make(settings: ConsumerSettings): TaskManaged[ConsumerAccess] =
+  def make(settings: ConsumerSettings): ZIO[Scope, Throwable, ConsumerAccess] =
     for {
-      access <- Semaphore.make(1).toManaged
-      consumer <- ZIO.attemptBlocking {
-                    new KafkaConsumer[Array[Byte], Array[Byte]](
-                      settings.driverSettings.asJava,
-                      new ByteArrayDeserializer(),
-                      new ByteArrayDeserializer()
-                    )
-                  }.toManagedWith(c => ZIO.blocking(access.withPermit(UIO(c.close(settings.closeTimeout)))))
+      access <- Semaphore.make(1)
+      consumer <- ZIO.acquireRelease {
+                    ZIO.attemptBlocking {
+                      new KafkaConsumer[Array[Byte], Array[Byte]](
+                        settings.driverSettings.asJava,
+                        new ByteArrayDeserializer(),
+                        new ByteArrayDeserializer()
+                      )
+                    }
+                  } { consumer =>
+                    ZIO.blocking(access.withPermit(ZIO.succeed(consumer.close(settings.closeTimeout))))
+                  }
     } yield new ConsumerAccess(consumer, access)
 }

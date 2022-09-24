@@ -1,12 +1,11 @@
 package zio.kafka.serde
 
-import org.apache.kafka.common.serialization.{ Serde => KafkaSerde }
 import org.apache.kafka.common.header.Headers
+import org.apache.kafka.common.serialization.{ Serde => KafkaSerde }
+import zio.{ RIO, Task, ZIO }
 
-import zio.{ RIO, Task }
-
-import scala.util.Try
 import scala.jdk.CollectionConverters._
+import scala.util.Try
 
 /**
  * A serializer and deserializer for values of type T
@@ -21,7 +20,7 @@ trait Serde[-R, T] extends Deserializer[R, T] with Serializer[R, T] {
   /**
    * Creates a new Serde that uses optional values. Null data will be mapped to None values.
    */
-  def asOption(implicit ev: T <:< AnyRef, ev2: Null <:< T): Serde[R, Option[T]] =
+  override def asOption: Serde[R, Option[T]] =
     Serde(super[Deserializer].asOption)(super[Serializer].asOption)
 
   /**
@@ -74,17 +73,18 @@ object Serde extends Serdes {
    * Create a Serde from a Kafka Serde
    */
   def fromKafkaSerde[T](serde: KafkaSerde[T], props: Map[String, AnyRef], isKey: Boolean) =
-    Task(serde.configure(props.asJava, isKey))
+    ZIO
+      .attempt(serde.configure(props.asJava, isKey))
       .as(
         new Serde[Any, T] {
           val serializer   = serde.serializer()
           val deserializer = serde.deserializer()
 
           override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Task[T] =
-            Task(deserializer.deserialize(topic, headers, data))
+            ZIO.attempt(deserializer.deserialize(topic, headers, data))
 
           override def serialize(topic: String, headers: Headers, value: T): Task[Array[Byte]] =
-            Task(serializer.serialize(topic, headers, value))
+            ZIO.attempt(serializer.serialize(topic, headers, value))
         }
       )
 

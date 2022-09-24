@@ -9,10 +9,12 @@ import org.apache.kafka.clients.admin.{
   ConsumerGroupListing => JConsumerGroupListing,
   CreatePartitionsOptions => JCreatePartitionsOptions,
   CreateTopicsOptions => JCreateTopicsOptions,
+  DeleteConsumerGroupsOptions => JDeleteConsumerGroupsOptions,
   DeleteRecordsOptions => JDeleteRecordsOptions,
   DeleteTopicsOptions => JDeleteTopicsOptions,
   DescribeClusterOptions => JDescribeClusterOptions,
   DescribeConfigsOptions => JDescribeConfigsOptions,
+  DescribeConsumerGroupsOptions => JDescribeConsumerGroupsOptions,
   DescribeTopicsOptions => JDescribeTopicsOptions,
   ListConsumerGroupOffsetsOptions => JListConsumerGroupOffsetsOptions,
   ListConsumerGroupsOptions => JListConsumerGroupsOptions,
@@ -45,7 +47,6 @@ import org.apache.kafka.common.{
 import zio._
 
 import java.util.Optional
-import java.util.concurrent.CompletionException
 import scala.jdk.CollectionConverters._
 
 trait AdminClient {
@@ -64,6 +65,14 @@ trait AdminClient {
    * Create a single topic.
    */
   def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit]
+
+  /**
+   * Delete consumer groups.
+   */
+  def deleteConsumerGroups(
+    groupIds: Iterable[String],
+    options: Option[DeleteConsumerGroupOptions] = None
+  ): Task[Unit]
 
   /**
    * Delete multiple topics.
@@ -108,6 +117,14 @@ trait AdminClient {
   ): Task[Map[ConfigResource, KafkaConfig]]
 
   /**
+   * Get the configuration for the specified resources async.
+   */
+  def describeConfigsAsync(
+    configResources: Iterable[ConfigResource],
+    options: Option[DescribeConfigsOptions] = None
+  ): Task[Map[ConfigResource, Task[KafkaConfig]]]
+
+  /**
    * Get the cluster nodes.
    */
   def describeClusterNodes(options: Option[DescribeClusterOptions] = None): Task[List[Node]]
@@ -146,6 +163,14 @@ trait AdminClient {
   ): Task[Map[TopicPartition, ListOffsetsResultInfo]]
 
   /**
+   * List offset for the specified partitions.
+   */
+  def listOffsetsAsync(
+    topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
+    options: Option[ListOffsetsOptions] = None
+  ): Task[Map[TopicPartition, Task[ListOffsetsResultInfo]]]
+
+  /**
    * List Consumer Group offsets for the specified partitions.
    */
   def listConsumerGroupOffsets(
@@ -178,6 +203,14 @@ trait AdminClient {
   def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]]
 
   /**
+   * Describe the specified consumer groups.
+   */
+  def describeConsumerGroups(
+    groupIds: List[String],
+    options: Option[DescribeConsumerGroupsOptions]
+  ): Task[Map[String, ConsumerGroupDescription]]
+
+  /**
    * Remove the specified members from a consumer group.
    */
   def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit]
@@ -188,9 +221,16 @@ trait AdminClient {
   def describeLogDirs(
     brokersId: Iterable[Int]
   ): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]]
+
+  /**
+   * Describe the log directories of the specified brokers async
+   */
+  def describeLogDirsAsync(
+    brokersId: Iterable[Int]
+  ): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]]
 }
 
-object AdminClient extends Accessible[AdminClient] {
+object AdminClient {
 
   /**
    * Thin wrapper around apache java AdminClient. See java api for descriptions
@@ -224,6 +264,25 @@ object AdminClient extends Accessible[AdminClient] {
      */
     override def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit] =
       createTopics(List(newTopic), Some(CreateTopicsOptions(validateOnly = validateOnly, timeout = Option.empty)))
+
+    /**
+     * Delete consumer groups.
+     */
+    override def deleteConsumerGroups(
+      groupIds: Iterable[String],
+      options: Option[DeleteConsumerGroupOptions]
+    ): Task[Unit] = {
+      val asJava = groupIds.asJavaCollection
+      fromKafkaFutureVoid {
+        ZIO.attemptBlocking(
+          options
+            .fold(adminClient.deleteConsumerGroups(asJava))(opts =>
+              adminClient.deleteConsumerGroups(asJava, opts.asJava)
+            )
+            .all()
+        )
+      }
+    }
 
     /**
      * Delete multiple topics.
@@ -292,7 +351,7 @@ object AdminClient extends Accessible[AdminClient] {
             .allTopicNames()
         )
       }.flatMap { jTopicDescriptions =>
-        Task
+        ZIO
           .foreach(jTopicDescriptions.asScala.toSeq) { case (k, v) =>
             AdminClient.TopicDescription(v).map(k -> _)
           }
@@ -321,6 +380,33 @@ object AdminClient extends Accessible[AdminClient] {
       )
     }
 
+    /**
+     * Get the configuration for the specified resources async.
+     */
+    override def describeConfigsAsync(
+      configResources: Iterable[ConfigResource],
+      options: Option[DescribeConfigsOptions] = None
+    ): Task[Map[ConfigResource, Task[KafkaConfig]]] = {
+      val asJava = configResources.map(_.asJava).asJavaCollection
+      ZIO
+        .attemptBlocking(
+          options
+            .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts.asJava))
+            .values()
+        )
+        .map(
+          _.asScala.view.map { case (configResource, configFuture) =>
+            (
+              ConfigResource(configResource),
+              ZIO
+                .fromCompletionStage(configFuture.toCompletionStage)
+                .map(config => KafkaConfig(config))
+            )
+
+          }.toMap
+        )
+    }
+
     private def describeCluster(options: Option[DescribeClusterOptions]): Task[DescribeClusterResult] =
       ZIO.attemptBlocking(
         options.fold(adminClient.describeCluster())(opts => adminClient.describeCluster(opts.asJava))
@@ -333,7 +419,7 @@ object AdminClient extends Accessible[AdminClient] {
       fromKafkaFuture(
         describeCluster(options).map(_.nodes())
       ).flatMap { nodes =>
-        Task.foreach(nodes.asScala.toList) { jNode =>
+        ZIO.foreach(nodes.asScala.toList) { jNode =>
           ZIO
             .getOrFailWith(new RuntimeException("NoNode not expected when listing cluster nodes"))(
               Node(jNode)
@@ -365,7 +451,7 @@ object AdminClient extends Accessible[AdminClient] {
     ): Task[Set[AclOperation]] =
       for {
         res <- describeCluster(options)
-        opt <- fromKafkaFuture(Task(res.authorizedOperations())).map(Option(_))
+        opt <- fromKafkaFuture(ZIO.attempt(res.authorizedOperations())).map(Option(_))
         lst <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
         aclOperations = lst.map(AclOperation.apply)
       } yield aclOperations
@@ -403,6 +489,28 @@ object AdminClient extends Accessible[AdminClient] {
         )
       }
     }.map(_.asScala.toMap.bimap(TopicPartition(_), ListOffsetsResultInfo(_)))
+
+    /**
+     * List offset for the specified partitions.
+     */
+    override def listOffsetsAsync(
+      topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
+      options: Option[ListOffsetsOptions]
+    ): Task[Map[TopicPartition, Task[ListOffsetsResultInfo]]] = {
+      val topicPartitionOffsetsAsJava = topicPartitionOffsets.bimap(_.asJava, _.asJava)
+      val topicPartitionsAsJava       = topicPartitionOffsetsAsJava.keySet
+      val asJava                      = topicPartitionOffsetsAsJava.asJava
+      ZIO.attemptBlocking {
+        val listOffsetsResult = options
+          .fold(adminClient.listOffsets(asJava))(opts => adminClient.listOffsets(asJava, opts.asJava))
+        topicPartitionsAsJava.map(tp => tp -> listOffsetsResult.partitionResult(tp))
+      }
+    }.map(_.view.map { case (topicPartition, listOffsetResultInfoFuture) =>
+      (
+        TopicPartition(topicPartition),
+        ZIO.fromCompletionStage(listOffsetResultInfoFuture.toCompletionStage).map(ListOffsetsResultInfo(_))
+      )
+    }.toMap)
 
     /**
      * List Consumer Group offsets for the specified partitions.
@@ -470,9 +578,22 @@ object AdminClient extends Accessible[AdminClient] {
      * Describe the specified consumer groups.
      */
     override def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]] =
+      describeConsumerGroups(groupIds.toList, options = None)
+
+    /**
+     * Describe the specified consumer groups.
+     */
+    override def describeConsumerGroups(
+      groupIds: List[String],
+      options: Option[DescribeConsumerGroupsOptions]
+    ): Task[Map[String, ConsumerGroupDescription]] =
       fromKafkaFuture(
         ZIO.attemptBlocking(
-          adminClient.describeConsumerGroups(groupIds.asJavaCollection).all
+          options
+            .fold(adminClient.describeConsumerGroups(groupIds.asJavaCollection))(opts =>
+              adminClient.describeConsumerGroups(groupIds.asJavaCollection, opts.asJava)
+            )
+            .all
         )
       ).map(_.asScala.map { case (k, v) => k -> ConsumerGroupDescription(v) }.toMap)
 
@@ -500,43 +621,40 @@ object AdminClient extends Accessible[AdminClient] {
       ).map(
         _.asScala.toMap.bimap(_.intValue, _.asScala.toMap.bimap(identity, LogDirDescription(_)))
       )
+
+    /**
+     * Describe the log directories of the specified brokers async
+     */
+    override def describeLogDirsAsync(
+      brokersId: Iterable[Int]
+    ): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]] =
+      ZIO
+        .attemptBlocking(
+          adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).descriptions()
+        )
+        .map(
+          _.asScala.view.map { case (brokerId, descriptionsFuture) =>
+            (
+              brokerId.intValue(),
+              ZIO
+                .fromCompletionStage(descriptionsFuture.toCompletionStage)
+                .map(_.asScala.toMap.map { case (k, v) => (k, LogDirDescription(v)) })
+            )
+
+          }.toMap
+        )
   }
 
   val live: ZLayer[AdminClientSettings, Throwable, AdminClient] =
-    (for {
-      settings <- ZManaged.service[AdminClientSettings]
-      admin    <- make(settings)
-    } yield admin).toLayer
+    ZLayer.scoped {
+      for {
+        settings <- ZIO.service[AdminClientSettings]
+        admin    <- make(settings)
+      } yield admin
+    }
 
-  def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] = {
-
-    /*
-     * Inspired by the implementation of [[zio.interop.javaz.fromCompletionStage]].
-     *
-     * See:
-     *   - https://github.com/zio/zio/blob/v1.0.13/core/jvm/src/main/scala/zio/interop/javaz.scala#L47-L80
-     */
-    def unwrapCompletionException(isFatal: Throwable => Boolean)(t: Throwable): Task[Nothing] =
-      t match {
-        case e: CompletionException => Task.fail(e.getCause)
-        case e if !isFatal(e)       => Task.fail(e)
-        case e                      => Task.die(e)
-      }
-
-    kfv.flatMap(f =>
-      Task.suspendSucceedWith { (p, _) =>
-        Task.asyncInterrupt[T] { cb =>
-          f.toCompletionStage.whenComplete { (v: T, t: Throwable) =>
-            if (f.isCancelled) cb(ZIO.fiberId.flatMap(id => Task.failCause(Cause.interrupt(id))))
-            else if (t ne null) cb(unwrapCompletionException(p.fatal)(t))
-            else cb(Task.succeed(v))
-          }
-
-          Left(ZIO.succeed(f.cancel(true)))
-        }
-      }
-    )
-  }
+  def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] =
+    kfv.flatMap(f => ZIO.fromCompletionStage(f.toCompletionStage))
 
   def fromKafkaFutureVoid[R](kfv: RIO[R, KafkaFuture[Void]]): RIO[R, Unit] =
     fromKafkaFuture(kfv).unit
@@ -681,6 +799,13 @@ object AdminClient extends Accessible[AdminClient] {
     }
   }
 
+  final case class DeleteConsumerGroupOptions(timeout: Option[Duration]) {
+    def asJava: JDeleteConsumerGroupsOptions = {
+      val opts = new JDeleteConsumerGroupsOptions()
+      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
+    }
+  }
+
   final case class DeleteTopicsOptions(retryOnQuotaViolation: Boolean = true, timeout: Option[Duration]) {
     def asJava: JDeleteTopicsOptions = {
       val opts = new JDeleteTopicsOptions().retryOnQuotaViolation(retryOnQuotaViolation)
@@ -720,6 +845,14 @@ object AdminClient extends Accessible[AdminClient] {
     lazy val asJava: JDescribeClusterOptions = {
       val opts = new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
       timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
+    }
+  }
+
+  final case class DescribeConsumerGroupsOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
+    lazy val asJava: JDescribeConsumerGroupsOptions = {
+      val jOpts = new JDescribeConsumerGroupsOptions()
+        .includeAuthorizedOperations(includeAuthorizedOperations)
+      timeout.fold(jOpts)(timeout => jOpts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
@@ -794,7 +927,7 @@ object AdminClient extends Accessible[AdminClient] {
   object TopicDescription {
     def apply(jt: JTopicDescription): Task[TopicDescription] = {
       val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet)
-      Task.foreach(jt.partitions.asScala.toList)(TopicPartitionInfo.apply).map { partitions =>
+      ZIO.foreach(jt.partitions.asScala.toList)(TopicPartitionInfo.apply).map { partitions =>
         TopicDescription(
           jt.name,
           jt.isInternal,
@@ -817,7 +950,7 @@ object AdminClient extends Accessible[AdminClient] {
 
   object TopicPartitionInfo {
     def apply(jtpi: JTopicPartitionInfo): Task[TopicPartitionInfo] = {
-      val replicas = Task.foreach(
+      val replicas: ZIO[Any, RuntimeException, List[Node]] = ZIO.foreach(
         jtpi
           .replicas()
           .asScala
@@ -826,7 +959,7 @@ object AdminClient extends Accessible[AdminClient] {
         ZIO.getOrFailWith(new RuntimeException("NoNode node not expected among topic replicas"))(Node(jNode))
       }
 
-      val inSyncReplicas = Task.foreach(
+      val inSyncReplicas: ZIO[Any, RuntimeException, List[Node]] = ZIO.foreach(
         jtpi
           .isr()
           .asScala
@@ -984,33 +1117,33 @@ object AdminClient extends Accessible[AdminClient] {
     def apply(ri: JReplicaInfo): ReplicaInfo = ReplicaInfo(ri.size(), ri.offsetLag(), ri.isFuture)
   }
 
-  def make(settings: AdminClientSettings): TaskManaged[AdminClient] =
+  def make(settings: AdminClientSettings): ZIO[Scope, Throwable, AdminClient] =
     fromManagedJavaClient(javaClientFromSettings(settings))
 
   def fromJavaClient(javaClient: JAdminClient): URIO[Any, AdminClient] =
     ZIO.succeed(new LiveAdminClient(javaClient))
 
   def fromManagedJavaClient[R, E](
-    managedJavaClient: ZManaged[R, E, JAdminClient]
-  ): ZManaged[R, E, AdminClient] =
+    managedJavaClient: ZIO[R with Scope, E, JAdminClient]
+  ): ZIO[R with Scope, E, AdminClient] =
     managedJavaClient.flatMap { javaClient =>
-      ZManaged.fromZIO(fromJavaClient(javaClient))
+      fromJavaClient(javaClient)
     }
 
-  def javaClientFromSettings(settings: AdminClientSettings): ZManaged[Any, Throwable, JAdminClient] =
-    ZManaged.acquireReleaseWith(ZIO(JAdminClient.create(settings.driverSettings.asJava)))(client =>
+  def javaClientFromSettings(settings: AdminClientSettings): ZIO[Scope, Throwable, JAdminClient] =
+    ZIO.acquireRelease(ZIO.attempt(JAdminClient.create(settings.driverSettings.asJava)))(client =>
       ZIO.succeed(client.close(settings.closeTimeout))
     )
 
   implicit class MapOps[K1, V1](val v: Map[K1, V1]) extends AnyVal {
-    def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2) = v.map(kv => fk(kv._1) -> fv(kv._2))
+    def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): Map[K2, V2] = v.map(kv => fk(kv._1) -> fv(kv._2))
   }
 
   implicit class OptionalOps[T](val v: Optional[T]) extends AnyVal {
-    def toScala = if (v.isPresent) Some(v.get()) else None
+    def toScala: Option[T] = if (v.isPresent) Some(v.get()) else None
   }
 
   implicit class OptionOps[T](val v: Option[T]) extends AnyVal {
-    def toJava = v.fold(Optional.empty[T])(Optional.of)
+    def toJava: Optional[T] = v.fold(Optional.empty[T])(Optional.of)
   }
 }

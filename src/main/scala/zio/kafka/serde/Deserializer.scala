@@ -4,9 +4,8 @@ import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Deserializer => KafkaDeserializer }
 import zio.{ RIO, Task, ZIO }
 
-import scala.util.{ Failure, Success, Try }
 import scala.jdk.CollectionConverters._
-import scala.annotation.nowarn
+import scala.util.{ Failure, Success, Try }
 
 /**
  * Deserializer from byte array to a value of some type T
@@ -56,7 +55,7 @@ trait Deserializer[-R, +T] {
   /**
    * Returns a new deserializer that deserializes values as Option values, mapping null data to None values.
    */
-  def asOption(implicit @nowarn ev: T <:< AnyRef): Deserializer[R, Option[T]] =
+  def asOption: Deserializer[R, Option[T]] =
     Deserializer((topic, headers, data) => ZIO.foreach(Option(data))(deserialize(topic, headers, _)))
 }
 
@@ -78,11 +77,12 @@ object Deserializer extends Serdes {
     props: Map[String, AnyRef],
     isKey: Boolean
   ): Task[Deserializer[Any, T]] =
-    Task(deserializer.configure(props.asJava, isKey))
+    ZIO
+      .attempt(deserializer.configure(props.asJava, isKey))
       .as(
         new Deserializer[Any, T] {
           override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Task[T] =
-            Task(deserializer.deserialize(topic, headers, data))
+            ZIO.attempt(deserializer.deserialize(topic, headers, data))
         }
       )
 }

@@ -1,11 +1,11 @@
 package zio.kafka.serde
 
+import org.apache.kafka.common.header.Headers
+import org.apache.kafka.common.serialization.{ Serde => KafkaSerde, Serdes => KafkaSerdes }
+import zio.{ RIO, ZIO }
+
 import java.nio.ByteBuffer
 import java.util.UUID
-
-import org.apache.kafka.common.serialization.{ Serde => KafkaSerde, Serdes => KafkaSerdes }
-import org.apache.kafka.common.header.Headers
-import zio.{ RIO, Task }
 
 private[zio] trait Serdes {
   lazy val long: Serde[Any, Long]     = convertPrimitiveSerde(KafkaSerdes.Long()).inmap(Long2long)(long2Long)
@@ -24,9 +24,9 @@ private[zio] trait Serdes {
       val deserializer = serde.deserializer()
 
       override def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[Any, T] =
-        Task(deserializer.deserialize(topic, headers, data))
+        ZIO.attempt(deserializer.deserialize(topic, headers, data))
 
       override def serialize(topic: String, headers: Headers, value: T): RIO[Any, Array[Byte]] =
-        Task(serializer.serialize(topic, headers, value))
+        ZIO.attempt(serializer.serialize(topic, headers, value))
     }
 }

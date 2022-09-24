@@ -1,8 +1,8 @@
 package zio.kafka.serde
 
-import zio.{ RIO, Task, ZIO }
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Serializer => KafkaSerializer }
+import zio.{ RIO, Task, ZIO }
 
 import scala.jdk.CollectionConverters._
 
@@ -37,8 +37,13 @@ trait Serializer[-R, -T] {
   /**
    * Returns a new serializer that handles optional values and serializes them as nulls.
    */
-  def asOption[U <: T](implicit ev: Null <:< T): Serializer[R, Option[U]] =
-    contramap(_.orNull)
+  def asOption[U <: T]: Serializer[R, Option[U]] =
+    Serializer { (topic, headers, valueOpt) =>
+      valueOpt match {
+        case None        => ZIO.succeed(null)
+        case Some(value) => serialize(topic, headers, value)
+      }
+    }
 }
 
 object Serializer extends Serdes {
@@ -60,11 +65,12 @@ object Serializer extends Serdes {
     props: Map[String, AnyRef],
     isKey: Boolean
   ): Task[Serializer[Any, T]] =
-    Task(serializer.configure(props.asJava, isKey))
+    ZIO
+      .attempt(serializer.configure(props.asJava, isKey))
       .as(
         new Serializer[Any, T] {
           override def serialize(topic: String, headers: Headers, value: T): Task[Array[Byte]] =
-            Task(serializer.serialize(topic, headers, value))
+            ZIO.attempt(serializer.serialize(topic, headers, value))
         }
       )
 

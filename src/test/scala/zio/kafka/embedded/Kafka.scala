@@ -17,14 +17,14 @@ object Kafka {
 
   case object DefaultLocal extends Kafka {
     override def bootstrapServers: List[String] = List(s"localhost:9092")
-    override def stop(): UIO[Unit]              = UIO.unit
+    override def stop(): UIO[Unit]              = ZIO.unit
   }
 
-  val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.fromManaged {
+  val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
     implicit val embeddedKafkaConfig: EmbeddedKafkaConfig = EmbeddedKafkaConfig(
       customBrokerProperties = Map("group.min.session.timeout.ms" -> "500", "group.initial.rebalance.delay.ms" -> "0")
     )
-    ZManaged.acquireReleaseWith(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
+    ZIO.acquireRelease(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
   }
 
   val local: ZLayer[Any, Nothing, Kafka] = ZLayer.succeed(DefaultLocal)

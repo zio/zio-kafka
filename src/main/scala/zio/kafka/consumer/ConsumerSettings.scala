@@ -4,6 +4,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio._
 
 import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.security.KafkaCredentialStore
 
 case class ConsumerSettings(
   bootstrapServers: List[String],
@@ -68,6 +69,9 @@ case class ConsumerSettings(
 
   def withRestartStreamOnRebalancing(value: Boolean): ConsumerSettings =
     copy(restartStreamOnRebalancing = value)
+
+  def withCredentials(credentialsStore: KafkaCredentialStore): ConsumerSettings =
+    withProperties(credentialsStore.properties)
 }
 
 object ConsumerSettings {

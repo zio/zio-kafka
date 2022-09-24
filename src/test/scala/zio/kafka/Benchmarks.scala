@@ -18,14 +18,14 @@ object PopulateTopic extends ZIOAppDefault {
       .take(length)
       .rechunk(500)
 
-  override def run: ZIO[zio.ZEnv, Nothing, ExitCode] =
+  override def run =
     dataStream(872000).map { case (k, v) =>
       new ProducerRecord("inputs-topic", null, null, k, v)
     }.mapChunksZIO(Producer.produceChunkAsync[Any, String, String](_, Serde.string, Serde.string).map(Chunk(_)))
       .mapZIOPar(5)(_.flatMap(chunk => Console.printLine(s"Wrote chunk of ${chunk.size}")))
       .runDrain
-      .provideCustomLayer(
-        ZLayer.fromManaged(
+      .provide(
+        ZLayer.scoped(
           Producer.make(
             ProducerSettings(List("localhost:9092"))
               .withProperty(ProducerConfig.ACKS_CONFIG, "1")
@@ -33,7 +33,6 @@ object PopulateTopic extends ZIOAppDefault {
           )
         )
       )
-      .exitCode
 }
 
 object Plain {
@@ -76,7 +75,7 @@ object Plain {
 object ZIOKafka extends ZIOAppDefault {
   import zio.kafka.consumer._
 
-  override def run: ZIO[zio.ZEnv, Nothing, ExitCode] = {
+  override def run = {
     val expectedCount = 1000000
     val settings = ConsumerSettings(List("localhost:9092"))
       .withGroupId(s"zio-kafka-${scala.util.Random.nextInt()}")
@@ -109,8 +108,7 @@ object ZIOKafka extends ZIOAppDefault {
               )
             }
         })
-      .provideCustomLayer(ZLayer.fromManaged(Consumer.make(settings)))
-      .exitCode
+      .provideLayer(ZLayer.scoped(Consumer.make(settings)))
 
   }
 }
