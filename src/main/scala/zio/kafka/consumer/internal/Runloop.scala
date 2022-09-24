@@ -151,11 +151,12 @@ private[consumer] final class Runloop(
         }
       }
       .as(Chunk.empty)
-      .catchSome {
+      .catchAll {
         case _: RebalanceInProgressException => // We cannot prevent this from occurring during cooperative rebalancing
           ZIO.succeed(cmds)
+        case e =>
+          onFailure(e).as(Chunk.empty)
       }
-      .catchAll(onFailure(_).as(Chunk.empty))
   }
 
   // Returns the highest offset to commit per partition
@@ -465,9 +466,7 @@ private[consumer] final class Runloop(
       newPendingCommits <-
         ZIO.ifZIO(isRebalancing)(
           ZIO.succeed(state.pendingCommits),
-          doCommit(state.pendingCommits)
-            .when(state.pendingCommits.nonEmpty)
-            .someOrElse(Chunk.empty[Command.Commit])
+          doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).someOrElse(Chunk.empty[Command.Commit])
         )
     } yield State(
       pollResult.unfulfilledRequests,
@@ -499,7 +498,7 @@ private[consumer] final class Runloop(
   private def handleCommit(state: State, cmd: Command.Commit): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
       ZIO.succeed(state.addCommit(cmd)),
-      doCommit(Chunk(cmd)).map(state.addCommits)
+      doCommit(Chunk(cmd)).map(remainingCommits => state.addCommits(remainingCommits))
     )
 
   /**
