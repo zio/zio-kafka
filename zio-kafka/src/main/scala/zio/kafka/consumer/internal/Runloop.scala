@@ -133,7 +133,7 @@ private[consumer] final class Runloop(
       _ <- p.await
     } yield ()
 
-  private def doCommit(cmds: Chunk[Command.Commit]): UIO[Any] = {
+  private def doCommit(cmds: Chunk[Command.Commit]): UIO[Unit] = {
     val offsets   = aggregateOffsets(cmds)
     val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(cmds)(_.cont.done(e))
     val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
@@ -155,7 +155,6 @@ private[consumer] final class Runloop(
           ZIO.attempt(c.commitAsync(offsets.asJava, callback))
         }
       }
-      .as(Chunk.empty)
       .catchAll(onFailure)
   }
 
