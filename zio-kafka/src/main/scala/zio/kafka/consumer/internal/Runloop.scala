@@ -666,7 +666,6 @@ private[internal] final case class State(
   assignedStreams: Map[TopicPartition, PartitionStreamControl]
 ) {
   def addCommit(c: Command.Commit)           = copy(pendingCommits = c +: pendingCommits)
-  def addCommits(c: Chunk[Command.Commit])   = copy(pendingCommits = c ++ pendingCommits)
   def addRequest(c: Runloop.Request)         = copy(pendingRequests = c +: pendingRequests)
   def addRequests(c: Chunk[Runloop.Request]) = copy(pendingRequests = c ++ pendingRequests)
   def addBufferedRecords(recs: BufferedRecords) =
