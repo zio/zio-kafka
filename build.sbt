@@ -1,6 +1,6 @@
 lazy val scala212  = "2.12.17"
 lazy val scala213  = "2.13.8"
-lazy val scala3    = "3.1.2"
+lazy val scala3    = "3.1.3"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
@@ -126,7 +126,7 @@ lazy val zioKafkaTest =
         "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
         "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.4",
         "ch.qos.logback"             % "logback-classic"         % "1.2.11"   % Test,
-        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.7.0"
+        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.8.1"
       ) ++ {
         if (scalaBinaryVersion.value == "3")
           Seq(
