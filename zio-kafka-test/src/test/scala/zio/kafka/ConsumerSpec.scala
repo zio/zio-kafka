@@ -756,45 +756,20 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         val nrPartitions = 5
         val nrMessages   = 10000
 
-        def diagnostics(clientId: String) =
-          for {
-            queue <- Diagnostics.SlidingQueue.make()
-            _ <- ZStream
-                   .fromQueue(queue.queue)
-                   .tap {
-                     case DiagnosticEvent.Rebalance.Revoked(partitions) =>
-                       ZIO.logInfo(s"$clientId: Partitions revoked: ${partitions.map(_.partition).mkString(",")}")
-                     case DiagnosticEvent.Rebalance.Assigned(partitions) =>
-                       ZIO.logInfo(s"$clientId: Partitions assigned: ${partitions.map(_.partition).mkString(",")}")
-                     case DiagnosticEvent.Rebalance.Lost(partitions) =>
-                       ZIO.logInfo(s"$clientId: Partitions LOST: ${partitions.map(_.partition).mkString(",")}")
-                     case _ =>
-                       ZIO.unit
-                   }
-                   .runDrain
-                   .forkScoped
-          } yield queue
-
         def customConsumer(clientId: String, groupId: Option[String]) =
           (ZLayer(
             consumerSettings(
               clientId = clientId,
               groupId = groupId,
-              clientInstanceId = None,
-              allowAutoCreateTopics = true,
-              offsetRetrieval = OffsetRetrieval.Auto(),
-              restartStreamOnRebalancing = false
+              clientInstanceId = None
             ).map(
               _.withProperties(
-//                ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG            -> "10000",
-//                ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG         -> "3000",
-                ConsumerConfig.MAX_POLL_RECORDS_CONFIG              -> "10",
                 ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> classOf[CooperativeStickyAssignor].getName
               )
-                .withPollInterval(1.second)
-                .withPollTimeout(1.second)
+                .withPollInterval(500.millis)
+                .withPollTimeout(500.millis)
             )
-          ) ++ ZLayer.scoped(diagnostics(clientId))) >>> Consumer.live
+          ) ++ ZLayer.succeed(Diagnostics.NoOp) >>> Consumer.live)
 
         for {
           // Produce messages on several partitions
@@ -809,11 +784,9 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                  .forkScoped
 
           // Consume messages
-          messagesReceivedConsumer1 <-
-            ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
-          messagesReceivedConsumer2 <-
-            ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
-          drainCount <- Ref.make(0)
+          messagesReceivedConsumer1 <- Ref.make[Int](0)
+          messagesReceivedConsumer2 <- Ref.make[Int](0)
+          drainCount                <- Ref.make(0)
           subscription = Subscription.topics(topic)
           fib <-
             Consumer
@@ -825,18 +798,10 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                   ZStream
                     .fromIterable(partitions.map(_._2))
                     .flatMapPar(Int.MaxValue)(s => s)
-                    .mapZIO(record => messagesReceivedConsumer1(record.partition).update(_ + 1).as(record))
+                    .mapZIO(record => messagesReceivedConsumer1.update(_ + 1).as(record))
                     .map(_.offset)
                     .aggregateAsync(Consumer.offsetBatches)
-                    .mapZIO(offsetBatch => offsetBatch.commit
-//                        .tap(_ =>
-//                        ZIO.logInfo(
-//                          s"Consumer 1: commit for ${offsetBatch.offsets.map { case (tp, off) =>
-//                            s"${tp.partition()}: $off"
-//                          }.mkString(",")} succeeded"
-//                        )
-//                      )
-                    )
+                    .mapZIO(offsetBatch => offsetBatch.commit)
                     .runDrain
               }
               .mapZIO(_ => drainCount.updateAndGet(_ + 1))
@@ -845,12 +810,9 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                 customConsumer("consumer1", Some(group)) ++ Scope.default
               )
               .tapError(e => ZIO.logErrorCause(e.getMessage, Cause.fail(e)))
-              .fork
+              .forkScoped
 
-          _ <- ZIO
-                 .foreach(messagesReceivedConsumer1.values)(_.get)
-                 .map(_.sum)
-                 .tap(ZIO.debug(_))
+          _ <- messagesReceivedConsumer1.get
                  .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
           _ <- ZIO.logInfo("Starting consumer 2")
 
@@ -858,16 +820,10 @@ object ConsumerSpec extends ZIOSpecWithKafka {
             Consumer
               .subscribeAnd(subscription)
               .plainStream(Serde.string, Serde.string)
-              .mapZIO(record => messagesReceivedConsumer2(record.partition).update(_ + 1).as(record))
+              .mapZIO(record => messagesReceivedConsumer2.update(_ + 1).as(record))
               .map(_.offset)
               .aggregateAsync(Consumer.offsetBatches)
-              .mapZIO(offsetBatch => offsetBatch.commit
-//                  .tap(_ =>
-//                  ZIO.logInfo(
-//                    s"Consumer 2: commit for ${offsetBatch.offsets.map { case (tp, off) => s"${tp.partition()}: $off" }.mkString(",")} succeeded"
-//                  )
-//                )
-              )
+              .mapZIO(offsetBatch => offsetBatch.commit)
               .runDrain
               .provideSomeLayer[Kafka](
                 customConsumer("consumer2", Some(group))
@@ -875,14 +831,11 @@ object ConsumerSpec extends ZIOSpecWithKafka {
               .tapError(e => ZIO.logErrorCause("Error in consumer 2", Cause.fail(e)))
               .forkScoped
 
-          _ <- ZIO
-                 .foreach(messagesReceivedConsumer2.values)(_.get)
-                 .map(_.sum)
-                 .tap(ZIO.debug(_))
+          _ <- messagesReceivedConsumer2.get
                  .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
-          _ <- fib.interrupt
-          _ <- fib2.interrupt
-        } yield assertCompletes
+          exit1 <- fib.interrupt
+          _     <- fib2.interrupt
+        } yield assert(exit1)(succeeds(anything))
       }
     ).provideSomeLayerShared[TestEnvironment with Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
       300.seconds

@@ -5,7 +5,6 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
-import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.Runloop.{
@@ -14,6 +13,7 @@ import zio.kafka.consumer.internal.Runloop.{
   ByteArrayConsumerRecord,
   Command
 }
+import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.stream._
 
 import java.util
@@ -149,14 +149,11 @@ private[consumer] final class Runloop(
       .runtime[Any]
       .map(makeOffsetCommitCallback(onSuccess, onFailure))
       .flatMap { callback =>
-        ZIO.logInfo(
-          s"doCommit for ${offsets.map { case (tp, off) => s"${tp.partition()}: ${off.offset()}" }.mkString(",")}"
-        ) *>
-          consumer.withConsumerM { c =>
-            // We don't wait for the completion of the commit here, because it
-            // will only complete once we poll again.
-            ZIO.attempt(c.commitAsync(offsets.asJava, callback))
-          }
+        consumer.withConsumerM { c =>
+          // We don't wait for the completion of the commit here, because it
+          // will only complete once we poll again.
+          ZIO.attempt(c.commitAsync(offsets.asJava, callback))
+        }
       }
       .as(Chunk.empty)
       .catchAll(onFailure)
