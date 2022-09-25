@@ -788,6 +788,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           messagesReceivedConsumer2 <- Ref.make[Int](0)
           drainCount                <- Ref.make(0)
           subscription = Subscription.topics(topic)
+          stopConsumer1 <- Promise.make[Nothing, Unit]
           fib <-
             Consumer
               .subscribeAnd(subscription)
@@ -805,6 +806,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                     .runDrain
               }
               .mapZIO(_ => drainCount.updateAndGet(_ + 1))
+              .interruptWhen(stopConsumer1.await)
               .runDrain
               .provideSomeLayer[Kafka](
                 customConsumer("consumer1", Some(group)) ++ Scope.default
@@ -833,9 +835,10 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 
           _ <- messagesReceivedConsumer2.get
                  .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
-          exit1 <- fib.interrupt
-          _     <- fib2.interrupt
-        } yield assert(exit1)(succeeds(anything))
+          _ <- stopConsumer1.succeed(())
+          _ <- fib.join
+          _ <- fib2.interrupt
+        } yield assertCompletes
       }
     ).provideSomeLayerShared[TestEnvironment with Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
       300.seconds
