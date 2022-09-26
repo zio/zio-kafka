@@ -1,6 +1,7 @@
 package zio.kafka.consumer
 
 import io.github.embeddedkafka.EmbeddedKafka
+import org.apache.kafka.clients.consumer.{ ConsumerConfig, CooperativeStickyAssignor }
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.KafkaTestUtils._
@@ -750,6 +751,96 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           // the exact count cannot be known because fib2's termination triggers fib1's rebalancing asynchronously.
         } yield assert(messagesPerPartition0)(forall(equalTo(nrMessages / nrPartitions))) &&
           assert(messagesPerPartition.view.sum)(isGreaterThan(0) && isLessThanEqualTo(nrMessages - 20))
+      },
+      test("handles RebalanceInProgressExceptions transparently") {
+        val nrPartitions = 5
+        val nrMessages   = 10000
+
+        def customConsumer(clientId: String, groupId: Option[String]) =
+          (ZLayer(
+            consumerSettings(
+              clientId = clientId,
+              groupId = groupId,
+              clientInstanceId = None
+            ).map(
+              _.withProperties(
+                ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> classOf[CooperativeStickyAssignor].getName
+              )
+                .withPollInterval(500.millis)
+                .withPollTimeout(500.millis)
+            )
+          ) ++ ZLayer.succeed(Diagnostics.NoOp) >>> Consumer.live)
+
+        for {
+          // Produce messages on several partitions
+          topic <- randomTopic
+          group <- randomGroup
+
+          _ <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO
+                 .foreachDiscard(1 to nrMessages) { i =>
+                   produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+                 }
+                 .forkScoped
+
+          // Consume messages
+          messagesReceivedConsumer1 <- Ref.make[Int](0)
+          messagesReceivedConsumer2 <- Ref.make[Int](0)
+          drainCount                <- Ref.make(0)
+          subscription = Subscription.topics(topic)
+          stopConsumer1 <- Promise.make[Nothing, Unit]
+          fib <-
+            Consumer
+              .subscribeAnd(subscription)
+              .partitionedAssignmentStream(Serde.string, Serde.string)
+              .rechunk(1)
+              .mapZIOPar(16) { partitions =>
+                ZIO.logInfo(s"Consumer 1 got new partition assignment: ${partitions.map(_._1.toString)}") *>
+                  ZStream
+                    .fromIterable(partitions.map(_._2))
+                    .flatMapPar(Int.MaxValue)(s => s)
+                    .mapZIO(record => messagesReceivedConsumer1.update(_ + 1).as(record))
+                    .map(_.offset)
+                    .aggregateAsync(Consumer.offsetBatches)
+                    .mapZIO(offsetBatch => offsetBatch.commit)
+                    .runDrain
+              }
+              .mapZIO(_ => drainCount.updateAndGet(_ + 1))
+              .interruptWhen(stopConsumer1.await)
+              .runDrain
+              .provideSomeLayer[Kafka](
+                customConsumer("consumer1", Some(group)) ++ Scope.default
+              )
+              .tapError(e => ZIO.logErrorCause(e.getMessage, Cause.fail(e)))
+              .forkScoped
+
+          _ <- messagesReceivedConsumer1.get
+                 .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
+          _ <- ZIO.logInfo("Starting consumer 2")
+
+          fib2 <-
+            Consumer
+              .subscribeAnd(subscription)
+              .plainStream(Serde.string, Serde.string)
+              .mapZIO(record => messagesReceivedConsumer2.update(_ + 1).as(record))
+              .map(_.offset)
+              .aggregateAsync(Consumer.offsetBatches)
+              .mapZIO(offsetBatch => offsetBatch.commit)
+              .runDrain
+              .provideSomeLayer[Kafka](
+                customConsumer("consumer2", Some(group))
+              )
+              .tapError(e => ZIO.logErrorCause("Error in consumer 2", Cause.fail(e)))
+              .forkScoped
+
+          _ <- messagesReceivedConsumer2.get
+                 .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
+          _ <- stopConsumer1.succeed(())
+          _ <- fib.join
+          _ <- fib2.interrupt
+        } yield assertCompletes
       }
-    ).provideSomeLayerShared[TestEnvironment with Kafka](producer) @@ withLiveClock @@ timeout(300.seconds)
+    ).provideSomeLayerShared[TestEnvironment with Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
+      300.seconds
+    )
 }

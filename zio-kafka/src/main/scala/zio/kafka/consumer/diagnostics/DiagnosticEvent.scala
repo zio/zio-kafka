@@ -23,5 +23,6 @@ object DiagnosticEvent {
   object Rebalance {
     final case class Revoked(partitions: Set[TopicPartition])  extends Rebalance
     final case class Assigned(partitions: Set[TopicPartition]) extends Rebalance
+    final case class Lost(partitions: Set[TopicPartition])     extends Rebalance
   }
 }

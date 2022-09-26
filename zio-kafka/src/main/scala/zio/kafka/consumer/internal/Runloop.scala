@@ -2,9 +2,9 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
-import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.Runloop.{
@@ -13,6 +13,7 @@ import zio.kafka.consumer.internal.Runloop.{
   ByteArrayConsumerRecord,
   Command
 }
+import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.stream._
 
 import java.util
@@ -77,7 +78,8 @@ private[consumer] final class Runloop(
 
     val emitDiagnostics = RebalanceListener(
       (assigned, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(assigned)),
-      (revoked, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked))
+      (revoked, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked)),
+      (lost, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Lost(lost))
     )
 
     lazy val revokeTopics = RebalanceListener(
@@ -135,8 +137,13 @@ private[consumer] final class Runloop(
     val offsets   = aggregateOffsets(cmds)
     val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(cmds)(_.cont.done(e))
     val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
-    val onFailure = (err: Throwable) =>
-      cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
+    val onFailure: Throwable => UIO[Unit] = {
+      case _: RebalanceInProgressException =>
+        ZIO.logInfo(s"Rebalance in progress, retrying ${cmds.size.toString} commits") *>
+          commitQueue.offerAll(cmds).unit
+      case err =>
+        cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
+    }
 
     ZIO
       .runtime[Any]
