@@ -2,7 +2,7 @@ package zio.kafka.admin
 
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
 import org.apache.kafka.clients.admin.{
-  AdminClient => JAdminClient,
+  Admin => JAdmin,
   AlterConsumerGroupOffsetsOptions => JAlterConsumerGroupOffsetsOptions,
   Config => JConfig,
   ConsumerGroupDescription => JConsumerGroupDescription,
@@ -238,7 +238,7 @@ object AdminClient {
    * @param adminClient
    */
   private final class LiveAdminClient(
-    private val adminClient: JAdminClient
+    private val adminClient: JAdmin
   ) extends AdminClient {
 
     /**
@@ -1120,18 +1120,18 @@ object AdminClient {
   def make(settings: AdminClientSettings): ZIO[Scope, Throwable, AdminClient] =
     fromManagedJavaClient(javaClientFromSettings(settings))
 
-  def fromJavaClient(javaClient: JAdminClient): URIO[Any, AdminClient] =
+  def fromJavaClient(javaClient: JAdmin): URIO[Any, AdminClient] =
     ZIO.succeed(new LiveAdminClient(javaClient))
 
   def fromManagedJavaClient[R, E](
-    managedJavaClient: ZIO[R with Scope, E, JAdminClient]
+    managedJavaClient: ZIO[R with Scope, E, JAdmin]
   ): ZIO[R with Scope, E, AdminClient] =
     managedJavaClient.flatMap { javaClient =>
       fromJavaClient(javaClient)
     }
 
-  def javaClientFromSettings(settings: AdminClientSettings): ZIO[Scope, Throwable, JAdminClient] =
-    ZIO.acquireRelease(ZIO.attempt(JAdminClient.create(settings.driverSettings.asJava)))(client =>
+  def javaClientFromSettings(settings: AdminClientSettings): ZIO[Scope, Throwable, JAdmin] =
+    ZIO.acquireRelease(ZIO.attempt(JAdmin.create(settings.driverSettings.asJava)))(client =>
       ZIO.succeed(client.close(settings.closeTimeout))
     )
 
