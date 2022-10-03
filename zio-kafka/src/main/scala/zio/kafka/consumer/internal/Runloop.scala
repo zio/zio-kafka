@@ -19,7 +19,6 @@ import zio.stream._
 import java.util
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.util.Try
 import scala.util.control.NonFatal
 
 private[consumer] final class Runloop(
@@ -210,7 +209,7 @@ private[consumer] final class Runloop(
       for {
         _ <- control.finishWith(
                remaining.map(
-                 CommittableRecord(_, commit(_), Try(consumer.consumer.groupMetadata()).toOption)
+                 CommittableRecord(_, commit, getConsumerGroupMetadataIfAny)
                )
              )
       } yield ()
@@ -262,11 +261,7 @@ private[consumer] final class Runloop(
           CommittableRecord(
             record = record,
             commitHandle = commit,
-            consumerGroupMetadata =
-              if (hasGroupId)
-                try Some(consumer.consumer.groupMetadata())
-                catch { case NonFatal(_) => None }
-              else None
+            consumerGroupMetadata = getConsumerGroupMetadataIfAny
           )
         })
         buf -= req.tp
@@ -275,6 +270,12 @@ private[consumer] final class Runloop(
 
     fulfillAction.as(Runloop.FulfillResult(acc, BufferedRecords.fromMutableMap(buf)))
   }
+
+  private def getConsumerGroupMetadataIfAny: Option[ConsumerGroupMetadata] =
+    if (hasGroupId)
+      try Some(consumer.consumer.groupMetadata())
+      catch { case NonFatal(_) => None }
+    else None
 
   private def bufferRecordsForUnrequestedPartitions(
     records: ConsumerRecords[Array[Byte], Array[Byte]],
