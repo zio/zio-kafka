@@ -2,7 +2,23 @@ package zio.kafka.admin
 
 import org.apache.kafka.common.acl.{ AclOperation => JAclOperation }
 
-sealed trait AclOperation
+sealed trait AclOperation {
+  def asJava: JAclOperation = this match {
+    case AclOperation.Unknown         => JAclOperation.UNKNOWN
+    case AclOperation.Any             => JAclOperation.ANY
+    case AclOperation.Read            => JAclOperation.READ
+    case AclOperation.Write           => JAclOperation.WRITE
+    case AclOperation.All             => JAclOperation.ALL
+    case AclOperation.Create          => JAclOperation.CREATE
+    case AclOperation.Delete          => JAclOperation.DELETE
+    case AclOperation.Alter           => JAclOperation.ALTER
+    case AclOperation.Describe        => JAclOperation.DESCRIBE
+    case AclOperation.ClusterAction   => JAclOperation.CLUSTER_ACTION
+    case AclOperation.DescribeConfigs => JAclOperation.DESCRIBE_CONFIGS
+    case AclOperation.AlterConfigs    => JAclOperation.ALTER_CONFIGS
+    case AclOperation.IdempotentWrite => JAclOperation.IDEMPOTENT_WRITE
+  }
+}
 
 object AclOperation {
   case object Unknown         extends AclOperation

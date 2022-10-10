@@ -22,7 +22,12 @@ object Kafka {
 
   val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
     implicit val embeddedKafkaConfig: EmbeddedKafkaConfig = EmbeddedKafkaConfig(
-      customBrokerProperties = Map("group.min.session.timeout.ms" -> "500", "group.initial.rebalance.delay.ms" -> "0")
+      customBrokerProperties = Map(
+        "group.min.session.timeout.ms"     -> "500",
+        "group.initial.rebalance.delay.ms" -> "0",
+        "authorizer.class.name"            -> "kafka.security.authorizer.AclAuthorizer",
+        "allow.everyone.if.no.acl.found"   -> "true"
+      )
     )
     ZIO.acquireRelease(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
   }

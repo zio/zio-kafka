@@ -54,6 +54,38 @@ trait AdminClient {
   import AdminClient._
 
   /**
+   * Create multiple acls.
+   */
+  def createAcls(
+    aclBindings: Iterable[AclBinding],
+    timeoutMs: Option[Int] = None
+  ): Task[Unit]
+
+  /**
+   * Create a single acl.
+   */
+  def createAcl(
+    aclBinding: AclBinding,
+    timeoutMs: Option[Int] = None
+  ): Task[Unit]
+
+  /**
+   * Delete multiple acls.
+   */
+  def deleteAcls(
+    aclBindingFilters: Iterable[AclBindingFilter],
+    timeoutMs: Option[Int] = None
+  ): Task[List[AclBinding]]
+
+  /**
+   * Describe multiple acls.
+   */
+  def describeAcls(
+    aclBindingFilter: AclBindingFilter,
+    timeoutMs: Option[Int] = None
+  ): Task[List[AclBinding]]
+
+  /**
    * Create multiple topics.
    */
   def createTopics(
@@ -242,12 +274,79 @@ object AdminClient {
   ) extends AdminClient {
 
     /**
+     * Create multiple acls.
+     */
+    override def createAcls(
+      aclBindings: Iterable[AclBinding],
+      timeoutMs: Option[Int] = None
+    ): Task[Unit] = {
+
+      val asJava = aclBindings.map(_.asJava).asJavaCollection
+      fromKafkaFutureVoid {
+        ZIO.attemptBlocking(
+          timeoutMs
+            .fold(adminClient.createAcls(asJava))(timeoutMs =>
+              adminClient.createAcls(asJava, new CreateAclsOptions().timeoutMs(timeoutMs))
+            )
+            .all()
+        )
+      }
+    }
+
+    /**
+     * Create a single acl.
+     */
+    override def createAcl(
+      aclBinding: AclBinding,
+      timeoutMs: Option[Int] = None
+    ): Task[Unit] =
+      createAcls(Seq(aclBinding), timeoutMs)
+
+    /**
+     * Delete multiple acls.
+     */
+    override def deleteAcls(
+      aclBindingFilters: Iterable[AclBindingFilter],
+      timeoutMs: Option[Int] = None
+    ): Task[List[AclBinding]] = {
+
+      val asJava = aclBindingFilters.map(_.asJava).asJavaCollection
+
+      fromKafkaFuture {
+        ZIO.attemptBlocking(
+          timeoutMs
+            .fold(adminClient.deleteAcls(asJava))(timeoutMs =>
+              adminClient.deleteAcls(asJava, new DeleteAclsOptions().timeoutMs(timeoutMs))
+            )
+            .all()
+        )
+      }.map(_.asScala.map(AclBinding(_)).toList)
+    }
+
+    /**
+     * Describe multiple acls.
+     */
+    override def describeAcls(
+      aclBindingFilter: AclBindingFilter,
+      timeoutMs: Option[Int] = None
+    ): Task[List[AclBinding]] = fromKafkaFuture {
+      ZIO.attemptBlocking(
+        timeoutMs
+          .fold(adminClient.describeAcls(aclBindingFilter.asJava))(timeoutMs =>
+            adminClient.describeAcls(aclBindingFilter.asJava, new DescribeAclsOptions().timeoutMs(timeoutMs))
+          )
+          .values()
+      )
+    }.map(_.asScala.map(AclBinding(_)).toList)
+
+    /**
      * Create multiple topics.
      */
     override def createTopics(
       newTopics: Iterable[NewTopic],
       options: Option[CreateTopicsOptions] = None
     ): Task[Unit] = {
+
       val asJava = newTopics.map(_.asJava).asJavaCollection
 
       fromKafkaFutureVoid {
@@ -868,6 +967,8 @@ object AdminClient {
   object Metric {
     def apply(jm: JMetric): Metric = Metric(MetricName(jm.metricName()), jm.metricValue())
   }
+
+  final case class Acl()
 
   final case class NewTopic(
     name: String,
