@@ -253,9 +253,7 @@ object Consumer {
       valueDeserializer: Deserializer[R, V],
       bufferSize: Int
     ): ZStream[R, Throwable, CommittableRecord[K, V]] =
-      partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(
-        _._2
-      )
+      partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(_._2)
 
     override def subscribeAnd(subscription: Subscription): SubscribedConsumer =
       new SubscribedConsumer(subscribe(subscription).as(this))
