@@ -5,7 +5,9 @@ import zio._
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.consumer._
 import zio.kafka.embedded.Kafka
+import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
+import zio.stream.ZStream
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
@@ -71,7 +73,58 @@ object MultiConsumerSpec extends ZIOSpecWithKafka {
                       .unit
                       .exit
         } yield assert(result)(fails(isSubtype[InvalidSubscriptionUnion](anything)))
+      },
+      test("distributes records (randomly) from overlapping subscriptions over all subscribers") {
+        val kvs = (1 to 500).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          topic1 <- randomTopic
+          topic2 <- randomTopic
+          client <- randomClient
+          group  <- randomGroup
+
+          _ <- produceMany(topic1, kvs)
+          _ <- produceMany(topic2, kvs)
+
+          consumer1GotMessage <- Promise.make[Nothing, Unit]
+          consumer2GotMessage <- Promise.make[Nothing, Unit]
+          _ <- MultiConsumer.make.flatMap { c =>
+                 c
+                   .plainStream(Subscription.Topics(Set(topic1)), Serde.string, Serde.string, 32)
+                   .tap(_ => consumer1GotMessage.succeed(()))
+                   .merge(
+                     c.plainStream(Subscription.Topics(Set(topic1)), Serde.string, Serde.string, 32)
+                       .tap(_ => consumer2GotMessage.succeed(()))
+                   )
+                   .interruptWhen(consumer1GotMessage.await *> consumer2GotMessage.await)
+                   .runCollect
+               }
+                 .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
+        } yield assertCompletes
+      },
+      test("can handle unsubscribing during the lifetime of other streams") {
+        val kvs = (1 to 50).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          topic1 <- randomTopic
+          topic2 <- randomTopic
+          client <- randomClient
+          group  <- randomGroup
+
+          _ <- produceMany(topic1, kvs)
+          _ <- produceMany(topic2, kvs)
+
+          _ <- MultiConsumer.make.flatMap { c =>
+                 c
+                   .plainStream(Subscription.Topics(Set(topic1)), Serde.string, Serde.string, 32)
+                   .take(100)
+                   .merge(
+                     c.plainStream(Subscription.Topics(Set(topic2)), Serde.string, Serde.string, 32)
+                       .take(50) *> ZStream.fromZIO(produceMany(topic1, kvs))
+                   )
+                   .runCollect
+               }
+                 .provideSomeLayer[Kafka with Scope with Producer](consumer(client, Some(group)))
+        } yield assertCompletes
       }
     ).provideSomeLayerShared[TestEnvironment with Kafka](producer ++ Scope.default) @@
-      withLiveClock @@ timeout(300.seconds)
+      withLiveClock @@ timeout(30.seconds)
 }

@@ -46,14 +46,27 @@ class MultiConsumer(
   ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] =
     ZStream.unwrapScoped {
       for {
-        _ <- subscriptions.getAndUpdateZIO { existingSubscriptions =>
+        _ <- subscriptions.updateZIO { existingSubscriptions =>
                val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
                ZIO
                  .fromOption(Subscription.unionAll(newSubscriptions))
                  .orElseFail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
                  .flatMap { union =>
-                   consumer.subscribe(union).as(newSubscriptions.toSet)
+                   ZIO.logInfo(s"Changing kafka subscription to $union") *>
+                     consumer.subscribe(union).as(newSubscriptions.toSet)
                  }
+             }.withFinalizer { _ =>
+               subscriptions.updateZIO { existingSubscriptions =>
+                 val newSubscriptions = NonEmptyChunk.fromIterableOption(existingSubscriptions - subscription)
+                 val newUnion         = newSubscriptions.flatMap(Subscription.unionAll)
+
+                 (newUnion match {
+                   case Some(union) =>
+                     ZIO.logInfo(s"Changing kafka subscription to $union") *> consumer.subscribe(union)
+                   case None =>
+                     ZIO.logInfo(s"Unsubscribing kafka consumer") *> consumer.unsubscribe
+                 }).as(newSubscriptions.map(_.toSet).getOrElse(Set.empty))
+               }.orDie
              }
         stream <- ZStream.fromHubScoped(partitionAssignments)
       } yield stream
