@@ -1,10 +1,12 @@
 package zio.kafka
 
+import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.consumer._
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
+import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
@@ -14,7 +16,7 @@ object MultiConsumerSpec extends ZIOSpecWithKafka {
   override def spec: Spec[TestEnvironment with Kafka, Throwable] =
     suite("MultiConsumer")(
       // TODO test all kinds of combinations of subscriptions
-      test("consumes from more than one topic") {
+      test("consumes from two topic subscriptions") {
         val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
         for {
           topic1 <- randomTopic
@@ -42,6 +44,33 @@ object MultiConsumerSpec extends ZIOSpecWithKafka {
           assertTrue(kvOut2 == kvs) &&
           assertTrue(records1.map(_.record.topic()).forall(_ == topic1)) &&
           assertTrue(records2.map(_.record.topic()).forall(_ == topic2))
+      },
+      test("gives an error when attempting to consume using a manual subscription") {
+        val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          topic1 <- randomTopic
+          topic2 <- randomTopic
+          client <- randomClient
+          group  <- randomGroup
+
+          _ <- produceMany(topic1, kvs)
+          _ <- produceMany(topic2, kvs)
+
+          result <- MultiConsumer.make.flatMap { c =>
+                      c
+                        .plainStream(Subscription.Topics(Set(topic1)), Serde.string, Serde.string, 32)
+                        .runCollect zipPar
+                        c.plainStream(
+                          Subscription.Manual(Set(new TopicPartition(topic2, 1))),
+                          Serde.string,
+                          Serde.string,
+                          32
+                        ).runCollect
+                    }
+                      .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
+                      .unit
+                      .exit
+        } yield assert(result)(fails(isSubtype[InvalidSubscriptionUnion](anything)))
       }
     ).provideSomeLayerShared[TestEnvironment with Kafka](producer ++ Scope.default) @@
       withLiveClock @@ timeout(300.seconds)
