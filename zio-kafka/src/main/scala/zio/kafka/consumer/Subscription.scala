@@ -88,7 +88,7 @@ object Subscription {
 
   def subscriptionMatches(subscription: Subscription, tp: TopicPartition): Boolean = subscription match {
     case Topics(topics)          => topics.contains(tp.topic())
-    case Pattern(pattern)        => pattern.matches(tp.topic())
+    case Pattern(pattern)        => pattern.findFirstIn(tp.topic()).isDefined
     case Manual(topicPartitions) => topicPartitions.contains(tp)
   }
 }
