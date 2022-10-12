@@ -199,6 +199,7 @@ object Consumer {
     ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] =
       ZStream.unwrapScoped {
         for {
+          stream <- ZStream.fromHubScoped(partitionAssignments)
           _ <- subscriptions.updateZIO { existingSubscriptions =>
                  val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
                  ZIO
@@ -221,7 +222,6 @@ object Consumer {
                    }).as(newSubscriptions.map(_.toSet).getOrElse(Set.empty))
                  }.orDie
                }
-          stream <- ZStream.fromHubScoped(partitionAssignments)
         } yield stream
           .map(_.exit)
           .flattenExitOption
