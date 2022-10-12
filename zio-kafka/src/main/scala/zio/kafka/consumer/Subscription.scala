@@ -76,17 +76,11 @@ object Subscription {
     manual((topic, partition))
 
   def union(s1: Subscription, s2: Subscription): Option[Subscription] = (s1, s2) match {
-    // Same types
     case (Pattern(p1), Pattern(p2)) => Some(Pattern(s"$p1|$p2".r))
     case (Topics(t1), Topics(t2))   => Some(Topics(t1 ++ t2))
     case (Manual(tp1), Manual(tp2)) => Some(Manual(tp1 ++ tp2))
-    // Combinations
-    case (Pattern(_), Topics(t1)) => union(s1, Pattern(t1.mkString("|").r))
-    case (Pattern(_), Manual(_))  => None
-    case (Topics(_), Manual(_))   => None
-    // Mirror combinations
-    case (Topics(_), Pattern(_)) => union(s2, s1)
-    case _                       => None
+    case _ =>
+      None // Although we could combine Pattern and Topics, the Kafka consumer will throw exceptions when changing the subscription type
   }
 
   def unionAll(subscriptions: NonEmptyChunk[Subscription]): Option[Subscription] =
