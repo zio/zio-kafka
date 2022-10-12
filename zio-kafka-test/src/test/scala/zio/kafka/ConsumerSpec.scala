@@ -62,24 +62,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                      .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(sizes)(forall(isGreaterThan(1)))
       },
-      test("Consumer.subscribeAnd works properly") {
-        val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
-        for {
-          topic  <- randomTopic
-          client <- randomClient
-          group  <- randomGroup
-
-          _ <- produceMany(topic, kvs)
-
-          records <- Consumer
-                       .plainStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
-                       .take(5)
-                       .runCollect
-                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
-          kvOut = records.map(r => (r.record.key, r.record.value)).toList
-        } yield assert(kvOut)(equalTo(kvs))
-      },
-      test("Consumer.subscribeAnd manual subscription without groupId works properly") {
+      test("Manual subscription without groupId works properly") {
         val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
         for {
           topic  <- randomTopic
@@ -133,12 +116,13 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         } yield assert(kvOut)(equalTo(kvs))
       },
       test("receive only messages from the subscribed topic-partition when creating a manual subscription") {
+        println("Running test")
         val nrPartitions = 5
-        val topic        = "manual-topic0"
 
         for {
           client <- randomClient
           group  <- randomGroup
+          topic  <- randomTopic
 
           _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreach(1 to nrPartitions) { i =>
@@ -154,13 +138,13 @@ object ConsumerSpec extends ZIOSpecWithKafka {
       },
       test("receive from the right offset when creating a manual subscription with manual seeking") {
         val nrPartitions = 5
-        val topic        = "manual-topic1"
 
         val manualOffsetSeek = 3
 
         for {
           client <- randomClient
           group  <- randomGroup
+          topic  <- randomTopic
 
           _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO.foreachDiscard(1 to nrPartitions) { i =>
@@ -821,6 +805,6 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         } yield assertCompletes
       }
     ).provideSomeLayerShared[TestEnvironment with Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
-      300.seconds
+      60.seconds
     )
 }
