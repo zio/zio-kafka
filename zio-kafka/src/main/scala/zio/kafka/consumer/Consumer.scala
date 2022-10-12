@@ -3,11 +3,10 @@ package zio.kafka.consumer
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetAndTimestamp }
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition }
 import zio._
-import zio.kafka.serde.Deserializer
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
-import zio.stream.ZStream.Pull
+import zio.kafka.serde.Deserializer
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
@@ -196,43 +195,50 @@ object Consumer {
       subscription: Subscription,
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
-    ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] =
+    ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
+      def extendSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
+        val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
+        ZIO
+          .fromOption(Subscription.unionAll(newSubscriptions))
+          .orElseFail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
+          .flatMap { union =>
+            ZIO.logInfo(s"Changing kafka subscription to $union") *>
+              subscribe(union).as(newSubscriptions.toSet)
+          }
+      }
+
+      def reduceSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
+        val newSubscriptions = NonEmptyChunk.fromIterableOption(existingSubscriptions - subscription)
+        val newUnion         = newSubscriptions.flatMap(Subscription.unionAll)
+
+        (newUnion match {
+          case Some(union) =>
+            ZIO.logInfo(s"Changing kafka subscription to $union") *> subscribe(union)
+          case None =>
+            ZIO.logInfo(s"Unsubscribing kafka consumer") *> unsubscribe
+        }).as(newSubscriptions.map(_.toSet).getOrElse(Set.empty))
+      }
+
       ZStream.unwrapScoped {
         for {
           stream <- ZStream.fromHubScoped(partitionAssignments)
-          _ <- subscriptions.updateZIO { existingSubscriptions =>
-                 val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
-                 ZIO
-                   .fromOption(Subscription.unionAll(newSubscriptions))
-                   .orElseFail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
-                   .flatMap { union =>
-                     ZIO.logInfo(s"Changing kafka subscription to $union") *>
-                       subscribe(union).as(newSubscriptions.toSet)
-                   }
-               }.withFinalizer { _ =>
-                 subscriptions.updateZIO { existingSubscriptions =>
-                   val newSubscriptions = NonEmptyChunk.fromIterableOption(existingSubscriptions - subscription)
-                   val newUnion         = newSubscriptions.flatMap(Subscription.unionAll)
-
-                   (newUnion match {
-                     case Some(union) =>
-                       ZIO.logInfo(s"Changing kafka subscription to $union") *> subscribe(union)
-                     case None =>
-                       ZIO.logInfo(s"Unsubscribing kafka consumer") *> unsubscribe
-                   }).as(newSubscriptions.map(_.toSet).getOrElse(Set.empty))
-                 }.orDie
-               }
+          _      <- extendSubscriptions.withFinalizer(_ => reduceSubscriptions.orDie)
         } yield stream
           .map(_.exit)
           .flattenExitOption
           .flattenChunks
           .map {
             _.collect {
-              case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
+              case (tp, partition) if Subscription.subscriptionMatches(subscription, tp) =>
+                val partitionStream =
+                  if (settings.perPartitionChunkPrefetch <= 0) partition
+                  else partition.bufferChunks(settings.perPartitionChunkPrefetch)
+
                 tp -> partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
             }
           }
       }
+    }
 
     override def partitionedStream[R, K, V](
       subscription: Subscription,
@@ -360,45 +366,12 @@ object Consumer {
                  )
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 
-      partitionAssignments <- internalPartitionedAssignmentStream(runloop, settings).toHub(32)
+      partitionAssignments <- ZStream
+                                .fromQueueWithShutdown(runloop.partitions)
+                                .map(_.exit)
+                                .flattenExitOption
+                                .toHub(32)
     } yield Live(wrapper, settings, runloop, subscriptions, partitionAssignments)
-
-  private def internalPartitionedAssignmentStream(
-    runloop: Runloop,
-    settings: ConsumerSettings
-  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord])]] = {
-    val partitions = runloop.partitions
-    val stream =
-      ZStream.repeatZIOChunkOption {
-        partitions
-          .takeBetween(1, ZStream.DefaultChunkSize)
-          .flatMap { chunk =>
-            ZIO.foreach(chunk) { take =>
-              take.fold(
-                partitions.shutdown.as(Take.end),
-                cause => ZIO.succeed(Take.failCause(cause)),
-                chunk => ZIO.succeed(Take.chunk(chunk))
-              )
-            }
-          }
-          .catchAllCause((c: Cause[Nothing]) =>
-            partitions.isShutdown.flatMap { down =>
-              if (down && c.isInterrupted) Pull.end
-              else Pull.failCause(c)
-            }
-          )
-      }
-
-    stream.map(_.exit).flattenExitOption.map {
-      _.map { case (tp, partition) =>
-        val partitionStream =
-          if (settings.perPartitionChunkPrefetch <= 0) partition
-          else partition.bufferChunks(settings.perPartitionChunkPrefetch)
-
-        tp -> partitionStream
-      }
-    }
-  }
 
   /**
    * Accessor method for [[Consumer.assignment]]
