@@ -47,6 +47,13 @@ trait Consumer {
    * rebalancing occurs, new topic-partition streams may be emitted and existing streams may be completed.
    *
    * All streams can be completed by calling [[stopConsumption]].
+   *
+   * Multiple subscriptions on one Consumer are supported, as long as the subscriptions are of the same type (topics,
+   * patterns, manual). Each subscription will only receive messages from the topic-partitions that match the
+   * subscription.
+   *
+   * On completion of the stream, the consumer is unsubscribed. In case of multiple subscriptions, the total consumer
+   * subscription is changed to exclude this subscription.
    */
   def partitionedAssignmentStream[R, K, V](
     subscription: Subscription,
@@ -62,6 +69,13 @@ trait Consumer {
    * new topic-partition streams may be emitted and existing streams may be completed.
    *
    * All streams can be completed by calling [[stopConsumption]].
+   *
+   * Multiple subscriptions on one Consumer are supported, as long as the subscriptions are of the same type (topics,
+   * patterns, manual). Each subscription will only receive messages from the topic-partitions that match the
+   * subscription.
+   *
+   * On completion of the stream, the consumer is unsubscribed. In case of multiple subscriptions, the total consumer
+   * subscription is changed to exclude this subscription.
    */
   def partitionedStream[R, K, V](
     subscription: Subscription,
@@ -78,6 +92,13 @@ trait Consumer {
    * Up to `bufferSize` chunks may be buffered in memory by this operator.
    *
    * The stream can be completed by calling [[stopConsumption]].
+   *
+   * Multiple subscriptions on one Consumer are supported, as long as the subscriptions are of the same type (topics,
+   * patterns, manual). Each subscription will only receive messages from the topic-partitions that match the
+   * subscription.
+   *
+   * On completion of the stream, the consumer is unsubscribed. In case of multiple subscriptions, the total consumer
+   * subscription is changed to exclude this subscription.
    */
   def plainStream[R, K, V](
     subscription: Subscription,
@@ -213,7 +234,7 @@ object Consumer {
 
         (newUnion match {
           case Some(union) =>
-            ZIO.logInfo(s"Changing kafka subscription to $union") *> subscribe(union)
+            ZIO.logInfo(s"Reducing kafka subscription to $union") *> subscribe(union)
           case None =>
             ZIO.logInfo(s"Unsubscribing kafka consumer") *> unsubscribe
         }).as(newSubscriptions.map(_.toSet).getOrElse(Set.empty))
