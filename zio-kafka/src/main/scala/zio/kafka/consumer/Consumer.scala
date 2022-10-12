@@ -50,7 +50,8 @@ trait Consumer {
    *
    * Multiple subscriptions on one Consumer are supported, as long as the subscriptions are of the same type (topics,
    * patterns, manual). Each subscription will only receive messages from the topic-partitions that match the
-   * subscription.
+   * subscription. When subscriptions overlap, kafka records will be divided over the overlapping subscriptions
+   * non-deterministically.
    *
    * On completion of the stream, the consumer is unsubscribed. In case of multiple subscriptions, the total consumer
    * subscription is changed to exclude this subscription.
@@ -72,7 +73,8 @@ trait Consumer {
    *
    * Multiple subscriptions on one Consumer are supported, as long as the subscriptions are of the same type (topics,
    * patterns, manual). Each subscription will only receive messages from the topic-partitions that match the
-   * subscription.
+   * subscription. When subscriptions overlap, kafka records will be divided over the overlapping subscriptions
+   * non-deterministically.
    *
    * On completion of the stream, the consumer is unsubscribed. In case of multiple subscriptions, the total consumer
    * subscription is changed to exclude this subscription.
@@ -95,7 +97,8 @@ trait Consumer {
    *
    * Multiple subscriptions on one Consumer are supported, as long as the subscriptions are of the same type (topics,
    * patterns, manual). Each subscription will only receive messages from the topic-partitions that match the
-   * subscription.
+   * subscription. When subscriptions overlap, kafka records will be divided over the overlapping subscriptions
+   * non-deterministically.
    *
    * On completion of the stream, the consumer is unsubscribed. In case of multiple subscriptions, the total consumer
    * subscription is changed to exclude this subscription.
