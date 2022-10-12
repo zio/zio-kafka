@@ -460,7 +460,7 @@ object Consumer {
     Throwable,
     (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
   ] =
-    ZStream.environmentWithStream(_.get[Consumer].partitionedStream(subscription, keyDeserializer, valueDeserializer))
+    ZStream.serviceWithStream[Consumer](_.partitionedStream(subscription, keyDeserializer, valueDeserializer))
 
   /**
    * Accessor method for [[Consumer.plainStream]]
@@ -471,8 +471,8 @@ object Consumer {
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
   ): ZStream[R with Consumer, Throwable, CommittableRecord[K, V]] =
-    ZStream.environmentWithStream(
-      _.get[Consumer].plainStream(subscription, keyDeserializer, valueDeserializer, bufferSize)
+    ZStream.serviceWithStream[Consumer](
+      _.plainStream(subscription, keyDeserializer, valueDeserializer, bufferSize)
     )
 
   /**
