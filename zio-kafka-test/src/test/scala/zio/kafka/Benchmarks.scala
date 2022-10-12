@@ -90,8 +90,7 @@ object ZIOKafka extends ZIOAppDefault {
         .currentTime(TimeUnit.MILLISECONDS)
         .flatMap { startTime =>
           Consumer
-            .subscribeAnd(Subscription.topics("inputs-topic"))
-            .plainStream(Serde.string, Serde.string)
+            .plainStream(Subscription.topics("inputs-topic"), Serde.string, Serde.string)
             .take(expectedCount.toLong)
             .mapChunks { recordChunk =>
               val messageCount = recordChunk.size

@@ -38,8 +38,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           _ <- produceMany(topic, kvs)
 
           records <- Consumer
-                       .subscribeAnd(Subscription.Topics(Set(topic)))
-                       .plainStream(Serde.string, Serde.string)
+                       .plainStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
                        .take(5)
                        .runCollect
                        .provideSomeLayer[Kafka](consumer(client, Some(group)))
@@ -56,8 +55,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           _ <- produceMany(topic, kvs)
 
           sizes <- Consumer
-                     .subscribeAnd(Subscription.Topics(Set(topic)))
-                     .plainStream(Serde.string, Serde.string)
+                     .plainStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
                      .take(100)
                      .mapChunks(c => Chunk(c.size))
                      .runCollect
@@ -74,8 +72,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           _ <- produceMany(topic, kvs)
 
           records <- Consumer
-                       .subscribeAnd(Subscription.Topics(Set(topic)))
-                       .plainStream(Serde.string, Serde.string)
+                       .plainStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
                        .take(5)
                        .runCollect
                        .provideSomeLayer[Kafka](consumer(client, Some(group)))
@@ -92,8 +89,11 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 
           records <-
             Consumer
-              .subscribeAnd(Subscription.Manual(Set(new org.apache.kafka.common.TopicPartition(topic, 0))))
-              .plainStream(Serde.string, Serde.string)
+              .plainStream(
+                Subscription.Manual(Set(new org.apache.kafka.common.TopicPartition(topic, 0))),
+                Serde.string,
+                Serde.string
+              )
               .take(5)
               .runCollect
               .provideSomeLayer[Kafka](consumer(clientId = client))
@@ -110,8 +110,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           _ <- produceMany(topic, kvs)
 
           records <- Consumer
-                       .subscribeAnd(Subscription.Topics(Set(topic)))
-                       .plainStream(Serde.string, Serde.string)
+                       .plainStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
                        .take(100)
                        .runCollect
                        .provideSomeLayer[Kafka](consumer(client, Some(group)))
@@ -126,8 +125,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 
           _ <- produceMany("pattern150", kvs)
           records <- Consumer
-                       .subscribeAnd(Subscription.Pattern("pattern[0-9]+".r))
-                       .plainStream(Serde.string, Serde.string)
+                       .plainStream(Subscription.Pattern("pattern[0-9]+".r), Serde.string, Serde.string)
                        .take(5)
                        .runCollect
                        .provideSomeLayer[Kafka](consumer(client, Some(group)))
@@ -147,8 +145,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
           record <- Consumer
-                      .subscribeAnd(Subscription.manual(topic, partition = 2))
-                      .plainStream(Serde.string, Serde.string)
+                      .plainStream(Subscription.manual(topic, partition = 2), Serde.string, Serde.string)
                       .take(1)
                       .runHead
                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
@@ -171,8 +168,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                }
           offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO.attempt(tps.map(_ -> manualOffsetSeek.toLong).toMap))
           record <- Consumer
-                      .subscribeAnd(Subscription.manual(topic, partition = 2))
-                      .plainStream(Serde.string, Serde.string)
+                      .plainStream(Subscription.manual(topic, partition = 2), Serde.string, Serde.string)
                       .take(1)
                       .runHead
                       .provideSomeLayer[Kafka](
@@ -192,8 +188,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           _ <- produceMany(topic, 0, data)
           firstResults <- for {
                             results <- Consumer
-                                         .subscribeAnd(Subscription.Topics(Set(topic)))
-                                         .partitionedStream(Serde.string, Serde.string)
+                                         .partitionedStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
                                          .filter(_._1 == new TopicPartition(topic, 0))
                                          .flatMap(_._2)
                                          .take(5)
@@ -211,23 +206,23 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                                          )
                           } yield results
           secondResults <- for {
-                             results <- Consumer
-                                          .subscribeAnd(Subscription.Topics(Set(topic)))
-                                          .partitionedStream(Serde.string, Serde.string)
-                                          .flatMap(_._2)
-                                          .take(5)
-                                          .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
-                                          .mapConcatZIO { committableRecords =>
-                                            val records = committableRecords.map(_.record)
-                                            val offsetBatch =
-                                              committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+                             results <-
+                               Consumer
+                                 .partitionedStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
+                                 .flatMap(_._2)
+                                 .take(5)
+                                 .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
+                                 .mapConcatZIO { committableRecords =>
+                                   val records = committableRecords.map(_.record)
+                                   val offsetBatch =
+                                     committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
 
-                                            offsetBatch.commit.as(records)
-                                          }
-                                          .runCollect
-                                          .provideSomeLayer[Kafka](
-                                            consumer(second, Some(group))
-                                          )
+                                   offsetBatch.commit.as(records)
+                                 }
+                                 .runCollect
+                                 .provideSomeLayer[Kafka](
+                                   consumer(second, Some(group))
+                                 )
                            } yield results
         } yield assert((firstResults ++ secondResults).map(rec => rec.key() -> rec.value()).toList)(equalTo(data))
       },
@@ -250,8 +245,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           messagesReceived <- ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
           subscription = Subscription.topics(topic)
           fib <- Consumer
-                   .subscribeAnd(subscription)
-                   .partitionedStream(Serde.string, Serde.string)
+                   .partitionedStream(subscription, Serde.string, Serde.string)
                    .flatMapPar(nrPartitions) { case (_, partition) =>
                      partition
                        .mapZIO(record => messagesReceived(record.partition).update(_ + 1).as(record))
@@ -292,8 +286,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           keepProducing <- Ref.make(true)
           _             <- (produceOne(topic, "key", "value") *> keepProducing.get).repeatWhile(b => b).fork
           _ <- Consumer
-                 .subscribeAnd(Subscription.topics(topic))
-                 .plainStream(Serde.string, Serde.string)
+                 .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                  .zipWithIndex
                  .tap { case (_, idx) => Consumer.stopConsumption.when(idx == 3) }
                  .runDrain
@@ -312,8 +305,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           _                <- produceMany(topic, kvs)
           messagesReceived <- Ref.make[Int](0)
           offset <- (Consumer
-                      .subscribeAnd(Subscription.topics(topic))
-                      .plainStream(Serde.string, Serde.string)
+                      .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                       .mapZIO { record =>
                         for {
                           nr <- messagesReceived.updateAndGet(_ + 1)
@@ -345,8 +337,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           messagesReceived <- ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
           subscription = Subscription.topics(topic)
           offsets <- (Consumer
-                       .subscribeAnd(subscription)
-                       .partitionedStream(Serde.string, Serde.string)
+                       .partitionedStream(subscription, Serde.string, Serde.string)
                        .flatMapPar(nrPartitions)(_._2.map(_.offset))
                        .take(nrMessages.toLong)
                        .transduce(Consumer.offsetBatches)
@@ -376,8 +367,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           // Consume messages
           subscription = Subscription.topics(topic)
           consumer1 <- Consumer
-                         .subscribeAnd(subscription)
-                         .partitionedStream(Serde.string, Serde.string)
+                         .partitionedStream(subscription, Serde.string, Serde.string)
                          .flatMapPar(nrPartitions) { case (tp, partition) =>
                            ZStream
                              .fromZIO(partition.runDrain)
@@ -389,8 +379,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                          .fork
           _ <- Live.live(ZIO.sleep(5.seconds))
           consumer2 <- Consumer
-                         .subscribeAnd(subscription)
-                         .partitionedStream(Serde.string, Serde.string)
+                         .partitionedStream(subscription, Serde.string, Serde.string)
                          .take(nrPartitions.toLong / 2)
                          .runDrain
                          .provideSomeLayer[Kafka](consumer(client2, Some(group)))
@@ -422,8 +411,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                 // Consume messages
                 subscription = Subscription.topics(topic)
                 consumer1 <- Consumer
-                               .subscribeAnd(subscription)
-                               .partitionedStream(Serde.string, Serde.string)
+                               .partitionedStream(subscription, Serde.string, Serde.string)
                                .flatMapPar(nrPartitions) { case (tp, partition) =>
                                  ZStream
                                    .fromZIO(partition.runDrain)
@@ -442,8 +430,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                                       .fork
                 _ <- ZIO.sleep(5.seconds)
                 consumer2 <- Consumer
-                               .subscribeAnd(subscription)
-                               .partitionedStream(Serde.string, Serde.string)
+                               .partitionedStream(subscription, Serde.string, Serde.string)
                                .take(nrPartitions.toLong / 2)
                                .runDrain
                                .provideSomeLayer[Kafka](consumer(client2, Some(group)))
@@ -470,8 +457,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           _ <- produceMany(topic, 0, data)
           // Consume 5 records to have the offset committed at 5
           _ <- Consumer
-                 .subscribeAnd(Subscription.topics(topic))
-                 .plainStream(Serde.string, Serde.string)
+                 .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                  .take(5)
                  .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
                  .mapConcatZIO { committableRecords =>
@@ -486,8 +472,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           // Start a new consumer with manual offset before the committed offset
           offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO.attempt(tps.map(_ -> manualOffsetSeek.toLong).toMap))
           secondResults <- Consumer
-                             .subscribeAnd(Subscription.topics(topic))
-                             .plainStream(Serde.string, Serde.string)
+                             .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                              .take(nrRecords.toLong - manualOffsetSeek)
                              .map(_.record)
                              .runCollect
@@ -532,8 +517,8 @@ object ConsumerSpec extends ZIOSpecWithKafka {
               ) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
           _ <- fib.interrupt
           _ <- produceOne(topic, "key-new", "msg-new")
-          newMessage <- (Consumer.subscribe(subscription) *> Consumer
-                          .plainStream(Serde.string, Serde.string)
+          newMessage <- (Consumer
+                          .plainStream(subscription, Serde.string, Serde.string)
                           .take(1)
                           .map(r => (r.record.key(), r.record.value()))
                           .run(ZSink.collectAll[(String, String)])
@@ -567,8 +552,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         def run(instance: Int, topic: String, allAssignments: Ref[Map[Int, List[Int]]]) = {
           val subscription = Subscription.topics(topic)
           Consumer
-            .subscribeAnd(subscription)
-            .partitionedStream(Serde.string, Serde.string)
+            .partitionedStream(subscription, Serde.string, Serde.string)
             .map { case (tp, partStream) =>
               val registerAssignment = ZStream.fromZIO(allAssignments.update { current =>
                 current.get(instance) match {
@@ -676,8 +660,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           drainCount <- Ref.make(0)
           subscription = Subscription.topics(topic)
           fib <- Consumer
-                   .subscribeAnd(subscription)
-                   .partitionedAssignmentStream(Serde.string, Serde.string)
+                   .partitionedAssignmentStream(subscription, Serde.string, Serde.string)
                    .rechunk(1)
                    .mapZIO { partitions =>
                      ZStream
@@ -710,8 +693,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           // Starting a new consumer that will stop after receiving 20 messages,
           // causing two rebalancing events for fib1 consumers on start and stop
           fib2 <- Consumer
-                    .subscribeAnd(subscription)
-                    .plainStream(Serde.string, Serde.string)
+                    .plainStream(subscription, Serde.string, Serde.string)
                     .take(20)
                     .runDrain
                     .provideSomeLayer[Kafka](
@@ -791,8 +773,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           stopConsumer1 <- Promise.make[Nothing, Unit]
           fib <-
             Consumer
-              .subscribeAnd(subscription)
-              .partitionedAssignmentStream(Serde.string, Serde.string)
+              .partitionedAssignmentStream(subscription, Serde.string, Serde.string)
               .rechunk(1)
               .mapZIOPar(16) { partitions =>
                 ZIO.logInfo(s"Consumer 1 got new partition assignment: ${partitions.map(_._1.toString)}") *>
@@ -820,8 +801,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 
           fib2 <-
             Consumer
-              .subscribeAnd(subscription)
-              .plainStream(Serde.string, Serde.string)
+              .plainStream(subscription, Serde.string, Serde.string)
               .mapZIO(record => messagesReceivedConsumer2.update(_ + 1).as(record))
               .map(_.offset)
               .aggregateAsync(Consumer.offsetBatches)

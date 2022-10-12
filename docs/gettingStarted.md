@@ -81,8 +81,7 @@ methods:
 import zio.Clock, zio.Console.printLine
 import zio.kafka.consumer._
 
-Consumer.subscribeAnd(Subscription.topics("topic150"))
-  .plainStream(Serde.string, Serde.string)
+Consumer.plainStream(Subscription.topics("topic150"), Serde.string, Serde.string)
   .tap(cr => printLine(s"key: ${cr.record.key}, value: ${cr.record.value}"))
   .map(_.offset)
   .aggregateAsync(Consumer.offsetBatches)
@@ -97,8 +96,7 @@ which creates a nested stream of partitions:
 import zio.Clock, zio.Console.printLine
 import zio.kafka.consumer._
 
-Consumer.subscribeAnd(Subscription.topics("topic150"))
-  .partitionedStream(Serde.string, Serde.string)
+Consumer.partitionedStream(Subscription.topics("topic150"), Serde.string, Serde.string)
   .tap(tpAndStr => printLine(s"topic: ${tpAndStr._1.topic}, partition: ${tpAndStr._1.partition}"))
   .flatMap(_._2)
   .tap(cr => printLine(s"key: ${cr.record.key}, value: ${cr.record.value}"))
@@ -127,8 +125,7 @@ val consumerAndProducer =
     ZLayer.scoped(Producer.make(producerSettings, Serde.int, Serde.string))
 
 val consumeProduceStream = Consumer
-  .subscribeAnd(Subscription.topics("my-input-topic"))
-  .plainStream(Serde.int, Serde.long)
+  .plainStream(Subscription.topics("my-input-topic"), Serde.int, Serde.long)
   .map { record =>
     val key: Int    = record.record.key()
     val value: Long = record.record.value()
@@ -193,8 +190,7 @@ import scala.util.{Try, Success, Failure}
 val consumer = ZLayer.scoped(Consumer.make(consumerSettings))
 
 val stream = Consumer
-  .subscribeAnd(Subscription.topics("topic150"))
-  .plainStream(Serde.string, Serde.string.asTry)
+  .plainStream(Subscription.topics("topic150"), Serde.string, Serde.string.asTry)
 
 stream 
   .mapZIO { record => 
