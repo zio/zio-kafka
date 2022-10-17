@@ -357,6 +357,24 @@ object AdminSpec extends DefaultRunnableSpec {
           } yield assert(description.groupId)(equalTo(groupId)) && assert(description.members.length)(equalTo(1))
         }
       },
+      testM("delete consumer groups") {
+        KafkaTestUtils.withAdmin { implicit admin =>
+          for {
+            topicName <- randomTopic
+            _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 10, replicationFactor = 1))
+            groupId1  <- randomGroup
+            _ <- admin.alterConsumerGroupOffsets(groupId1, Map(TopicPartition(topicName, 0) -> OffsetAndMetadata(0)))
+            groupId2 <- randomGroup
+            _ <- admin.alterConsumerGroupOffsets(groupId2, Map(TopicPartition(topicName, 0) -> OffsetAndMetadata(0)))
+            consumerGroupsBefore <- admin.listConsumerGroups()
+            _                    <- admin.deleteConsumerGroups(List(groupId1))
+            consumerGroupsAfter  <- admin.listConsumerGroups()
+          } yield assert(consumerGroupsBefore)(exists(hasField("groupId", _.groupId, equalTo(groupId1)))) &&
+            assert(consumerGroupsBefore)(exists(hasField("groupId", _.groupId, equalTo(groupId2)))) &&
+            assert(consumerGroupsAfter)(not(exists(hasField("groupId", _.groupId, equalTo(groupId1))))) &&
+            assert(consumerGroupsAfter)(exists(hasField("groupId", _.groupId, equalTo(groupId2))))
+        }
+      },
       testM("describe log dirs") {
         KafkaTestUtils.withAdmin { implicit admin =>
           for {

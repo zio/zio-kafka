@@ -9,6 +9,7 @@ import org.apache.kafka.clients.admin.{
   ConsumerGroupListing => JConsumerGroupListing,
   CreatePartitionsOptions => JCreatePartitionsOptions,
   CreateTopicsOptions => JCreateTopicsOptions,
+  DeleteConsumerGroupsOptions => JDeleteConsumerGroupsOptions,
   DeleteRecordsOptions => JDeleteRecordsOptions,
   DescribeClusterOptions => JDescribeClusterOptions,
   DescribeConfigsOptions => JDescribeConfigsOptions,
@@ -207,6 +208,11 @@ trait AdminClient {
    * Remove the specified members from a consumer group.
    */
   def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit]
+
+  /**
+   * Delete the specified consumer groups.
+   */
+  def deleteConsumerGroups(groupIds: Iterable[String], options: Option[DeleteConsumerGroupsOptions] = None): Task[Unit]
 
   /**
    * Describe the log directories of the specified brokers
@@ -585,6 +591,23 @@ object AdminClient extends Accessible[AdminClient] {
       ).unit
     }
 
+    /**
+     * Delete the specified consumer groups.
+     */
+    override def deleteConsumerGroups(
+      groupIds: Iterable[String],
+      options: Option[DeleteConsumerGroupsOptions]
+    ): Task[Unit] =
+      fromKafkaFutureVoid(
+        blocking.effectBlocking(
+          options
+            .fold(adminClient.deleteConsumerGroups(groupIds.asJavaCollection))(options =>
+              adminClient.deleteConsumerGroups(groupIds.asJavaCollection, options.asJava)
+            )
+            .all()
+        )
+      )
+
     override def describeLogDirs(
       brokersId: Iterable[Int]
     ): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]] =
@@ -775,6 +798,10 @@ object AdminClient extends Accessible[AdminClient] {
         .includeAuthorizedOperations(includeAuthorizedOperations)
       timeout.fold(jOpts)(timeout => jOpts.timeoutMs(timeout.toMillis.toInt))
     }
+  }
+
+  final case class DeleteConsumerGroupsOptions(timeout: Duration) {
+    lazy val asJava: JDeleteConsumerGroupsOptions = new JDeleteConsumerGroupsOptions().timeoutMs(timeout.toMillis.toInt)
   }
 
   final case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
