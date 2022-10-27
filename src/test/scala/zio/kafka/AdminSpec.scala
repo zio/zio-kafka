@@ -1,6 +1,7 @@
 package zio.kafka.admin
 
-import org.apache.kafka.clients.admin.RecordsToDelete
+import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
+import org.apache.kafka.clients.admin.{ ConfigEntry, RecordsToDelete }
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{ Node => JNode }
 import zio.blocking.Blocking
@@ -9,6 +10,9 @@ import zio.duration.Duration
 import zio.kafka.KafkaTestUtils
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.admin.AdminClient.{
+  AlterConfigOp,
+  AlterConfigOpType,
+  AlterConfigsOptions,
   ConfigResource,
   ConfigResourceType,
   ConsumerGroupDescription,
@@ -439,6 +443,78 @@ object AdminSpec extends DefaultRunnableSpec {
         assert(AdminClient.Node.apply(jNode).map(_.host.isEmpty))(
           equalTo(Some(true))
         )
+      },
+      testM("incremental alter configs") {
+        KafkaTestUtils.withAdmin { implicit admin =>
+          for {
+            topicName <- randomTopic
+            _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
+
+            configEntry    = new ConfigEntry("retention.ms", "1")
+            configResource = ConfigResource(ConfigResourceType.Topic, topicName)
+
+            setAlterConfigOp = AlterConfigOp(configEntry, AlterConfigOpType.Set)
+            _ <- admin.incrementalAlterConfigs(Map(configResource -> Seq(setAlterConfigOp)), AlterConfigsOptions())
+            updatedConfigsWithUpdate <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
+
+            deleteAlterConfigOp = AlterConfigOp(configEntry, AlterConfigOpType.Delete)
+            _ <- admin.incrementalAlterConfigs(Map(configResource -> Seq(deleteAlterConfigOp)), AlterConfigsOptions())
+            updatedConfigsWithDelete <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
+          } yield {
+            val updatedRetentionMsConfig =
+              updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
+            val deleteRetentionMsConfig =
+              updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
+            assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
+            assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
+            assert(deleteRetentionMsConfig.map(_.value()))(isSome(equalTo("604800000"))) &&
+            assert(deleteRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DEFAULT_CONFIG)))
+          }
+        }
+      },
+      testM("incremental alter configs async") {
+        KafkaTestUtils.withAdmin { implicit admin =>
+          for {
+            topicName <- randomTopic
+            _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
+
+            configEntry    = new ConfigEntry("retention.ms", "1")
+            configResource = ConfigResource(ConfigResourceType.Topic, topicName)
+
+            setAlterConfigOp = AlterConfigOp(configEntry, AlterConfigOpType.Set)
+            setResult <-
+              admin
+                .incrementalAlterConfigsAsync(Map(configResource -> Seq(setAlterConfigOp)), AlterConfigsOptions())
+                .flatMap { configsAsync =>
+                  ZIO.foreachPar(configsAsync) { case (configResource, unitAsync) =>
+                    unitAsync.map(unit => (configResource, unit))
+                  }
+                }
+            updatedConfigsWithUpdate <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
+
+            deleteAlterConfigOp = AlterConfigOp(configEntry, AlterConfigOpType.Delete)
+            deleteResult <-
+              admin
+                .incrementalAlterConfigsAsync(Map(configResource -> Seq(deleteAlterConfigOp)), AlterConfigsOptions())
+                .flatMap { configsAsync =>
+                  ZIO.foreachPar(configsAsync) { case (configResource, unitAsync) =>
+                    unitAsync.map(unit => (configResource, unit))
+                  }
+                }
+            updatedConfigsWithDelete <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
+          } yield {
+            val updatedRetentionMsConfig =
+              updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
+            val deleteRetentionMsConfig =
+              updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
+            assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
+            assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
+            assert(deleteRetentionMsConfig.map(_.value()))(isSome(equalTo("604800000"))) &&
+            assert(deleteRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DEFAULT_CONFIG))) &&
+            assert(setResult)(equalTo(Map((configResource, ())))) &&
+            assert(deleteResult)(equalTo(Map((configResource, ()))))
+          }
+        }
       }
     ).provideSomeLayerShared[TestEnvironment](Kafka.embedded.mapError(TestFailure.fail) ++ Clock.live) @@ sequential
 
