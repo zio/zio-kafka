@@ -1,14 +1,14 @@
-lazy val scala212  = "2.12.15"
+lazy val scala212  = "2.12.17"
 lazy val scala213  = "2.13.8"
-lazy val scala3    = "3.1.2"
+lazy val scala3    = "3.1.3"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-lazy val zioVersion           = "2.0.0-RC5"
+lazy val zioVersion           = "2.0.2"
 lazy val kafkaVersion         = "3.2.0"
 lazy val embeddedKafkaVersion = "3.2.0" // Should be the same as kafkaVersion, except for the patch part
 
-lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion % Test
+lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion
 
 inThisBuild(
   List(
@@ -40,37 +40,93 @@ inThisBuild(
 
 val excludeInferAny = { options: Seq[String] => options.filterNot(Set("-Xlint:infer-any")) }
 
-lazy val kafka =
+lazy val root = project
+  .in(file("."))
+  .settings(
+    name           := "zio-kafka",
+    publish / skip := true
+  )
+  .aggregate(
+    zioKafka,
+    zioKafkaTestUtils,
+    zioKafkaTest
+  )
+
+def buildInfoSettings(packageName: String) =
+  Seq(
+    buildInfoKeys := Seq[BuildInfoKey](organization, moduleName, name, version, scalaVersion, sbtVersion, isSnapshot),
+    buildInfoPackage := packageName
+  )
+
+def stdSettings(prjName: String) = Seq(
+  name              := s"$prjName",
+  scalafmtOnCompile := true,
+  Compile / compile / scalacOptions ++= {
+    if (scalaBinaryVersion.value == "2.13") Seq("-Wconf:cat=unused-nowarn:s")
+    else Seq()
+  },
+  scalacOptions -= "-Xlint:infer-any",
+  // workaround for bad constant pool issue
+  (Compile / doc) := Def.taskDyn {
+    val default = (Compile / doc).taskValue
+    Def.task(default.value)
+  }.value
+)
+
+lazy val zioKafka =
   project
-    .in(file("."))
+    .in(file("zio-kafka"))
     .enablePlugins(BuildInfoPlugin)
+    .settings(stdSettings("zio-kafka"))
+    .settings(buildInfoSettings("zio.kafka"))
     .settings(
-      name              := "zio-kafka",
-      scalafmtOnCompile := true,
-      Compile / compile / scalacOptions ++= {
-        if (scalaBinaryVersion.value == "2.13") Seq("-Wconf:cat=unused-nowarn:s")
-        else Seq()
-      },
-      scalacOptions -= "-Xlint:infer-any",
-      // workaround for bad constant pool issue
-      (Compile / doc) := Def.taskDyn {
-        val default = (Compile / doc).taskValue
-        Def.task(default.value)
-      }.value
+      libraryDependencies ++= Seq(
+        "dev.zio"                   %% "zio-streams"             % zioVersion,
+        "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
+        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.3",
+        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.7.0"
+      )
     )
+
+lazy val zioKafkaTestUtils =
+  project
+    .in(file("zio-kafka-test-utils"))
+    .dependsOn(zioKafka)
+    .enablePlugins(BuildInfoPlugin)
+    .settings(stdSettings("zio-kafka-test-utils"))
+    .settings(buildInfoSettings("zio.kafka"))
     .settings(
-      buildInfoKeys    := Seq[BuildInfoKey](organization, name, version, scalaVersion, sbtVersion, isSnapshot),
-      buildInfoPackage := "zio.kafka"
+      libraryDependencies ++= Seq(
+        "dev.zio"                %% "zio"                     % zioVersion,
+        "org.apache.kafka"        % "kafka-clients"           % kafkaVersion,
+        "org.scala-lang.modules" %% "scala-collection-compat" % "2.7.0"
+      ) ++ {
+        if (scalaBinaryVersion.value == "3")
+          Seq(
+            embeddedKafka
+              .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
+          )
+        else Seq(embeddedKafka)
+      }
     )
+
+lazy val zioKafkaTest =
+  project
+    .in(file("zio-kafka-test"))
+    .dependsOn(zioKafka, zioKafkaTestUtils)
+    .enablePlugins(BuildInfoPlugin)
+    .settings(stdSettings("zio-kafka-test"))
+    .settings(buildInfoSettings("zio.kafka"))
+    .settings(publish / skip := true)
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                   %% "zio-streams"             % zioVersion,
         "dev.zio"                   %% "zio-test"                % zioVersion % Test,
         "dev.zio"                   %% "zio-test-sbt"            % zioVersion % Test,
         "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.3",
+        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.4",
         "ch.qos.logback"             % "logback-classic"         % "1.2.11"   % Test,
-        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.7.0"
+        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.8.1"
       ) ++ {
         if (scalaBinaryVersion.value == "3")
           Seq(
@@ -84,7 +140,7 @@ lazy val kafka =
 
 lazy val docs = project
   .in(file("zio-kafka-docs"))
-  .dependsOn(kafka)
+  .dependsOn(zioKafka)
   .settings(
     // Version will only appear on the generated target file replacing @VERSION@
     mdocVariables := Map(
