@@ -48,7 +48,7 @@ import zio.blocking.Blocking
 import zio.duration.Duration
 
 import java.util.Optional
-import scala.annotation.tailrec
+import scala.annotation.{ nowarn, tailrec }
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 import scala.util.{ Failure, Success, Try }
@@ -231,7 +231,8 @@ trait AdminClient {
   ): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]]
 
   /**
-   * Incrementally update the configuration for the specified resources.
+   * Incrementally update the configuration for the specified resources. Only supported by brokers with version 2.3.0 or
+   * higher. Use alterConfigs otherwise.
    */
   def incrementalAlterConfigs(
     configs: Map[ConfigResource, Iterable[AlterConfigOp]],
@@ -239,10 +240,28 @@ trait AdminClient {
   ): Task[Unit]
 
   /**
-   * Incrementally update the configuration for the specified resources async.
+   * Incrementally update the configuration for the specified resources async. Only supported by brokers with version
+   * 2.3.0 or higher. Use alterConfigsAsync otherwise.
    */
   def incrementalAlterConfigsAsync(
     configs: Map[ConfigResource, Iterable[AlterConfigOp]],
+    options: AlterConfigsOptions
+  ): Task[Map[ConfigResource, Task[Unit]]]
+
+  /**
+   * Update the configuration for the specified resources.
+   *
+   * If you are using brokers with version 2.3.0 or higher, please use incrementalAlterConfigs instead.
+   */
+  def alterConfigs(configs: Map[ConfigResource, KafkaConfig], options: AlterConfigsOptions): Task[Unit]
+
+  /**
+   * Update the configuration for the specified resources async.
+   *
+   * If you are using brokers with version 2.3.0 or higher, please use incrementalAlterConfigs instead.
+   */
+  def alterConfigsAsync(
+    configs: Map[ConfigResource, KafkaConfig],
     options: AlterConfigsOptions
   ): Task[Map[ConfigResource, Task[Unit]]]
 }
@@ -695,6 +714,41 @@ object AdminClient extends Accessible[AdminClient] {
           (ConfigResource(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
         }.toMap)
 
+    @nowarn("msg=deprecated")
+    override def alterConfigs(configs: Map[ConfigResource, KafkaConfig], options: AlterConfigsOptions): Task[Unit] =
+      fromKafkaFutureVoid(
+        blocking
+          .effectBlocking(
+            adminClient
+              .alterConfigs(
+                configs.map { case (configResource, kafkaConfig) =>
+                  (configResource.asJava, kafkaConfig.asJava)
+                }.asJava,
+                options.asJava
+              )
+              .all()
+          )
+      )
+
+    @nowarn("msg=deprecated")
+    override def alterConfigsAsync(
+      configs: Map[ConfigResource, KafkaConfig],
+      options: AlterConfigsOptions
+    ): Task[Map[ConfigResource, Task[Unit]]] =
+      blocking
+        .effectBlocking(
+          adminClient
+            .alterConfigs(
+              configs.map { case (configResource, kafkaConfig) =>
+                (configResource.asJava, kafkaConfig.asJava)
+              }.asJava,
+              options.asJava
+            )
+            .values()
+        )
+        .map(_.asScala.map { case (configResource, kf) =>
+          (ConfigResource(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
+        }.toMap)
   }
 
   val live: ZLayer[Has[Blocking.Service] with Has[AdminClientSettings], Throwable, Has[AdminClient]] =
@@ -1153,7 +1207,9 @@ object AdminClient extends Accessible[AdminClient] {
       )
   }
 
-  final case class KafkaConfig(entries: Map[String, ConfigEntry])
+  final case class KafkaConfig(entries: Map[String, ConfigEntry]) {
+    def asJava: JConfig = new JConfig(entries.values.asJavaCollection)
+  }
   object KafkaConfig {
     def apply(jConfig: JConfig): KafkaConfig =
       KafkaConfig(entries = jConfig.entries().asScala.map(e => e.name() -> e).toMap)
