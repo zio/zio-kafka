@@ -3,6 +3,8 @@ package zio.kafka.admin
 import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
 import org.apache.kafka.clients.admin.{
   Admin => JAdmin,
+  AlterConfigOp => JAlterConfigOp,
+  AlterConfigsOptions => JAlterConfigsOptions,
   AlterConsumerGroupOffsetsOptions => JAlterConsumerGroupOffsetsOptions,
   Config => JConfig,
   ConsumerGroupDescription => JConsumerGroupDescription,
@@ -228,6 +230,22 @@ trait AdminClient {
   def describeLogDirsAsync(
     brokersId: Iterable[Int]
   ): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]]
+
+  /**
+   * Incrementally update the configuration for the specified resources.
+   */
+  def incrementalAlterConfigs(
+    configs: Map[ConfigResource, Iterable[AlterConfigOp]],
+    options: AlterConfigsOptions
+  ): Task[Unit]
+
+  /**
+   * Incrementally update the configuration for the specified resources async.
+   */
+  def incrementalAlterConfigsAsync(
+    configs: Map[ConfigResource, Iterable[AlterConfigOp]],
+    options: AlterConfigsOptions
+  ): Task[Map[ConfigResource, Task[Unit]]]
 }
 
 object AdminClient {
@@ -643,6 +661,44 @@ object AdminClient {
 
           }.toMap
         )
+
+    override def incrementalAlterConfigs(
+      configs: Map[ConfigResource, Iterable[AlterConfigOp]],
+      options: AlterConfigsOptions
+    ): Task[Unit] =
+      fromKafkaFutureVoid(
+        ZIO
+          .attemptBlocking(
+            adminClient
+              .incrementalAlterConfigs(
+                configs.map { case (configResource, alterConfigOps) =>
+                  (configResource.asJava, alterConfigOps.map(_.asJava).asJavaCollection)
+                }.asJava,
+                options.asJava
+              )
+              .all()
+          )
+      )
+
+    override def incrementalAlterConfigsAsync(
+      configs: Map[ConfigResource, Iterable[AlterConfigOp]],
+      options: AlterConfigsOptions
+    ): Task[Map[ConfigResource, Task[Unit]]] =
+      ZIO
+        .attemptBlocking(
+          adminClient
+            .incrementalAlterConfigs(
+              configs.map { case (configResource, alterConfigOps) =>
+                (configResource.asJava, alterConfigOps.map(_.asJava).asJavaCollection)
+              }.asJava,
+              options.asJava
+            )
+            .values()
+        )
+        .map(_.asScala.map { case (configResource, kf) =>
+          (ConfigResource(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
+        }.toMap)
+
   }
 
   val live: ZLayer[AdminClientSettings, Throwable, AdminClient] =
@@ -853,6 +909,39 @@ object AdminClient {
       val jOpts = new JDescribeConsumerGroupsOptions()
         .includeAuthorizedOperations(includeAuthorizedOperations)
       timeout.fold(jOpts)(timeout => jOpts.timeoutMs(timeout.toMillis.toInt))
+    }
+  }
+
+  final case class AlterConfigsOptions(validateOnly: Boolean = false, timeout: Option[Duration] = None) {
+    lazy val asJava: JAlterConfigsOptions = {
+      val jOpts = new JAlterConfigsOptions().validateOnly(validateOnly)
+      timeout.fold(jOpts)(timeout => jOpts.timeoutMs(timeout.toMillis.toInt))
+    }
+  }
+
+  final case class AlterConfigOp(configEntry: ConfigEntry, opType: AlterConfigOpType) {
+    lazy val asJava: JAlterConfigOp = new JAlterConfigOp(configEntry, opType.asJava)
+  }
+
+  sealed trait AlterConfigOpType {
+    def asJava: JAlterConfigOp.OpType
+  }
+
+  object AlterConfigOpType {
+    case object Set extends AlterConfigOpType {
+      lazy val asJava = JAlterConfigOp.OpType.SET
+    }
+
+    case object Delete extends AlterConfigOpType {
+      lazy val asJava = JAlterConfigOp.OpType.DELETE
+    }
+
+    case object Append extends AlterConfigOpType {
+      lazy val asJava = JAlterConfigOp.OpType.APPEND
+    }
+
+    case object Substract extends AlterConfigOpType {
+      lazy val asJava = JAlterConfigOp.OpType.SUBTRACT
     }
   }
 
