@@ -11,6 +11,8 @@ object SerdeSpec extends ZIOSpecDefault {
 
   val testDataStructureSerde = Serde.string.inmap[TestDataStructure](TestDataStructure.apply)(_.value)
 
+  private val anyBytes = Gen.listOf(Gen.byte).map(bytes => new org.apache.kafka.common.utils.Bytes(bytes.toArray))
+
   override def spec = suite("Serde")(
     testSerde(Serde.string, Gen.string),
     testSerde(Serde.int, Gen.int),
@@ -19,6 +21,7 @@ object SerdeSpec extends ZIOSpecDefault {
     testSerde(Serde.double, Gen.double),
     testSerde(Serde.long, Gen.long),
     testSerde(Serde.uuid, Gen.uuid),
+    testSerde(Serde.bytes, anyBytes),
     testSerde(Serde.byteArray, Gen.listOf(Gen.byte).map(_.toArray)),
     suite("asOption")(
       test("serialize and deserialize None values to null and visa versa") {
