@@ -1,6 +1,6 @@
 const sidebars = {
   sidebar: [
-    'getting-started',
+    'index',
     'annotated-tests'
   ]
 };
