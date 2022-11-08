@@ -1,3 +1,9 @@
+---
+id: getting-started
+title: "Getting Started with ZIO Kafka"
+sidebar_label: "Getting Started"
+---
+
 ## Contents
 
 - [Quickstart](#quickstart)
