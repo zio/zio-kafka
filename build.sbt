@@ -51,6 +51,7 @@ lazy val root = project
     zioKafkaTestUtils,
     zioKafkaTest
   )
+  .enablePlugins(WebsitePlugin)
 
 def buildInfoSettings(packageName: String) =
   Seq(
@@ -137,17 +138,6 @@ lazy val zioKafkaTest =
       },
       testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
     )
-
-lazy val docs = project
-  .in(file("zio-kafka-docs"))
-  .dependsOn(zioKafka)
-  .settings(
-    // Version will only appear on the generated target file replacing @VERSION@
-    mdocVariables := Map(
-      "VERSION" -> version.value
-    )
-  )
-  .enablePlugins(MdocPlugin)
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
