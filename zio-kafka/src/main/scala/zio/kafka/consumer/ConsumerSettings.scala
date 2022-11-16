@@ -80,7 +80,7 @@ object ConsumerSettings {
   def apply(bootstrapServers: List[String]): ConsumerSettings =
     new ConsumerSettings(
       bootstrapServers = bootstrapServers,
-      properties = Map(),
+      properties = Map.empty,
       closeTimeout = 30.seconds,
       pollInterval = 50.millis,
       pollTimeout = 50.millis,
