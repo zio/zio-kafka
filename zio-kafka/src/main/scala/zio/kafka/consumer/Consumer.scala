@@ -1,11 +1,12 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetAndTimestamp }
+import org.apache.kafka.clients.consumer.{ Consumer => JConsumer, KafkaConsumer, OffsetAndMetadata, OffsetAndTimestamp }
+import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition }
 import zio._
-import zio.kafka.serde.Deserializer
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
+import zio.kafka.serde.Deserializer
 import zio.stream.ZStream.Pull
 import zio.stream._
 
@@ -348,8 +349,22 @@ object Consumer {
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
+    fromJavaConsumer(makeJavaConsumer(settings))(settings, diagnostics)
+
+  /**
+   * This function allows you to create a consumer from a Java Kafka Consumer.
+   *
+   * Be careful when using this function. You must ensure that you pass the same settings that the ones you used to
+   * create the Java Consumer.
+   *
+   * Usually, you'll want to avoid using this function and will prefer to just use [[Consumer.make]].
+   */
+  def fromJavaConsumer(javaConsumer: ZIO[Scope, Throwable, JConsumer[Array[Byte], Array[Byte]]])(
+    settings: ConsumerSettings,
+    diagnostics: Diagnostics = Diagnostics.NoOp
+  ): ZIO[Scope, Throwable, Consumer] =
     for {
-      wrapper <- ConsumerAccess.make(settings)
+      wrapper <- ConsumerAccess.fromJavaConsumer(javaConsumer, settings.closeTimeout)
       runloop <- Runloop(
                    settings.hasGroupId,
                    wrapper,
@@ -361,6 +376,27 @@ object Consumer {
                    settings.restartStreamOnRebalancing
                  )
     } yield Live(wrapper, settings, runloop)
+
+  /**
+   * This function is an helper provided by the library to help you create Java Kafka Consumer instances in a safe way
+   * if you need to.
+   *
+   * Usually, you'll want to avoid using this function and will prefer to just use [[Consumer.make]].
+   */
+  def makeJavaConsumer(
+    settings: ConsumerSettings
+  ): ZIO[Scope, Throwable, JConsumer[Array[Byte], Array[Byte]]] =
+    ZIO.acquireRelease {
+      ZIO.attemptBlocking {
+        new KafkaConsumer[Array[Byte], Array[Byte]](
+          settings.driverSettings.asJava,
+          new ByteArrayDeserializer(),
+          new ByteArrayDeserializer()
+        )
+      }
+    } { consumer =>
+      ZIO.attemptBlocking(consumer.close(settings.closeTimeout)).orDie
+    }
 
   /**
    * Accessor method for [[Consumer.assignment]]
