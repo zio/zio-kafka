@@ -1,16 +1,21 @@
 name: CI
 
 on:
-  pull_request:
   push:
-    branches: ['master', 'series/0.x']
-  release:
-    types:
-      - published
+    branches:
+      - zio1-main
+      - zio2-main
+      - main
+      - master
+  pull_request:
+    types: [ opened, reopened, synchronize ]
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   lint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout current branch
         uses: actions/checkout@v3
@@ -28,11 +33,11 @@ jobs:
         run: sbt check
 
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        java: [ '8', '11', '17' ]
+        java: [ '11', '17' ]
         scala: [ '2.12.x', '2.13.x', '3.2.x' ]
     steps:
       - name: Checkout current branch
@@ -50,22 +55,9 @@ jobs:
       - name: Run tests
         run: sbt ++${{ matrix.scala }} test
 
-  website:
-    runs-on: ubuntu-20.04
-    timeout-minutes: 60
-    steps:
-      - name: Checkout current branch
-        uses: actions/checkout@v3
-      - name: Setup Scala and Java
-        uses: olafurpg/setup-scala@v13
-      - name: Cache scala dependencies
-        uses: coursier/cache-action@v6
-      - name: Check Document Generation
-        run: sbt docs/compileDocs
-
   publish:
-    runs-on: ubuntu-20.04
-    needs: [lint, test, website]
+    runs-on: ubuntu-latest
+    needs: [ lint, test ]
     if: github.event_name != 'pull_request'
     steps:
       - name: Checkout current branch
@@ -81,9 +73,4 @@ jobs:
           java-version: 17
           check-latest: true
       - name: Release artifacts
-        run: sbt ci-release
-        env:
-          PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
-          PGP_SECRET: ${{ secrets.PGP_SECRET }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+        run: sbt publish
