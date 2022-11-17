@@ -10,6 +10,8 @@ trait Kafka {
 
 object Kafka {
 
+  final case class Sasl(value: Kafka) extends AnyVal
+
   final case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka {
     override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
     override def stop(): UIO[Unit]              = ZIO.succeed(embeddedK.stop(true))
@@ -29,7 +31,7 @@ object Kafka {
     ZIO.acquireRelease(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
   }
 
-  val saslEmbedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
+  val saslEmbedded: ZLayer[Any, Throwable, Kafka.Sasl] = ZLayer.scoped {
     val kafkaPort = 6003
     implicit val embeddedKafkaConfig: EmbeddedKafkaConfig = EmbeddedKafkaConfig(
       zooKeeperPort = 6002,
@@ -47,7 +49,7 @@ object Kafka {
         "listener.name.sasl_plaintext.plain.sasl.jaas.config" -> """org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_kafkabroker1="kafkabroker1-secret";"""
       )
     )
-    ZIO.acquireRelease(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
+    ZIO.acquireRelease(ZIO.attempt(Kafka.Sasl(EmbeddedKafkaService(EmbeddedKafka.start()))))(_.value.stop())
   }
 
   val local: ZLayer[Any, Nothing, Kafka] = ZLayer.succeed(DefaultLocal)
