@@ -33,7 +33,7 @@ inThisBuild(
         url("https://github.com/iravid")
       )
     )
-  )
+  ) ++ ConduktorSettings.conduktorSettings
 )
 
 val excludeInferAny = { options: Seq[String] => options.filterNot(Set("-Xlint:infer-any")) }
