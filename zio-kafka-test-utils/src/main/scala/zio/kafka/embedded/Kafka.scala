@@ -29,6 +29,7 @@ object Kafka {
 
   val saslEmbedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
     implicit val embeddedKafkaConfig: EmbeddedKafkaConfig = EmbeddedKafkaConfig(
+      kafkaPort = EmbeddedKafkaConfig.defaultKafkaPort + 1,
       customBrokerProperties = Map(
         "group.min.session.timeout.ms"         -> "500",
         "group.initial.rebalance.delay.ms"     -> "0",
