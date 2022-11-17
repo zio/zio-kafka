@@ -4,7 +4,7 @@ import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin.{ ConfigEntry, RecordsToDelete }
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{ Node => JNode }
-import zio.kafka.{ KafkaTestUtils, ZIOKafkaSpec }
+import zio._
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.admin.AdminClient.{
   AlterConfigOp,
@@ -22,15 +22,15 @@ import zio.kafka.admin.AdminClient.{
   TopicPartition
 }
 import zio.kafka.admin.acl._
+import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
+import zio.kafka.{ KafkaTestUtils, ZIOKafkaSpec }
 import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio._
-import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 
 import java.util.UUID
 import java.util.concurrent.TimeoutException
@@ -330,10 +330,12 @@ object AdminSpec extends ZIOKafkaSpec {
               client.listConsumerGroupOffsets(
                 Map(invalidGroupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
               )
-          } yield assert(offsets.get(TopicPartition(topic, 0)).map(_.offset))(isSome(equalTo(msgConsume.toLong))) &&
-            assert(invalidTopicOffsets)(isEmpty) &&
-            assert(invalidTpOffsets)(isEmpty) &&
-            assert(invalidGroupIdOffsets)(isEmpty)
+          } yield assert(offsets.get(groupId).flatMap(_.get(TopicPartition(topic, 0))).map(_.offset))(
+            isSome(equalTo(msgConsume.toLong))
+          ) &&
+            assert(invalidTopicOffsets.get(groupId))(isSome(isEmpty)) &&
+            assert(invalidTpOffsets.get(groupId))(isSome(isEmpty)) &&
+            assert(invalidGroupIdOffsets.get(invalidGroupId))(isSome(isEmpty))
         }
       },
       test("delete consumer group offsets") {
@@ -359,7 +361,7 @@ object AdminSpec extends ZIOKafkaSpec {
             offsets <- client.listConsumerGroupOffsets(
                          Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
                        )
-          } yield assert(offsets.get(TopicPartition(topic, 0)).map(_.offset))(isNone)
+          } yield assert(offsets.get(groupId).flatMap(_.get(TopicPartition(topic, 0))).map(_.offset))(isNone)
         }
       },
       test("describe consumer groups") {

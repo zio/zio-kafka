@@ -50,6 +50,7 @@ import org.apache.kafka.common.{
 }
 import zio._
 import zio.kafka.admin.acl._
+import zio.kafka.utils.SslHelper
 
 import java.util.Optional
 import scala.annotation.{ nowarn, tailrec }
@@ -191,7 +192,7 @@ trait AdminClient {
    */
   def listConsumerGroupOffsets(
     groupSpecs: Map[String, ListConsumerGroupOffsetsSpec]
-  ): Task[Map[TopicPartition, OffsetAndMetadata]]
+  ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]]
 
   /**
    * List the consumer group offsets available in the cluster for the specified consumer groups.
@@ -199,7 +200,7 @@ trait AdminClient {
   def listConsumerGroupOffsets(
     groupSpecs: Map[String, ListConsumerGroupOffsetsSpec],
     options: ListConsumerGroupOffsetsOptions
-  ): Task[Map[TopicPartition, OffsetAndMetadata]]
+  ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]]
 
   /**
    * Alter offsets for the specified partitions and consumer group.
@@ -627,22 +628,27 @@ object AdminClient {
      */
     override def listConsumerGroupOffsets(
       groupSpecs: Map[String, ListConsumerGroupOffsetsSpec]
-    ): Task[Map[TopicPartition, OffsetAndMetadata]] =
+    ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]] =
       fromKafkaFuture {
         ZIO.attemptBlocking(
           adminClient
             .listConsumerGroupOffsets(groupSpecs.map { case (groupId, offsetsSpec) =>
               (groupId, offsetsSpec.asJava)
             }.asJava)
-            .partitionsToOffsetAndMetadata()
+            .all()
         )
       }
-        .map(_.asScala.filter { case (_, om) => om ne null }.toMap.bimap(TopicPartition(_), OffsetAndMetadata(_)))
+        .map(
+          _.asScala.map { case (groupId, offsets) =>
+            groupId -> offsets.asScala.filter { case (_, om) => om ne null }.toMap
+              .bimap(TopicPartition(_), OffsetAndMetadata(_))
+          }.toMap
+        )
 
     override def listConsumerGroupOffsets(
       groupSpecs: Map[String, ListConsumerGroupOffsetsSpec],
       options: ListConsumerGroupOffsetsOptions
-    ): Task[Map[TopicPartition, OffsetAndMetadata]] =
+    ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]] =
       fromKafkaFuture {
         ZIO.attemptBlocking(
           adminClient
@@ -650,10 +656,15 @@ object AdminClient {
               groupSpecs.map { case (groupId, offsetsSpec) => (groupId, offsetsSpec.asJava) }.asJava,
               options.asJava
             )
-            .partitionsToOffsetAndMetadata()
+            .all()
         )
       }
-        .map(_.asScala.filter { case (_, om) => om ne null }.toMap.bimap(TopicPartition(_), OffsetAndMetadata(_)))
+        .map(
+          _.asScala.map { case (groupId, offsets) =>
+            groupId -> offsets.asScala.filter { case (_, om) => om ne null }.toMap
+              .bimap(TopicPartition(_), OffsetAndMetadata(_))
+          }.toMap
+        )
 
     /**
      * Alter offsets for the specified partitions and consumer group.
@@ -1478,22 +1489,25 @@ object AdminClient {
   }
 
   def make(settings: AdminClientSettings): ZIO[Scope, Throwable, AdminClient] =
-    fromManagedJavaClient(javaClientFromSettings(settings))
+    fromScopedJavaClient(javaClientFromSettings(settings))
 
   def fromJavaClient(javaClient: JAdmin): URIO[Any, AdminClient] =
     ZIO.succeed(new LiveAdminClient(javaClient))
 
-  def fromManagedJavaClient[R, E](
-    managedJavaClient: ZIO[R & Scope, E, JAdmin]
+  def fromScopedJavaClient[R, E](
+    scopedJavaClient: ZIO[R & Scope, E, JAdmin]
   ): ZIO[R & Scope, E, AdminClient] =
-    managedJavaClient.flatMap { javaClient =>
+    scopedJavaClient.flatMap { javaClient =>
       fromJavaClient(javaClient)
     }
 
   def javaClientFromSettings(settings: AdminClientSettings): ZIO[Scope, Throwable, JAdmin] =
-    ZIO.acquireRelease(ZIO.attempt(JAdmin.create(settings.driverSettings.asJava)))(client =>
-      ZIO.succeed(client.close(settings.closeTimeout))
-    )
+    ZIO.acquireRelease {
+      val endpointCheck = SslHelper
+        .validateEndpoint(settings.bootstrapServers, settings.properties)
+
+      endpointCheck *> ZIO.attempt(JAdmin.create(settings.driverSettings.asJava))
+    }(client => ZIO.succeed(client.close(settings.closeTimeout)))
 
   implicit final class MapOps[K1, V1](private val v: Map[K1, V1]) extends AnyVal {
     def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): Map[K2, V2] = v.map(kv => fk(kv._1) -> fv(kv._2))
