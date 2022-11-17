@@ -1,6 +1,6 @@
 lazy val scala212  = "2.12.17"
-lazy val scala213  = "2.13.8"
-lazy val scala3    = "3.1.3"
+lazy val scala213  = "2.13.10"
+lazy val scala3    = "3.2.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
@@ -8,7 +8,15 @@ lazy val zioVersion           = "2.0.2"
 lazy val kafkaVersion         = "3.2.0"
 lazy val embeddedKafkaVersion = "3.2.0" // Should be the same as kafkaVersion, except for the patch part
 
-lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion
+lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
+lazy val zio                   = "dev.zio"                   %% "zio"                     % zioVersion
+lazy val zioStreams            = "dev.zio"                   %% "zio-streams"             % zioVersion
+lazy val zioTest               = "dev.zio"                   %% "zio-test"                % zioVersion
+lazy val zioTestSbt            = "dev.zio"                   %% "zio-test-sbt"            % zioVersion
+lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.8.1"
+lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.0"
+lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.4"
+lazy val embeddedKafka         = "io.github.embeddedkafka"   %% "embedded-kafka"          % embeddedKafkaVersion
 
 inThisBuild(
   List(
@@ -81,10 +89,10 @@ lazy val zioKafka =
     .settings(buildInfoSettings("zio.kafka"))
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                   %% "zio-streams"             % zioVersion,
-        "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.3",
-        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.7.0"
+        zioStreams,
+        kafkaClients,
+        jacksonDatabind,
+        scalaCollectionCompat
       )
     )
 
@@ -97,9 +105,9 @@ lazy val zioKafkaTestUtils =
     .settings(buildInfoSettings("zio.kafka"))
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                %% "zio"                     % zioVersion,
-        "org.apache.kafka"        % "kafka-clients"           % kafkaVersion,
-        "org.scala-lang.modules" %% "scala-collection-compat" % "2.7.0"
+        zio,
+        kafkaClients,
+        scalaCollectionCompat
       ) ++ {
         if (scalaBinaryVersion.value == "3")
           Seq(
@@ -120,13 +128,13 @@ lazy val zioKafkaTest =
     .settings(publish / skip := true)
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                   %% "zio-streams"             % zioVersion,
-        "dev.zio"                   %% "zio-test"                % zioVersion % Test,
-        "dev.zio"                   %% "zio-test-sbt"            % zioVersion % Test,
-        "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.4",
-        "ch.qos.logback"             % "logback-classic"         % "1.2.11"   % Test,
-        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.8.1"
+        zioStreams,
+        zioTest    % Test,
+        zioTestSbt % Test,
+        kafkaClients,
+        jacksonDatabind,
+        logback % Test,
+        scalaCollectionCompat
       ) ++ {
         if (scalaBinaryVersion.value == "3")
           Seq(
