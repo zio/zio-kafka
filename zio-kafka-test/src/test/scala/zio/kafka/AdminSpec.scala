@@ -17,7 +17,6 @@ import zio.kafka.admin.AdminClient.{
   TopicPartition
 }
 import zio.kafka.admin.acl._
-import zio.kafka.admin.resource._
 import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
@@ -458,41 +457,6 @@ object AdminSpec extends ZIOSpecWithKafka {
         assert(AdminClient.Node.apply(jNode).map(_.host.isEmpty))(
           equalTo(Some(true))
         )
-      },
-      test("ACLs") {
-        KafkaTestUtils.withSaslAdmin() { client =>
-          for {
-            topic <- randomTopic
-            bindings =
-              Set(
-                AclBinding(
-                  ResourcePattern(ResourceType.Topic, name = topic, patternType = PatternType.Literal),
-                  AccessControlEntry(
-                    principal = "User:*",
-                    host = "*",
-                    operation = AclOperation.Write,
-                    permissionType = AclPermissionType.Allow
-                  )
-                )
-              )
-            _ <-
-              client.createAcls(bindings)
-            createdAcls <-
-              client
-                .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
-                .delay(50.millis) // because the createAcls is async
-            deletedAcls <-
-              client
-                .deleteAcls(Set(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any)))
-            remainingAcls <-
-              client
-                .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
-                .delay(50.millis) // because the deleteAcls is async
-
-          } yield assert(createdAcls)(equalTo(bindings)) &&
-            assert(deletedAcls)(equalTo(bindings)) &&
-            assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
-        }
       }
     ) @@ withLiveClock @@ sequential
 
