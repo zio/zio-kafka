@@ -149,4 +149,20 @@ object KafkaTestUtils {
                   .flatMap(client => f(client))
               }
     } yield fRes
+
+  def withSaslAdmin[T](username: String = "admin", password: String = "admin-secret")(f: AdminClient => RIO[Kafka, T]) =
+    for {
+      settings <- adminSettings
+      fRes <- ZIO.scoped {
+                AdminClient
+                  .make(
+                    settings.withProperties(
+                      "sasl.mechanism"    -> "PLAIN",
+                      "security.protocol" -> "SASL_PLAINTEXT",
+                      "sasl.jaas.config" -> s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="$username" password="$password";"""
+                    )
+                  )
+                  .flatMap(client => f(client))
+              }
+    } yield fRes
 }
