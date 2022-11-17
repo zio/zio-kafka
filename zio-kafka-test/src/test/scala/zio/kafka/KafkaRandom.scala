@@ -1,6 +1,6 @@
 package zio.kafka
 
-import zio.{Task, ZIO }
+import zio.{ Task, ZIO }
 
 import java.util.UUID
 
