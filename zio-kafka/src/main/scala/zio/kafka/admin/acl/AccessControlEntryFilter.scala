@@ -14,7 +14,7 @@ final case class AccessControlEntryFilter(
 
 object AccessControlEntryFilter {
   val Any: AccessControlEntryFilter = AccessControlEntryFilter(null, null, AclOperation.Any, AclPermissionType.Any)
-  
+
   def apply(jAccessControlEntryFilter: JAccessControlEntryFilter): AccessControlEntryFilter = AccessControlEntryFilter(
     principal = jAccessControlEntryFilter.principal(),
     host = jAccessControlEntryFilter.host(),
