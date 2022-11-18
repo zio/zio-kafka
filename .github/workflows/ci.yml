@@ -54,23 +54,3 @@ jobs:
           check-latest: true
       - name: Run tests
         run: sbt ++${{ matrix.scala }} test
-
-  publish:
-    runs-on: ubuntu-latest
-    needs: [ lint, test ]
-    if: github.event_name != 'pull_request'
-    steps:
-      - name: Checkout current branch
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Cache scala dependencies
-        uses: coursier/cache-action@v6
-      - name: Setup Java
-        uses: actions/setup-java@v3.10.0
-        with:
-          distribution: temurin
-          java-version: 17
-          check-latest: true
-      - name: Release artifacts
-        run: sbt publish

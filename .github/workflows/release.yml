@@ -41,6 +41,6 @@ jobs:
         run: echo "::set-output name=tag::${GITHUB_REF#refs/*/}"
 
       - name: Publish
-        run: sbt publish
+        run: sbt +publish
         env:
           RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
