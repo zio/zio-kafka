@@ -51,7 +51,6 @@ lazy val root = project
     zioKafkaTestUtils,
     zioKafkaTest
   )
-  .enablePlugins(WebsitePlugin)
 
 def buildInfoSettings(packageName: String) =
   Seq(
@@ -141,3 +140,13 @@ lazy val zioKafkaTest =
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
+
+lazy val docs = project
+  .in(file("zio-kafka-docs"))
+  .settings(
+    publish / skip := true,
+    moduleName     := "zio-kafka-docs",
+    scalacOptions -= "-Yno-imports",
+    scalacOptions -= "-Xfatal-warnings"
+  )
+  .enablePlugins(WebsitePlugin)
