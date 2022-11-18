@@ -21,6 +21,7 @@ import zio.kafka.admin.AdminClient.{
   OffsetSpec,
   TopicPartition
 }
+import zio.kafka.admin.acl._
 import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
@@ -28,9 +29,11 @@ import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio.{ Chunk, Duration, Schedule, ZIO }
+import zio._
+import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 
 import java.util.UUID
+import java.util.concurrent.TimeoutException
 
 object AdminSpec extends ZIOSpecWithKafka {
 
@@ -604,6 +607,42 @@ object AdminSpec extends ZIOSpecWithKafka {
             assert(setResult)(equalTo(Map((configResource, ())))) &&
             assert(deleteResult)(equalTo(Map((configResource, ()))))
           }
+        }
+      },
+      test("ACLs") {
+        KafkaTestUtils.withAdmin { client =>
+          for {
+            topic <- randomTopic
+            bindings =
+              Set(
+                AclBinding(
+                  ResourcePattern(ResourceType.Topic, name = topic, patternType = PatternType.Literal),
+                  AccessControlEntry(
+                    principal = "User:*",
+                    host = "*",
+                    operation = AclOperation.Write,
+                    permissionType = AclPermissionType.Allow
+                  )
+                )
+              )
+            _ <- client.createAcls(bindings)
+            createdAcls <-
+              client
+                .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
+                .repeatWhile(_.isEmpty) // because the createAcls is executed async by the broker
+                .timeoutFail(new TimeoutException())(100.millis)
+            deletedAcls <-
+              client
+                .deleteAcls(Set(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any)))
+            remainingAcls <-
+              client
+                .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
+                .repeatWhile(_.nonEmpty) // because the deleteAcls is executed async by the broker
+                .timeoutFail(new TimeoutException())(100.millis)
+
+          } yield assert(createdAcls)(equalTo(bindings)) &&
+            assert(deletedAcls)(equalTo(bindings)) &&
+            assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
         }
       }
     ) @@ withLiveClock @@ sequential
