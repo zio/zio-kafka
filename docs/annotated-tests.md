@@ -1,10 +1,13 @@
-# Annotated Tests
+---
+id: annotated-tests
+title: "Annotated Tests"
+---
 
 By way of examples, we present some annotated tests from the test suite.
 
 Tests are written using zio-test.
 
-# General Notes
+## General Notes
 
 The tests make use of KafkaTestUtils.scala which comprises a number of helper methods
 for testing zio-kafka. You may find it useful to copy this file into your own test
@@ -12,7 +15,7 @@ folder for writing your kafka-based tests (there is no zio-test-utils project
 at present). Relevant portions of the KafkaTestUtils will be introduced as we work
 through the tests.
 
-# First Producer Test
+## First Producer Test
 
 ```scala
 object ProducerSpec extends DefaultRunnableSpec {
