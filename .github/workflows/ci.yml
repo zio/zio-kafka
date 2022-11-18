@@ -58,4 +58,3 @@ jobs:
           check-latest: true
       - name: Run tests
         run: sbt ++${{ matrix.scala }} test
-
