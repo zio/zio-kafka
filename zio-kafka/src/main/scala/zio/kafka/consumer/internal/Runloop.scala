@@ -19,9 +19,10 @@ import zio.stream._
 import java.util
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.util.Try
+import scala.util.control.NonFatal
 
 private[consumer] final class Runloop(
+  hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollFrequency: Duration,
   pollTimeout: Duration,
@@ -208,7 +209,7 @@ private[consumer] final class Runloop(
       for {
         _ <- control.finishWith(
                remaining.map(
-                 CommittableRecord(_, commit(_), Try(consumer.consumer.groupMetadata()).toOption)
+                 CommittableRecord(_, commit, getConsumerGroupMetadataIfAny)
                )
              )
       } yield ()
@@ -256,15 +257,25 @@ private[consumer] final class Runloop(
             reqRecs.toArray[ByteArrayConsumerRecord](Array.ofDim[ByteArrayConsumerRecord](reqRecs.size))
           )
 
-        fulfillAction = fulfillAction *> req.cont.succeed(
-          concatenatedChunk.map(CommittableRecord(_, commit(_), Try(consumer.consumer.groupMetadata()).toOption))
-        )
+        fulfillAction = fulfillAction *> req.cont.succeed(concatenatedChunk.map { record =>
+          CommittableRecord(
+            record = record,
+            commitHandle = commit,
+            consumerGroupMetadata = getConsumerGroupMetadataIfAny
+          )
+        })
         buf -= req.tp
       }
     }
 
     fulfillAction.as(Runloop.FulfillResult(acc, BufferedRecords.fromMutableMap(buf)))
   }
+
+  private def getConsumerGroupMetadataIfAny: Option[ConsumerGroupMetadata] =
+    if (hasGroupId)
+      try Some(consumer.consumer.groupMetadata())
+      catch { case NonFatal(_) => None }
+    else None
 
   private def bufferRecordsForUnrequestedPartitions(
     records: ConsumerRecords[Array[Byte], Array[Byte]],
@@ -615,6 +626,7 @@ private[consumer] object Runloop {
   }
 
   def apply(
+    hasGroupId: Boolean,
     consumer: ConsumerAccess,
     pollFrequency: Duration,
     pollTimeout: Duration,
@@ -638,6 +650,7 @@ private[consumer] object Runloop {
       currentStateRef <- Ref.make(State.initial)
       subscribedRef   <- Ref.make(false)
       runloop = new Runloop(
+                  hasGroupId,
                   consumer,
                   pollFrequency,
                   pollTimeout,
