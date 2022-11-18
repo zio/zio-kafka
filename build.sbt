@@ -13,7 +13,7 @@ lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embedde
 inThisBuild(
   List(
     organization             := "dev.zio",
-    homepage                 := Some(url("https://github.com/zio/zio-kafka")),
+    homepage                 := Some(url("https://zio.dev/zio-kafka")),
     licenses                 := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
     useCoursier              := false,
     scalaVersion             := mainScala,
@@ -138,16 +138,15 @@ lazy val zioKafkaTest =
       testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
     )
 
-lazy val docs = project
-  .in(file("zio-kafka-docs"))
-  .dependsOn(zioKafka)
-  .settings(
-    // Version will only appear on the generated target file replacing @VERSION@
-    mdocVariables := Map(
-      "VERSION" -> version.value
-    )
-  )
-  .enablePlugins(MdocPlugin)
-
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
+
+lazy val docs = project
+  .in(file("zio-kafka-docs"))
+  .settings(
+    publish / skip := true,
+    moduleName     := "zio-kafka-docs",
+    scalacOptions -= "-Yno-imports",
+    scalacOptions -= "-Xfatal-warnings"
+  )
+  .enablePlugins(WebsitePlugin)
