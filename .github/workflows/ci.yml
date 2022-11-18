@@ -26,8 +26,6 @@ jobs:
           check-latest: true
       - name: Lint code
         run: sbt check
-      - name: Mdocs check
-        run: sbt docs/mdoc
 
   test:
     runs-on: ubuntu-20.04
@@ -52,9 +50,22 @@ jobs:
       - name: Run tests
         run: sbt ++${{ matrix.scala }}! test
 
+  website:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v3.1.0
+      - name: Setup Scala and Java
+        uses: olafurpg/setup-scala@v13
+      - name: Cache scala dependencies
+        uses: coursier/cache-action@v6
+      - name: Check Document Generation
+        run: sbt docs/compileDocs
+
   publish:
     runs-on: ubuntu-20.04
-    needs: [lint, test]
+    needs: [lint, test, website]
     if: github.event_name != 'pull_request'
     steps:
       - name: Checkout current branch
