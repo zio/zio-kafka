@@ -1,24 +1,10 @@
 package zio.kafka
 
+import zio.ZLayer
 import zio.kafka.embedded.Kafka
 import zio.test._
-import zio.{ Task, ZIO, ZLayer }
 
-import java.util.UUID
-
-trait ZIOSpecWithKafka extends ZIOSpec[TestEnvironment with Kafka] {
-
-  def kafkaPrefix: String
-
+trait ZIOSpecWithKafka extends ZIOSpec[TestEnvironment with Kafka] with KafkaRandom {
   override val bootstrap: ZLayer[Any, Any, TestEnvironment with Kafka] =
     testEnvironment ++ Kafka.embedded
-
-  def randomThing(prefix: String): Task[String] =
-    ZIO.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
-
-  def randomTopic: Task[String] = randomThing(s"$kafkaPrefix-topic")
-
-  def randomGroup: Task[String] = randomThing(s"$kafkaPrefix-group")
-
-  def randomClient: Task[String] = randomThing(s"$kafkaPrefix-client")
 }
