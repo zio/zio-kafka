@@ -1,3 +1,9 @@
+---
+id: index 
+title: "Getting Started with ZIO Kafka"
+sidebar_label: "Getting Started"
+---
+
 ## Contents
 
 - [Quickstart](#quickstart)
@@ -10,12 +16,14 @@
 ## Quickstart
 
 Add the following dependencies to your `build.sbt` file:
-```
-libraryDependencies += "dev.zio" %% "zio-kafka" % "<version>"
+
+```scala
+libraryDependencies += "dev.zio" %% "zio-kafka" % "@VERSION@"
 ```
 
 Somewhere in your application, configure the `zio.kafka.ConsumerSettings`
 data type:
+
 ```scala
 import zio._
 import zio.kafka.consumer._
@@ -47,6 +55,7 @@ If you require more control over the consumption process, read on!
 ## Consuming Kafka topics using ZIO Streams
 
 First, create a consumer using the ConsumerSettings instance:
+
 ```scala
 import zio.Clock, zio.ZLayer, zio.ZManaged
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
@@ -62,6 +71,7 @@ The consumer returned from `Consumer.make` is wrapped in a `ZLayer`
 to allow for easy composition with other ZIO environment components.
 You may provide that layer to effects that require a consumer. Here's
 an example:
+
 ```scala
 import zio._
 import zio.kafka.consumer._
@@ -93,6 +103,7 @@ Consumer.subscribeAnd(Subscription.topics("topic150"))
 If you need to distinguish between the different partitions assigned
 to the consumer, you may use the `Consumer#partitionedStream` method,
 which creates a nested stream of partitions:
+
 ```scala
 import zio.Clock, zio.Console.printLine
 import zio.kafka.consumer._
