@@ -20,7 +20,13 @@ pull_request_rules:
       - author=scala-steward
       - "body~=(labels: library-update, semver-minor)|(labels: library-update, semver-patch)|(labels: sbt-plugin-update, semver-minor)|(labels: sbt-plugin-update, semver-patch)|(labels: scalafix-rule-update)|(labels: test-library-update)"
       - "status-success=license/cla"
-      - "status-success=ci"
+      - "status-success=lint"
+      - "status-success=test (8, 2.12.15)"
+      - "status-success=test (8, 2.13.8)"
+      - "status-success=test (11, 2.12.15)"
+      - "status-success=test (11, 2.13.8)"
+      - "status-success=test (17, 2.12.15)"
+      - "status-success=test (17, 2.13.8)"
     actions:
       merge:
         method: squash
