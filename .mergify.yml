@@ -22,11 +22,11 @@ pull_request_rules:
       - "status-success=license/cla"
       - "status-success=lint"
       - "status-success=test (8, 2.12.15)"
-      - "status-success=test (8, 2.13.8)"
+      - "status-success=test (8, 2.13.10)"
       - "status-success=test (11, 2.12.15)"
-      - "status-success=test (11, 2.13.8)"
+      - "status-success=test (11, 2.13.10)"
       - "status-success=test (17, 2.12.15)"
-      - "status-success=test (17, 2.13.8)"
+      - "status-success=test (17, 2.13.10)"
     actions:
       merge:
         method: squash
