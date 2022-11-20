@@ -2,6 +2,7 @@ package zio.kafka.serde
 
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Serde => KafkaSerde, Serdes => KafkaSerdes }
+import org.apache.kafka.common.utils.Bytes
 import zio.{ RIO, ZIO }
 
 import java.nio.ByteBuffer
@@ -15,6 +16,7 @@ private[zio] trait Serdes {
   lazy val double: Serde[Any, Double] = convertPrimitiveSerde(KafkaSerdes.Double()).inmap(Double2double)(double2Double)
   lazy val string: Serde[Any, String] = convertPrimitiveSerde(KafkaSerdes.String())
   lazy val byteArray: Serde[Any, Array[Byte]] = convertPrimitiveSerde(KafkaSerdes.ByteArray())
+  lazy val bytes: Serde[Any, Bytes]           = convertPrimitiveSerde(KafkaSerdes.Bytes())
   lazy val byteBuffer: Serde[Any, ByteBuffer] = convertPrimitiveSerde(KafkaSerdes.ByteBuffer())
   lazy val uuid: Serde[Any, UUID]             = convertPrimitiveSerde(KafkaSerdes.UUID())
 

@@ -376,6 +376,7 @@ object Consumer {
     for {
       wrapper <- ConsumerAccess.make(settings)
       runloop <- Runloop(
+                   settings.hasGroupId,
                    wrapper,
                    settings.pollInterval,
                    settings.pollTimeout,
