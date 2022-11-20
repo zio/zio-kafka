@@ -8,7 +8,7 @@ client. It integrates effortlessly with ZIO and ZIO Streams.
 
 ## Contents
 
-- [Getting Started](docs/gettingStarted.md)
+- [Getting Started](https://zio.dev/zio-kafka/)
 - [Getting help](#getting-help)
 - [Credits](#credits)
 - [Legal](#legal)
