@@ -1,19 +1,19 @@
 lazy val scala212  = "2.12.17"
 lazy val scala213  = "2.13.10"
-lazy val scala3    = "3.1.3"
+lazy val scala3    = "3.2.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
 lazy val zioVersion           = "2.0.2"
 lazy val kafkaVersion         = "3.2.0"
-lazy val embeddedKafkaVersion = "3.2.0" // Should be the same as kafkaVersion, except for the patch part
+lazy val embeddedKafkaVersion = "3.3.1" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion
 
 inThisBuild(
   List(
     organization             := "dev.zio",
-    homepage                 := Some(url("https://github.com/zio/zio-kafka")),
+    homepage                 := Some(url("https://zio.dev/zio-kafka")),
     licenses                 := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
     useCoursier              := false,
     scalaVersion             := mainScala,
@@ -124,7 +124,7 @@ lazy val zioKafkaTest =
         "dev.zio"                   %% "zio-test"                % zioVersion % Test,
         "dev.zio"                   %% "zio-test-sbt"            % zioVersion % Test,
         "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.4",
+        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.0",
         "ch.qos.logback"             % "logback-classic"         % "1.2.11"   % Test,
         "org.scala-lang.modules"    %% "scala-collection-compat" % "2.8.1"
       ) ++ {
@@ -138,16 +138,15 @@ lazy val zioKafkaTest =
       testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
     )
 
-lazy val docs = project
-  .in(file("zio-kafka-docs"))
-  .dependsOn(zioKafka)
-  .settings(
-    // Version will only appear on the generated target file replacing @VERSION@
-    mdocVariables := Map(
-      "VERSION" -> version.value
-    )
-  )
-  .enablePlugins(MdocPlugin)
-
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
+
+lazy val docs = project
+  .in(file("zio-kafka-docs"))
+  .settings(
+    publish / skip := true,
+    moduleName     := "zio-kafka-docs",
+    scalacOptions -= "-Yno-imports",
+    scalacOptions -= "-Xfatal-warnings"
+  )
+  .enablePlugins(WebsitePlugin)
