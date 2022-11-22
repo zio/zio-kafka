@@ -360,111 +360,111 @@ private[consumer] final class Runloop(
 
             resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
-            val records = doPoll(c, requestedPartitions)
+            val records = doPoll(c, requestedPartitions, state.assignedStreams.nonEmpty)
 
-                // Check shutdown again after polling (which takes up to the poll timeout)
-                ZIO.ifZIO(isShutdown)(
-                  pauseAllPartitions(c).as(
-                    Runloop.PollResult(
-                      Set(),
-                      state.pendingRequests,
-                      BufferedRecords.empty,
-                      Map[TopicPartition, PartitionStreamControl]()
-                    )
-                  ), {
-                    val tpsInResponse   = records.partitions.asScala.toSet
-                    val currentAssigned = c.assignment().asScala.toSet
-
-                    for {
-                      rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
-
-                      newlyAssigned = rebalanceEvent match {
-                                        case Some(Runloop.RebalanceEvent.Assigned(assigned)) =>
-                                          assigned
-                                        case Some(
-                                              Runloop.RebalanceEvent.RevokedAndAssigned(_, assigned)
-                                            ) =>
-                                          assigned
-                                        case Some(Runloop.RebalanceEvent.Revoked(_)) =>
-                                          currentAssigned -- prevAssigned
-                                        case None =>
-                                          currentAssigned -- prevAssigned
-                                      }
-                      remainingRequestedPartitions = rebalanceEvent match {
-                                                       case Some(Runloop.RebalanceEvent.Revoked(_)) | Some(
-                                                             Runloop.RebalanceEvent
-                                                               .RevokedAndAssigned(_, _)
-                                                           ) =>
-                                                         // In case rebalancing restarted all partitions, we have to ignore
-                                                         // all the requests as their promise were for the previous partition streams
-                                                         Set.empty
-                                                       case Some(Runloop.RebalanceEvent.Assigned(_)) =>
-                                                         requestedPartitions
-                                                       case None =>
-                                                         requestedPartitions
-                                                     }
-                      unrequestedRecords = bufferRecordsForUnrequestedPartitions(
-                                             records,
-                                             tpsInResponse -- remainingRequestedPartitions
-                                           )
-
-                      _ <- doSeekForNewPartitions(c, newlyAssigned)
-
-                      revokeResult <- rebalanceEvent match {
-                                        case Some(Runloop.RebalanceEvent.Revoked(result)) =>
-                                          ZIO.succeed(
-                                            result.copy(
-                                              bufferedRecords = result.bufferedRecords ++ unrequestedRecords
-                                            )
-                                          )
-                                        case Some(
-                                              Runloop.RebalanceEvent.RevokedAndAssigned(result, _)
-                                            ) =>
-                                          ZIO.succeed(
-                                            result.copy(
-                                              bufferedRecords = result.bufferedRecords ++ unrequestedRecords
-                                            )
-                                          )
-                                        case Some(Runloop.RebalanceEvent.Assigned(_)) =>
-                                          endRevoked(
-                                            state.pendingRequests,
-                                            state
-                                              .addBufferedRecords(unrequestedRecords)
-                                              .bufferedRecords,
-                                            state.assignedStreams,
-                                            _ => false // not treating any partitions as revoked, as endRevoked was called previously in the rebalance listener
-                                          )
-                                        case None =>
-                                          endRevoked(
-                                            state.pendingRequests,
-                                            state
-                                              .addBufferedRecords(unrequestedRecords)
-                                              .bufferedRecords,
-                                            state.assignedStreams,
-                                            tp => !currentAssigned(tp)
-                                          )
-                                      }
-
-                      fulfillResult <- fulfillRequests(
-                                         revokeResult.unfulfilledRequests,
-                                         revokeResult.bufferedRecords,
-                                         records
-                                       )
-                      _ <- diagnostics.emitIfEnabled(
-                             DiagnosticEvent.Poll(
-                               requestedPartitions,
-                               fulfillResult.bufferedRecords.partitions,
-                           fulfillResult.unfulfilledRequests.map(_.tp).toSet
-                             )
-                           )
-                    } yield Runloop.PollResult(
-                      newlyAssigned,
-                      fulfillResult.unfulfilledRequests,
-                      fulfillResult.bufferedRecords,
-                      revokeResult.assignedStreams
-                    )
-                  }
+            // Check shutdown again after polling (which takes up to the poll timeout)
+            ZIO.ifZIO(isShutdown)(
+              pauseAllPartitions(c).as(
+                Runloop.PollResult(
+                  Set(),
+                  state.pendingRequests,
+                  BufferedRecords.empty,
+                  Map[TopicPartition, PartitionStreamControl]()
                 )
+              ), {
+                val tpsInResponse   = records.partitions.asScala.toSet
+                val currentAssigned = c.assignment().asScala.toSet
+
+                for {
+                  rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
+
+                  newlyAssigned = rebalanceEvent match {
+                                    case Some(Runloop.RebalanceEvent.Assigned(assigned)) =>
+                                      assigned
+                                    case Some(
+                                          Runloop.RebalanceEvent.RevokedAndAssigned(_, assigned)
+                                        ) =>
+                                      assigned
+                                    case Some(Runloop.RebalanceEvent.Revoked(_)) =>
+                                      currentAssigned -- prevAssigned
+                                    case None =>
+                                      currentAssigned -- prevAssigned
+                                  }
+                  remainingRequestedPartitions = rebalanceEvent match {
+                                                   case Some(Runloop.RebalanceEvent.Revoked(_)) | Some(
+                                                         Runloop.RebalanceEvent
+                                                           .RevokedAndAssigned(_, _)
+                                                       ) =>
+                                                     // In case rebalancing restarted all partitions, we have to ignore
+                                                     // all the requests as their promise were for the previous partition streams
+                                                     Set.empty
+                                                   case Some(Runloop.RebalanceEvent.Assigned(_)) =>
+                                                     requestedPartitions
+                                                   case None =>
+                                                     requestedPartitions
+                                                 }
+                  unrequestedRecords = bufferRecordsForUnrequestedPartitions(
+                                         records,
+                                         tpsInResponse -- remainingRequestedPartitions
+                                       )
+
+                  _ <- doSeekForNewPartitions(c, newlyAssigned)
+
+                  revokeResult <- rebalanceEvent match {
+                                    case Some(Runloop.RebalanceEvent.Revoked(result)) =>
+                                      ZIO.succeed(
+                                        result.copy(
+                                          bufferedRecords = result.bufferedRecords ++ unrequestedRecords
+                                        )
+                                      )
+                                    case Some(
+                                          Runloop.RebalanceEvent.RevokedAndAssigned(result, _)
+                                        ) =>
+                                      ZIO.succeed(
+                                        result.copy(
+                                          bufferedRecords = result.bufferedRecords ++ unrequestedRecords
+                                        )
+                                      )
+                                    case Some(Runloop.RebalanceEvent.Assigned(_)) =>
+                                      endRevoked(
+                                        state.pendingRequests,
+                                        state
+                                          .addBufferedRecords(unrequestedRecords)
+                                          .bufferedRecords,
+                                        state.assignedStreams,
+                                        _ => false // not treating any partitions as revoked, as endRevoked was called previously in the rebalance listener
+                                      )
+                                    case None =>
+                                      endRevoked(
+                                        state.pendingRequests,
+                                        state
+                                          .addBufferedRecords(unrequestedRecords)
+                                          .bufferedRecords,
+                                        state.assignedStreams,
+                                        tp => !currentAssigned(tp)
+                                      )
+                                  }
+
+                  fulfillResult <- fulfillRequests(
+                                     revokeResult.unfulfilledRequests,
+                                     revokeResult.bufferedRecords,
+                                     records
+                                   )
+                  _ <- diagnostics.emitIfEnabled(
+                         DiagnosticEvent.Poll(
+                           requestedPartitions,
+                           fulfillResult.bufferedRecords.partitions,
+                           fulfillResult.unfulfilledRequests.map(_.tp).toSet
+                         )
+                       )
+                } yield Runloop.PollResult(
+                  newlyAssigned,
+                  fulfillResult.unfulfilledRequests,
+                  fulfillResult.bufferedRecords,
+                  revokeResult.assignedStreams
+                )
+              }
+            )
           }
         }
       newAssignedStreams <-
