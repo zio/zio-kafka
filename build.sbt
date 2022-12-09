@@ -15,7 +15,7 @@ lazy val zioTest               = "dev.zio"                   %% "zio-test"      
 lazy val zioTestSbt            = "dev.zio"                   %% "zio-test-sbt"            % zioVersion
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.8.1"
 lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.1"
-lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.5"
+lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.4.5"
 lazy val embeddedKafka         = "io.github.embeddedkafka"   %% "embedded-kafka"          % embeddedKafkaVersion
 
 inThisBuild(
