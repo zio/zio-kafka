@@ -155,6 +155,14 @@ lazy val docs = project
     publish / skip := true,
     moduleName     := "zio-kafka-docs",
     scalacOptions -= "-Yno-imports",
-    scalacOptions -= "-Xfatal-warnings"
+    scalacOptions -= "-Xfatal-warnings",
+    projectName := "ZIO Kafka",
+    badgeInfo := Some(
+      BadgeInfo(
+        artifact = "zio-kafka_2.12",
+        projectStage = ProjectStage.ProductionReady
+      )
+    ),
+    docsPublishBranch := "master"
   )
   .enablePlugins(WebsitePlugin)

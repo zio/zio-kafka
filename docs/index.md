@@ -4,225 +4,112 @@ title: "Getting Started with ZIO Kafka"
 sidebar_label: "Getting Started"
 ---
 
-## Contents
+[ZIO Kafka](https://github.com/zio/zio-kafka) is a Kafka client for ZIO. It provides a purely functional, streams-based interface to the Kafka client and integrates effortlessly with ZIO and ZIO Streams.
 
-- [Quickstart](#quickstart)
-- [Consuming Kafka topics using ZIO Streams](#consuming-kafka-topics-using-zio-streams)
-- [Example: consuming, producing and committing offset](#example-consuming-producing-and-committing-offset)
-- [Partition assignment and offset retrieval](#partition-assignment-and-offset-retrieval)
-- [Custom data type serdes](#custom-data-type-serdes)
-- [Handling deserialization failures](#handling-deserialization-failures)
+@PROJECT_BADGES@
 
-## Quickstart
+## Introduction
 
-Add the following dependencies to your `build.sbt` file:
+Apache Kafka is a distributed event streaming platform that acts as a distributed publish-subscribe messaging system. It enables us to build distributed streaming data pipelines and event-driven applications.
+
+Kafka has a mature Java client for producing and consuming events, but it has a low-level API. ZIO Kafka is a ZIO native client for Apache Kafka. It has a high-level streaming API on top of the Java client. So we can produce and consume events using the declarative concurrency model of ZIO Streams.
+
+## Installation
+
+In order to use this library, we need to add the following line in our `build.sbt` file:
 
 ```scala
-libraryDependencies += "dev.zio" %% "zio-kafka" % "@VERSION@"
+libraryDependencies += "dev.zio" %% "zio-kafka" % "@VERSION@" 
 ```
 
-Somewhere in your application, configure the `zio.kafka.ConsumerSettings`
-data type:
+## Example
+
+Let's write a simple Kafka producer and consumer using ZIO Kafka with ZIO Streams. Before everything, we need a running instance of Kafka. We can do that by saving the following docker-compose script in the `docker-compose.yml` file and run `docker-compose up`:
+
+```docker
+version: '2'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - 22181:2181
+  
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - 29092:29092
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+```
+
+Now, we can run our ZIO Kafka Streaming application:
 
 ```scala
 import zio._
 import zio.kafka.consumer._
-
-val settings: ConsumerSettings = 
-  ConsumerSettings(List("localhost:9092"))
-    .withGroupId("group")
-    .withClientId("client")
-    .withCloseTimeout(30.seconds)
-```
-
-For a lot of use cases where you just want to do something with all messages on a Kafka topic, ZIO Kafka provides the convenience method `Consumer.consumeWith`. This method lets you execute a ZIO effect for each message. Topic partitions will be processed in parallel and offsets are committed after running the effect automatically.
-
-```scala
-import zio._
-import zio.kafka.consumer._
+import zio.kafka.producer.{Producer, ProducerSettings}
 import zio.kafka.serde._
+import zio.stream.ZStream
 
-val subscription = Subscription.topics("topic")
+object MainApp extends ZIOAppDefault {
+  val producer: ZStream[Any with Producer, Throwable, Nothing] =
+    ZStream
+      .repeatZIO(Random.nextIntBetween(0, Int.MaxValue))
+      .schedule(Schedule.fixed(2.seconds))
+      .mapZIO { random =>
+        Producer.produce[Any, Long, String](
+          topic = "random",
+          key = random % 4,
+          value = random.toString,
+          keySerializer = Serde.long,
+          valueSerializer = Serde.string
+        )
+      }
+      .drain
 
-Consumer.consumeWith(settings, subscription, Serde.string, Serde.string) { case (key, value) =>
-  Console.printLine(s"Received message ${key}: ${value}")
-  // Perform an effect with the received message
+  val consumer: ZStream[Any with Consumer, Throwable, Nothing] =
+    Consumer
+      .subscribeAnd(Subscription.topics("random"))
+      .plainStream(Serde.long, Serde.string)
+      .tap(r => Console.printLine(r.value))
+      .map(_.offset)
+      .aggregateAsync(Consumer.offsetBatches)
+      .mapZIO(_.commit)
+      .drain
+
+  def producerLayer =
+    ZLayer.scoped(
+      Producer.make(
+        settings = ProducerSettings(List("localhost:29092"))
+      )
+    )
+
+  def consumerLayer =
+    ZLayer.scoped(
+      Consumer.make(
+        ConsumerSettings(List("localhost:29092")).withGroupId("group")
+      )
+    )
+
+  override def run =
+    producer.merge(consumer)
+      .runDrain
+      .provide(producerLayer, consumerLayer)
 }
 ```
 
-If you require more control over the consumption process, read on!
+## Resources
 
-## Consuming Kafka topics using ZIO Streams
-
-First, create a consumer using the ConsumerSettings instance:
-
-```scala
-import zio.Clock, zio.ZLayer, zio.ZManaged
-import zio.kafka.consumer.{ Consumer, ConsumerSettings }
-
-val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
-val consumerManaged: ZIO[Scope, Throwable, Consumer] =
-  Consumer.make(consumerSettings)
-val consumer: ZLayer[Clock, Throwable, Consumer] =
-  ZLayer.scoped(consumerManaged)
-```
-
-The consumer returned from `Consumer.make` is wrapped in a `ZLayer`
-to allow for easy composition with other ZIO environment components.
-You may provide that layer to effects that require a consumer. Here's
-an example:
-
-```scala
-import zio._
-import zio.kafka.consumer._
-import zio.kafka.serde._
-
-val data: RIO[Clock, 
-              Chunk[CommittableRecord[String, String]]] = 
-  (Consumer.subscribe(Subscription.topics("topic")) *>
-  Consumer.plainStream(Serde.string, Serde.string).take(50).runCollect)
-    .provideSomeLayer(consumer)
-```
-
-You may stream data from Kafka using the `subscribeAnd` and `plainStream`
-methods:
-
-```scala
-import zio.Clock, zio.Console.printLine
-import zio.kafka.consumer._
-
-Consumer.subscribeAnd(Subscription.topics("topic150"))
-  .plainStream(Serde.string, Serde.string)
-  .tap(cr => printLine(s"key: ${cr.record.key}, value: ${cr.record.value}"))
-  .map(_.offset)
-  .aggregateAsync(Consumer.offsetBatches)
-  .mapZIO(_.commit)
-  .runDrain
-```
-
-If you need to distinguish between the different partitions assigned
-to the consumer, you may use the `Consumer#partitionedStream` method,
-which creates a nested stream of partitions:
-
-```scala
-import zio.Clock, zio.Console.printLine
-import zio.kafka.consumer._
-
-Consumer.subscribeAnd(Subscription.topics("topic150"))
-  .partitionedStream(Serde.string, Serde.string)
-  .tap(tpAndStr => printLine(s"topic: ${tpAndStr._1.topic}, partition: ${tpAndStr._1.partition}"))
-  .flatMap(_._2)
-  .tap(cr => printLine(s"key: ${cr.record.key}, value: ${cr.record.value}"))
-  .map(_.offset)
-  .aggregateAsync(Consumer.offsetBatches)
-  .mapZIO(_.commit)
-  .runDrain
-```
-
-## Example: consuming, producing and committing offset
-
-This example shows how to consume messages from topic `topic_a` and produce transformed messages to `topic_b`, after which consumer offsets are committed. Processing is done in chunks using `ZStreamChunk` for more efficiency.
-
-```scala
-import zio.ZLayer
-import zio.kafka.consumer._
-import zio.kafka.producer._
-import zio.kafka.serde._
-import org.apache.kafka.clients.producer.ProducerRecord
-
-val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
-val producerSettings: ProducerSettings = ProducerSettings(List("localhost:9092"))
-
-val consumerAndProducer = 
-  ZLayer.scoped(Consumer.make(consumerSettings)) ++
-    ZLayer.scoped(Producer.make(producerSettings, Serde.int, Serde.string))
-
-val consumeProduceStream = Consumer
-  .subscribeAnd(Subscription.topics("my-input-topic"))
-  .plainStream(Serde.int, Serde.long)
-  .map { record =>
-    val key: Int    = record.record.key()
-    val value: Long = record.record.value()
-    val newValue: String = value.toString
-
-    val producerRecord: ProducerRecord[Int, String] = new ProducerRecord("my-output-topic", key, newValue)
-    (producerRecord, record.offset)
-  }
-  .mapChunksZIO { chunk =>
-    val records     = chunk.map(_._1)
-    val offsetBatch = OffsetBatch(chunk.map(_._2).toSeq)
-
-    Producer.produceChunk[Any, Int, String](records) *> offsetBatch.commit.as(Chunk(()))
-  }
-  .runDrain
-  .provideSomeLayer(consumerAndProducer)
-```
-
-## Partition assignment and offset retrieval
-
-`zio-kafka` offers several ways to control which Kafka topics and partitions are assigned to your application.
-
-| Use case | Method |
-| --- | --- |
-| One or more topics, automatic partition assignment | `Consumer.subscribe(Subscription.topics("my_topic", "other_topic"))` |
-| Topics matching a pattern | `Consumer.subscribe(Subscription.pattern("topic.*"))` |
-| Manual partition assignment | `Consumer.subscribe(Subscription.manual("my_topic" -> 1, "my_topic" -> 2))` |
-
-By default `zio-kafka` will start streaming a partition from the last committed offset for the consumer group, or the latest message on the topic if no offset has yet been committed. You can also choose to store offsets outside of Kafka. This can be useful in cases where consistency between data stores and consumer offset is required.
-
-| Use case | Method |
-| --- | --- |
-| Offsets in Kafka, start at latest message if no offset committed | `OffsetRetrieval.Auto()` |
-| Offsets in Kafka, start at earliest message if no offset committed | `OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)` |
-| Manual/external offset storage | `Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]])` |
-
-For manual offset retrieval, the `getOffsets` function will be called for each topic-partition that is assigned to the consumer, either via Kafka's rebalancing or via a manual assignment.
-
-## Custom data type serdes
-
-Serializers and deserializers (serdes) for custom data types can be constructed from scratch or by converting existing serdes. For example, to create a serde for an `Instant`:
-
-```scala
-import java.time.Instant
-import zio.kafka.serde._
-
-val instantSerde: Serde[Any, Instant] = Serde.long.inmap(java.time.Instant.ofEpochMilli)(_.toEpochMilli)
-```
-
-## Handling deserialization failures
-
-The default behavior for a consumer stream when encountering a deserialization failure is to fail the stream. In many cases you may want to handle this situation differently, e.g. by skipping the message that failed to deserialize or by executing an alternative effect. For this purpose, any `Deserializer[T]` for some type `T` can be easily converted into a `Deserializer[Try[T]]` where deserialization failures are converted to a `Failure` using the `asTry` method.
-
-Below is an example of skipping messages that fail to deserialize. The offset is passed downstream to be committed.
-
-```scala
-import zio._, stream._
-import zio.kafka.consumer._
-import zio.kafka.serde._
-import scala.util.{Try, Success, Failure}
-
-val consumer = ZLayer.scoped(Consumer.make(consumerSettings))
-
-val stream = Consumer
-  .subscribeAnd(Subscription.topics("topic150"))
-  .plainStream(Serde.string, Serde.string.asTry)
-
-stream 
-  .mapZIO { record => 
-    val tryValue: Try[String] = record.record.value()
-    val offset: Offset = record.offset
-  
-    tryValue match {
-      case Success(value) =>
-        // Action for successful deserialization
-        someEffect(value).as(offset)
-      case Failure(exception) =>
-        // Possibly log the exception or take alternative action
-        ZIO.succeed(offset)
-    }
-  }
-  .aggregateAsync(Consumer.offsetBatches)
-  .mapZIO(_.commit)
-  .runDrain
-  .provideSomeLayer(consumer)
-```
+- [An Introduction to ZIO Kafka](https://ziverge.com/blog/introduction-to-zio-kafka/)
+- [Streaming microservices with ZIO and Kafka](https://scalac.io/streaming-microservices-with-zio-and-kafka/) by Aleksandar Skrbic (February 2021)
+- [ZIO WORLD - ZIO Kafka](https://www.youtube.com/watch?v=GECv1ONieLw) by Aleksandar Skrbic (March 2020) — Aleksandar Skrbic presented ZIO Kafka, a critical library for the modern Scala developer, which hides some of the complexities of Kafka.
