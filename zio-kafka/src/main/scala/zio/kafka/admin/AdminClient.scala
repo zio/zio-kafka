@@ -1478,15 +1478,15 @@ object AdminClient {
   }
 
   def make(settings: AdminClientSettings): ZIO[Scope, Throwable, AdminClient] =
-    fromManagedJavaClient(javaClientFromSettings(settings))
+    fromScopedJavaClient(javaClientFromSettings(settings))
 
   def fromJavaClient(javaClient: JAdmin): URIO[Any, AdminClient] =
     ZIO.succeed(new LiveAdminClient(javaClient))
 
-  def fromManagedJavaClient[R, E](
-    managedJavaClient: ZIO[R & Scope, E, JAdmin]
+  def fromScopedJavaClient[R, E](
+    scopedJavaClient: ZIO[R & Scope, E, JAdmin]
   ): ZIO[R & Scope, E, AdminClient] =
-    managedJavaClient.flatMap { javaClient =>
+    scopedJavaClient.flatMap { javaClient =>
       fromJavaClient(javaClient)
     }
 
