@@ -6,14 +6,14 @@ title: "Consuming Kafka topics using ZIO Streams"
 First, create a consumer using the ConsumerSettings instance:
 
 ```scala
-import zio.Clock, zio.ZLayer, zio.ZManaged
+import zio.*
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 
 val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
-val consumerManaged: ZIO[Scope, Throwable, Consumer] =
+val consumerScoped: ZIO[Scope, Throwable, Consumer] =
   Consumer.make(consumerSettings)
 val consumer: ZLayer[Clock, Throwable, Consumer] =
-  ZLayer.scoped(consumerManaged)
+  ZLayer.scoped(consumerScoped)
 ```
 
 The consumer returned from `Consumer.make` is wrapped in a `ZLayer`
