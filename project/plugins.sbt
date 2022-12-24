@@ -3,6 +3,6 @@ addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat"    % "0.4.1")
 addSbtPlugin("com.eed3si9n"              % "sbt-buildinfo"   % "0.11.0")
 addSbtPlugin("com.github.sbt"            % "sbt-ci-release"  % "1.5.11")
 addSbtPlugin("org.scalameta"             % "sbt-mdoc"        % "2.3.6")
-addSbtPlugin("dev.zio"                   % "zio-sbt-website" % "0.1.5+21-de576a1e-SNAPSHOT")
+addSbtPlugin("dev.zio"                   % "zio-sbt-website" % "0.1.5+28-4b5b0374-SNAPSHOT")
 
 resolvers += Resolver.sonatypeRepo("public")
