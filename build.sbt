@@ -156,7 +156,7 @@ lazy val docs = project
     moduleName := "zio-kafka-docs",
     scalacOptions -= "-Yno-imports",
     scalacOptions -= "-Xfatal-warnings",
-    crossScalaVersions := Seq(scalaVersion.value),
+    crossScalaVersions := Seq.empty,
     projectName        := "ZIO Kafka",
     badgeInfo := Some(
       BadgeInfo(
