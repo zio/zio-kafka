@@ -156,14 +156,9 @@ lazy val docs = project
     moduleName := "zio-kafka-docs",
     scalacOptions -= "-Yno-imports",
     scalacOptions -= "-Xfatal-warnings",
-    crossScalaVersions := Seq.empty,
-    projectName        := "ZIO Kafka",
-    badgeInfo := Some(
-      BadgeInfo(
-        artifact = "zio-kafka_2.13",
-        projectStage = ProjectStage.ProductionReady
-      )
-    ),
+    projectName                                := "ZIO Kafka",
+    mainModuleName                             := (zioKafka / moduleName).value,
+    projectStage                               := ProjectStage.ProductionReady,
     docsPublishBranch                          := "master",
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioKafka),
     readmeCredits :=
