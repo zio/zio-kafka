@@ -143,8 +143,8 @@ object Producer {
                  new Callback {
                    def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
                      Unsafe.unsafe { implicit u =>
-                       if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
-                       else runtime.unsafe.run(done.succeed(metadata)).getOrThrowFiberFailure()
+                       if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
+                       else runtime.unsafe.run(done.succeed(metadata)).getOrThrowFiberFailure(): Unit
                        ()
                      }
                  }
@@ -177,11 +177,11 @@ object Producer {
                      new Callback {
                        def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
                          Unsafe.unsafe { implicit u =>
-                           if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
+                           if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
                            else {
                              res(idx) = metadata
                              if (count.incrementAndGet == records.length)
-                               runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure()
+                               runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
                            }
 
                            ()
