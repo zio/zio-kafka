@@ -11,6 +11,7 @@ import org.apache.kafka.clients.admin.{
   ConsumerGroupListing => JConsumerGroupListing,
   CreatePartitionsOptions => JCreatePartitionsOptions,
   CreateTopicsOptions => JCreateTopicsOptions,
+  DeleteAclsOptions => _,
   DeleteConsumerGroupsOptions => JDeleteConsumerGroupsOptions,
   DeleteRecordsOptions => JDeleteRecordsOptions,
   DeleteTopicsOptions => JDeleteTopicsOptions,
@@ -47,6 +48,8 @@ import org.apache.kafka.common.{
   Uuid
 }
 import zio._
+
+import zio.kafka.admin.acl._
 
 import java.util.Optional
 import scala.annotation.nowarn
@@ -266,6 +269,41 @@ trait AdminClient {
     configs: Map[ConfigResource, KafkaConfig],
     options: AlterConfigsOptions
   ): Task[Map[ConfigResource, Task[Unit]]]
+
+  /*
+   * Lists access control lists (ACLs) according to the supplied filter.
+   *
+   * Note: it may take some time for changes made by createAcls or deleteAcls to be reflected in the output of
+   * describeAcls.
+   */
+  def describeAcls(filter: AclBindingFilter, options: Option[DescribeAclOptions] = None): Task[Set[AclBinding]]
+
+  /**
+   * Creates access control lists (ACLs) which are bound to specific resources.
+   */
+  def createAcls(acls: Set[AclBinding], options: Option[CreateAclOptions] = None): Task[Unit]
+
+  /**
+   * Creates access control lists (ACLs) which are bound to specific resources async.
+   */
+  def createAclsAsync(
+    acls: Set[AclBinding],
+    options: Option[CreateAclOptions] = None
+  ): Task[Map[AclBinding, Task[Unit]]]
+
+  /**
+   * Deletes access control lists (ACLs) according to the supplied filters.
+   */
+  def deleteAcls(filters: Set[AclBindingFilter], options: Option[DeleteAclsOptions] = None): Task[Set[AclBinding]]
+
+  /**
+   * Deletes access control lists (ACLs) according to the supplied filters async.
+   */
+  def deleteAclsAsync(
+    filters: Set[AclBindingFilter],
+    options: Option[DeleteAclsOptions] = None
+  ): Task[Map[AclBindingFilter, Task[Map[AclBinding, Option[Throwable]]]]]
+
 }
 
 object AdminClient {
@@ -754,6 +792,86 @@ object AdminClient {
         .map(_.asScala.map { case (configResource, kf) =>
           (ConfigResource(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
         }.toMap)
+
+    override def describeAcls(
+      filter: AclBindingFilter,
+      options: Option[DescribeAclOptions]
+    ): Task[Set[AclBinding]] =
+      fromKafkaFuture(
+        ZIO
+          .attemptBlocking(
+            options
+              .fold(adminClient.describeAcls(filter.asJava))(opt => adminClient.describeAcls(filter.asJava, opt.asJava))
+              .values()
+          )
+      ).map(_.asScala.view.map(AclBinding(_)).toSet)
+
+    override def createAcls(acls: Set[AclBinding], options: Option[CreateAclOptions]): Task[Unit] =
+      fromKafkaFutureVoid(
+        ZIO
+          .attemptBlocking(
+            options
+              .fold(adminClient.createAcls(acls.map(_.asJava).asJava))(opt =>
+                adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava)
+              )
+              .all()
+          )
+      )
+
+    override def createAclsAsync(
+      acls: Set[AclBinding],
+      options: Option[CreateAclOptions]
+    ): Task[Map[AclBinding, Task[Unit]]] =
+      ZIO
+        .attemptBlocking(
+          options
+            .fold(adminClient.createAcls(acls.map(_.asJava).asJava))(opt =>
+              adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava)
+            )
+            .values()
+        )
+        .map(_.asScala.view.map { case (k, v) =>
+          (AclBinding(k), ZIO.fromCompletionStage(v.toCompletionStage).unit)
+        }.toMap)
+
+    override def deleteAcls(filters: Set[AclBindingFilter], options: Option[DeleteAclsOptions]): Task[Set[AclBinding]] =
+      fromKafkaFuture(
+        ZIO
+          .attemptBlocking(
+            options
+              .fold(adminClient.deleteAcls(filters.map(_.asJava).asJava))(opt =>
+                adminClient.deleteAcls(filters.map(_.asJava).asJava, opt.asJava)
+              )
+              .all()
+          )
+      ).map(_.asScala.view.map(AclBinding(_)).toSet)
+
+    override def deleteAclsAsync(
+      filters: Set[AclBindingFilter],
+      options: Option[DeleteAclsOptions]
+    ): Task[Map[AclBindingFilter, Task[Map[AclBinding, Option[Throwable]]]]] =
+      ZIO
+        .attemptBlocking(
+          options
+            .fold(adminClient.deleteAcls(filters.map(_.asJava).asJava))(opt =>
+              adminClient.deleteAcls(filters.map(_.asJava).asJava, opt.asJava)
+            )
+            .values()
+        )
+        .map(_.asScala.view.map { case (k, v) =>
+          (
+            AclBindingFilter(k),
+            ZIO
+              .fromCompletionStage(v.toCompletionStage)
+              .map(
+                _.values().asScala.view.map { filterRes =>
+                  // FilterResult.binding() is claimed to be nullable but in fact it is not: see DeleteAclsResponse.aclBinding
+                  AclBinding(filterRes.binding()) -> Option(filterRes.exception())
+                }.toMap
+              )
+          )
+        }.toMap)
+
   }
 
   val live: ZLayer[AdminClientSettings, Throwable, AdminClient] =

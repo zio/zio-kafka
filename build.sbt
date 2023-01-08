@@ -4,7 +4,7 @@ lazy val scala3    = "3.2.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-lazy val zioVersion           = "2.0.4"
+lazy val zioVersion           = "2.0.5"
 lazy val kafkaVersion         = "3.2.0"
 lazy val embeddedKafkaVersion = "3.3.1" // Should be the same as kafkaVersion, except for the patch part
 
@@ -13,9 +13,9 @@ lazy val zio                   = "dev.zio"                   %% "zio"           
 lazy val zioStreams            = "dev.zio"                   %% "zio-streams"             % zioVersion
 lazy val zioTest               = "dev.zio"                   %% "zio-test"                % zioVersion
 lazy val zioTestSbt            = "dev.zio"                   %% "zio-test-sbt"            % zioVersion
-lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.8.1"
-lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.0"
-lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.4"
+lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.9.0"
+lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.1"
+lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.5"
 lazy val embeddedKafka         = "io.github.embeddedkafka"   %% "embedded-kafka"          % embeddedKafkaVersion
 
 inThisBuild(
@@ -57,7 +57,8 @@ lazy val root = project
   .aggregate(
     zioKafka,
     zioKafkaTestUtils,
-    zioKafkaTest
+    zioKafkaTest,
+    docs
   )
 
 def buildInfoSettings(packageName: String) =
@@ -152,9 +153,20 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val docs = project
   .in(file("zio-kafka-docs"))
   .settings(
-    publish / skip := true,
-    moduleName     := "zio-kafka-docs",
+    moduleName := "zio-kafka-docs",
     scalacOptions -= "-Yno-imports",
-    scalacOptions -= "-Xfatal-warnings"
+    scalacOptions -= "-Xfatal-warnings",
+    projectName                                := "ZIO Kafka",
+    mainModuleName                             := (zioKafka / moduleName).value,
+    projectStage                               := ProjectStage.ProductionReady,
+    docsPublishBranch                          := "master",
+    ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioKafka),
+    readmeCredits :=
+      "This library is heavily inspired and made possible by the research and implementation done in " +
+        "[Alpakka Kafka](https://github.com/akka/alpakka-kafka), a library maintained by the Akka team and originally " +
+        "written as Reactive Kafka by SoftwareMill.",
+    readmeLicense +=
+      "\n\n" + """|Copyright 2021 Itamar Ravid and the zio-kafka contributors. All rights reserved.
+                  |<!-- TODO: not all rights reserved, rather Apache 2... -->""".stripMargin
   )
   .enablePlugins(WebsitePlugin)

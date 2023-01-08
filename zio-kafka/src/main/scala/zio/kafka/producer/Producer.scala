@@ -137,7 +137,7 @@ object Producer {
         done             <- Promise.make[Throwable, RecordMetadata]
         serializedRecord <- serialize(record, keySerializer, valueSerializer)
         runtime          <- ZIO.runtime[Any]
-        _ <- ZIO.attemptBlocking {
+        _ <- ZIO.attempt {
                p.send(
                  serializedRecord,
                  new Callback {
@@ -163,7 +163,7 @@ object Producer {
           done              <- Promise.make[Throwable, Chunk[RecordMetadata]]
           runtime           <- ZIO.runtime[Any]
           serializedRecords <- ZIO.foreach(records.toSeq)(serialize(_, keySerializer, valueSerializer))
-          _ <- ZIO.attemptBlocking {
+          _ <- ZIO.attempt {
                  val it: Iterator[(ByteRecord, Int)] =
                    serializedRecords.iterator.zipWithIndex
                  val res: Array[RecordMetadata] = new Array[RecordMetadata](records.length)
