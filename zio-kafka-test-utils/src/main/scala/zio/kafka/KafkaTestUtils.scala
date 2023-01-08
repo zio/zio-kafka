@@ -125,6 +125,24 @@ object KafkaTestUtils {
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
+  def transactionalConsumer(
+    clientId: String,
+    groupId: String,
+    clientInstanceId: Option[String] = None,
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+    allowAutoCreateTopics: Boolean = true,
+    diagnostics: Diagnostics = Diagnostics.NoOp
+  ): ZLayer[Kafka, Throwable, Consumer] =
+    (ZLayer(
+      transactionalConsumerSettings(
+        groupId,
+        clientId,
+        clientInstanceId,
+        allowAutoCreateTopics,
+        offsetRetrieval
+      )
+    ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
+
   def consumeWithStrings[RC](clientId: String, groupId: Option[String] = None, subscription: Subscription)(
     r: (String, String) => URIO[Any, Unit]
   ): RIO[Kafka, Unit] =
