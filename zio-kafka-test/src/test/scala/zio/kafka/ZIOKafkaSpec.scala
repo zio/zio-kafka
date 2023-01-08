@@ -2,20 +2,7 @@ package zio.kafka
 
 import zio._
 
-import java.util.UUID
-
-trait ZIOKafkaSpec extends ZIOSpecWithKafka {
-
-  def kafkaPrefix: String
-
-  def randomThing(prefix: String): Task[String] =
-    ZIO.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
-
-  def randomTopic: Task[String] = randomThing(s"$kafkaPrefix-topic")
-
-  def randomGroup: Task[String] = randomThing(s"$kafkaPrefix-group")
-
-  def randomClient: Task[String] = randomThing(s"$kafkaPrefix-client")
+trait ZIOKafkaSpec extends ZIOSpecWithKafka with KafkaRandom {
 
   val logger: ZLogger[String, Unit] =
     new ZLogger[String, Unit] {
@@ -35,4 +22,5 @@ trait ZIOKafkaSpec extends ZIOSpecWithKafka {
               .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint}"
         )
     }.filterLogLevel(_ >= LogLevel.Debug).map(_ => ())
+
 }
