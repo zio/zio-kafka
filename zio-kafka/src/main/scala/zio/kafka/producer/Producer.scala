@@ -14,6 +14,7 @@ import zio.kafka.serde.Serializer
 import zio.stream.ZPipeline
 
 import java.util.concurrent.atomic.AtomicLong
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 trait Producer {
@@ -143,8 +144,10 @@ object Producer {
                  new Callback {
                    def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
                      Unsafe.unsafe { implicit u =>
-                       if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
-                       else runtime.unsafe.run(done.succeed(metadata)).getOrThrowFiberFailure()
+                       (
+                         if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
+                         else runtime.unsafe.run(done.succeed(metadata)).getOrThrowFiberFailure(): Unit
+                       ): @nowarn("msg=discarded non-Unit value")
                        ()
                      }
                  }
@@ -177,12 +180,14 @@ object Producer {
                      new Callback {
                        def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
                          Unsafe.unsafe { implicit u =>
-                           if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
-                           else {
-                             res(idx) = metadata
-                             if (count.incrementAndGet == records.length)
-                               runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure()
-                           }
+                           (
+                             if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
+                             else {
+                               res(idx) = metadata
+                               if (count.incrementAndGet == records.length)
+                                 runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
+                             }
+                           ): @nowarn("msg=discarded non-Unit value")
 
                            ()
                          }
