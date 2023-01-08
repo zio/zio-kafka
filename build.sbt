@@ -57,7 +57,8 @@ lazy val root = project
   .aggregate(
     zioKafka,
     zioKafkaTestUtils,
-    zioKafkaTest
+    zioKafkaTest,
+    docs
   )
 
 def buildInfoSettings(packageName: String) =
@@ -152,18 +153,14 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val docs = project
   .in(file("zio-kafka-docs"))
   .settings(
-    publish / skip := true,
-    moduleName     := "zio-kafka-docs",
+    moduleName := "zio-kafka-docs",
     scalacOptions -= "-Yno-imports",
     scalacOptions -= "-Xfatal-warnings",
-    projectName := "ZIO Kafka",
-    badgeInfo := Some(
-      BadgeInfo(
-        artifact = "zio-kafka_2.12",
-        projectStage = ProjectStage.ProductionReady
-      )
-    ),
-    docsPublishBranch := "master",
+    projectName                                := "ZIO Kafka",
+    mainModuleName                             := (zioKafka / moduleName).value,
+    projectStage                               := ProjectStage.ProductionReady,
+    docsPublishBranch                          := "master",
+    ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioKafka),
     readmeCredits :=
       "This library is heavily inspired and made possible by the research and implementation done in " +
         "[Alpakka Kafka](https://github.com/akka/alpakka-kafka), a library maintained by the Akka team and originally " +

@@ -40,7 +40,7 @@ object SerdeSpec extends ZIOSpecDefault {
         for {
           serialized   <- serde.serialize("topic1", new RecordHeaders, value)
           deserialized <- serde.deserialize("topic1", new RecordHeaders, serialized)
-        } yield assert(deserialized)(equalTo(deserialized))
+        } yield assert(deserialized)(equalTo(value))
       }
     }
 
