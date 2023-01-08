@@ -1,16 +1,18 @@
-name: Scala Steward
+name: Launch Scala Steward
 
 # This workflow will launch everyday at 00:00
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * 1-5'
   workflow_dispatch: {}
 
 jobs:
   scala-steward:
     timeout-minutes: 45
     runs-on: ubuntu-latest
-    name: Scala Steward
+    env:
+      GH_READ_PACKAGES: ${{ secrets.GH_READ_PACKAGES }}
+    name: Launch Scala Steward
     steps:
       - name: Scala Steward
         uses: scala-steward-org/scala-steward-action@v2.50.0

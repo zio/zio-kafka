@@ -1,3 +1,8 @@
+import sbt.Keys.{ fork, parallelExecution }
+import scala.sys.process._
+
+import scala.util.Try
+
 lazy val scala212  = "2.12.17"
 lazy val scala213  = "2.13.10"
 lazy val scala3    = "3.2.2"
@@ -15,7 +20,7 @@ lazy val zioTest               = "dev.zio"                   %% "zio-test"      
 lazy val zioTestSbt            = "dev.zio"                   %% "zio-test-sbt"            % zioVersion
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.9.0"
 lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.2"
-lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.5"
+lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.4.5"
 lazy val embeddedKafka         = "io.github.embeddedkafka"   %% "embedded-kafka"          % embeddedKafkaVersion
 
 val GITHUB_OWNER   = "conduktor"
@@ -83,7 +88,6 @@ lazy val root = project
     zioKafkaTestUtils,
     zioKafkaTest,
     zioKafkaBench,
-    docs
   )
 
 def buildInfoSettings(packageName: String) =
@@ -183,24 +187,3 @@ lazy val zioKafkaBench =
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
-
-lazy val docs = project
-  .in(file("zio-kafka-docs"))
-  .settings(
-    moduleName := "zio-kafka-docs",
-    scalacOptions -= "-Yno-imports",
-    scalacOptions -= "-Xfatal-warnings",
-    projectName                                := "ZIO Kafka",
-    mainModuleName                             := (zioKafka / moduleName).value,
-    projectStage                               := ProjectStage.ProductionReady,
-    docsPublishBranch                          := "master",
-    ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioKafka),
-    readmeCredits :=
-      "This library is heavily inspired and made possible by the research and implementation done in " +
-        "[Alpakka Kafka](https://github.com/akka/alpakka-kafka), a library maintained by the Akka team and originally " +
-        "written as Reactive Kafka by SoftwareMill.",
-    readmeLicense +=
-      "\n\n" + """|Copyright 2021 Itamar Ravid and the zio-kafka contributors. All rights reserved.
-                  |<!-- TODO: not all rights reserved, rather Apache 2... -->""".stripMargin
-  )
-  .enablePlugins(WebsitePlugin)
