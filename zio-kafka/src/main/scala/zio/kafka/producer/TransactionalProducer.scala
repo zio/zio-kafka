@@ -61,7 +61,7 @@ object TransactionalProducer {
       }
   }
 
-  def createTransaction: ZIO[TransactionalProducer with Scope, Throwable, Transaction] =
+  def createTransaction: ZIO[TransactionalProducer & Scope, Throwable, Transaction] =
     ZIO.service[TransactionalProducer].flatMap(_.createTransaction)
 
   val live: RLayer[TransactionalProducerSettings, TransactionalProducer] =

@@ -18,7 +18,7 @@ import zio.test._
 object ConsumerSpec extends ZIOSpecWithKafka {
   override val kafkaPrefix: String = "consumespec"
 
-  override def spec: Spec[TestEnvironment with Kafka, Throwable] =
+  override def spec: Spec[TestEnvironment & Kafka, Throwable] =
     suite("Consumer Streaming")(
       test("export metrics") {
         for {
@@ -840,7 +840,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           _ <- fib2.interrupt
         } yield assertCompletes
       }
-    ).provideSomeLayerShared[TestEnvironment with Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
+    ).provideSomeLayerShared[TestEnvironment & Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
       300.seconds
     )
 }
