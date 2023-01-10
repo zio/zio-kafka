@@ -99,7 +99,7 @@ trait Consumer {
     commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
   )(
     f: (K, V) => URIO[R1, Unit]
-  ): ZIO[R with R1, Throwable, Unit]
+  ): ZIO[R & R1, Throwable, Unit]
 
   def subscribe(subscription: Subscription): Task[Unit]
 
@@ -270,9 +270,9 @@ object Consumer {
       commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
     )(
       f: (K, V) => URIO[R1, Unit]
-    ): ZIO[R with R1, Throwable, Unit] =
+    ): ZIO[R & R1, Throwable, Unit] =
       for {
-        r <- ZIO.environment[R with R1]
+        r <- ZIO.environment[R & R1]
         _ <- ZStream
                .fromZIO(subscribe(subscription))
                .flatMap { _ =>
@@ -335,7 +335,7 @@ object Consumer {
   val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
-  def live: RLayer[ConsumerSettings with Diagnostics, Consumer] =
+  def live: RLayer[ConsumerSettings & Diagnostics, Consumer] =
     ZLayer.scoped {
       for {
         settings    <- ZIO.service[ConsumerSettings]
@@ -423,7 +423,7 @@ object Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
-  ): ZStream[R with Consumer, Throwable, CommittableRecord[K, V]] =
+  ): ZStream[R & Consumer, Throwable, CommittableRecord[K, V]] =
     ZStream.environmentWithStream(_.get[Consumer].plainStream(keyDeserializer, valueDeserializer, bufferSize))
 
   /**
@@ -491,8 +491,8 @@ object Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
-  )(f: (K, V) => URIO[R1, Unit]): RIO[R with R1, Unit] =
-    ZIO.scoped[R with R1] {
+  )(f: (K, V) => URIO[R1, Unit]): RIO[R & R1, Unit] =
+    ZIO.scoped[R & R1] {
       Consumer
         .make(settings)
         .flatMap(_.consumeWith[R, R1, K, V](subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))

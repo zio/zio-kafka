@@ -51,8 +51,9 @@ val excludeInferAny = { options: Seq[String] => options.filterNot(Set("-Xlint:in
 lazy val root = project
   .in(file("."))
   .settings(
-    name           := "zio-kafka",
-    publish / skip := true
+    name               := "zio-kafka",
+    publish / skip     := true,
+    crossScalaVersions := Nil // https://www.scala-sbt.org/1.x/docs/Cross-Build.html#Cross+building+a+project+statefully
   )
   .aggregate(
     zioKafka,
