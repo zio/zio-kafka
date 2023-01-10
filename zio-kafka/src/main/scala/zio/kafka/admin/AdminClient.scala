@@ -1387,8 +1387,8 @@ object AdminClient {
     ZIO.succeed(new LiveAdminClient(javaClient))
 
   def fromManagedJavaClient[R, E](
-    managedJavaClient: ZIO[R with Scope, E, JAdmin]
-  ): ZIO[R with Scope, E, AdminClient] =
+    managedJavaClient: ZIO[R & Scope, E, JAdmin]
+  ): ZIO[R & Scope, E, AdminClient] =
     managedJavaClient.flatMap { javaClient =>
       fromJavaClient(javaClient)
     }
@@ -1398,15 +1398,15 @@ object AdminClient {
       ZIO.succeed(client.close(settings.closeTimeout))
     )
 
-  implicit class MapOps[K1, V1](val v: Map[K1, V1]) extends AnyVal {
+  implicit final class MapOps[K1, V1](val v: Map[K1, V1]) extends AnyVal {
     def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): Map[K2, V2] = v.map(kv => fk(kv._1) -> fv(kv._2))
   }
 
-  implicit class OptionalOps[T](val v: Optional[T]) extends AnyVal {
+  implicit final class OptionalOps[T](val v: Optional[T]) extends AnyVal {
     def toScala: Option[T] = if (v.isPresent) Some(v.get()) else None
   }
 
-  implicit class OptionOps[T](val v: Option[T]) extends AnyVal {
+  implicit final class OptionOps[T](val v: Option[T]) extends AnyVal {
     def toJava: Optional[T] = v.fold(Optional.empty[T])(Optional.of)
   }
 }

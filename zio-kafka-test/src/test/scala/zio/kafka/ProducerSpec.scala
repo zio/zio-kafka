@@ -460,7 +460,7 @@ object ProducerSpec extends ZIOSpecWithKafka {
         } yield ()
         assertZIO(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
       }
-    ).provideSomeLayerShared[TestEnvironment with Kafka](
+    ).provideSomeLayerShared[TestEnvironment & Kafka](
       (KafkaTestUtils.producer ++ transactionalProducer)
         .mapError(TestFailure.fail)
     ) @@ withLiveClock

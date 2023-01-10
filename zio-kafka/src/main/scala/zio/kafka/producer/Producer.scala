@@ -47,7 +47,7 @@ trait Producer {
   def produceAll[R, K, V](
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): ZPipeline[R with Producer, Throwable, ProducerRecord[K, V], RecordMetadata] =
+  ): ZPipeline[R & Producer, Throwable, ProducerRecord[K, V], RecordMetadata] =
     ZPipeline.mapChunksZIO(records => produceChunk(records, keySerializer, valueSerializer))
 
   /**
@@ -273,7 +273,7 @@ object Producer {
 
   def withProducerService[R, A](
     r: Producer => RIO[R, A]
-  ): RIO[R with Producer, A] =
+  ): RIO[R & Producer, A] =
     ZIO.serviceWithZIO[Producer](r)
 
   /**
@@ -283,7 +283,7 @@ object Producer {
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R with Producer, RecordMetadata] =
+  ): RIO[R & Producer, RecordMetadata] =
     withProducerService(_.produce(record, keySerializer, valueSerializer))
 
   /**
@@ -295,7 +295,7 @@ object Producer {
     value: V,
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R with Producer, RecordMetadata] =
+  ): RIO[R & Producer, RecordMetadata] =
     withProducerService(_.produce(topic, key, value, keySerializer, valueSerializer))
 
   /**
@@ -304,7 +304,7 @@ object Producer {
   def produceAll[R, K, V](
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): ZPipeline[R with Producer, Throwable, ProducerRecord[K, V], RecordMetadata] =
+  ): ZPipeline[R & Producer, Throwable, ProducerRecord[K, V], RecordMetadata] =
     ZPipeline.mapChunksZIO(records => produceChunk(records, keySerializer, valueSerializer))
 
   /**
@@ -314,7 +314,7 @@ object Producer {
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R with Producer, Task[RecordMetadata]] =
+  ): RIO[R & Producer, Task[RecordMetadata]] =
     withProducerService(_.produceAsync(record, keySerializer, valueSerializer))
 
   /**
@@ -326,7 +326,7 @@ object Producer {
     value: V,
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R with Producer, Task[RecordMetadata]] =
+  ): RIO[R & Producer, Task[RecordMetadata]] =
     withProducerService(_.produceAsync(topic, key, value, keySerializer, valueSerializer))
 
   /**
@@ -336,7 +336,7 @@ object Producer {
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R with Producer, Task[Chunk[RecordMetadata]]] =
+  ): RIO[R & Producer, Task[Chunk[RecordMetadata]]] =
     withProducerService(_.produceChunkAsync(records, keySerializer, valueSerializer))
 
   /**
@@ -346,7 +346,7 @@ object Producer {
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R with Producer, Chunk[RecordMetadata]] =
+  ): RIO[R & Producer, Chunk[RecordMetadata]] =
     withProducerService(_.produceChunk(records, keySerializer, valueSerializer))
 
   /**

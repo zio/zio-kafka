@@ -62,7 +62,7 @@ import zio.kafka.serde._
 import zio.stream.ZStream
 
 object MainApp extends ZIOAppDefault {
-  val producer: ZStream[Any with Producer, Throwable, Nothing] =
+  val producer: ZStream[Producer, Throwable, Nothing] =
     ZStream
       .repeatZIO(Random.nextIntBetween(0, Int.MaxValue))
       .schedule(Schedule.fixed(2.seconds))
@@ -77,7 +77,7 @@ object MainApp extends ZIOAppDefault {
       }
       .drain
 
-  val consumer: ZStream[Any with Consumer, Throwable, Nothing] =
+  val consumer: ZStream[Consumer, Throwable, Nothing] =
     Consumer
       .subscribeAnd(Subscription.topics("random"))
       .plainStream(Serde.long, Serde.string)
