@@ -408,7 +408,6 @@ object ProducerSpec extends ZIOSpecWithKafka {
                                          aliceHadMoneyCommittableMessage <- readAliceAccount
                                          _ <- ZIO.scoped {
                                                 TransactionalProducer.createTransaction.flatMap { t =>
-                                                  println("Step 1")
                                                   t.produce(
                                                     aliceAccountFeesPaid,
                                                     Serde.string,
@@ -418,19 +417,16 @@ object ProducerSpec extends ZIOSpecWithKafka {
                                                     t.abort
                                                 }
                                               }.catchSome { case UserInitiatedAbort =>
-                                                println("Step 2")
+                                                ("Step 2")
                                                 ZIO.unit // silences the abort
                                               }
                                          aliceTopicPartition =
                                            new TopicPartition(topic, aliceHadMoneyCommittableMessage.partition)
-                                         _ = println("Step 3")
                                          committed <- c.committed(Set(aliceTopicPartition))
                                        } yield committed(aliceTopicPartition)
                                      }
                                  }
                                }
-
-            _ = println("Step 4")
           } yield assert(committedOffset)(isNone)
         },
         test("fails if transaction leaks") {
