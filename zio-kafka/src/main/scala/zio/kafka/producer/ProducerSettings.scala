@@ -40,5 +40,5 @@ final case class ProducerSettings(
 
 object ProducerSettings {
   def apply(bootstrapServers: List[String]): ProducerSettings =
-    new ProducerSettings(bootstrapServers, 30.seconds, 4096, Map())
+    new ProducerSettings(bootstrapServers, 30.seconds, 4096, Map.empty)
 }
