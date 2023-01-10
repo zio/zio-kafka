@@ -417,7 +417,6 @@ object ProducerSpec extends ZIOSpecWithKafka {
                                                     t.abort
                                                 }
                                               }.catchSome { case UserInitiatedAbort =>
-                                                ("Step 2")
                                                 ZIO.unit // silences the abort
                                               }
                                          aliceTopicPartition =
