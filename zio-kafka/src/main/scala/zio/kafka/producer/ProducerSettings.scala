@@ -7,6 +7,7 @@ import zio.kafka.security.KafkaCredentialStore
 final case class ProducerSettings(
   bootstrapServers: List[String],
   closeTimeout: Duration,
+  sendBufferSize: Int,
   properties: Map[String, AnyRef]
 ) {
   def driverSettings: Map[String, AnyRef] =
@@ -33,9 +34,11 @@ final case class ProducerSettings(
 
   def withCredentials(credentialsStore: KafkaCredentialStore): ProducerSettings =
     withProperties(credentialsStore.properties)
+
+  def withSendBufferSize(sendBufferSize: Int) = copy(sendBufferSize = sendBufferSize)
 }
 
 object ProducerSettings {
   def apply(bootstrapServers: List[String]): ProducerSettings =
-    new ProducerSettings(bootstrapServers, 30.seconds, Map())
+    new ProducerSettings(bootstrapServers, 30.seconds, 4096, Map())
 }

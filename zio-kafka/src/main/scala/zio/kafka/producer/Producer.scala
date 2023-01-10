@@ -11,10 +11,9 @@ import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.{ Metric, MetricName }
 import zio._
 import zio.kafka.serde.Serializer
-import zio.stream.ZPipeline
+import zio.stream.{ ZPipeline, ZStream }
 
 import java.util.concurrent.atomic.AtomicLong
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 trait Producer {
@@ -126,7 +125,9 @@ object Producer {
 
   private[producer] final case class Live(
     p: JProducer[Array[Byte], Array[Byte]],
-    producerSettings: ProducerSettings
+    producerSettings: ProducerSettings,
+    runtime: Runtime[Any],
+    sendQueue: Queue[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])]
   ) extends Producer {
 
     override def produceAsync[R, K, V](
@@ -135,25 +136,10 @@ object Producer {
       valueSerializer: Serializer[R, V]
     ): RIO[R, Task[RecordMetadata]] =
       for {
-        done             <- Promise.make[Throwable, RecordMetadata]
+        done             <- Promise.make[Throwable, Chunk[RecordMetadata]]
         serializedRecord <- serialize(record, keySerializer, valueSerializer)
-        runtime          <- ZIO.runtime[Any]
-        _ <- ZIO.attempt {
-               p.send(
-                 serializedRecord,
-                 new Callback {
-                   def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
-                     Unsafe.unsafe { implicit u =>
-                       (
-                         if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
-                         else runtime.unsafe.run(done.succeed(metadata)).getOrThrowFiberFailure(): Unit
-                       ): @nowarn("msg=discarded non-Unit value")
-                       ()
-                     }
-                 }
-               )
-             }
-      } yield done.await
+        _                <- sendQueue.offer((Chunk.single(serializedRecord), done))
+      } yield done.await.map(_.head)
 
     override def produceChunkAsync[R, K, V](
       records: Chunk[ProducerRecord[K, V]],
@@ -164,39 +150,46 @@ object Producer {
       else {
         for {
           done              <- Promise.make[Throwable, Chunk[RecordMetadata]]
-          runtime           <- ZIO.runtime[Any]
-          serializedRecords <- ZIO.foreach(records.toSeq)(serialize(_, keySerializer, valueSerializer))
-          _ <- ZIO.attempt {
-                 val it: Iterator[(ByteRecord, Int)] =
-                   serializedRecords.iterator.zipWithIndex
-                 val res: Array[RecordMetadata] = new Array[RecordMetadata](records.length)
-                 val count: AtomicLong          = new AtomicLong
-
-                 while (it.hasNext) {
-                   val (rec, idx): (ByteRecord, Int) = it.next()
-
-                   p.send(
-                     rec,
-                     new Callback {
-                       def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
-                         Unsafe.unsafe { implicit u =>
-                           (
-                             if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
-                             else {
-                               res(idx) = metadata
-                               if (count.incrementAndGet == records.length)
-                                 runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
-                             }
-                           ): @nowarn("msg=discarded non-Unit value")
-
-                           ()
-                         }
-                     }
-                   )
-                 }
-               }
+          serializedRecords <- ZIO.foreach(records)(serialize(_, keySerializer, valueSerializer))
+          _                 <- sendQueue.offer((serializedRecords, done))
         } yield done.await
       }
+
+    /**
+     * Calls to send may block when updating metadata or when communication with the broker is (temporarily) lost,
+     * therefore this stream is run on a the blocking thread pool
+     */
+    val sendFromQueue: ZIO[Any, Nothing, Any] =
+      ZStream
+        .fromQueueWithShutdown(sendQueue)
+        .mapZIO { case (serializedRecords, done) =>
+          ZIO.attempt {
+            val it: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
+            val res: Array[RecordMetadata]      = new Array[RecordMetadata](serializedRecords.length)
+            val count: AtomicLong               = new AtomicLong
+
+            while (it.hasNext) {
+              val (rec, idx): (ByteRecord, Int) = it.next()
+
+              p.send(
+                rec,
+                new Callback {
+                  def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
+                    Unsafe.unsafe { implicit u =>
+                      if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
+                      else {
+                        res(idx) = metadata
+                        if (count.incrementAndGet == serializedRecords.length)
+                          runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
+                      }
+                    }
+                }
+              )
+            }
+          }
+            .foldCauseZIO(done.failCause, _ => ZIO.unit)
+        }
+        .runDrain
 
     override def produce[R, K, V](
       record: ProducerRecord[K, V],
@@ -256,20 +249,21 @@ object Producer {
     }
 
   def make(settings: ProducerSettings): ZIO[Scope, Throwable, Producer] =
-    ZIO.acquireRelease {
-      for {
-        props <- ZIO.attempt(settings.driverSettings)
-        rawProducer <- ZIO.attempt(
-                         new KafkaProducer[Array[Byte], Array[Byte]](
-                           props.asJava,
-                           new ByteArraySerializer(),
-                           new ByteArraySerializer()
-                         )
+    for {
+      props <- ZIO.attempt(settings.driverSettings)
+      rawProducer <- ZIO.attempt(
+                       new KafkaProducer[Array[Byte], Array[Byte]](
+                         props.asJava,
+                         new ByteArraySerializer(),
+                         new ByteArraySerializer()
                        )
-      } yield Live(rawProducer, settings)
-    } { producer =>
-      producer.close
-    }
+                     )
+      runtime <- ZIO.runtime[Any]
+      sendQueue <-
+        Queue.bounded[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])](settings.sendBufferSize)
+      producer <- ZIO.acquireRelease(ZIO.succeed(Live(rawProducer, settings, runtime, sendQueue)))(_.close)
+      _        <- ZIO.blocking(producer.sendFromQueue).forkScoped
+    } yield producer
 
   def withProducerService[R, A](
     r: Producer => RIO[R, A]
