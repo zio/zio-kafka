@@ -18,6 +18,7 @@ object TransactionalProducerSettings {
       ProducerSettings(
         bootstrapServers,
         30.seconds,
+        4096,
         Map(ProducerConfig.TRANSACTIONAL_ID_CONFIG -> transactionalId)
       )
     ) {}
@@ -26,12 +27,14 @@ object TransactionalProducerSettings {
     bootstrapServers: List[String],
     closeTimeout: Duration,
     properties: Map[String, AnyRef],
-    transactionalId: String
+    transactionalId: String,
+    sendBufferSize: Int
   ): TransactionalProducerSettings =
     new TransactionalProducerSettings(
       ProducerSettings(
         bootstrapServers,
         closeTimeout,
+        sendBufferSize,
         properties.updated(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
       )
     ) {}
