@@ -168,6 +168,7 @@ object Producer {
             val it: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
             val res: Array[RecordMetadata]      = new Array[RecordMetadata](serializedRecords.length)
             val count: AtomicLong               = new AtomicLong
+            val length                          = serializedRecords.length
 
             while (it.hasNext) {
               val (rec, idx): (ByteRecord, Int) = it.next()
@@ -180,7 +181,7 @@ object Producer {
                       (if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
                        else {
                          res(idx) = metadata
-                         if (count.incrementAndGet == serializedRecords.length)
+                         if (count.incrementAndGet == length)
                            runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
                        }): @nowarn("msg=discarded non-Unit value")
                       ()
