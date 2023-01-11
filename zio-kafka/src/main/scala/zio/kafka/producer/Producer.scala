@@ -1,12 +1,6 @@
 package zio.kafka.producer
 
-import org.apache.kafka.clients.producer.{
-  Callback,
-  KafkaProducer,
-  Producer => JProducer,
-  ProducerRecord,
-  RecordMetadata
-}
+import org.apache.kafka.clients.producer.{ KafkaProducer, Producer => JProducer, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.{ Metric, MetricName }
 import zio._
@@ -14,7 +8,6 @@ import zio.kafka.serde.Serializer
 import zio.stream.{ ZPipeline, ZStream }
 
 import java.util.concurrent.atomic.AtomicLong
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 trait Producer {
@@ -127,7 +120,6 @@ object Producer {
   private[producer] final case class Live(
     p: JProducer[Array[Byte], Array[Byte]],
     producerSettings: ProducerSettings,
-    runtime: Runtime[Any],
     sendQueue: Queue[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])]
   ) extends Producer {
 
@@ -164,30 +156,41 @@ object Producer {
       ZStream
         .fromQueueWithShutdown(sendQueue)
         .mapZIO { case (serializedRecords, done) =>
-          ZIO.attempt {
+          ZIO.suspendSucceed {
             val it: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
-            val res: Array[RecordMetadata]      = new Array[RecordMetadata](serializedRecords.length)
+            val length                          = serializedRecords.length
+            val res: Array[RecordMetadata]      = new Array[RecordMetadata](length)
             val count: AtomicLong               = new AtomicLong
 
-            while (it.hasNext) {
-              val (rec, idx): (ByteRecord, Int) = it.next()
+            val send: ((ByteRecord, Int)) => Task[Unit] = { case (rec: ByteRecord, idx: Int) =>
+              ZIO.asyncInterrupt { callback =>
+                val future =
+                  p.send(
+                    rec,
+                    (metadata: RecordMetadata, err: Exception) =>
+                      if (err != null) {
+                        callback.apply(done.fail(err).unit)
+                      } else {
+                        res(idx) = metadata
 
-              p.send(
-                rec,
-                new Callback {
-                  def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
-                    Unsafe.unsafe { implicit u =>
-                      (if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
-                       else {
-                         res(idx) = metadata
-                         if (count.incrementAndGet == serializedRecords.length)
-                           runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
-                       }): @nowarn("msg=discarded non-Unit value")
-                      ()
-                    }
-                }
-              )
+                        val callbackResult: UIO[Unit] =
+                          if (count.incrementAndGet == length)
+                            done.succeed(Chunk.fromArray(res)).asInstanceOf[UIO[Unit]]
+                          else
+                            ZIO.unit
+
+                        callback.apply(callbackResult)
+                      }
+                  )
+
+                Left(ZIO.attempt(future.cancel(false)).unit.orDie)
+              }
             }
+
+            // Code copied from `ZIO.foreachDiscard`
+            //
+            // `ZIO.foreachDiscard` takes an Iterable, which forces us to allocate an additional Chunk when we `zipWithIndex`
+            ZIO.whileLoop(it.hasNext)(send.apply(it.next()))(_ => ())
           }
             .foldCauseZIO(done.failCause, _ => ZIO.unit)
         }
@@ -260,10 +263,9 @@ object Producer {
                          new ByteArraySerializer()
                        )
                      )
-      runtime <- ZIO.runtime[Any]
       sendQueue <-
         Queue.bounded[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])](settings.sendBufferSize)
-      producer <- ZIO.acquireRelease(ZIO.succeed(Live(rawProducer, settings, runtime, sendQueue)))(_.close)
+      producer <- ZIO.acquireRelease(ZIO.succeed(Live(rawProducer, settings, sendQueue)))(_.close)
       _        <- ZIO.blocking(producer.sendFromQueue).forkScoped
     } yield producer
 

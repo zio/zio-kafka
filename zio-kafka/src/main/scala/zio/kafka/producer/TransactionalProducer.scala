@@ -5,8 +5,8 @@ import org.apache.kafka.clients.producer.{ KafkaProducer, RecordMetadata }
 import org.apache.kafka.common.errors.InvalidGroupIdException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
-import zio.kafka.consumer.OffsetBatch
 import zio._
+import zio.kafka.consumer.OffsetBatch
 
 import scala.jdk.CollectionConverters._
 
@@ -84,13 +84,12 @@ object TransactionalProducer {
                      )
       _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
       semaphore <- Semaphore.make(1)
-      runtime   <- ZIO.runtime[Any]
       sendQueue <-
         Queue.bounded[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])](
           settings.producerSettings.sendBufferSize
         )
       live <- ZIO.acquireRelease(
-                ZIO.succeed(Producer.Live(rawProducer, settings.producerSettings, runtime, sendQueue))
+                ZIO.succeed(Producer.Live(rawProducer, settings.producerSettings, sendQueue))
               )(_.close)
       _ <- ZIO.blocking(live.sendFromQueue).forkScoped
     } yield LiveTransactionalProducer(live, semaphore)
