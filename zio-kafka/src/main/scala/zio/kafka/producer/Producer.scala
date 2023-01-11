@@ -239,7 +239,7 @@ object Producer {
         value <- valueSerializer.serialize(r.topic, r.headers, r.value())
       } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
 
-    private[producer] def close: UIO[Unit] = ZIO.attempt(p.close(producerSettings.closeTimeout)).orDie
+    private[producer] def close: UIO[Unit] = ZIO.attemptBlocking(p.close(producerSettings.closeTimeout)).orDie
   }
 
   val live: RLayer[ProducerSettings, Producer] =
