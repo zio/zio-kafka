@@ -128,7 +128,7 @@ object Producer {
     p: JProducer[Array[Byte], Array[Byte]],
     producerSettings: ProducerSettings,
     runtime: Runtime[Any],
-    sendQueue: Queue[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])]
+    sendQueue: Queue[(Chunk[Task[ByteRecord]], Promise[Throwable, Chunk[RecordMetadata]])]
   ) extends Producer {
 
     override def produceAsync[R, K, V](
@@ -137,9 +137,10 @@ object Producer {
       valueSerializer: Serializer[R, V]
     ): RIO[R, Task[RecordMetadata]] =
       for {
-        done             <- Promise.make[Throwable, Chunk[RecordMetadata]]
-        serializedRecord <- serialize(record, keySerializer, valueSerializer)
-        _                <- sendQueue.offer((Chunk.single(serializedRecord), done))
+        r    <- ZIO.environment[R]
+        done <- Promise.make[Throwable, Chunk[RecordMetadata]]
+        serializedRecord = serialize(record, keySerializer, valueSerializer).provideEnvironment(r)
+        _ <- sendQueue.offer((Chunk.single(serializedRecord), done))
       } yield done.await.map(_.head)
 
     override def produceChunkAsync[R, K, V](
@@ -150,9 +151,10 @@ object Producer {
       if (records.isEmpty) ZIO.succeed(ZIO.succeed(Chunk.empty))
       else {
         for {
-          done              <- Promise.make[Throwable, Chunk[RecordMetadata]]
-          serializedRecords <- ZIO.foreach(records)(serialize(_, keySerializer, valueSerializer))
-          _                 <- sendQueue.offer((serializedRecords, done))
+          r    <- ZIO.environment[R]
+          done <- Promise.make[Throwable, Chunk[RecordMetadata]]
+          serializedRecords = records.map(serialize(_, keySerializer, valueSerializer).provideEnvironment(r))
+          _ <- sendQueue.offer((serializedRecords, done))
         } yield done.await
       }
 
@@ -164,30 +166,38 @@ object Producer {
       ZStream
         .fromQueueWithShutdown(sendQueue)
         .mapZIO { case (serializedRecords, done) =>
-          ZIO.attempt {
-            val it: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
-            val res: Array[RecordMetadata]      = new Array[RecordMetadata](serializedRecords.length)
-            val count: AtomicLong               = new AtomicLong
+          ZIO.suspendSucceed {
+            val it: Iterator[(Task[ByteRecord], Int)] = serializedRecords.iterator.zipWithIndex
+            val length                                = serializedRecords.length
+            val res: Array[RecordMetadata]            = new Array[RecordMetadata](length)
+            val count: AtomicLong                     = new AtomicLong
 
-            while (it.hasNext) {
-              val (rec, idx): (ByteRecord, Int) = it.next()
+            val send: ((Task[ByteRecord], Int)) => Task[Unit] = { case (recT: Task[ByteRecord], idx: Int) =>
+              recT.map { rec =>
+                p.send(
+                  rec,
+                  new Callback {
+                    def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
+                      Unsafe.unsafe { implicit u =>
+                        (if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
+                         else {
+                           res(idx) = metadata
+                           if (count.incrementAndGet == length)
+                             runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
+                         }): @nowarn("msg=discarded non-Unit value")
+                        ()
+                      }
+                  }
+                )
 
-              p.send(
-                rec,
-                new Callback {
-                  def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
-                    Unsafe.unsafe { implicit u =>
-                      (if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
-                       else {
-                         res(idx) = metadata
-                         if (count.incrementAndGet == serializedRecords.length)
-                           runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
-                       }): @nowarn("msg=discarded non-Unit value")
-                      ()
-                    }
-                }
-              )
+                ()
+              }
             }
+
+            // Code copied from `ZIO.foreachDiscard`
+            //
+            // `ZIO.foreachDiscard` takes an Iterable, which forces us to allocate an additional Chunk when we `zipWithIndex`
+            ZIO.whileLoop(it.hasNext)(send.apply(it.next()))(_ => ())
           }
             .foldCauseZIO(done.failCause, _ => ZIO.unit)
         }
@@ -262,7 +272,7 @@ object Producer {
                      )
       runtime <- ZIO.runtime[Any]
       sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])](settings.sendBufferSize)
+        Queue.bounded[(Chunk[Task[ByteRecord]], Promise[Throwable, Chunk[RecordMetadata]])](settings.sendBufferSize)
       producer <- ZIO.acquireRelease(ZIO.succeed(Live(rawProducer, settings, runtime, sendQueue)))(_.close)
       _        <- ZIO.blocking(producer.sendFromQueue).forkScoped
     } yield producer
