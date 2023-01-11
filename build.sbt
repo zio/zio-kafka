@@ -108,6 +108,7 @@ lazy val zioKafkaTestUtils =
     .settings(
       libraryDependencies ++= Seq(
         zio,
+        zioTest,
         kafkaClients,
         scalaCollectionCompat
       ) ++ {
