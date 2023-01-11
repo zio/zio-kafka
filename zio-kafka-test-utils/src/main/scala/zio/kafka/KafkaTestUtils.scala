@@ -158,13 +158,38 @@ object KafkaTestUtils {
   def adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(AdminClientSettings(_))
 
-  def withAdmin[T](f: AdminClient => RIO[Kafka, T]) =
+  def saslAdminSettings(username: String, password: String): ZIO[Kafka.Sasl, Nothing, AdminClientSettings] =
+    ZIO
+      .serviceWith[Kafka.Sasl](_.value.bootstrapServers)
+      .map(
+        AdminClientSettings(_).withProperties(
+          "sasl.mechanism"    -> "PLAIN",
+          "security.protocol" -> "SASL_PLAINTEXT",
+          "sasl.jaas.config" -> s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="$username" password="$password";"""
+        )
+      )
+
+  def withAdmin[T](f: AdminClient => RIO[Kafka, T]): ZIO[Kafka, Throwable, T] =
     for {
       settings <- adminSettings
-      fRes <- ZIO.scoped {
-                AdminClient
-                  .make(settings)
-                  .flatMap(client => f(client))
-              }
+      fRes     <- withAdminClient(settings)(f)
     } yield fRes
+
+  def withSaslAdmin[T](
+    username: String = "admin",
+    password: String = "admin-secret"
+  )(
+    f: AdminClient => RIO[Kafka.Sasl, T]
+  ): ZIO[Kafka.Sasl, Throwable, T] =
+    for {
+      settings <- saslAdminSettings(username, password)
+      fRes     <- withAdminClient(settings)(f)
+    } yield fRes
+
+  private def withAdminClient[R, T](settings: AdminClientSettings)(f: AdminClient => RIO[R, T]) =
+    ZIO.scoped[R] {
+      AdminClient
+        .make(settings)
+        .flatMap(client => f(client))
+    }
 }
