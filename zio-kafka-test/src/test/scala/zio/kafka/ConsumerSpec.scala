@@ -405,7 +405,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                     ).commit.as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
                 }
               }
-              .timeout(10.seconds)
+              .timeout(5.seconds)
               .runDrain
               .provideSomeLayer[Kafka](
                 consumer(
@@ -434,7 +434,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                                ).commit.as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
                            }
                          }
-                         .timeout(10.seconds)
+                         .timeout(5.seconds)
                          .runDrain
                          .provideSomeLayer[Kafka](
                            consumer(

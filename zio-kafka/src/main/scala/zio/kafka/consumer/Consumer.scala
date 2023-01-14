@@ -217,12 +217,7 @@ object Consumer {
         }
 
       stream.map(_.exit).flattenExitOption.map {
-        _.map { case (tp, partition) =>
-          // TODO Disabling this evokes the issue
-          val partitionStream =
-            if (settings.perPartitionChunkPrefetch <= 0) partition
-            else partition.bufferChunks(settings.perPartitionChunkPrefetch)
-
+        _.map { case (tp, partitionStream) =>
           tp -> partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
         }
       }
@@ -359,7 +354,8 @@ object Consumer {
                    diagnostics,
                    settings.offsetRetrieval,
                    settings.rebalanceListener,
-                   settings.restartStreamOnRebalancing
+                   settings.restartStreamOnRebalancing,
+                   settings.perPartitionChunkPrefetch
                  )
     } yield Live(wrapper, settings, runloop)
 

@@ -37,7 +37,8 @@ private[consumer] final class Runloop(
   userRebalanceListener: RebalanceListener,
   subscribedRef: Ref[Boolean],
   restartStreamsOnRebalancing: Boolean,
-  currentState: Ref[State]
+  currentState: Ref[State],
+  perPartitionChunkPrefetch: Int
 ) {
   private val isRebalancing = rebalancingRef.get
   private val isShutdown    = shutdownRef.get
@@ -56,7 +57,8 @@ private[consumer] final class Runloop(
                    _      <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
                    result <- request.await
                  } yield result
-               }.interruptWhen(interruptionPromise)
+               }.viaFunction(s => if (perPartitionChunkPrefetch > 0) s.bufferChunks(perPartitionChunkPrefetch) else s)
+                 .interruptWhen(interruptionPromise)
                  .concat(
                    ZStream
                      .fromQueue(drainQueue)
@@ -551,15 +553,14 @@ private[consumer] final class Runloop(
         ZIO.ifZIO(subscribedRef.get)(handlePoll(state), ZIO.succeed(state))
       case Command.Requests(reqs) =>
         handleRequests(state, reqs).flatMap { state =>
-          ZIO.succeed(state)
-//          // Optimization: eagerly poll if we have pending requests instead of waiting
-//          // for the next scheduled poll.
-//          if (state.pendingRequests.nonEmpty) {
-//            println(
-//              s"handlePoll from Requests after completion and still pending requests: ${state.pendingRequests.map(_.tp.partition()).mkString(",")}"
-//            )
-//            handlePoll(state)
-//          } else ZIO.succeed(state)
+          // Optimization: eagerly poll if we have pending requests instead of waiting
+          // for the next scheduled poll.
+          if (state.pendingRequests.nonEmpty) {
+            println(
+              s"handlePoll from Requests after completion and still pending requests: ${state.pendingRequests.map(_.tp.partition()).mkString(",")}"
+            )
+            handlePoll(state)
+          } else ZIO.succeed(state)
         }
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
@@ -653,7 +654,8 @@ private[consumer] object Runloop {
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
-    restartStreamsOnRebalancing: Boolean
+    restartStreamsOnRebalancing: Boolean,
+    perPartitionChunkPrefetch: Int
   ): ZIO[Scope, Throwable, Runloop] =
     for {
       rebalancingRef     <- Ref.make(false)
@@ -685,7 +687,8 @@ private[consumer] object Runloop {
                   userRebalanceListener,
                   subscribedRef,
                   restartStreamsOnRebalancing,
-                  currentStateRef
+                  currentStateRef,
+                  perPartitionChunkPrefetch
                 )
       _ <- runloop.run
     } yield runloop
