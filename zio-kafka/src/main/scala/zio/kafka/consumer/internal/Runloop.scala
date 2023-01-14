@@ -551,14 +551,15 @@ private[consumer] final class Runloop(
         ZIO.ifZIO(subscribedRef.get)(handlePoll(state), ZIO.succeed(state))
       case Command.Requests(reqs) =>
         handleRequests(state, reqs).flatMap { state =>
-          // Optimization: eagerly poll if we have pending requests instead of waiting
-          // for the next scheduled poll.
-          if (state.pendingRequests.nonEmpty) {
-            println(
-              s"handlePoll from Requests after completion and still pending requests: ${state.pendingRequests.map(_.tp.partition()).mkString(",")}"
-            )
-            handlePoll(state)
-          } else ZIO.succeed(state)
+          ZIO.succeed(state)
+//          // Optimization: eagerly poll if we have pending requests instead of waiting
+//          // for the next scheduled poll.
+//          if (state.pendingRequests.nonEmpty) {
+//            println(
+//              s"handlePoll from Requests after completion and still pending requests: ${state.pendingRequests.map(_.tp.partition()).mkString(",")}"
+//            )
+//            handlePoll(state)
+//          } else ZIO.succeed(state)
         }
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
