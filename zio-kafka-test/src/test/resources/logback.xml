@@ -8,6 +8,7 @@
     <logger name="org.apache.kafka" level="ERROR" />
 
     <logger name="kafka" level="WARN" />
+    <logger name="state.change.logger" level="WARN" />
 
     <logger name="org.apache.zookeeper" level="ERROR" />
 

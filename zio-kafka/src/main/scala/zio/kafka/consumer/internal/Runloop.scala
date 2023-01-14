@@ -51,9 +51,10 @@ private[consumer] final class Runloop(
       stream = ZStream.repeatZIOChunkOption {
                  for {
                    request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-                   _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
-                   _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
-                   result  <- request.await
+                   _ = println(s"Making request for ${tp}")
+                   _      <- requestQueue.offer(Runloop.Request(tp, request)).unit
+                   _      <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
+                   result <- request.await
                  } yield result
                }.interruptWhen(interruptionPromise)
                  .concat(
@@ -347,10 +348,14 @@ private[consumer] final class Runloop(
 
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
+            println(s"Pending requests: ${requestedPartitions.map(_.partition()).mkString(",")}")
 
             resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
             val records = doPoll(c, requestedPartitions)
+            println(
+              s"Polled for partitions ${requestedPartitions.map(_.partition()).mkString(",")}, got ${records.count()} records"
+            )
 
             // Check shutdown again after polling (which takes up to the poll timeout)
             ZIO.ifZIO(isShutdown)(
@@ -434,6 +439,9 @@ private[consumer] final class Runloop(
                                         tp => !currentAssigned(tp)
                                       )
                                   }
+                  _ = println(
+                        s"Unfulfilled requests ${revokeResult.unfulfilledRequests.map(_.tp.partition()).mkString(",")}"
+                      )
 
                   fulfillResult <- fulfillRequests(
                                      revokeResult.unfulfilledRequests,
@@ -447,6 +455,10 @@ private[consumer] final class Runloop(
                            fulfillResult.unfulfilledRequests.map(_.tp).toSet
                          )
                        )
+                  _ =
+                    println(
+                      s"Unfulfilled requests after fulfilling: ${fulfillResult.unfulfilledRequests.map(_.tp.partition()).mkString(",")}"
+                    )
                 } yield Runloop.PollResult(
                   newlyAssigned,
                   fulfillResult.unfulfilledRequests,
@@ -490,15 +502,17 @@ private[consumer] final class Runloop(
       if (restartStreamsOnRebalancing) {
         ZIO.foreachDiscard(reqs)(_.cont.fail(None)).as(state)
       } else {
+        println(s"Adding requests: ${reqs}")
         ZIO.succeed(state.addRequests(reqs))
       },
       consumer
         .withConsumer(_.assignment.asScala)
         .flatMap { assignment =>
           ZIO.foldLeft(reqs)(state) { (state, req) =>
-            if (assignment.contains(req.tp))
+            if (assignment.contains(req.tp)) {
+              println(s"Adding request ${req}")
               ZIO.succeed(state.addRequest(req))
-            else
+            } else
               req.cont.fail(None).as(state)
           }
         }
@@ -532,14 +546,19 @@ private[consumer] final class Runloop(
   private def handleOperational(state: State, cmd: Command): Task[State] =
     cmd match {
       case Command.Poll() =>
+        println("handlePoll from Poll()")
         // The consumer will throw an IllegalStateException if no call to subscribe
         ZIO.ifZIO(subscribedRef.get)(handlePoll(state), ZIO.succeed(state))
       case Command.Requests(reqs) =>
         handleRequests(state, reqs).flatMap { state =>
           // Optimization: eagerly poll if we have pending requests instead of waiting
           // for the next scheduled poll.
-          if (state.pendingRequests.nonEmpty) handlePoll(state)
-          else ZIO.succeed(state)
+          if (state.pendingRequests.nonEmpty) {
+            println(
+              s"handlePoll from Requests after completion and still pending requests: ${state.pendingRequests.map(_.tp.partition()).mkString(",")}"
+            )
+            handlePoll(state)
+          } else ZIO.succeed(state)
         }
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)

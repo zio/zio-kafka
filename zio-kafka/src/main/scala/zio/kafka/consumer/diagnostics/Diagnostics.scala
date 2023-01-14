@@ -24,4 +24,7 @@ object Diagnostics {
     def make(queueSize: Int = 16): ZIO[Scope, Nothing, SlidingQueue] =
       ZIO.acquireRelease(Queue.sliding[DiagnosticEvent](queueSize))(_.shutdown).map(SlidingQueue(_))
   }
+
+  def apply(f: PartialFunction[DiagnosticEvent, UIO[Unit]]): Diagnostics = event =>
+    f.applyOrElse(event, (_: DiagnosticEvent) => ZIO.unit)
 }

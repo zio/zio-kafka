@@ -218,6 +218,7 @@ object Consumer {
 
       stream.map(_.exit).flattenExitOption.map {
         _.map { case (tp, partition) =>
+          // TODO Disabling this evokes the issue
           val partitionStream =
             if (settings.perPartitionChunkPrefetch <= 0) partition
             else partition.bufferChunks(settings.perPartitionChunkPrefetch)
