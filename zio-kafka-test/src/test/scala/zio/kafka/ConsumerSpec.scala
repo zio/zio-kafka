@@ -5,7 +5,7 @@ import org.apache.kafka.clients.consumer.{ ConsumerConfig, CooperativeStickyAssi
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.KafkaTestUtils._
-import zio.kafka.ZIOSpecWithKafka
+import zio.kafka.ZIOKafkaSpec
 import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.embedded.Kafka
@@ -15,7 +15,7 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
-object ConsumerSpec extends ZIOSpecWithKafka {
+object ConsumerSpec extends ZIOKafkaSpec {
   override val kafkaPrefix: String = "consumespec"
 
   override def spec: Spec[TestEnvironment & Kafka, Throwable] =
