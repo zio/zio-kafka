@@ -358,8 +358,22 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / nrPartitions))))
       },
       test("handle rebalancing by completing topic-partition streams") {
-        val nrMessages   = 5000
-        val nrPartitions = 6
+        val nrMessages   = 9000
+        val nrPartitions = 2
+
+        def diagnostics(consumer: Int) =
+          Diagnostics {
+            case e: DiagnosticEvent.Rebalance =>
+              ZIO.debug(s"Consumer $consumer: ${e}")
+            case DiagnosticEvent.Commit.Started(offsets) =>
+              ZIO.debug(s"Consumer $consumer starting committed ${offsets.map { case (tp, offset) =>
+                  s"${tp.partition()}->${offset}"
+                }.mkString(",")}")
+            case DiagnosticEvent.Commit.Success(offsets) =>
+              ZIO.debug(s"Consumer $consumer committed ${offsets.map { case (tp, offset) =>
+                  s"${tp.partition()}->${offset.offset()}"
+                }.mkString(",")}")
+          }
 
         def diagnostics(consumer: Int) =
           Diagnostics {
@@ -397,20 +411,18 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           consumer1 <-
             Consumer
               .subscribeAnd(subscription)
-              .partitionedStream(Serde.string, Serde.string)
-              .flatMapPar(nrPartitions) { case (tp, partition) =>
-                println(s"Consumer 1 starting ${tp.partition()}")
-                partition.mapChunksZIO { records =>
-                  consumer1Receiving.succeed(()) *>
-                    recordCounter.update(_ + records.size) *>
-                    messagesConsumed.update(m => m.updated(1, m.getOrElse(1, Chunk.empty) ++ records)) *>
-                    ZIO.sleep(1.second) *>
-                    OffsetBatch(
-                      records.map(_.offset)
-                    ).commit *> ZIO
-                      .debug(s"Consumer 1 committed offsets for ${tp.partition()}: ${records.size} records")
-                      .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
-                }
+              .plainStream(Serde.string, Serde.string)
+              .mapChunksZIO { records =>
+                consumer1Receiving.succeed(()) *>
+                  recordCounter.update(_ + records.size) *>
+                  messagesConsumed.update(m => m.updated(1, m.getOrElse(1, Chunk.empty) ++ records)) *>
+                  ZIO.sleep(1.second) *>
+                  OffsetBatch(
+                    records.map(_.offset)
+                  ).commit *> ZIO
+                    .debug(s"Consumer 1 committed offsets for ${records.size} records")
+                    .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
+//                }
               }
               .timeout(5.seconds)
               .runDrain
@@ -429,18 +441,18 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           _ = println("Starting second consumer")
           consumer2 <- Consumer
                          .subscribeAnd(subscription)
-                         .partitionedStream(Serde.string, Serde.string)
-                         .flatMapPar(nrPartitions) { case (tp, partition) =>
-                           println(s"Consumer 2 starting ${tp.partition()}")
-                           partition.mapChunksZIO { records =>
-                             recordCounter.update(_ + records.size) *>
-                               messagesConsumed.update(m => m.updated(2, m.getOrElse(2, Chunk.empty) ++ records)) *> ZIO
-                                 .sleep(1.second) *> OffsetBatch(
-                                 records.map(_.offset)
-                               ).commit *> ZIO
-                                 .debug(s"Consumer 2 committed offsets for ${records.size} records")
-                                 .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
-                           }
+                         .plainStream(Serde.string, Serde.string)
+                         .mapChunksZIO { case records =>
+//                           println(s"Consumer 2 starting ${tp.partition()}")
+//                           partition.mapChunksZIO { records =>
+                           recordCounter.update(_ + records.size) *>
+                             messagesConsumed.update(m => m.updated(2, m.getOrElse(2, Chunk.empty) ++ records)) *> ZIO
+                               .sleep(1.second) *> OffsetBatch(
+                               records.map(_.offset)
+                             ).commit *> ZIO
+                               .debug(s"Consumer 2 committed offsets for ${records.size} records")
+                               .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
+//                           }
                          }
                          .timeout(5.seconds)
                          .runDrain
