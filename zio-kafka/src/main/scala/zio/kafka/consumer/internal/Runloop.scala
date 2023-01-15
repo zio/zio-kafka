@@ -38,7 +38,8 @@ private[consumer] final class Runloop(
   subscribedRef: Ref[Boolean],
   restartStreamsOnRebalancing: Boolean,
   currentState: Ref[State],
-  perPartitionChunkPrefetch: Int
+  perPartitionChunkPrefetch: Int,
+  pollQueue: Queue[Command.Poll.type]
 ) {
   private val isRebalancing = rebalancingRef.get
   private val isShutdown    = shutdownRef.get
@@ -52,10 +53,11 @@ private[consumer] final class Runloop(
       stream = ZStream.repeatZIOChunkOption {
                  for {
                    request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-                   _ = println(s"Making request for ${tp}")
+                   _ = println(s"Making request for tp ${tp.partition()}")
                    _      <- requestQueue.offer(Runloop.Request(tp, request)).unit
                    _      <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
                    result <- request.await
+                   _ = println(s"Got ${result.size} records for tp ${tp.partition()}")
                  } yield result
                }.viaFunction(s => if (perPartitionChunkPrefetch > 0) s.bufferChunks(perPartitionChunkPrefetch) else s)
                  .interruptWhen(interruptionPromise)
@@ -202,6 +204,7 @@ private[consumer] final class Runloop(
   ): UIO[Runloop.RevokeResult] = {
     var acc = Chunk[Runloop.Request]()
     val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
+    if (bufferedRecords.recs.nonEmpty) println(s"There's more than 0 bufferedRecords: ${bufferedRecords.recs.size}")
     buf ++= bufferedRecords.recs
 
     val (revokedStreams, assignedStreams) =
@@ -350,14 +353,14 @@ private[consumer] final class Runloop(
 
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
-            println(s"Pending requests: ${requestedPartitions.map(_.partition()).mkString(",")}")
+//            println(s"Pending requests: ${requestedPartitions.map(_.partition()).mkString(",")}")
 
             resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
             val records = doPoll(c, requestedPartitions)
-            println(
-              s"Polled for partitions ${requestedPartitions.map(_.partition()).mkString(",")}, got ${records.count()} records"
-            )
+//            println(
+//              s"Polled for partitions ${requestedPartitions.map(_.partition()).mkString(",")}, got ${records.count()} records"
+//            )
 
             // Check shutdown again after polling (which takes up to the poll timeout)
             ZIO.ifZIO(isShutdown)(
@@ -441,9 +444,9 @@ private[consumer] final class Runloop(
                                         tp => !currentAssigned(tp)
                                       )
                                   }
-                  _ = println(
-                        s"Unfulfilled requests ${revokeResult.unfulfilledRequests.map(_.tp.partition()).mkString(",")}"
-                      )
+//                  _ = println(
+//                        s"Unfulfilled requests ${revokeResult.unfulfilledRequests.map(_.tp.partition()).mkString(",")}"
+//                      )
 
                   fulfillResult <- fulfillRequests(
                                      revokeResult.unfulfilledRequests,
@@ -457,10 +460,10 @@ private[consumer] final class Runloop(
                            fulfillResult.unfulfilledRequests.map(_.tp).toSet
                          )
                        )
-                  _ =
-                    println(
-                      s"Unfulfilled requests after fulfilling: ${fulfillResult.unfulfilledRequests.map(_.tp.partition()).mkString(",")}"
-                    )
+//                  _ =
+//                    println(
+//                      s"Unfulfilled requests after fulfilling: ${fulfillResult.unfulfilledRequests.map(_.tp.partition()).mkString(",")}"
+//                    )
                 } yield Runloop.PollResult(
                   newlyAssigned,
                   fulfillResult.unfulfilledRequests,
@@ -504,7 +507,7 @@ private[consumer] final class Runloop(
       if (restartStreamsOnRebalancing) {
         ZIO.foreachDiscard(reqs)(_.cont.fail(None)).as(state)
       } else {
-        println(s"Adding requests: ${reqs}")
+//        println(s"Adding requests: ${reqs}")
         ZIO.succeed(state.addRequests(reqs))
       },
       consumer
@@ -512,7 +515,7 @@ private[consumer] final class Runloop(
         .flatMap { assignment =>
           ZIO.foldLeft(reqs)(state) { (state, req) =>
             if (assignment.contains(req.tp)) {
-              println(s"Adding request ${req}")
+//              println(s"Adding request ${req}")
               ZIO.succeed(state.addRequest(req))
             } else
               req.cont.fail(None).as(state)
@@ -535,7 +538,7 @@ private[consumer] final class Runloop(
    */
   private def handleShutdown(state: State, cmd: Command): Task[State] =
     cmd match {
-      case Command.Poll() =>
+      case Command.Poll =>
         // End all pending requests
         ZIO.foreachDiscard(state.pendingRequests)(_.cont.fail(None)) *>
           handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = BufferedRecords.empty))
@@ -547,19 +550,17 @@ private[consumer] final class Runloop(
 
   private def handleOperational(state: State, cmd: Command): Task[State] =
     cmd match {
-      case Command.Poll() =>
-        println("handlePoll from Poll()")
+      case Command.Poll =>
+//        println("handlePoll from Poll()")
         // The consumer will throw an IllegalStateException if no call to subscribe
         ZIO.ifZIO(subscribedRef.get)(handlePoll(state), ZIO.succeed(state))
       case Command.Requests(reqs) =>
         handleRequests(state, reqs).flatMap { state =>
-          // Optimization: eagerly poll if we have pending requests instead of waiting
-          // for the next scheduled poll.
+          // Optimization: eagerly enqueue a poll if we have pending requests instead of waiting
+          // Do not execute handlePoll directly so that other queued commands get a fair treatment
           if (state.pendingRequests.nonEmpty) {
-            println(
-              s"handlePoll from Requests after completion and still pending requests: ${state.pendingRequests.map(_.tp.partition()).mkString(",")}"
-            )
-            handlePoll(state)
+//            println("enqueueing poll from Requests")
+            pollQueue.offer(Command.Poll).as(state)
           } else ZIO.succeed(state)
         }
       case cmd @ Command.Commit(_, _) =>
@@ -567,9 +568,15 @@ private[consumer] final class Runloop(
     }
 
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Unit]] =
-    ZStream
+    (ZStream
+      .repeatZIOWithSchedule(
+//        ZIO.debug("Offering to poll queue") *>
+        pollQueue.offer(Command.Poll),
+        Schedule.spaced(pollFrequency)
+      )
+      .runDrain zipPar ZStream
       .mergeAll(3, 1)(
-        ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency)),
+        ZStream.fromQueue(pollQueue),
         ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
         ZStream.fromQueue(commitQueue)
       )
@@ -577,8 +584,7 @@ private[consumer] final class Runloop(
         ZIO.ifZIO(isShutdown)(handleShutdown(state, cmd), handleOperational(state, cmd))
       }
       .onError(cause => partitions.offer(Take.failCause(cause)))
-      .unit
-      .forkScoped
+      .unit).forkScoped
 }
 
 private[consumer] object Runloop {
@@ -615,7 +621,7 @@ private[consumer] object Runloop {
   sealed abstract class Command
   object Command {
     final case class Requests(requests: Chunk[Request])                                         extends Command
-    final case class Poll()                                                                     extends Command
+    final case object Poll                                                                      extends Command
     final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
   }
 
@@ -661,6 +667,7 @@ private[consumer] object Runloop {
       rebalancingRef     <- Ref.make(false)
       requestQueue       <- ZIO.acquireRelease(Queue.unbounded[Runloop.Request])(_.shutdown)
       commitQueue        <- ZIO.acquireRelease(Queue.unbounded[Command.Commit])(_.shutdown)
+      pollQueue          <- ZIO.acquireRelease(Queue.unbounded[Command.Poll.type])(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       partitions <- ZIO.acquireRelease(
                       Queue
@@ -688,7 +695,8 @@ private[consumer] object Runloop {
                   subscribedRef,
                   restartStreamsOnRebalancing,
                   currentStateRef,
-                  perPartitionChunkPrefetch
+                  perPartitionChunkPrefetch,
+                  pollQueue
                 )
       _ <- runloop.run
     } yield runloop

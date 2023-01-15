@@ -361,6 +361,20 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         val nrMessages   = 5000
         val nrPartitions = 6
 
+        def diagnostics(consumer: Int) =
+          Diagnostics {
+            case e: DiagnosticEvent.Rebalance =>
+              ZIO.debug(s"Consumer $consumer: ${e}")
+            case DiagnosticEvent.Commit.Started(offsets) =>
+              ZIO.debug(s"Consumer $consumer starting committed ${offsets.map { case (tp, offset) =>
+                  s"${tp.partition()}->${offset}"
+                }.mkString(",")}")
+            case DiagnosticEvent.Commit.Success(offsets) =>
+              ZIO.debug(s"Consumer $consumer committed ${offsets.map { case (tp, offset) =>
+                  s"${tp.partition()}->${offset.offset()}"
+                }.mkString(",")}")
+          }
+
         for {
           // Produce messages on several partitions
           topic   <- randomTopic
@@ -371,15 +385,6 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           _ <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           messages = (1 to nrMessages).map(i => s"$i" -> s"msg$i")
           _ <- produceMany(topic, messages)
-//          _ <- Live.live {
-//                 ZStream
-//                   .fromIterable(messages, 1)
-//                   .rechunk(1)
-////                   .throttleShape(100, 1.second, 100)(_.size.toLong)
-//                   .mapZIO { case (k, v) => produceOne(topic, k, v) }
-//                   .runDrain
-//                   .forkScoped
-//               }
 
           // Consume messages
           subscription = Subscription.topics(topic)
@@ -402,7 +407,9 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                     ZIO.sleep(1.second) *>
                     OffsetBatch(
                       records.map(_.offset)
-                    ).commit.as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
+                    ).commit *> ZIO
+                      .debug(s"Consumer 1 committed offsets for ${tp.partition()}: ${records.size} records")
+                      .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
                 }
               }
               .timeout(5.seconds)
@@ -411,14 +418,13 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                 consumer(
                   client1,
                   Some(group),
-                  diagnostics = Diagnostics { case e: DiagnosticEvent.Rebalance =>
-                    ZIO.debug(s"Consumer 1: ${e}")
-                  }
+                  diagnostics = diagnostics(1),
+                  restartStreamOnRebalancing = false
                 )
               )
               .tapError(e => ZIO.debug(s"Error consumer 1: ${e}"))
               .fork
-          _ <- consumer1Receiving.await
+          _ <- consumer1Receiving.await *> ZIO.sleep(5.seconds)
 
           _ = println("Starting second consumer")
           consumer2 <- Consumer
@@ -431,7 +437,9 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                                messagesConsumed.update(m => m.updated(2, m.getOrElse(2, Chunk.empty) ++ records)) *> ZIO
                                  .sleep(1.second) *> OffsetBatch(
                                  records.map(_.offset)
-                               ).commit.as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
+                               ).commit *> ZIO
+                                 .debug(s"Consumer 2 committed offsets for ${records.size} records")
+                                 .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
                            }
                          }
                          .timeout(5.seconds)
@@ -440,9 +448,8 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                            consumer(
                              client2,
                              Some(group),
-                             diagnostics = Diagnostics { case e: DiagnosticEvent.Rebalance =>
-                               ZIO.debug(s"Consumer 2: ${e}")
-                             }
+                             diagnostics = diagnostics(2),
+                             restartStreamOnRebalancing = false
                            )
                          )
                          .tapError(e => ZIO.debug(s"Error consumer 2: ${e}"))
@@ -451,8 +458,14 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           _                 <- consumer2.join
           nrRecordsConsumed <- recordCounter.get
           _                 <- ZIO.debug(s"Consumed ${nrRecordsConsumed} records")
-//          recordsConsumed   <- messagesConsumed.get
-
+          recordsConsumed   <- messagesConsumed.get
+          byConsumerPartition = recordsConsumed.view
+                                  .mapValues(records =>
+                                    records.map(r => r.partition -> r.offset).groupBy(_._1).view.mapValues(_.size).toMap
+                                  )
+                                  .toMap
+          _ = println(s"Consumed records by consumer by partition: ${byConsumerPartition}")
+//
 //          _ =
 //            println(
 //              s"Consumer 1 consumed: ${recordsConsumed(1).sortBy(r => (r.partition, r.key.toInt)).map(r => s"${r.partition}->${r.key}").mkString("\n")}"

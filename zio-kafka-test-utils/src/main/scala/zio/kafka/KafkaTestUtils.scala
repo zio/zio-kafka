@@ -85,7 +85,7 @@ object KafkaTestUtils {
           ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "50",
           ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
-        .withPerPartitionChunkPrefetch(16)
+        .withPerPartitionChunkPrefetch(2)
         .withOffsetRetrieval(offsetRetrieval)
         .withRestartStreamOnRebalancing(restartStreamOnRebalancing)
 
