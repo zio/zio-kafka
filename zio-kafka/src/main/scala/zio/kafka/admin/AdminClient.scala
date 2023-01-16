@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.{
   DescribeConsumerGroupsOptions => JDescribeConsumerGroupsOptions,
   DescribeTopicsOptions => JDescribeTopicsOptions,
   ListConsumerGroupOffsetsOptions => JListConsumerGroupOffsetsOptions,
+  ListConsumerGroupOffsetsSpec => JListConsumerGroupOffsetsSpec,
   ListConsumerGroupsOptions => JListConsumerGroupsOptions,
   ListOffsetsOptions => JListOffsetsOptions,
   ListTopicsOptions => JListTopicsOptions,
@@ -182,6 +183,21 @@ trait AdminClient {
   def listConsumerGroupOffsets(
     groupId: String,
     options: Option[ListConsumerGroupOffsetsOptions] = None
+  ): Task[Map[TopicPartition, OffsetAndMetadata]]
+
+  /**
+   * List the consumer group offsets available in the cluster for the specified consumer groups.
+   */
+  def listConsumerGroupOffsets(
+    groupSpecs: Map[String, ListConsumerGroupOffsetsSpec]
+  ): Task[Map[TopicPartition, OffsetAndMetadata]]
+
+  /**
+   * List the consumer group offsets available in the cluster for the specified consumer groups.
+   */
+  def listConsumerGroupOffsets(
+    groupSpecs: Map[String, ListConsumerGroupOffsetsSpec],
+    options: ListConsumerGroupOffsetsOptions
   ): Task[Map[TopicPartition, OffsetAndMetadata]]
 
   /**
@@ -601,6 +617,34 @@ object AdminClient {
             .fold(adminClient.listConsumerGroupOffsets(groupId))(opts =>
               adminClient.listConsumerGroupOffsets(groupId, opts.asJava)
             )
+            .partitionsToOffsetAndMetadata()
+        )
+      }
+        .map(_.asScala.filterNot { case (_, om) => om eq null }.toMap.bimap(TopicPartition(_), OffsetAndMetadata(_)))
+
+    /**
+     * List the consumer group offsets available in the cluster for the specified consumer groups.
+     */
+    override def listConsumerGroupOffsets(
+      groupSpecs: Map[String, ListConsumerGroupOffsetsSpec]
+    ): Task[Map[TopicPartition, OffsetAndMetadata]] =
+      fromKafkaFuture {
+        ZIO.attemptBlocking(
+          adminClient
+            .listConsumerGroupOffsets(groupSpecs.view.mapValues(_.asJava).toMap.asJava)
+            .partitionsToOffsetAndMetadata()
+        )
+      }
+        .map(_.asScala.filterNot { case (_, om) => om eq null }.toMap.bimap(TopicPartition(_), OffsetAndMetadata(_)))
+
+    override def listConsumerGroupOffsets(
+      groupSpecs: Map[String, ListConsumerGroupOffsetsSpec],
+      options: ListConsumerGroupOffsetsOptions
+    ): Task[Map[TopicPartition, OffsetAndMetadata]] =
+      fromKafkaFuture {
+        ZIO.attemptBlocking(
+          adminClient
+            .listConsumerGroupOffsets(groupSpecs.view.mapValues(_.asJava).toMap.asJava, options.asJava)
             .partitionsToOffsetAndMetadata()
         )
       }
@@ -1321,10 +1365,33 @@ object AdminClient {
       ListOffsetsResultInfo(lo.offset(), lo.timestamp(), lo.leaderEpoch().toScala.map(_.toInt))
   }
 
-  final case class ListConsumerGroupOffsetsOptions(partitions: Chunk[TopicPartition]) {
+  @nowarn("msg=deprecated")
+  final case class ListConsumerGroupOffsetsOptions(partitions: Chunk[TopicPartition], requireStable: Boolean) {
     def asJava = {
-      val opts = new JListConsumerGroupOffsetsOptions
+      val opts = new JListConsumerGroupOffsetsOptions()
+      opts.requireStable(requireStable)
       if (partitions.isEmpty) opts else opts.topicPartitions(partitions.map(_.asJava).asJava)
+    }
+  }
+
+  object ListConsumerGroupOffsetsOptions {
+    @deprecated("Use the listConsumerGroupOffsets overload with ListConsumerGroupOffsetsSpec", since = "2.0.5")
+    def apply(partitions: Chunk[TopicPartition], requireStable: Boolean): ListConsumerGroupOffsetsOptions =
+      new ListConsumerGroupOffsetsOptions(partitions, requireStable)
+
+    @deprecated("Use the listConsumerGroupOffsets overload with ListConsumerGroupOffsetsSpec", since = "2.0.5")
+    def apply(partitions: Chunk[TopicPartition]): ListConsumerGroupOffsetsOptions =
+      new ListConsumerGroupOffsetsOptions(partitions, requireStable = false)
+
+    def apply(requireStable: Boolean): ListConsumerGroupOffsetsOptions =
+      new ListConsumerGroupOffsetsOptions(Chunk.empty, requireStable)
+  }
+
+  final case class ListConsumerGroupOffsetsSpec(partitions: Chunk[TopicPartition]) {
+    def asJava = {
+      val opts = new JListConsumerGroupOffsetsSpec
+      opts.topicPartitions(partitions.map(_.asJava).asJava)
+      opts
     }
   }
 
