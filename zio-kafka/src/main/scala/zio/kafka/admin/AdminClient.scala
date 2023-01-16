@@ -631,7 +631,9 @@ object AdminClient {
       fromKafkaFuture {
         ZIO.attemptBlocking(
           adminClient
-            .listConsumerGroupOffsets(groupSpecs.view.mapValues(_.asJava).toMap.asJava)
+            .listConsumerGroupOffsets(groupSpecs.map { case (groupId, offsetsSpec) =>
+              (groupId, offsetsSpec.asJava)
+            }.asJava)
             .partitionsToOffsetAndMetadata()
         )
       }
@@ -644,7 +646,10 @@ object AdminClient {
       fromKafkaFuture {
         ZIO.attemptBlocking(
           adminClient
-            .listConsumerGroupOffsets(groupSpecs.view.mapValues(_.asJava).toMap.asJava, options.asJava)
+            .listConsumerGroupOffsets(
+              groupSpecs.map { case (groupId, offsetsSpec) => (groupId, offsetsSpec.asJava) }.asJava,
+              options.asJava
+            )
             .partitionsToOffsetAndMetadata()
         )
       }
