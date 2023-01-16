@@ -359,21 +359,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
       },
       test("handle rebalancing by completing topic-partition streams") {
         val nrMessages   = 9000
-        val nrPartitions = 2
-
-        def diagnostics(consumer: Int) =
-          Diagnostics {
-            case e: DiagnosticEvent.Rebalance =>
-              ZIO.debug(s"Consumer $consumer: ${e}")
-            case DiagnosticEvent.Commit.Started(offsets) =>
-              ZIO.debug(s"Consumer $consumer starting committed ${offsets.map { case (tp, offset) =>
-                  s"${tp.partition()}->${offset}"
-                }.mkString(",")}")
-            case DiagnosticEvent.Commit.Success(offsets) =>
-              ZIO.debug(s"Consumer $consumer committed ${offsets.map { case (tp, offset) =>
-                  s"${tp.partition()}->${offset.offset()}"
-                }.mkString(",")}")
-          }
+        val nrPartitions = 6
 
         def diagnostics(consumer: Int) =
           Diagnostics {
