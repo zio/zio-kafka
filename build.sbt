@@ -4,8 +4,8 @@ lazy val scala3    = "3.2.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-lazy val zioVersion           = "2.0.5"
-lazy val kafkaVersion         = "3.2.0"
+lazy val zioVersion           = "2.0.6"
+lazy val kafkaVersion         = "3.3.1"
 lazy val embeddedKafkaVersion = "3.3.1" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
