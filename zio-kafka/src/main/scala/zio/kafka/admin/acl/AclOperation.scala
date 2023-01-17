@@ -46,6 +46,12 @@ object AclOperation {
   case object IdempotentWrite extends AclOperation {
     def asJava: JAclOperation = JAclOperation.IDEMPOTENT_WRITE
   }
+  case object CreateTokens extends AclOperation {
+    def asJava: JAclOperation = JAclOperation.CREATE_TOKENS
+  }
+  case object DescribeTokens extends AclOperation {
+    def asJava: JAclOperation = JAclOperation.DESCRIBE_TOKENS
+  }
 
   def apply(jAclOperation: JAclOperation): AclOperation =
     jAclOperation match {
@@ -62,5 +68,7 @@ object AclOperation {
       case JAclOperation.DESCRIBE_CONFIGS => DescribeConfigs
       case JAclOperation.ALTER_CONFIGS    => AlterConfigs
       case JAclOperation.IDEMPOTENT_WRITE => IdempotentWrite
+      case JAclOperation.CREATE_TOKENS    => CreateTokens
+      case JAclOperation.DESCRIBE_TOKENS  => DescribeTokens
     }
 }
