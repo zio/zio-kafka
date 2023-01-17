@@ -13,7 +13,7 @@ import zio.test.Assertion._
 import zio.test.TestAspect.withLiveClock
 import zio.test._
 
-object ProducerSpec extends ZIOSpecWithKafka {
+object ProducerSpec extends ZIOKafkaSpec {
   override val kafkaPrefix: String = "producerspec"
 
   def withConsumerInt(subscription: Subscription, settings: ConsumerSettings) =

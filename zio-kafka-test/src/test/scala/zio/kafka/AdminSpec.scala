@@ -4,7 +4,7 @@ import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin.{ ConfigEntry, RecordsToDelete }
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{ Node => JNode }
-import zio.kafka.{ KafkaTestUtils, ZIOSpecWithKafka }
+import zio.kafka.{ KafkaTestUtils, ZIOKafkaSpec }
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.admin.AdminClient.{
   AlterConfigOp,
@@ -35,7 +35,7 @@ import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternF
 import java.util.UUID
 import java.util.concurrent.TimeoutException
 
-object AdminSpec extends ZIOSpecWithKafka {
+object AdminSpec extends ZIOKafkaSpec {
 
   override val kafkaPrefix: String = "adminspec"
 
