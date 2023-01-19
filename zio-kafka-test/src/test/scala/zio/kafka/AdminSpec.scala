@@ -333,10 +333,12 @@ object AdminSpec extends ZIOKafkaSpec {
               client.listConsumerGroupOffsets(
                 Map(invalidGroupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
               )
-          } yield assert(offsets.get(TopicPartition(topic, 0)).map(_.offset))(isSome(equalTo(msgConsume.toLong))) &&
-            assert(invalidTopicOffsets)(isEmpty) &&
-            assert(invalidTpOffsets)(isEmpty) &&
-            assert(invalidGroupIdOffsets)(isEmpty)
+          } yield assert(offsets.get(groupId).flatMap(_.get(TopicPartition(topic, 0))).map(_.offset))(
+            isSome(equalTo(msgConsume.toLong))
+          ) &&
+            assert(invalidTopicOffsets.get(groupId))(isSome(isEmpty)) &&
+            assert(invalidTpOffsets.get(groupId))(isSome(isEmpty)) &&
+            assert(invalidGroupIdOffsets.get(invalidGroupId))(isSome(isEmpty))
         }
       },
       test("delete consumer group offsets") {
@@ -363,7 +365,7 @@ object AdminSpec extends ZIOKafkaSpec {
             offsets <- client.listConsumerGroupOffsets(
                          Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
                        )
-          } yield assert(offsets.get(TopicPartition(topic, 0)).map(_.offset))(isNone)
+          } yield assert(offsets.get(groupId).flatMap(_.get(TopicPartition(topic, 0))).map(_.offset))(isNone)
         }
       },
       test("describe consumer groups") {
