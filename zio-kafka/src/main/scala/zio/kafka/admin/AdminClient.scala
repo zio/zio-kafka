@@ -191,7 +191,7 @@ trait AdminClient {
    */
   def listConsumerGroupOffsets(
     groupSpecs: Map[String, ListConsumerGroupOffsetsSpec]
-  ): Task[Map[TopicPartition, OffsetAndMetadata]]
+  ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]]
 
   /**
    * List the consumer group offsets available in the cluster for the specified consumer groups.
@@ -199,7 +199,7 @@ trait AdminClient {
   def listConsumerGroupOffsets(
     groupSpecs: Map[String, ListConsumerGroupOffsetsSpec],
     options: ListConsumerGroupOffsetsOptions
-  ): Task[Map[TopicPartition, OffsetAndMetadata]]
+  ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]]
 
   /**
    * Alter offsets for the specified partitions and consumer group.
@@ -627,22 +627,27 @@ object AdminClient {
      */
     override def listConsumerGroupOffsets(
       groupSpecs: Map[String, ListConsumerGroupOffsetsSpec]
-    ): Task[Map[TopicPartition, OffsetAndMetadata]] =
+    ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]] =
       fromKafkaFuture {
         ZIO.attemptBlocking(
           adminClient
             .listConsumerGroupOffsets(groupSpecs.map { case (groupId, offsetsSpec) =>
               (groupId, offsetsSpec.asJava)
             }.asJava)
-            .partitionsToOffsetAndMetadata()
+            .all()
         )
       }
-        .map(_.asScala.filter { case (_, om) => om ne null }.toMap.bimap(TopicPartition(_), OffsetAndMetadata(_)))
+        .map(
+          _.asScala.map { case (groupId, offsets) =>
+            groupId -> offsets.asScala.filter { case (_, om) => om ne null }.toMap
+              .bimap(TopicPartition(_), OffsetAndMetadata(_))
+          }.toMap
+        )
 
     override def listConsumerGroupOffsets(
       groupSpecs: Map[String, ListConsumerGroupOffsetsSpec],
       options: ListConsumerGroupOffsetsOptions
-    ): Task[Map[TopicPartition, OffsetAndMetadata]] =
+    ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]] =
       fromKafkaFuture {
         ZIO.attemptBlocking(
           adminClient
@@ -650,10 +655,15 @@ object AdminClient {
               groupSpecs.map { case (groupId, offsetsSpec) => (groupId, offsetsSpec.asJava) }.asJava,
               options.asJava
             )
-            .partitionsToOffsetAndMetadata()
+            .all()
         )
       }
-        .map(_.asScala.filter { case (_, om) => om ne null }.toMap.bimap(TopicPartition(_), OffsetAndMetadata(_)))
+        .map(
+          _.asScala.map { case (groupId, offsets) =>
+            groupId -> offsets.asScala.filter { case (_, om) => om ne null }.toMap
+              .bimap(TopicPartition(_), OffsetAndMetadata(_))
+          }.toMap
+        )
 
     /**
      * Alter offsets for the specified partitions and consumer group.
