@@ -2,23 +2,14 @@ package zio.kafka.consumer.diagnostics
 
 import zio.{ Queue, Scope, UIO, ZIO }
 
-trait Diagnostics {
-  val enabled: Boolean = true
-
-  def emitIfEnabled(event: => DiagnosticEvent): UIO[Unit] =
+abstract class Diagnostics(enabled: Boolean, emit: DiagnosticEvent => UIO[Unit]) {
+  final def emitIfEnabled(event: => DiagnosticEvent): UIO[Unit] =
     if (enabled) emit(event) else ZIO.unit
-
-  protected def emit(event: DiagnosticEvent): UIO[Unit]
 }
 object Diagnostics {
-  case object NoOp extends Diagnostics {
-    override val enabled: Boolean                        = false
-    override def emit(event: DiagnosticEvent): UIO[Unit] = ZIO.unit
-  }
-
-  final case class SlidingQueue(queue: Queue[DiagnosticEvent]) extends Diagnostics {
-    override def emit(event: DiagnosticEvent): UIO[Unit] = queue.offer(event).unit
-  }
+  case object NoOp extends Diagnostics(enabled = false, emit = _ => ZIO.unit)
+  final case class SlidingQueue(queue: Queue[DiagnosticEvent])
+      extends Diagnostics(enabled = true, event => queue.offer(event).unit)
 
   object SlidingQueue {
     def make(queueSize: Int = 16): ZIO[Scope, Nothing, SlidingQueue] =
