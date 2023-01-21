@@ -519,7 +519,7 @@ private[consumer] final class Runloop(
    */
   private def handleShutdown(state: State, cmd: Command): Task[State] =
     cmd match {
-      case Command.Poll() =>
+      case Command.Poll =>
         // End all pending requests
         ZIO.foreachDiscard(state.pendingRequests)(_.cont.fail(None)) *>
           handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = BufferedRecords.empty))
@@ -531,7 +531,7 @@ private[consumer] final class Runloop(
 
   private def handleOperational(state: State, cmd: Command): Task[State] =
     cmd match {
-      case Command.Poll() =>
+      case Command.Poll =>
         // The consumer will throw an IllegalStateException if no call to subscribe
         ZIO.ifZIO(subscribedRef.get)(handlePoll(state), ZIO.succeed(state))
       case Command.Requests(reqs) =>
@@ -548,7 +548,7 @@ private[consumer] final class Runloop(
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Unit]] =
     ZStream
       .mergeAll(3, 1)(
-        ZStream(Command.Poll()).repeat(Schedule.spaced(pollFrequency)),
+        ZStream(Command.Poll).repeat(Schedule.spaced(pollFrequency)),
         ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
         ZStream.fromQueue(commitQueue)
       )
@@ -594,7 +594,7 @@ private[consumer] object Runloop {
   sealed abstract class Command
   object Command {
     final case class Requests(requests: Chunk[Request])                                         extends Command
-    final case class Poll()                                                                     extends Command
+    case object Poll                                                                            extends Command
     final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
   }
 
