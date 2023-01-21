@@ -1,19 +1,27 @@
 lazy val scala212  = "2.12.17"
-lazy val scala213  = "2.13.8"
-lazy val scala3    = "3.1.3"
+lazy val scala213  = "2.13.10"
+lazy val scala3    = "3.2.1"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-lazy val zioVersion           = "2.0.2"
-lazy val kafkaVersion         = "3.2.0"
-lazy val embeddedKafkaVersion = "3.2.0" // Should be the same as kafkaVersion, except for the patch part
+lazy val zioVersion           = "2.0.6"
+lazy val kafkaVersion         = "3.3.2"
+lazy val embeddedKafkaVersion = "3.3.1" // Should be the same as kafkaVersion, except for the patch part
 
-lazy val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion
+lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
+lazy val zio                   = "dev.zio"                   %% "zio"                     % zioVersion
+lazy val zioStreams            = "dev.zio"                   %% "zio-streams"             % zioVersion
+lazy val zioTest               = "dev.zio"                   %% "zio-test"                % zioVersion
+lazy val zioTestSbt            = "dev.zio"                   %% "zio-test-sbt"            % zioVersion
+lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.9.0"
+lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.1"
+lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.5"
+lazy val embeddedKafka         = "io.github.embeddedkafka"   %% "embedded-kafka"          % embeddedKafkaVersion
 
 inThisBuild(
   List(
     organization             := "dev.zio",
-    homepage                 := Some(url("https://github.com/zio/zio-kafka")),
+    homepage                 := Some(url("https://zio.dev/zio-kafka")),
     licenses                 := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
     useCoursier              := false,
     scalaVersion             := mainScala,
@@ -43,13 +51,15 @@ val excludeInferAny = { options: Seq[String] => options.filterNot(Set("-Xlint:in
 lazy val root = project
   .in(file("."))
   .settings(
-    name           := "zio-kafka",
-    publish / skip := true
+    name               := "zio-kafka",
+    publish / skip     := true,
+    crossScalaVersions := Nil // https://www.scala-sbt.org/1.x/docs/Cross-Build.html#Cross+building+a+project+statefully
   )
   .aggregate(
     zioKafka,
     zioKafkaTestUtils,
-    zioKafkaTest
+    zioKafkaTest,
+    docs
   )
 
 def buildInfoSettings(packageName: String) =
@@ -81,10 +91,10 @@ lazy val zioKafka =
     .settings(buildInfoSettings("zio.kafka"))
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                   %% "zio-streams"             % zioVersion,
-        "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.3",
-        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.7.0"
+        zioStreams,
+        kafkaClients,
+        jacksonDatabind,
+        scalaCollectionCompat
       )
     )
 
@@ -97,9 +107,10 @@ lazy val zioKafkaTestUtils =
     .settings(buildInfoSettings("zio.kafka"))
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                %% "zio"                     % zioVersion,
-        "org.apache.kafka"        % "kafka-clients"           % kafkaVersion,
-        "org.scala-lang.modules" %% "scala-collection-compat" % "2.7.0"
+        zio,
+        zioTest,
+        kafkaClients,
+        scalaCollectionCompat
       ) ++ {
         if (scalaBinaryVersion.value == "3")
           Seq(
@@ -120,13 +131,13 @@ lazy val zioKafkaTest =
     .settings(publish / skip := true)
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                   %% "zio-streams"             % zioVersion,
-        "dev.zio"                   %% "zio-test"                % zioVersion % Test,
-        "dev.zio"                   %% "zio-test-sbt"            % zioVersion % Test,
-        "org.apache.kafka"           % "kafka-clients"           % kafkaVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind"        % "2.13.4",
-        "ch.qos.logback"             % "logback-classic"         % "1.2.11"   % Test,
-        "org.scala-lang.modules"    %% "scala-collection-compat" % "2.8.1"
+        zioStreams,
+        zioTest    % Test,
+        zioTestSbt % Test,
+        kafkaClients,
+        jacksonDatabind,
+        logback % Test,
+        scalaCollectionCompat
       ) ++ {
         if (scalaBinaryVersion.value == "3")
           Seq(
@@ -138,16 +149,26 @@ lazy val zioKafkaTest =
       testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
     )
 
-lazy val docs = project
-  .in(file("zio-kafka-docs"))
-  .dependsOn(zioKafka)
-  .settings(
-    // Version will only appear on the generated target file replacing @VERSION@
-    mdocVariables := Map(
-      "VERSION" -> version.value
-    )
-  )
-  .enablePlugins(MdocPlugin)
-
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
+
+lazy val docs = project
+  .in(file("zio-kafka-docs"))
+  .settings(
+    moduleName := "zio-kafka-docs",
+    scalacOptions -= "-Yno-imports",
+    scalacOptions -= "-Xfatal-warnings",
+    projectName                                := "ZIO Kafka",
+    mainModuleName                             := (zioKafka / moduleName).value,
+    projectStage                               := ProjectStage.ProductionReady,
+    docsPublishBranch                          := "master",
+    ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioKafka),
+    readmeCredits :=
+      "This library is heavily inspired and made possible by the research and implementation done in " +
+        "[Alpakka Kafka](https://github.com/akka/alpakka-kafka), a library maintained by the Akka team and originally " +
+        "written as Reactive Kafka by SoftwareMill.",
+    readmeLicense +=
+      "\n\n" + """|Copyright 2021 Itamar Ravid and the zio-kafka contributors. All rights reserved.
+                  |<!-- TODO: not all rights reserved, rather Apache 2... -->""".stripMargin
+  )
+  .enablePlugins(WebsitePlugin)

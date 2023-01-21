@@ -1,21 +1,27 @@
 package zio.kafka.admin
 
-import org.apache.kafka.clients.admin.RecordsToDelete
+import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
+import org.apache.kafka.clients.admin.{ ConfigEntry, RecordsToDelete }
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{ Node => JNode }
-import zio.kafka.{ KafkaTestUtils, ZIOSpecWithKafka }
+import zio.kafka.{ KafkaTestUtils, ZIOKafkaSpec }
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.admin.AdminClient.{
+  AlterConfigOp,
+  AlterConfigOpType,
+  AlterConfigsOptions,
   ConfigResource,
   ConfigResourceType,
   ConsumerGroupDescription,
   ConsumerGroupState,
-  ListConsumerGroupOffsetsOptions,
+  KafkaConfig,
+  ListConsumerGroupOffsetsSpec,
   ListConsumerGroupsOptions,
   OffsetAndMetadata,
   OffsetSpec,
   TopicPartition
 }
+import zio.kafka.admin.acl._
 import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
@@ -23,11 +29,13 @@ import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio.{ Chunk, Duration, Schedule, ZIO }
+import zio._
+import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 
 import java.util.UUID
+import java.util.concurrent.TimeoutException
 
-object AdminSpec extends ZIOSpecWithKafka {
+object AdminSpec extends ZIOKafkaSpec {
 
   override val kafkaPrefix: String = "adminspec"
 
@@ -310,25 +318,19 @@ object AdminSpec extends ZIOSpecWithKafka {
             _ <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
             _ <- consumeAndCommit(msgConsume.toLong, topic, groupId)
             offsets <- client.listConsumerGroupOffsets(
-                         groupId,
-                         Some(ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 0))))
+                         Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
                        )
-            invalidTopicOffsets <- client.listConsumerGroupOffsets(
-                                     groupId,
-                                     Some(
-                                       ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(invalidTopic, 0)))
-                                     )
-                                   )
+            invalidTopicOffsets <-
+              client.listConsumerGroupOffsets(
+                Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(invalidTopic, 0))))
+              )
             invalidTpOffsets <- client.listConsumerGroupOffsets(
-                                  groupId,
-                                  Some(
-                                    ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 1)))
-                                  )
+                                  Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 1))))
                                 )
-            invalidGroupIdOffsets <- client.listConsumerGroupOffsets(
-                                       invalidGroupId,
-                                       Some(ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 0))))
-                                     )
+            invalidGroupIdOffsets <-
+              client.listConsumerGroupOffsets(
+                Map(invalidGroupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
+              )
           } yield assert(offsets.get(TopicPartition(topic, 0)).map(_.offset))(isSome(equalTo(msgConsume.toLong))) &&
             assert(invalidTopicOffsets)(isEmpty) &&
             assert(invalidTpOffsets)(isEmpty) &&
@@ -356,8 +358,7 @@ object AdminSpec extends ZIOSpecWithKafka {
             _ <- consumeAndCommit(msgConsume.toLong, topic, groupId)
             _ <- client.deleteConsumerGroups(Chunk.single(groupId))
             offsets <- client.listConsumerGroupOffsets(
-                         groupId,
-                         Some(ListConsumerGroupOffsetsOptions(Chunk.single(TopicPartition(topic, 0))))
+                         Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
                        )
           } yield assert(offsets.get(TopicPartition(topic, 0)).map(_.offset))(isNone)
         }
@@ -453,6 +454,186 @@ object AdminSpec extends ZIOSpecWithKafka {
         assert(AdminClient.Node.apply(jNode).map(_.host.isEmpty))(
           equalTo(Some(true))
         )
+      },
+      test("incremental alter configs") {
+        KafkaTestUtils.withAdmin { implicit admin =>
+          for {
+            topicName <- randomTopic
+            _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
+
+            configEntry    = new ConfigEntry("retention.ms", "1")
+            configResource = ConfigResource(ConfigResourceType.Topic, topicName)
+
+            setAlterConfigOp = AlterConfigOp(configEntry, AlterConfigOpType.Set)
+            _ <- admin.incrementalAlterConfigs(Map(configResource -> Seq(setAlterConfigOp)), AlterConfigsOptions())
+            updatedConfigsWithUpdate <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
+
+            deleteAlterConfigOp = AlterConfigOp(configEntry, AlterConfigOpType.Delete)
+            _ <- admin.incrementalAlterConfigs(Map(configResource -> Seq(deleteAlterConfigOp)), AlterConfigsOptions())
+            updatedConfigsWithDelete <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
+          } yield {
+            val updatedRetentionMsConfig =
+              updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
+            val deleteRetentionMsConfig =
+              updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
+            assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
+            assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
+            assert(deleteRetentionMsConfig.map(_.value()))(isSome(equalTo("604800000"))) &&
+            assert(deleteRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DEFAULT_CONFIG)))
+          }
+        }
+      },
+      test("incremental alter configs async") {
+        KafkaTestUtils.withAdmin { implicit admin =>
+          for {
+            topicName <- randomTopic
+            _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
+
+            configEntry    = new ConfigEntry("retention.ms", "1")
+            configResource = ConfigResource(ConfigResourceType.Topic, topicName)
+
+            setAlterConfigOp = AlterConfigOp(configEntry, AlterConfigOpType.Set)
+            setResult <-
+              admin
+                .incrementalAlterConfigsAsync(Map(configResource -> Seq(setAlterConfigOp)), AlterConfigsOptions())
+                .flatMap { configsAsync =>
+                  ZIO.foreachPar(configsAsync) { case (configResource, unitAsync) =>
+                    unitAsync.map(unit => (configResource, unit))
+                  }
+                }
+            updatedConfigsWithUpdate <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
+
+            deleteAlterConfigOp = AlterConfigOp(configEntry, AlterConfigOpType.Delete)
+            deleteResult <-
+              admin
+                .incrementalAlterConfigsAsync(Map(configResource -> Seq(deleteAlterConfigOp)), AlterConfigsOptions())
+                .flatMap { configsAsync =>
+                  ZIO.foreachPar(configsAsync) { case (configResource, unitAsync) =>
+                    unitAsync.map(unit => (configResource, unit))
+                  }
+                }
+            updatedConfigsWithDelete <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
+          } yield {
+            val updatedRetentionMsConfig =
+              updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
+            val deleteRetentionMsConfig =
+              updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
+            assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
+            assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
+            assert(deleteRetentionMsConfig.map(_.value()))(isSome(equalTo("604800000"))) &&
+            assert(deleteRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DEFAULT_CONFIG))) &&
+            assert(setResult)(equalTo(Map((configResource, ())))) &&
+            assert(deleteResult)(equalTo(Map((configResource, ()))))
+          }
+        }
+      },
+      test("alter configs") {
+        KafkaTestUtils.withAdmin { implicit admin =>
+          for {
+            topicName <- randomTopic
+            _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
+
+            configEntry    = new ConfigEntry("retention.ms", "1")
+            configResource = ConfigResource(ConfigResourceType.Topic, topicName)
+
+            kafkaConfig = KafkaConfig(Map(topicName -> configEntry))
+            _                        <- admin.alterConfigs(Map(configResource -> kafkaConfig), AlterConfigsOptions())
+            updatedConfigsWithUpdate <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
+
+            emptyKafkaConfig = KafkaConfig(Map.empty[String, ConfigEntry])
+            _ <- admin.alterConfigs(Map(configResource -> emptyKafkaConfig), AlterConfigsOptions())
+            updatedConfigsWithDelete <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
+          } yield {
+            val updatedRetentionMsConfig =
+              updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
+            val deleteRetentionMsConfig =
+              updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
+            assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
+            assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
+            assert(deleteRetentionMsConfig.map(_.value()))(isSome(equalTo("604800000"))) &&
+            assert(deleteRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DEFAULT_CONFIG)))
+          }
+        }
+      },
+      test("alter configs async") {
+        KafkaTestUtils.withAdmin { implicit admin =>
+          for {
+            topicName <- randomTopic
+            _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
+
+            configEntry    = new ConfigEntry("retention.ms", "1")
+            configResource = ConfigResource(ConfigResourceType.Topic, topicName)
+
+            kafkaConfig = KafkaConfig(Map(topicName -> configEntry))
+            setResult <-
+              admin
+                .alterConfigsAsync(Map(configResource -> kafkaConfig), AlterConfigsOptions())
+                .flatMap { configsAsync =>
+                  ZIO.foreachPar(configsAsync) { case (configResource, unitAsync) =>
+                    unitAsync.map(unit => (configResource, unit))
+                  }
+                }
+            updatedConfigsWithUpdate <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
+
+            emptyKafkaConfig = KafkaConfig(Map.empty[String, ConfigEntry])
+            deleteResult <-
+              admin
+                .alterConfigsAsync(Map(configResource -> emptyKafkaConfig), AlterConfigsOptions())
+                .flatMap { configsAsync =>
+                  ZIO.foreachPar(configsAsync) { case (configResource, unitAsync) =>
+                    unitAsync.map(unit => (configResource, unit))
+                  }
+                }
+            updatedConfigsWithDelete <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
+          } yield {
+            val updatedRetentionMsConfig =
+              updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
+            val deleteRetentionMsConfig =
+              updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
+            assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
+            assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
+            assert(deleteRetentionMsConfig.map(_.value()))(isSome(equalTo("604800000"))) &&
+            assert(deleteRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DEFAULT_CONFIG))) &&
+            assert(setResult)(equalTo(Map((configResource, ())))) &&
+            assert(deleteResult)(equalTo(Map((configResource, ()))))
+          }
+        }
+      },
+      test("ACLs") {
+        KafkaTestUtils.withAdmin { client =>
+          for {
+            topic <- randomTopic
+            bindings =
+              Set(
+                AclBinding(
+                  ResourcePattern(ResourceType.Topic, name = topic, patternType = PatternType.Literal),
+                  AccessControlEntry(
+                    principal = "User:*",
+                    host = "*",
+                    operation = AclOperation.Write,
+                    permissionType = AclPermissionType.Allow
+                  )
+                )
+              )
+            _ <- client.createAcls(bindings)
+            createdAcls <-
+              client
+                .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
+                .repeatWhile(_.isEmpty) // because the createAcls is executed async by the broker
+                .timeoutFail(new TimeoutException())(100.millis)
+            deletedAcls <-
+              client
+                .deleteAcls(Set(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any)))
+            remainingAcls <-
+              client
+                .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
+                .repeatWhile(_.nonEmpty) // because the deleteAcls is executed async by the broker
+                .timeoutFail(new TimeoutException())(100.millis)
+
+          } yield assert(createdAcls)(equalTo(bindings)) &&
+            assert(deletedAcls)(equalTo(bindings)) &&
+            assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
+        }
       }
     ) @@ withLiveClock @@ sequential
 

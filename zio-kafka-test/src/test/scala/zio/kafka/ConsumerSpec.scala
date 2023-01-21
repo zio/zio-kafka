@@ -5,7 +5,7 @@ import org.apache.kafka.clients.consumer.{ ConsumerConfig, CooperativeStickyAssi
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.KafkaTestUtils._
-import zio.kafka.ZIOSpecWithKafka
+import zio.kafka.ZIOKafkaSpec
 import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.embedded.Kafka
@@ -16,10 +16,10 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
-object ConsumerSpec extends ZIOSpecWithKafka {
+object ConsumerSpec extends ZIOKafkaSpec {
   override val kafkaPrefix: String = "consumespec"
 
-  override def spec: Spec[TestEnvironment with Kafka, Throwable] =
+  override def spec: Spec[TestEnvironment & Kafka, Throwable] =
     suite("Consumer Streaming")(
       test("export metrics") {
         for {
@@ -889,7 +889,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                     32
                   )
                   .runCollect)
-                .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
+                .provideSomeLayer[Kafka & Scope](consumer(client, Some(group)))
                 .unit
                 .exit
           } yield assert(result)(fails(isSubtype[InvalidSubscriptionUnion](anything)))
@@ -918,7 +918,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                 )
                 .interruptWhen(consumer1GotMessage.await *> consumer2GotMessage.await)
                 .runCollect)
-                .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
+                .provideSomeLayer[Kafka & Scope](consumer(client, Some(group)))
           } yield assertCompletes
         },
         test("can handle unsubscribing during the lifetime of other streams") {
@@ -966,7 +966,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           } yield assertCompletes
         }
       )
-    ).provideSomeLayerShared[TestEnvironment with Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
+    ).provideSomeLayerShared[TestEnvironment & Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
       300.seconds
     )
 }

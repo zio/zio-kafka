@@ -1,17 +1,12 @@
 package zio.kafka
 
-import zio.kafka.embedded.Kafka
-import zio.test._
-import zio.{ Scope, Task, ZIO, ZLayer }
+import zio.{ Task, ZIO }
 
 import java.util.UUID
 
-trait ZIOSpecWithKafka extends ZIOSpec[TestEnvironment with Kafka] {
+trait ZIOKafkaSpec extends ZIOSpecWithKafka {
 
   def kafkaPrefix: String
-
-  override val bootstrap: ZLayer[Scope, Any, TestEnvironment with Kafka] =
-    testEnvironment ++ Kafka.embedded
 
   def randomThing(prefix: String): Task[String] =
     ZIO.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")

@@ -1,7 +1,7 @@
 package zio.kafka.producer
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
-import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.{ KafkaProducer, RecordMetadata }
 import org.apache.kafka.common.errors.InvalidGroupIdException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
@@ -61,7 +61,7 @@ object TransactionalProducer {
       }
   }
 
-  def createTransaction: ZIO[TransactionalProducer with Scope, Throwable, Transaction] =
+  def createTransaction: ZIO[TransactionalProducer & Scope, Throwable, Transaction] =
     ZIO.service[TransactionalProducer].flatMap(_.createTransaction)
 
   val live: RLayer[TransactionalProducerSettings, TransactionalProducer] =
@@ -73,21 +73,25 @@ object TransactionalProducer {
     }
 
   def make(settings: TransactionalProducerSettings): ZIO[Scope, Throwable, TransactionalProducer] =
-    ZIO.acquireRelease {
-      for {
-        props <- ZIO.attempt(settings.producerSettings.driverSettings)
-        rawProducer <- ZIO.attempt(
-                         new KafkaProducer[Array[Byte], Array[Byte]](
-                           props.asJava,
-                           new ByteArraySerializer(),
-                           new ByteArraySerializer()
-                         )
+    for {
+      props <- ZIO.attempt(settings.producerSettings.driverSettings)
+      rawProducer <- ZIO.attempt(
+                       new KafkaProducer[Array[Byte], Array[Byte]](
+                         props.asJava,
+                         new ByteArraySerializer(),
+                         new ByteArraySerializer()
                        )
-        _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
-        semaphore <- Semaphore.make(1)
-        live = Producer.Live(rawProducer, settings.producerSettings)
-      } yield LiveTransactionalProducer(live, semaphore)
-    } { producer =>
-      producer.live.close
-    }
+                     )
+      _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
+      semaphore <- Semaphore.make(1)
+      runtime   <- ZIO.runtime[Any]
+      sendQueue <-
+        Queue.bounded[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])](
+          settings.producerSettings.sendBufferSize
+        )
+      live <- ZIO.acquireRelease(
+                ZIO.succeed(Producer.Live(rawProducer, settings.producerSettings, runtime, sendQueue))
+              )(_.close)
+      _ <- ZIO.blocking(live.sendFromQueue).forkScoped
+    } yield LiveTransactionalProducer(live, semaphore)
 }
