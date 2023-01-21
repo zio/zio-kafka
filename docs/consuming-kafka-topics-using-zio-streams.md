@@ -33,15 +33,14 @@ val data: RIO[Clock,
     .provideSomeLayer(consumer)
 ```
 
-You may stream data from Kafka using the `subscribeAnd` and `plainStream`
+You may stream data from Kafka using the `plainStream`
 methods:
 
 ```scala
 import zio.Clock, zio.Console.printLine
 import zio.kafka.consumer._
 
-Consumer.subscribeAnd(Subscription.topics("topic150"))
-  .plainStream(Serde.string, Serde.string)
+Consumer.plainStream(Subscription.topics("topic150"), Serde.string, Serde.string)
   .tap(cr => printLine(s"key: ${cr.record.key}, value: ${cr.record.value}"))
   .map(_.offset)
   .aggregateAsync(Consumer.offsetBatches)
@@ -57,8 +56,7 @@ which creates a nested stream of partitions:
 import zio.Clock, zio.Console.printLine
 import zio.kafka.consumer._
 
-Consumer.subscribeAnd(Subscription.topics("topic150"))
-  .partitionedStream(Serde.string, Serde.string)
+Consumer.partitionedStream(Subscription.topics("topic150"), Serde.string, Serde.string)
   .tap(tpAndStr => printLine(s"topic: ${tpAndStr._1.topic}, partition: ${tpAndStr._1.partition}"))
   .flatMap(_._2)
   .tap(cr => printLine(s"key: ${cr.record.key}, value: ${cr.record.value}"))

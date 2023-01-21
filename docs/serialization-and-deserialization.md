@@ -29,8 +29,7 @@ import scala.util.{Try, Success, Failure}
 val consumer = ZLayer.scoped(Consumer.make(consumerSettings))
 
 val stream = Consumer
-  .subscribeAnd(Subscription.topics("topic150"))
-  .plainStream(Serde.string, Serde.string.asTry)
+  .plainStream(Subscription.topics("topic150"), Serde.string, Serde.string.asTry)
 
 stream 
   .mapZIO { record => 

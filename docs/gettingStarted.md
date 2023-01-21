@@ -69,13 +69,11 @@ import zio.kafka.serde._
 
 val data: RIO[Clock, 
               Chunk[CommittableRecord[String, String]]] = 
-  (Consumer.subscribe(Subscription.topics("topic")) *>
-  Consumer.plainStream(Serde.string, Serde.string).take(50).runCollect)
+  Consumer.plainStream(Subscription.topics("topic"), Serde.string, Serde.string).take(50).runCollect
     .provideSomeLayer(consumer)
 ```
 
-You may stream data from Kafka using the `subscribeAnd` and `plainStream`
-methods:
+You may stream data from Kafka using the `plainStream` methods:
 
 ```scala
 import zio.Clock, zio.Console.printLine
