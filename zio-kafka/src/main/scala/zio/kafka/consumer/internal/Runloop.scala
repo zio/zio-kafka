@@ -257,7 +257,7 @@ private[consumer] final class Runloop(
             reqRecs.toArray[ByteArrayConsumerRecord](Array.ofDim[ByteArrayConsumerRecord](reqRecs.size))
           )
 
-        fulfillAction = fulfillAction *> req.cont.succeed(concatenatedChunk.map { record =>
+        fulfillAction = fulfillAction *> req.continue.succeed(concatenatedChunk.map { record =>
           CommittableRecord(
             record = record,
             commitHandle = commit,
@@ -488,7 +488,7 @@ private[consumer] final class Runloop(
   private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
       if (restartStreamsOnRebalancing) {
-        ZIO.foreachDiscard(reqs)(_.cont.fail(None)).as(state)
+        ZIO.foreachDiscard(reqs)(_.continue.fail(None)).as(state)
       } else {
         ZIO.succeed(state.addRequests(reqs))
       },
@@ -499,7 +499,7 @@ private[consumer] final class Runloop(
             if (assignment.contains(req.tp))
               ZIO.succeed(state.addRequest(req))
             else
-              req.cont.fail(None).as(state)
+              req.continue.fail(None).as(state)
           }
         }
         .orElseSucceed(state.addRequests(reqs))
@@ -521,10 +521,10 @@ private[consumer] final class Runloop(
     cmd match {
       case Command.Poll() =>
         // End all pending requests
-        ZIO.foreachDiscard(state.pendingRequests)(_.cont.fail(None)) *>
+        ZIO.foreachDiscard(state.pendingRequests)(_.continue.fail(None)) *>
           handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = BufferedRecords.empty))
       case Command.Requests(reqs) =>
-        ZIO.foreachDiscard(reqs)(_.cont.fail(None)).as(state)
+        ZIO.foreachDiscard(reqs)(_.continue.fail(None)).as(state)
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
     }
@@ -553,7 +553,7 @@ private[consumer] final class Runloop(
         ZStream.fromQueue(commitQueue)
       )
       .runFoldZIO(State.initial) { (state, cmd) =>
-        ZIO.ifZIO(isShutdown)(handleShutdown(state, cmd), handleOperational(state, cmd))
+        ZIO.ifZIO(isShutdown)(onTrue = handleShutdown(state, cmd), onFalse = handleOperational(state, cmd))
       }
       .onError(cause => partitions.offer(Take.failCause(cause)))
       .unit
@@ -564,7 +564,7 @@ private[consumer] object Runloop {
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
   type ByteArrayConsumerRecord    = ConsumerRecord[Array[Byte], Array[Byte]]
 
-  final case class Request(tp: TopicPartition, cont: Promise[Option[Throwable], Chunk[ByteArrayCommittableRecord]])
+  final case class Request(tp: TopicPartition, continue: Promise[Option[Throwable], Chunk[ByteArrayCommittableRecord]])
   final case class PollResult(
     newlyAssigned: Set[TopicPartition],
     unfulfilledRequests: Chunk[Runloop.Request],
