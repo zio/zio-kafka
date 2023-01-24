@@ -361,17 +361,17 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         val nrMessages   = 9000
         val nrPartitions = 6
 
-        def diagnostics(consumer: Int) =
+        def diagnostics(consumer: Int, committed: Ref[Map[Int, Long]]) =
           Diagnostics {
             case e: DiagnosticEvent.Rebalance =>
-              ZIO.debug(s"Consumer $consumer: ${e}")
+              ZIO.debug(s"Consumer $consumer: ${e}. Offsets: ${committed}")
             case DiagnosticEvent.Commit.Started(offsets) =>
               ZIO.debug(s"Consumer $consumer starting committed ${offsets.map { case (tp, offset) =>
                   s"${tp.partition()}->${offset}"
                 }.mkString(",")}")
             case DiagnosticEvent.Commit.Success(offsets) =>
               ZIO.debug(s"Consumer $consumer committed ${offsets.map { case (tp, offset) =>
-                  s"${tp.partition()}->${offset.offset()}"
+                  s"for tp ${tp.partition()}->${offset.offset()}"
                 }.mkString(",")}")
           }
 
@@ -393,6 +393,8 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           recordCounter      <- Ref.make(0)
 
           messagesConsumed <- Ref.make(Map.empty[Int, Chunk[CommittableRecord[String, String]]])
+          lastCommitted    <- Ref.make(Map.empty[Int, Long])
+          lastCommitted2   <- Ref.make(Map.empty[Int, Long])
 
           consumer1 <-
             Consumer
@@ -402,10 +404,16 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                 consumer1Receiving.succeed(()) *>
                   recordCounter.update(_ + records.size) *>
                   messagesConsumed.update(m => m.updated(1, m.getOrElse(1, Chunk.empty) ++ records)) *>
-                  ZIO.sleep(1.second) *>
-                  OffsetBatch(
-                    records.map(_.offset)
-                  ).commit *> ZIO
+                  ZIO.sleep(1.second) *> {
+                    val batch =
+                      OffsetBatch(
+                        records.map(_.offset)
+                      )
+
+                    (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
+                      k.partition() -> v
+                    })).uninterruptible
+                  } *> ZIO
                     .debug(s"Consumer 1 committed offsets for ${records.size} records")
                     .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
 //                }
@@ -416,7 +424,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                 consumer(
                   client1,
                   Some(group),
-                  diagnostics = diagnostics(1),
+                  diagnostics = diagnostics(1, lastCommitted),
                   restartStreamOnRebalancing = false
                 )
               )
@@ -433,9 +441,16 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 //                           partition.mapChunksZIO { records =>
                            recordCounter.update(_ + records.size) *>
                              messagesConsumed.update(m => m.updated(2, m.getOrElse(2, Chunk.empty) ++ records)) *> ZIO
-                               .sleep(1.second) *> OffsetBatch(
-                               records.map(_.offset)
-                             ).commit *> ZIO
+                               .sleep(1.second) *> {
+                               val batch =
+                                 OffsetBatch(
+                                   records.map(_.offset)
+                                 )
+
+                               (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
+                                 k.partition() -> v
+                               })).uninterruptible
+                             } *> ZIO
                                .debug(s"Consumer 2 committed offsets for ${records.size} records")
                                .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
 //                           }
@@ -446,7 +461,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                            consumer(
                              client2,
                              Some(group),
-                             diagnostics = diagnostics(2),
+                             diagnostics = diagnostics(2, lastCommitted2),
                              restartStreamOnRebalancing = false
                            )
                          )
