@@ -399,7 +399,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
           consumer1 <-
             Consumer
               .subscribeAnd(subscription)
-              .plainStream(Serde.string, Serde.string)
+              .plainStream(Serde.string, Serde.string, 1)
               .mapChunksZIO { records =>
                 consumer1Receiving.succeed(()) *>
                   recordCounter.update(_ + records.size) *>
