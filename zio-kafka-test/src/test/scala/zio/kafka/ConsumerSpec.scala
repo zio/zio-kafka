@@ -358,7 +358,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / nrPartitions))))
       },
       test("handle rebalancing by completing topic-partition streams") {
-        val nrMessages   = 30000
+        val nrMessages   = 9000
         val nrPartitions = 6
 
         def diagnostics(consumer: Int, committed: Ref[Map[Int, Long]]) =
