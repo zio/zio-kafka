@@ -358,7 +358,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / nrPartitions))))
       },
       test("handle rebalancing by completing topic-partition streams") {
-        val nrMessages   = 9000
+        val nrMessages   = 30000
         val nrPartitions = 6
 
         def diagnostics(consumer: Int, committed: Ref[Map[Int, Long]]) =
@@ -418,7 +418,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                     .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
 //                }
               }
-              .timeout(5.seconds)
+              .timeout(10.seconds)
               .runDrain
               .provideSomeLayer[Kafka](
                 consumer(
@@ -456,7 +456,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                                .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
 //                           }
                          }
-                         .timeout(5.seconds)
+                         .timeout(10.seconds)
                          .runDrain
                          .provideSomeLayer[Kafka](
                            consumer(
@@ -467,6 +467,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                            )
                          )
                          .tapError(e => ZIO.debug(s"Error consumer 2: ${e}"))
+                         .logSpan("Consumer 2")
                          .fork
           _                 <- consumer1.join
           _                 <- consumer2.join

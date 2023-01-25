@@ -9,7 +9,7 @@ private[internal] case class PartitionStreamControl(
   topicPartition: TopicPartition,
   interrupt: Promise[Throwable, Unit],
   drainQueue: Queue[Take[Nothing, ByteArrayCommittableRecord]],
-  completed: Ref[Boolean]
+  completed: Promise[Nothing, Unit]
 ) {
 
   def finishWith(remaining: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
@@ -19,6 +19,5 @@ private[internal] case class PartitionStreamControl(
       _ <- interrupt.succeed(())
     } yield ()
 
-  def isComplete: UIO[Boolean] = completed.get
-  def complete: UIO[Unit]      = ZIO.logInfo(s"Completing TP ${topicPartition}") *> completed.set(true)
+  def complete: UIO[Unit] = ZIO.logInfo(s"Completing for tp ${topicPartition}") *> completed.succeed(()).unit
 }

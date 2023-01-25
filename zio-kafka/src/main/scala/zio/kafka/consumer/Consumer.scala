@@ -300,7 +300,7 @@ object Consumer {
             // For manual subscriptions we have to do some manual work before starting the run loop
             case Subscription.Manual(topicPartitions) =>
               ZIO.attempt(c.assign(topicPartitions.asJava)) *>
-                ZIO.foreach(topicPartitions)(runloop.newPartitionStream).flatMap { partitionStreams =>
+                ZIO.foreach(topicPartitions)(runloop.newPartitionStream(_, ZIO.unit)).flatMap { partitionStreams =>
                   runloop.partitions.offer(
                     Take.chunk(
                       Chunk.fromIterable(partitionStreams.map { case (tp, _, stream) =>
