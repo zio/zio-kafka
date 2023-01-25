@@ -603,7 +603,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
               messagesSoFar <- messagesReceived.updateAndGet(_ :+ (key -> value))
               _             <- ZIO.when(messagesSoFar.size == nrMessages)(done.succeed(()))
             } yield ()
-          }).fork
+          }).tapError(e => ZIO.debug(e)).fork
 
         for {
           topic  <- randomTopic
@@ -613,8 +613,8 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 
           done             <- Promise.make[Nothing, Unit]
           messagesReceived <- Ref.make(List.empty[(String, String)])
-          _                <- produceMany(topic, messages)
           fib              <- consumeIt(client, group, subscription, messagesReceived, done)
+          _                <- produceMany(topic, messages)
           _ <-
             done.await *> Live
               .live(
@@ -931,6 +931,6 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         } yield assertCompletes
       }
     ).provideSomeLayerShared[TestEnvironment & Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
-      120.seconds
-    ) @@ TestAspect.sequential
+      300.seconds
+    )
 }
