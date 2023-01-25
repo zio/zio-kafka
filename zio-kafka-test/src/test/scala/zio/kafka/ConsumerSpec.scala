@@ -931,6 +931,6 @@ object ConsumerSpec extends ZIOSpecWithKafka {
         } yield assertCompletes
       }
     ).provideSomeLayerShared[TestEnvironment & Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
-      300.seconds
-    )
+      120.seconds
+    ) @@ TestAspect.sequential
 }

@@ -105,40 +105,40 @@ private[consumer] final class Runloop(
       (lost, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Lost(lost))
     )
 
-//    lazy val revokeTopics = RebalanceListener(
-//      onAssigned = (assigned, _) =>
-//        lastRebalanceEvent.updateZIO {
-//          case None =>
-//            ZIO.some(Runloop.RebalanceEvent.Assigned(assigned))
-//          case Some(Runloop.RebalanceEvent.Revoked(revokeResult)) =>
-//            ZIO.some(Runloop.RebalanceEvent.RevokedAndAssigned(revokeResult, assigned))
-//          case Some(_) =>
-//            ZIO.fail(new IllegalStateException(s"Multiple onAssigned calls on rebalance listener"))
-//        },
-//      onRevoked = (_, _) =>
-//        currentState.get.flatMap { state =>
-//          endRevoked(
-//            state.pendingRequests,
-//            state.bufferedRecords,
-//            state.assignedStreams,
-//            _ => true
-//          ).flatMap { result =>
-//            lastRebalanceEvent.updateZIO {
-//              case None =>
-//                ZIO.some(Runloop.RebalanceEvent.Revoked(result))
-//              case _ =>
-//                ZIO.fail(
-//                  new IllegalStateException(
-//                    s"onRevoked called on rebalance listener with pending assigned event"
-//                  )
-//                )
-//            }
-//          }
-//        }
-//    )
+    lazy val revokeTopics = RebalanceListener(
+      onAssigned = (assigned, _) =>
+        lastRebalanceEvent.updateZIO {
+          case None =>
+            ZIO.some(Runloop.RebalanceEvent.Assigned(assigned))
+          case Some(Runloop.RebalanceEvent.Revoked(revokeResult)) =>
+            ZIO.some(Runloop.RebalanceEvent.RevokedAndAssigned(revokeResult, assigned))
+          case Some(_) =>
+            ZIO.fail(new IllegalStateException(s"Multiple onAssigned calls on rebalance listener"))
+        },
+      onRevoked = (_, _) =>
+        currentState.get.flatMap { state =>
+          endRevoked(
+            state.pendingRequests,
+            state.bufferedRecords,
+            state.assignedStreams,
+            _ => true
+          ).flatMap { result =>
+            lastRebalanceEvent.updateZIO {
+              case None =>
+                ZIO.some(Runloop.RebalanceEvent.Revoked(result))
+              case _ =>
+                ZIO.fail(
+                  new IllegalStateException(
+                    s"onRevoked called on rebalance listener with pending assigned event"
+                  )
+                )
+            }
+          }
+        }
+    )
 
     if (restartStreamsOnRebalancing) {
-      trackRebalancing ++ emitDiagnostics ++ userRebalanceListener // ++ revokeTopics
+      trackRebalancing ++ emitDiagnostics ++ userRebalanceListener ++ revokeTopics
     } else {
       trackRebalancing ++ emitDiagnostics ++ userRebalanceListener
     }
