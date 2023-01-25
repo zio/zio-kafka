@@ -429,6 +429,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
                 )
               )
               .tapError(e => ZIO.debug(s"Error consumer 1: ${e}"))
+              .logSpan("Consumer 1")
               .fork
           _ <- consumer1Receiving.await *> ZIO.sleep(5.seconds)
 

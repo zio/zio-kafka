@@ -50,14 +50,16 @@ private[consumer] final class Runloop(
     for {
       interruptionPromise <- Promise.make[Throwable, Unit]
       drainQueue          <- Queue.unbounded[Take[Nothing, ByteArrayCommittableRecord]]
-      stream = ZStream.repeatZIOChunkOption {
+      completed           <- Ref.make(false)
+      control = PartitionStreamControl(tp, interruptionPromise, drainQueue, completed)
+      stream = ZStream.finalizer(control.complete) *> ZStream.repeatZIOChunkOption {
                  for {
                    request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-                   _ = println(s"Making request for tp ${tp.partition()}")
-                   _      <- requestQueue.offer(Runloop.Request(tp, request)).unit
-                   _      <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
-                   result <- request.await
-                   _ = println(s"Got ${result.size} records for tp ${tp.partition()}")
+                   _       <- ZIO.logInfo(s"Making request for tp ${tp.partition()}")
+                   _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
+                   _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
+                   result  <- request.await
+                   _       <- ZIO.logInfo(s"Got ${result.size} records for tp ${tp.partition()}")
                  } yield result
                }.viaFunction(s => if (perPartitionChunkPrefetch > 0) s.bufferChunks(perPartitionChunkPrefetch) else s)
                  .interruptWhen(interruptionPromise)
@@ -66,7 +68,7 @@ private[consumer] final class Runloop(
                      .fromQueue(drainQueue)
                      .flattenTake
                  )
-    } yield (tp, PartitionStreamControl(interruptionPromise, drainQueue), stream)
+    } yield (tp, control, stream)
 
   def gracefulShutdown: UIO[Unit] =
     for {
@@ -390,6 +392,7 @@ private[consumer] final class Runloop(
                                     case None =>
                                       currentAssigned -- prevAssigned
                                   }
+//                  _ <- ZIO.logInfo(s"Current assigned: ${currentAssigned.map(_.partition()).mkString(",")}")
                   remainingRequestedPartitions = rebalanceEvent match {
                                                    case Some(Runloop.RebalanceEvent.Revoked(_)) | Some(
                                                          Runloop.RebalanceEvent
