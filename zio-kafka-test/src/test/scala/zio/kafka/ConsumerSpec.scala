@@ -403,8 +403,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
               .mapChunksZIO { records =>
                 consumer1Receiving.succeed(()) *>
                   recordCounter.update(_ + records.size) *>
-                  messagesConsumed.update(m => m.updated(1, m.getOrElse(1, Chunk.empty) ++ records)) *>
-                  ZIO.sleep(1.second) *> {
+                  messagesConsumed.update(m => m.updated(1, m.getOrElse(1, Chunk.empty) ++ records)) *> {
                     val batch =
                       OffsetBatch(
                         records.map(_.offset)
@@ -431,7 +430,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
               .tapError(e => ZIO.debug(s"Error consumer 1: ${e}"))
               .logSpan("Consumer 1")
               .fork
-          _ <- consumer1Receiving.await *> ZIO.sleep(5.seconds)
+          _ <- consumer1Receiving.await // *> ZIO.sleep(5.seconds)
 
           _ = println("Starting second consumer")
           consumer2 <- Consumer
@@ -441,8 +440,7 @@ object ConsumerSpec extends ZIOSpecWithKafka {
 //                           println(s"Consumer 2 starting ${tp.partition()}")
 //                           partition.mapChunksZIO { records =>
                            recordCounter.update(_ + records.size) *>
-                             messagesConsumed.update(m => m.updated(2, m.getOrElse(2, Chunk.empty) ++ records)) *> ZIO
-                               .sleep(1.second) *> {
+                             messagesConsumed.update(m => m.updated(2, m.getOrElse(2, Chunk.empty) ++ records)) *> {
                                val batch =
                                  OffsetBatch(
                                    records.map(_.offset)
