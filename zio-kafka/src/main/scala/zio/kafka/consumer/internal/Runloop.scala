@@ -54,7 +54,9 @@ private[consumer] final class Runloop(
       completed           <- Promise.make[Nothing, Unit]
       control = PartitionStreamControl(tp, interruptionPromise, drainQueue, completed)
       stream =
-        ZStream.finalizer(ZIO.logInfo(s"Completing control for tp ${tp.partition()}") *> control.complete) *> ZStream
+        ZStream.finalizer(
+          ZIO.logInfo(s"Completing control for tp ${tp.partition()}") *> control.completeStream
+        ) *> ZStream
           .fromZIO(
             waitBeforeStarting.tap(_ => ZIO.logInfo(s"Starting requests stream for tp ${tp.partition()}"))
           ) *>
@@ -499,7 +501,9 @@ private[consumer] final class Runloop(
           }
         }
       newFinishingStreams <-
-        ZIO.filterNot(pollResult.finishingStreams.toSeq) { case (_, control) => control.completed.isDone }.map(_.toMap)
+        ZIO
+          .filterNot(pollResult.finishingStreams.toSeq) { case (_, control) => control.streamCompleted.isDone }
+          .map(_.toMap)
       newAssignedStreams <-
         if (pollResult.newlyAssigned.isEmpty)
           ZIO.succeed(Set[(TopicPartition, PartitionStreamControl)]())
@@ -511,7 +515,7 @@ private[consumer] final class Runloop(
                 newFinishingStreams
                   .get(tp)
                   .map(
-                    _.completed.await.tap(_ =>
+                    _.streamCompleted.await.tap(_ =>
                       ZIO.logInfo(s"Done awaiting completion of previous stream for tp ${tp.partition()}")
                     )
                   )
