@@ -28,6 +28,9 @@ object ResourceType {
   case object DelegationToken extends ResourceType {
     def asJava: JResourceType = JResourceType.DELEGATION_TOKEN
   }
+  case object User extends ResourceType {
+    def asJava: JResourceType = JResourceType.USER
+  }
 
   def apply(jResourceType: JResourceType): ResourceType = jResourceType match {
     case JResourceType.TRANSACTIONAL_ID => TransactionalId
@@ -37,5 +40,6 @@ object ResourceType {
     case JResourceType.ANY              => Any
     case JResourceType.GROUP            => Group
     case JResourceType.DELEGATION_TOKEN => DelegationToken
+    case JResourceType.USER             => User
   }
 }

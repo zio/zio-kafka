@@ -22,6 +22,7 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 private[consumer] final class Runloop(
+  runtime: Runtime[Any],
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollFrequency: Duration,
@@ -169,17 +170,13 @@ private[consumer] final class Runloop(
       case err =>
         cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
     }
+    val callback = makeOffsetCommitCallback(onSuccess, onFailure)
 
-    ZIO
-      .runtime[Any]
-      .map(makeOffsetCommitCallback(onSuccess, onFailure))
-      .flatMap { callback =>
-        consumer.withConsumerM { c =>
-          // We don't wait for the completion of the commit here, because it
-          // will only complete once we poll again.
-          ZIO.attempt(c.commitAsync(offsets.asJava, callback))
-        }
-      }
+    consumer.withConsumerM { c =>
+      // We don't wait for the completion of the commit here, because it
+      // will only complete once we poll again.
+      ZIO.attempt(c.commitAsync(offsets.asJava, callback))
+    }
       .catchAll(onFailure)
   }
 
@@ -199,14 +196,16 @@ private[consumer] final class Runloop(
     offsets.toMap
   }
 
-  private def makeOffsetCommitCallback(onSuccess: Task[Unit], onFailure: Exception => Task[Unit])(
-    runtime: Runtime[Any]
-  ): OffsetCommitCallback = new OffsetCommitCallback {
-    override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
-      Unsafe.unsafe { implicit u =>
-        runtime.unsafe.run(if (exception eq null) onSuccess else onFailure(exception)).getOrThrowFiberFailure()
-      }
-  }
+  private def makeOffsetCommitCallback(
+    onSuccess: Task[Unit],
+    onFailure: Exception => Task[Unit]
+  ): OffsetCommitCallback =
+    new OffsetCommitCallback {
+      override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
+        Unsafe.unsafe { implicit u =>
+          runtime.unsafe.run(if (exception eq null) onSuccess else onFailure(exception)).getOrThrowFiberFailure()
+        }
+    }
 
   /**
    * Does all needed to end revoked partitions:
@@ -594,7 +593,6 @@ private[consumer] final class Runloop(
   private def handleOperational(state: State, cmd: Command): Task[State] =
     cmd match {
       case Command.Poll =>
-//        println("handlePoll from Poll()")
         // The consumer will throw an IllegalStateException if no call to subscribe
         ZIO.ifZIO(subscribedRef.get)(handlePoll(state), ZIO.succeed(state))
       case Command.Requests(reqs) =>
@@ -666,7 +664,7 @@ private[consumer] object Runloop {
   sealed abstract class Command
   object Command {
     final case class Requests(requests: Chunk[Request])                                         extends Command
-    final case object Poll                                                                      extends Command
+    case object Poll                                                                            extends Command
     final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
   }
 
@@ -723,7 +721,9 @@ private[consumer] object Runloop {
       shutdownRef     <- Ref.make(false)
       currentStateRef <- Ref.make(State.initial)
       subscribedRef   <- Ref.make(false)
+      runtime         <- ZIO.runtime[Any]
       runloop = new Runloop(
+                  runtime,
                   hasGroupId,
                   consumer,
                   pollFrequency,

@@ -560,14 +560,13 @@ object Consumer {
     ZIO.serviceWithZIO(_.metrics)
 
   sealed trait OffsetRetrieval
-
   object OffsetRetrieval {
     final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest)                extends OffsetRetrieval
     final case class Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]]) extends OffsetRetrieval
   }
 
   sealed trait AutoOffsetStrategy { self =>
-    def toConfig: String = self match {
+    final def toConfig: String = self match {
       case AutoOffsetStrategy.Earliest => "earliest"
       case AutoOffsetStrategy.Latest   => "latest"
       case AutoOffsetStrategy.None     => "none"
