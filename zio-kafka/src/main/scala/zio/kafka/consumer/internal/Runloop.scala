@@ -401,6 +401,7 @@ private[consumer] final class Runloop(
                 for {
                   rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
 
+                  // rebalanceEvent is only Some(_) when `restartStreamsOnRebalancing` is set to true
                   newlyAssigned = rebalanceEvent match {
                                     case Some(Runloop.RebalanceEvent.Assigned(assigned)) =>
                                       assigned
@@ -434,6 +435,7 @@ private[consumer] final class Runloop(
 
                   _ <- doSeekForNewPartitions(c, newlyAssigned)
 
+                  // rebalanceEvent is only Some(_) when `restartStreamsOnRebalancing` is set to true
                   revokeResult <- rebalanceEvent match {
                                     case Some(Runloop.RebalanceEvent.Revoked(result)) =>
                                       ZIO.succeed(

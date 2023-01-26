@@ -424,7 +424,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                   client1,
                   Some(group),
                   diagnostics = diagnostics(1, lastCommitted),
-                  restartStreamOnRebalancing = false
+                  restartStreamOnRebalancing = true
                 )
               )
               .tapError(e => ZIO.debug(s"Error consumer 1: ${e}"))
@@ -461,7 +461,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                              client2,
                              Some(group),
                              diagnostics = diagnostics(2, lastCommitted2),
-                             restartStreamOnRebalancing = false
+                             restartStreamOnRebalancing = true
                            )
                          )
                          .tapError(e => ZIO.debug(s"Error consumer 2: ${e}"))
