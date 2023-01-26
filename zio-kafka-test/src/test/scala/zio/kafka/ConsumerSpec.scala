@@ -357,8 +357,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                        .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / nrPartitions))))
       },
-      test("handle rebalancing by completing topic-partition streams") {
-        val nrMessages   = 9000
+      test("does not process messages twice by the same client when rebalancing") {
+        val nrMessages   = 20000
         val nrPartitions = 6
 
         def diagnostics(consumer: Int, committed: Ref[Map[Int, Long]]) =
@@ -487,7 +487,17 @@ object ConsumerSpec extends ZIOKafkaSpec {
 //            println(
 //              s"Consumer 2 consumed: ${recordsConsumed(2).sortBy(r => (r.partition, r.key.toInt)).map(r => s"${r.partition}->${r.key}").mkString("\n")}"
 //            )
-        } yield assertCompletes
+          // Assert: no record (identified by offset) is processed twice by the same consumer
+          offsets = recordsConsumed.view
+                      .mapValues(
+                        _.groupBy(m => m.partition).view
+                          .mapValues(_.map(_.offset))
+                          .mapValues(offsets => (offsets.size, offsets.map(_.offset).toSet.size))
+                      )
+                      .view
+                      .flatMap { case (_, offsetsByPartition) => offsetsByPartition.values }
+          _ = println(offsets.toSeq)
+        } yield assertTrue(offsets.forall { case (size, uniqueSize) => size == uniqueSize })
       },
       test("produce diagnostic events when rebalancing") {
         val nrMessages   = 50
