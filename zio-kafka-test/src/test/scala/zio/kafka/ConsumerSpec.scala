@@ -390,7 +390,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
 
           // Consume messages
           subscription = Subscription.topics(topic)
-          _            = println("Starting first consumer")
           consumer1Receiving <- Promise.make[Nothing, Unit]
           recordCounter      <- Ref.make(0)
 

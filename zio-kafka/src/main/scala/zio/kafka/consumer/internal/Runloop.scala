@@ -392,14 +392,10 @@ private[consumer] final class Runloop(
 
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet -- state.finishingStreams.keys
-//            println(s"Pending requests: ${requestedPartitions.map(_.partition()).mkString(",")}")
 
             resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
             val records = doPoll(c, requestedPartitions)
-//            println(
-//              s"Polled for partitions ${requestedPartitions.map(_.partition()).mkString(",")}, got ${records.count()} records"
-//            )
 
             // Check shutdown again after polling (which takes up to the poll timeout)
             ZIO.ifZIO(isShutdown)(
@@ -429,11 +425,6 @@ private[consumer] final class Runloop(
                                     case Some(Runloop.RebalanceEvent.Revoked(_)) =>
                                       currentAssigned -- prevAssigned
                                     case None =>
-                                      if (currentAssigned != prevAssigned) {
-                                        println(
-                                          s"Yeah here: ${currentAssigned.mkString(",")}, prevASsigned: ${prevAssigned.mkString(",")}"
-                                        )
-                                      }
                                       currentAssigned -- prevAssigned
                                   }
 //                  _ <- ZIO.logInfo(s"Current assigned: ${currentAssigned.map(_.partition()).mkString(",")}")
@@ -491,9 +482,6 @@ private[consumer] final class Runloop(
                                         tp => !currentAssigned(tp)
                                       )
                                   }
-//                  _ = println(
-//                        s"Unfulfilled requests ${revokeResult.unfulfilledRequests.map(_.tp.partition()).mkString(",")}"
-//                      )
 
                   fulfillResult <- fulfillRequests(
                                      revokeResult.unfulfilledRequests,
@@ -507,10 +495,6 @@ private[consumer] final class Runloop(
                            fulfillResult.unfulfilledRequests.map(_.tp).toSet
                          )
                        )
-//                  _ =
-//                    println(
-//                      s"Unfulfilled requests after fulfilling: ${fulfillResult.unfulfilledRequests.map(_.tp.partition()).mkString(",")}"
-//                    )
                 } yield Runloop.PollResult(
                   newlyAssigned,
                   fulfillResult.unfulfilledRequests,
@@ -530,8 +514,6 @@ private[consumer] final class Runloop(
         if (pollResult.newlyAssigned.isEmpty)
           ZIO.succeed(Set[(TopicPartition, PartitionStreamControl)]())
         else {
-          println(s"Creating new assigned streams for ${pollResult.newlyAssigned}")
-
           ZIO
             .foreach(pollResult.newlyAssigned)(tp =>
               newPartitionStream(
@@ -623,7 +605,6 @@ private[consumer] final class Runloop(
           // Optimization: eagerly enqueue a poll if we have pending requests instead of waiting
           // Do not execute handlePoll directly so that other queued commands get a fair treatment
           if (state.pendingRequests.nonEmpty) {
-//            println("enqueueing poll from Requests")
             pollQueue.offer(Command.Poll).as(state)
           } else ZIO.succeed(state)
         }
