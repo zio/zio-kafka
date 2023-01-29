@@ -427,8 +427,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                     consumer(
                       client1,
                       Some(group),
-                      diagnostics = diagnostics(lastCommitted),
-                      restartStreamOnRebalancing = false
+                      diagnostics = diagnostics(lastCommitted)
                     )
                   )
                   .tapError(e => ZIO.logError(s"Error: ${e}"))
@@ -436,7 +435,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
               .fork
           _ <- consumer1Receiving.await // *> ZIO.sleep(5.seconds)
 
-          _ = println("Starting second consumer")
           consumer2 <-
             ZIO
               .logAnnotate("consumer", "2") {
@@ -464,8 +462,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                     consumer(
                       client2,
                       Some(group),
-                      diagnostics = diagnostics(lastCommitted2),
-                      restartStreamOnRebalancing = false
+                      diagnostics = diagnostics(lastCommitted2)
                     )
                   )
                   .tapError(e => ZIO.logError(s"Error: ${e}"))
@@ -481,16 +478,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                     records.map(r => r.partition -> r.offset).groupBy(_._1).view.mapValues(_.size).toMap
                                   )
                                   .toMap
-          _ = println(s"Consumed records by consumer by partition: ${byConsumerPartition}")
-//
-//          _ =
-//            println(
-//              s"Consumer 1 consumed: ${recordsConsumed(1).sortBy(r => (r.partition, r.key.toInt)).map(r => s"${r.partition}->${r.key}").mkString("\n")}"
-//            )
-//          _ =
-//            println(
-//              s"Consumer 2 consumed: ${recordsConsumed(2).sortBy(r => (r.partition, r.key.toInt)).map(r => s"${r.partition}->${r.key}").mkString("\n")}"
-//            )
           // Assert: no record (identified by offset) is processed twice by the same consumer
           offsets = recordsConsumed.view
                       .mapValues(
@@ -500,9 +487,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                       )
                       .view
                       .flatMap { case (_, offsetsByPartition) => offsetsByPartition.values }
-          _ = println(offsets.toSeq)
         } yield assertTrue(offsets.forall { case (size, uniqueSize) => size == uniqueSize })
-      }, // @@ TestAspect.nonFlaky(10),
+      },
       test("produce diagnostic events when rebalancing") {
         val nrMessages   = 50
         val nrPartitions = 6
@@ -727,8 +713,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                         consumer(
                           client1,
                           Some(group),
-                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest),
-                          restartStreamOnRebalancing = true
+                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
                         )
                       )
                       .fork
@@ -748,8 +733,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                         consumer(
                           client3,
                           Some(group),
-                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest),
-                          restartStreamOnRebalancing = true
+                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
                         )
                       )
                       .fork
@@ -806,7 +790,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                    )
                    .runDrain
                    .provideSomeLayer[Kafka](
-                     consumer(client1, Some(group), restartStreamOnRebalancing = true)
+                     consumer(client1, Some(group))
                    )
                    .fork
           // fib is running, consuming all the published messages from all partitions.

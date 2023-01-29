@@ -13,8 +13,7 @@ case class ConsumerSettings(
   pollTimeout: Duration,
   perPartitionChunkPrefetch: Int,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
-  rebalanceListener: RebalanceListener = RebalanceListener.noop,
-  restartStreamOnRebalancing: Boolean = false
+  rebalanceListener: RebalanceListener = RebalanceListener.noop
 ) {
   private[this] def autoOffsetResetConfig = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
@@ -68,9 +67,6 @@ case class ConsumerSettings(
 
   def withRebalanceListener(listener: RebalanceListener): ConsumerSettings =
     copy(rebalanceListener = listener)
-
-  def withRestartStreamOnRebalancing(value: Boolean): ConsumerSettings =
-    copy(restartStreamOnRebalancing = value)
 
   def withCredentials(credentialsStore: KafkaCredentialStore): ConsumerSettings =
     withProperties(credentialsStore.properties)

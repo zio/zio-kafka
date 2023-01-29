@@ -68,8 +68,7 @@ object KafkaTestUtils {
     groupId: Option[String] = None,
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
-    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
-    restartStreamOnRebalancing: Boolean = false
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)
   ): URIO[Kafka, ConsumerSettings] =
     ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
       val settings = ConsumerSettings(kafka.bootstrapServers)
@@ -85,7 +84,6 @@ object KafkaTestUtils {
         )
         .withOffsetRetrieval(offsetRetrieval)
         .withPerPartitionChunkPrefetch(2)
-        .withRestartStreamOnRebalancing(restartStreamOnRebalancing)
 
       val withClientInstanceId = clientInstanceId.fold(settings)(settings.withGroupInstanceId)
       groupId.fold(withClientInstanceId)(withClientInstanceId.withGroupId)
@@ -111,8 +109,7 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     allowAutoCreateTopics: Boolean = true,
-    diagnostics: Diagnostics = Diagnostics.NoOp,
-    restartStreamOnRebalancing: Boolean = false
+    diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
       consumerSettings(
@@ -120,8 +117,7 @@ object KafkaTestUtils {
         groupId,
         clientInstanceId,
         allowAutoCreateTopics,
-        offsetRetrieval,
-        restartStreamOnRebalancing
+        offsetRetrieval
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 

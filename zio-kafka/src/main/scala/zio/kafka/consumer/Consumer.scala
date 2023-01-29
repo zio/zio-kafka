@@ -354,7 +354,6 @@ object Consumer {
                    diagnostics,
                    settings.offsetRetrieval,
                    settings.rebalanceListener,
-                   settings.restartStreamOnRebalancing,
                    settings.perPartitionChunkPrefetch
                  )
     } yield Live(wrapper, settings, runloop)

@@ -17,7 +17,6 @@ import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.stream._
 
 import java.util
-import scala.annotation.unused
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
@@ -38,7 +37,6 @@ private[consumer] final class Runloop(
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   subscribedRef: Ref[Boolean],
-  @unused restartStreamsOnRebalancing: Boolean,
   currentState: Ref[State],
   perPartitionChunkPrefetch: Int,
   pollQueue: Queue[Command.Poll.type]
@@ -718,7 +716,6 @@ private[consumer] object Runloop {
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
-    restartStreamsOnRebalancing: Boolean,
     perPartitionChunkPrefetch: Int
   ): ZIO[Scope, Throwable, Runloop] =
     for {
@@ -753,7 +750,6 @@ private[consumer] object Runloop {
                   offsetRetrieval,
                   userRebalanceListener,
                   subscribedRef,
-                  restartStreamsOnRebalancing,
                   currentStateRef,
                   perPartitionChunkPrefetch,
                   pollQueue
