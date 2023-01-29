@@ -77,7 +77,9 @@ private[consumer] final class Runloop(
                 )
             } yield result
           }
-            .viaFunction(s => if (perPartitionChunkPrefetch > 0) s.bufferChunks(perPartitionChunkPrefetch) else s)
+            .viaFunction(s =>
+              if (perPartitionChunkPrefetch > 0) s.bufferChunks(perPartitionChunkPrefetch) else s
+            ) // TODO why does restoring this buffer make 'twice' test fail?
             .concat(
               ZStream
                 .fromQueue(drainQueue)
@@ -181,7 +183,7 @@ private[consumer] final class Runloop(
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
         ZIO.logInfo(s"Rebalance in progress, retrying ${cmds.size.toString} commits") *>
-          commitQueue.offerAll(cmds).unit
+          commitQueue.offerAll(cmds).unit.delay(100.millis)
       case err =>
         cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
     }

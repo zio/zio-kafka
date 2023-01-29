@@ -364,7 +364,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
         def diagnostics(committed: Ref[Map[Int, Long]]) =
           Diagnostics {
             case e: DiagnosticEvent.Rebalance =>
-              ZIO.logDebug(s"$e. Offsets: ${committed}")
+              ZIO.logInfo(s"$e. Offsets: ${committed}")
             case DiagnosticEvent.Commit.Started(offsets) =>
               ZIO.logTrace(s"Starting commit ${offsets.map { case (tp, offset) =>
                   s"${tp.partition()}->${offset}"
