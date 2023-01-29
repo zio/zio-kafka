@@ -14,6 +14,7 @@ import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
+import scala.collection.compat._
 
 object ConsumerSpec extends ZIOKafkaSpec {
   override val kafkaPrefix: String = "consumespec"
@@ -478,6 +479,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                       )
                       .view
                       .flatMap { case (_, offsetsByPartition) => offsetsByPartition.values }
+                      .toMap
         } yield assertTrue(offsets.forall { case (size, uniqueSize) => size == uniqueSize })
       },
       test("produce diagnostic events when rebalancing") {
