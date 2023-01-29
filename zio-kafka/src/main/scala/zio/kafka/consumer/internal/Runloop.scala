@@ -243,9 +243,6 @@ private[consumer] final class Runloop(
   ): UIO[Runloop.RevokeResult] = {
     var acc = Chunk[Runloop.Request]()
     val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
-    if (bufferedRecords.recs.nonEmpty) println(s"There's more than 0 bufferedRecords: ${bufferedRecords.recs.map {
-        case (tp, recs) => s"for tp ${tp.partition()}: ${recs.size}"
-      }}")
     buf ++= bufferedRecords.recs
 
     val (revokedStreams, assignedStreams) =
