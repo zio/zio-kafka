@@ -470,17 +470,18 @@ object ConsumerSpec extends ZIOKafkaSpec {
           nrRecordsConsumed <- recordCounter.get
           _                 <- ZIO.debug(s"Consumed ${nrRecordsConsumed} records")
           recordsConsumed   <- messagesConsumed.get
-          offsets = recordsConsumed.view
-                      .mapValues(
-                        _.groupBy(m => m.partition).view
-                          .mapValues(_.map(_.offset))
-                          .mapValues(offsets => (offsets.size, offsets.map(_.offset).toSet.size))
-                      )
-                      .view
-                      .flatMap { case (_, offsetsByPartition) => offsetsByPartition.values }
-                      .toMap
+          offsets = recordsConsumed.view.map { case (consumer, records) =>
+                      consumer -> records
+                        .groupBy(m => m.partition)
+                        .view
+                        .map { case (partition, records) =>
+                          val offsets = records.map(_.offset)
+                          partition -> (offsets.size, offsets.map(_.offset).toSet.size)
+                        }
+                        .toMap
+                    }.view.flatMap { case (_, offsetsByPartition) => offsetsByPartition.values }.toMap
         } yield assertTrue(offsets.forall { case (size, uniqueSize) => size == uniqueSize })
-      },
+      } @@ TestAspect.nonFlaky(10),
       test("produce diagnostic events when rebalancing") {
         val nrMessages   = 50
         val nrPartitions = 6
@@ -924,9 +925,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
       }
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
-    ) @@ withLiveClock @@ timeout(
-      300.seconds
-    )
+    ) @@ withLiveClock @@ timeout(300.seconds) @@ TestAspect.sequential
 
   lazy val logger: ZLogger[String, Unit] =
     new ZLogger[String, Unit] {

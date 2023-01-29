@@ -60,9 +60,7 @@ private[consumer] final class Runloop(
         (ZStream.logAnnotate(annotations) *>
           ZStream.finalizer(control.completeStream) *>
           ZStream.fromZIO(waitBeforeStarting) *>
-          ZStream.fromZIO(
-            seekToLastCommittedOffset(tp)
-          ) *>
+          ZStream.fromZIO(seekToLastCommittedOffset(tp)) *>
           ZStream.repeatZIOChunkOption {
             for {
               request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
@@ -89,20 +87,23 @@ private[consumer] final class Runloop(
     } yield (tp, control, stream)
 
   private def seekToLastCommittedOffset(tp: TopicPartition) =
+    // We can get a "java.lang.IllegalStateException: You can only check the position for partitions assigned to this consumer."
+    // from the position(tp) call when the partition is already revoked before starting.
     offsetRetrieval match {
       case OffsetRetrieval.Auto(_) if hasGroupId =>
-        (consumer.withConsumer(_.position(tp)) zip consumer
+        (consumer.withConsumer(_.position(tp)).option zip consumer
           .withConsumer(_.committed(Set(tp).asJava))
-          .map(_.asScala.get(tp).flatMap(Option.apply).map(_.offset()))).tap { case (nextToFetch, lastCommitted) =>
-          lastCommitted match {
-            case Some(lastCommitted) if lastCommitted != nextToFetch =>
-              ZIO.logInfo(
-                s"Seeking to last committed offset by this consumer from partition stream before rebalancing: ${lastCommitted}"
-              ) *>
-                consumer.withConsumer(_.seek(tp, lastCommitted))
-            case _ =>
-              ZIO.unit
-          }
+          .map(_.asScala.get(tp).flatMap(Option.apply).map(_.offset()))).tap {
+          case (Some(nextToFetch), lastCommitted) =>
+            lastCommitted match {
+              case Some(lastCommitted) if lastCommitted != nextToFetch =>
+                ZIO.logInfo(
+                  s"Seeking to last committed offset by this consumer from partition stream before rebalancing: ${lastCommitted}"
+                ) *>
+                  consumer.withConsumer(_.seek(tp, lastCommitted))
+              case _ =>
+                ZIO.unit
+            }
         }
 
       case _ =>
