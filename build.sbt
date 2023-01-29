@@ -59,6 +59,7 @@ lazy val root = project
     zioKafka,
     zioKafkaTestUtils,
     zioKafkaTest,
+    zioKafkaBench,
     docs
   )
 
@@ -148,6 +149,14 @@ lazy val zioKafkaTest =
       },
       testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
     )
+
+lazy val zioKafkaBench =
+  project
+    .in(file("zio-kafka-bench"))
+    .enablePlugins(JmhPlugin)
+    .settings(stdSettings("zio-kafka-bench"))
+    .settings(publish / skip := true)
+    .dependsOn(zioKafka)
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
