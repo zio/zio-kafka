@@ -13,12 +13,18 @@ private[internal] case class PartitionStreamControl(
 ) {
 
   def finishWith(remaining: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
-    for {
-      _ <- drainQueue.offer(Take.chunk(remaining))
-      _ <- drainQueue.offer(Take.end)
-      _ <- interrupt.succeed(())
-    } yield ()
+    ZIO.logAnnotate(
+      LogAnnotation("topic", topicPartition.topic()),
+      LogAnnotation("partition", topicPartition.partition().toString)
+    ) {
+      for {
+        _ <- ZIO.logInfo("finishWith")
+        _ <- drainQueue.offer(Take.chunk(remaining))
+        _ <- drainQueue.offer(Take.end)
+        _ <- interrupt.succeed(())
+      } yield ()
+    }
 
   def completeStream: UIO[Unit] =
-    ZIO.logInfo(s"Marked completion of partition stream for tp ${topicPartition}") *> streamCompleted.succeed(()).unit
+    ZIO.logInfo(s"Marked completion of partition stream") *> streamCompleted.succeed(()).unit
 }

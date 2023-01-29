@@ -55,32 +55,33 @@ private[consumer] final class Runloop(
       completed           <- Promise.make[Nothing, Unit]
       control = PartitionStreamControl(tp, interruptionPromise, drainQueue, completed)
       stream =
-        ZStream.finalizer(
-          ZIO.logInfo(s"Completing control for tp ${tp.partition()}") *> control.completeStream
-        ) *> ZStream
-          .fromZIO(
-            waitBeforeStarting.tap(_ => ZIO.logInfo(s"Starting requests stream for tp ${tp.partition()}"))
+        ZStream.logAnnotate("topic", tp.topic()) *>
+          ZStream.logAnnotate("partition", tp.partition().toString) *>
+          ZStream.finalizer(control.completeStream) *>
+          ZStream.fromZIO(waitBeforeStarting) *>
+          ZStream.fromZIO(
+            consumer
+              .withConsumer(_.position(tp))
+              .tap(pos => ZIO.logInfo(s"Starting partition stream. Next fetch offset is ${pos}"))
           ) *>
           ZStream.repeatZIOChunkOption {
             for {
               request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-              _       <- ZIO.logInfo(s"Making request for tp ${tp.partition()}")
+              _       <- ZIO.logDebug(s"Making request for tp ${tp.partition()}")
               _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
               _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
               result <-
-                request.await.tapError(e =>
-                  ZIO.logInfo(s"Partition stream for tp ${tp.partition()} was completed with ${e}")
-                )
+                request.await.tapError(e => ZIO.logInfo(s"Partition stream for was completed with ${e}"))
               _ <-
-                ZIO.logInfo(
-                  s"Got ${result.size} records for tp ${tp.partition()}. Last offset = ${result.map(_.offset.offset).max}"
+                ZIO.logDebug(
+                  s"Got ${result.size} records. Last offset = ${result.map(_.offset.offset).max}"
                 )
             } yield result
           }
             .viaFunction(s => if (perPartitionChunkPrefetch > 0) s.bufferChunks(perPartitionChunkPrefetch) else s)
-//            .interruptWhen(
-//              interruptionPromise.await *> ZIO.logInfo(s"Partition stream for tp ${tp.partition()} was finished")
-//            )
+            .interruptWhen(
+              interruptionPromise.await *> ZIO.logInfo(s"Finishing partition stream by interruption")
+            )
             .concat(
               ZStream
                 .fromQueue(drainQueue)
@@ -222,7 +223,9 @@ private[consumer] final class Runloop(
   ): UIO[Runloop.RevokeResult] = {
     var acc = Chunk[Runloop.Request]()
     val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
-    if (bufferedRecords.recs.nonEmpty) println(s"There's more than 0 bufferedRecords: ${bufferedRecords.recs.size}")
+    if (bufferedRecords.recs.nonEmpty) println(s"There's more than 0 bufferedRecords: ${bufferedRecords.recs.map {
+        case (tp, recs) => s"for tp ${tp.partition()}: ${recs.size}"
+      }}")
     buf ++= bufferedRecords.recs
 
     val (revokedStreams, assignedStreams) =
@@ -374,7 +377,7 @@ private[consumer] final class Runloop(
           ZIO.suspend {
 
             val prevAssigned        = c.assignment().asScala.toSet
-            val requestedPartitions = state.pendingRequests.map(_.tp).toSet
+            val requestedPartitions = state.pendingRequests.map(_.tp).toSet -- state.finishingStreams.keys
 //            println(s"Pending requests: ${requestedPartitions.map(_.partition()).mkString(",")}")
 
             resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
@@ -412,6 +415,11 @@ private[consumer] final class Runloop(
                                     case Some(Runloop.RebalanceEvent.Revoked(_)) =>
                                       currentAssigned -- prevAssigned
                                     case None =>
+                                      if (currentAssigned != prevAssigned) {
+                                        println(
+                                          s"Yeah here: ${currentAssigned.mkString(",")}, prevASsigned: ${prevAssigned.mkString(",")}"
+                                        )
+                                      }
                                       currentAssigned -- prevAssigned
                                   }
 //                  _ <- ZIO.logInfo(s"Current assigned: ${currentAssigned.map(_.partition()).mkString(",")}")
@@ -508,18 +516,16 @@ private[consumer] final class Runloop(
       newAssignedStreams <-
         if (pollResult.newlyAssigned.isEmpty)
           ZIO.succeed(Set[(TopicPartition, PartitionStreamControl)]())
-        else
+        else {
+          println(s"Creating new assigned streams for ${pollResult.newlyAssigned}")
+
           ZIO
             .foreach(pollResult.newlyAssigned)(tp =>
               newPartitionStream(
                 tp,
                 newFinishingStreams
                   .get(tp)
-                  .map(
-                    _.streamCompleted.await.tap(_ =>
-                      ZIO.logInfo(s"Done awaiting completion of previous stream for tp ${tp.partition()}")
-                    )
-                  )
+                  .map(_.streamCompleted.await <* ZIO.logInfo(s"Done awaiting completion of previous stream"))
                   .getOrElse(ZIO.unit)
               )
             )
@@ -533,6 +539,7 @@ private[consumer] final class Runloop(
             .map(_.map { case (tp, control, _) =>
               tp -> control
             })
+        }
       newPendingCommits <-
         ZIO.ifZIO(isRebalancing)(
           ZIO.succeed(state.pendingCommits),
@@ -558,11 +565,14 @@ private[consumer] final class Runloop(
         .withConsumer(_.assignment.asScala)
         .flatMap { assignment =>
           ZIO.foldLeft(reqs)(state) { (state, req) =>
-            if (assignment.contains(req.tp) && !state.finishingStreams.contains(req.tp)) {
+            val partitionIsAssigned = assignment.contains(req.tp)
+            val previousStreamFinished =
+              state.finishingStreams.get(req.tp).map(_.streamCompleted.isDone).getOrElse(ZIO.succeed(true))
+            ZIO.ifZIO(previousStreamFinished.map(_ && partitionIsAssigned))(
 //              println(s"Adding request ${req}")
-              ZIO.succeed(state.addRequest(req))
-            } else
+              ZIO.succeed(state.addRequest(req)),
               req.cont.fail(None).as(state)
+            )
           }
         }
         .orElseSucceed(state.addRequests(reqs))

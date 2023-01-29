@@ -358,21 +358,23 @@ object ConsumerSpec extends ZIOKafkaSpec {
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / nrPartitions))))
       },
       test("does not process messages twice by the same client when rebalancing") {
-        val nrMessages   = 20000
+        val nrMessages   = 15000
         val nrPartitions = 6
 
-        def diagnostics(consumer: Int, committed: Ref[Map[Int, Long]]) =
+        def diagnostics(committed: Ref[Map[Int, Long]]) =
           Diagnostics {
             case e: DiagnosticEvent.Rebalance =>
-              ZIO.debug(s"Consumer $consumer: ${e}. Offsets: ${committed}")
+              ZIO.logDebug(s"$e. Offsets: ${committed}")
             case DiagnosticEvent.Commit.Started(offsets) =>
-              ZIO.debug(s"Consumer $consumer starting committed ${offsets.map { case (tp, offset) =>
+              ZIO.logTrace(s"Starting commit ${offsets.map { case (tp, offset) =>
                   s"${tp.partition()}->${offset}"
                 }.mkString(",")}")
             case DiagnosticEvent.Commit.Success(offsets) =>
-              ZIO.debug(s"Consumer $consumer committed ${offsets.map { case (tp, offset) =>
-                  s"for tp ${tp.partition()}->${offset.offset()}"
-                }.mkString(",")}")
+              ZIO.foreachDiscard(offsets) { case (tp, offset) =>
+                ZIO.logAnnotate(LogAnnotation("partition", tp.partition().toString), LogAnnotation("topic", tp.topic)) {
+                  ZIO.logDebug(s"Committed offset ${offset.offset()}")
+                }
+              }
           }
 
         for {
@@ -397,76 +399,78 @@ object ConsumerSpec extends ZIOKafkaSpec {
           lastCommitted2   <- Ref.make(Map.empty[Int, Long])
 
           consumer1 <-
-            Consumer
-              .subscribeAnd(subscription)
-              .plainStream(Serde.string, Serde.string, 1)
-              .mapChunksZIO { records =>
-                consumer1Receiving.succeed(()) *>
-                  recordCounter.update(_ + records.size) *>
-                  messagesConsumed.update(m => m.updated(1, m.getOrElse(1, Chunk.empty) ++ records)) *> {
-                    val batch =
-                      OffsetBatch(
-                        records.map(_.offset)
-                      )
+            ZIO
+              .logAnnotate("consumer", "1") {
+                Consumer
+                  .subscribeAnd(subscription)
+                  .plainStream(Serde.string, Serde.string, 1)
+                  .mapChunksZIO { records =>
+                    consumer1Receiving.succeed(()) *>
+                      recordCounter.update(_ + records.size) *>
+                      messagesConsumed.update(m => m.updated(1, m.getOrElse(1, Chunk.empty) ++ records)) *> {
+                        val batch =
+                          OffsetBatch(
+                            records.map(_.offset)
+                          )
 
-                    (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
-                      k.partition() -> v
-                    })).uninterruptible
-                  } *> ZIO
-                    .debug(s"Consumer 1 committed offsets for ${records.size} records")
-                    .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
+                        (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
+                          k.partition() -> v
+                        })).uninterruptible
+                      } *> ZIO
+                        .logDebug(s"Committed offsets for ${records.size} records")
+                        .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
 //                }
+                  }
+                  .timeout(5.seconds)
+                  .runDrain
+                  .provideSomeLayer[Kafka](
+                    consumer(
+                      client1,
+                      Some(group),
+                      diagnostics = diagnostics(lastCommitted),
+                      restartStreamOnRebalancing = true
+                    )
+                  )
+                  .tapError(e => ZIO.logError(s"Error: ${e}"))
               }
-              .timeout(10.seconds)
-              .runDrain
-              .provideSomeLayer[Kafka](
-                consumer(
-                  client1,
-                  Some(group),
-                  diagnostics = diagnostics(1, lastCommitted),
-                  restartStreamOnRebalancing = true
-                )
-              )
-              .tapError(e => ZIO.debug(s"Error consumer 1: ${e}"))
-              .logSpan("Consumer 1")
               .fork
           _ <- consumer1Receiving.await // *> ZIO.sleep(5.seconds)
 
           _ = println("Starting second consumer")
-          consumer2 <- Consumer
-                         .subscribeAnd(subscription)
-                         .plainStream(Serde.string, Serde.string)
-                         .mapChunksZIO { case records =>
-//                           println(s"Consumer 2 starting ${tp.partition()}")
-//                           partition.mapChunksZIO { records =>
-                           recordCounter.update(_ + records.size) *>
-                             messagesConsumed.update(m => m.updated(2, m.getOrElse(2, Chunk.empty) ++ records)) *> {
-                               val batch =
-                                 OffsetBatch(
-                                   records.map(_.offset)
-                                 )
+          consumer2 <-
+            ZIO
+              .logAnnotate("consumer", "2") {
+                Consumer
+                  .subscribeAnd(subscription)
+                  .plainStream(Serde.string, Serde.string)
+                  .mapChunksZIO { case records =>
+                    recordCounter.update(_ + records.size) *>
+                      messagesConsumed.update(m => m.updated(2, m.getOrElse(2, Chunk.empty) ++ records)) *> {
+                        val batch =
+                          OffsetBatch(
+                            records.map(_.offset)
+                          )
 
-                               (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
-                                 k.partition() -> v
-                               })).uninterruptible
-                             } *> ZIO
-                               .debug(s"Consumer 2 committed offsets for ${records.size} records")
-                               .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
-//                           }
-                         }
-                         .timeout(10.seconds)
-                         .runDrain
-                         .provideSomeLayer[Kafka](
-                           consumer(
-                             client2,
-                             Some(group),
-                             diagnostics = diagnostics(2, lastCommitted2),
-                             restartStreamOnRebalancing = true
-                           )
-                         )
-                         .tapError(e => ZIO.debug(s"Error consumer 2: ${e}"))
-                         .logSpan("Consumer 2")
-                         .fork
+                        (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
+                          k.partition() -> v
+                        })).uninterruptible
+                      } *> ZIO
+                        .logDebug(s"Committed offsets for ${records.size} records")
+                        .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
+                  }
+                  .timeout(5.seconds)
+                  .runDrain
+                  .provideSomeLayer[Kafka](
+                    consumer(
+                      client2,
+                      Some(group),
+                      diagnostics = diagnostics(lastCommitted2),
+                      restartStreamOnRebalancing = true
+                    )
+                  )
+                  .tapError(e => ZIO.logError(s"Error: ${e}"))
+              }
+              .fork
           _                 <- consumer1.join
           _                 <- consumer2.join
           nrRecordsConsumed <- recordCounter.get
@@ -498,7 +502,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                       .flatMap { case (_, offsetsByPartition) => offsetsByPartition.values }
           _ = println(offsets.toSeq)
         } yield assertTrue(offsets.forall { case (size, uniqueSize) => size == uniqueSize })
-      },
+      }, // @@ TestAspect.nonFlaky(10),
       test("produce diagnostic events when rebalancing") {
         val nrMessages   = 50
         val nrPartitions = 6
@@ -657,6 +661,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
       },
       // Test backported from fs2-kafka: https://github.com/fd4s/fs2-kafka/blob/1bd0c1f3d46b543277fce1a3cc743154c162ef09/modules/core/src/test/scala/fs2/kafka/KafkaConsumerSpec.scala#L592
       test("should close old stream during rebalancing under load") {
+        // TODO test fails because we're already emitting a stream that is still pending on the old one to complete.
         val nrMessages   = 50000
         val nrPartitions = 3
         val partitions   = (0 until nrPartitions).toList
@@ -669,14 +674,17 @@ object ConsumerSpec extends ZIOKafkaSpec {
           Consumer
             .subscribeAnd(subscription)
             .partitionedStream(Serde.string, Serde.string)
-            .map { case (tp, partStream) =>
+            .flatMapPar(Int.MaxValue) { case (tp, partStream) =>
+              println(s"Instance ${instance}: Got to ${tp.partition()}")
               val registerAssignment = ZStream.fromZIO(allAssignments.update { current =>
+                println(s"Instance ${instance}: Registering tp ${tp.partition()}")
                 current.get(instance) match {
                   case Some(currentList) => current.updated(instance, currentList :+ tp.partition())
                   case None              => current.updated(instance, List(tp.partition()))
                 }
               })
-              val deregisterAssignment = ZStream.fromZIO(allAssignments.update({ current =>
+              val deregisterAssignment = allAssignments.update({ current =>
+                println(s"Instance ${instance}: Deregistering tp ${tp.partition()}")
                 current.get(instance) match {
                   case Some(currentList) =>
                     val idx = currentList.indexOf(tp.partition())
@@ -684,11 +692,10 @@ object ConsumerSpec extends ZIOKafkaSpec {
                     else current
                   case None => current
                 }
-              }))
+              })
 
-              registerAssignment.drain ++ partStream.schedule(Schedule.fixed(10.millis)) ++ deregisterAssignment.drain
+              registerAssignment.drain ++ partStream.schedule(Schedule.fixed(10.millis)).ensuring(deregisterAssignment)
             }
-            .flattenParUnbounded()
             .runDrain
         }
 
@@ -720,7 +727,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                         consumer(
                           client1,
                           Some(group),
-                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
+                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest),
+                          restartStreamOnRebalancing = true
                         )
                       )
                       .fork
@@ -740,7 +748,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                         consumer(
                           client3,
                           Some(group),
-                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
+                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest),
+                          restartStreamOnRebalancing = true
                         )
                       )
                       .fork
@@ -940,7 +949,25 @@ object ConsumerSpec extends ZIOKafkaSpec {
           _ <- fib2.interrupt
         } yield assertCompletes
       }
-    ).provideSomeLayerShared[TestEnvironment & Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
+    ).provideSomeLayerShared[TestEnvironment & Kafka](
+      producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
+    ) @@ withLiveClock @@ timeout(
       300.seconds
     )
+
+  lazy val logger: ZLogger[String, Unit] =
+    new ZLogger[String, Unit] {
+      override def apply(
+        trace: Trace,
+        fiberId: FiberId,
+        logLevel: LogLevel,
+        message: () => String,
+        cause: Cause[Any],
+        context: FiberRefs,
+        spans: List[LogSpan],
+        annotations: Map[String, String]
+      ): Unit =
+        println(s"${java.time.Instant
+            .now()} ${logLevel.label} [${annotations.map { case (k, v) => s"$k=$v" }.mkString(",")}] ${message()}")
+    }
 }
