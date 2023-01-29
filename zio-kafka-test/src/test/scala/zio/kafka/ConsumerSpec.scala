@@ -481,7 +481,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                         .toMap
                     }.view.flatMap { case (_, offsetsByPartition) => offsetsByPartition.values }.toMap
         } yield assertTrue(offsets.forall { case (size, uniqueSize) => size == uniqueSize })
-      } @@ TestAspect.nonFlaky(10),
+      },
       test("produce diagnostic events when rebalancing") {
         val nrMessages   = 50
         val nrPartitions = 6
