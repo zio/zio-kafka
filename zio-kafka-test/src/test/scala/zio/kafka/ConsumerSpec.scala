@@ -970,7 +970,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
         println(
           s"${java.time.Instant
               .now()} ${logLevel.label} [${annotations.map { case (k, v) => s"$k=$v" }
-              .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint + trace.toString}"
+              .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint}"
         )
     }
 }

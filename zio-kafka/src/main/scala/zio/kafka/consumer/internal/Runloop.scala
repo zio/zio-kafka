@@ -90,7 +90,7 @@ private[consumer] final class Runloop(
 
   private def seekToLastCommittedOffset(tp: TopicPartition) =
     offsetRetrieval match {
-      case OffsetRetrieval.Auto(_) =>
+      case OffsetRetrieval.Auto(_) if hasGroupId =>
         (consumer.withConsumer(_.position(tp)) zip consumer
           .withConsumer(_.committed(Set(tp).asJava))
           .map(_.asScala.get(tp).flatMap(Option.apply).map(_.offset()))).tap { case (nextToFetch, lastCommitted) =>
