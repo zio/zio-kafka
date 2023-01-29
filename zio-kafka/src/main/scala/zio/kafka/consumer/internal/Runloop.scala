@@ -261,7 +261,7 @@ private[consumer] final class Runloop(
       val req = reqsIt.next()
       if (revoked(req.tp)) {
         buf -= req.tp
-        revokeAction = revokeAction *> req.cont.fail(None).unit
+        revokeAction = revokeAction *> req.end.unit
       } else acc :+= req
     }
 
@@ -299,7 +299,7 @@ private[consumer] final class Runloop(
             reqRecs.toArray[ByteArrayConsumerRecord](Array.ofDim[ByteArrayConsumerRecord](reqRecs.size))
           )
 
-        fulfillAction = fulfillAction *> req.cont.succeed(concatenatedChunk.map { record =>
+        fulfillAction = fulfillAction *> req.succeed(concatenatedChunk.map { record =>
           CommittableRecord(
             record = record,
             commitHandle = commit,
@@ -400,7 +400,7 @@ private[consumer] final class Runloop(
 
             // Check shutdown again after polling (which takes up to the poll timeout)
             ZIO.ifZIO(isShutdown)(
-              pauseAllPartitions(c).as(
+              onTrue = pauseAllPartitions(c).as(
                 Runloop.PollResult(
                   Set(),
                   state.pendingRequests,
@@ -408,7 +408,8 @@ private[consumer] final class Runloop(
                   Map[TopicPartition, PartitionStreamControl](),
                   Map.empty // TODO check
                 )
-              ), {
+              ),
+              onFalse = {
                 val tpsInResponse   = records.partitions.asScala.toSet
                 val currentAssigned = c.assignment().asScala.toSet
 
@@ -551,8 +552,8 @@ private[consumer] final class Runloop(
         }
       newPendingCommits <-
         ZIO.ifZIO(isRebalancing)(
-          ZIO.succeed(state.pendingCommits),
-          doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).as(Chunk.empty)
+          onTrue = ZIO.succeed(state.pendingCommits),
+          onFalse = doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).as(Chunk.empty)
         )
     } yield State(
       pollResult.unfulfilledRequests,
@@ -564,8 +565,8 @@ private[consumer] final class Runloop(
 
   private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
-      ZIO.foreachDiscard(reqs)(_.cont.fail(None)).as(state),
-      consumer
+      onTrue = ZIO.foreachDiscard(reqs)(_.end).as(state),
+      onFalse = consumer
         .withConsumer(_.assignment.asScala)
         .flatMap { assignment =>
           ZIO.foldLeft(reqs)(state) { (state, req) =>
@@ -575,7 +576,7 @@ private[consumer] final class Runloop(
             ZIO.ifZIO(previousStreamFinished.map(_ && partitionIsAssigned))(
 //              println(s"Adding request ${req}")
               ZIO.succeed(state.addRequest(req)),
-              req.cont.fail(None).as(state)
+              req.end.as(state)
             )
           }
         }
@@ -584,8 +585,8 @@ private[consumer] final class Runloop(
 
   private def handleCommit(state: State, cmd: Command.Commit): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
-      ZIO.succeed(state.addCommit(cmd)),
-      doCommit(Chunk(cmd)).as(state)
+      onTrue = ZIO.succeed(state.addCommit(cmd)),
+      onFalse = doCommit(Chunk(cmd)).as(state)
     )
 
   /**
@@ -598,10 +599,10 @@ private[consumer] final class Runloop(
     cmd match {
       case Command.Poll =>
         // End all pending requests
-        ZIO.foreachDiscard(state.pendingRequests)(_.cont.fail(None)) *>
+        ZIO.foreachDiscard(state.pendingRequests)(_.end) *>
           handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = BufferedRecords.empty))
       case Command.Requests(reqs) =>
-        ZIO.foreachDiscard(reqs)(_.cont.fail(None)).as(state)
+        ZIO.foreachDiscard(reqs)(_.end).as(state)
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
     }
@@ -610,7 +611,7 @@ private[consumer] final class Runloop(
     cmd match {
       case Command.Poll =>
         // The consumer will throw an IllegalStateException if no call to subscribe
-        ZIO.ifZIO(subscribedRef.get)(handlePoll(state), ZIO.succeed(state))
+        ZIO.ifZIO(subscribedRef.get)(onTrue = handlePoll(state), onFalse = ZIO.succeed(state))
       case Command.Requests(reqs) =>
         handleRequests(state, reqs).flatMap { state =>
           // Optimization: eagerly enqueue a poll if we have pending requests instead of waiting
@@ -638,7 +639,7 @@ private[consumer] final class Runloop(
         ZStream.fromQueue(commitQueue)
       )
       .runFoldZIO(State.initial) { (state, cmd) =>
-        ZIO.ifZIO(isShutdown)(handleShutdown(state, cmd), handleOperational(state, cmd))
+        ZIO.ifZIO(isShutdown)(onTrue = handleShutdown(state, cmd), onFalse = handleOperational(state, cmd))
       }
       .onError(cause => partitions.offer(Take.failCause(cause)))
       .unit).forkScoped
@@ -648,7 +649,14 @@ private[consumer] object Runloop {
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
   type ByteArrayConsumerRecord    = ConsumerRecord[Array[Byte], Array[Byte]]
 
-  final case class Request(tp: TopicPartition, cont: Promise[Option[Throwable], Chunk[ByteArrayCommittableRecord]])
+  final case class Request(
+    tp: TopicPartition,
+    private val cont: Promise[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
+  ) {
+    @inline def succeed(data: Chunk[ByteArrayCommittableRecord]): UIO[Boolean] = cont.succeed(data)
+    @inline def end: UIO[Boolean]                                              = cont.fail(None)
+    @inline def fail(throwable: Throwable): UIO[Boolean]                       = cont.fail(Some(throwable))
+  }
   final case class PollResult(
     newlyAssigned: Set[TopicPartition],
     unfulfilledRequests: Chunk[Runloop.Request],
