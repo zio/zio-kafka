@@ -50,10 +50,9 @@ private[consumer] final class Runloop(
     waitBeforeStarting: UIO[Unit]
   ): UIO[(TopicPartition, PartitionStreamControl, ZStream[Any, Throwable, ByteArrayCommittableRecord])] =
     for {
-      interruptionPromise <- Promise.make[Throwable, Unit]
-      drainQueue          <- Queue.unbounded[Take[Nothing, ByteArrayCommittableRecord]]
-      completed           <- Promise.make[Nothing, Unit]
-      control = PartitionStreamControl(tp, interruptionPromise, drainQueue, completed)
+      drainQueue <- Queue.unbounded[Take[Nothing, ByteArrayCommittableRecord]]
+      completed  <- Promise.make[Nothing, Unit]
+      control = PartitionStreamControl(tp, drainQueue, completed)
       stream =
         (ZStream.logAnnotate("topic", tp.topic()) *>
           ZStream.logAnnotate("partition", tp.partition().toString) *>
@@ -76,9 +75,6 @@ private[consumer] final class Runloop(
                 )
             } yield result
           }
-//            .interruptWhen(
-//              interruptionPromise.await *> ZIO.logInfo(s"Finishing partition stream by interruption")
-//            )
             .viaFunction(s => if (perPartitionChunkPrefetch > 0) s.bufferChunks(perPartitionChunkPrefetch) else s)
             .concat(
               ZStream
