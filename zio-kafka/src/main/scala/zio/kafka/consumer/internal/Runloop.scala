@@ -162,7 +162,8 @@ private[consumer] final class Runloop(
                 )
             }
           }
-        }
+        },
+      onLost = (_, _) => ZIO.unit
     )
 
     trackRebalancing ++ emitDiagnostics ++ userRebalanceListener ++ revokeTopics
