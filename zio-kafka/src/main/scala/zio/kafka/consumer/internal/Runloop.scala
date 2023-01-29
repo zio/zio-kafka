@@ -55,14 +55,12 @@ private[consumer] final class Runloop(
       completed           <- Promise.make[Nothing, Unit]
       control = PartitionStreamControl(tp, interruptionPromise, drainQueue, completed)
       stream =
-        ZStream.logAnnotate("topic", tp.topic()) *>
+        (ZStream.logAnnotate("topic", tp.topic()) *>
           ZStream.logAnnotate("partition", tp.partition().toString) *>
           ZStream.finalizer(control.completeStream) *>
           ZStream.fromZIO(waitBeforeStarting) *>
           ZStream.fromZIO(
-            consumer
-              .withConsumer(_.position(tp))
-              .tap(pos => ZIO.logInfo(s"Starting partition stream. Next fetch offset is ${pos}"))
+            seekToLastCommittedOffset(tp)
           ) *>
           ZStream.repeatZIOChunkOption {
             for {
@@ -78,17 +76,38 @@ private[consumer] final class Runloop(
                 )
             } yield result
           }
+//            .interruptWhen(
+//              interruptionPromise.await *> ZIO.logInfo(s"Finishing partition stream by interruption")
+//            )
             .viaFunction(s => if (perPartitionChunkPrefetch > 0) s.bufferChunks(perPartitionChunkPrefetch) else s)
-            .interruptWhen(
-              interruptionPromise.await *> ZIO.logInfo(s"Finishing partition stream by interruption")
-            )
             .concat(
               ZStream
                 .fromQueue(drainQueue)
                 .flattenTake
-            )
+            ))
+          .tapErrorCause(ZIO.logErrorCause(_))
     } yield (tp, control, stream)
 
+  private def seekToLastCommittedOffset(tp: TopicPartition) =
+    offsetRetrieval match {
+      case OffsetRetrieval.Auto(_) =>
+        (consumer.withConsumer(_.position(tp)) zip consumer
+          .withConsumer(_.committed(Set(tp).asJava))
+          .map(_.asScala.get(tp).flatMap(Option.apply).map(_.offset()))).tap { case (nextToFetch, lastCommitted) =>
+          lastCommitted match {
+            case Some(lastCommitted) if lastCommitted != nextToFetch =>
+              ZIO.logInfo(
+                s"Seeking to last committed offset by this consumer from partition stream before rebalancing: ${lastCommitted}"
+              ) *>
+                consumer.withConsumer(_.seek(tp, lastCommitted))
+            case _ =>
+              ZIO.unit
+          }
+        }
+
+      case _ =>
+        ZIO.unit
+    }
   def gracefulShutdown: UIO[Unit] =
     for {
       wasShutdown <- shutdownRef.getAndSet(true)
@@ -230,9 +249,6 @@ private[consumer] final class Runloop(
 
     val (revokedStreams, assignedStreams) =
       currentAssignedStreams.partition(es => revoked(es._1))
-
-    if (revokedStreams.nonEmpty)
-      println(s"Revoking ${revokedStreams.keys.map(tp => s"tp ${tp.partition()}").mkString(",")}")
 
     var revokeAction: UIO[Unit] = ZIO.foreachDiscard(revokedStreams) { case (tp, control) =>
       val remaining = bufferedRecords.recs.getOrElse(tp, Chunk.empty)

@@ -27,8 +27,9 @@ private[consumer] class ConsumerAccess(
       .catchSome { case _: WakeupException =>
         ZIO.interrupt
       }
+      .exit // Prevent logging uncaught fiber failures
       .fork
-      .flatMap(fib => fib.join.onInterrupt(ZIO.succeed(consumer.wakeup()) *> fib.interrupt))
+      .flatMap(fib => fib.join.unexit.onInterrupt(ZIO.succeed(consumer.wakeup()) *> fib.interrupt))
 }
 
 private[consumer] object ConsumerAccess {

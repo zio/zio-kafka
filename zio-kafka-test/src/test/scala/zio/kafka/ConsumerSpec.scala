@@ -820,7 +820,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           // causing two rebalancing events for fib1 consumers on start and stop
           fib2 <- Consumer
                     .subscribeAnd(subscription)
-                    .plainStream(Serde.string, Serde.string)
+                    .plainStream(Serde.string, Serde.string, 1)
                     .take(20)
                     .runDrain
                     .provideSomeLayer[Kafka](
@@ -967,7 +967,10 @@ object ConsumerSpec extends ZIOKafkaSpec {
         spans: List[LogSpan],
         annotations: Map[String, String]
       ): Unit =
-        println(s"${java.time.Instant
-            .now()} ${logLevel.label} [${annotations.map { case (k, v) => s"$k=$v" }.mkString(",")}] ${message()}")
+        println(
+          s"${java.time.Instant
+              .now()} ${logLevel.label} [${annotations.map { case (k, v) => s"$k=$v" }
+              .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint + trace.toString}"
+        )
     }
 }

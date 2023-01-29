@@ -84,7 +84,7 @@ object KafkaTestUtils {
           ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
         .withOffsetRetrieval(offsetRetrieval)
-        .withPerPartitionChunkPrefetch(2)
+        .withPerPartitionChunkPrefetch(16)
         .withRestartStreamOnRebalancing(restartStreamOnRebalancing)
 
       val withClientInstanceId = clientInstanceId.fold(settings)(settings.withGroupInstanceId)
