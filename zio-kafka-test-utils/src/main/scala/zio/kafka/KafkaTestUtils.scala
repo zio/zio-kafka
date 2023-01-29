@@ -68,7 +68,8 @@ object KafkaTestUtils {
     groupId: Option[String] = None,
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
-    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
+    properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
       val settings = ConsumerSettings(kafka.bootstrapServers)
@@ -79,11 +80,12 @@ object KafkaTestUtils {
           ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",
           ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "3000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "250",
-          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "10",
+          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "100",
           ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
+        .withProperties(properties)
         .withOffsetRetrieval(offsetRetrieval)
-        .withPerPartitionChunkPrefetch(16)
+        .withPerPartitionChunkPrefetch(2)
 
       val withClientInstanceId = clientInstanceId.fold(settings)(settings.withGroupInstanceId)
       groupId.fold(withClientInstanceId)(withClientInstanceId.withGroupId)
@@ -109,7 +111,8 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     allowAutoCreateTopics: Boolean = true,
-    diagnostics: Diagnostics = Diagnostics.NoOp
+    diagnostics: Diagnostics = Diagnostics.NoOp,
+    properties: Map[String, String] = Map.empty
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
       consumerSettings(
@@ -117,7 +120,8 @@ object KafkaTestUtils {
         groupId,
         clientInstanceId,
         allowAutoCreateTopics,
-        offsetRetrieval
+        offsetRetrieval,
+        properties
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 

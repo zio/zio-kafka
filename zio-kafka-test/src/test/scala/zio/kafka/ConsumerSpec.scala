@@ -1,7 +1,12 @@
 package zio.kafka.consumer
 
 import io.github.embeddedkafka.EmbeddedKafka
-import org.apache.kafka.clients.consumer.{ ConsumerConfig, CooperativeStickyAssignor }
+import org.apache.kafka.clients.consumer.{
+  ConsumerConfig,
+  ConsumerPartitionAssignor,
+  CooperativeStickyAssignor,
+  RangeAssignor
+}
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.KafkaTestUtils._
@@ -14,6 +19,8 @@ import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
+
+import scala.reflect.ClassTag
 
 object ConsumerSpec extends ZIOKafkaSpec {
   override val kafkaPrefix: String = "consumespec"
@@ -357,133 +364,164 @@ object ConsumerSpec extends ZIOKafkaSpec {
                        .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / nrPartitions))))
       },
-      test("does not process messages twice by the same client when rebalancing") {
-        val nrMessages   = 15000
-        val nrPartitions = 6
+      suite("does not process messages twice by the same client when rebalancing")({
 
-        def diagnostics(committed: Ref[Map[Int, Long]]) =
-          Diagnostics {
-            case e: DiagnosticEvent.Rebalance =>
-              ZIO.logInfo(s"$e. Offsets: ${committed}")
-            case DiagnosticEvent.Commit.Started(offsets) =>
-              ZIO.logTrace(s"Starting commit ${offsets.map { case (tp, offset) =>
-                  s"${tp.partition()}->${offset}"
-                }.mkString(",")}")
-            case DiagnosticEvent.Commit.Success(offsets) =>
-              ZIO.foreachDiscard(offsets) { case (tp, offset) =>
-                ZIO.logAnnotate(LogAnnotation("partition", tp.partition().toString), LogAnnotation("topic", tp.topic)) {
-                  ZIO.logDebug(s"Committed offset ${offset.offset()}")
-                }
+        def testForPartitionAssignmentStrategy[T <: ConsumerPartitionAssignor: ClassTag] =
+          test(implicitly[ClassTag[T]].runtimeClass.getName) {
+            val nrMessages   = 15000
+            val nrPartitions = 6
+
+            def diagnostics(committed: Ref[Map[Int, Long]]) =
+              Diagnostics {
+                case e: DiagnosticEvent.Rebalance =>
+                  ZIO.logInfo(s"$e. Offsets: ${committed}")
+                case DiagnosticEvent.Commit.Started(offsets) =>
+                  ZIO.logTrace(s"Starting commit ${offsets.map { case (tp, offset) =>
+                      s"${tp.partition()}->${offset}"
+                    }.mkString(",")}")
+                case DiagnosticEvent.Commit.Success(offsets) =>
+                  ZIO.foreachDiscard(offsets) { case (tp, offset) =>
+                    ZIO.logAnnotate(
+                      LogAnnotation("partition", tp.partition().toString),
+                      LogAnnotation("topic", tp.topic)
+                    ) {
+                      ZIO.logInfo(s"Committed offset ${offset.offset()}")
+                    }
+                  }
               }
+
+            for {
+              // Produce messages on several partitions
+              topic   <- randomTopic
+              group   <- randomGroup
+              client1 <- randomClient
+              client2 <- randomClient
+
+              _ <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+              messages = (1 to nrMessages).map(i => s"$i" -> s"msg$i")
+              _ <- produceMany(topic, messages)
+
+              // Consume messages
+              subscription = Subscription.topics(topic)
+              consumer1Receiving <- Promise.make[Nothing, Unit]
+              recordCounter      <- Ref.make(0)
+
+              messagesConsumed <- Ref.make(Map.empty[Int, Chunk[CommittableRecord[String, String]]])
+              lastCommitted    <- Ref.make(Map.empty[Int, Long])
+              lastCommitted2   <- Ref.make(Map.empty[Int, Long])
+
+              consumer1 <-
+                ZIO
+                  .logAnnotate("consumer", "1") {
+                    Consumer
+                      .subscribeAnd(subscription)
+                      .partitionedStream(Serde.string, Serde.string)
+                      .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
+                        partitionStream.mapChunksZIO { records =>
+                          consumer1Receiving.succeed(()) *>
+                            recordCounter.update(_ + records.size) *>
+                            messagesConsumed.update(m => m.updated(1, m.getOrElse(1, Chunk.empty) ++ records)) *> {
+                              val batch = OffsetBatch(records.map(_.offset))
+
+                              (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
+                                k.partition() -> v
+                              })).uninterruptible
+                            } *> ZIO
+                              .logDebug(s"Committed offsets for ${records.size} records")
+                              .as(records)
+                        }
+                      }
+                      .timeout(5.seconds)
+                      .runDrain
+                      .provideSomeLayer[Kafka](
+                        consumer(
+                          client1,
+                          Some(group),
+                          diagnostics = diagnostics(lastCommitted),
+                          properties = Map(
+                            ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> implicitly[
+                              ClassTag[T]
+                            ].runtimeClass.getName
+                          )
+                        )
+                      )
+                      .tapError(e => ZIO.logError(s"Error: ${e}")) *> ZIO.logInfo("Done")
+                  }
+                  .fork
+              _ <- consumer1Receiving.await
+
+              consumer2 <-
+                ZIO
+                  .logAnnotate("consumer", "2") {
+                    Consumer
+                      .subscribeAnd(subscription)
+                      .partitionedStream(Serde.string, Serde.string)
+                      .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
+                        partitionStream.mapChunksZIO { records =>
+                          recordCounter.update(_ + records.size) *>
+                            messagesConsumed.update(m => m.updated(2, m.getOrElse(2, Chunk.empty) ++ records)) *> {
+                              val batch = OffsetBatch(records.map(_.offset))
+
+                              (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
+                                k.partition() -> v
+                              })).uninterruptible
+                            } *> ZIO
+                              .logDebug(s"Committed offsets for ${records.size} records")
+                              .as(records)
+                        }
+                      }
+                      .timeout(5.seconds)
+                      .runDrain
+                      .provideSomeLayer[Kafka](
+                        consumer(
+                          client2,
+                          Some(group),
+                          diagnostics = diagnostics(lastCommitted2),
+                          properties = Map(
+                            ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> implicitly[
+                              ClassTag[T]
+                            ].runtimeClass.getName
+                          )
+                        )
+                      )
+                      .tapError(e => ZIO.logError(s"Error: ${e}")) *> ZIO.logInfo("Done")
+                  }
+                  .fork
+              _                 <- consumer1.join
+              _                 <- consumer2.join
+              nrRecordsConsumed <- recordCounter.get
+              _                 <- ZIO.logInfo(s"Consumed ${nrRecordsConsumed} records")
+              recordsConsumed   <- messagesConsumed.get
+              offsetsByConsumer = recordsConsumed.view.map { case (consumer, records) =>
+                                    consumer -> records
+                                      .groupBy(m => m.partition)
+                                      .view
+                                      .map { case (partition, records) =>
+                                        val offsets = records.map(_.offset)
+                                        partition -> ((offsets.size, offsets.map(_.offset).toSet.size))
+                                      }
+                                      .toMap
+                                  }.view.toMap
+              _ <- ZIO.logInfo(offsetsByConsumer.mkString(","))
+              allOffsets = offsetsByConsumer.toSeq.flatMap { case (_, offsetsByPartition) => offsetsByPartition.values }
+            } yield assertTrue(allOffsets.forall { case (size, uniqueSize) => size == uniqueSize })
           }
 
-        for {
-          // Produce messages on several partitions
-          topic   <- randomTopic
-          group   <- randomGroup
-          client1 <- randomClient
-          client2 <- randomClient
+        // Test for both default partition assignment strategies
+        Seq(
+          testForPartitionAssignmentStrategy[RangeAssignor],
+          testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
+        )
 
-          _ <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-          messages = (1 to nrMessages).map(i => s"$i" -> s"msg$i")
-          _ <- produceMany(topic, messages)
-
-          // Consume messages
-          subscription = Subscription.topics(topic)
-          consumer1Receiving <- Promise.make[Nothing, Unit]
-          recordCounter      <- Ref.make(0)
-
-          messagesConsumed <- Ref.make(Map.empty[Int, Chunk[CommittableRecord[String, String]]])
-          lastCommitted    <- Ref.make(Map.empty[Int, Long])
-          lastCommitted2   <- Ref.make(Map.empty[Int, Long])
-
-          consumer1 <-
-            ZIO
-              .logAnnotate("consumer", "1") {
-                Consumer
-                  .subscribeAnd(subscription)
-                  .partitionedStream(Serde.string, Serde.string)
-                  .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
-                    partitionStream.mapChunksZIO { records =>
-                      consumer1Receiving.succeed(()) *>
-                        recordCounter.update(_ + records.size) *>
-                        messagesConsumed.update(m => m.updated(1, m.getOrElse(1, Chunk.empty) ++ records)) *> {
-                          val batch = OffsetBatch(records.map(_.offset))
-
-                          (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
-                            k.partition() -> v
-                          })).uninterruptible
-                        } *> ZIO
-                          .logDebug(s"Committed offsets for ${records.size} records")
-                          .as(records)
-                    }
-                  }
-                  .timeout(5.seconds)
-                  .runDrain
-                  .provideSomeLayer[Kafka](
-                    consumer(
-                      client1,
-                      Some(group),
-                      diagnostics = diagnostics(lastCommitted)
-                    )
-                  )
-                  .tapError(e => ZIO.logError(s"Error: ${e}"))
-              }
-              .fork
-          _ <- consumer1Receiving.await
-
-          consumer2 <-
-            ZIO
-              .logAnnotate("consumer", "2") {
-                Consumer
-                  .subscribeAnd(subscription)
-                  .partitionedStream(Serde.string, Serde.string)
-                  .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
-                    partitionStream.mapChunksZIO { records =>
-                      recordCounter.update(_ + records.size) *>
-                        messagesConsumed.update(m => m.updated(2, m.getOrElse(2, Chunk.empty) ++ records)) *> {
-                          val batch = OffsetBatch(records.map(_.offset))
-
-                          (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
-                            k.partition() -> v
-                          })).uninterruptible
-                        } *> ZIO
-                          .logDebug(s"Committed offsets for ${records.size} records")
-                          .as(records)
-                    }
-                  }
-                  .timeout(5.seconds)
-                  .runDrain
-                  .provideSomeLayer[Kafka](
-                    consumer(
-                      client2,
-                      Some(group),
-                      diagnostics = diagnostics(lastCommitted2)
-                    )
-                  )
-                  .tapError(e => ZIO.logError(s"Error: ${e}"))
-              }
-              .fork
-          _                 <- consumer1.join
-          _                 <- consumer2.join
-          nrRecordsConsumed <- recordCounter.get
-          _                 <- ZIO.debug(s"Consumed ${nrRecordsConsumed} records")
-          recordsConsumed   <- messagesConsumed.get
-          offsets = recordsConsumed.view.map { case (consumer, records) =>
-                      consumer -> records
-                        .groupBy(m => m.partition)
-                        .view
-                        .map { case (partition, records) =>
-                          val offsets = records.map(_.offset)
-                          partition -> ((offsets.size, offsets.map(_.offset).toSet.size))
-                        }
-                        .toMap
-                    }.view.flatMap { case (_, offsetsByPartition) => offsetsByPartition.values }.toMap
-        } yield assertTrue(offsets.forall { case (size, uniqueSize) => size == uniqueSize })
-      },
+      }: _*),
       test("produce diagnostic events when rebalancing") {
         val nrMessages   = 50
         val nrPartitions = 6
+
+        def rebalanceDiagnostics =
+          Diagnostics { case e: DiagnosticEvent.Rebalance =>
+            ZIO.logInfo(s"$e")
+          }
 
         ZIO.scoped {
           Diagnostics.SlidingQueue
@@ -514,7 +552,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                .take(nrPartitions.toLong / 2)
                                .runDrain
                                .provideSomeLayer[Kafka](
-                                 consumer(client1, Some(group), diagnostics = diagnostics)
+                                 consumer(client1, Some(group), diagnostics = diagnostics ++ rebalanceDiagnostics)
                                )
                                .fork
                 diagnosticStream <- ZStream
@@ -737,6 +775,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
         } yield assertCompletes
       },
       test("restartStreamsOnRebalancing mode closes all partition streams") {
+        // TODO test does not work for cooperative partition strategy
         val nrPartitions = 5
         val nrMessages   = 100
 
@@ -924,7 +963,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
       }
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
-    ) @@ withLiveClock @@ timeout(300.seconds) @@ TestAspect.sequential
+    ) @@ withLiveClock @@ timeout(60.seconds)
 
   lazy val logger: ZLogger[String, Unit] =
     new ZLogger[String, Unit] {
