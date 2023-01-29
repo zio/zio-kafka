@@ -51,10 +51,13 @@ private[consumer] final class Runloop(
     for {
       drainQueue <- Queue.unbounded[Take[Nothing, ByteArrayCommittableRecord]]
       completed  <- Promise.make[Nothing, Unit]
+      annotations = Set(LogAnnotation("topic", tp.topic()), LogAnnotation("partition", tp.partition().toString))
+      _ <- ZIO.logAnnotate(annotations) {
+             ZIO.logInfo("Creating new partition stream")
+           }
       control = PartitionStreamControl(tp, drainQueue, completed)
       stream =
-        (ZStream.logAnnotate("topic", tp.topic()) *>
-          ZStream.logAnnotate("partition", tp.partition().toString) *>
+        (ZStream.logAnnotate(annotations) *>
           ZStream.finalizer(control.completeStream) *>
           ZStream.fromZIO(waitBeforeStarting) *>
           ZStream.fromZIO(
@@ -63,7 +66,7 @@ private[consumer] final class Runloop(
           ZStream.repeatZIOChunkOption {
             for {
               request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-              _       <- ZIO.logDebug(s"Making request for tp ${tp.partition()}")
+              _       <- ZIO.logDebug(s"Queueing request")
               _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
               _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
               result <-

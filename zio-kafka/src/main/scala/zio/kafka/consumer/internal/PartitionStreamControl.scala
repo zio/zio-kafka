@@ -23,5 +23,10 @@ private[internal] case class PartitionStreamControl(
     }
 
   def completeStream: UIO[Unit] =
-    ZIO.logDebug(s"Marked completion of partition stream") *> streamCompleted.succeed(()).unit
+    ZIO.logAnnotate(
+      LogAnnotation("topic", topicPartition.topic()),
+      LogAnnotation("partition", topicPartition.partition().toString)
+    ) {
+      ZIO.logDebug(s"Marked completion of partition stream") *> streamCompleted.succeed(()).unit
+    }
 }
