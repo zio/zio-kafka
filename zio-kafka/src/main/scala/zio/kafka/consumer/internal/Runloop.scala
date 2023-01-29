@@ -17,6 +17,7 @@ import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.stream._
 
 import java.util
+import scala.annotation.unused
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
@@ -37,7 +38,7 @@ private[consumer] final class Runloop(
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   subscribedRef: Ref[Boolean],
-  restartStreamsOnRebalancing: Boolean,
+  @unused restartStreamsOnRebalancing: Boolean,
   currentState: Ref[State],
   perPartitionChunkPrefetch: Int,
   pollQueue: Queue[Command.Poll.type]
@@ -124,6 +125,7 @@ private[consumer] final class Runloop(
       (lost, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Lost(lost))
     )
 
+    // Revokes ALL partitions on rebalancing, regardless of which ones were actually revoked
     lazy val revokeTopics = RebalanceListener(
       onAssigned = (assigned, _) =>
         lastRebalanceEvent.updateZIO {
@@ -156,11 +158,7 @@ private[consumer] final class Runloop(
         }
     )
 
-    if (restartStreamsOnRebalancing) {
-      trackRebalancing ++ emitDiagnostics ++ userRebalanceListener ++ revokeTopics
-    } else {
-      trackRebalancing ++ emitDiagnostics ++ userRebalanceListener
-    }
+    trackRebalancing ++ emitDiagnostics ++ userRebalanceListener ++ revokeTopics
   }
 
   def markSubscribed: UIO[Unit] = subscribedRef.set(true)
@@ -416,7 +414,6 @@ private[consumer] final class Runloop(
                 for {
                   rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
 
-                  // rebalanceEvent is only Some(_) when `restartStreamsOnRebalancing` is set to true
                   newlyAssigned = rebalanceEvent match {
                                     case Some(Runloop.RebalanceEvent.Assigned(assigned)) =>
                                       assigned
@@ -455,7 +452,6 @@ private[consumer] final class Runloop(
 
                   _ <- doSeekForNewPartitions(c, newlyAssigned)
 
-                  // rebalanceEvent is only Some(_) when `restartStreamsOnRebalancing` is set to true
                   revokeResult <- rebalanceEvent match {
                                     case Some(Runloop.RebalanceEvent.Revoked(result)) =>
                                       ZIO.succeed(
@@ -567,12 +563,7 @@ private[consumer] final class Runloop(
 
   private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
-      if (restartStreamsOnRebalancing) {
-        ZIO.foreachDiscard(reqs)(_.cont.fail(None)).as(state)
-      } else {
-//        println(s"Adding requests: ${reqs}")
-        ZIO.succeed(state.addRequests(reqs))
-      },
+      ZIO.foreachDiscard(reqs)(_.cont.fail(None)).as(state),
       consumer
         .withConsumer(_.assignment.asScala)
         .flatMap { assignment =>
