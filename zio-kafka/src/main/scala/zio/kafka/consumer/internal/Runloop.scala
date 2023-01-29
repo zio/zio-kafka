@@ -98,7 +98,7 @@ private[consumer] final class Runloop(
             lastCommitted match {
               case Some(lastCommitted) if lastCommitted != nextToFetch =>
                 ZIO.logInfo(
-                  s"Seeking to last committed offset by this consumer from partition stream before rebalancing: ${lastCommitted}"
+                  s"Seeking to last committed offset by this consumer from partition stream before rebalancing: from ${nextToFetch} to ${lastCommitted}"
                 ) *>
                   consumer.withConsumer(_.seek(tp, lastCommitted))
               case _ =>
@@ -416,37 +416,12 @@ private[consumer] final class Runloop(
                 for {
                   rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
 
-                  newlyAssigned = rebalanceEvent match {
-                                    case Some(Runloop.RebalanceEvent.Assigned(assigned)) =>
-                                      assigned
-                                    case Some(
-                                          Runloop.RebalanceEvent.RevokedAndAssigned(_, assigned)
-                                        ) =>
-                                      assigned
-                                    case Some(Runloop.RebalanceEvent.Revoked(_)) =>
-                                      currentAssigned -- prevAssigned
-                                    case None =>
-                                      currentAssigned -- prevAssigned
-                                  }
-//                  _ <- ZIO.logInfo(s"Current assigned: ${currentAssigned.map(_.partition()).mkString(",")}")
-                  remainingRequestedPartitions = rebalanceEvent match {
-                                                   case Some(Runloop.RebalanceEvent.Revoked(_)) | Some(
-                                                         Runloop.RebalanceEvent
-                                                           .RevokedAndAssigned(_, _)
-                                                       ) =>
-                                                     // In case rebalancing restarted all partitions, we have to ignore
-                                                     // all the requests as their promise were for the previous partition streams
-                                                     Set.empty
-                                                   case Some(Runloop.RebalanceEvent.Assigned(_)) =>
-                                                     requestedPartitions
-                                                   case None =>
-                                                     requestedPartitions
-                                                 }
-                  unrequestedRecords = bufferRecordsForUnrequestedPartitions(
-                                         records,
-                                         tpsInResponse -- remainingRequestedPartitions
-                                       )
+                  // Include the partitions whose streams we ended during a revoke
+                  newlyAssigned = currentAssigned -- prevAssigned
+                  unrequestedRecords =
+                    bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
 
+                  // TODO Is it wrong to do this for the ended partition streams as well..?
                   _ <- doSeekForNewPartitions(c, newlyAssigned)
 
                   revokeResult <- rebalanceEvent match {
