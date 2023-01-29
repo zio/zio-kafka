@@ -475,7 +475,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                         .view
                         .map { case (partition, records) =>
                           val offsets = records.map(_.offset)
-                          partition -> (offsets.size, offsets.map(_.offset).toSet.size)
+                          partition -> ((offsets.size, offsets.map(_.offset).toSet.size))
                         }
                         .toMap
                     }.view.flatMap { case (_, offsetsByPartition) => offsetsByPartition.values }.toMap
