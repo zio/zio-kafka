@@ -60,7 +60,7 @@ private[consumer] final class Runloop(
         (ZStream.logAnnotate(annotations) *>
           ZStream.finalizer(control.completeStream) *>
           ZStream.fromZIO(waitBeforeStarting) *>
-          ZStream.fromZIO(seekToLastCommittedOffset(tp)) *>
+          ZStream.fromZIO(seekForNewPartitionStream(tp)) *>
           ZStream.repeatZIOChunkOption {
             for {
               request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
@@ -86,9 +86,16 @@ private[consumer] final class Runloop(
           .tapErrorCause(ZIO.logErrorCause(_))
     } yield (tp, control, stream)
 
-  private def seekToLastCommittedOffset(tp: TopicPartition) =
+  /*
+  After rebalancing, the next fetch position is set to the last committed offset at that time, which may be lower than
+  the last fetched offset that may still be in the previous partition stream's buffer. That is why we seek before
+  requesting data for the partition.
+
+  In case of manual offset retrieval, here is where we seek.
+   */
+  private def seekForNewPartitionStream(tp: TopicPartition): Task[Any] =
     // We can get a "java.lang.IllegalStateException: You can only check the position for partitions assigned to this consumer."
-    // from the position(tp) call when the partition is already revoked before starting.
+    // from the position(tp) call when the partition is already revoked before starting, the `.option` handles this
     offsetRetrieval match {
       case OffsetRetrieval.Auto(_) if hasGroupId =>
         (consumer.withConsumer(_.position(tp)).option zip consumer
@@ -108,6 +115,13 @@ private[consumer] final class Runloop(
             // No position for this TP: we're not assigned this TP
             ZIO.unit
         }
+
+      case OffsetRetrieval.Manual(getOffsets) =>
+        getOffsets(Set(tp))
+          .tap(offsets =>
+            ZIO.foreachDiscard(offsets) { case (tp, offset) => consumer.withConsumer(_.seek(tp, offset)) }
+          )
+          .unit
 
       case _ =>
         ZIO.unit
@@ -344,18 +358,6 @@ private[consumer] final class Runloop(
     BufferedRecords.fromMap(builder.result())
   }
 
-  private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Unit] =
-    offsetRetrieval match {
-      case OffsetRetrieval.Manual(getOffsets) =>
-        getOffsets(tps)
-          .tap(offsets => ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) })
-          .when(tps.nonEmpty)
-          .unit
-
-      case OffsetRetrieval.Auto(_) =>
-        ZIO.unit
-    }
-
   // Pause partitions for which there is no demand and resume those for which there is now demand
   private def resumeAndPausePartitions(
     c: ByteArrayKafkaConsumer,
@@ -420,9 +422,6 @@ private[consumer] final class Runloop(
                   newlyAssigned = currentAssigned -- prevAssigned
                   unrequestedRecords =
                     bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
-
-                  // TODO Is it wrong to do this for the ended partition streams as well..?
-                  _ <- doSeekForNewPartitions(c, newlyAssigned)
 
                   revokeResult <- rebalanceEvent match {
                                     case Some(Runloop.RebalanceEvent.Revoked(result)) =>
