@@ -14,7 +14,6 @@ import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import scala.collection.compat._
 
 object ConsumerSpec extends ZIOKafkaSpec {
   override val kafkaPrefix: String = "consumespec"
