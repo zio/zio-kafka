@@ -104,6 +104,9 @@ private[consumer] final class Runloop(
               case _ =>
                 ZIO.unit
             }
+          case _ =>
+            // No position for this TP: we're not assigned this TP
+            ZIO.unit
         }
 
       case _ =>
@@ -566,6 +569,10 @@ private[consumer] final class Runloop(
       newFinishingStreams
     )
 
+  /*
+  When getting requests during rebalancing, end the partition stream. Otherwise allow the request unless
+  we're not assigned the TP or there's a revoked stream that is not yet done draining.
+   */
   private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
       onTrue = ZIO.foreachDiscard(reqs)(_.end).as(state),
@@ -577,9 +584,8 @@ private[consumer] final class Runloop(
             val previousStreamFinished =
               state.finishingStreams.get(req.tp).map(_.streamCompleted.isDone).getOrElse(ZIO.succeed(true))
             ZIO.ifZIO(previousStreamFinished.map(_ && partitionIsAssigned))(
-//              println(s"Adding request ${req}")
-              ZIO.succeed(state.addRequest(req)),
-              req.end.as(state)
+              onTrue = ZIO.succeed(state.addRequest(req)),
+              onFalse = req.end.as(state)
             )
           }
         }
