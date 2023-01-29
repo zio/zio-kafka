@@ -403,23 +403,21 @@ object ConsumerSpec extends ZIOKafkaSpec {
               .logAnnotate("consumer", "1") {
                 Consumer
                   .subscribeAnd(subscription)
-                  .plainStream(Serde.string, Serde.string, 1)
-                  .mapChunksZIO { records =>
-                    consumer1Receiving.succeed(()) *>
-                      recordCounter.update(_ + records.size) *>
-                      messagesConsumed.update(m => m.updated(1, m.getOrElse(1, Chunk.empty) ++ records)) *> {
-                        val batch =
-                          OffsetBatch(
-                            records.map(_.offset)
-                          )
+                  .partitionedStream(Serde.string, Serde.string)
+                  .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
+                    partitionStream.mapChunksZIO { records =>
+                      consumer1Receiving.succeed(()) *>
+                        recordCounter.update(_ + records.size) *>
+                        messagesConsumed.update(m => m.updated(1, m.getOrElse(1, Chunk.empty) ++ records)) *> {
+                          val batch = OffsetBatch(records.map(_.offset))
 
-                        (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
-                          k.partition() -> v
-                        })).uninterruptible
-                      } *> ZIO
-                        .logDebug(s"Committed offsets for ${records.size} records")
-                        .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
-//                }
+                          (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
+                            k.partition() -> v
+                          })).uninterruptible
+                        } *> ZIO
+                          .logDebug(s"Committed offsets for ${records.size} records")
+                          .as(records)
+                    }
                   }
                   .timeout(5.seconds)
                   .runDrain
@@ -433,28 +431,27 @@ object ConsumerSpec extends ZIOKafkaSpec {
                   .tapError(e => ZIO.logError(s"Error: ${e}"))
               }
               .fork
-          _ <- consumer1Receiving.await // *> ZIO.sleep(5.seconds)
+          _ <- consumer1Receiving.await
 
           consumer2 <-
             ZIO
               .logAnnotate("consumer", "2") {
                 Consumer
                   .subscribeAnd(subscription)
-                  .plainStream(Serde.string, Serde.string)
-                  .mapChunksZIO { case records =>
-                    recordCounter.update(_ + records.size) *>
-                      messagesConsumed.update(m => m.updated(2, m.getOrElse(2, Chunk.empty) ++ records)) *> {
-                        val batch =
-                          OffsetBatch(
-                            records.map(_.offset)
-                          )
+                  .partitionedStream(Serde.string, Serde.string)
+                  .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
+                    partitionStream.mapChunksZIO { records =>
+                      recordCounter.update(_ + records.size) *>
+                        messagesConsumed.update(m => m.updated(2, m.getOrElse(2, Chunk.empty) ++ records)) *> {
+                          val batch = OffsetBatch(records.map(_.offset))
 
-                        (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
-                          k.partition() -> v
-                        })).uninterruptible
-                      } *> ZIO
-                        .logDebug(s"Committed offsets for ${records.size} records")
-                        .as(records) // .as(s"Consumer 2: ${(record.partition, record.key)}")
+                          (batch.commit *> lastCommitted.update(_ ++ batch.offsets.map { case (k, v) =>
+                            k.partition() -> v
+                          })).uninterruptible
+                        } *> ZIO
+                          .logDebug(s"Committed offsets for ${records.size} records")
+                          .as(records)
+                    }
                   }
                   .timeout(5.seconds)
                   .runDrain
@@ -473,12 +470,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
           nrRecordsConsumed <- recordCounter.get
           _                 <- ZIO.debug(s"Consumed ${nrRecordsConsumed} records")
           recordsConsumed   <- messagesConsumed.get
-          byConsumerPartition = recordsConsumed.view
-                                  .mapValues(records =>
-                                    records.map(r => r.partition -> r.offset).groupBy(_._1).view.mapValues(_.size).toMap
-                                  )
-                                  .toMap
-          // Assert: no record (identified by offset) is processed twice by the same consumer
           offsets = recordsConsumed.view
                       .mapValues(
                         _.groupBy(m => m.partition).view
@@ -647,7 +638,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
       },
       // Test backported from fs2-kafka: https://github.com/fd4s/fs2-kafka/blob/1bd0c1f3d46b543277fce1a3cc743154c162ef09/modules/core/src/test/scala/fs2/kafka/KafkaConsumerSpec.scala#L592
       test("should close old stream during rebalancing under load") {
-        // TODO test fails because we're already emitting a stream that is still pending on the old one to complete.
         val nrMessages   = 50000
         val nrPartitions = 3
         val partitions   = (0 until nrPartitions).toList
@@ -661,16 +651,13 @@ object ConsumerSpec extends ZIOKafkaSpec {
             .subscribeAnd(subscription)
             .partitionedStream(Serde.string, Serde.string)
             .flatMapPar(Int.MaxValue) { case (tp, partStream) =>
-              println(s"Instance ${instance}: Got to ${tp.partition()}")
               val registerAssignment = ZStream.fromZIO(allAssignments.update { current =>
-                println(s"Instance ${instance}: Registering tp ${tp.partition()}")
                 current.get(instance) match {
                   case Some(currentList) => current.updated(instance, currentList :+ tp.partition())
                   case None              => current.updated(instance, List(tp.partition()))
                 }
               })
               val deregisterAssignment = allAssignments.update({ current =>
-                println(s"Instance ${instance}: Deregistering tp ${tp.partition()}")
                 current.get(instance) match {
                   case Some(currentList) =>
                     val idx = currentList.indexOf(tp.partition())
@@ -688,6 +675,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
         def checkAssignments(allAssignments: Ref[Map[Int, List[Int]]])(instances: Set[Int]) =
           ZStream
             .repeatZIOWithSchedule(allAssignments.get, Schedule.spaced(30.millis))
+            .rechunk(1)
             .filter { state =>
               state.keySet == instances &&
               instances.forall(instance => state.get(instance).exists(_.nonEmpty)) &&
@@ -956,5 +944,5 @@ object ConsumerSpec extends ZIOKafkaSpec {
               .now()} ${logLevel.label} [${annotations.map { case (k, v) => s"$k=$v" }
               .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint}"
         )
-    }
+    }.filterLogLevel(_ >= LogLevel.Info).map(_ => ())
 }
