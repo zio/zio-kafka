@@ -71,7 +71,7 @@ def buildInfoSettings(packageName: String) =
 
 def stdSettings(prjName: String) = Seq(
   name              := s"$prjName",
-  scalafmtOnCompile := true,
+  scalafmtOnCompile := !(insideCI.value),
   Compile / compile / scalacOptions ++= {
     if (scalaBinaryVersion.value == "2.13") Seq("-Wconf:cat=unused-nowarn:s")
     else Seq()
