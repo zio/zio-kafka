@@ -1,9 +1,9 @@
 # Inspired by Flavio W. Brasil's work on Kyo: https://github.com/fwbrasil/kyo
-name: benchs
+name: Benchs
 on:
   push:
     branches:
-      - main
+      - master
 
 permissions:
   # deployments permission to deploy GitHub pages website
