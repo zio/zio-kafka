@@ -54,7 +54,7 @@ jobs:
         with:
           name: JMH Benchmark
           tool: 'jmh'
-          output-file-path: zioKafkaBench/jmh-result.json
+          output-file-path: zio-kafka-bench/jmh-result.json
           # Access token to deploy GitHub Pages branch
           github-token: ${{ secrets.GITHUB_TOKEN }}
           # Push and deploy GitHub pages branch automatically
