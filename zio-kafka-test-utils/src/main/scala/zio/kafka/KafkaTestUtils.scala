@@ -1,6 +1,6 @@
 package zio.kafka
 
-import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerRecord }
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio._
 import zio.kafka.admin._
@@ -144,7 +144,7 @@ object KafkaTestUtils {
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
   def consumeWithStrings[RC](clientId: String, groupId: Option[String] = None, subscription: Subscription)(
-    r: (String, String) => URIO[Any, Unit]
+    r: ConsumerRecord[String, String] => URIO[Any, Unit]
   ): RIO[Kafka, Unit] =
     consumerSettings(clientId, groupId, None).flatMap { settings =>
       Consumer.consumeWith[Any, Any, String, String](

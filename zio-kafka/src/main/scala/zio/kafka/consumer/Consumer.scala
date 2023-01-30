@@ -1,6 +1,6 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetAndTimestamp }
+import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp }
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition }
 import zio._
 import zio.kafka.serde.Deserializer
@@ -98,7 +98,7 @@ trait Consumer {
     valueDeserializer: Deserializer[R, V],
     commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
   )(
-    f: (K, V) => URIO[R1, Unit]
+    f: ConsumerRecord[K, V] => URIO[R1, Unit]
   ): ZIO[R & R1, Throwable, Unit]
 
   def subscribe(subscription: Subscription): Task[Unit]
@@ -269,7 +269,7 @@ object Consumer {
       valueDeserializer: Deserializer[R, V],
       commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
     )(
-      f: (K, V) => URIO[R1, Unit]
+      f: ConsumerRecord[K, V] => URIO[R1, Unit]
     ): ZIO[R & R1, Throwable, Unit] =
       for {
         r <- ZIO.environment[R & R1]
@@ -280,7 +280,7 @@ object Consumer {
                    .flatMapPar(Int.MaxValue, bufferSize = settings.perPartitionChunkPrefetch) {
                      case (_, partitionStream) =>
                        partitionStream.mapChunksZIO(_.mapZIO { case CommittableRecord(record, offset) =>
-                         f(record.key(), record.value()).as(offset)
+                         f(record).as(offset)
                        })
                    }
                }
@@ -456,9 +456,9 @@ object Consumer {
    * val settings: ConsumerSettings = ???
    * val subscription = Subscription.Topics(Set("my-kafka-topic"))
    *
-   * val consumerIO = Consumer.consumeWith(settings, subscription, Serdes.string, Serdes.string) { case (key, value) =>
+   * val consumerIO = Consumer.consumeWith(settings, subscription, Serdes.string, Serdes.string) { record =>
    *   // Process the received record here
-   *   putStrLn(s"Received record: \${key}: \${value}")
+   *   putStrLn(s"Received record: \${record.key()}: \${record.value()}")
    * }
    * }}}
    *
@@ -473,7 +473,7 @@ object Consumer {
    * @param commitRetryPolicy
    *   Retry commits that failed due to a RetriableCommitFailedException according to this schedule
    * @param f
-   *   Function that returns the effect to execute for each message. It is passed the key and value
+   *   Function that returns the effect to execute for each message. It is passed the [[ConsumerRecord]].
    * @tparam R
    *   Environment for the consuming effect
    * @tparam R1
@@ -491,7 +491,7 @@ object Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
-  )(f: (K, V) => URIO[R1, Unit]): RIO[R & R1, Unit] =
+  )(f: ConsumerRecord[K, V] => URIO[R1, Unit]): RIO[R & R1, Unit] =
     ZIO.scoped[R & R1] {
       Consumer
         .make(settings)
