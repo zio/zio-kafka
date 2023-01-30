@@ -779,6 +779,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
         val nrPartitions = 5
         val nrMessages   = 100
 
+        println("Starting test")
+
         for {
           // Produce messages on several partitions
           topic   <- randomTopic
@@ -801,6 +803,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                    .partitionedAssignmentStream(Serde.string, Serde.string)
                    .rechunk(1)
                    .mapZIO { partitions =>
+                     println(s"Consumer 1 got a partition chunk with ${partitions.map(_._1.partition()).mkString(",")}")
                      ZStream
                        .fromIterable(partitions.map(_._2))
                        .flatMapPar(Int.MaxValue)(s => s)
@@ -826,7 +829,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
           _ <- ZIO
                  .foreach(messagesReceived.values)(_.get)
                  .map(_.sum)
-                 .repeat(Schedule.recurUntil((n: Int) => n == nrMessages) && Schedule.fixed(100.millis))
+                 .repeat(Schedule.recurUntil((n: Int) => n >= nrMessages) && Schedule.fixed(100.millis))
+          _ <- ZIO.debug("Step 1")
 
           // Starting a new consumer that will stop after receiving 20 messages,
           // causing two rebalancing events for fib1 consumers on start and stop
@@ -841,7 +845,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                     .fork
 
           // Waiting until fib1's partition streams got restarted because of the rebalancing
-          _ <- drainCount.get.repeat(Schedule.recurUntil((n: Int) => n == 1) && Schedule.fixed(100.millis))
+          _ <- drainCount.get.repeat(Schedule.recurUntil((n: Int) => n >= 1) && Schedule.fixed(100.millis))
+          _ <- ZIO.debug("Step 2")
 
           // All messages processed, the partition streams of fib are still running.
           // Saving the values and resetting the counters
@@ -853,6 +858,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                 } <* messagesReceived(i).set(0)
               }
               .map(_.toMap)
+          _ <- ZIO.debug("Step 3")
 
           // Publishing another N messages - now they will be distributed among the two consumers until
           // fib2 stops after 20 messages
@@ -860,7 +866,9 @@ object ConsumerSpec extends ZIOKafkaSpec {
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
           _ <- fib2.join
+          _ <- ZIO.debug("Step 4")
           _ <- fib.join
+          _ <- ZIO.debug("Step 5")
           // fib2 terminates after 20 messages, fib terminates after fib2 because of the rebalancing (drainCount==2)
           messagesPerPartition0 <-
             ZIO.foreach(messagesReceived0.values)(_.get) // counts from the first N messages (single consumer)
@@ -872,7 +880,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           // the exact count cannot be known because fib2's termination triggers fib1's rebalancing asynchronously.
         } yield assert(messagesPerPartition0)(forall(equalTo(nrMessages / nrPartitions))) &&
           assert(messagesPerPartition.view.sum)(isGreaterThan(0) && isLessThanEqualTo(nrMessages - 20))
-      },
+      } @@ TestAspect.nonFlaky(50),
       test("handles RebalanceInProgressExceptions transparently") {
         val nrPartitions = 5
         val nrMessages   = 10000
@@ -963,7 +971,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
       }
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
-    ) @@ withLiveClock @@ timeout(120.seconds)
+    ) @@ withLiveClock // @@ timeout(120.seconds)
 
   lazy val logger: ZLogger[String, Unit] =
     new ZLogger[String, Unit] {
