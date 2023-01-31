@@ -103,7 +103,8 @@ private[consumer] final class Runloop(
           .map(_.asScala.get(tp).flatMap(Option.apply).map(_.offset()))).tap {
           case (Some(nextToFetch), lastCommitted) =>
             lastCommitted match {
-              case Some(lastCommitted) if lastCommitted != nextToFetch =>
+              // TODO what about when we just got assigned this partition and there's already some buffered records
+              case Some(lastCommitted) if lastCommitted > nextToFetch =>
                 ZIO.logInfo(
                   s"Seeking to last committed offset by this consumer from partition stream before rebalancing: from ${nextToFetch} to ${lastCommitted}"
                 ) *>
@@ -422,6 +423,16 @@ private[consumer] final class Runloop(
                   newlyAssigned = currentAssigned -- prevAssigned
                   unrequestedRecords =
                     bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
+                  _ <- ZIO.foreachDiscard(unrequestedRecords.recs) { case (topicPartition, records) =>
+                         ZIO.logAnnotate(
+                           LogAnnotation("topic", topicPartition.topic),
+                           LogAnnotation("partition", topicPartition.partition().toString)
+                         ) {
+                           ZIO.logInfo(
+                             s"Buffering ${records.size} unrequested records with latest offset ${records.last.offset()}"
+                           )
+                         }
+                       }
 
                   revokeResult <- rebalanceEvent match {
                                     case Some(Runloop.RebalanceEvent.Revoked(result)) =>
