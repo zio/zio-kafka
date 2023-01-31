@@ -515,7 +515,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
 
-      }: _*),
+      }: _*) @@ TestAspect.nonFlaky(5),
       test("produce diagnostic events when rebalancing") {
         val nrMessages   = 50
         val nrPartitions = 6
