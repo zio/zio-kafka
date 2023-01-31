@@ -371,6 +371,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
             val nrMessages   = 15000
             val nrPartitions = 6
 
+            println("Beginning test")
+
             def diagnostics(committed: Ref[Map[Int, Long]]) =
               Diagnostics {
                 case e: DiagnosticEvent.Rebalance =>
@@ -830,7 +832,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
                  .foreach(messagesReceived.values)(_.get)
                  .map(_.sum)
                  .repeat(Schedule.recurUntil((n: Int) => n >= nrMessages) && Schedule.fixed(100.millis))
-          _ <- ZIO.debug("Step 1")
 
           // Starting a new consumer that will stop after receiving 20 messages,
           // causing two rebalancing events for fib1 consumers on start and stop
@@ -846,7 +847,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
 
           // Waiting until fib1's partition streams got restarted because of the rebalancing
           _ <- drainCount.get.repeat(Schedule.recurUntil((n: Int) => n >= 1) && Schedule.fixed(100.millis))
-          _ <- ZIO.debug("Step 2")
 
           // All messages processed, the partition streams of fib are still running.
           // Saving the values and resetting the counters
@@ -858,7 +858,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
                 } <* messagesReceived(i).set(0)
               }
               .map(_.toMap)
-          _ <- ZIO.debug("Step 3")
 
           // Publishing another N messages - now they will be distributed among the two consumers until
           // fib2 stops after 20 messages
@@ -866,9 +865,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
           _ <- fib2.join
-          _ <- ZIO.debug("Step 4")
           _ <- fib.join
-          _ <- ZIO.debug("Step 5")
+
           // fib2 terminates after 20 messages, fib terminates after fib2 because of the rebalancing (drainCount==2)
           messagesPerPartition0 <-
             ZIO.foreach(messagesReceived0.values)(_.get) // counts from the first N messages (single consumer)
@@ -971,7 +969,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
       }
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
-    ) @@ withLiveClock // @@ timeout(120.seconds)
+    ) @@ withLiveClock @@ TestAspect.sequential // @@ timeout(120.seconds)
 
   lazy val logger: ZLogger[String, Unit] =
     new ZLogger[String, Unit] {
