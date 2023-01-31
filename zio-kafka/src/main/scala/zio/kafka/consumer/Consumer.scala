@@ -473,7 +473,8 @@ object Consumer {
    * @param commitRetryPolicy
    *   Retry commits that failed due to a RetriableCommitFailedException according to this schedule
    * @param f
-   *   Function that returns the effect to execute for each message. It is passed the [[ConsumerRecord]].
+   *   Function that returns the effect to execute for each message. It is passed the
+   *   [[org.apache.kafka.clients.consumer.ConsumerRecord]].
    * @tparam R
    *   Environment for the consuming effect
    * @tparam R1
