@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1675059356054,
+  "lastUpdate": 1675135314090,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -88,6 +88,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1244276191.9943419,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "41898282+github-actions[bot]@users.noreply.github.com",
+            "name": "github-actions[bot]",
+            "username": "github-actions[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e881beaf9738d074ac6b5da6b5cca344189100ee",
+          "message": "Update scala3-library to 3.2.2 (#621)\n\n* Update scala3-library to 3.2.2\r\n\r\n* Update scala3-library to 3.2.2\r\n\r\n---------\r\n\r\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>",
+          "timestamp": "2023-01-31T11:19:08+08:00",
+          "tree_id": "5efe97ef70933c2b57c4922065c05fbcc56c5fc9",
+          "url": "https://github.com/zio/zio-kafka/commit/e881beaf9738d074ac6b5da6b5cca344189100ee"
+        },
+        "date": 1675135313528,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1989314980.7373483,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
