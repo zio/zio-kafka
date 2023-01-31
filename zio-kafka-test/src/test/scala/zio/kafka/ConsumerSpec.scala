@@ -880,7 +880,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           // the exact count cannot be known because fib2's termination triggers fib1's rebalancing asynchronously.
         } yield assert(messagesPerPartition0)(forall(equalTo(nrMessages / nrPartitions))) &&
           assert(messagesPerPartition.view.sum)(isGreaterThan(0) && isLessThanEqualTo(nrMessages - 20))
-      } @@ TestAspect.nonFlaky(50),
+      },
       test("handles RebalanceInProgressExceptions transparently") {
         val nrPartitions = 5
         val nrMessages   = 10000
