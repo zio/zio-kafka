@@ -423,8 +423,18 @@ private[consumer] final class Runloop(
 
                   // Include the partitions whose streams we ended during a revoke
                   newlyAssigned = currentAssigned -- prevAssigned
+
+                  remainingRequestedPartitions = rebalanceEvent match {
+                                                   case Some(Runloop.RebalanceEvent.Revoked(_)) |
+                                                       Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, _)) =>
+                                                     // In case rebalancing restarted all partitions, we have to ignore
+                                                     // all the requests as their promise were for the previous partition streams
+                                                     Set.empty
+                                                   case _ =>
+                                                     requestedPartitions
+                                                 }
                   unrequestedRecords =
-                    bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- requestedPartitions)
+                    bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- remainingRequestedPartitions)
                   _ <- ZIO.foreachDiscard(unrequestedRecords.recs) { case (topicPartition, records) =>
                          ZIO.logAnnotate(
                            LogAnnotation("topic", topicPartition.topic),
