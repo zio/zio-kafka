@@ -459,19 +459,12 @@ private[consumer] final class Runloop(
 
                   revokeResult <- rebalanceEvent match {
                                     case Some(Runloop.RebalanceEvent.Revoked(result)) =>
-                                      ZIO.succeed(
-                                        result.copy(
-                                          bufferedRecords = result.bufferedRecords ++ unrequestedRecords
-                                        )
-                                      )
+                                      ZIO.succeed(result)
                                     case Some(
                                           Runloop.RebalanceEvent.RevokedAndAssigned(result, _)
                                         ) =>
-                                      ZIO.succeed(
-                                        result.copy(
-                                          bufferedRecords = result.bufferedRecords ++ unrequestedRecords
-                                        )
-                                      )
+                                      // Since we will do a seek, do not buffer any records
+                                      ZIO.succeed(result)
                                     case Some(Runloop.RebalanceEvent.Assigned(_)) =>
                                       endRevoked(
                                         state.pendingRequests,
