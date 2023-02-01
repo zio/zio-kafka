@@ -78,7 +78,7 @@ object ProducerSpec extends ZIOKafkaSpec {
         val chunks = Chunk.fromIterable(List.empty)
         for {
           outcome <- Producer.produceChunk(chunks, Serde.string, Serde.string)
-        } yield assertTrue(outcome.length == 0)
+        } yield assertTrue(outcome.isEmpty)
       },
       test("export metrics") {
         for {
