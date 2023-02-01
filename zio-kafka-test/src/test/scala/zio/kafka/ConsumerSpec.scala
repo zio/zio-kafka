@@ -802,6 +802,14 @@ object ConsumerSpec extends ZIOKafkaSpec {
             ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
           drainCount <- Ref.make(0)
           subscription = Subscription.topics(topic)
+          diagnostics =
+            Diagnostics {
+              case e: DiagnosticEvent.Rebalance =>
+                ZIO.logInfo(s"$e")
+              case _: DiagnosticEvent.Poll =>
+                ZIO.logInfo(s"Completed poll")
+            }
+
           fib <- Consumer
                    .subscribeAnd(subscription)
                    .partitionedAssignmentStream(Serde.string, Serde.string)
@@ -825,7 +833,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                    )
                    .runDrain
                    .provideSomeLayer[Kafka](
-                     consumer(client1, Some(group))
+                     consumer(client1, Some(group), diagnostics = diagnostics)
                    )
                    .fork
           // fib is running, consuming all the published messages from all partitions.
