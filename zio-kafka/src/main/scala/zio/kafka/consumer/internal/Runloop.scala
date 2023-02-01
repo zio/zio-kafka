@@ -177,11 +177,9 @@ private[consumer] final class Runloop(
                     s"onRevoked called on rebalance listener with pending assigned event"
                   )
                 )
-            }.unlessZIO(
-              isShutdown
-            ).unit // onRevoked can be called during shutdown, in which case handlePoll does not reset lastRebalanceEvent anymore
+            }
           }
-        },
+        }.unlessZIO(isShutdown).unit,
       onLost = (_, _) => ZIO.unit
     )
 
@@ -718,7 +716,9 @@ private[consumer] object Runloop {
                           Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
                         ]
                     )(_.shutdown)
-      shutdownRef     <- Ref.make(false)
+      // The Runloop's rebalance listener's onRevoked may be called after shutting down the runloop when closing the consumer,
+      // where we check the shutdownRef
+      shutdownRef     <- ZIO.acquireRelease(Ref.make(false))(_.set(true))
       currentStateRef <- Ref.make(State.initial)
       subscribedRef   <- Ref.make(false)
       runtime         <- ZIO.runtime[Any]
