@@ -835,6 +835,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                     }
                   )
                   .runDrain
+                  .tap(_ => ZIO.logInfo("Done"))
                   .provideSomeLayer[Kafka](
                     consumer(client1, Some(group), diagnostics = diagnostics)
                   )
@@ -857,8 +858,9 @@ object ConsumerSpec extends ZIOKafkaSpec {
                         .plainStream(Serde.string, Serde.string, 1)
                         .take(20)
                         .runDrain
+                        .tap(_ => ZIO.logInfo("Done"))
                         .provideSomeLayer[Kafka](
-                          consumer(client2, Some(group))
+                          consumer(client2, Some(group), diagnostics = diagnostics)
                         )
                     }
                     .fork
