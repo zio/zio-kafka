@@ -421,8 +421,19 @@ private[consumer] final class Runloop(
                 for {
                   rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
 
-                  // Include the partitions whose streams we ended during a revoke
-                  newlyAssigned = currentAssigned -- prevAssigned
+                  newlyAssigned = rebalanceEvent match {
+                                    case Some(Runloop.RebalanceEvent.Assigned(assigned)) =>
+                                      assigned // These are new
+                                    case Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, assigned @ _)) =>
+                                      // We already ended all revoked partitions's streams and got assigned new partitions, recreate all of the current assignment
+                                      currentAssigned
+                                    case Some(Runloop.RebalanceEvent.Revoked(_)) =>
+                                      // We revoked, should recreate all of the current assignment
+                                      currentAssigned
+                                    case None =>
+                                      // This should be an empty set, but just a catch-all
+                                      currentAssigned -- prevAssigned
+                                  }
 
                   remainingRequestedPartitions = rebalanceEvent match {
                                                    case Some(Runloop.RebalanceEvent.Revoked(_)) |
