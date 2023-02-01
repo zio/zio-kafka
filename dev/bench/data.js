@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1675218445846,
+  "lastUpdate": 1675259377576,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -148,6 +148,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1244385319.8940203,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "82821371+rituraj2342@users.noreply.github.com",
+            "name": "Rituraj Khare",
+            "username": "rituraj2342"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "baae4ae9ef393af86a961010809cc8702bc3f3bc",
+          "message": "Clean some code (#624)",
+          "timestamp": "2023-02-01T21:44:52+08:00",
+          "tree_id": "baf102e538e04aae299f1104790d9fdb79200375",
+          "url": "https://github.com/zio/zio-kafka/commit/baae4ae9ef393af86a961010809cc8702bc3f3bc"
+        },
+        "date": 1675259376779,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1244310784.133902,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
