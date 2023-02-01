@@ -177,7 +177,9 @@ private[consumer] final class Runloop(
                     s"onRevoked called on rebalance listener with pending assigned event"
                   )
                 )
-            }
+            }.unlessZIO(
+              isShutdown
+            ).unit // onRevoked can be called during shutdown, in which case handlePoll does not reset lastRebalanceEvent anymore
           }
         },
       onLost = (_, _) => ZIO.unit
