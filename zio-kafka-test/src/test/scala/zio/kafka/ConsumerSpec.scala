@@ -810,53 +810,62 @@ object ConsumerSpec extends ZIOKafkaSpec {
                 ZIO.logInfo(s"Completed poll")
             }
 
-          fib <- Consumer
-                   .subscribeAnd(subscription)
-                   .partitionedAssignmentStream(Serde.string, Serde.string)
-                   .rechunk(1)
-                   .mapZIO { partitions =>
-                     println(s"Consumer 1 got a partition chunk with ${partitions.map(_._1.partition()).mkString(",")}")
-                     ZStream
-                       .fromIterable(partitions.map(_._2))
-                       .flatMapPar(Int.MaxValue)(s => s)
-                       .mapZIO(record => messagesReceived(record.partition).update(_ + 1).as(record))
-                       .mapZIO(record => record.offset.commit)
-                       .runDrain
-                   }
-                   .mapZIO(_ =>
-                     drainCount.updateAndGet(_ + 1).flatMap {
-                       case 2 => Consumer.stopConsumption
-                       // 1: when consumer on fib2 starts
-                       // 2: when consumer on fib2 stops, end of test
-                       case _ => ZIO.unit
-                     }
-                   )
-                   .runDrain
-                   .provideSomeLayer[Kafka](
-                     consumer(client1, Some(group), diagnostics = diagnostics)
-                   )
-                   .fork
+          fib <-
+            ZIO
+              .logAnnotate("consumer", "1") {
+                Consumer
+                  .subscribeAnd(subscription)
+                  .partitionedAssignmentStream(Serde.string, Serde.string)
+                  .rechunk(1)
+                  .mapZIO { partitions =>
+                    println(s"Consumer 1 got a partition chunk with ${partitions.map(_._1.partition()).mkString(",")}")
+                    ZStream
+                      .fromIterable(partitions.map(_._2))
+                      .flatMapPar(Int.MaxValue)(s => s)
+                      .mapZIO(record => messagesReceived(record.partition).update(_ + 1).as(record))
+                      .mapZIO(record => record.offset.commit)
+                      .runDrain
+                  }
+                  .mapZIO(_ =>
+                    drainCount.updateAndGet(_ + 1).flatMap {
+                      case 2 => Consumer.stopConsumption
+                      // 1: when consumer on fib2 starts
+                      // 2: when consumer on fib2 stops, end of test
+                      case _ => ZIO.unit
+                    }
+                  )
+                  .runDrain
+                  .provideSomeLayer[Kafka](
+                    consumer(client1, Some(group), diagnostics = diagnostics)
+                  )
+              }
+              .fork
           // fib is running, consuming all the published messages from all partitions.
           // Waiting until it recorded all messages
           _ <- ZIO
                  .foreach(messagesReceived.values)(_.get)
                  .map(_.sum)
                  .repeat(Schedule.recurUntil((n: Int) => n >= nrMessages) && Schedule.fixed(100.millis))
+          _ <- ZIO.logInfo("Step 1")
 
           // Starting a new consumer that will stop after receiving 20 messages,
           // causing two rebalancing events for fib1 consumers on start and stop
-          fib2 <- Consumer
-                    .subscribeAnd(subscription)
-                    .plainStream(Serde.string, Serde.string, 1)
-                    .take(20)
-                    .runDrain
-                    .provideSomeLayer[Kafka](
-                      consumer(client2, Some(group))
-                    )
+          fib2 <- ZIO
+                    .logAnnotate("consumer", "2") {
+                      Consumer
+                        .subscribeAnd(subscription)
+                        .plainStream(Serde.string, Serde.string, 1)
+                        .take(20)
+                        .runDrain
+                        .provideSomeLayer[Kafka](
+                          consumer(client2, Some(group))
+                        )
+                    }
                     .fork
 
           // Waiting until fib1's partition streams got restarted because of the rebalancing
           _ <- drainCount.get.repeat(Schedule.recurUntil((n: Int) => n >= 1) && Schedule.fixed(100.millis))
+          _ <- ZIO.logInfo("Step 2")
 
           // All messages processed, the partition streams of fib are still running.
           // Saving the values and resetting the counters
@@ -888,7 +897,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           // the exact count cannot be known because fib2's termination triggers fib1's rebalancing asynchronously.
         } yield assert(messagesPerPartition0)(forall(equalTo(nrMessages / nrPartitions))) &&
           assert(messagesPerPartition.view.sum)(isGreaterThan(0) && isLessThanEqualTo(nrMessages - 20))
-      },
+      } @@ TestAspect.nonFlaky(3),
       test("handles RebalanceInProgressExceptions transparently") {
         val nrPartitions = 5
         val nrMessages   = 10000
