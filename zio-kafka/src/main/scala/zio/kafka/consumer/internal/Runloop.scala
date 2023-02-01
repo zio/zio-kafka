@@ -109,6 +109,8 @@ private[consumer] final class Runloop(
                   s"Seeking to last committed offset by this consumer from partition stream before rebalancing: from ${nextToFetch} to ${lastCommitted}"
                 ) *>
                   consumer.withConsumer(_.seek(tp, lastCommitted))
+              case Some(lastCommitted) if lastCommitted < nextToFetch =>
+                ZIO.logWarning(s"Unexpected fetch position ${nextToFetch} for last committed offset ${lastCommitted}")
               case _ =>
                 ZIO.unit
             }
