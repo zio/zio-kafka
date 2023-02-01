@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1675135314090,
+  "lastUpdate": 1675218445846,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -118,6 +118,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1989314980.7373483,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "41898282+github-actions[bot]@users.noreply.github.com",
+            "name": "github-actions[bot]",
+            "username": "github-actions[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5f3bc323355b2b84fbfc75dbc44ad4f4c1a4aac7",
+          "message": "Update sbt-jmh to 0.4.4 (#623)\n\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>",
+          "timestamp": "2023-02-01T10:25:00+08:00",
+          "tree_id": "a1d7da449fa47c2a3a72228e6fdc09203d373503",
+          "url": "https://github.com/zio/zio-kafka/commit/5f3bc323355b2b84fbfc75dbc44ad4f4c1a4aac7"
+        },
+        "date": 1675218445514,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1244385319.8940203,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
