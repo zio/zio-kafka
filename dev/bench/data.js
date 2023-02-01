@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1675259377576,
+  "lastUpdate": 1675259768037,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -178,6 +178,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1244310784.133902,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "guizmaii@users.noreply.github.com",
+            "name": "Jules Ivanic",
+            "username": "guizmaii"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0b6f2c08d0c846a5d4147cb1866f6fe325abdec7",
+          "message": "Fix mergify configuration (#625)",
+          "timestamp": "2023-02-01T21:51:31+08:00",
+          "tree_id": "e1c33d44aa382ab5e1642d577aa241fc6365efe6",
+          "url": "https://github.com/zio/zio-kafka/commit/0b6f2c08d0c846a5d4147cb1866f6fe325abdec7"
+        },
+        "date": 1675259767637,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1685680540.059739,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
