@@ -259,7 +259,7 @@ object AdminSpec extends ZIOKafkaSpec {
                    )
                  )
             expectedMsgsToConsume = endOffsets(p(0)).offset + partitionResetBy
-            recordsAfterAltering <- consumeAndCommit(expectedMsgsToConsume.toLong).map(toMap)
+            recordsAfterAltering <- consumeAndCommit(expectedMsgsToConsume).map(toMap)
           } yield assert(recordsAfterAltering(0))(equalTo(records(0))) &&
             assert(records(1).take(endOffsets(p(1)).offset.toInt - partitionResetBy) ++ recordsAfterAltering(1))(
               equalTo(records(1))
