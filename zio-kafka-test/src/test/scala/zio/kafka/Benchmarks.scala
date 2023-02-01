@@ -57,7 +57,7 @@ object Plain {
 
       batch.iterator().asScala.foreach { record =>
         messageCounter += 1
-        lengthCounter += record.value().size
+        lengthCounter += record.value().length
       }
 
       println(s"messageCounter = $messageCounter")
