@@ -175,18 +175,15 @@ object Producer {
 
               p.send(
                 rec,
-                new Callback {
-                  def onCompletion(metadata: RecordMetadata, err: Exception): Unit =
-                    Unsafe.unsafe { implicit u =>
-                      (if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
-                       else {
-                         res(idx) = metadata
-                         if (count.incrementAndGet == length) {
-                           runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
-                         }
-                       }): @nowarn("msg=discarded non-Unit value")
-                      ()
+                (metadata: RecordMetadata, err: Exception) => Unsafe.unsafe { implicit u =>
+                  (if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
+                  else {
+                    res(idx) = metadata
+                    if (count.incrementAndGet == length) {
+                      runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
                     }
+                  }): @nowarn("msg=discarded non-Unit value")
+                  ()
                 }
               )
             }
