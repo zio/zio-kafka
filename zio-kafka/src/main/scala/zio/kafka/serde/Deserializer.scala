@@ -64,10 +64,8 @@ object Deserializer extends Serdes {
   /**
    * Create a deserializer from a function
    */
-  def apply[R, T](deser: (String, Headers, Array[Byte]) => RIO[R, T]): Deserializer[R, T] = new Deserializer[R, T] {
-    override def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T] =
-      deser(topic, headers, data)
-  }
+  def apply[R, T](deser: (String, Headers, Array[Byte]) => RIO[R, T]): Deserializer[R, T] =
+    (topic: String, headers: Headers, data: Array[Byte]) => deser(topic, headers, data)
 
   /**
    * Create a Deserializer from a Kafka Deserializer

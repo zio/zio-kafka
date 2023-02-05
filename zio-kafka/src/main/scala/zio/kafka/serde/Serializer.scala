@@ -52,10 +52,7 @@ object Serializer extends Serdes {
    * Create a serializer from a function
    */
   def apply[R, T](ser: (String, Headers, T) => RIO[R, Array[Byte]]): Serializer[R, T] =
-    new Serializer[R, T] {
-      override def serialize(topic: String, headers: Headers, value: T): RIO[R, Array[Byte]] =
-        ser(topic, headers, value)
-    }
+    (topic: String, headers: Headers, value: T) => ser(topic, headers, value)
 
   /**
    * Create a Serializer from a Kafka Serializer
