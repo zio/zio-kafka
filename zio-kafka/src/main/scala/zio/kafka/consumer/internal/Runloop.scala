@@ -113,7 +113,7 @@ private[consumer] final class Runloop(
                 ) *>
                   consumer.withConsumer(_.seek(tp, lastCommitted))
               case Some(lastCommitted) if lastCommitted < nextToFetch =>
-                // TODO this happens when some records were already buffered
+                // TODO this happens when some records were already buffered or when another consumer is also still committing offsets followed by a rebalancing
                 ZIO.logWarning(s"Unexpected fetch position ${nextToFetch} for last committed offset ${lastCommitted}")
               case _ =>
                 ZIO.unit
@@ -155,7 +155,6 @@ private[consumer] final class Runloop(
     )
 
     // Revokes ALL partitions on rebalancing, regardless of which ones were actually revoked
-    // TODO can we just store the event and do all the state handling and endRevoked calling in handlePoll so we don't need the currentState ref anymore ..?
     lazy val revokeTopics = RebalanceListener(
       onAssigned = (assigned, _) =>
         lastRebalanceEvent.updateZIO {
@@ -166,26 +165,19 @@ private[consumer] final class Runloop(
           case Some(_) =>
             ZIO.fail(new IllegalStateException(s"Multiple onAssigned calls on rebalance listener"))
         },
-      onRevoked = (_, _) =>
-        currentState.get.flatMap { state =>
-          endRevoked(
-            state.pendingRequests,
-            state.bufferedRecords,
-            state.assignedStreams,
-            _ => true
-          ).flatMap { result =>
-            lastRebalanceEvent.updateZIO {
-              case None =>
-                ZIO.some(Runloop.RebalanceEvent.Revoked(result))
-              case _ =>
-                ZIO.fail(
-                  new IllegalStateException(
-                    s"onRevoked called on rebalance listener with pending assigned event"
-                  )
-                )
-            }
-          }
-        }.unlessZIO(isShutdown).unit,
+      onRevoked = (revoked, _) =>
+        lastRebalanceEvent.updateZIO {
+          case None =>
+            ZIO.some(Runloop.RebalanceEvent.Revoked(revoked))
+          case _ =>
+            ZIO.fail(
+              new IllegalStateException(
+                s"onRevoked called on rebalance listener with pending assigned event"
+              )
+            )
+        }
+          .unlessZIO(isShutdown)
+          .unit,
       onLost = (_, _) => ZIO.unit
     )
 
@@ -464,13 +456,21 @@ private[consumer] final class Runloop(
                        }
 
                   revokeResult <- rebalanceEvent match {
-                                    case Some(Runloop.RebalanceEvent.Revoked(result)) =>
-                                      ZIO.succeed(result)
-                                    case Some(
-                                          Runloop.RebalanceEvent.RevokedAndAssigned(result, _)
-                                        ) =>
+                                    case Some(Runloop.RebalanceEvent.Revoked(_)) =>
+                                      endRevoked(
+                                        state.pendingRequests,
+                                        state.bufferedRecords,
+                                        state.assignedStreams,
+                                        _ => true
+                                      )
+                                    case Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, _)) =>
                                       // Since we will do a seek, do not buffer any records
-                                      ZIO.succeed(result)
+                                      endRevoked(
+                                        state.pendingRequests,
+                                        state.bufferedRecords,
+                                        state.assignedStreams,
+                                        _ => true
+                                      )
                                     case Some(Runloop.RebalanceEvent.Assigned(newPartitions)) =>
                                       endRevoked(
                                         state.pendingRequests,
@@ -672,12 +672,10 @@ private[consumer] object Runloop {
 
   sealed trait RebalanceEvent
   object RebalanceEvent {
-    final case class Revoked(revokeResult: Runloop.RevokeResult)  extends RebalanceEvent
+    final case class Revoked(revoked: Set[TopicPartition])        extends RebalanceEvent
     final case class Assigned(newlyAssigned: Set[TopicPartition]) extends RebalanceEvent
-    final case class RevokedAndAssigned(
-      revokeResult: Runloop.RevokeResult,
-      newlyAssigned: Set[TopicPartition]
-    ) extends RebalanceEvent
+    final case class RevokedAndAssigned(revoked: Set[TopicPartition], newlyAssigned: Set[TopicPartition])
+        extends RebalanceEvent
   }
 
   sealed abstract class Command
