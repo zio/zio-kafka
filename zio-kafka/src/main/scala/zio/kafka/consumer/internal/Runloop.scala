@@ -99,28 +99,27 @@ private[consumer] final class Runloop(
 
   In case of manual offset retrieval, here is where we seek.
    */
-  private def seekForNewPartitionStream(tp: TopicPartition): Task[Any] =
+  private def seekForNewPartitionStream(
+    tp: TopicPartition
+  ): Task[Any] =
     // We can get a "java.lang.IllegalStateException: You can only check the position for partitions assigned to this consumer."
     // from the position(tp) call when the partition is already revoked before starting, the `.option` handles this
     offsetRetrieval match {
       case OffsetRetrieval.Auto(_) if hasGroupId =>
         (consumer.withConsumer(_.position(tp)).option zip consumer
           .withConsumer(_.committed(Set(tp).asJava))
-          .map(_.asScala.get(tp).flatMap(Option.apply).map(_.offset()))).tap { case (nextToFetch, lastCommitted) =>
-          // TODO change to debug level
-          ZIO.logInfo(s"Next to fetch: ${nextToFetch}, committed: ${lastCommitted}")
-        }.tap {
+          .map(_.asScala.get(tp).flatMap(Option.apply).map(_.offset()))).tap {
           case (Some(nextToFetch), lastCommitted) =>
             lastCommitted match {
-              // TODO what about when we just got assigned this partition and there's already some buffered records
               case Some(lastCommitted) if lastCommitted > nextToFetch =>
                 ZIO.logInfo(
                   s"Seeking to last committed offset by this consumer from partition stream before rebalancing: from ${nextToFetch} to ${lastCommitted}"
                 ) *>
                   consumer.withConsumer(_.seek(tp, lastCommitted))
               case Some(lastCommitted) if lastCommitted < nextToFetch =>
-                // TODO this happens when some records were already buffered or when another consumer is also still committing offsets followed by a rebalancing
-                ZIO.logWarning(s"Unexpected fetch position ${nextToFetch} for last committed offset ${lastCommitted}")
+                ZIO.logWarning(
+                  s"Unexpected fetch position ${nextToFetch} for last committed offset ${lastCommitted}. This may happen after rebalancing."
+                )
               case _ =>
                 ZIO.unit
             }
@@ -447,16 +446,6 @@ private[consumer] final class Runloop(
                                                  }
                   unrequestedRecords =
                     bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- remainingRequestedPartitions)
-                  _ <- ZIO.foreachDiscard(unrequestedRecords.recs) { case (topicPartition, records) =>
-                         ZIO.logAnnotate(
-                           LogAnnotation("topic", topicPartition.topic),
-                           LogAnnotation("partition", topicPartition.partition().toString)
-                         ) {
-                           ZIO.logInfo(
-                             s"Buffering ${records.size} unrequested records with latest offset ${records.last.offset()}"
-                           )
-                         }
-                       }
 
                   revokeResult <- rebalanceEvent match {
                                     case Some(Runloop.RebalanceEvent.Revoked(_)) =>
@@ -467,7 +456,6 @@ private[consumer] final class Runloop(
                                         _ => true
                                       )
                                     case Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, _)) =>
-                                      // Since we will do a seek, do not buffer any records
                                       endRevoked(
                                         state.pendingRequests,
                                         state.bufferedRecords,
@@ -493,6 +481,17 @@ private[consumer] final class Runloop(
                                         tp => !currentAssigned(tp)
                                       )
                                   }
+
+                  _ <- ZIO.foreachDiscard(revokeResult.bufferedRecords.recs) { case (topicPartition, records) =>
+                         ZIO.logAnnotate(
+                           LogAnnotation("topic", topicPartition.topic),
+                           LogAnnotation("partition", topicPartition.partition().toString)
+                         ) {
+                           ZIO.logInfo(
+                             s"Buffered ${records.size} unrequested records with latest offset ${records.last.offset()}"
+                           )
+                         }
+                       }
 
                   fulfillResult <- fulfillRequests(
                                      revokeResult.unfulfilledRequests,
@@ -532,7 +531,8 @@ private[consumer] final class Runloop(
                 newFinishingStreams
                   .get(tp)
                   .map(_.streamCompleted.await <* ZIO.logInfo(s"Done awaiting completion of previous stream"))
-                  .getOrElse(ZIO.unit)
+                  .getOrElse(ZIO.unit),
+                pollResult.bufferedRecords.recs.getOrElse(tp, Chunk.empty)
               )
             )
             .tap { newStreams =>
