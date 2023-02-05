@@ -431,7 +431,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                 k.partition() -> v
                               })).uninterruptible
                             } *> ZIO
-                              .logDebug(s"Committed offsets for ${records.size} records")
+                              .logInfo(s"Committed offsets for ${records.size} records")
                               .as(records)
                         }
                       }
@@ -470,7 +470,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                 k.partition() -> v
                               })).uninterruptible
                             } *> ZIO
-                              .logDebug(s"Committed offsets for ${records.size} records")
+                              .logInfo(s"Committed offsets for ${records.size} records")
                               .as(records)
                         }
                       }
@@ -984,8 +984,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           _ <- messagesReceivedConsumer2.get
                  .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
           _ <- stopConsumer1.succeed(())
-          _ <- fib.join
-          _ <- fib2.interrupt
+          _ <- fib.join zipPar fib2.interrupt
         } yield assertCompletes
       }
     ).provideSomeLayerShared[TestEnvironment & Kafka](
