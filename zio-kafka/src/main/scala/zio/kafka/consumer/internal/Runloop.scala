@@ -100,7 +100,10 @@ private[consumer] final class Runloop(
       case OffsetRetrieval.Auto(_) if hasGroupId =>
         (consumer.withConsumer(_.position(tp)).option zip consumer
           .withConsumer(_.committed(Set(tp).asJava))
-          .map(_.asScala.get(tp).flatMap(Option.apply).map(_.offset()))).tap {
+          .map(_.asScala.get(tp).flatMap(Option.apply).map(_.offset()))).tap { case (nextToFetch, lastCommitted) =>
+          // TODO change to debug level
+          ZIO.logInfo(s"Next to fetch: ${nextToFetch}, committed: ${lastCommitted}")
+        }.tap {
           case (Some(nextToFetch), lastCommitted) =>
             lastCommitted match {
               // TODO what about when we just got assigned this partition and there's already some buffered records
@@ -110,6 +113,7 @@ private[consumer] final class Runloop(
                 ) *>
                   consumer.withConsumer(_.seek(tp, lastCommitted))
               case Some(lastCommitted) if lastCommitted < nextToFetch =>
+                // TODO this happens when some records were already buffered
                 ZIO.logWarning(s"Unexpected fetch position ${nextToFetch} for last committed offset ${lastCommitted}")
               case _ =>
                 ZIO.unit
@@ -131,6 +135,7 @@ private[consumer] final class Runloop(
     }
   def gracefulShutdown: UIO[Unit] =
     for {
+      // TODO replace by a shutdown command ingested in the queue..?
       wasShutdown <- shutdownRef.getAndSet(true)
       state       <- currentState.get
       _           <- partitions.offer(Take.end).when(!wasShutdown)
@@ -150,6 +155,7 @@ private[consumer] final class Runloop(
     )
 
     // Revokes ALL partitions on rebalancing, regardless of which ones were actually revoked
+    // TODO can we just store the event and do all the state handling and endRevoked calling in handlePoll so we don't need the currentState ref anymore ..?
     lazy val revokeTopics = RebalanceListener(
       onAssigned = (assigned, _) =>
         lastRebalanceEvent.updateZIO {
@@ -465,11 +471,11 @@ private[consumer] final class Runloop(
                                         ) =>
                                       // Since we will do a seek, do not buffer any records
                                       ZIO.succeed(result)
-                                    case Some(Runloop.RebalanceEvent.Assigned(_)) =>
+                                    case Some(Runloop.RebalanceEvent.Assigned(newPartitions)) =>
                                       endRevoked(
                                         state.pendingRequests,
                                         state
-                                          .addBufferedRecords(unrequestedRecords)
+                                          .addBufferedRecords(unrequestedRecords.remove(newPartitions))
                                           .bufferedRecords,
                                         state.assignedStreams,
                                         _ => false // not treating any partitions as revoked, as endRevoked was called previously in the rebalance listener
@@ -686,6 +692,9 @@ private[consumer] object Runloop {
 
     def remove(partition: TopicPartition): BufferedRecords =
       BufferedRecords(recs - partition)
+
+    def remove(partitions: Set[TopicPartition]): BufferedRecords =
+      BufferedRecords(recs -- partitions)
 
     def ++(newRecs: BufferedRecords): BufferedRecords =
       BufferedRecords(newRecs.recs.foldLeft(recs) { case (acc, (tp, recs)) =>
