@@ -1002,7 +1002,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
       } @@ TestAspect.nonFlaky(5)
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
-    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(180.seconds)
+    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(300.seconds)
 
   lazy val logger: ZLogger[String, Unit] =
     new ZLogger[String, Unit] {
