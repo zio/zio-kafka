@@ -37,7 +37,6 @@ private[consumer] final class Runloop(
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   subscribedRef: Ref[Boolean],
-  currentState: Ref[State],
   perPartitionChunkPrefetch: Int,
   pollQueue: Queue[Command.Poll.type]
 ) {
@@ -91,6 +90,13 @@ private[consumer] final class Runloop(
   the last fetched offset that may still be in the previous partition stream's buffer. That is why we seek before
   requesting data for the partition.
 
+  Edge case situation:
+  - Consumer 1 gets a partition revoked but still has records buffered, consumer 2 starts processing and committing,
+  meanwhile consumer 1 is also still committing, consumer 1 stops, rebalancing happens and consumer 2 resumes
+  from the last committed position of consumer 1, which is lower than what it has already seen itself. This results
+  in consumer 2 processing some records twice.
+  The solution would be to also store our own committed offsets and take the max (broker committed, local committed).
+
   In case of manual offset retrieval, here is where we seek.
    */
   private def seekForNewPartitionStream(tp: TopicPartition): Task[Any] =
@@ -133,13 +139,11 @@ private[consumer] final class Runloop(
       case _ =>
         ZIO.unit
     }
+
   def gracefulShutdown: UIO[Unit] =
     for {
-      // TODO replace by a shutdown command ingested in the queue..?
       wasShutdown <- shutdownRef.getAndSet(true)
-      state       <- currentState.get
       _           <- partitions.offer(Take.end).when(!wasShutdown)
-      _           <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.finishWith(Chunk.empty) }
     } yield ()
 
   val rebalanceListener: RebalanceListener = {
@@ -389,7 +393,6 @@ private[consumer] final class Runloop(
 
   private def handlePoll(state: State): Task[State] =
     for {
-      _ <- currentState.set(state)
       pollResult <-
         consumer.withConsumerM { c =>
           ZIO.suspend {
@@ -409,7 +412,7 @@ private[consumer] final class Runloop(
                   state.pendingRequests,
                   BufferedRecords.empty,
                   Map[TopicPartition, PartitionStreamControl](),
-                  Map.empty // TODO check
+                  state.assignedStreams
                 )
               ),
               onFalse = {
@@ -596,6 +599,9 @@ private[consumer] final class Runloop(
       case Command.Poll =>
         // End all pending requests
         ZIO.foreachDiscard(state.pendingRequests)(_.end) *>
+          ZIO.foreachDiscard(state.finishingStreams) { case (tp, stream) =>
+            stream.finishWith(Chunk.empty) <* ZIO.logInfo(s"Finishing stream ${tp.partition()}")
+          } *>
           handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = BufferedRecords.empty))
       case Command.Requests(reqs) =>
         ZIO.foreachDiscard(reqs)(_.end).as(state)
@@ -739,10 +745,9 @@ private[consumer] object Runloop {
                     )(_.shutdown)
       // The Runloop's rebalance listener's onRevoked may be called after shutting down the runloop when closing the consumer,
       // where we check the shutdownRef
-      shutdownRef     <- ZIO.acquireRelease(Ref.make(false))(_.set(true))
-      currentStateRef <- Ref.make(State.initial)
-      subscribedRef   <- Ref.make(false)
-      runtime         <- ZIO.runtime[Any]
+      shutdownRef   <- ZIO.acquireRelease(Ref.make(false))(_.set(true))
+      subscribedRef <- Ref.make(false)
+      runtime       <- ZIO.runtime[Any]
       runloop = new Runloop(
                   runtime,
                   hasGroupId,
@@ -759,7 +764,6 @@ private[consumer] object Runloop {
                   offsetRetrieval,
                   userRebalanceListener,
                   subscribedRef,
-                  currentStateRef,
                   perPartitionChunkPrefetch,
                   pollQueue
                 )
