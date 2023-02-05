@@ -531,8 +531,7 @@ private[consumer] final class Runloop(
                 newFinishingStreams
                   .get(tp)
                   .map(_.streamCompleted.await <* ZIO.logInfo(s"Done awaiting completion of previous stream"))
-                  .getOrElse(ZIO.unit),
-                pollResult.bufferedRecords.recs.getOrElse(tp, Chunk.empty)
+                  .getOrElse(ZIO.unit)
               )
             )
             .tap { newStreams =>
