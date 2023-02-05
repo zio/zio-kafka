@@ -1,7 +1,6 @@
 package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.{
-  Callback,
   KafkaProducer,
   Producer => JProducer,
   ProducerRecord,
