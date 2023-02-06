@@ -2,6 +2,11 @@ package zio.kafka.embedded
 
 import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import zio._
+import _root_.kafka.server.KafkaConfig
+import io.github.embeddedkafka.EmbeddedKafkaConfig.defaultKafkaPort
+import org.apache.kafka.common.security.auth.SecurityProtocol
+
+import java.nio.file.Paths
 
 trait Kafka {
   def bootstrapServers: List[String]
@@ -53,6 +58,35 @@ object Kafka {
       )
     )
     ZIO.acquireRelease(ZIO.attempt(Kafka.Sasl(EmbeddedKafkaService(EmbeddedKafka.start()))))(_.value.stop())
+  }
+
+  val sslEmbedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
+    val listener = s"${SecurityProtocol.SSL}://localhost:$defaultKafkaPort"
+
+    val keyStorePath   = Paths.get(Kafka.getClass.getResource("/keystore/kafka.keystore.jks").toURI).toFile
+    val trustStorePath = Paths.get(Kafka.getClass.getResource("/truststore/kafka.truststore.jks").toURI).toFile
+
+    implicit val embeddedKafkaConfig: EmbeddedKafkaConfig = EmbeddedKafkaConfig(
+      customBrokerProperties = Map(
+        "group.min.session.timeout.ms"          -> "500",
+        "group.initial.rebalance.delay.ms"      -> "0",
+        "authorizer.class.name"                 -> "kafka.security.authorizer.AclAuthorizer",
+        "super.users"                           -> "User:ANONYMOUS",
+        "ssl.client.auth"                       -> "required",
+        "ssl.enabled.protocols"                 -> "TLSv1.2",
+        "ssl.truststore.type"                   -> "JKS",
+        "ssl.keystore.type"                     -> "JKS",
+        "ssl.truststore.location"               -> trustStorePath.getAbsolutePath,
+        "ssl.truststore.password"               -> "123456",
+        "ssl.keystore.location"                 -> keyStorePath.getAbsolutePath,
+        "ssl.keystore.password"                 -> "123456",
+        "ssl.key.password"                      -> "123456",
+        KafkaConfig.InterBrokerListenerNameProp -> "SSL",
+        KafkaConfig.ListenersProp               -> listener,
+        KafkaConfig.AdvertisedListenersProp     -> listener
+      )
+    )
+    ZIO.acquireRelease(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
   }
 
   val local: ZLayer[Any, Nothing, Kafka] = ZLayer.succeed(DefaultLocal)

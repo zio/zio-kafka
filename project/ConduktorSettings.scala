@@ -1,6 +1,7 @@
 import sbt.*
 import sbt.Keys.*
 import zio.sbt.ZioSbtCiPlugin.autoImport.ciEnabledBranches
+import scala.sys.process._
 
 import scala.util.Try
 

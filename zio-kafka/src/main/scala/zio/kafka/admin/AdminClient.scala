@@ -50,6 +50,7 @@ import org.apache.kafka.common.{
 }
 import zio._
 import zio.kafka.admin.acl._
+import zio.kafka.utils.SslHelper
 
 import java.util.Optional
 import scala.annotation.{ nowarn, tailrec }
@@ -1501,9 +1502,11 @@ object AdminClient {
     }
 
   def javaClientFromSettings(settings: AdminClientSettings): ZIO[Scope, Throwable, JAdmin] =
-    ZIO.acquireRelease(ZIO.attempt(JAdmin.create(settings.driverSettings.asJava)))(client =>
-      ZIO.succeed(client.close(settings.closeTimeout))
-    )
+    ZIO.acquireRelease(
+      SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties) *> ZIO.attempt(
+        JAdmin.create(settings.driverSettings.asJava)
+      )
+    )(client => ZIO.succeed(client.close(settings.closeTimeout)))
 
   implicit final class MapOps[K1, V1](private val v: Map[K1, V1]) extends AnyVal {
     def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): Map[K2, V2] = v.map(kv => fk(kv._1) -> fv(kv._2))
