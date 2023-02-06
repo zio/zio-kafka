@@ -1,4 +1,5 @@
 import sbt.Keys.{ fork, parallelExecution }
+import sbt.Tests.{ Group, SubProcess }
 import scala.sys.process._
 
 import scala.util.Try
@@ -174,7 +175,9 @@ lazy val zioKafkaTest =
           )
         else Seq(embeddedKafka)
       },
-      testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
+      testFrameworks      := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
+      Test / fork         := true,
+      Test / testGrouping := groupByMemory((Test / definedTests).value)
     )
 
 lazy val zioKafkaBench =
@@ -184,6 +187,22 @@ lazy val zioKafkaBench =
     .settings(stdSettings("zio-kafka-bench"))
     .settings(publish / skip := true)
     .dependsOn(zioKafka)
+
+def groupByMemory(allTests: Seq[TestDefinition]): Seq[Group] = allTests.groupBy { t =>
+  val regex = """.*Xmx(\d+[mg])""".r
+  val data = regex
+    .findAllIn(t.name)
+    .matchData
+    .map { v =>
+      v.group(1)
+    }
+    .toList
+
+  data match {
+    case List(x) => (s"Xmx$x", ForkOptions().withRunJVMOptions(Vector(s"-Xmx$x")))
+    case _       => ("Default", ForkOptions())
+  }
+}.map { case ((name, opts), tests) => Group(name, tests, SubProcess(opts)) }.toSeq
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")

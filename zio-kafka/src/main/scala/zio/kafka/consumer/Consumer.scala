@@ -3,9 +3,10 @@ package zio.kafka.consumer
 import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp }
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition }
 import zio._
-import zio.kafka.serde.Deserializer
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
+import zio.kafka.serde.Deserializer
+import zio.kafka.utils.SslHelper
 import zio.stream.ZStream.Pull
 import zio.stream._
 
@@ -349,6 +350,7 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
+      _       <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
       wrapper <- ConsumerAccess.make(settings)
       runloop <- Runloop(
                    hasGroupId = settings.hasGroupId,
