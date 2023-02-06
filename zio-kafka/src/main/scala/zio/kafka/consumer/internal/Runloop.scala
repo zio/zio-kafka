@@ -11,7 +11,8 @@ import zio.kafka.consumer.internal.Runloop.{
   BufferedRecords,
   ByteArrayCommittableRecord,
   ByteArrayConsumerRecord,
-  Command
+  Command,
+  RevokeResult
 }
 import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.stream._
@@ -421,20 +422,6 @@ private[consumer] final class Runloop(
                 for {
                   rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
 
-                  newlyAssigned = rebalanceEvent match {
-                                    case Some(Runloop.RebalanceEvent.Assigned(assigned)) =>
-                                      assigned // These are new
-                                    case Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, assigned @ _)) =>
-                                      // We already ended all revoked partitions's streams and got assigned new partitions, recreate all of the current assignment
-                                      currentAssigned
-                                    case Some(Runloop.RebalanceEvent.Revoked(_)) =>
-                                      // We revoked, should recreate all of the current assignment
-                                      currentAssigned
-                                    case None =>
-                                      // This should be an empty set, but just a catch-all
-                                      currentAssigned -- prevAssigned
-                                  }
-
                   remainingRequestedPartitions = rebalanceEvent match {
                                                    case Some(Runloop.RebalanceEvent.Revoked(_)) |
                                                        Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, _)) =>
@@ -448,14 +435,8 @@ private[consumer] final class Runloop(
                     bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- remainingRequestedPartitions)
 
                   revokeResult <- rebalanceEvent match {
-                                    case Some(Runloop.RebalanceEvent.Revoked(_)) =>
-                                      endRevoked(
-                                        state.pendingRequests,
-                                        state.bufferedRecords,
-                                        state.assignedStreams,
-                                        _ => true
-                                      )
-                                    case Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, _)) =>
+                                    case Some(Runloop.RebalanceEvent.Revoked(_)) |
+                                        Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, _)) =>
                                       endRevoked(
                                         state.pendingRequests,
                                         state.bufferedRecords,
@@ -472,14 +453,29 @@ private[consumer] final class Runloop(
                                         _ => false // not treating any partitions as revoked, as endRevoked was called previously in the rebalance listener
                                       )
                                     case None =>
-                                      endRevoked(
-                                        state.pendingRequests,
-                                        state
-                                          .addBufferedRecords(unrequestedRecords)
-                                          .bufferedRecords,
-                                        state.assignedStreams,
-                                        tp => !currentAssigned(tp)
+                                      ZIO.succeed(
+                                        RevokeResult(
+                                          state.pendingRequests,
+                                          state.addBufferedRecords(unrequestedRecords).bufferedRecords,
+                                          state.assignedStreams,
+                                          Map.empty
+                                        )
                                       )
+                                  }
+
+                  newlyAssigned = rebalanceEvent match {
+                                    case Some(Runloop.RebalanceEvent.Assigned(_)) =>
+                                      // Just for newly assigned partitions
+                                      currentAssigned -- prevAssigned
+                                    case Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, assigned @ _)) =>
+                                      // Recreate all of the current assignment
+                                      currentAssigned
+                                    case Some(Runloop.RebalanceEvent.Revoked(_)) =>
+                                      // We revoked, should recreate all of the current assignment
+                                      currentAssigned
+                                    case None =>
+                                      // This should be an empty set, but just a catch-all
+                                      currentAssigned -- prevAssigned
                                   }
 
                   _ <- ZIO.foreachDiscard(revokeResult.bufferedRecords.recs) { case (topicPartition, records) =>
@@ -516,35 +512,11 @@ private[consumer] final class Runloop(
             )
           }
         }
-      newFinishingStreams <-
+      updatedFinishingStreams <-
         ZIO
           .filterNot(pollResult.finishingStreams.toSeq) { case (_, control) => control.streamCompleted.isDone }
           .map(_.toMap)
-      newAssignedStreams <-
-        if (pollResult.newlyAssigned.isEmpty)
-          ZIO.succeed(Set[(TopicPartition, PartitionStreamControl)]())
-        else {
-          ZIO
-            .foreach(pollResult.newlyAssigned)(tp =>
-              newPartitionStream(
-                tp,
-                newFinishingStreams
-                  .get(tp)
-                  .map(_.streamCompleted.await <* ZIO.logInfo(s"Done awaiting completion of previous stream"))
-                  .getOrElse(ZIO.unit)
-              )
-            )
-            .tap { newStreams =>
-              partitions.offer(
-                Take.chunk(
-                  Chunk.fromIterable(newStreams.map { case (tp, _, stream) => tp -> stream })
-                )
-              )
-            }
-            .map(_.map { case (tp, control, _) =>
-              tp -> control
-            })
-        }
+      newAssignedStreams <- createNewPartitionStreams(pollResult.newlyAssigned, updatedFinishingStreams)
       newPendingCommits <-
         ZIO.ifZIO(isRebalancing)(
           onTrue = ZIO.succeed(state.pendingCommits),
@@ -555,8 +527,37 @@ private[consumer] final class Runloop(
       newPendingCommits,
       pollResult.bufferedRecords,
       pollResult.assignedStreams ++ newAssignedStreams,
-      newFinishingStreams
+      updatedFinishingStreams
     )
+
+  private def createNewPartitionStreams(
+    newlyAssigned: Set[TopicPartition],
+    finishingStreams: Map[TopicPartition, PartitionStreamControl]
+  ): UIO[Set[(TopicPartition, PartitionStreamControl)]] =
+    if (newlyAssigned.isEmpty)
+      ZIO.succeed(Set[(TopicPartition, PartitionStreamControl)]())
+    else {
+      ZIO
+        .foreach(newlyAssigned)(tp =>
+          newPartitionStream(
+            tp,
+            finishingStreams
+              .get(tp)
+              .map(_.streamCompleted.await <* ZIO.logInfo(s"Done awaiting completion of previous stream"))
+              .getOrElse(ZIO.unit)
+          )
+        )
+        .tap { newStreams =>
+          partitions.offer(
+            Take.chunk(
+              Chunk.fromIterable(newStreams.map { case (tp, _, stream) => tp -> stream })
+            )
+          )
+        }
+        .map(_.map { case (tp, control, _) =>
+          tp -> control
+        })
+    }
 
   /*
   When getting requests during rebalancing, end the partition stream. Otherwise allow the request unless
