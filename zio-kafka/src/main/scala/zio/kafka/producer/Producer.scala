@@ -2,7 +2,7 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.{ KafkaProducer, Producer => JProducer, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization.ByteArraySerializer
-import org.apache.kafka.common.{ Metric, MetricName }
+import org.apache.kafka.common.{ KafkaException, Metric, MetricName }
 import zio._
 import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
@@ -248,7 +248,11 @@ object Producer {
   def make(settings: ProducerSettings): ZIO[Scope, Throwable, Producer] =
     for {
       props <- ZIO.attempt(settings.driverSettings)
-      _     <- SslHelper.validateEndpoint(settings.bootstrapServers, props)
+      _ <- SslHelper
+             .validateEndpoint(settings.bootstrapServers, props)
+             .mapError(e =>
+               new KafkaException("Failed to construct kafka producer", e)
+             ) // Mimic behaviour of KafkaProducer constructor
       rawProducer <- ZIO.attempt(
                        new KafkaProducer[Array[Byte], Array[Byte]](
                          props.asJava,

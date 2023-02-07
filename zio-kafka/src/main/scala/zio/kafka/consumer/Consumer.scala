@@ -1,7 +1,7 @@
 package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp }
-import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition }
+import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
@@ -350,7 +350,11 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _       <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
+      _ <- SslHelper
+             .validateEndpoint(settings.bootstrapServers, settings.properties)
+             .mapError(e =>
+               new KafkaException("Failed to construct kafka consumer", e)
+             ) // Mimic behaviour of KafkaConsumer constructor
       wrapper <- ConsumerAccess.make(settings)
       runloop <- Runloop(
                    hasGroupId = settings.hasGroupId,
