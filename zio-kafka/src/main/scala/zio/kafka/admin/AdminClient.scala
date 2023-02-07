@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.{
   ConsumerGroupState => JConsumerGroupState,
   IsolationLevel => JIsolationLevel,
+  KafkaException,
   KafkaFuture,
   Metric => JMetric,
   MetricName => JMetricName,
@@ -1502,11 +1503,15 @@ object AdminClient {
     }
 
   def javaClientFromSettings(settings: AdminClientSettings): ZIO[Scope, Throwable, JAdmin] =
-    ZIO.acquireRelease(
-      SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties) *> ZIO.attempt(
-        JAdmin.create(settings.driverSettings.asJava)
-      )
-    )(client => ZIO.succeed(client.close(settings.closeTimeout)))
+    ZIO.acquireRelease {
+      val endpointCheck = SslHelper
+        .validateEndpoint(settings.bootstrapServers, settings.properties)
+        .mapError(e =>
+          new KafkaException("Failed to create new KafkaAdminClient", e)
+        ) // Mimic behaviour of KafkaAdminClient.createInternal
+
+      endpointCheck *> ZIO.attempt(JAdmin.create(settings.driverSettings.asJava))
+    }(client => ZIO.succeed(client.close(settings.closeTimeout)))
 
   implicit final class MapOps[K1, V1](private val v: Map[K1, V1]) extends AnyVal {
     def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): Map[K2, V2] = v.map(kv => fk(kv._1) -> fv(kv._2))

@@ -40,7 +40,7 @@ object SslHelper {
                                     ZIO.attempt(SocketChannel.open(addr))
                                   )(channel => ZIO.attempt(channel.close()).orDie)
                        tls <- ZIO.attempt {
-                                // make a simple request here and validate a server response
+                                // Send a simple request and read the TLS record type from the answer
                                 val buf = ByteBuffer.allocate(5)
                                 channel.write(buf)
                                 buf.position(0)
@@ -64,6 +64,9 @@ object SslHelper {
       }
       .unit
 
+  /**
+   * Check if first byte of buffer corresponds to a record type from a TLS server
+   */
   private def isTls(buf: ByteBuffer): Boolean = {
     val tlsMessageType = buf.get()
     tlsMessageType match {
