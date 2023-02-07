@@ -21,7 +21,7 @@ object ProducerSpec extends ZIOKafkaSpec {
       c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.int).toQueue()
     }
 
-  override def spec =
+  override def spec: Spec[TestEnvironment & Kafka, Object] =
     suite("producer test suite")(
       test("one record") {
         for {
@@ -34,7 +34,7 @@ object ProducerSpec extends ZIOKafkaSpec {
 
         def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
           Consumer.make(settings).flatMap { c =>
-            (c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.string).toQueue())
+            c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.string).toQueue()
           }
 
         for {
@@ -58,7 +58,6 @@ object ProducerSpec extends ZIOKafkaSpec {
                            messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
                            record = messages
                                       .filter(rec => rec.record.key == key1 && rec.record.value == value1)
-                                      .toSeq
                          } yield record
                        }
                      }
@@ -72,7 +71,7 @@ object ProducerSpec extends ZIOKafkaSpec {
                      }
         } yield assertTrue(outcome.length == 2) &&
           assertTrue(record1.nonEmpty) &&
-          assertTrue(record2.length > 0)
+          assertTrue(record2.nonEmpty)
       },
       test("an empty chunk of records") {
         val chunks = Chunk.fromIterable(List.empty)
