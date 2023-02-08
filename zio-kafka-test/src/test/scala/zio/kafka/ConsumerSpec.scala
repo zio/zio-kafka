@@ -937,137 +937,154 @@ object ConsumerSpec extends ZIOKafkaSpec {
           _ <- fiber0.interrupt
         } yield assertCompletes
       },
-      test("restartStreamsOnRebalancing mode closes all partition streams") {
-        // TODO test does not work for cooperative partition strategy
-        val nrPartitions = 5
-        val nrMessages   = 100
+      suite("restartStreamsOnRebalancing mode closes all partition streams")({
+        def testForPartitionAssignmentStrategy[T <: ConsumerPartitionAssignor: ClassTag] =
+          test(implicitly[ClassTag[T]].runtimeClass.getName) {
+            val nrPartitions = 5
+            val nrMessages   = 100
 
-        println("Starting test")
+            for {
+              // Produce messages on several partitions
+              topic   <- randomTopic
+              group   <- randomGroup
+              client1 <- randomClient
+              client2 <- randomClient
 
-        for {
-          // Produce messages on several partitions
-          topic   <- randomTopic
-          group   <- randomGroup
-          client1 <- randomClient
-          client2 <- randomClient
+              _ <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+              _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
+                     produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+                   }
 
-          _ <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-          _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
-                 produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
-               }
+              // Consume messages
+              messagesReceived <-
+                ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
+              drainCount <- Ref.make(0)
+              subscription = Subscription.topics(topic)
+              diagnostics =
+                Diagnostics { case e: DiagnosticEvent.Rebalance =>
+                  ZIO.logInfo(s"$e")
+                }
 
-          // Consume messages
-          messagesReceived <-
-            ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
-          drainCount <- Ref.make(0)
-          subscription = Subscription.topics(topic)
-          diagnostics =
-            Diagnostics {
-              case e: DiagnosticEvent.Rebalance =>
-                ZIO.logInfo(s"$e")
-              case _: DiagnosticEvent.Poll =>
-                ZIO.logInfo(s"Completed poll")
-            }
-
-          fib <-
-            ZIO
-              .logAnnotate("consumer", "1") {
-                Consumer
-                  .subscribeAnd(subscription)
-                  .partitionedAssignmentStream(Serde.string, Serde.string)
-                  .rechunk(1)
-                  .mapZIO { partitions =>
-                    println(s"Consumer 1 got a partition chunk with ${partitions.map(_._1.partition()).mkString(",")}")
-                    ZStream
-                      .fromIterable(partitions.map(_._2))
-                      .flatMapPar(Int.MaxValue)(s => s)
-                      .mapZIO(record => messagesReceived(record.partition).update(_ + 1).as(record))
-                      .mapZIO(record => record.offset.commit)
+              fib <-
+                ZIO
+                  .logAnnotate("consumer", "1") {
+                    Consumer
+                      .subscribeAnd(subscription)
+                      .partitionedAssignmentStream(Serde.string, Serde.string)
+                      .rechunk(1)
+                      .mapZIO { partitions =>
+                        ZStream
+                          .fromIterable(partitions.map(_._2))
+                          .flatMapPar(Int.MaxValue)(s => s)
+                          .mapZIO(record => messagesReceived(record.partition).update(_ + 1).as(record))
+                          .mapZIO(record => record.offset.commit)
+                          .runDrain
+                      }
+                      .mapZIO(_ =>
+                        drainCount.updateAndGet(_ + 1).flatMap {
+                          case 2 => Consumer.stopConsumption
+                          // 1: when consumer on fib2 starts
+                          // 2: when consumer on fib2 stops, end of test
+                          case _ => ZIO.unit
+                        }
+                      )
                       .runDrain
-                  }
-                  .mapZIO(_ =>
-                    drainCount.updateAndGet(_ + 1).flatMap {
-                      case 2 => Consumer.stopConsumption
-                      // 1: when consumer on fib2 starts
-                      // 2: when consumer on fib2 stops, end of test
-                      case _ => ZIO.unit
-                    }
-                  )
-                  .runDrain
-                  .tap(_ => ZIO.logInfo("Done"))
-                  .provideSomeLayer[Kafka](
-                    consumer(client1, Some(group), diagnostics = diagnostics)
-                  )
-              }
-              .fork
-          // fib is running, consuming all the published messages from all partitions.
-          // Waiting until it recorded all messages
-          _ <- ZIO
-                 .foreach(messagesReceived.values)(_.get)
-                 .map(_.sum)
-                 .repeat(Schedule.recurUntil((n: Int) => n >= nrMessages) && Schedule.fixed(100.millis))
-          _ <- ZIO.logInfo("Step 1")
-
-          // Starting a new consumer that will stop after receiving 20 messages,
-          // causing two rebalancing events for fib1 consumers on start and stop
-          fib2 <- ZIO
-                    .logAnnotate("consumer", "2") {
-                      Consumer
-                        .subscribeAnd(subscription)
-                        .plainStream(Serde.string, Serde.string, 1)
-                        .take(20)
-                        .runDrain
-                        .tap(_ => ZIO.logInfo("Done"))
-                        .provideSomeLayer[Kafka](
-                          consumer(client2, Some(group), diagnostics = diagnostics)
+                      .tap(_ => ZIO.logInfo("Done"))
+                      .provideSomeLayer[Kafka](
+                        consumer(
+                          client1,
+                          Some(group),
+                          diagnostics = diagnostics,
+                          properties = Map(
+                            ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> implicitly[
+                              ClassTag[T]
+                            ].runtimeClass.getName
+                          )
                         )
-                    }
-                    .fork
+                      )
+                  }
+                  .fork
+              // fib is running, consuming all the published messages from all partitions.
+              // Waiting until it recorded all messages
+              _ <- ZIO
+                     .foreach(messagesReceived.values)(_.get)
+                     .map(_.sum)
+                     .repeat(Schedule.recurUntil((n: Int) => n >= nrMessages) && Schedule.fixed(100.millis))
+              _ <- ZIO.logInfo("Step 1")
 
-          // Waiting until fib1's partition streams got restarted because of the rebalancing
-          _ <- drainCount.get.repeat(Schedule.recurUntil((n: Int) => n >= 1) && Schedule.fixed(100.millis))
-          _ <- ZIO.logInfo("Step 2")
+              // Starting a new consumer that will stop after receiving 20 messages,
+              // causing two rebalancing events for fib1 consumers on start and stop
+              fib2 <- ZIO
+                        .logAnnotate("consumer", "2") {
+                          Consumer
+                            .subscribeAnd(subscription)
+                            .plainStream(Serde.string, Serde.string, 1)
+                            .take(20)
+                            .runDrain
+                            .tap(_ => ZIO.logInfo("Done"))
+                            .provideSomeLayer[Kafka](
+                              consumer(
+                                client2,
+                                Some(group),
+                                diagnostics = diagnostics,
+                                properties = Map(
+                                  ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> implicitly[
+                                    ClassTag[T]
+                                  ].runtimeClass.getName
+                                )
+                              )
+                            )
+                        }
+                        .fork
 
-          // All messages processed, the partition streams of fib are still running.
-          // Saving the values and resetting the counters
-          messagesReceived0 <-
-            ZIO
-              .foreach((0 until nrPartitions).toList) { i =>
-                messagesReceived(i).get.flatMap { v =>
-                  Ref.make(v).map(r => i -> r)
-                } <* messagesReceived(i).set(0)
-              }
-              .map(_.toMap)
+              // Waiting until fib1's partition streams got restarted because of the rebalancing
+              _ <- drainCount.get.repeat(Schedule.recurUntil((n: Int) => n >= 1) && Schedule.fixed(100.millis))
+              _ <- ZIO.logInfo("Step 2")
 
-          // Publishing another N messages - now they will be distributed among the two consumers until
-          // fib2 stops after 20 messages
-          _ <- ZIO.foreachDiscard((nrMessages + 1) to (2 * nrMessages)) { i =>
-                 produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
-               }
-          _ <- fib2.join
-          _ <- fib.join
+              // All messages processed, the partition streams of fib are still running.
+              // Saving the values and resetting the counters
+              messagesReceived0 <-
+                ZIO
+                  .foreach((0 until nrPartitions).toList) { i =>
+                    messagesReceived(i).get.flatMap { v =>
+                      Ref.make(v).map(r => i -> r)
+                    } <* messagesReceived(i).set(0)
+                  }
+                  .map(_.toMap)
 
-          // fib2 terminates after 20 messages, fib terminates after fib2 because of the rebalancing (drainCount==2)
-          messagesPerPartition0 <-
-            ZIO.foreach(messagesReceived0.values)(_.get) // counts from the first N messages (single consumer)
-          messagesPerPartition <-
-            ZIO.foreach(messagesReceived.values)(_.get) // counts from fib after the second consumer joined
+              // Publishing another N messages - now they will be distributed among the two consumers until
+              // fib2 stops after 20 messages
+              _ <- ZIO.foreachDiscard((nrMessages + 1) to (2 * nrMessages)) { i =>
+                     produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+                   }
+              _ <- fib2.join
+              _ <- fib.join
 
-          // The first set must contain all the produced messages
-          // The second set must have at least one and maximum N-20 (because fib2 stops after consuming 20) -
-          // the exact count cannot be known because fib2's termination triggers fib1's rebalancing asynchronously.
-        } yield assert(messagesPerPartition0)(forall(equalTo(nrMessages / nrPartitions))) &&
-          assert(messagesPerPartition.view.sum)(isGreaterThan(0) && isLessThanEqualTo(nrMessages - 20))
-      } @@ TestAspect.nonFlaky(3),
+              // fib2 terminates after 20 messages, fib terminates after fib2 because of the rebalancing (drainCount==2)
+              messagesPerPartition0 <-
+                ZIO.foreach(messagesReceived0.values)(_.get) // counts from the first N messages (single consumer)
+              messagesPerPartition <-
+                ZIO.foreach(messagesReceived.values)(_.get) // counts from fib after the second consumer joined
+
+              // The first set must contain all the produced messages
+              // The second set must have at least one and maximum N-20 (because fib2 stops after consuming 20) -
+              // the exact count cannot be known because fib2's termination triggers fib1's rebalancing asynchronously.
+            } yield assert(messagesPerPartition0)(forall(equalTo(nrMessages / nrPartitions))) &&
+              assert(messagesPerPartition.view.sum)(isGreaterThan(0) && isLessThanEqualTo(nrMessages - 20))
+          }
+
+        // Test for both default partition assignment strategies
+        Seq(
+          testForPartitionAssignmentStrategy[RangeAssignor],
+          testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
+        )
+      }: _*) @@ TestAspect.nonFlaky(3),
       test("handles RebalanceInProgressExceptions transparently") {
         val nrPartitions = 5
         val nrMessages   = 10000
 
-        val diagnostics = Diagnostics {
-          case e: DiagnosticEvent.Rebalance =>
-            ZIO.logInfo(s"$e")
-          case _: DiagnosticEvent.Poll =>
-            ZIO.logInfo(s"Completed poll")
+        val diagnostics = Diagnostics { case e: DiagnosticEvent.Rebalance =>
+          ZIO.logInfo(s"$e")
         }
 
         def customConsumer(clientId: String, groupId: Option[String]) =
