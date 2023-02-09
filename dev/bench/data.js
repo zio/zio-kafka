@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1675844903189,
+  "lastUpdate": 1675941891758,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -328,6 +328,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1989903355.215539,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "82821371+rituraj2342@users.noreply.github.com",
+            "name": "Rituraj Khare",
+            "username": "rituraj2342"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "53035361a5edadc26d146e259c731f3e1045feb7",
+          "message": "Remove redundant collection conversion (#632)",
+          "timestamp": "2023-02-09T19:21:43+08:00",
+          "tree_id": "8363cd7db1a670b767cafe9a3708a0a657b71850",
+          "url": "https://github.com/zio/zio-kafka/commit/53035361a5edadc26d146e259c731f3e1045feb7"
+        },
+        "date": 1675941891131,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1987942142.5377262,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
