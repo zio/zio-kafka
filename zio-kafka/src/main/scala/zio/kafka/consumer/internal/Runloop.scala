@@ -176,9 +176,10 @@ private[consumer] final class Runloop(
     onSuccess: Task[Unit],
     onFailure: Exception => Task[Unit]
   ): OffsetCommitCallback =
-    (offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception) => Unsafe.unsafe { implicit u =>
-      runtime.unsafe.run(if (exception eq null) onSuccess else onFailure(exception)).getOrThrowFiberFailure()
-    }
+    (offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception) =>
+      Unsafe.unsafe { implicit u =>
+        runtime.unsafe.run(if (exception eq null) onSuccess else onFailure(exception)).getOrThrowFiberFailure()
+      }
 
   /**
    * Does all needed to end revoked partitions:
