@@ -176,11 +176,8 @@ private[consumer] final class Runloop(
     onSuccess: Task[Unit],
     onFailure: Exception => Task[Unit]
   ): OffsetCommitCallback =
-    new OffsetCommitCallback {
-      override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
-        Unsafe.unsafe { implicit u =>
-          runtime.unsafe.run(if (exception eq null) onSuccess else onFailure(exception)).getOrThrowFiberFailure()
-        }
+    (offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception) => Unsafe.unsafe { implicit u =>
+      runtime.unsafe.run(if (exception eq null) onSuccess else onFailure(exception)).getOrThrowFiberFailure()
     }
 
   /**
