@@ -16,7 +16,7 @@ case class ConsumerSettings(
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false
 ) {
-  private[this] def autoOffsetResetConfig = offsetRetrieval match {
+  private[this] def autoOffsetResetConfig: Map[_ <: String, String] = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
     case OffsetRetrieval.Manual(_)   => Map.empty
   }
