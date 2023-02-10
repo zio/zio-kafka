@@ -399,13 +399,13 @@ private[consumer] final class Runloop(
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet -- state.finishingStreams.keys
 
-            val prevGroupGenerationId = Option.when(hasGroupId)(c.groupMetadata().generationId())
+            val prevGroupGenerationId = if (hasGroupId) Some(c.groupMetadata().generationId()) else None
 
             resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
             val records = doPoll(c, requestedPartitions)
 
-            val newGroupGenerationId = Option.when(hasGroupId)(c.groupMetadata().generationId())
+            val newGroupGenerationId = if (hasGroupId) Some(c.groupMetadata().generationId()) else None
 
             // Check shutdown again after polling (which takes up to the poll timeout)
             ZIO.ifZIO(isShutdown)(
@@ -434,6 +434,7 @@ private[consumer] final class Runloop(
                                                    case _ =>
                                                      requestedPartitions
                                                  }
+                  // TODO what to do with buffered records in combination with seeking
                   unrequestedRecords =
                     bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- remainingRequestedPartitions)
 
@@ -462,12 +463,14 @@ private[consumer] final class Runloop(
                                           _ => newGroupGenerationId != prevGroupGenerationId
                                         )
                                     case None =>
-                                      ZIO.succeed(
-                                        RevokeResult(
-                                          state.pendingRequests,
-                                          state.addBufferedRecords(unrequestedRecords).bufferedRecords,
-                                          state.assignedStreams,
-                                          Map.empty
+                                      endRevoked(
+                                        state.pendingRequests,
+                                        state
+                                          .addBufferedRecords(unrequestedRecords)
+                                          .bufferedRecords,
+                                        state.assignedStreams,
+                                        !currentAssigned(
+                                          _
                                         )
                                       )
                                   }
