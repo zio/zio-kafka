@@ -11,8 +11,7 @@ import zio.kafka.consumer.internal.Runloop.{
   BufferedRecords,
   ByteArrayCommittableRecord,
   ByteArrayConsumerRecord,
-  Command,
-  RevokeResult
+  Command
 }
 import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.stream._
@@ -400,9 +399,13 @@ private[consumer] final class Runloop(
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet -- state.finishingStreams.keys
 
+            val prevGroupGenerationId = c.groupMetadata().generationId()
+
             resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
             val records = doPoll(c, requestedPartitions)
+
+            val newGroupGenerationId = c.groupMetadata().generationId()
 
             // Check shutdown again after polling (which takes up to the poll timeout)
             ZIO.ifZIO(isShutdown)(
@@ -437,21 +440,27 @@ private[consumer] final class Runloop(
                   revokeResult <- rebalanceEvent match {
                                     case Some(Runloop.RebalanceEvent.Revoked(_)) |
                                         Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, _)) =>
-                                      endRevoked(
-                                        state.pendingRequests,
-                                        state.bufferedRecords,
-                                        state.assignedStreams,
-                                        _ => true
-                                      )
+                                      ZIO.logDebug(
+                                        s"Consumer group generation ID: ${c.groupMetadata().generationId()}"
+                                      ) *>
+                                        endRevoked(
+                                          state.pendingRequests,
+                                          state.bufferedRecords,
+                                          state.assignedStreams,
+                                          _ => true
+                                        )
                                     case Some(Runloop.RebalanceEvent.Assigned(newPartitions)) =>
-                                      endRevoked(
-                                        state.pendingRequests,
-                                        state
-                                          .addBufferedRecords(unrequestedRecords.remove(newPartitions))
-                                          .bufferedRecords,
-                                        state.assignedStreams,
-                                        _ => false // not treating any partitions as revoked, as endRevoked was called previously in the rebalance listener
-                                      )
+                                      ZIO.logDebug(
+                                        s"Consumer group generation ID: ${c.groupMetadata().generationId()}"
+                                      ) *>
+                                        endRevoked(
+                                          state.pendingRequests,
+                                          state
+                                            .addBufferedRecords(unrequestedRecords.remove(newPartitions))
+                                            .bufferedRecords,
+                                          state.assignedStreams,
+                                          _ => newGroupGenerationId != prevGroupGenerationId
+                                        )
                                     case None =>
                                       ZIO.succeed(
                                         RevokeResult(
