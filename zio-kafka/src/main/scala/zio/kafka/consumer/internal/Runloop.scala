@@ -399,13 +399,13 @@ private[consumer] final class Runloop(
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet -- state.finishingStreams.keys
 
-            val prevGroupGenerationId = c.groupMetadata().generationId()
+            val prevGroupGenerationId = Option.when(hasGroupId)(c.groupMetadata().generationId())
 
             resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
             val records = doPoll(c, requestedPartitions)
 
-            val newGroupGenerationId = c.groupMetadata().generationId()
+            val newGroupGenerationId = Option.when(hasGroupId)(c.groupMetadata().generationId())
 
             // Check shutdown again after polling (which takes up to the poll timeout)
             ZIO.ifZIO(isShutdown)(
