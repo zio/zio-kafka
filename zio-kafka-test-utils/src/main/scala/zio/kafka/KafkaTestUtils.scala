@@ -158,7 +158,7 @@ object KafkaTestUtils {
   def adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(AdminClientSettings(_))
 
-  def withAdmin[T](f: AdminClient => RIO[Kafka, T]): ZIO[Kafka, Throwable, Nothing] =
+  def withAdmin[T](f: AdminClient => RIO[Kafka, T]) =
     for {
       settings <- adminSettings
       fRes <- ZIO.scoped {
