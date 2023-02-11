@@ -1056,6 +1056,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
         )
       }: _*) @@ TestAspect.timeout(60.seconds) @@ TestAspect.nonFlaky(3),
       test("handles RebalanceInProgressExceptions transparently") {
+        // Committing during rebalancing must not throw exceptions. Since we can't directly observe this happening,
+        // the best we can do is make the situation occur and check that we don't get any errors
         val nrPartitions = 5
         val nrMessages   = 10000
 
@@ -1078,10 +1080,35 @@ object ConsumerSpec extends ZIOKafkaSpec {
             )
           ) ++ ZLayer.succeed(diagnostics) >>> Consumer.live)
 
+        def consumerStream(nr: Int, groupId: String, subscription: Subscription) =
+          ZIO
+            .logAnnotate("consumer", nr.toString) {
+              Consumer
+                .subscribeAnd(subscription)
+                .partitionedAssignmentStream(Serde.string, Serde.string)
+                .tap(partitions => ZIO.logInfo(s"Got new partition assignment: ${partitions.map(_._1.toString)}"))
+                .mapZIOPar(16) { partitions =>
+                  ZStream
+                    .fromIterable(partitions.map(_._2))
+                    .flatMapPar(Int.MaxValue)(s => s)
+                    .map(_.offset)
+                    .aggregateAsync(Consumer.offsetBatches)
+                    .mapZIO(_.commit)
+                    .runDrain
+                }
+                .runDrain
+                .tap(_ => ZIO.logInfo("Done"))
+                .provideSomeLayer[Kafka](
+                  customConsumer("consumer1", Some(groupId)) ++ Scope.default
+                )
+                .tapError(e => ZIO.logErrorCause(e.getMessage, Cause.fail(e)))
+            }
+
         for {
           // Produce messages on several partitions
           topic <- randomTopic
           group <- randomGroup
+          subscription = Subscription.topics(topic)
 
           _ <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
           _ <- ZIO
@@ -1090,68 +1117,14 @@ object ConsumerSpec extends ZIOKafkaSpec {
                  }
                  .forkScoped
 
-          // Consume messages
-          messagesReceivedConsumer1 <- Ref.make[Int](0)
-          messagesReceivedConsumer2 <- Ref.make[Int](0)
-          drainCount                <- Ref.make(0)
-          subscription = Subscription.topics(topic)
-          stopConsumer1 <- Promise.make[Nothing, Unit]
-          fib <-
-            ZIO
-              .logAnnotate("consumer", "1") {
-                Consumer
-                  .subscribeAnd(subscription)
-                  .partitionedAssignmentStream(Serde.string, Serde.string)
-                  .rechunk(1)
-                  .mapZIOPar(16) { partitions =>
-                    ZIO.logInfo(s"Consumer 1 got new partition assignment: ${partitions.map(_._1.toString)}") *>
-                      ZStream
-                        .fromIterable(partitions.map(_._2))
-                        .flatMapPar(Int.MaxValue)(s => s)
-                        .mapZIO(record => messagesReceivedConsumer1.update(_ + 1).as(record))
-                        .map(_.offset)
-                        .aggregateAsync(Consumer.offsetBatches)
-                        .mapZIO(offsetBatch => offsetBatch.commit)
-                        .runDrain
-                  }
-                  .mapZIO(_ => drainCount.updateAndGet(_ + 1))
-                  .interruptWhen(stopConsumer1.await)
-                  .runDrain
-                  .provideSomeLayer[Kafka](
-                    customConsumer("consumer1", Some(group)) ++ Scope.default
-                  )
-                  .tapError(e => ZIO.logErrorCause(e.getMessage, Cause.fail(e)))
-              }
-              .forkScoped
-
-          _ <- messagesReceivedConsumer1.get
-                 .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
-          _ <- ZIO.logInfo("Starting consumer 2")
-
-          fib2 <-
-            ZIO
-              .logAnnotate("consumer", "2") {
-                Consumer
-                  .subscribeAnd(subscription)
-                  .plainStream(Serde.string, Serde.string)
-                  .mapZIO(record => messagesReceivedConsumer2.update(_ + 1).as(record))
-                  .map(_.offset)
-                  .aggregateAsync(Consumer.offsetBatches)
-                  .mapZIO(offsetBatch => offsetBatch.commit)
-                  .runDrain
-                  .provideSomeLayer[Kafka](
-                    customConsumer("consumer2", Some(group))
-                  )
-                  .tapError(e => ZIO.logErrorCause("Error in consumer 2", Cause.fail(e)))
-              }
-              .forkScoped
-
-          _ <- messagesReceivedConsumer2.get
-                 .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
-          _ <- stopConsumer1.succeed(())
-          _ <- fib.join zipPar fib2.interrupt
-        } yield assertCompletes
-      } @@ TestAspect.nonFlaky(5)
+          // Start a consumer every second
+          fibers <- ZIO.foreach((1 to 10).toList) { i =>
+                      consumerStream(i, group, subscription).fork.delay(1.second)
+                    }
+          _     <- ZIO.sleep(5.seconds)
+          exits <- ZIO.foreach(fibers)(_.interrupt)
+        } yield assert(exits)(forall(not(fails(anything))))
+      }
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
     ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(600.seconds)
