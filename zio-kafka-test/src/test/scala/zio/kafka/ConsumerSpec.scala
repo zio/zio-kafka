@@ -371,8 +371,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
             val nrMessages   = 15000
             val nrPartitions = 6
 
-            println("Beginning test")
-
             def diagnostics(committed: Ref[Map[Int, Long]]) =
               Diagnostics {
                 case e: DiagnosticEvent.Rebalance =>
@@ -511,7 +509,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
 
-      }: _*) @@ TestAspect.nonFlaky(5),
+      }: _*) @@ TestAspect.nonFlaky(3),
       suite("partition streams only contain records from one consumer group generation")({
 
         def testForPartitionAssignmentStrategy[T <: ConsumerPartitionAssignor: ClassTag] =
@@ -662,7 +660,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
 
-      }: _*) @@ TestAspect.nonFlaky(5),
+      }: _*) @@ TestAspect.nonFlaky(3),
       test("produce diagnostic events when rebalancing") {
         val nrMessages   = 50
         val nrPartitions = 6

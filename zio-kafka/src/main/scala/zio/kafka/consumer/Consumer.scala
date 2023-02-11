@@ -218,11 +218,7 @@ object Consumer {
 
       stream.map(_.exit).flattenExitOption.map {
         _.map { case (tp, partitionStream) =>
-          tp -> partitionStream
-            .mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
-            .viaFunction(s =>
-              if (settings.perPartitionChunkPrefetch > 0) s.bufferChunks(settings.perPartitionChunkPrefetch) else s
-            )
+          tp -> partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
         }
       }
     }

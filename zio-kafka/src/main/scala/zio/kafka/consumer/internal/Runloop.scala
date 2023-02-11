@@ -79,9 +79,7 @@ private[consumer] final class Runloop(
                 )
             } yield result
           }
-            .viaFunction(s =>
-              if (perPartitionChunkPrefetch > 0) s.bufferChunks(perPartitionChunkPrefetch) else s
-            ) // TODO why does restoring this buffer make 'twice' test fail?
+            .viaFunction(s => if (perPartitionChunkPrefetch > 0) s.bufferChunks(perPartitionChunkPrefetch) else s)
             .concat(
               ZStream
                 .fromQueue(drainQueue)
