@@ -377,12 +377,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
               Diagnostics {
                 case e: DiagnosticEvent.Rebalance =>
                   ZIO.logInfo(s"$e. Offsets: ${committed}")
-                case e: DiagnosticEvent.Poll =>
-                  ZIO.logInfo(s"Completed poll: ${e}")
-                case DiagnosticEvent.Commit.Started(offsets) =>
-                  ZIO.logTrace(s"Starting commit ${offsets.map { case (tp, offset) =>
-                      s"${tp.partition()}->${offset}"
-                    }.mkString(",")}")
                 case DiagnosticEvent.Commit.Success(offsets) =>
                   ZIO.foreachDiscard(offsets) { case (tp, offset) =>
                     ZIO.logAnnotate(
@@ -525,18 +519,10 @@ object ConsumerSpec extends ZIOKafkaSpec {
             val nrMessages   = 15000
             val nrPartitions = 6
 
-            println("Beginning test")
-
             def diagnostics(committed: Ref[Map[Int, Long]]) =
               Diagnostics {
                 case e: DiagnosticEvent.Rebalance =>
                   ZIO.logInfo(s"$e. Offsets: ${committed}")
-                case e: DiagnosticEvent.Poll =>
-                  ZIO.logInfo(s"Completed poll: ${e}")
-                case DiagnosticEvent.Commit.Started(offsets) =>
-                  ZIO.logTrace(s"Starting commit ${offsets.map { case (tp, offset) =>
-                      s"${tp.partition()}->${offset}"
-                    }.mkString(",")}")
                 case DiagnosticEvent.Commit.Success(offsets) =>
                   ZIO.foreachDiscard(offsets) { case (tp, offset) =>
                     ZIO.logAnnotate(

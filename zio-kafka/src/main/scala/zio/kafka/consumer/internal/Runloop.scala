@@ -67,7 +67,12 @@ private[consumer] final class Runloop(
               _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
               _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
               result <-
-                request.await.tapError(e => ZIO.logInfo(s"Partition stream for was completed with ${e}"))
+                request.await.tapError {
+                  case Some(e) =>
+                    ZIO.logErrorCause("Partition stream failed", Cause.fail(e))
+                  case None =>
+                    ZIO.logInfo(s"Partition stream ended")
+                }
               _ <-
                 ZIO.logDebug(
                   s"Got ${result.size} records. Last offset = ${result.map(_.offset.offset).max}"
