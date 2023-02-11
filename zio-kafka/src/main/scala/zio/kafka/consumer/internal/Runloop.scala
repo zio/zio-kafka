@@ -180,8 +180,7 @@ private[consumer] final class Runloop(
             )
         }
           .unlessZIO(isShutdown)
-          .unit,
-      onLost = (_, _) => ZIO.unit
+          .unit
     )
 
     trackRebalancing ++ emitDiagnostics ++ userRebalanceListener ++ revokeTopics
@@ -442,17 +441,17 @@ private[consumer] final class Runloop(
                                     case Some(Runloop.RebalanceEvent.Revoked(_)) |
                                         Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, _)) =>
                                       ZIO.logDebug(
-                                        s"Consumer group generation ID: ${c.groupMetadata().generationId()}"
+                                        s"New consumer group generation ID: ${c.groupMetadata().generationId()}"
                                       ) *>
                                         endRevoked(
                                           state.pendingRequests,
                                           state.bufferedRecords,
                                           state.assignedStreams,
-                                          _ => true
+                                          revoked = _ => true
                                         )
                                     case Some(Runloop.RebalanceEvent.Assigned(newPartitions)) =>
                                       ZIO.logDebug(
-                                        s"Consumer group generation ID: ${c.groupMetadata().generationId()}"
+                                        s"New consumer group generation ID: ${c.groupMetadata().generationId()}"
                                       ) *>
                                         endRevoked(
                                           state.pendingRequests,
@@ -460,7 +459,7 @@ private[consumer] final class Runloop(
                                             .addBufferedRecords(unrequestedRecords.remove(newPartitions))
                                             .bufferedRecords,
                                           state.assignedStreams,
-                                          _ => newGroupGenerationId != prevGroupGenerationId
+                                          revoked = _ => newGroupGenerationId != prevGroupGenerationId
                                         )
                                     case None =>
                                       endRevoked(
@@ -469,9 +468,7 @@ private[consumer] final class Runloop(
                                           .addBufferedRecords(unrequestedRecords)
                                           .bufferedRecords,
                                         state.assignedStreams,
-                                        !currentAssigned(
-                                          _
-                                        )
+                                        revoked = !currentAssigned(_)
                                       )
                                   }
 
