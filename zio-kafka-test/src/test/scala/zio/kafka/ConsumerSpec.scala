@@ -981,16 +981,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                             .mapZIO(_.commit)
                             .runDrain
                       }
-                      .mapZIO(_ =>
-                        drainCount.updateAndGet(_ + 1).flatMap {
-                          case 2 =>
-                            ZIO.logInfo("Stopping consumption") *>
-                              Consumer.stopConsumption
-                          // 1: when consumer on fib2 starts
-                          // 2: when consumer on fib2 stops, end of test
-                          case _ => ZIO.unit
-                        }
-                      )
+                      .mapZIO(_ => drainCount.updateAndGet(_ + 1))
                       .runDrain
                       .tap(_ => ZIO.logInfo("Done"))
                       .provideSomeLayer[Kafka](
@@ -1063,7 +1054,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                    }
               _ <- fib2.join
               _ <- ZIO.logInfo("Step 3: consumer 2 done after consuming 20 messages")
-              _ <- fib.join
+              _ <- fib.interrupt
               _ <- ZIO.logInfo("Step 4: consumer 1 done")
 
               // fib2 terminates after 20 messages, fib terminates after fib2 because of the rebalancing (drainCount==2)
@@ -1081,10 +1072,10 @@ object ConsumerSpec extends ZIOKafkaSpec {
 
         // Test for both default partition assignment strategies
         Seq(
-//          testForPartitionAssignmentStrategy[RangeAssignor]
+          testForPartitionAssignmentStrategy[RangeAssignor],
           testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
-      }: _*) @@ TestAspect.timeout(60.seconds),
+      }: _*) @@ TestAspect.timeout(60.seconds) @@ TestAspect.nonFlaky(3),
       test("handles RebalanceInProgressExceptions transparently") {
         val nrPartitions = 5
         val nrMessages   = 10000
