@@ -291,6 +291,11 @@ object ConsumerSpec extends ZIOKafkaSpec {
         )
       } @@ timeout(10.seconds),
       test("stopConsumption must stop the stream") {
+
+        val diagnostics = Diagnostics { case e: DiagnosticEvent.Rebalance =>
+          ZIO.logInfo(s"$e")
+        }
+
         for {
           topic  <- randomTopic
           group  <- randomGroup
@@ -305,7 +310,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                  .tap { case (_, idx) => Consumer.stopConsumption.when(idx == 3) }
                  .runDrain
                  .provideSomeLayer[Kafka](
-                   consumer(client, Some(group))
+                   consumer(client, Some(group), diagnostics = diagnostics)
                  ) *> keepProducing
                  .set(false)
         } yield assertCompletes

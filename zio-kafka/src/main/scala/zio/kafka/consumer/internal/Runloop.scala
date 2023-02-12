@@ -160,7 +160,6 @@ private[consumer] final class Runloop(
       (lost, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Lost(lost))
     )
 
-    // Revokes ALL partitions on rebalancing, regardless of which ones were actually revoked
     lazy val revokeTopics = RebalanceListener(
       onAssigned = (assigned, _) =>
         lastRebalanceEvent.updateZIO {
@@ -411,15 +410,22 @@ private[consumer] final class Runloop(
 
             // Check shutdown again after polling (which takes up to the poll timeout)
             ZIO.ifZIO(isShutdown)(
-              onTrue = pauseAllPartitions(c).as(
-                Runloop.PollResult(
-                  Set(),
+              onTrue = pauseAllPartitions(c) *>
+                endRevoked(
                   state.pendingRequests,
-                  BufferedRecords.empty,
-                  Map[TopicPartition, PartitionStreamControl](),
-                  state.assignedStreams
+                  state.bufferedRecords,
+                  state.assignedStreams,
+                  revoked = _ => true
                 )
-              ),
+                  .as(
+                    Runloop.PollResult(
+                      newlyAssigned = Set(),
+                      unfulfilledRequests = state.pendingRequests,
+                      bufferedRecords = BufferedRecords.empty,
+                      assignedStreams = Map[TopicPartition, PartitionStreamControl](),
+                      finishingStreams = state.assignedStreams
+                    )
+                  ),
               onFalse = {
                 val tpsInResponse   = records.partitions.asScala.toSet
                 val currentAssigned = c.assignment().asScala.toSet
@@ -609,12 +615,7 @@ private[consumer] final class Runloop(
   private def handleShutdown(state: State, cmd: Command): Task[State] =
     cmd match {
       case Command.Poll =>
-        // End all pending requests
-        ZIO.foreachDiscard(state.pendingRequests)(_.end) *>
-          ZIO.foreachDiscard(state.finishingStreams) { case (tp, stream) =>
-            stream.finishWith(Chunk.empty) <* ZIO.logInfo(s"Finishing stream ${tp.partition()}")
-          } *>
-          handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = BufferedRecords.empty))
+        handlePoll(state.copy(bufferedRecords = BufferedRecords.empty))
       case Command.Requests(reqs) =>
         ZIO.foreachDiscard(reqs)(_.end).as(state)
       case cmd @ Command.Commit(_, _) =>
