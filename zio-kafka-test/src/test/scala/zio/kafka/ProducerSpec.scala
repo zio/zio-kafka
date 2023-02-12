@@ -20,7 +20,7 @@ object ProducerSpec extends ZIOKafkaSpec {
   def withConsumerInt(
     subscription: Subscription,
     settings: ConsumerSettings
-  ): ZIO[Any with Scope, Throwable, Dequeue[Take[Throwable, CommittableRecord[String, RuntimeFlags]]]] =
+  ): ZIO[Any with Scope, Throwable, Dequeue[Take[Throwable, CommittableRecord[String, Int]]]] =
     Consumer.make(settings).flatMap { c =>
       c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.int).toQueue()
     }
