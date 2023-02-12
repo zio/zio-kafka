@@ -454,18 +454,18 @@ private[consumer] final class Runloop(
                                       ) *>
                                         endRevoked(
                                           state.pendingRequests,
-                                          state.bufferedRecords,
+                                          state.bufferedRecords, // Discard new unrequested records, they are for the previous consumer group generation
                                           state.assignedStreams,
                                           revoked = _ => true
                                         )
-                                    case Some(Runloop.RebalanceEvent.Assigned(newPartitions)) =>
+                                    case Some(Runloop.RebalanceEvent.Assigned(newPartitions @ _)) =>
                                       ZIO.logDebug(
                                         s"New consumer group generation ID: ${c.groupMetadata().generationId()}"
                                       ) *>
                                         endRevoked(
                                           state.pendingRequests,
                                           state
-                                            .addBufferedRecords(unrequestedRecords.remove(newPartitions))
+                                            .addBufferedRecords(unrequestedRecords)
                                             .bufferedRecords,
                                           state.assignedStreams,
                                           revoked = _ => newGroupGenerationId != prevGroupGenerationId
@@ -709,9 +709,6 @@ private[consumer] object Runloop {
 
     def remove(partition: TopicPartition): BufferedRecords =
       BufferedRecords(recs - partition)
-
-    def remove(partitions: Set[TopicPartition]): BufferedRecords =
-      BufferedRecords(recs -- partitions)
 
     def ++(newRecs: BufferedRecords): BufferedRecords =
       BufferedRecords(newRecs.recs.foldLeft(recs) { case (acc, (tp, recs)) =>
