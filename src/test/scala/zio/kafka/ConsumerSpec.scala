@@ -507,7 +507,7 @@ object ConsumerSpec extends DefaultRunnableSpec {
             .subscribeAnd(subscription)
             .partitionedStream(Serde.string, Serde.string)
             .map { case (tp, partStream) =>
-              ZStream.fromEffect(allAssignments.update({ current =>
+              ZStream.fromEffect[Any, Nothing, Any](allAssignments.update({ current =>
                 current.get(instance) match {
                   case Some(currentList) => current.updated(instance, currentList :+ tp.partition())
                   case None              => current.updated(instance, List(tp.partition()))
