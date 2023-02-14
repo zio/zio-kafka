@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1676360768949,
+  "lastUpdate": 1676393709078,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -478,6 +478,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1761386599.0418046,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "guizmaii@users.noreply.github.com",
+            "name": "Jules Ivanic",
+            "username": "guizmaii"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "77de3f21b9992aca7d9287df8ece8995a3ed2cb0",
+          "message": "Avoid using a `Task` when code is pure. Prefer to use `Try` (#539)",
+          "timestamp": "2023-02-14T16:52:30Z",
+          "tree_id": "412c219eb267ce5acc0320b0203fb4156a9bd17e",
+          "url": "https://github.com/zio/zio-kafka/commit/77de3f21b9992aca7d9287df8ece8995a3ed2cb0"
+        },
+        "date": 1676393708591,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1989744935.8005106,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
