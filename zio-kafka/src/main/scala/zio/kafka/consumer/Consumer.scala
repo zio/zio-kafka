@@ -392,7 +392,7 @@ object Consumer {
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 
       partitionAssignments <- ZStream
-                                .fromQueueWithShutdown(runloop.partitions)
+                                .fromQueue(runloop.partitions)
                                 .map(_.exit)
                                 .flattenExitOption
                                 .toHub(32)
