@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1676277163057,
+  "lastUpdate": 1676360768949,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -448,6 +448,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1650029076.204478,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "77047591+aashish2054@users.noreply.github.com",
+            "name": "Ashish Chaudhary",
+            "username": "aashish2054"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "81cc36921b6d1b3c58086149ed9beb374c82fadf",
+          "message": "added missing type annotations (#636)",
+          "timestamp": "2023-02-14T08:42:52+01:00",
+          "tree_id": "ffccd6fe4a570450aad7d06abbd76f9c9f0673b9",
+          "url": "https://github.com/zio/zio-kafka/commit/81cc36921b6d1b3c58086149ed9beb374c82fadf"
+        },
+        "date": 1676360768196,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1761386599.0418046,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
