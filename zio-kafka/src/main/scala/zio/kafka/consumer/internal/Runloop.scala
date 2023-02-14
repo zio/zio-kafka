@@ -686,13 +686,13 @@ private[internal] final case class State(
   bufferedRecords: BufferedRecords,
   assignedStreams: Map[TopicPartition, PartitionStreamControl]
 ) {
-  def addCommit(c: Command.Commit)           = copy(pendingCommits = c +: pendingCommits)
-  def addRequest(c: Runloop.Request)         = copy(pendingRequests = c +: pendingRequests)
-  def addRequests(c: Chunk[Runloop.Request]) = copy(pendingRequests = c ++ pendingRequests)
-  def addBufferedRecords(recs: BufferedRecords) =
+  def addCommit(c: Command.Commit): State           = copy(pendingCommits = c +: pendingCommits)
+  def addRequest(c: Runloop.Request): State         = copy(pendingRequests = c +: pendingRequests)
+  def addRequests(c: Chunk[Runloop.Request]): State = copy(pendingRequests = c ++ pendingRequests)
+  def addBufferedRecords(recs: BufferedRecords): State =
     copy(bufferedRecords = bufferedRecords ++ recs)
 
-  def removeBufferedRecordsFor(tp: TopicPartition) =
+  def removeBufferedRecordsFor(tp: TopicPartition): State =
     copy(bufferedRecords = bufferedRecords.remove(tp))
 }
 

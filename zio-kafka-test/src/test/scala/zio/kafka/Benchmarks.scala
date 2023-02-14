@@ -12,13 +12,13 @@ import org.apache.kafka.common.serialization.StringDeserializer
 import java.util.concurrent.TimeUnit
 
 object PopulateTopic extends ZIOAppDefault {
-  def dataStream(length: Long) =
+  def dataStream(length: Long): ZStream[Any, Nothing, (String, String)] =
     ZStream
       .repeatZIO(Random.nextString(16) <*> Random.nextString(128))
       .take(length)
       .rechunk(500)
 
-  override def run =
+  override def run: ZIO[Any, Throwable, Unit] =
     dataStream(872000).map { case (k, v) =>
       new ProducerRecord("inputs-topic", null, null, k, v)
     }.mapChunksZIO(Producer.produceChunkAsync[Any, String, String](_, Serde.string, Serde.string).map(Chunk(_)))
