@@ -1,0 +1,66 @@
+# Inspired by Flavio W. Brasil's work on Kyo: https://github.com/fwbrasil/kyo
+name: Benchs
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  # deployments permission to deploy GitHub pages website
+  deployments: write
+  # contents permission to update benchmark contents in gh-pages branch
+  contents: write
+
+jobs:
+  benchmark: # See https://github.com/marketplace/actions/continuous-benchmark
+    name: Run benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Setup Java
+        uses: actions/setup-java@v3.10.0
+        with:
+          distribution: temurin
+          java-version: 17
+          check-latest: true
+
+      - name: compile
+        run: sbt compile
+
+      - name: run benchmarks
+        # To list all possible options and undestand these configurations, see run `sbt "zioKafkaBench/Jmh/run -h"`
+        #
+        # Used options meaning:
+        #  - "-wi 5": 5 warmup iterations
+        #  - "-i 3": 3 benchmark iterations
+        #  - "-r 1": Minimum time to spend at each measurement iteration. 1 second
+        #  - "-w 1": Minimum time to spend at each warmup iteration. 1 second
+        #  - "-t 1": Number of worker threads to run with. 1 thread
+        #  - "-rf json": Format type for machine-readable results. JSON
+        #  - "-foe true": Should JMH fail immediately if any benchmark had experienced an unrecoverable error?. True
+        run: sbt "zioKafkaBench/Jmh/run -wi 5 -i 3 -r 1 -w 1 -t 1 -rf json -foe true"
+
+      - name: Download previous benchmark data
+        uses: actions/cache@v3
+        with:
+          path: ./cache
+          key: ${{ runner.os }}-benchmark
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1.15.0
+        with:
+          name: JMH Benchmark
+          tool: 'jmh'
+          output-file-path: zio-kafka-bench/jmh-result.json
+          # Access token to deploy GitHub Pages branch
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Push and deploy GitHub pages branch automatically
+          auto-push: true
+          alert-threshold: '200%'
+          comment-on-alert: true
+          fail-on-alert: true
+          # Mention these maintainers in the commit comment
+          alert-comment-cc-users: '@iravid,@svroonland,@guizmaii'

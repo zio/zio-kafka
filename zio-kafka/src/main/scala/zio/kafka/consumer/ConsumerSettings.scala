@@ -16,7 +16,7 @@ case class ConsumerSettings(
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false
 ) {
-  private[this] def autoOffsetResetConfig = offsetRetrieval match {
+  private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
     case OffsetRetrieval.Manual(_)   => Map.empty
   }
@@ -80,7 +80,7 @@ object ConsumerSettings {
   def apply(bootstrapServers: List[String]): ConsumerSettings =
     new ConsumerSettings(
       bootstrapServers = bootstrapServers,
-      properties = Map(),
+      properties = Map.empty,
       closeTimeout = 30.seconds,
       pollInterval = 50.millis,
       pollTimeout = 50.millis,

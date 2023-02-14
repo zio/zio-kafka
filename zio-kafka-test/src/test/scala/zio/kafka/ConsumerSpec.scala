@@ -724,7 +724,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
         val nrMessages   = 10000
 
         def customConsumer(clientId: String, groupId: Option[String]) =
-          (ZLayer(
+          ZLayer(
             consumerSettings(
               clientId = clientId,
               groupId = groupId,
@@ -736,7 +736,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                 .withPollInterval(500.millis)
                 .withPollTimeout(500.millis)
             )
-          ) ++ ZLayer.succeed(Diagnostics.NoOp) >>> Consumer.live)
+          ) ++ ZLayer.succeed(Diagnostics.NoOp) >>> Consumer.live
 
         for {
           // Produce messages on several partitions

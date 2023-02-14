@@ -209,7 +209,7 @@ object Consumer {
       timeout: Duration = Duration.Infinity
     ): Task[Map[TopicPartition, OffsetAndTimestamp]] =
       consumer.withConsumer(
-        _.offsetsForTimes(timestamps.map { case (k, v) => k -> Long.box(v) }.toMap.asJava, timeout.asJava).asScala.toMap
+        _.offsetsForTimes(timestamps.map { case (k, v) => k -> Long.box(v) }.asJava, timeout.asJava).asScala.toMap
           // If a partition doesn't exist yet, the map will have 'null' as entry.
           // It's more idiomatic scala to then simply not have that map entry.
           .filter(_._2 != null)
@@ -585,14 +585,13 @@ object Consumer {
     ZIO.serviceWithZIO(_.metrics)
 
   sealed trait OffsetRetrieval
-
   object OffsetRetrieval {
     final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest)                extends OffsetRetrieval
     final case class Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]]) extends OffsetRetrieval
   }
 
   sealed trait AutoOffsetStrategy { self =>
-    def toConfig: String = self match {
+    final def toConfig: String = self match {
       case AutoOffsetStrategy.Earliest => "earliest"
       case AutoOffsetStrategy.Latest   => "latest"
       case AutoOffsetStrategy.None     => "none"
