@@ -1,7 +1,8 @@
 package zio.kafka.consumer
 
 import io.github.embeddedkafka.EmbeddedKafka
-import org.apache.kafka.clients.consumer.{ ConsumerConfig, CooperativeStickyAssignor }
+import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerPartitionAssignor, CooperativeStickyAssignor, RangeAssignor }
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.KafkaTestUtils._
@@ -9,11 +10,14 @@ import zio.kafka.ZIOKafkaSpec
 import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.embedded.Kafka
+import zio.kafka.producer.TransactionalProducer
 import zio.kafka.serde.Serde
 import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
+
+import scala.reflect.ClassTag
 
 object ConsumerSpec extends ZIOKafkaSpec {
   override val kafkaPrefix: String = "consumespec"
@@ -839,7 +843,204 @@ object ConsumerSpec extends ZIOKafkaSpec {
           _ <- fib.join
           _ <- fib2.interrupt
         } yield assertCompletes
-      }
+      },
+      suite("does not process messages twice for transactional producer, even when rebalancing")({
+
+        /**
+         * Outline of this test:
+         *   - A producer generates some messages on topic A,
+         *   - a transactional consumer/producer pair (copier1) reads these and copies them to topic B transactionally,
+         *   - after a few messages we start a second transactional consumer/producer pair (copier2) that does the same
+         *     (in the same consumer group) this triggers a rebalance,
+         *   - produce some more messages to topic A,
+         *   - a consumer that empties topic B,
+         *   - when enough messages have been received, the copiers are interrupted.
+         *
+         * We will assert that the produced messages to topic A correspond exactly with the read messages from topic B.
+         */
+        def testForPartitionAssignmentStrategy[T <: ConsumerPartitionAssignor: ClassTag] =
+          test(implicitly[ClassTag[T]].runtimeClass.getName) {
+            val partitionCount                                    = 6
+            val messageCount                                      = 5000
+            val allMessages                                       = (1 to messageCount).map(i => s"$i" -> f"msg$i%06d")
+            val (messagesBeforeRebalance, messagesAfterRebalance) = allMessages.splitAt(messageCount / 2)
+
+            def transactionalRebalanceListener(streamCompleteOnRebalanceRef: Ref[Option[Promise[Nothing, Unit]]]) =
+              RebalanceListener(
+                onAssigned = (_, _) => ZIO.unit,
+                onRevoked = (_, _) =>
+                  streamCompleteOnRebalanceRef.get.flatMap {
+                    case Some(p) =>
+                      ZIO.logWarning("onRevoked, awaiting stream completion") *>
+                        p.await.timeoutFail(new InterruptedException("Timed out waiting stream to complete"))(1.minute)
+                    case None => ZIO.unit
+                  },
+                onLost = (_, _) => ZIO.logWarning("Lost some partitions")
+              )
+
+            def makeCopyingTransactionalConsumer(
+              name: String,
+              consumerGroupId: String,
+              clientId: String,
+              fromTopic: String,
+              toTopic: String,
+              tProducer: TransactionalProducer,
+              consumerCreated: Promise[Nothing, Unit]
+            ): ZIO[Kafka, Throwable, Unit] =
+              ZIO.logAnnotate("consumer", name) {
+                for {
+                  consumedMessagesCounter      <- Ref.make(0)
+                  streamCompleteOnRebalanceRef <- Ref.make[Option[Promise[Nothing, Unit]]](None)
+                  tConsumer <- Consumer
+                                 .subscribeAnd(Subscription.topics(fromTopic))
+                                 .partitionedAssignmentStream(Serde.string, Serde.string)
+                                 .mapZIO { assignedPartitions =>
+                                   for {
+                                     p <- Promise.make[Nothing, Unit]
+                                     _ <- streamCompleteOnRebalanceRef.set(Some(p))
+                                     _ <- ZIO.logInfo(s"${assignedPartitions.size} partitions assigned")
+                                     _ <- consumerCreated.succeed(())
+                                     // Increase chunk size (from 10) to speed up the producer.
+                                     rechunkedStreams = assignedPartitions.map(_._2).map(_.rechunk(200))
+                                     s <- ZStream
+                                            .mergeAllUnbounded(64)(rechunkedStreams: _*)
+                                            .mapChunksZIO { records =>
+                                              ZIO.scoped {
+                                                for {
+                                                  _ <- consumedMessagesCounter.update(_ + records.size)
+                                                  t <- tProducer.createTransaction
+                                                  _ <- t.produceChunkBatch(
+                                                         records.map(r => new ProducerRecord(toTopic, r.key, r.value)),
+                                                         Serde.string,
+                                                         Serde.string,
+                                                         OffsetBatch(records.map(_.offset))
+                                                       )
+                                                } yield Chunk.empty
+                                              }.uninterruptible
+                                            }
+                                            .runDrain
+                                            .ensuring {
+                                              for {
+                                                _ <- streamCompleteOnRebalanceRef.set(None)
+                                                _ <- p.succeed(())
+                                                c <- consumedMessagesCounter.get
+                                                _ <- ZIO.logInfo(s"Consumed $c messages")
+                                              } yield ()
+                                            }
+                                   } yield s
+                                 }
+                                 .runDrain
+                                 .provideSome[Kafka](
+                                   transactionalConsumer(
+                                     clientId,
+                                     consumerGroupId,
+                                     offsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
+                                     restartStreamOnRebalancing = true,
+                                     properties = Map(
+                                       ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG ->
+                                         implicitly[ClassTag[T]].runtimeClass.getName
+                                     ),
+                                     rebalanceListener = transactionalRebalanceListener(streamCompleteOnRebalanceRef)
+                                   )
+                                 )
+                                 .tapError(e => ZIO.logError(s"Error: ${e}")) <* ZIO.logInfo("Done")
+                } yield tConsumer
+              }
+
+            for {
+              tProducerSettings <- transactionalProducerSettings
+              tProducer         <- TransactionalProducer.make(tProducerSettings)
+
+              topicA <- randomTopic
+              topicB <- randomTopic
+              _      <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topicA, partitions = partitionCount))
+              _      <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topicB, partitions = partitionCount))
+
+              _ <- produceMany(topicA, messagesBeforeRebalance)
+
+              copyingGroup <- randomGroup
+
+              _               <- ZIO.logInfo("Starting copier 1")
+              copier1ClientId <- randomClient
+              copier1Created  <- Promise.make[Nothing, Unit]
+              copier1 <- makeCopyingTransactionalConsumer(
+                           "1",
+                           copyingGroup,
+                           copier1ClientId,
+                           topicA,
+                           topicB,
+                           tProducer,
+                           copier1Created
+                         ).fork
+              _ <- copier1Created.await
+
+              _               <- ZIO.logInfo("Starting copier 2")
+              copier2ClientId <- randomClient
+              copier2Created  <- Promise.make[Nothing, Unit]
+              copier2 <- makeCopyingTransactionalConsumer(
+                           "2",
+                           copyingGroup,
+                           copier2ClientId,
+                           topicA,
+                           topicB,
+                           tProducer,
+                           copier2Created
+                         ).fork
+              _ <- ZIO.logInfo("Waiting for copier 2 to start")
+              _ <- copier2Created.await
+
+//              _               <- ZIO.logInfo("Starting copier 3")
+//              copier3ClientId <- randomClient
+//              copier3Created  <- Promise.make[Nothing, Unit]
+//              copier3 <- makeCopyingTransactionalConsumer(
+//                           "3",
+//                           copyingGroup,
+//                           copier3ClientId,
+//                           topicA,
+//                           topicB,
+//                           tProducer,
+//                           copier3Created
+//                         ).fork
+//              _ <- ZIO.logInfo("Waiting for copier 3 to start")
+//              _ <- copier3Created.await
+
+              _ <- ZIO.logInfo("Producing some more messages")
+              _ <- produceMany(topicA, messagesAfterRebalance)
+
+              _                 <- ZIO.logInfo("Collecting messages on topic B")
+              groupB            <- randomGroup
+              validatorClientId <- randomClient
+              messagesOnTopicB <- ZIO.logAnnotate("consumer", "validator") {
+                                    Consumer
+                                      .subscribeAnd(Subscription.topics(topicB))
+                                      .plainStream(Serde.string, Serde.string)
+                                      .map(_.value)
+                                      .timeout(30.seconds)
+                                      .runCollect
+                                      .provideSome[Kafka](
+                                        transactionalConsumer(
+                                          validatorClientId,
+                                          groupB,
+                                          offsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)
+                                        )
+                                      )
+                                      .tapError(e => ZIO.logError(s"Error: ${e}")) <* ZIO.logInfo("Done")
+                                  }
+              _ <- copier1.interrupt
+              _ <- copier2.interrupt
+//              _ <- copier3.interrupt
+              messagesOnTopicBCount         = messagesOnTopicB.size
+              messagesOnTopicBDistinctCount = messagesOnTopicB.distinct.size
+            } yield assertTrue(messageCount == messagesOnTopicBCount && messageCount == messagesOnTopicBDistinctCount)
+          }
+
+        // Test for both default partition assignment strategies
+        Seq(
+          testForPartitionAssignmentStrategy[RangeAssignor],
+          testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
+        )
+
+      }: _*) @@ TestAspect.nonFlaky(3)
     ).provideSomeLayerShared[TestEnvironment & Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
       300.seconds
     )

@@ -69,7 +69,8 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
-    restartStreamOnRebalancing: Boolean = false
+    restartStreamOnRebalancing: Boolean = false,
+    properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
       val settings = ConsumerSettings(kafka.bootstrapServers)
@@ -86,6 +87,7 @@ object KafkaTestUtils {
         .withPerPartitionChunkPrefetch(16)
         .withOffsetRetrieval(offsetRetrieval)
         .withRestartStreamOnRebalancing(restartStreamOnRebalancing)
+        .withProperties(properties)
 
       val withClientInstanceId = clientInstanceId.fold(settings)(settings.withGroupInstanceId)
       groupId.fold(withClientInstanceId)(withClientInstanceId.withGroupId)
@@ -96,9 +98,19 @@ object KafkaTestUtils {
     clientId: String,
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
-    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+    restartStreamOnRebalancing: Boolean = false,
+    properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
-    consumerSettings(clientId, Some(groupId), clientInstanceId, allowAutoCreateTopics, offsetRetrieval)
+    consumerSettings(
+      clientId,
+      Some(groupId),
+      clientInstanceId,
+      allowAutoCreateTopics,
+      offsetRetrieval,
+      restartStreamOnRebalancing,
+      properties
+    )
       .map(
         _.withProperties(
           ConsumerConfig.ISOLATION_LEVEL_CONFIG -> "read_committed"
@@ -131,7 +143,10 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     allowAutoCreateTopics: Boolean = true,
-    diagnostics: Diagnostics = Diagnostics.NoOp
+    diagnostics: Diagnostics = Diagnostics.NoOp,
+    restartStreamOnRebalancing: Boolean = false,
+    properties: Map[String, String] = Map.empty,
+    rebalanceListener: RebalanceListener = RebalanceListener.noop
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
       transactionalConsumerSettings(
@@ -139,8 +154,10 @@ object KafkaTestUtils {
         clientId,
         clientInstanceId,
         allowAutoCreateTopics,
-        offsetRetrieval
-      )
+        offsetRetrieval,
+        restartStreamOnRebalancing,
+        properties
+      ).map(_.withRebalanceListener(rebalanceListener))
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
   def consumeWithStrings[RC](clientId: String, groupId: Option[String] = None, subscription: Subscription)(
