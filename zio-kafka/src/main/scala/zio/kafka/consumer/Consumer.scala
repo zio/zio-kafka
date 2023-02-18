@@ -222,13 +222,12 @@ object Consumer {
     ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
       def extendSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
         val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
-        ZIO
-          .fromOption(Subscription.unionAll(newSubscriptions))
-          .orElseFail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
-          .flatMap { union =>
+        Subscription.unionAll(newSubscriptions) match {
+          case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
+          case Some(union) =>
             ZIO.logInfo(s"Changing kafka subscription to $union") *>
               subscribe(union).as(newSubscriptions.toSet)
-          }
+        }
       }
 
       def reduceSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
