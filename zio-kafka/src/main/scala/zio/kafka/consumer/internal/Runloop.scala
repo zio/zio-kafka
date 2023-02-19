@@ -3,7 +3,7 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
-import zio._
+import zio.{ ZIO, _ }
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
@@ -53,19 +53,22 @@ private[consumer] final class Runloop(
       drainQueue <- Queue.unbounded[Take[Nothing, ByteArrayCommittableRecord]]
       completed  <- Promise.make[Nothing, Unit]
       annotations = Set(LogAnnotation("topic", tp.topic()), LogAnnotation("partition", tp.partition().toString))
-      _ <- ZIO.logAnnotate(annotations) {
-             ZIO.logInfo("Creating new partition stream")
+      _ <- Util.annotateTopicPartition(tp) {
+             ZIO.logDebug("Creating new partition stream")
            }
       control = PartitionStreamControl(tp, drainQueue, completed)
       stream =
         (ZStream.logAnnotate(annotations) *>
           ZStream.finalizer(control.completeStream) *>
-          ZStream.fromZIO(waitBeforeStarting) *>
+          ZStream.fromZIO(
+            Util.logAfterTime(waitBeforeStarting, 2.seconds, ZIO.logInfo(s"Awaiting completion of previous stream"))
+          ) *>
+          ZStream.fromZIO(ZIO.logDebug(s"Done awaiting completion of previous stream")) *>
           ZStream.fromZIO(seekForNewPartitionStream(tp)) *>
           ZStream.repeatZIOChunkOption {
             for {
               request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-              _       <- ZIO.logDebug(s"Queueing request")
+              _       <- ZIO.logTrace(s"Queueing request")
               _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
               _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
               result <-
@@ -73,12 +76,8 @@ private[consumer] final class Runloop(
                   case Some(e) =>
                     ZIO.logErrorCause("Partition stream failed", Cause.fail(e))
                   case None =>
-                    ZIO.logInfo(s"Partition stream ended")
+                    ZIO.logDebug(s"Partition stream ended")
                 }
-              _ <-
-                ZIO.logDebug(
-                  s"Got ${result.size} records. Last offset = ${result.map(_.offset.offset).max}"
-                )
             } yield result
           }
             .viaFunction(s => if (perPartitionChunkPrefetch > 0) s.bufferChunks(perPartitionChunkPrefetch) else s)
@@ -116,14 +115,22 @@ private[consumer] final class Runloop(
           .map(_.asScala.get(tp).flatMap(Option.apply).map(_.offset()))).tap {
           case (Some(nextToFetch), lastCommitted) =>
             lastCommitted match {
+              // Fetch position is behind and would lead to double processing
+              // Advancing to the committed position is safe
               case Some(lastCommitted) if lastCommitted > nextToFetch =>
                 ZIO.logInfo(
                   s"Seeking to last committed offset by this consumer from partition stream before rebalancing: from ${nextToFetch} to ${lastCommitted}"
                 ) *>
                   consumer.withConsumer(_.seek(tp, lastCommitted))
               case Some(lastCommitted) if lastCommitted < nextToFetch =>
+                // Fetch position is ahead and would lead to unprocessed records
+                // TODO could this situation lead to data loss..? Buffered records..?
                 ZIO.logWarning(
-                  s"Unexpected fetch position ${nextToFetch} for last committed offset ${lastCommitted}. This may happen after rebalancing."
+                  s"""Unexpected fetch position $nextToFetch for last committed offset $lastCommitted.
+                     |This may happen when this partition is reassigned to this consumer during rebalancing and records were received in a call to poll()
+                     |without a pending request for the partition.
+                     |
+                     |.""".stripMargin
                 )
               case _ =>
                 ZIO.unit
@@ -147,6 +154,7 @@ private[consumer] final class Runloop(
   def gracefulShutdown: UIO[Unit] =
     for {
       wasShutdown <- shutdownRef.getAndSet(true)
+      _           <- ZIO.logInfo("Starting graceful shutdown")
       _           <- partitions.offer(Take.end).when(!wasShutdown)
     } yield ()
 
@@ -475,6 +483,7 @@ private[consumer] final class Runloop(
                                                    case _ =>
                                                      requestedPartitions
                                                  }
+
                   // TODO what to do with buffered records in combination with seeking
                   unrequestedRecords =
                     bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- remainingRequestedPartitions)
@@ -534,10 +543,7 @@ private[consumer] final class Runloop(
                                   }
 
                   _ <- ZIO.foreachDiscard(revokeResult.bufferedRecords.recs) { case (topicPartition, records) =>
-                         ZIO.logAnnotate(
-                           LogAnnotation("topic", topicPartition.topic),
-                           LogAnnotation("partition", topicPartition.partition().toString)
-                         ) {
+                         Util.annotateTopicPartition(topicPartition) {
                            ZIO.logInfo(
                              s"Buffered ${records.size} unrequested records with latest offset ${records.last.offset()}"
                            )
@@ -599,7 +605,7 @@ private[consumer] final class Runloop(
             tp,
             finishingStreams
               .get(tp)
-              .map(_.streamCompleted.await <* ZIO.logInfo(s"Done awaiting completion of previous stream"))
+              .map(_.streamCompleted.await)
               .getOrElse(ZIO.unit)
           )
         )
