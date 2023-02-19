@@ -409,7 +409,8 @@ private[consumer] final class Runloop(
               .unit,
         onAssigned = (assigned, _) =>
           // Pause fetching for these new partitions until we have requests
-          consumer.withConsumerNoPermit(c => ZIO.attempt(c.pause(assigned.asJava))) *>
+          (ZIO.logDebug(s"Pausing newly assigned partitions ${assigned.mkString(",")}") *>
+            consumer.withConsumerNoPermit(c => ZIO.attempt(c.pause(assigned.asJava)))).when(assigned.nonEmpty) *>
             // assigned and revoked may be called within the same poll call, so we should only revoke streams if we haven't already
             revokeResult.get.flatMap {
               case Some(_) =>
