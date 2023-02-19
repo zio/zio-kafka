@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1676430037222,
+  "lastUpdate": 1676809576228,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -538,6 +538,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1242469023.1223793,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b2248486e746dba6edbd3d7c9853c5767e2a6194",
+          "message": "Add transactional test (#644)\n\nCo-authored-by: Steven Vroonland <svroonland@gmail.com>",
+          "timestamp": "2023-02-19T13:23:43+01:00",
+          "tree_id": "b560b942b8de188ed71b90fa5c38429ca1728c12",
+          "url": "https://github.com/zio/zio-kafka/commit/b2248486e746dba6edbd3d7c9853c5767e2a6194"
+        },
+        "date": 1676809575618,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1987765573.8015697,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
