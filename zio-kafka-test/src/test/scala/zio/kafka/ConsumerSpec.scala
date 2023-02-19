@@ -1,7 +1,12 @@
 package zio.kafka.consumer
 
 import io.github.embeddedkafka.EmbeddedKafka
-import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerPartitionAssignor, CooperativeStickyAssignor, RangeAssignor }
+import org.apache.kafka.clients.consumer.{
+  ConsumerConfig,
+  ConsumerPartitionAssignor,
+  CooperativeStickyAssignor,
+  RangeAssignor
+}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
@@ -900,10 +905,9 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                      _ <- streamCompleteOnRebalanceRef.set(Some(p))
                                      _ <- ZIO.logInfo(s"${assignedPartitions.size} partitions assigned")
                                      _ <- consumerCreated.succeed(())
-                                     // Increase chunk size (from 10) to speed up the producer.
-                                     rechunkedStreams = assignedPartitions.map(_._2).map(_.rechunk(200))
+                                     partitionStreams = assignedPartitions.map(_._2)
                                      s <- ZStream
-                                            .mergeAllUnbounded(64)(rechunkedStreams: _*)
+                                            .mergeAllUnbounded(64)(partitionStreams: _*)
                                             .mapChunksZIO { records =>
                                               ZIO.scoped {
                                                 for {
@@ -938,7 +942,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                      restartStreamOnRebalancing = true,
                                      properties = Map(
                                        ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG ->
-                                         implicitly[ClassTag[T]].runtimeClass.getName
+                                         implicitly[ClassTag[T]].runtimeClass.getName,
+                                       ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200"
                                      ),
                                      rebalanceListener = transactionalRebalanceListener(streamCompleteOnRebalanceRef)
                                    )
@@ -1021,7 +1026,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                         transactionalConsumer(
                                           validatorClientId,
                                           groupB,
-                                          offsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)
+                                          offsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
+                                          properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200")
                                         )
                                       )
                                       .tapError(e => ZIO.logError(s"Error: ${e}")) <* ZIO.logInfo("Done")
