@@ -4,11 +4,12 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.KafkaTestUtils._
-import zio.kafka.consumer.{ Consumer, ConsumerSettings, OffsetBatch, Subscription }
+import zio.kafka.consumer.{ CommittableRecord, Consumer, ConsumerSettings, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.{ Producer, Transaction, TransactionalProducer }
 import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
 import zio.kafka.serde.Serde
+import zio.stream.Take
 import zio.test.Assertion._
 import zio.test.TestAspect.withLiveClock
 import zio.test._
@@ -16,12 +17,15 @@ import zio.test._
 object ProducerSpec extends ZIOKafkaSpec {
   override val kafkaPrefix: String = "producerspec"
 
-  def withConsumerInt(subscription: Subscription, settings: ConsumerSettings) =
+  def withConsumerInt(
+    subscription: Subscription,
+    settings: ConsumerSettings
+  ): ZIO[Any with Scope, Throwable, Dequeue[Take[Throwable, CommittableRecord[String, Int]]]] =
     Consumer.make(settings).flatMap { c =>
       c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.int).toQueue()
     }
 
-  override def spec =
+  override def spec: Spec[TestEnvironment & Kafka, Object] =
     suite("producer test suite")(
       test("one record") {
         for {
@@ -34,7 +38,7 @@ object ProducerSpec extends ZIOKafkaSpec {
 
         def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
           Consumer.make(settings).flatMap { c =>
-            (c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.string).toQueue())
+            c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.string).toQueue()
           }
 
         for {
@@ -58,7 +62,6 @@ object ProducerSpec extends ZIOKafkaSpec {
                            messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
                            record = messages
                                       .filter(rec => rec.record.key == key1 && rec.record.value == value1)
-                                      .toSeq
                          } yield record
                        }
                      }
@@ -72,7 +75,7 @@ object ProducerSpec extends ZIOKafkaSpec {
                      }
         } yield assertTrue(outcome.length == 2) &&
           assertTrue(record1.nonEmpty) &&
-          assertTrue(record2.length > 0)
+          assertTrue(record2.nonEmpty)
       },
       test("an empty chunk of records") {
         val chunks = Chunk.fromIterable(List.empty)

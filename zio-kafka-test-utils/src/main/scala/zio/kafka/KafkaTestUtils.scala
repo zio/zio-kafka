@@ -96,9 +96,17 @@ object KafkaTestUtils {
     clientId: String,
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
-    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto()
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+    properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
-    consumerSettings(clientId, Some(groupId), clientInstanceId, allowAutoCreateTopics, offsetRetrieval)
+    consumerSettings(
+      clientId,
+      Some(groupId),
+      clientInstanceId,
+      allowAutoCreateTopics,
+      offsetRetrieval,
+      properties
+    )
       .map(
         _.withProperties(
           ConsumerConfig.ISOLATION_LEVEL_CONFIG -> "read_committed"
@@ -131,7 +139,9 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     allowAutoCreateTopics: Boolean = true,
-    diagnostics: Diagnostics = Diagnostics.NoOp
+    diagnostics: Diagnostics = Diagnostics.NoOp,
+    properties: Map[String, String] = Map.empty,
+    rebalanceListener: RebalanceListener = RebalanceListener.noop
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
       transactionalConsumerSettings(
@@ -139,8 +149,9 @@ object KafkaTestUtils {
         clientId,
         clientInstanceId,
         allowAutoCreateTopics,
-        offsetRetrieval
-      )
+        offsetRetrieval,
+        properties
+      ).map(_.withRebalanceListener(rebalanceListener))
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
   def consumeWithStrings[RC](clientId: String, groupId: Option[String] = None, subscription: Subscription)(

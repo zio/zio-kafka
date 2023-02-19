@@ -53,8 +53,10 @@ import zio._
 import zio.kafka.admin.acl._
 
 import java.util.Optional
-import scala.annotation.nowarn
+import scala.annotation.{ nowarn, tailrec }
+import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
+import scala.util.{ Failure, Success, Try }
 
 trait AdminClient {
 
@@ -443,11 +445,10 @@ object AdminClient {
             .allTopicNames()
         )
       }.flatMap { jTopicDescriptions =>
-        ZIO
-          .foreach(jTopicDescriptions.asScala.toSeq) { case (k, v) =>
-            AdminClient.TopicDescription(v).map(k -> _)
-          }
-          .map(_.toMap)
+        ZIO.fromTry {
+          jTopicDescriptions.asScala.toList.forEach { case (k, v) => AdminClient.TopicDescription(v).map(k -> _) }
+            .map(_.toMap)
+        }
       }
     }
 
@@ -765,7 +766,6 @@ object AdminClient {
                 .fromCompletionStage(descriptionsFuture.toCompletionStage)
                 .map(_.asScala.toMap.map { case (k, v) => (k, LogDirDescription(v)) })
             )
-
           }.toMap
         )
 
@@ -942,7 +942,8 @@ object AdminClient {
   }
 
   object ConfigResource {
-    def apply(jcr: JConfigResource): ConfigResource = ConfigResource(ConfigResourceType(jcr.`type`()), jcr.name())
+    def apply(jcr: JConfigResource): ConfigResource =
+      ConfigResource(`type` = ConfigResourceType(jcrt = jcr.`type`()), name = jcr.name())
   }
 
   trait ConfigResourceType {
@@ -1022,13 +1023,14 @@ object AdminClient {
   )
 
   object MemberDescription {
-    def apply(desc: JMemberDescription): MemberDescription = MemberDescription(
-      desc.consumerId,
-      desc.groupInstanceId.toScala,
-      desc.clientId(),
-      desc.host(),
-      desc.assignment.topicPartitions().asScala.map(TopicPartition.apply).toSet
-    )
+    def apply(desc: JMemberDescription): MemberDescription =
+      MemberDescription(
+        consumerId = desc.consumerId,
+        groupInstanceId = desc.groupInstanceId.toScala,
+        clientId = desc.clientId(),
+        host = desc.host(),
+        assignment = desc.assignment.topicPartitions().asScala.map(TopicPartition.apply).toSet
+      )
   }
 
   final case class ConsumerGroupDescription(
@@ -1045,13 +1047,13 @@ object AdminClient {
 
     def apply(description: JConsumerGroupDescription): ConsumerGroupDescription =
       ConsumerGroupDescription(
-        description.groupId,
-        description.isSimpleConsumerGroup,
-        description.members.asScala.map(MemberDescription.apply).toList,
-        description.partitionAssignor,
-        ConsumerGroupState(description.state),
-        Node(description.coordinator()),
-        Option(description.authorizedOperations())
+        groupId = description.groupId,
+        isSimpleConsumerGroup = description.isSimpleConsumerGroup,
+        members = description.members.asScala.map(MemberDescription.apply).toList,
+        partitionAssignor = description.partitionAssignor,
+        state = ConsumerGroupState(description.state),
+        coordinator = Node(description.coordinator()),
+        authorizedOperations = Option(description.authorizedOperations())
           .fold(Set.empty[AclOperation])(_.asScala.map(AclOperation.apply).toSet)
       )
   }
@@ -1168,29 +1170,33 @@ object AdminClient {
   }
 
   final case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
-
   object MetricName {
     def apply(jmn: JMetricName): MetricName =
-      MetricName(jmn.name(), jmn.group(), jmn.description(), jmn.tags().asScala.toMap)
+      MetricName(
+        name = jmn.name(),
+        group = jmn.group(),
+        description = jmn.description(),
+        tags = jmn.tags().asScala.toMap
+      )
   }
 
   final case class Metric(name: MetricName, metricValue: AnyRef)
-
   object Metric {
-    def apply(jm: JMetric): Metric = Metric(MetricName(jm.metricName()), jm.metricValue())
+    def apply(jm: JMetric): Metric = Metric(name = MetricName(jmn = jm.metricName()), metricValue = jm.metricValue())
   }
 
   final case class NewTopic(
     name: String,
     numPartitions: Int,
     replicationFactor: Short,
-    configs: Map[String, String] = Map()
+    configs: Map[String, String] = Map.empty
   ) {
     def asJava: JNewTopic = {
       val jn = new JNewTopic(name, numPartitions, replicationFactor)
 
-      if (configs.nonEmpty)
+      if (configs.nonEmpty) {
         jn.configs(configs.asJava)
+      }
 
       jn
     }
@@ -1200,7 +1206,7 @@ object AdminClient {
     totalCount: Int,
     newAssignments: List[List[Int]] = Nil
   ) {
-    def asJava =
+    def asJava: JNewPartitions =
       if (newAssignments.nonEmpty)
         JNewPartitions.increaseTo(totalCount, newAssignments.map(_.map(Int.box).asJava).asJava)
       else JNewPartitions.increaseTo(totalCount)
@@ -1215,17 +1221,20 @@ object AdminClient {
    *   can't be negative if present
    */
   final case class Node(id: Int, host: Option[String], port: Option[Int], rack: Option[String] = None) {
-    lazy val asJava = new JNode(id, host.getOrElse(""), port.getOrElse(-1), rack.orNull)
+    lazy val asJava: JNode = new JNode(id, host.getOrElse(""), port.getOrElse(-1), rack.orNull)
   }
   object Node {
-    def apply(jNode: JNode): Option[Node] = Option(jNode).filter(_.id() >= 0).map { jNode =>
-      Node(
-        id = jNode.id(),
-        host = Option(jNode.host()).filterNot(_.isEmpty),
-        port = Option(jNode.port()).filter(_ >= 0),
-        rack = Option(jNode.rack())
-      )
-    }
+    def apply(jNode: JNode): Option[Node] =
+      Option(jNode)
+        .filter(_.id() >= 0)
+        .map { jNode =>
+          Node(
+            id = jNode.id(),
+            host = Option(jNode.host()).filterNot(_.isEmpty),
+            port = Option(jNode.port()).filter(_ >= 0),
+            rack = Option(jNode.rack())
+          )
+        }
   }
 
   final case class TopicDescription(
@@ -1236,14 +1245,15 @@ object AdminClient {
   )
 
   object TopicDescription {
-    def apply(jt: JTopicDescription): Task[TopicDescription] = {
-      val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet)
-      ZIO.foreach(jt.partitions.asScala.toList)(TopicPartitionInfo.apply).map { partitions =>
+    def apply(jt: JTopicDescription): Try[TopicDescription] = {
+      val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet).map(_.map(AclOperation.apply))
+
+      jt.partitions.asScala.toList.forEach(TopicPartitionInfo.apply).map { partitions =>
         TopicDescription(
-          jt.name,
-          jt.isInternal,
-          partitions,
-          authorizedOperations.map(_.map(AclOperation.apply))
+          name = jt.name,
+          internal = jt.isInternal,
+          partitions = partitions,
+          authorizedOperations = authorizedOperations
         )
       }
     }
@@ -1260,39 +1270,45 @@ object AdminClient {
   }
 
   object TopicPartitionInfo {
-    def apply(jtpi: JTopicPartitionInfo): Task[TopicPartitionInfo] = {
-      val replicas: ZIO[Any, RuntimeException, List[Node]] = ZIO.foreach(
+    def apply(jtpi: JTopicPartitionInfo): Try[TopicPartitionInfo] = {
+      val replicas: Try[List[Node]] =
         jtpi
           .replicas()
           .asScala
           .toList
-      ) { jNode =>
-        ZIO.getOrFailWith(new RuntimeException("NoNode node not expected among topic replicas"))(Node(jNode))
-      }
+          .forEach { jNode =>
+            Node(jNode) match {
+              case Some(node) => Success(node)
+              case None       => Failure(new RuntimeException("NoNode node not expected among topic replicas"))
+            }
+          }
 
-      val inSyncReplicas: ZIO[Any, RuntimeException, List[Node]] = ZIO.foreach(
+      val inSyncReplicas: Try[List[Node]] =
         jtpi
           .isr()
           .asScala
           .toList
-      ) { jNode =>
-        ZIO.getOrFailWith(new RuntimeException("NoNode node not expected among topic in sync replicas"))(Node(jNode))
-      }
+          .forEach { jNode =>
+            Node(jNode) match {
+              case Some(node) => Success(node)
+              case None       => Failure(new RuntimeException("NoNode node not expected among topic in sync replicas"))
+            }
+          }
 
       for {
         replicas       <- replicas
         inSyncReplicas <- inSyncReplicas
       } yield TopicPartitionInfo(
-        jtpi.partition(),
-        Node(jtpi.leader()),
-        replicas,
-        inSyncReplicas
+        partition = jtpi.partition(),
+        leader = Node(jtpi.leader()),
+        replicas = replicas,
+        isr = inSyncReplicas
       )
     }
   }
 
   final case class TopicListing(name: String, topicId: Uuid, isInternal: Boolean) {
-    def asJava = new JTopicListing(name, topicId, isInternal)
+    def asJava: JTopicListing = new JTopicListing(name, topicId, isInternal)
   }
 
   object TopicListing {
@@ -1303,11 +1319,11 @@ object AdminClient {
     name: String,
     partition: Int
   ) {
-    def asJava = new JTopicPartition(name, partition)
+    def asJava: JTopicPartition = new JTopicPartition(name, partition)
   }
 
   object TopicPartition {
-    def apply(tp: JTopicPartition): TopicPartition = new TopicPartition(tp.topic(), tp.partition())
+    def apply(tp: JTopicPartition): TopicPartition = new TopicPartition(name = tp.topic(), partition = tp.partition())
   }
 
   sealed abstract class OffsetSpec {
@@ -1316,15 +1332,15 @@ object AdminClient {
 
   object OffsetSpec {
     case object EarliestSpec extends OffsetSpec {
-      override def asJava = JOffsetSpec.earliest()
+      override def asJava: JOffsetSpec = JOffsetSpec.earliest()
     }
 
     case object LatestSpec extends OffsetSpec {
-      override def asJava = JOffsetSpec.latest()
+      override def asJava: JOffsetSpec = JOffsetSpec.latest()
     }
 
     final case class TimestampSpec(timestamp: Long) extends OffsetSpec {
-      override def asJava = JOffsetSpec.forTimestamp(timestamp)
+      override def asJava: JOffsetSpec = JOffsetSpec.forTimestamp(timestamp)
     }
   }
 
@@ -1334,16 +1350,16 @@ object AdminClient {
 
   object IsolationLevel {
     case object ReadUncommitted extends IsolationLevel {
-      override def asJava = JIsolationLevel.READ_UNCOMMITTED
+      override def asJava: JIsolationLevel = JIsolationLevel.READ_UNCOMMITTED
     }
 
     case object ReadCommitted extends IsolationLevel {
-      override def asJava = JIsolationLevel.READ_COMMITTED
+      override def asJava: JIsolationLevel = JIsolationLevel.READ_COMMITTED
     }
   }
 
   final case class DeleteRecordsOptions(timeout: Option[Duration]) {
-    def asJava = {
+    def asJava: JDeleteRecordsOptions = {
       val deleteRecordsOpt = new JDeleteRecordsOptions()
       timeout.fold(deleteRecordsOpt)(timeout => deleteRecordsOpt.timeoutMs(timeout.toMillis.toInt))
     }
@@ -1353,7 +1369,7 @@ object AdminClient {
     isolationLevel: IsolationLevel = IsolationLevel.ReadUncommitted,
     timeout: Option[Duration]
   ) {
-    def asJava = {
+    def asJava: JListOffsetsOptions = {
       val offsetOpt = new JListOffsetsOptions(isolationLevel.asJava)
       timeout.fold(offsetOpt)(timeout => offsetOpt.timeoutMs(timeout.toMillis.toInt))
     }
@@ -1364,7 +1380,6 @@ object AdminClient {
     timestamp: Long,
     leaderEpoch: Option[Int]
   )
-
   object ListOffsetsResultInfo {
     def apply(lo: JListOffsetsResultInfo): ListOffsetsResultInfo =
       ListOffsetsResultInfo(lo.offset(), lo.timestamp(), lo.leaderEpoch().toScala.map(_.toInt))
@@ -1372,7 +1387,7 @@ object AdminClient {
 
   @nowarn("msg=deprecated")
   final case class ListConsumerGroupOffsetsOptions(partitions: Chunk[TopicPartition], requireStable: Boolean) {
-    def asJava = {
+    def asJava: JListConsumerGroupOffsetsOptions = {
       val opts = new JListConsumerGroupOffsetsOptions()
       opts.requireStable(requireStable)
       if (partitions.isEmpty) opts else opts.topicPartitions(partitions.map(_.asJava).asJava)
@@ -1405,30 +1420,37 @@ object AdminClient {
     leaderEpoch: Option[Int] = None,
     metadata: Option[String] = None
   ) {
-    def asJava = new JOffsetAndMetadata(offset, leaderEpoch.map(Int.box).toJava, metadata.orNull)
+    def asJava: JOffsetAndMetadata = new JOffsetAndMetadata(offset, leaderEpoch.map(Int.box).toJava, metadata.orNull)
   }
-
   object OffsetAndMetadata {
     def apply(om: JOffsetAndMetadata): OffsetAndMetadata =
-      OffsetAndMetadata(om.offset(), om.leaderEpoch().toScala.map(_.toInt), Some(om.metadata()))
+      OffsetAndMetadata(
+        offset = om.offset(),
+        leaderEpoch = om.leaderEpoch().toScala.map(_.toInt),
+        metadata = Some(om.metadata())
+      )
   }
 
   final case class AlterConsumerGroupOffsetsOptions(timeout: Option[Duration]) {
-    def asJava = {
+    def asJava: JAlterConsumerGroupOffsetsOptions = {
       val options = new JAlterConsumerGroupOffsetsOptions()
       timeout.fold(options)(timeout => options.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
   final case class ListConsumerGroupsOptions(states: Set[ConsumerGroupState]) {
-    def asJava = new JListConsumerGroupsOptions().inStates(states.map(_.asJava).asJava)
+    def asJava: JListConsumerGroupsOptions = new JListConsumerGroupsOptions().inStates(states.map(_.asJava).asJava)
   }
 
   final case class ConsumerGroupListing(groupId: String, isSimple: Boolean, state: Option[ConsumerGroupState])
 
   object ConsumerGroupListing {
     def apply(cg: JConsumerGroupListing): ConsumerGroupListing =
-      ConsumerGroupListing(cg.groupId(), cg.isSimpleConsumerGroup, cg.state().toScala.map(ConsumerGroupState(_)))
+      ConsumerGroupListing(
+        groupId = cg.groupId(),
+        isSimple = cg.isSimpleConsumerGroup,
+        state = cg.state().toScala.map(ConsumerGroupState(_))
+      )
   }
 
   final case class KafkaConfig(entries: Map[String, ConfigEntry]) {
@@ -1436,20 +1458,22 @@ object AdminClient {
   }
   object KafkaConfig {
     def apply(jConfig: JConfig): KafkaConfig =
-      KafkaConfig(jConfig.entries().asScala.map(e => e.name() -> e).toMap)
+      KafkaConfig(entries = jConfig.entries().asScala.map(e => e.name() -> e).toMap)
   }
 
   final case class LogDirDescription(error: ApiException, replicaInfos: Map[TopicPartition, ReplicaInfo])
-
   object LogDirDescription {
     def apply(ld: JLogDirDescription): LogDirDescription =
-      LogDirDescription(ld.error(), ld.replicaInfos().asScala.toMap.bimap(TopicPartition(_), ReplicaInfo(_)))
+      LogDirDescription(
+        error = ld.error(),
+        replicaInfos = ld.replicaInfos().asScala.toMap.bimap(TopicPartition(_), ReplicaInfo(_))
+      )
   }
 
   final case class ReplicaInfo(size: Long, offsetLag: Long, isFuture: Boolean)
-
   object ReplicaInfo {
-    def apply(ri: JReplicaInfo): ReplicaInfo = ReplicaInfo(ri.size(), ri.offsetLag(), ri.isFuture)
+    def apply(ri: JReplicaInfo): ReplicaInfo =
+      ReplicaInfo(size = ri.size(), offsetLag = ri.offsetLag(), isFuture = ri.isFuture)
   }
 
   def make(settings: AdminClientSettings): ZIO[Scope, Throwable, AdminClient] =
@@ -1470,15 +1494,32 @@ object AdminClient {
       ZIO.succeed(client.close(settings.closeTimeout))
     )
 
-  implicit final class MapOps[K1, V1](val v: Map[K1, V1]) extends AnyVal {
+  implicit final class MapOps[K1, V1](private val v: Map[K1, V1]) extends AnyVal {
     def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): Map[K2, V2] = v.map(kv => fk(kv._1) -> fv(kv._2))
   }
 
-  implicit final class OptionalOps[T](val v: Optional[T]) extends AnyVal {
+  implicit final class OptionalOps[T](private val v: Optional[T]) extends AnyVal {
     def toScala: Option[T] = if (v.isPresent) Some(v.get()) else None
   }
 
-  implicit final class OptionOps[T](val v: Option[T]) extends AnyVal {
+  implicit final class OptionOps[T](private val v: Option[T]) extends AnyVal {
     def toJava: Optional[T] = v.fold(Optional.empty[T])(Optional.of)
+  }
+
+  implicit final class ListOps[A](private val list: List[A]) extends AnyVal {
+    def forEach[B](f: A => Try[B]): Try[List[B]] = {
+      @tailrec
+      def loop(acc: ListBuffer[B], rest: List[A]): Try[List[B]] =
+        rest match {
+          case Nil => Success(acc.toList)
+          case h :: t =>
+            f(h) match {
+              case Success(b)        => loop(acc += b, t)
+              case fail @ Failure(_) => fail.asInstanceOf[Try[List[B]]]
+            }
+        }
+
+      loop(ListBuffer.empty, list)
+    }
   }
 }
