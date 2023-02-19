@@ -61,7 +61,8 @@ private[consumer] final class Runloop(
         (ZStream.logAnnotate(annotations) *>
           ZStream.finalizer(control.completeStream) *>
           ZStream.fromZIO(
-            Util.logAfterTime(waitBeforeStarting, 2.seconds, ZIO.logInfo(s"Awaiting completion of previous stream"))
+            // Util.logAfterTime(waitBeforeStarting, 5.seconds, ZIO.logInfo(s"Awaiting completion of previous stream"))
+            ZIO.logInfo(s"Awaiting completion of previous stream") *> waitBeforeStarting
           ) *>
           ZStream.fromZIO(ZIO.logDebug(s"Done awaiting completion of previous stream")) *>
           ZStream.fromZIO(seekForNewPartitionStream(tp)) *>
