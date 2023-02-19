@@ -1271,7 +1271,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                       .subscribeAnd(Subscription.topics(topicB))
                                       .plainStream(Serde.string, Serde.string)
                                       .map(_.value)
-                                      .timeout(30.seconds)
+                                      .timeout(10.seconds)
                                       .runCollect
                                       .provideSome[Kafka](
                                         transactionalConsumer(
@@ -1296,7 +1296,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
 //          testForPartitionAssignmentStrategy[CooperativeStickyAssignor] // TODO not yet supported
         )
 
-      }: _*) @@ TestAspect.nonFlaky(3) @@ TestAspect.ignore
+      }: _*) @@ TestAspect.nonFlaky(3)
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
     ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(600.seconds)
