@@ -8,7 +8,13 @@ private[consumer] object Util {
    * Executes `log` after f has been running for `duration`
    */
   def logAfterTime[R, E, A](f: ZIO[R, E, A], duration: Duration, log: UIO[Unit]): ZIO[R, E, A] =
-    ZIO.acquireReleaseWith(log.delay(duration).fork)(_.interrupt)(_ => f)
+    ZIO.scoped[R] {
+      for {
+        fib    <- log.delay(duration).forkScoped
+        result <- f
+        _      <- fib.interrupt
+      } yield result
+    }
 
   def annotateTopicPartition[R, E, A](topicPartition: TopicPartition)(f: ZIO[R, E, A]): ZIO[R, E, A] =
     ZIO.logAnnotate(
