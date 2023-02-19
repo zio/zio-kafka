@@ -6,6 +6,7 @@
     </appender>
 
     <logger name="org.apache.kafka" level="ERROR" />
+    <logger name="state.change.logger" level="WARN" />
 
     <logger name="kafka" level="WARN" />
 
