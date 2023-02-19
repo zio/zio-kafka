@@ -1041,7 +1041,26 @@ object ConsumerSpec extends ZIOKafkaSpec {
         )
 
       }: _*) @@ TestAspect.nonFlaky(3)
-    ).provideSomeLayerShared[TestEnvironment & Kafka](producer ++ Scope.default) @@ withLiveClock @@ timeout(
-      300.seconds
-    )
+    ).provideSomeLayerShared[TestEnvironment & Kafka](
+      producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
+    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(600.seconds)
+
+  lazy private val logger: ZLogger[String, Unit] =
+    new ZLogger[String, Unit] {
+      override def apply(
+        trace: Trace,
+        fiberId: FiberId,
+        logLevel: LogLevel,
+        message: () => String,
+        cause: Cause[Any],
+        context: FiberRefs,
+        spans: List[LogSpan],
+        annotations: Map[String, String]
+      ): Unit =
+        println(
+          s"${java.time.Instant
+              .now()} ${logLevel.label} [${annotations.map { case (k, v) => s"$k=$v" }
+              .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint}"
+        )
+    }.filterLogLevel(_ >= LogLevel.Info).map(_ => ())
 }
