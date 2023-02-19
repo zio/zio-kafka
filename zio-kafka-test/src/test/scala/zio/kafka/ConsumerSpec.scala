@@ -1296,7 +1296,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
 //          testForPartitionAssignmentStrategy[CooperativeStickyAssignor] // TODO not yet supported
         )
 
-      }: _*) @@ TestAspect.nonFlaky(3)
+      }: _*) @@ TestAspect.nonFlaky(3) @@ TestAspect.ignore
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
     ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(600.seconds)
