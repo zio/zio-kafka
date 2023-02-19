@@ -32,21 +32,36 @@ final case class RebalanceListener(
       override def onPartitionsRevoked(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
-        runtime.unsafe.run(onRevoked(partitions.asScala.toSet, consumer)).getOrThrowFiberFailure()
+        runtime.unsafe
+          .run(
+            onRevoked(partitions.asScala.toSet, consumer)
+              .tapErrorCause(cause => ZIO.logErrorCause(cause))
+          )
+          .getOrThrowFiberFailure()
         ()
       }
 
       override def onPartitionsAssigned(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
-        runtime.unsafe.run(onAssigned(partitions.asScala.toSet, consumer)).getOrThrowFiberFailure()
+        runtime.unsafe
+          .run(
+            onAssigned(partitions.asScala.toSet, consumer)
+              .tapErrorCause(cause => ZIO.logErrorCause(cause))
+          )
+          .getOrThrowFiberFailure()
         ()
       }
 
       override def onPartitionsLost(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
-        runtime.unsafe.run(onLost(partitions.asScala.toSet, consumer)).getOrThrowFiberFailure()
+        runtime.unsafe
+          .run(
+            onLost(partitions.asScala.toSet, consumer)
+              .tapErrorCause(cause => ZIO.logErrorCause(cause))
+          )
+          .getOrThrowFiberFailure()
         ()
       }
     }
