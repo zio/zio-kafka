@@ -1144,7 +1144,9 @@ object ConsumerSpec extends ZIOKafkaSpec {
                   streamCompleteOnRebalanceRef.get.flatMap {
                     case Some(p) =>
                       ZIO.logWarning("onRevoked, awaiting stream completion") *>
-                        p.await.timeoutFail(new InterruptedException("Timed out waiting stream to complete"))(1.minute)
+                        (p.await *> ZIO.logInfo("Done awaiting stream completion")).timeoutFail(
+                          new InterruptedException("Timed out waiting stream to complete")
+                        )(1.minute)
                     case None => ZIO.unit
                   },
                 onLost = (_, _) => ZIO.logWarning("Lost some partitions")
@@ -1211,7 +1213,10 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                          implicitly[ClassTag[T]].runtimeClass.getName,
                                        ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200"
                                      ),
-                                     rebalanceListener = transactionalRebalanceListener(streamCompleteOnRebalanceRef)
+                                     rebalanceListener = transactionalRebalanceListener(streamCompleteOnRebalanceRef),
+                                     diagnostics = Diagnostics { case e: DiagnosticEvent.Rebalance =>
+                                       ZIO.logInfo(s"${e}")
+                                     }
                                    )
                                  )
                                  .tapError(e => ZIO.logError(s"Error: ${e}")) <* ZIO.logInfo("Done")
@@ -1292,8 +1297,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
 
         // Test for both default partition assignment strategies
         Seq(
-          testForPartitionAssignmentStrategy[RangeAssignor]
-//          testForPartitionAssignmentStrategy[CooperativeStickyAssignor] // TODO not yet supported
+//          testForPartitionAssignmentStrategy[RangeAssignor],
+          testForPartitionAssignmentStrategy[CooperativeStickyAssignor] // TODO not yet supported
         )
 
       }: _*) @@ TestAspect.nonFlaky(3)
