@@ -994,21 +994,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
               _ <- ZIO.logInfo("Waiting for copier 2 to start")
               _ <- copier2Created.await
 
-//              _               <- ZIO.logInfo("Starting copier 3")
-//              copier3ClientId <- randomClient
-//              copier3Created  <- Promise.make[Nothing, Unit]
-//              copier3 <- makeCopyingTransactionalConsumer(
-//                           "3",
-//                           copyingGroup,
-//                           copier3ClientId,
-//                           topicA,
-//                           topicB,
-//                           tProducer,
-//                           copier3Created
-//                         ).fork
-//              _ <- ZIO.logInfo("Waiting for copier 3 to start")
-//              _ <- copier3Created.await
-
               _ <- ZIO.logInfo("Producing some more messages")
               _ <- produceMany(topicA, messagesAfterRebalance)
 
@@ -1034,7 +1019,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                   }
               _ <- copier1.interrupt
               _ <- copier2.interrupt
-//              _ <- copier3.interrupt
               messagesOnTopicBCount         = messagesOnTopicB.size
               messagesOnTopicBDistinctCount = messagesOnTopicB.distinct.size
             } yield assertTrue(messageCount == messagesOnTopicBCount && messageCount == messagesOnTopicBDistinctCount)
