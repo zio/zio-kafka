@@ -400,18 +400,20 @@ private[consumer] final class Runloop(
               .unlessZIO(isShutdown)
               .unit,
         onAssigned = (assigned, _) =>
-          // assigned and revoked may be called within the same poll call, so we should only revoke streams if we haven't already
-          revokeResult.get.flatMap {
-            case Some(_) =>
-              ZIO.unit
-            case None =>
-              endRevoked(
-                state.pendingRequests,
-                state.bufferedRecords,
-                state.assignedStreams,
-                revoked = _ => true
-              ).asSome.tap(revokeResult.set).unit
-          } *>
+          // Pause fetching for these new partitions until we have requests
+          consumer.withConsumerNoPermit(c => ZIO.attempt(c.pause(assigned.asJava))) *>
+            // assigned and revoked may be called within the same poll call, so we should only revoke streams if we haven't already
+            revokeResult.get.flatMap {
+              case Some(_) =>
+                ZIO.unit
+              case None =>
+                endRevoked(
+                  state.pendingRequests,
+                  state.bufferedRecords,
+                  state.assignedStreams,
+                  revoked = _ => true
+                ).asSome.tap(revokeResult.set).unit
+            } *>
             lastRebalanceEvent.update {
               case None =>
                 Some(Runloop.RebalanceEvent.Assigned(assigned))
