@@ -972,7 +972,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                 .retryN(1)
                 .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
           } yield assertCompletes
-        }
+        } @@ TestAspect.nonFlaky(3)
       ),
       suite("does not process messages twice for transactional producer, even when rebalancing")({
 

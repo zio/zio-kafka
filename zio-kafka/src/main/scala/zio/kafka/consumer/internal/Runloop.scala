@@ -327,7 +327,14 @@ private[consumer] final class Runloop(
       if (requestedPartitions.nonEmpty) this.pollTimeout.asJava
       else 0.millis.asJava
 
-    val records = c.poll(pollTimeout)
+    val records =
+      try
+        c.poll(pollTimeout)
+      catch {
+        case _: IllegalStateException =>
+          // This can happen in a race condition between calling markUnsubscribed and calling handlePoll()
+          null
+      }
 
     if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
   }
