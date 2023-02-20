@@ -332,7 +332,7 @@ private[consumer] final class Runloop(
         c.poll(pollTimeout)
       catch {
         case _: IllegalStateException =>
-          // This can happen in a race condition between calling markUnsubscribed and calling handlePoll()
+          // When not subscribed, poll() will throw an exception. This can happen in a race condition between calling markUnsubscribed and calling handlePoll()
           null
       }
 
