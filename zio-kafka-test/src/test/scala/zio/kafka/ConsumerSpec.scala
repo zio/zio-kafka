@@ -972,8 +972,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                 .retryN(1)
                 .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
           } yield assertCompletes
-        } @@ TestAspect.nonFlaky(3)
-      ),
+        }
+      ) @@ TestAspect.nonFlaky(50),
       suite("does not process messages twice for transactional producer, even when rebalancing")({
 
         /**
@@ -1157,7 +1157,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
       }: _*) @@ TestAspect.nonFlaky(3)
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
-    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(600.seconds)
+    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(3600.seconds)
 
   lazy private val logger: ZLogger[String, Unit] =
     new ZLogger[String, Unit] {
