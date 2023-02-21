@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1676877484019,
+  "lastUpdate": 1676984839206,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -598,6 +598,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1984534140.147251,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@users.noreply.github.com",
+            "name": "svroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c2b1ef77c9840ee5560b1ddf673a556e34125fe2",
+          "message": "Upgrade to kafka 3.4.0 (#650)",
+          "timestamp": "2023-02-21T14:04:34+01:00",
+          "tree_id": "7c99e51c74e468ddda9e931252dd89a373aad431",
+          "url": "https://github.com/zio/zio-kafka/commit/c2b1ef77c9840ee5560b1ddf673a556e34125fe2"
+        },
+        "date": 1676984838393,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1777380671.0852268,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
