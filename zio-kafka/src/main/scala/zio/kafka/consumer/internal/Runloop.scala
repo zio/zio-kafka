@@ -323,9 +323,7 @@ private[consumer] final class Runloop(
   }
 
   private def doPoll(c: ByteArrayKafkaConsumer, requestedPartitions: Set[TopicPartition]) = {
-    val pollTimeout =
-      if (requestedPartitions.nonEmpty) this.pollTimeout.asJava
-      else 0.millis.asJava
+    val pollTimeout: Duration = if (requestedPartitions.nonEmpty) this.pollTimeout else Duration.Zero
 
     val records = c.poll(pollTimeout)
 
@@ -355,7 +353,7 @@ private[consumer] final class Runloop(
             ZIO.ifZIO(isShutdown)(
               onTrue = pauseAllPartitions(c).as(
                 Runloop.PollResult(
-                  Set(),
+                  Set.empty,
                   state.pendingRequests,
                   BufferedRecords.empty,
                   Map[TopicPartition, PartitionStreamControl]()
@@ -459,7 +457,7 @@ private[consumer] final class Runloop(
         }
       newAssignedStreams <-
         if (pollResult.newlyAssigned.isEmpty)
-          ZIO.succeed(Set[(TopicPartition, PartitionStreamControl)]())
+          ZIO.succeed(Set.empty[(TopicPartition, PartitionStreamControl)])
         else
           ZIO
             .foreach(pollResult.newlyAssigned)(newPartitionStream)
