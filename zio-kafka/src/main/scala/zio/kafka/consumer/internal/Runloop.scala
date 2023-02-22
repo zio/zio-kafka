@@ -17,6 +17,7 @@ import zio.kafka.consumer.{ CommittableRecord, RebalanceListener }
 import zio.stream._
 
 import java.util
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
@@ -36,7 +37,7 @@ private[consumer] final class Runloop(
   shutdownRef: Ref[Boolean],
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
-  subscribedRef: Ref[Boolean],
+  subscribedRef: AtomicBoolean,
   restartStreamsOnRebalancing: Boolean,
   currentState: Ref[State]
 ) {
@@ -123,9 +124,9 @@ private[consumer] final class Runloop(
     }
   }
 
-  def markSubscribed: UIO[Unit] = subscribedRef.set(true)
-
-  def markUnsubscribed: UIO[Unit] = subscribedRef.set(false)
+  def markSubscribed: UIO[Unit]       = ZIO.succeed(subscribedRef.set(true))
+  def markUnsubscribed: UIO[Unit]     = ZIO.succeed(subscribedRef.set(false))
+  private def isUnsubscribed: Boolean = subscribedRef.get()
 
   private def commit(offsets: Map[TopicPartition, Long]): Task[Unit] =
     for {
@@ -331,7 +332,7 @@ private[consumer] final class Runloop(
       try
         c.poll(pollTimeout)
       catch {
-        case _: IllegalStateException =>
+        case _: IllegalStateException if isUnsubscribed =>
           // When not subscribed, poll() will throw an exception. This can happen in a race condition between calling markUnsubscribed and calling handlePoll()
           null
       }
@@ -540,7 +541,7 @@ private[consumer] final class Runloop(
     cmd match {
       case Command.Poll =>
         // The consumer will throw an IllegalStateException if no call to subscribe
-        ZIO.ifZIO(subscribedRef.get)(onTrue = handlePoll(state), onFalse = ZIO.succeed(state))
+        ZIO.ifZIO(ZIO.succeed(subscribedRef.get))(onTrue = handlePoll(state), onFalse = ZIO.succeed(state))
       case Command.Requests(reqs) =>
         handleRequests(state, reqs).flatMap { state =>
           // Optimization: eagerly poll if we have pending requests instead of waiting
@@ -662,8 +663,8 @@ private[consumer] object Runloop {
                     )(_.shutdown)
       shutdownRef     <- Ref.make(false)
       currentStateRef <- Ref.make(State.initial)
-      subscribedRef   <- Ref.make(false)
-      runtime         <- ZIO.runtime[Any]
+      subscribedRef = new AtomicBoolean(false)
+      runtime <- ZIO.runtime[Any]
       runloop = new Runloop(
                   runtime,
                   hasGroupId,
