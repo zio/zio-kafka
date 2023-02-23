@@ -695,5 +695,10 @@ private[internal] final case class State(
 }
 
 object State {
-  def initial: State = State(Chunk.empty, Chunk.empty, BufferedRecords.empty, Map.empty)
+  val initial: State = State(
+    pendingRequests = Chunk.empty,
+    pendingCommits = Chunk.empty,
+    bufferedRecords = BufferedRecords.empty,
+    assignedStreams = Map.empty
+  )
 }
