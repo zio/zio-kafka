@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1677087102470,
+  "lastUpdate": 1677186234971,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -658,6 +658,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1677394250.5281105,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "guizmaii@users.noreply.github.com",
+            "name": "Jules Ivanic",
+            "username": "guizmaii"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a4b81eba986bd8f4928c7a83d48ba6b17de7beef",
+          "message": "No need to instantiate more than one `State.initial` instance (#657)",
+          "timestamp": "2023-02-23T21:49:54+01:00",
+          "tree_id": "2006189fd7c469fb6c22d0790e3505034bc690a9",
+          "url": "https://github.com/zio/zio-kafka/commit/a4b81eba986bd8f4928c7a83d48ba6b17de7beef"
+        },
+        "date": 1677186234365,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1989672776.1562421,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
