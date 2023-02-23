@@ -319,42 +319,17 @@ object Consumer {
       } yield ()
 
     private def subscribe(subscription: Subscription): Task[Unit] =
-      ZIO.runtime[Any].flatMap { runtime =>
-        consumer.withConsumerM { c =>
-          val rc = RebalanceConsumer.Live(c)
-
-          subscription match {
-            case Subscription.Pattern(pattern) =>
-              ZIO.attempt(c.subscribe(pattern.pattern, runloop.rebalanceListener.toKafka(runtime, rc)))
-            case Subscription.Topics(topics) =>
-              ZIO.attempt(c.subscribe(topics.asJava, runloop.rebalanceListener.toKafka(runtime, rc)))
-
-            // For manual subscriptions we have to do some manual work before starting the run loop
-            case Subscription.Manual(topicPartitions) =>
-              ZIO.attempt(c.assign(topicPartitions.asJava)) *>
-                ZIO.foreach(topicPartitions)(runloop.newPartitionStream).flatMap { partitionStreams =>
-                  runloop.partitions.offer(
-                    Take.chunk(
-                      Chunk.fromIterable(partitionStreams.map { case (tp, _, stream) =>
-                        tp -> stream
-                      })
-                    )
-                  )
-                } *> {
-                  settings.offsetRetrieval match {
-                    case OffsetRetrieval.Manual(getOffsets) =>
-                      getOffsets(topicPartitions).flatMap { offsets =>
-                        ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) }
-                      }
-                    case OffsetRetrieval.Auto(_) => ZIO.unit
-                  }
-                }
-          }
-        }
-      } *> runloop.markSubscribed
+      changeSubscription(Some(subscription))
 
     private def unsubscribe: Task[Unit] =
-      runloop.markUnsubscribed *> consumer.withConsumer(_.unsubscribe())
+      changeSubscription(None)
+
+    private def changeSubscription(subscription: Option[Subscription]): Task[Unit] =
+      ZIO.runtime[Any].flatMap { runtime =>
+        val rc = RebalanceConsumer.Live(consumer.consumer)
+        runloop
+          .changeSubscription(subscription, settings.offsetRetrieval, runloop.rebalanceListener.toKafka(runtime, rc))
+      }
 
     override def metrics: Task[Map[MetricName, Metric]] =
       consumer.withConsumer(_.metrics().asScala.toMap)
