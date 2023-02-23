@@ -27,11 +27,11 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
 
         records <-
           (Consumer
-            .plainStream(Subscription.topics(topic1), Serde.string, Serde.string, 32)
+            .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .take(5)
             .runCollect zipPar
             Consumer
-              .plainStream(Subscription.topics(topic2), Serde.string, Serde.string, 32)
+              .plainStream(Subscription.topics(topic2), Serde.string, Serde.string)
               .take(5)
               .runCollect)
             .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
@@ -56,11 +56,11 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
 
         records <-
           (Consumer
-            .plainStream(Subscription.Pattern(s"$topic1".r), Serde.string, Serde.string, 32)
+            .plainStream(Subscription.Pattern(s"$topic1".r), Serde.string, Serde.string)
             .take(5)
             .runCollect zipPar
             Consumer
-              .plainStream(Subscription.Pattern(s"$topic2".r), Serde.string, Serde.string, 32)
+              .plainStream(Subscription.Pattern(s"$topic2".r), Serde.string, Serde.string)
               .take(5)
               .runCollect)
             .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
@@ -87,7 +87,7 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
 
         result <-
           (Consumer
-            .plainStream(Subscription.topics(topic1), Serde.string, Serde.string, 32)
+            .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .runCollect zipPar
             Consumer
               .plainStream(
@@ -117,11 +117,11 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
         consumer2GotMessage <- Promise.make[Nothing, Unit]
         _ <-
           (Consumer
-            .plainStream(Subscription.topics(topic1), Serde.string, Serde.string, 32)
+            .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .tap(_ => consumer1GotMessage.succeed(()))
             .merge(
               Consumer
-                .plainStream(Subscription.topics(topic1), Serde.string, Serde.string, 32)
+                .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
                 .tap(_ => consumer2GotMessage.succeed(()))
             )
             .interruptWhen(consumer1GotMessage.await *> consumer2GotMessage.await)
@@ -142,11 +142,11 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
 
         _ <-
           (Consumer
-            .plainStream(Subscription.topics(topic1), Serde.string, Serde.string, 32)
+            .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .take(100)
             .merge(
               Consumer
-                .plainStream(Subscription.topics(topic2), Serde.string, Serde.string, 32)
+                .plainStream(Subscription.topics(topic2), Serde.string, Serde.string)
                 .take(50) *> ZStream.fromZIO(produceMany(topic1, kvs))
             )
             .runCollect)
@@ -165,7 +165,7 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
         errored <- Ref.make(false)
         _ <-
           Consumer
-            .plainStream(Subscription.topics(topic1), Serde.string, Serde.string, 32)
+            .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .take(5)
             .tap(_ => ZIO.unlessZIO(errored.getAndSet(true))(ZIO.fail(new RuntimeException("Stream failure 1"))))
             .runCollect
