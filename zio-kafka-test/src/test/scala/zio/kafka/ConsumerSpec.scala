@@ -125,7 +125,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
         } yield assert(kvOut)(equalTo(kvs))
       },
       test("receive only messages from the subscribed topic-partition when creating a manual subscription") {
-        println("Running test")
         val nrPartitions = 5
 
         for {
