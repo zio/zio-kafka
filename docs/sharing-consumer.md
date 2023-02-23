@@ -35,7 +35,7 @@ val stream2 = Consumer.plainStream(Subscription.topics("topic2"), Serde.uuid, Se
 (stream1 zipPar stream2).provideSomeLayer(consumer)
 ```
 
-Each of the streams can have different lifetimes. Subscriptions are tied to the Stream's scope, so when the stream completes (succesfully, via failure or interruption), that stream's subscription is removed. 
+Each Stream can have a different lifetime. Subscriptions are tied to their Stream's scope, so when a Stream completes (successfully, via failure or interruption), the corresponding subscription is removed. 
 
 Consumer sharing is only possible when using the same type of `Subscription`: `Topics`, `Pattern` or `Manual`. Mixing different types will result in a failed stream. Note that every `Topic` subscription can be written as a `Pattern` subscription as well, so if you want to mix `Topic` and `Pattern` subscriptions, use just `Pattern`. 
 
