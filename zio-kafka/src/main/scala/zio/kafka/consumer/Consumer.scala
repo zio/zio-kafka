@@ -6,7 +6,7 @@ import zio._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
-import zio.kafka.serde.Deserializer
+import zio.kafka.serde.{ Deserializer, Serde }
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
@@ -242,6 +242,8 @@ object Consumer {
         }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
       }
 
+      val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
+
       ZStream.unwrapScoped {
         for {
           stream <- ZStream.fromHubScoped(partitionAssignments)
@@ -257,7 +259,11 @@ object Consumer {
                   if (settings.perPartitionChunkPrefetch <= 0) partition
                   else partition.bufferChunks(settings.perPartitionChunkPrefetch)
 
-                tp -> partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
+                val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
+                  if (onlyByteArraySerdes) partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
+                  else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
+
+                tp -> stream
             }
           }
       }
