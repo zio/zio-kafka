@@ -239,7 +239,7 @@ object Consumer {
             ZIO.logInfo(s"Reducing kafka subscription to $union") *> subscribe(union)
           case None =>
             ZIO.logInfo(s"Unsubscribing kafka consumer") *> unsubscribe
-        }).as(newSubscriptions.map(_.toSet).getOrElse(Set.empty))
+        }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
       }
 
       ZStream.unwrapScoped {
