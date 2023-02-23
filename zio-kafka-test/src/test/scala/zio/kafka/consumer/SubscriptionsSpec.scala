@@ -106,12 +106,10 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
       val kvs = (1 to 500).toList.map(i => (s"key$i", s"msg$i"))
       for {
         topic1 <- randomTopic
-        topic2 <- randomTopic
         client <- randomClient
         group  <- randomGroup
 
         _ <- produceMany(topic1, kvs)
-        _ <- produceMany(topic2, kvs)
 
         consumer1GotMessage <- Promise.make[Nothing, Unit]
         consumer2GotMessage <- Promise.make[Nothing, Unit]
