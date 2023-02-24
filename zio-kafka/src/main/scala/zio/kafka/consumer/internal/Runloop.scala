@@ -536,8 +536,8 @@ private[consumer] final class Runloop(
         ZIO.foreachDiscard(reqs)(_.end).as(state)
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
-      case _ @Command.ChangeSubscription(_, _, cont) =>
-        cont.succeed(()).as(state)
+      case r @ Command.ChangeSubscription(_, _, _) =>
+        r.succeed.as(state)
     }
 
   private def handleOperational(state: State, cmd: Command): Task[State] =
@@ -600,8 +600,8 @@ private[consumer] final class Runloop(
           }
       }
     }.foldZIO(
-      e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> command.cont.fail(e).as(state),
-      _ => command.cont.succeed(()).as(state.copy(subscription = command.subscription))
+      e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> command.fail(e).as(state),
+      _ => command.succeed.as(state.copy(subscription = command.subscription))
     )
 
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Unit]] =
@@ -667,7 +667,10 @@ private[consumer] object Runloop {
       subscription: Option[Subscription],
       offsetRetrieval: OffsetRetrieval,
       cont: Promise[Throwable, Unit]
-    ) extends Command
+    ) extends Command {
+      @inline def succeed: UIO[Boolean]                    = cont.succeed(())
+      @inline def fail(throwable: Throwable): UIO[Boolean] = cont.fail(throwable)
+    }
   }
 
   final case class BufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) {
