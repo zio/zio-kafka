@@ -740,7 +740,7 @@ private[consumer] object Runloop {
                   restartStreamsOnRebalancing,
                   currentStateRef
                 )
-      _ <- ZIO.addFinalizer(ZIO.logInfo("Shut down Runloop"))
+      _ <- ZIO.addFinalizer(ZIO.logDebug("Shut down Runloop"))
       _ <- runloop.run
     } yield runloop
 }
