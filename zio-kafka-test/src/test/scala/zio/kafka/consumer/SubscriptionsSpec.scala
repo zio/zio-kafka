@@ -93,8 +93,7 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
               .plainStream(
                 Subscription.manual(topic2, 1),
                 Serde.string,
-                Serde.string,
-                32
+                Serde.string
               )
               .runCollect)
             .provideSomeLayer[Kafka & Scope](consumer(client, Some(group)))
