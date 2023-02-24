@@ -556,7 +556,6 @@ private[consumer] final class Runloop(
         handleCommit(state, cmd)
       case cmd @ Command.ChangeSubscription(_, _, _) =>
         handleChangeSubscription(state, cmd)
-
     }
 
   private def handleChangeSubscription(
