@@ -548,7 +548,7 @@ private[consumer] final class Runloop(
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Unit]] =
     ZStream
       .mergeAll(3, 1)(
-        ZStream(Command.Poll).repeat(Schedule.spaced(pollFrequency)),
+        ZStream(Command.Poll).repeat(Schedule.once ++ Schedule.spaced(pollFrequency)),
         ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
         ZStream.fromQueue(commitQueue)
       )
