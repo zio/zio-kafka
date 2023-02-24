@@ -331,11 +331,7 @@ object Consumer {
       changeSubscription(None)
 
     private def changeSubscription(subscription: Option[Subscription]): Task[Unit] =
-      ZIO.runtime[Any].flatMap { runtime =>
-        val rc = RebalanceConsumer.Live(consumer.consumer)
-        runloop
-          .changeSubscription(subscription, settings.offsetRetrieval, runloop.rebalanceListener.toKafka(runtime, rc))
-      }
+      runloop.changeSubscription(subscription, settings.offsetRetrieval)
 
     override def metrics: Task[Map[MetricName, Metric]] =
       consumer.withConsumer(_.metrics().asScala.toMap)

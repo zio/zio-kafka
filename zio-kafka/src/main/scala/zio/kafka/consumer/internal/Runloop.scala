@@ -13,7 +13,7 @@ import zio.kafka.consumer.internal.Runloop.{
   ByteArrayConsumerRecord,
   Command
 }
-import zio.kafka.consumer.{ CommittableRecord, RebalanceListener, Subscription }
+import zio.kafka.consumer.{ CommittableRecord, RebalanceConsumer, RebalanceListener, Subscription }
 import zio.stream._
 
 import java.util
@@ -73,13 +73,12 @@ private[consumer] final class Runloop(
 
   def changeSubscription(
     subscription: Option[Subscription],
-    offsetRetrieval: OffsetRetrieval,
-    rebalanceListener: ConsumerRebalanceListener
+    offsetRetrieval: OffsetRetrieval
   ): Task[Unit] =
     Promise
       .make[Throwable, Unit]
       .flatMap { cont =>
-        commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, rebalanceListener, cont)) *>
+        commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
           cont.await
       }
       .unlessZIO(isShutdown)
@@ -537,7 +536,7 @@ private[consumer] final class Runloop(
         ZIO.foreachDiscard(reqs)(_.end).as(state)
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
-      case _ @Command.ChangeSubscription(_, _, _, cont) =>
+      case _ @Command.ChangeSubscription(_, _, cont) =>
         cont.succeed(()).as(state)
     }
 
@@ -555,7 +554,7 @@ private[consumer] final class Runloop(
         }
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
-      case cmd @ Command.ChangeSubscription(_, _, _, _) =>
+      case cmd @ Command.ChangeSubscription(_, _, _) =>
         handleChangeSubscription(state, cmd)
 
     }
@@ -572,9 +571,11 @@ private[consumer] final class Runloop(
         case Some(subscription) =>
           subscription match {
             case Subscription.Pattern(pattern) =>
-              ZIO.attempt(c.subscribe(pattern.pattern, command.rebalanceListener))
+              val rc = RebalanceConsumer.Live(c)
+              ZIO.attempt(c.subscribe(pattern.pattern, rebalanceListener.toKafka(runtime, rc)))
             case Subscription.Topics(topics) =>
-              ZIO.attempt(c.subscribe(topics.asJava, command.rebalanceListener))
+              val rc = RebalanceConsumer.Live(c)
+              ZIO.attempt(c.subscribe(topics.asJava, rebalanceListener.toKafka(runtime, rc)))
 
             // For manual subscriptions we have to do some manual work before starting the run loop
             case Subscription.Manual(topicPartitions) =>
@@ -666,7 +667,6 @@ private[consumer] object Runloop {
     final case class ChangeSubscription(
       subscription: Option[Subscription],
       offsetRetrieval: OffsetRetrieval,
-      rebalanceListener: ConsumerRebalanceListener,
       cont: Promise[Throwable, Unit]
     ) extends Command
   }
