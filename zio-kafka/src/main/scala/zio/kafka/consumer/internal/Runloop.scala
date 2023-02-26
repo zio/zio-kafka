@@ -560,7 +560,22 @@ private[consumer] final class Runloop(
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
       case cmd @ Command.ChangeSubscription(_, _, _) =>
-        handleChangeSubscription(state, cmd)
+        handleChangeSubscription(state, cmd).flatMap { state =>
+          if (state.isSubscribed) {
+            handlePoll(state)
+          } // This updates the assignment and will end partition streams which we are no longer subscribed to
+          else {
+            // End pending requests
+            endRevoked(state.pendingRequests, state.bufferedRecords, state.assignedStreams, _ => true).as(
+              state.copy(
+                pendingRequests = Chunk.empty,
+                assignedStreams = Map.empty,
+                bufferedRecords = BufferedRecords.empty
+              )
+            )
+          }
+
+        }
     }
 
   private def handleChangeSubscription(
