@@ -14,7 +14,7 @@ object RunloopSpec extends ZIOKafkaSpec {
 
   private val repeatWithScheduleSpec =
     suite("ZStream.repeatWithSchedule")(
-      test("Immediately triggers a first Poll command, doesn't wait for `pollFrequency` to trigger it") {
+      test("tata") {
         for {
           queue <- Queue.unbounded[Command]
           schedule = Schedule.fixed(2.seconds)
@@ -29,6 +29,39 @@ object RunloopSpec extends ZIOKafkaSpec {
           afterTwoSec   <- queue.takeAll
           _             <- TestClock.adjust(1.second)
           afterThreeSec <- queue.takeAll
+        } yield assertTrue(before.isEmpty) &&
+          assertTrue(justAfter.size == 1) &&
+          assertTrue(afterOneSec.isEmpty) &&
+          assertTrue(afterTwoSec.size == 1) &&
+          assertTrue(afterThreeSec.isEmpty)
+      }
+    )
+
+  private val mergeSpec =
+    suite("ZStream.merge")(
+      test("toto") {
+        for {
+          commandQueue <- Queue.unbounded[Command]
+          queue_0      <- Queue.unbounded[Any]
+          queue_1      <- Queue.unbounded[Any]
+          schedule      = Schedule.fixed(2.seconds)
+          commandStream = ZStream.repeatZIOWithSchedule(commandQueue.offer(Command.Poll), schedule)
+          stream = ZStream
+                     .mergeAll(3, 1)(
+                       commandStream,
+                       ZStream.fromQueue(queue_0),
+                       ZStream.fromQueue(queue_1)
+                     )
+          before        <- commandQueue.takeAll
+          _             <- stream.runDrain.forkScoped
+          _             <- TestClock.adjust(10.milliseconds)
+          justAfter     <- commandQueue.takeAll
+          _             <- TestClock.adjust(1.second)
+          afterOneSec   <- commandQueue.takeAll
+          _             <- TestClock.adjust(1.second)
+          afterTwoSec   <- commandQueue.takeAll
+          _             <- TestClock.adjust(1.second)
+          afterThreeSec <- commandQueue.takeAll
         } yield assertTrue(before.isEmpty) &&
           assertTrue(justAfter.size == 1) &&
           assertTrue(afterOneSec.isEmpty) &&
@@ -67,6 +100,7 @@ object RunloopSpec extends ZIOKafkaSpec {
   override def spec: Spec[TestEnvironment & Kafka & Scope, Any] =
     suite("Runloop")(
       repeatWithScheduleSpec,
+      mergeSpec,
       runSpec
     )
 }
