@@ -3,9 +3,9 @@ package zio.kafka.consumer
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetAndTimestamp }
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition }
 import zio._
-import zio.kafka.serde.Deserializer
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
+import zio.kafka.serde.Deserializer
 import zio.stream.ZStream.Pull
 import zio.stream._
 
@@ -133,10 +133,10 @@ trait Consumer {
 
 object Consumer {
 
-  private[consumer] final case class Live(
+  private final case class Live(
     private val consumer: ConsumerAccess,
     private val settings: ConsumerSettings,
-    private[consumer] val runloop: Runloop
+    private val runloop: Runloop
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
