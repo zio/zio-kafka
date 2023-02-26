@@ -547,8 +547,15 @@ private[consumer] final class Runloop(
         handleRequests(state, reqs).flatMap { state =>
           // Optimization: eagerly poll if we have pending requests instead of waiting
           // for the next scheduled poll.
-          if (state.pendingRequests.nonEmpty && state.isSubscribed) handlePoll(state)
-          else ZIO.succeed(state)
+          if (state.pendingRequests.nonEmpty) {
+            if (state.isSubscribed) handlePoll(state)
+            else
+              ZIO.fail(
+                new IllegalStateException(
+                  s"Should Never Happen: Some requests are pending but the consumer is not subscribed. Current State: $state"
+                )
+              )
+          } else ZIO.succeed(state)
         }
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
