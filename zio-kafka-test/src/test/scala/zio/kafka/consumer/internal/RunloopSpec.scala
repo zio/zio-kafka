@@ -5,11 +5,37 @@ import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Runloop.Command
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 import zio.kafka.embedded.Kafka
+import zio.stream.ZStream
 import zio.test._
-import zio.{ &, durationInt, Scope, ZIO }
+import zio.{ &, durationInt, Queue, Schedule, Scope, ZIO }
 
 object RunloopSpec extends ZIOKafkaSpec {
   override val kafkaPrefix: String = "runloopspec"
+
+  private val repeatWithScheduleSpec =
+    suite("ZStream.repeatWithSchedule")(
+      test("Immediately triggers a first Poll command, doesn't wait for `pollFrequency` to trigger it") {
+        for {
+          queue <- Queue.unbounded[Command]
+          schedule = Schedule.fixed(2.seconds)
+          stream   = ZStream.repeatZIOWithSchedule(queue.offer(Command.Poll), schedule)
+          before        <- queue.takeAll
+          _             <- stream.runDrain.forkScoped
+          _             <- TestClock.adjust(10.milliseconds)
+          justAfter     <- queue.takeAll
+          _             <- TestClock.adjust(1.second)
+          afterOneSec   <- queue.takeAll
+          _             <- TestClock.adjust(1.second)
+          afterTwoSec   <- queue.takeAll
+          _             <- TestClock.adjust(1.second)
+          afterThreeSec <- queue.takeAll
+        } yield assertTrue(before.isEmpty) &&
+          assertTrue(justAfter.size == 1) &&
+          assertTrue(afterOneSec.isEmpty) &&
+          assertTrue(afterTwoSec.size == 1) &&
+          assertTrue(afterThreeSec.isEmpty)
+      }
+    )
 
   private val runSpec =
     suite("::run")(
@@ -40,6 +66,7 @@ object RunloopSpec extends ZIOKafkaSpec {
 
   override def spec: Spec[TestEnvironment & Kafka & Scope, Any] =
     suite("Runloop")(
+      repeatWithScheduleSpec,
       runSpec
     )
 }
