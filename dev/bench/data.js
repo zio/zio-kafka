@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1677207702740,
+  "lastUpdate": 1677436939442,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -718,6 +718,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1243965374.780661,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "duxetlg@gmail.com",
+            "name": "Wojciech",
+            "username": "duxet"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2d1ddd1832908e603dd19aa7db0512ca6cb16c8e",
+          "message": "Replace key&value tuple with ConsumerRecord in consumeWith (#620)\n\nCo-authored-by: svroonland <svroonland@users.noreply.github.com>\r\nCo-authored-by: Jules Ivanic <guizmaii@users.noreply.github.com>",
+          "timestamp": "2023-02-26T19:39:50+01:00",
+          "tree_id": "fc53ed8c3345a96d73ca586b958ad600abaf751d",
+          "url": "https://github.com/zio/zio-kafka/commit/2d1ddd1832908e603dd19aa7db0512ca6cb16c8e"
+        },
+        "date": 1677436938919,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1244403866.1596038,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
