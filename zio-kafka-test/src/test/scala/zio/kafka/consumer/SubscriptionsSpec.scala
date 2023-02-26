@@ -6,7 +6,7 @@ import zio.kafka.ZIOKafkaSpec
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.stream.ZStream
+import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
@@ -170,7 +170,36 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
             .retryN(1)
             .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
       } yield assertCompletes
-    }
+    },
+    test("can resume a stream for the same subscription") {
+      val kvs = (1 to 10000).toList.map(i => (s"key$i", s"msg$i"))
+      for {
+        topic1 <- randomTopic
+        client <- randomClient
+        group  <- randomGroup
+
+        _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = 48)) // Large number of partitions
+
+        _ <- produceMany(topic1, kvs)
+
+        recordsConsumed <- Ref.make(Chunk.empty[CommittableRecord[String, String]])
+        _ <-
+          Consumer
+            .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
+            .take(200)
+            .transduce(
+              Consumer.offsetBatches.contramap[CommittableRecord[String, String]](_.offset) <&> ZSink
+                .collectAll[CommittableRecord[String, String]]
+            )
+            .mapZIO { case (offsetBatch, records) => offsetBatch.commit.as(records) }
+            .flattenChunks
+            .runCollect
+            .tap(records => recordsConsumed.update(_ ++ records))
+            .repeatN(50)
+            .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
+        consumed <- recordsConsumed.get
+      } yield assert(consumed.map(r => r.value))(hasSameElements(Chunk.fromIterable(kvs.map(_._2))))
+    } @@ TestAspect.nonFlaky(5)
   ).provideSomeLayerShared[TestEnvironment & Kafka](
     producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
   ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(600.seconds)
