@@ -1,4 +1,5 @@
 package zio.kafka.consumer
+import io.github.embeddedkafka.EmbeddedKafka
 import zio._
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.ZIOKafkaSpec
@@ -108,6 +109,7 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
         client <- randomClient
         group  <- randomGroup
 
+        _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = 48)) // Large number of partitions
         _ <- produceMany(topic1, kvs)
 
         consumer1GotMessage <- Promise.make[Nothing, Unit]
@@ -125,7 +127,7 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
             .runCollect)
             .provideSomeLayer[Kafka & Scope](consumer(client, Some(group)))
       } yield assertCompletes
-    },
+    } @@ TestAspect.nonFlaky(5),
     test("can handle unsubscribing during the lifetime of other streams") {
       val kvs = (1 to 50).toList.map(i => (s"key$i", s"msg$i"))
       for {

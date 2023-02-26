@@ -605,9 +605,9 @@ private[consumer] final class Runloop(
           }
       }
     }.foldZIO(
-        e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> command.fail(e).as(state),
+      e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> command.fail(e).as(state),
       _ => command.succeed.as(state.copy(subscription = command.subscription))
-      )
+    )
 
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Unit]] =
     ZStream
