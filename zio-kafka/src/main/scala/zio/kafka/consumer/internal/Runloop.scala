@@ -659,23 +659,23 @@ private[consumer] object Runloop {
       subscribedRef   <- Ref.make(false)
       runtime         <- ZIO.runtime[Any]
       runloop = new Runloop(
-                  runtime,
-                  hasGroupId,
-                  consumer,
-                  pollFrequency,
-                  pollTimeout,
-                  requestQueue,
-                  commitQueue,
-                  lastRebalanceEvent,
-                  partitions,
-                  rebalancingRef,
-                  diagnostics,
-                  shutdownRef,
-                  offsetRetrieval,
-                  userRebalanceListener,
-                  subscribedRef,
-                  restartStreamsOnRebalancing,
-                  currentStateRef
+                  runtime = runtime,
+                  hasGroupId = hasGroupId,
+                  consumer = consumer,
+                  pollFrequency = pollFrequency,
+                  pollTimeout = pollTimeout,
+                  requestQueue = requestQueue,
+                  commitQueue = commitQueue,
+                  lastRebalanceEvent = lastRebalanceEvent,
+                  partitions = partitions,
+                  rebalancingRef = rebalancingRef,
+                  diagnostics = diagnostics,
+                  shutdownRef = shutdownRef,
+                  offsetRetrieval = offsetRetrieval,
+                  userRebalanceListener = userRebalanceListener,
+                  subscribedRef = subscribedRef,
+                  restartStreamsOnRebalancing = restartStreamsOnRebalancing,
+                  currentState = currentStateRef
                 )
       _ <- runloop.run
     } yield runloop
