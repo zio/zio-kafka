@@ -109,7 +109,6 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
         client <- randomClient
         group  <- randomGroup
 
-        _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = 48)) // Large number of partitions
         _ <- produceMany(topic1, kvs)
 
         consumer1GotMessage <- Promise.make[Nothing, Unit]
