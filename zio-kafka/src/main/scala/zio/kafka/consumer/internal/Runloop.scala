@@ -494,7 +494,7 @@ private[consumer] final class Runloop(
 
   private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
-      onTrue = if (restartStreamsOnRebalancing) {
+      onTrue = if (restartStreamsOnRebalancing || !state.isSubscribed) {
         ZIO.foreachDiscard(reqs)(_.end).as(state)
       } else {
         ZIO.succeed(state.addRequests(reqs))
@@ -605,9 +605,9 @@ private[consumer] final class Runloop(
           }
       }
     }.foldZIO(
-      e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> command.fail(e).as(state),
+        e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> command.fail(e).as(state),
       _ => command.succeed.as(state.copy(subscription = command.subscription))
-    )
+      )
 
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Unit]] =
     ZStream
