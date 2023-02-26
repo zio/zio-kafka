@@ -548,10 +548,11 @@ private[consumer] final class Runloop(
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Unit]] =
     ZStream
       .mergeAll(3, 1)(
-        ZStream(Command.Poll).repeat(Schedule.once ++ Schedule.spaced(pollFrequency)),
+        ZStream.repeatWithSchedule(Command.Poll, Schedule.fixed(pollFrequency)),
         ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
         ZStream.fromQueue(commitQueue)
       )
+      .tap(cmd => diagnostics.emitIfEnabled(DiagnosticEvent.RunEvent(cmd)))
       .runFoldZIO(State.initial) { (state, cmd) =>
         ZIO.ifZIO(isShutdown)(onTrue = handleShutdown(state, cmd), onFalse = handleOperational(state, cmd))
       }
