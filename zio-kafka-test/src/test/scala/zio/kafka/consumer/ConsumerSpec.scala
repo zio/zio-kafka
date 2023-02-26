@@ -261,7 +261,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           client <- randomClient
           subscription = Subscription.Topics(Set(topic))
           _ <- produceMany(topic, messages)
-          consumeResult <- consumeWithStrings(client, Some(group), subscription) { case (_, _) =>
+          consumeResult <- consumeWithStrings(client, Some(group), subscription) { _ =>
                              ZIO.die(new IllegalArgumentException("consumeWith failure"))
                            }.exit
         } yield consumeResult.foldExit[TestResult](
@@ -485,9 +485,9 @@ object ConsumerSpec extends ZIOKafkaSpec {
           messagesReceived: Ref[List[(String, String)]],
           done: Promise[Nothing, Unit]
         ) =
-          consumeWithStrings(client, Some(group), subscription)({ (key, value) =>
+          consumeWithStrings(client, Some(group), subscription)({ record =>
             for {
-              messagesSoFar <- messagesReceived.updateAndGet(_ :+ (key -> value))
+              messagesSoFar <- messagesReceived.updateAndGet(_ :+ (record.key() -> record.value()))
               _             <- ZIO.when(messagesSoFar.size == nrMessages)(done.succeed(()))
             } yield ()
           }).fork
