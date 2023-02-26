@@ -352,7 +352,17 @@ object Consumer {
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZIO[Scope, Throwable, Consumer] =
+  ): ZIO[Scope, Throwable, Consumer] = {
+    /*
+    We must supply a queue size for the partitionAssignments hub below. Under most circumstances,
+    a value of 1 should be sufficient, as runloop.partitions is already an unbounded queue. But if
+    there is a large skew in speed of consuming partition assignments (not the speed of consuming kafka messages)
+    between the subscriptions, there may arise a situation where the faster stream is 'blocked' from
+    getting new partition assignments by the faster stream. A value of 32 should be more than sufficient to cover
+    this situation.
+     */
+    val hubCapacity = 32
+
     for {
       wrapper <- ConsumerAccess.make(settings)
       runloop <- Runloop(
@@ -371,8 +381,9 @@ object Consumer {
                                 .fromQueue(runloop.partitions)
                                 .map(_.exit)
                                 .flattenExitOption
-                                .toHub(32)
+                                .toHub(hubCapacity)
     } yield Live(wrapper, settings, runloop, subscriptions, partitionAssignments)
+  }
 
   /**
    * Accessor method for [[Consumer.assignment]]
