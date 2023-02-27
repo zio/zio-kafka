@@ -562,9 +562,9 @@ private[consumer] final class Runloop(
       case cmd @ Command.ChangeSubscription(_, _, _) =>
         handleChangeSubscription(state, cmd).flatMap { state =>
           if (state.isSubscribed) {
+            // This updates the assignment and will end partition streams which we are no longer subscribed to
             handlePoll(state)
-          } // This updates the assignment and will end partition streams which we are no longer subscribed to
-          else {
+          } else {
             // End pending requests
             endRevoked(state.pendingRequests, state.bufferedRecords, state.assignedStreams, _ => true).as(
               state.copy(
