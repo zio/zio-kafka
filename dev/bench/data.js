@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1677482832647,
+  "lastUpdate": 1677483224030,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -808,6 +808,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1990224958.4360168,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "guizmaii@users.noreply.github.com",
+            "name": "Jules Ivanic",
+            "username": "guizmaii"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9446f6209d29a5a783a09a9ec5316ab02170aa5c",
+          "message": "Optimize `Runloop::endRevoked`, `Runloop::fulfillRequests`, and `Runloop::bufferRecordsForUnrequestedPartitions` code (#666)",
+          "timestamp": "2023-02-27T08:30:15+01:00",
+          "tree_id": "979a4e9b6f0284edf61978386bcbdef296a7a28f",
+          "url": "https://github.com/zio/zio-kafka/commit/9446f6209d29a5a783a09a9ec5316ab02170aa5c"
+        },
+        "date": 1677483223489,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1989444278.469336,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
