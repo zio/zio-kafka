@@ -22,8 +22,8 @@ private[zio] trait Serdes {
   /**
    * Optimisation
    *
-   * Here, we're not using [[KafkaSerdes.ByteArray()]] because the underlying deserializer and serializer
-   * implementations are just identity functions.
+   * Here, we're not using `KafkaSerdes.ByteArray()` because the underlying deserializer and serializer implementations
+   * are just identity functions.
    *
    * That allows us to use [[ZIO.succeed]] instead of [[ZIO.attempt]].
    */
