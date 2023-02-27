@@ -6,7 +6,7 @@ import zio.kafka.consumer.internal.Runloop.Command
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 import zio.kafka.embedded.Kafka
 import zio.test._
-import zio.{ &, durationInt, Scope, ZIO }
+import zio.{ durationInt, Scope, ZIO }
 
 object RunloopSpec extends ZIOKafkaSpec {
   override val kafkaPrefix: String = "runloopspec"
@@ -54,7 +54,7 @@ object RunloopSpec extends ZIOKafkaSpec {
       }
     )
 
-  override def spec: Spec[TestEnvironment & Kafka & Scope, Any] =
+  override def spec: Spec[TestEnvironment with Kafka with Scope, Any] =
     suite("Runloop")(
       runSpec
     )
