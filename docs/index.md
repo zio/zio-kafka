@@ -79,8 +79,7 @@ object MainApp extends ZIOAppDefault {
 
   val consumer: ZStream[Consumer, Throwable, Nothing] =
     Consumer
-      .subscribeAnd(Subscription.topics("random"))
-      .plainStream(Serde.long, Serde.string)
+      .plainStream(Subscription.topics("random"), Serde.long, Serde.string)
       .tap(r => Console.printLine(r.value))
       .map(_.offset)
       .aggregateAsync(Consumer.offsetBatches)

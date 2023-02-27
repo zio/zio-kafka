@@ -1,12 +1,12 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetAndTimestamp }
+import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp }
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition }
 import zio._
-import zio.kafka.serde.Deserializer
 import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
-import zio.stream.ZStream.Pull
+import zio.kafka.serde.{ Deserializer, Serde }
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
@@ -47,8 +47,17 @@ trait Consumer {
    * rebalancing occurs, new topic-partition streams may be emitted and existing streams may be completed.
    *
    * All streams can be completed by calling [[stopConsumption]].
+   *
+   * Multiple subscriptions on one Consumer are supported, as long as the subscriptions are of the same type (topics,
+   * patterns, manual). Each subscription will only receive messages from the topic-partitions that match the
+   * subscription. When subscriptions overlap, kafka records will be divided over the overlapping subscriptions
+   * non-deterministically.
+   *
+   * On completion of the stream, the consumer is unsubscribed. In case of multiple subscriptions, the total consumer
+   * subscription is changed to exclude this subscription.
    */
   def partitionedAssignmentStream[R, K, V](
+    subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
@@ -61,8 +70,17 @@ trait Consumer {
    * new topic-partition streams may be emitted and existing streams may be completed.
    *
    * All streams can be completed by calling [[stopConsumption]].
+   *
+   * Multiple subscriptions on one Consumer are supported, as long as the subscriptions are of the same type (topics,
+   * patterns, manual). Each subscription will only receive messages from the topic-partitions that match the
+   * subscription. When subscriptions overlap, kafka records will be divided over the overlapping subscriptions
+   * non-deterministically.
+   *
+   * On completion of the stream, the consumer is unsubscribed. In case of multiple subscriptions, the total consumer
+   * subscription is changed to exclude this subscription.
    */
   def partitionedStream[R, K, V](
+    subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
@@ -76,8 +94,17 @@ trait Consumer {
    * Up to `bufferSize` chunks may be buffered in memory by this operator.
    *
    * The stream can be completed by calling [[stopConsumption]].
+   *
+   * Multiple subscriptions on one Consumer are supported, as long as the subscriptions are of the same type (topics,
+   * patterns, manual). Each subscription will only receive messages from the topic-partitions that match the
+   * subscription. When subscriptions overlap, kafka records will be divided over the overlapping subscriptions
+   * non-deterministically.
+   *
+   * On completion of the stream, the consumer is unsubscribed. In case of multiple subscriptions, the total consumer
+   * subscription is changed to exclude this subscription.
    */
   def plainStream[R, K, V](
+    subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
@@ -98,12 +125,8 @@ trait Consumer {
     valueDeserializer: Deserializer[R, V],
     commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
   )(
-    f: (K, V) => URIO[R1, Unit]
+    f: ConsumerRecord[K, V] => URIO[R1, Unit]
   ): ZIO[R & R1, Throwable, Unit]
-
-  def subscribe(subscription: Subscription): Task[Unit]
-
-  def unsubscribe: Task[Unit]
 
   /**
    * Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the earliest
@@ -121,8 +144,6 @@ trait Consumer {
 
   def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): Task[Long]
 
-  def subscribeAnd(subscription: Subscription): SubscribedConsumer
-
   def subscription: Task[Set[String]]
 
   /**
@@ -136,7 +157,11 @@ object Consumer {
   private final case class Live(
     private val consumer: ConsumerAccess,
     private val settings: ConsumerSettings,
-    private val runloop: Runloop
+    private val runloop: Runloop,
+    private val subscriptions: Ref.Synchronized[Set[Subscription]],
+    private val partitionAssignments: Hub[
+      Take[Throwable, Chunk[(TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord])]]
+    ]
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
@@ -191,46 +216,63 @@ object Consumer {
       )
 
     override def partitionedAssignmentStream[R, K, V](
+      subscription: Subscription,
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
     ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
-      val partitions = runloop.partitions
-      val stream =
-        ZStream.repeatZIOChunkOption {
-          partitions
-            .takeBetween(1, ZStream.DefaultChunkSize)
-            .flatMap { chunk =>
-              ZIO.foreach(chunk) { take =>
-                take.fold(
-                  partitions.shutdown.as(Take.end),
-                  cause => ZIO.succeed(Take.failCause(cause)),
-                  chunk => ZIO.succeed(Take.chunk(chunk))
-                )
-              }
-            }
-            .catchAllCause((c: Cause[Nothing]) =>
-              partitions.isShutdown.flatMap { down =>
-                if (down && c.isInterrupted) Pull.end
-                else Pull.failCause(c)
-              }
-            )
+      def extendSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
+        val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
+        Subscription.unionAll(newSubscriptions) match {
+          case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
+          case Some(union) =>
+            ZIO.logInfo(s"Changing kafka subscription to $union") *>
+              subscribe(union).as(newSubscriptions.toSet)
         }
+      }
 
-      stream.map(_.exit).flattenExitOption.map {
-        _.map { case (tp, partitionStream) =>
-          tp -> partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
-        }
+      def reduceSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
+        val newSubscriptions = NonEmptyChunk.fromIterableOption(existingSubscriptions - subscription)
+        val newUnion         = newSubscriptions.flatMap(Subscription.unionAll)
+
+        (newUnion match {
+          case Some(union) =>
+            ZIO.logInfo(s"Reducing kafka subscription to $union") *> subscribe(union)
+          case None =>
+            ZIO.logInfo(s"Unsubscribing kafka consumer") *> unsubscribe
+        }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
+      }
+
+      val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
+
+      ZStream.unwrapScoped {
+        for {
+          stream <- ZStream.fromHubScoped(partitionAssignments)
+          _      <- extendSubscriptions.withFinalizer(_ => reduceSubscriptions.orDie)
+        } yield stream
+          .map(_.exit)
+          .flattenExitOption
+          .flattenChunks
+          .map {
+            _.collect {
+              case (tp, partition) if Subscription.subscriptionMatches(subscription, tp) =>
+                val partitionStream = partition
+
+                val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
+                  if (onlyByteArraySerdes) partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
+                  else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
+
+                tp -> stream
+            }
+          }
       }
     }
 
     override def partitionedStream[R, K, V](
+      subscription: Subscription,
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
-    ): ZStream[
-      Any,
-      Throwable,
-      (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
-    ] = partitionedAssignmentStream(keyDeserializer, valueDeserializer).flattenChunks
+    ): ZStream[Any, Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] =
+      partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer).flattenChunks
 
     override def partitionsFor(
       topic: String,
@@ -245,16 +287,15 @@ object Consumer {
       consumer.withConsumer(_.position(partition, timeout.asJava))
 
     override def plainStream[R, K, V](
+      subscription: Subscription,
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V],
       bufferSize: Int
     ): ZStream[R, Throwable, CommittableRecord[K, V]] =
-      partitionedStream(keyDeserializer, valueDeserializer).flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(
-        _._2
-      )
-
-    override def subscribeAnd(subscription: Subscription): SubscribedConsumer =
-      new SubscribedConsumer(subscribe(subscription).as(this))
+      partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
+        n = Int.MaxValue,
+        bufferSize = bufferSize
+      )(_._2)
 
     override def subscription: Task[Set[String]] =
       consumer.withConsumer(_.subscription().asScala.toSet)
@@ -265,20 +306,15 @@ object Consumer {
       valueDeserializer: Deserializer[R, V],
       commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
     )(
-      f: (K, V) => URIO[R1, Unit]
+      f: ConsumerRecord[K, V] => URIO[R1, Unit]
     ): ZIO[R & R1, Throwable, Unit] =
       for {
         r <- ZIO.environment[R & R1]
-        _ <- ZStream
-               .fromZIO(subscribe(subscription))
-               .flatMap { _ =>
-                 partitionedStream(keyDeserializer, valueDeserializer)
-                   .flatMapPar(Int.MaxValue, bufferSize = settings.perPartitionChunkPrefetch) {
-                     case (_, partitionStream) =>
-                       partitionStream.mapChunksZIO(_.mapZIO { case CommittableRecord(record, offset) =>
-                         f(record.key(), record.value()).as(offset)
-                       })
-                   }
+        _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
+               .flatMapPar(Int.MaxValue, bufferSize = settings.perPartitionChunkPrefetch) { case (_, partitionStream) =>
+                 partitionStream.mapChunksZIO(_.mapZIO { case CommittableRecord(record, offset) =>
+                   f(record).as(offset)
+                 })
                }
                .provideEnvironment(r)
                .aggregateAsync(offsetBatches)
@@ -286,43 +322,14 @@ object Consumer {
                .runDrain
       } yield ()
 
-    override def subscribe(subscription: Subscription): Task[Unit] =
-      ZIO.runtime[Any].flatMap { runtime =>
-        consumer.withConsumerM { c =>
-          val rc = RebalanceConsumer.Live(c)
+    private def subscribe(subscription: Subscription): Task[Unit] =
+      changeSubscription(Some(subscription))
 
-          subscription match {
-            case Subscription.Pattern(pattern) =>
-              ZIO.attempt(c.subscribe(pattern.pattern, runloop.rebalanceListener.toKafka(runtime, rc)))
-            case Subscription.Topics(topics) =>
-              ZIO.attempt(c.subscribe(topics.asJava, runloop.rebalanceListener.toKafka(runtime, rc)))
+    private def unsubscribe: Task[Unit] =
+      changeSubscription(None)
 
-            // For manual subscriptions we have to do some manual work before starting the run loop
-            case Subscription.Manual(topicPartitions) =>
-              ZIO.attempt(c.assign(topicPartitions.asJava)) *>
-                ZIO.foreach(topicPartitions)(runloop.newPartitionStream(_, ZIO.unit)).flatMap { partitionStreams =>
-                  runloop.partitions.offer(
-                    Take.chunk(
-                      Chunk.fromIterable(partitionStreams.map { case (tp, _, stream) =>
-                        tp -> stream
-                      })
-                    )
-                  )
-                } *> {
-                  settings.offsetRetrieval match {
-                    case OffsetRetrieval.Manual(getOffsets) =>
-                      getOffsets(topicPartitions).flatMap { offsets =>
-                        ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) }
-                      }
-                    case OffsetRetrieval.Auto(_) => ZIO.unit
-                  }
-                }
-          }
-        }
-      } *> runloop.markSubscribed
-
-    override def unsubscribe: Task[Unit] =
-      runloop.markUnsubscribed *> consumer.withConsumer(_.unsubscribe())
+    private def changeSubscription(subscription: Option[Subscription]): Task[Unit] =
+      runloop.changeSubscription(subscription, settings.offsetRetrieval)
 
     override def metrics: Task[Map[MetricName, Metric]] =
       consumer.withConsumer(_.metrics().asScala.toMap)
@@ -343,20 +350,38 @@ object Consumer {
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZIO[Scope, Throwable, Consumer] =
+  ): ZIO[Scope, Throwable, Consumer] = {
+    /*
+    We must supply a queue size for the partitionAssignments hub below. Under most circumstances,
+    a value of 1 should be sufficient, as runloop.partitions is already an unbounded queue. But if
+    there is a large skew in speed of consuming partition assignments (not the speed of consuming kafka messages)
+    between the subscriptions, there may arise a situation where the faster stream is 'blocked' from
+    getting new partition assignments by the faster stream. A value of 32 should be more than sufficient to cover
+    this situation.
+     */
+    val hubCapacity = 32
+
     for {
       wrapper <- ConsumerAccess.make(settings)
       runloop <- Runloop(
-                   settings.hasGroupId,
-                   wrapper,
-                   settings.pollInterval,
-                   settings.pollTimeout,
-                   diagnostics,
-                   settings.offsetRetrieval,
-                   settings.rebalanceListener,
-                   settings.perPartitionChunkPrefetch
+                   hasGroupId = settings.hasGroupId,
+                   consumer = wrapper,
+                   pollFrequency = settings.pollInterval,
+                   pollTimeout = settings.pollTimeout,
+                   diagnostics = diagnostics,
+                   offsetRetrieval = settings.offsetRetrieval,
+                   userRebalanceListener = settings.rebalanceListener,
+                   perPartitionChunkPrefetch = settings.perPartitionChunkPrefetch
                  )
-    } yield Live(wrapper, settings, runloop)
+      subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
+
+      partitionAssignments <- ZStream
+                                .fromQueue(runloop.partitions)
+                                .map(_.exit)
+                                .flattenExitOption
+                                .toHub(hubCapacity)
+    } yield Live(wrapper, settings, runloop, subscriptions, partitionAssignments)
+  }
 
   /**
    * Accessor method for [[Consumer.assignment]]
@@ -399,10 +424,18 @@ object Consumer {
   ): RIO[Consumer, Map[String, List[PartitionInfo]]] =
     ZIO.serviceWithZIO(_.listTopics(timeout))
 
+  def partitionedAssignmentStream[R, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStream[Consumer, Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] =
+    ZStream.serviceWithStream[Consumer](_.partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer))
+
   /**
    * Accessor method for [[Consumer.partitionedStream]]
    */
   def partitionedStream[R, K, V](
+    subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): ZStream[
@@ -410,17 +443,20 @@ object Consumer {
     Throwable,
     (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
   ] =
-    ZStream.environmentWithStream(_.get[Consumer].partitionedStream(keyDeserializer, valueDeserializer))
+    ZStream.serviceWithStream[Consumer](_.partitionedStream(subscription, keyDeserializer, valueDeserializer))
 
   /**
    * Accessor method for [[Consumer.plainStream]]
    */
   def plainStream[R, K, V](
+    subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
   ): ZStream[R & Consumer, Throwable, CommittableRecord[K, V]] =
-    ZStream.environmentWithStream(_.get[Consumer].plainStream(keyDeserializer, valueDeserializer, bufferSize))
+    ZStream.serviceWithStream[Consumer](
+      _.plainStream(subscription, keyDeserializer, valueDeserializer, bufferSize)
+    )
 
   /**
    * Accessor method for [[Consumer.stopConsumption]]
@@ -452,9 +488,9 @@ object Consumer {
    * val settings: ConsumerSettings = ???
    * val subscription = Subscription.Topics(Set("my-kafka-topic"))
    *
-   * val consumerIO = Consumer.consumeWith(settings, subscription, Serdes.string, Serdes.string) { case (key, value) =>
+   * val consumerIO = Consumer.consumeWith(settings, subscription, Serdes.string, Serdes.string) { record =>
    *   // Process the received record here
-   *   putStrLn(s"Received record: \${key}: \${value}")
+   *   putStrLn(s"Received record: \${record.key()}: \${record.value()}")
    * }
    * }}}
    *
@@ -469,7 +505,8 @@ object Consumer {
    * @param commitRetryPolicy
    *   Retry commits that failed due to a RetriableCommitFailedException according to this schedule
    * @param f
-   *   Function that returns the effect to execute for each message. It is passed the key and value
+   *   Function that returns the effect to execute for each message. It is passed the
+   *   [[org.apache.kafka.clients.consumer.ConsumerRecord]].
    * @tparam R
    *   Environment for the consuming effect
    * @tparam R1
@@ -487,24 +524,12 @@ object Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
-  )(f: (K, V) => URIO[R1, Unit]): RIO[R & R1, Unit] =
+  )(f: ConsumerRecord[K, V] => URIO[R1, Unit]): RIO[R & R1, Unit] =
     ZIO.scoped[R & R1] {
       Consumer
         .make(settings)
         .flatMap(_.consumeWith[R, R1, K, V](subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
     }
-
-  /**
-   * Accessor method for [[Consumer.subscribe]]
-   */
-  def subscribe(subscription: Subscription): RIO[Consumer, Unit] =
-    ZIO.serviceWithZIO(_.subscribe(subscription))
-
-  /**
-   * Accessor method for [[Consumer.unsubscribe]]
-   */
-  def unsubscribe: RIO[Consumer, Unit] =
-    ZIO.serviceWithZIO(_.unsubscribe)
 
   /**
    * Accessor method for [[Consumer.offsetsForTimes]]
@@ -532,19 +557,6 @@ object Consumer {
     timeout: Duration = Duration.Infinity
   ): RIO[Consumer, Long] =
     ZIO.serviceWithZIO(_.position(partition, timeout))
-
-  /**
-   * Accessor method for [[Consumer.subscribeAnd]]
-   */
-  def subscribeAnd(
-    subscription: Subscription
-  ): SubscribedConsumerFromEnvironment =
-    new SubscribedConsumerFromEnvironment(
-      ZIO.environmentWithZIO { env =>
-        val consumer = env.get[Consumer]
-        consumer.subscribe(subscription).as(consumer)
-      }
-    )
 
   /**
    * Accessor method for [[Consumer.subscription]]

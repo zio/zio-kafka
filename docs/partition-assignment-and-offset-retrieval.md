@@ -7,9 +7,9 @@ title: "Partition Assignment And Offset Retrieval"
 
 | Use case                                           | Method                                                                      |
 |----------------------------------------------------|-----------------------------------------------------------------------------|
-| One or more topics, automatic partition assignment | `Consumer.subscribe(Subscription.topics("my_topic", "other_topic"))`        |
-| Topics matching a pattern                          | `Consumer.subscribe(Subscription.pattern("topic.*"))`                       |
-| Manual partition assignment                        | `Consumer.subscribe(Subscription.manual("my_topic" -> 1, "my_topic" -> 2))` |
+| One or more topics, automatic partition assignment | `Subscription.topics("my_topic", "other_topic")`        |
+| Topics matching a pattern                          | `Subscription.pattern("topic.*")`                       |
+| Manual partition assignment                        | `Subscription.manual("my_topic" -> 1, "my_topic" -> 2)` |
 
 By default `zio-kafka` will start streaming a partition from the last committed offset for the consumer group, or the latest message on the topic if no offset has yet been committed. You can also choose to store offsets outside of Kafka. This can be useful in cases where consistency between data stores and consumer offset is required.
 

@@ -22,7 +22,7 @@ object ProducerSpec extends ZIOKafkaSpec {
     settings: ConsumerSettings
   ): ZIO[Any with Scope, Throwable, Dequeue[Take[Throwable, CommittableRecord[String, Int]]]] =
     Consumer.make(settings).flatMap { c =>
-      c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.int).toQueue()
+      c.plainStream(subscription, Serde.string, Serde.int).toQueue()
     }
 
   override def spec: Spec[TestEnvironment & Kafka, Object] =
@@ -38,7 +38,7 @@ object ProducerSpec extends ZIOKafkaSpec {
 
         def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
           Consumer.make(settings).flatMap { c =>
-            c.subscribe(subscription) *> c.plainStream(Serde.string, Serde.string).toQueue()
+            c.plainStream(subscription, Serde.string, Serde.string).toQueue()
           }
 
         for {
@@ -349,35 +349,34 @@ object ProducerSpec extends ZIOKafkaSpec {
             committedOffset <-
               ZIO.scoped {
                 Consumer.make(settings).flatMap { c =>
-                  c.subscribe(Topics(Set(topic))) *>
-                    ZIO.scoped {
-                      c
-                        .plainStream(Serde.string, Serde.int)
-                        .toQueue()
-                        .flatMap { q =>
-                          val readAliceAccount = for {
-                            messages <- q.take
-                                          .flatMap(_.done)
-                                          .mapError(_.getOrElse(new NoSuchElementException))
-                          } yield messages.head
-                          for {
-                            aliceHadMoneyCommittableMessage <- readAliceAccount
-                            _ <- ZIO.scoped {
-                                   TransactionalProducer.createTransaction.flatMap { t =>
-                                     t.produce(
-                                       aliceAccountFeesPaid,
-                                       Serde.string,
-                                       Serde.int,
-                                       Some(aliceHadMoneyCommittableMessage.offset)
-                                     )
-                                   }
+                  ZIO.scoped {
+                    c
+                      .plainStream(Topics(Set(topic)), Serde.string, Serde.int)
+                      .toQueue()
+                      .flatMap { q =>
+                        val readAliceAccount = for {
+                          messages <- q.take
+                                        .flatMap(_.done)
+                                        .mapError(_.getOrElse(new NoSuchElementException))
+                        } yield messages.head
+                        for {
+                          aliceHadMoneyCommittableMessage <- readAliceAccount
+                          _ <- ZIO.scoped {
+                                 TransactionalProducer.createTransaction.flatMap { t =>
+                                   t.produce(
+                                     aliceAccountFeesPaid,
+                                     Serde.string,
+                                     Serde.int,
+                                     Some(aliceHadMoneyCommittableMessage.offset)
+                                   )
                                  }
-                            aliceTopicPartition =
-                              new TopicPartition(topic, aliceHadMoneyCommittableMessage.partition)
-                            committed <- c.committed(Set(aliceTopicPartition))
-                          } yield committed(aliceTopicPartition)
-                        }
-                    }
+                               }
+                          aliceTopicPartition =
+                            new TopicPartition(topic, aliceHadMoneyCommittableMessage.partition)
+                          committed <- c.committed(Set(aliceTopicPartition))
+                        } yield committed(aliceTopicPartition)
+                      }
+                  }
                 }
               }
 
@@ -398,8 +397,8 @@ object ProducerSpec extends ZIOKafkaSpec {
             settings <- transactionalConsumerSettings(group, client)
             committedOffset <- ZIO.scoped {
                                  Consumer.make(settings).flatMap { c =>
-                                   c.subscribe(Topics(Set(topic))) *> c
-                                     .plainStream(Serde.string, Serde.int)
+                                   c
+                                     .plainStream(Topics(Set(topic)), Serde.string, Serde.int)
                                      .toQueue()
                                      .flatMap { q =>
                                        val readAliceAccount = for {

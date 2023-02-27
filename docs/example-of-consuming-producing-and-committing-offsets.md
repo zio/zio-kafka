@@ -20,8 +20,7 @@ val consumerAndProducer =
     ZLayer.scoped(Producer.make(producerSettings, Serde.int, Serde.string))
 
 val consumeProduceStream = Consumer
-  .subscribeAnd(Subscription.topics("my-input-topic"))
-  .plainStream(Serde.int, Serde.long)
+  .plainStream(Subscription.topics("my-input-topic"), Serde.int, Serde.long)
   .map { record =>
     val key: Int    = record.record.key()
     val value: Long = record.record.value()

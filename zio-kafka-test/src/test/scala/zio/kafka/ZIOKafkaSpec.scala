@@ -1,6 +1,6 @@
 package zio.kafka
 
-import zio.{ Task, ZIO }
+import zio._
 
 import java.util.UUID
 
@@ -16,4 +16,23 @@ trait ZIOKafkaSpec extends ZIOSpecWithKafka {
   def randomGroup: Task[String] = randomThing(s"$kafkaPrefix-group")
 
   def randomClient: Task[String] = randomThing(s"$kafkaPrefix-client")
+
+  val logger: ZLogger[String, Unit] =
+    new ZLogger[String, Unit] {
+      override def apply(
+        trace: Trace,
+        fiberId: FiberId,
+        logLevel: LogLevel,
+        message: () => String,
+        cause: Cause[Any],
+        context: FiberRefs,
+        spans: List[LogSpan],
+        annotations: Map[String, String]
+      ): Unit =
+        println(
+          s"${java.time.Instant
+              .now()} ${logLevel.label} [${annotations.map { case (k, v) => s"$k=$v" }
+              .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint}"
+        )
+    }.filterLogLevel(_ >= LogLevel.Info).map(_ => ())
 }

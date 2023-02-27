@@ -11,15 +11,13 @@ private[internal] case class PartitionStreamControl(
   streamCompleted: Promise[Nothing, Unit]
 ) {
 
-  def finishWith(remaining: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
+  def finishWith(remaining: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Any] =
     ZIO.logAnnotate(
       LogAnnotation("topic", topicPartition.topic()),
       LogAnnotation("partition", topicPartition.partition().toString)
     ) {
-      for {
-        _ <- drainQueue.offer(Take.chunk(remaining))
-        _ <- drainQueue.offer(Take.end)
-      } yield ()
+      if (remaining.isEmpty) drainQueue.offer(Take.end)
+      else drainQueue.offerAll(List(Take.chunk(remaining), Take.end))
     }
 
   def completeStream: UIO[Unit] =

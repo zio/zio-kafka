@@ -1,10 +1,9 @@
 package zio.kafka.consumer
 
-import zio.{ Task, ZIO }
+import zio.{ NonEmptyChunk, Task, ZIO }
 
 import scala.util.matching.Regex
 import java.util.regex.{ Pattern => JPattern }
-
 import org.apache.kafka.common.TopicPartition
 
 sealed trait Subscription
@@ -75,4 +74,22 @@ object Subscription {
    */
   def manual(topic: String, partition: Int): Manual =
     manual((topic, partition))
+
+  private[consumer] def union(s1: Subscription, s2: Subscription): Option[Subscription] = (s1, s2) match {
+    case (Pattern(p1), Pattern(p2)) => Some(Pattern(s"$p1|$p2".r))
+    case (Topics(t1), Topics(t2))   => Some(Topics(t1 ++ t2))
+    case (Manual(tp1), Manual(tp2)) => Some(Manual(tp1 ++ tp2))
+    case _ =>
+      None // Although we could combine Pattern and Topics, the Kafka consumer will throw exceptions when changing the subscription type
+  }
+
+  private[consumer] def unionAll(subscriptions: NonEmptyChunk[Subscription]): Option[Subscription] =
+    subscriptions.foldLeft(Option(subscriptions.head)) { case (s1, s2) => s1.flatMap(union(_, s2)) }
+
+  private[consumer] def subscriptionMatches(subscription: Subscription, tp: TopicPartition): Boolean =
+    subscription match {
+      case Topics(topics)          => topics.contains(tp.topic())
+      case Pattern(pattern)        => pattern.findFirstIn(tp.topic()).isDefined
+      case Manual(topicPartitions) => topicPartitions.contains(tp)
+    }
 }
