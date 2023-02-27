@@ -429,73 +429,77 @@ private[consumer] final class Runloop(
             }
       )
 
-    for {
-      revokeResult       <- Ref.make[Option[RevokeResult]](None)
-      lastRebalanceEvent <- Ref.make[Option[RebalanceEvent]](None)
-      _                  <- handlePollRebalanceListenerRef.set(Some(listener(revokeResult, lastRebalanceEvent)))
-      pollResult <-
-        consumer.withConsumerM { c =>
-          {
-            // Check shutdown again after polling (which takes up to the poll timeout)
-            ZIO.ifZIO(isShutdown)(
-              onTrue = pauseAllPartitions(c) *>
-                endRevoked(
-                  state.pendingRequests,
-                  state.bufferedRecords,
-                  state.assignedStreams,
-                  isRevoked = _ => true
-                )
-                  .as(
-                    Runloop.PollResult(
-                      newlyAssigned = Set(),
-                      unfulfilledRequests = state.pendingRequests,
-                      bufferedRecords = BufferedRecords.empty,
-                      assignedStreams = Map[TopicPartition, PartitionStreamControl](),
-                      finishingStreams = state.assignedStreams
-                    )
-                  ),
-              onFalse = ZIO.suspend {
-                val prevAssigned        = c.assignment().asScala.toSet
-                val requestedPartitions = state.pendingRequests.map(_.tp).toSet -- state.finishingStreams.keys
-
-                val prevGroupGenerationId = getConsumerGroupMetadataIfAny
-
-                resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
-
-                val records = doPoll(c, requestedPartitions)
-
-                val newGroupGenerationId = getConsumerGroupMetadataIfAny
-                val tpsInResponse        = records.partitions.asScala.toSet
-                val currentAssigned      = c.assignment().asScala.toSet
-
-                for {
-                  rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
-
-                  remainingRequestedPartitions = rebalanceEvent match {
-                                                   case Some(Runloop.RebalanceEvent.Revoked(_)) |
-                                                       Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, _)) =>
-                                                     // In case rebalancing restarted all partitions, we have to ignore
-                                                     // all the requests as their promise were for the previous partition streams
-                                                     Set.empty
-                                                   case _ =>
-                                                     requestedPartitions
-                                                 }
-
-                  // TODO what to do with buffered records in combination with seeking
-                  unrequestedRecords =
-                    bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- remainingRequestedPartitions)
-
-                  revokeResult <-
-                    revokeResult
-                      .getAndSet(None)
-                      .some
-                      .orElseSucceed(
-                        RevokeResult(state.pendingRequests, state.bufferedRecords, state.assignedStreams, Map.empty)
+    ZIO.scoped {
+      for {
+        revokeResult       <- Ref.make[Option[RevokeResult]](None)
+        lastRebalanceEvent <- Ref.make[Option[RebalanceEvent]](None)
+        _ <-
+          ZIO.acquireRelease(handlePollRebalanceListenerRef.set(Some(listener(revokeResult, lastRebalanceEvent))))(_ =>
+            handlePollRebalanceListenerRef.set(None)
+          )
+        pollResult <-
+          consumer.withConsumerM { c =>
+            {
+              // Check shutdown again after polling (which takes up to the poll timeout)
+              ZIO.ifZIO(isShutdown)(
+                onTrue = pauseAllPartitions(c) *>
+                  endRevoked(
+                    state.pendingRequests,
+                    state.bufferedRecords,
+                    state.assignedStreams,
+                    isRevoked = _ => true
+                  )
+                    .as(
+                      Runloop.PollResult(
+                        newlyAssigned = Set(),
+                        unfulfilledRequests = state.pendingRequests,
+                        bufferedRecords = BufferedRecords.empty,
+                        assignedStreams = Map[TopicPartition, PartitionStreamControl](),
+                        finishingStreams = state.assignedStreams
                       )
+                    ),
+                onFalse = ZIO.suspend {
+                  val prevAssigned        = c.assignment().asScala.toSet
+                  val requestedPartitions = state.pendingRequests.map(_.tp).toSet -- state.finishingStreams.keys
 
-                  _ <- ZIO
-                         .logDebug(s"New consumer group generation ID: ${c.groupMetadata().generationId()}")
-                         .when(newGroupGenerationId != prevGroupGenerationId)
+                  val prevGroupGenerationId = getConsumerGroupMetadataIfAny
+
+                  resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
+
+                  val records = doPoll(c, requestedPartitions)
+
+                  val newGroupGenerationId = getConsumerGroupMetadataIfAny
+                  val tpsInResponse        = records.partitions.asScala.toSet
+                  val currentAssigned      = c.assignment().asScala.toSet
+
+                  for {
+                    rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
+
+                    remainingRequestedPartitions = rebalanceEvent match {
+                                                     case Some(Runloop.RebalanceEvent.Revoked(_)) |
+                                                         Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, _)) =>
+                                                       // In case rebalancing restarted all partitions, we have to ignore
+                                                       // all the requests as their promise were for the previous partition streams
+                                                       Set.empty
+                                                     case _ =>
+                                                       requestedPartitions
+                                                   }
+
+                    // TODO what to do with buffered records in combination with seeking
+                    unrequestedRecords =
+                      bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- remainingRequestedPartitions)
+
+                    revokeResult <-
+                      revokeResult
+                        .getAndSet(None)
+                        .some
+                        .orElseSucceed(
+                          RevokeResult(state.pendingRequests, state.bufferedRecords, state.assignedStreams, Map.empty)
+                        )
+
+                    _ <- ZIO
+                           .logDebug(s"New consumer group generation ID: ${c.groupMetadata().generationId()}")
+                           .when(newGroupGenerationId != prevGroupGenerationId)
 //                  _ <- revokeResult match {
 //                    case Some(_) =>
 //                                      ZIO.logDebug(
@@ -524,70 +528,71 @@ private[consumer] final class Runloop(
 //                                      )
 //                                  }
 
-                  newlyAssigned = rebalanceEvent match {
-                                    case Some(Runloop.RebalanceEvent.Assigned(_)) =>
-                                      // Just for newly assigned partitions
-                                      currentAssigned -- prevAssigned
-                                    case Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, assigned @ _)) =>
-                                      // Recreate all of the current assignment
-                                      currentAssigned
-                                    case Some(Runloop.RebalanceEvent.Revoked(_)) =>
-                                      // We revoked, should recreate all of the current assignment
-                                      currentAssigned
-                                    case None =>
-                                      // This should be an empty set, but just a catch-all
-                                      currentAssigned -- prevAssigned
-                                  }
+                    newlyAssigned = rebalanceEvent match {
+                                      case Some(Runloop.RebalanceEvent.Assigned(_)) =>
+                                        // Just for newly assigned partitions
+                                        currentAssigned -- prevAssigned
+                                      case Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, assigned @ _)) =>
+                                        // Recreate all of the current assignment
+                                        currentAssigned
+                                      case Some(Runloop.RebalanceEvent.Revoked(_)) =>
+                                        // We revoked, should recreate all of the current assignment
+                                        currentAssigned
+                                      case None =>
+                                        // This should be an empty set, but just a catch-all
+                                        currentAssigned -- prevAssigned
+                                    }
 
-                  _ <- ZIO.foreachDiscard(revokeResult.bufferedRecords.recs) { case (topicPartition, records) =>
-                         Util.annotateTopicPartition(topicPartition) {
-                           ZIO.logInfo(
-                             s"Buffered ${records.size} unrequested records with latest offset ${records.last.offset()}"
-                           )
+                    _ <- ZIO.foreachDiscard(revokeResult.bufferedRecords.recs) { case (topicPartition, records) =>
+                           Util.annotateTopicPartition(topicPartition) {
+                             ZIO.logInfo(
+                               s"Buffered ${records.size} unrequested records with latest offset ${records.last.offset()}"
+                             )
+                           }
                          }
-                       }
 
-                  fulfillResult <- fulfillRequests(
-                                     revokeResult.unfulfilledRequests,
-                                     revokeResult.bufferedRecords,
-                                     records
-                                   )
-                  _ <- diagnostics.emitIfEnabled(
-                         DiagnosticEvent.Poll(
-                           requestedPartitions,
-                           fulfillResult.bufferedRecords.partitions,
-                           fulfillResult.unfulfilledRequests.map(_.tp).toSet
+                    fulfillResult <- fulfillRequests(
+                                       revokeResult.unfulfilledRequests,
+                                       revokeResult.bufferedRecords,
+                                       records
+                                     )
+                    _ <- diagnostics.emitIfEnabled(
+                           DiagnosticEvent.Poll(
+                             requestedPartitions,
+                             fulfillResult.bufferedRecords.partitions,
+                             fulfillResult.unfulfilledRequests.map(_.tp).toSet
+                           )
                          )
-                       )
-                } yield Runloop.PollResult(
-                  newlyAssigned,
-                  fulfillResult.unfulfilledRequests,
-                  fulfillResult.bufferedRecords,
-                  revokeResult.assignedStreams,
-                  state.finishingStreams ++ revokeResult.revokedStreams
-                )
-              }
-            )
+                  } yield Runloop.PollResult(
+                    newlyAssigned,
+                    fulfillResult.unfulfilledRequests,
+                    fulfillResult.bufferedRecords,
+                    revokeResult.assignedStreams,
+                    state.finishingStreams ++ revokeResult.revokedStreams
+                  )
+                }
+              )
+            }
           }
-        }
-      updatedFinishingStreams <-
-        ZIO
-          .filterNot(pollResult.finishingStreams.toSeq) { case (_, control) => control.streamCompleted.isDone }
-          .map(_.toMap)
-      newAssignedStreams <- createNewPartitionStreams(pollResult.newlyAssigned, updatedFinishingStreams)
-      newPendingCommits <-
-        ZIO.ifZIO(isRebalancing)(
-          onTrue = ZIO.succeed(state.pendingCommits),
-          onFalse = doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).as(Chunk.empty)
-        )
-    } yield State(
-      pollResult.unfulfilledRequests,
-      newPendingCommits,
-      pollResult.bufferedRecords,
-      pollResult.assignedStreams ++ newAssignedStreams,
-      updatedFinishingStreams,
-      state.subscription
-    )
+        updatedFinishingStreams <-
+          ZIO
+            .filterNot(pollResult.finishingStreams.toSeq) { case (_, control) => control.streamCompleted.isDone }
+            .map(_.toMap)
+        newAssignedStreams <- createNewPartitionStreams(pollResult.newlyAssigned, updatedFinishingStreams)
+        newPendingCommits <-
+          ZIO.ifZIO(isRebalancing)(
+            onTrue = ZIO.succeed(state.pendingCommits),
+            onFalse = doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).as(Chunk.empty)
+          )
+      } yield State(
+        pollResult.unfulfilledRequests,
+        newPendingCommits,
+        pollResult.bufferedRecords,
+        pollResult.assignedStreams ++ newAssignedStreams,
+        updatedFinishingStreams,
+        state.subscription
+      )
+    }
   }
 
   private def createNewPartitionStreams(
@@ -877,8 +882,6 @@ private[consumer] object Runloop {
                           Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
                         ]
                     )(_.shutdown)
-      // The Runloop's rebalance listener's onRevoked may be called after shutting down the runloop when closing the consumer,
-      // where we check the shutdownRef
       shutdownRef <- ZIO.acquireRelease(Ref.make(false))(_.set(true))
       runtime     <- ZIO.runtime[Any]
       runloop = new Runloop(
