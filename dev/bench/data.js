@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1677483224030,
+  "lastUpdate": 1677484528506,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -838,6 +838,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1989444278.469336,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "guizmaii@users.noreply.github.com",
+            "name": "Jules Ivanic",
+            "username": "guizmaii"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "17bdb0cb9fd5159cbff832f1b620fe3457d6df7d",
+          "message": "Avoid extra latency potentially happening between `Poll` calls (#668)",
+          "timestamp": "2023-02-27T08:53:12+01:00",
+          "tree_id": "a2bd5826f2b41e4b7ef2448bf2840b6a4be9d5dd",
+          "url": "https://github.com/zio/zio-kafka/commit/17bdb0cb9fd5159cbff832f1b620fe3457d6df7d"
+        },
+        "date": 1677484528172,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1988346345.6414845,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
