@@ -225,8 +225,7 @@ object AdminSpec extends ZIOKafkaSpec {
 
           def consumeAndCommit(count: Long) =
             Consumer
-              .subscribeAnd(Subscription.Topics(Set(topic)))
-              .partitionedStream[Kafka, String, String](Serde.string, Serde.string)
+              .partitionedStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
               .flatMapPar(partitionCount)(_._2)
               .take(count)
               .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
@@ -301,8 +300,7 @@ object AdminSpec extends ZIOKafkaSpec {
 
         def consumeAndCommit(count: Long, topic: String, groupId: String) =
           Consumer
-            .subscribeAnd(Subscription.Topics(Set(topic)))
-            .plainStream[Kafka, String, String](Serde.string, Serde.string)
+            .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
             .take(count)
             .foreach(_.offset.commit)
             .provideSomeLayer[Kafka](consumer(topic, Some(groupId)))
@@ -343,8 +341,7 @@ object AdminSpec extends ZIOKafkaSpec {
 
         def consumeAndCommit(count: Long, topic: String, groupId: String) =
           Consumer
-            .subscribeAnd(Subscription.Topics(Set(topic)))
-            .plainStream[Kafka, String, String](Serde.string, Serde.string)
+            .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
             .take(count)
             .foreach(_.offset.commit)
             .provideSomeLayer[Kafka](consumer(topic, Some(groupId)))
@@ -646,8 +643,7 @@ object AdminSpec extends ZIOKafkaSpec {
     clientId: String,
     groupInstanceId: Option[String] = None
   ): ZIO[Kafka, Throwable, Unit] = Consumer
-    .subscribeAnd(Subscription.topics(topicName))
-    .plainStream(Serde.string, Serde.string)
+    .plainStream(Subscription.topics(topicName), Serde.string, Serde.string)
     .foreach(_.offset.commit)
     .provideSomeLayer(consumer(clientId, Some(groupId), groupInstanceId))
 
