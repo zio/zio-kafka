@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1677482274324,
+  "lastUpdate": 1677482832647,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -778,6 +778,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1987908149.291719,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@users.noreply.github.com",
+            "name": "svroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4ea0d188e34af884c53991ad8263db31435d6763",
+          "message": "Support for multiple subscriptions on the same Consumer (#517)\n\nCo-authored-by: Jules Ivanic <guizmaii@users.noreply.github.com>",
+          "timestamp": "2023-02-27T08:24:51+01:00",
+          "tree_id": "09c2674e18aa18d9a3c13199380d83f764699b27",
+          "url": "https://github.com/zio/zio-kafka/commit/4ea0d188e34af884c53991ad8263db31435d6763"
+        },
+        "date": 1677482832264,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1990224958.4360168,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
