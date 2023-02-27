@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1677436939442,
+  "lastUpdate": 1677482274324,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -748,6 +748,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1244403866.1596038,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "guizmaii@users.noreply.github.com",
+            "name": "Jules Ivanic",
+            "username": "guizmaii"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2b7c028be83fdd669a3cc4a03efcd626893ecc79",
+          "message": "Optimize `Runloop::handleRequests` code (#667)",
+          "timestamp": "2023-02-27T08:15:35+01:00",
+          "tree_id": "5885aa453ddf5183f450d0d6975fd9a623f4d4cf",
+          "url": "https://github.com/zio/zio-kafka/commit/2b7c028be83fdd669a3cc4a03efcd626893ecc79"
+        },
+        "date": 1677482273916,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1987908149.291719,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
