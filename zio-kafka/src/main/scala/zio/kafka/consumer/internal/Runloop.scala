@@ -30,7 +30,6 @@ private[consumer] final class Runloop(
   pollFrequency: Duration,
   pollTimeout: Duration,
   requestQueue: Queue[Runloop.Request],
-  commitQueue: Queue[Command.Commit], // TODO integrate in commandQueue
   commandQueue: Queue[Command],
   val partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
   rebalancingRef: Ref[Boolean],
@@ -39,7 +38,6 @@ private[consumer] final class Runloop(
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   perPartitionChunkPrefetch: Int,
-  pollQueue: Queue[Command.Poll.type], // TODO integrate in commandQueue
   handlePollRebalanceListenerRef: Ref[Option[RebalanceListener]]
 ) {
   private val isRebalancing = rebalancingRef.get
@@ -208,7 +206,7 @@ private[consumer] final class Runloop(
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
         ZIO.logInfo(s"Rebalance in progress, retrying ${cmds.size.toString} commits") *>
-          commitQueue.offerAll(cmds).unit.delay(100.millis) // TODO magic nr
+          commandQueue.offerAll(cmds).unit.delay(100.millis) // TODO magic nr
       case err =>
         cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
     }
@@ -776,12 +774,11 @@ private[consumer] final class Runloop(
     (ZStream
       .repeatZIOWithSchedule(
 //        ZIO.debug("Offering to poll queue") *>
-        pollQueue.offer(Command.Poll),
+        commandQueue.offer(Command.Poll),
         Schedule.fixed(pollFrequency)
       )
       .runDrain zipPar ZStream
-      .mergeAll(3, 1)(
-        ZStream.fromQueue(pollQueue),
+      .mergeAll(2, 1)(
         ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
         ZStream.fromQueue(commandQueue)
       )
@@ -887,8 +884,6 @@ private[consumer] object Runloop {
     for {
       rebalancingRef                 <- Ref.make(false)
       requestQueue                   <- ZIO.acquireRelease(Queue.unbounded[Runloop.Request])(_.shutdown)
-      commitQueue                    <- ZIO.acquireRelease(Queue.unbounded[Command.Commit])(_.shutdown)
-      pollQueue                      <- ZIO.acquireRelease(Queue.unbounded[Command.Poll.type])(_.shutdown)
       commandQueue                   <- ZIO.acquireRelease(Queue.unbounded[Command])(_.shutdown)
       handlePollRebalanceListenerRef <- Ref.make[Option[RebalanceListener]](None)
       partitions <- ZIO.acquireRelease(
@@ -908,7 +903,6 @@ private[consumer] object Runloop {
                   pollFrequency,
                   pollTimeout,
                   requestQueue,
-                  commitQueue,
                   commandQueue,
                   partitions,
                   rebalancingRef,
@@ -917,7 +911,6 @@ private[consumer] object Runloop {
                   offsetRetrieval,
                   userRebalanceListener,
                   perPartitionChunkPrefetch,
-                  pollQueue,
                   handlePollRebalanceListenerRef
                 )
       _ <- ZIO.addFinalizer(ZIO.logDebug("Shut down Runloop"))
