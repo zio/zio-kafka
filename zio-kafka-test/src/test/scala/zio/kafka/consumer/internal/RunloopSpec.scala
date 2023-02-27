@@ -5,6 +5,7 @@ import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Runloop.Command
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 import zio.kafka.embedded.Kafka
+import zio.test.TestAspect.nonFlaky
 import zio.test._
 import zio.{ durationInt, Scope, ZIO }
 
@@ -18,8 +19,9 @@ object RunloopSpec extends ZIOKafkaSpec {
   private val runSpec =
     suite("::run")(
       test("Immediately triggers a first Poll command, doesn't wait an initial `pollFrequency` to trigger it") {
-        val oneCycle  = 1.second
-        val twoCycles = 2.seconds
+        val halfACycle = 500.milliseconds
+        val oneCycle   = 1.second
+        val twoCycles  = 2.seconds
 
         for {
           kafka       <- ZIO.service[Kafka]
@@ -29,7 +31,7 @@ object RunloopSpec extends ZIOKafkaSpec {
 
           before <- diagnosticsQueue.takeAll
 
-          _             <- TestClock.adjust(10.milliseconds)
+          _             <- TestClock.adjust(halfACycle)
           justAfterBoot <- diagnosticsQueue.takeAll
 
           _            <- TestClock.adjust(oneCycle)
@@ -51,7 +53,7 @@ object RunloopSpec extends ZIOKafkaSpec {
           afterCycle_3.isEmpty,
           afterCycle_4.size == 1 && afterCycle_4.head == DiagnosticEvent.RunloopEvent(Command.Poll)
         )
-      }
+      } @@ nonFlaky(10)
     )
 
   override def spec: Spec[TestEnvironment with Kafka with Scope, Any] =
