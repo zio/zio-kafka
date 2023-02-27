@@ -11,8 +11,8 @@ private[internal] case class PartitionStreamControl(
 
   def finishWith(remaining: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
     for {
-      _ <- drainQueue.offer(Take.chunk(remaining))
-      _ <- drainQueue.offer(Take.end)
+      _ <- if (remaining.isEmpty) drainQueue.offer(Take.end)
+           else drainQueue.offerAll(List(Take.chunk(remaining), Take.end))
       _ <- interrupt.succeed(())
     } yield ()
 }

@@ -199,38 +199,33 @@ private[consumer] final class Runloop(
    *   New pending requests, new buffered records and active assigned streams
    */
   private def endRevoked(
-    reqs: Chunk[Runloop.Request],
+    requests: Chunk[Runloop.Request],
     bufferedRecords: BufferedRecords,
     currentAssignedStreams: Map[TopicPartition, PartitionStreamControl],
-    revoked: TopicPartition => Boolean
+    isRevoked: TopicPartition => Boolean
   ): UIO[Runloop.RevokeResult] = {
-    var acc = Chunk[Runloop.Request]()
-    val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
-    buf ++= bufferedRecords.recs
-
     val (revokedStreams, assignedStreams) =
-      currentAssignedStreams.partition(es => revoked(es._1))
+      currentAssignedStreams.partition(es => isRevoked(es._1))
 
-    val revokeAction: UIO[Unit] = ZIO.foreachDiscard(revokedStreams) { case (tp, control) =>
-      val remaining = bufferedRecords.recs.getOrElse(tp, Chunk.empty)
-      for {
-        _ <- control.finishWith(
-               remaining.map(
-                 CommittableRecord(_, commit, getConsumerGroupMetadataIfAny)
-               )
-             )
-      } yield ()
-    }
+    val revokeAction: UIO[Unit] =
+      ZIO.foreachDiscard(revokedStreams) { case (tp, control) =>
+        val remaining = bufferedRecords.recs.getOrElse(tp, Chunk.empty)
 
-    val reqsIt = reqs.iterator
-    while (reqsIt.hasNext) {
-      val req = reqsIt.next()
-      if (revoked(req.tp)) {
-        buf -= req.tp
-      } else acc :+= req
-    }
+        control.finishWith(
+          remaining.map(
+            CommittableRecord(_, commit, getConsumerGroupMetadataIfAny)
+          )
+        )
+      }
 
-    revokeAction.as(Runloop.RevokeResult(acc, BufferedRecords.fromMutableMap(buf), assignedStreams))
+    val acc = ChunkBuilder.make[Runloop.Request]()
+    val buf = mutable.Map.empty[TopicPartition, Chunk[ByteArrayConsumerRecord]]
+    buf ++= bufferedRecords.recs
+    requests.foreach(req => if (isRevoked(req.tp)) buf -= req.tp else acc += req)
+    val unfulfilledRequests = acc.result()
+    val newBufferedRecords  = BufferedRecords.fromMutableMap(buf)
+
+    revokeAction.as(Runloop.RevokeResult(unfulfilledRequests, newBufferedRecords, assignedStreams))
   }
 
   /**
@@ -244,25 +239,20 @@ private[consumer] final class Runloop(
     bufferedRecords: BufferedRecords,
     records: ConsumerRecords[Array[Byte], Array[Byte]]
   ): UIO[Runloop.FulfillResult] = {
-    var acc = Chunk[Runloop.Request]()
-    val buf = mutable.Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]()
+    val acc = ChunkBuilder.make[Runloop.Request]()
+    val buf = mutable.Map.empty[TopicPartition, Chunk[ByteArrayConsumerRecord]]
     buf ++= bufferedRecords.recs
 
     var fulfillAction: UIO[_] = ZIO.unit
 
-    val reqsIt = pendingRequests.iterator
-    while (reqsIt.hasNext) {
-      val req           = reqsIt.next()
+    pendingRequests.foreach { req =>
       val bufferedChunk = buf.getOrElse(req.tp, Chunk.empty)
       val reqRecs       = records.records(req.tp)
 
       if (bufferedChunk.isEmpty && reqRecs.isEmpty) {
-        acc +:= req
+        acc += req
       } else {
-        val concatenatedChunk = bufferedChunk ++
-          Chunk.fromArray(
-            reqRecs.toArray[ByteArrayConsumerRecord](Array.ofDim[ByteArrayConsumerRecord](reqRecs.size))
-          )
+        val concatenatedChunk = bufferedChunk ++ Chunk.fromJavaIterable(reqRecs)
 
         fulfillAction = fulfillAction *> req.succeed(concatenatedChunk.map { record =>
           CommittableRecord(
@@ -274,8 +264,10 @@ private[consumer] final class Runloop(
         buf -= req.tp
       }
     }
+    val unfulfilledRequests = acc.result()
+    val newBufferedRecords  = BufferedRecords.fromMutableMap(buf)
 
-    fulfillAction.as(Runloop.FulfillResult(acc, BufferedRecords.fromMutableMap(buf)))
+    fulfillAction.as(Runloop.FulfillResult(unfulfilledRequests, newBufferedRecords))
   }
 
   private def getConsumerGroupMetadataIfAny: Option[ConsumerGroupMetadata] =
@@ -296,10 +288,9 @@ private[consumer] final class Runloop(
       val tp   = tpsIt.next()
       val recs = records.records(tp)
 
-      if (recs.size > 0)
-        builder += (tp -> Chunk.fromArray(
-          recs.toArray(Array.ofDim[ByteArrayConsumerRecord](recs.size))
-        ))
+      if (recs.size > 0) {
+        builder += (tp -> Chunk.fromJavaIterable(recs))
+      }
     }
 
     BufferedRecords.fromMap(builder.result())
