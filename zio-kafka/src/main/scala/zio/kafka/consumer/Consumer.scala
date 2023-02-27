@@ -351,14 +351,14 @@ object Consumer {
     for {
       wrapper <- ConsumerAccess.make(settings)
       runloop <- Runloop(
-                   settings.hasGroupId,
-                   wrapper,
-                   settings.pollInterval,
-                   settings.pollTimeout,
-                   diagnostics,
-                   settings.offsetRetrieval,
-                   settings.rebalanceListener,
-                   settings.restartStreamOnRebalancing
+                   hasGroupId = settings.hasGroupId,
+                   consumer = wrapper,
+                   pollFrequency = settings.pollInterval,
+                   pollTimeout = settings.pollTimeout,
+                   diagnostics = diagnostics,
+                   offsetRetrieval = settings.offsetRetrieval,
+                   userRebalanceListener = settings.rebalanceListener,
+                   restartStreamsOnRebalancing = settings.restartStreamOnRebalancing
                  )
     } yield Live(wrapper, settings, runloop)
 

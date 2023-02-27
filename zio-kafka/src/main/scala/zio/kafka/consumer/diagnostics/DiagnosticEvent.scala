@@ -2,6 +2,7 @@ package zio.kafka.consumer.diagnostics
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
+import zio.kafka.consumer.internal.Runloop.Command
 
 sealed trait DiagnosticEvent
 object DiagnosticEvent {
@@ -25,4 +26,6 @@ object DiagnosticEvent {
     final case class Assigned(partitions: Set[TopicPartition]) extends Rebalance
     final case class Lost(partitions: Set[TopicPartition])     extends Rebalance
   }
+
+  final case class RunloopEvent(command: Command) extends DiagnosticEvent
 }
