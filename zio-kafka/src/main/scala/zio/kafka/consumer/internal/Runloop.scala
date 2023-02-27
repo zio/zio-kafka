@@ -643,21 +643,6 @@ private[consumer] final class Runloop(
         }
         .orElseSucceed(state.addRequests(reqs))
     }
-//=======
-//      onTrue = if (restartStreamsOnRebalancing || !state.isSubscribed) {
-//        ZIO.foreachDiscard(reqs)(_.end).as(state)
-//      } else {
-//        ZIO.succeed(state.addRequests(reqs))
-//      },
-//      onFalse = consumer
-//        .withConsumer(_.assignment.asScala)
-//        .flatMap { assignment =>
-//          val (toQueue, toEnd) = reqs.partition(req => assignment.contains(req.tp))
-//          ZIO.foreach(toEnd)(_.end).as(state.addRequests(toQueue))
-//>>>>>>> origin/master
-//        }
-//        .orElseSucceed(state.addRequests(reqs))
-//    )
 
   private def handleCommit(state: State, cmd: Command.Commit): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
