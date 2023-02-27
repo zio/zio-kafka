@@ -495,12 +495,8 @@ private[consumer] final class Runloop(
       onFalse = consumer
         .withConsumer(_.assignment.asScala)
         .flatMap { assignment =>
-          ZIO.foldLeft(reqs)(state) { (state, req) =>
-            if (assignment.contains(req.tp))
-              ZIO.succeed(state.addRequest(req))
-            else
-              req.end.as(state)
-          }
+          val (toQueue, toEnd) = reqs.partition(req => assignment.contains(req.tp))
+          ZIO.foreach(toEnd)(_.end).as(state.addRequests(toQueue))
         }
         .orElseSucceed(state.addRequests(reqs))
     )
