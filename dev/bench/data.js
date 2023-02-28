@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1677573052641,
+  "lastUpdate": 1677598806732,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -988,6 +988,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1244281969.7450006,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "guizmaii@users.noreply.github.com",
+            "name": "Jules Ivanic",
+            "username": "guizmaii"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a3cb75256fd3fc4e13656c1ff61276a93d696e39",
+          "message": "Change level of internal to zio-kafka logs from INFO to DEBUG (#681)",
+          "timestamp": "2023-02-28T23:37:33+08:00",
+          "tree_id": "b6d5d91baeb3045aa83260ad41f30cde50ea8a43",
+          "url": "https://github.com/zio/zio-kafka/commit/a3cb75256fd3fc4e13656c1ff61276a93d696e39"
+        },
+        "date": 1677598806124,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1243547645.8378382,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
