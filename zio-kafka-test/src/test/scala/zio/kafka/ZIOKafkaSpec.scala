@@ -34,5 +34,5 @@ trait ZIOKafkaSpec extends ZIOSpecWithKafka {
               .now()} ${logLevel.label} [${annotations.map { case (k, v) => s"$k=$v" }
               .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint}"
         )
-    }.filterLogLevel(_ >= LogLevel.Info).map(_ => ())
+    }.filterLogLevel(_ >= LogLevel.Debug).map(_ => ())
 }

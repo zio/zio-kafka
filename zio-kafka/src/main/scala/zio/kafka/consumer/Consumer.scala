@@ -225,7 +225,7 @@ object Consumer {
         Subscription.unionAll(newSubscriptions) match {
           case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
           case Some(union) =>
-            ZIO.logInfo(s"Changing kafka subscription to $union") *>
+            ZIO.logDebug(s"Changing kafka subscription to $union") *>
               subscribe(union).as(newSubscriptions.toSet)
         }
       }
@@ -236,9 +236,9 @@ object Consumer {
 
         (newUnion match {
           case Some(union) =>
-            ZIO.logInfo(s"Reducing kafka subscription to $union") *> subscribe(union)
+            ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union)
           case None =>
-            ZIO.logInfo(s"Unsubscribing kafka consumer") *> unsubscribe
+            ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe
         }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
       }
 
