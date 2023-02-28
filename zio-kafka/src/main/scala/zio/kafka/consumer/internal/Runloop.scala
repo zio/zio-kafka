@@ -96,7 +96,7 @@ private[consumer] final class Runloop(
       (lost, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Lost(lost))
     )
 
-    lazy val revokeTopics = RebalanceListener(
+    def revokeTopics = RebalanceListener(
       onAssigned = (assigned, _) =>
         lastRebalanceEvent.updateZIO {
           case None =>
