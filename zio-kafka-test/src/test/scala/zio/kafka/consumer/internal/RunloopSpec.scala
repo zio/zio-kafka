@@ -5,7 +5,7 @@ import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Runloop.Command
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 import zio.kafka.embedded.Kafka
-import zio.test.TestAspect.nonFlaky
+import zio.test.TestAspect.flaky
 import zio.test._
 import zio.{ durationInt, Scope, ZIO }
 
@@ -53,7 +53,7 @@ object RunloopSpec extends ZIOKafkaSpec {
           afterCycle_3.isEmpty,
           afterCycle_4.size == 1 && afterCycle_4.head == DiagnosticEvent.RunloopEvent(Command.Poll)
         )
-      } @@ nonFlaky(10)
+      } @@ flaky
     )
 
   override def spec: Spec[TestEnvironment with Kafka with Scope, Any] =
