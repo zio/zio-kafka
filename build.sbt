@@ -88,7 +88,7 @@ lazy val root = project
     zioKafka,
     zioKafkaTestUtils,
     zioKafkaTest,
-    zioKafkaBench,
+    zioKafkaBench
   )
 
 def buildInfoSettings(packageName: String) =

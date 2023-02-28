@@ -54,3 +54,21 @@ jobs:
           check-latest: true
       - name: Run tests
         run: sbt ++${{ matrix.scala }} test
+
+  validate_doc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Cache scala dependencies
+        uses: coursier/cache-action@v6
+      - name: Setup Java
+        uses: actions/setup-java@v3.10.0
+        with:
+          distribution: temurin
+          java-version: 17
+          check-latest: true
+      - name: Validate documentation
+        run: sbt doc
