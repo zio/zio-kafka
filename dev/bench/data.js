@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1677598806732,
+  "lastUpdate": 1677661618325,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -1018,6 +1018,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1243547645.8378382,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "guizmaii@users.noreply.github.com",
+            "name": "Jules Ivanic",
+            "username": "guizmaii"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a1c00902dad5324d1d8b568687d3f27d25d63bbf",
+          "message": "Review usage of lazy values (#680)",
+          "timestamp": "2023-03-01T17:04:23+08:00",
+          "tree_id": "c4ad3fbc7b440b3c9c138ca88e86c80bd8d6ab7e",
+          "url": "https://github.com/zio/zio-kafka/commit/a1c00902dad5324d1d8b568687d3f27d25d63bbf"
+        },
+        "date": 1677661617736,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1988630716.2052946,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
