@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1677661618325,
+  "lastUpdate": 1677685656537,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -1048,6 +1048,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1988630716.2052946,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@users.noreply.github.com",
+            "name": "svroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7cff1abec1175b7444f1011f63b3c5693ac06ba0",
+          "message": "Improve docs for partitionedStream (#682)",
+          "timestamp": "2023-03-01T16:44:56+01:00",
+          "tree_id": "3d83358e1adce29d22b9b6360eac02c64e5f0ad7",
+          "url": "https://github.com/zio/zio-kafka/commit/7cff1abec1175b7444f1011f63b3c5693ac06ba0"
+        },
+        "date": 1677685655926,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1243101940.0809484,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
