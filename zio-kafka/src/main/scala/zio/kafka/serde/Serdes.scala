@@ -9,15 +9,15 @@ import java.nio.ByteBuffer
 import java.util.UUID
 
 private[zio] trait Serdes {
-  lazy val long: Serde[Any, Long]     = convertPrimitiveSerde(KafkaSerdes.Long()).inmap(Long2long)(long2Long)
-  lazy val int: Serde[Any, Int]       = convertPrimitiveSerde(KafkaSerdes.Integer()).inmap(Integer2int)(int2Integer)
-  lazy val short: Serde[Any, Short]   = convertPrimitiveSerde(KafkaSerdes.Short()).inmap(Short2short)(short2Short)
-  lazy val float: Serde[Any, Float]   = convertPrimitiveSerde(KafkaSerdes.Float()).inmap(Float2float)(float2Float)
-  lazy val double: Serde[Any, Double] = convertPrimitiveSerde(KafkaSerdes.Double()).inmap(Double2double)(double2Double)
-  lazy val string: Serde[Any, String] = convertPrimitiveSerde(KafkaSerdes.String())
-  lazy val bytes: Serde[Any, Bytes]   = convertPrimitiveSerde(KafkaSerdes.Bytes())
-  lazy val byteBuffer: Serde[Any, ByteBuffer] = convertPrimitiveSerde(KafkaSerdes.ByteBuffer())
-  lazy val uuid: Serde[Any, UUID]             = convertPrimitiveSerde(KafkaSerdes.UUID())
+  val long: Serde[Any, Long]     = convertPrimitiveSerde(KafkaSerdes.Long()).inmap(Long2long)(long2Long)
+  val int: Serde[Any, Int]       = convertPrimitiveSerde(KafkaSerdes.Integer()).inmap(Integer2int)(int2Integer)
+  val short: Serde[Any, Short]   = convertPrimitiveSerde(KafkaSerdes.Short()).inmap(Short2short)(short2Short)
+  val float: Serde[Any, Float]   = convertPrimitiveSerde(KafkaSerdes.Float()).inmap(Float2float)(float2Float)
+  val double: Serde[Any, Double] = convertPrimitiveSerde(KafkaSerdes.Double()).inmap(Double2double)(double2Double)
+  val string: Serde[Any, String] = convertPrimitiveSerde(KafkaSerdes.String())
+  val bytes: Serde[Any, Bytes]   = convertPrimitiveSerde(KafkaSerdes.Bytes())
+  val byteBuffer: Serde[Any, ByteBuffer] = convertPrimitiveSerde(KafkaSerdes.ByteBuffer())
+  val uuid: Serde[Any, UUID]             = convertPrimitiveSerde(KafkaSerdes.UUID())
 
   /**
    * Optimisation
@@ -27,7 +27,7 @@ private[zio] trait Serdes {
    *
    * That allows us to use [[ZIO.succeed]] instead of [[ZIO.attempt]].
    */
-  lazy val byteArray: Serde[Any, Array[Byte]] =
+  val byteArray: Serde[Any, Array[Byte]] =
     new Serde[Any, Array[Byte]] {
       override final def serialize(topic: String, headers: Headers, value: Array[Byte]): RIO[Any, Array[Byte]] =
         ZIO.succeed(value)

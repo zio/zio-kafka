@@ -49,7 +49,6 @@ import org.apache.kafka.common.{
   Uuid
 }
 import zio._
-
 import zio.kafka.admin.acl._
 
 import java.util.Optional
@@ -938,7 +937,7 @@ object AdminClient {
     fromKafkaFuture(kfv).unit
 
   final case class ConfigResource(`type`: ConfigResourceType, name: String) {
-    lazy val asJava = new JConfigResource(`type`.asJava, name)
+    lazy val asJava: JConfigResource = new JConfigResource(`type`.asJava, name)
   }
 
   object ConfigResource {
@@ -952,27 +951,28 @@ object AdminClient {
 
   object ConfigResourceType {
     case object BrokerLogger extends ConfigResourceType {
-      lazy val asJava = JConfigResource.Type.BROKER_LOGGER
+      override def asJava = JConfigResource.Type.BROKER_LOGGER
     }
 
     case object Broker extends ConfigResourceType {
-      lazy val asJava = JConfigResource.Type.BROKER
+      override def asJava = JConfigResource.Type.BROKER
     }
 
     case object Topic extends ConfigResourceType {
-      lazy val asJava = JConfigResource.Type.TOPIC
+      override def asJava = JConfigResource.Type.TOPIC
     }
 
     case object Unknown extends ConfigResourceType {
-      lazy val asJava = JConfigResource.Type.UNKNOWN
+      override def asJava = JConfigResource.Type.UNKNOWN
     }
 
-    def apply(jcrt: JConfigResource.Type): ConfigResourceType = jcrt match {
-      case JConfigResource.Type.BROKER_LOGGER => BrokerLogger
-      case JConfigResource.Type.BROKER        => Broker
-      case JConfigResource.Type.TOPIC         => Topic
-      case JConfigResource.Type.UNKNOWN       => Unknown
-    }
+    def apply(jcrt: JConfigResource.Type): ConfigResourceType =
+      jcrt match {
+        case JConfigResource.Type.BROKER_LOGGER => BrokerLogger
+        case JConfigResource.Type.BROKER        => Broker
+        case JConfigResource.Type.TOPIC         => Topic
+        case JConfigResource.Type.UNKNOWN       => Unknown
+      }
   }
 
   sealed trait ConsumerGroupState {
@@ -1004,14 +1004,15 @@ object AdminClient {
       override def asJava: JConsumerGroupState = JConsumerGroupState.EMPTY
     }
 
-    def apply(state: JConsumerGroupState): ConsumerGroupState = state match {
-      case JConsumerGroupState.UNKNOWN              => ConsumerGroupState.Unknown
-      case JConsumerGroupState.PREPARING_REBALANCE  => ConsumerGroupState.PreparingRebalance
-      case JConsumerGroupState.COMPLETING_REBALANCE => ConsumerGroupState.CompletingRebalance
-      case JConsumerGroupState.STABLE               => ConsumerGroupState.Stable
-      case JConsumerGroupState.DEAD                 => ConsumerGroupState.Dead
-      case JConsumerGroupState.EMPTY                => ConsumerGroupState.Empty
-    }
+    def apply(state: JConsumerGroupState): ConsumerGroupState =
+      state match {
+        case JConsumerGroupState.UNKNOWN              => ConsumerGroupState.Unknown
+        case JConsumerGroupState.PREPARING_REBALANCE  => ConsumerGroupState.PreparingRebalance
+        case JConsumerGroupState.COMPLETING_REBALANCE => ConsumerGroupState.CompletingRebalance
+        case JConsumerGroupState.STABLE               => ConsumerGroupState.Stable
+        case JConsumerGroupState.DEAD                 => ConsumerGroupState.Dead
+        case JConsumerGroupState.EMPTY                => ConsumerGroupState.Empty
+      }
   }
 
   final case class MemberDescription(
@@ -1153,19 +1154,19 @@ object AdminClient {
 
   object AlterConfigOpType {
     case object Set extends AlterConfigOpType {
-      lazy val asJava = JAlterConfigOp.OpType.SET
+      override def asJava = JAlterConfigOp.OpType.SET
     }
 
     case object Delete extends AlterConfigOpType {
-      lazy val asJava = JAlterConfigOp.OpType.DELETE
+      override def asJava = JAlterConfigOp.OpType.DELETE
     }
 
     case object Append extends AlterConfigOpType {
-      lazy val asJava = JAlterConfigOp.OpType.APPEND
+      override def asJava = JAlterConfigOp.OpType.APPEND
     }
 
     case object Substract extends AlterConfigOpType {
-      lazy val asJava = JAlterConfigOp.OpType.SUBTRACT
+      override def asJava = JAlterConfigOp.OpType.SUBTRACT
     }
   }
 
@@ -1260,7 +1261,7 @@ object AdminClient {
   }
 
   final case class TopicPartitionInfo(partition: Int, leader: Option[Node], replicas: List[Node], isr: List[Node]) {
-    lazy val asJava =
+    lazy val asJava: JTopicPartitionInfo =
       new JTopicPartitionInfo(
         partition,
         leader.map(_.asJava).getOrElse(JNode.noNode()),
