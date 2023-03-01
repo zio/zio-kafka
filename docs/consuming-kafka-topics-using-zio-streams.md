@@ -53,11 +53,11 @@ import zio.Clock, zio.Console.printLine
 import zio.kafka.consumer._
 
 Consumer.partitionedStream(Subscription.topics("topic150"), Serde.string, Serde.string)
-  .tap(tpAndStr => printLine(s"topic: ${tpAndStr._1.topic}, partition: ${tpAndStr._1.partition}"))
-  .flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) => 
-    partitionStream
-      .tap(cr => printLine(s"key: ${cr.record.key}, value: ${cr.record.value}")) // Replace with a custom message handling effect
-      .map(_.offset)
+  .flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
+    ZStream.fromZIO(printLine(s"Starting stream for topic '${topicPartition.topic}' partition ${topicPartition.partition}")) *>
+      partitionStream
+        .tap(record => printLine(s"key: ${record.key}, value: ${record.value}")) // Replace with a custom message handling effect
+        .map(_.offset)
   }
   .aggregateAsync(Consumer.offsetBatches)
   .mapZIO(_.commit)
