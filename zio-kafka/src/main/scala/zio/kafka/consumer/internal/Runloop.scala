@@ -529,13 +529,15 @@ private[consumer] final class Runloop(
     cmd match {
       case Command.Poll =>
         // The consumer will throw an IllegalStateException if no call to subscribe
-        if (state.isSubscribed) handlePoll(state) else ZIO.succeed(state)
+        if (state.isSubscribed)
+          handlePoll(state).tap(state => commandQueue.offer(Command.Poll).when(state.pendingRequests.nonEmpty))
+        else ZIO.succeed(state)
       case Command.Requests(reqs) =>
         handleRequests(state, reqs).flatMap { state =>
           // Optimization: eagerly poll if we have pending requests instead of waiting
           // for the next scheduled poll.
           if (state.pendingRequests.nonEmpty) {
-            if (state.isSubscribed) handlePoll(state)
+            if (state.isSubscribed) commandQueue.offer(Command.Poll).as(state)
             else
               ZIO.fail(
                 new IllegalStateException(
@@ -611,20 +613,19 @@ private[consumer] final class Runloop(
       _ => command.succeed.as(state.copy(subscription = command.subscription))
     )
 
-  def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Unit]] =
-    ZStream
+  def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] =
+    (ZStream
       .mergeAll(3, 1)(
-        ZStream.repeatWithSchedule(Command.Poll, Schedule.fixed(pollFrequency)),
-        ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
-        ZStream.fromQueue(commandQueue)
+        ZStream.repeatZIOWithSchedule(commandQueue.offer(Command.Poll), Schedule.fixed(pollFrequency)).drain,
+        ZStream.fromQueue(commandQueue),
+        ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c)))
       )
       .tap(cmd => diagnostics.emitIfEnabled(DiagnosticEvent.RunloopEvent(cmd)))
       .runFoldZIO(State.initial) { (state, cmd) =>
         ZIO.ifZIO(isShutdown)(onTrue = handleShutdown(state, cmd), onFalse = handleOperational(state, cmd))
       }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
-      .onError(cause => partitions.offer(Take.failCause(cause)))
-      .unit
+      .onError(cause => partitions.offer(Take.failCause(cause))))
       .forkScoped
 }
 
