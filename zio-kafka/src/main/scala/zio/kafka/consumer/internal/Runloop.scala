@@ -78,8 +78,10 @@ private[consumer] final class Runloop(
     Promise
       .make[Throwable, Unit]
       .flatMap { cont =>
-        commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
-          cont.await
+        ZIO.logTrace(s"Enqueuing ChangeSubscription command. subscription=${subscription}") *>
+          commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
+          cont.await *>
+          ZIO.logTrace(s"Done awaiting ChangeSubscription command. subscription=${subscription}")
       }
       .unlessZIO(isShutdown)
       .unit
@@ -614,19 +616,36 @@ private[consumer] final class Runloop(
     )
 
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] =
-    (ZStream
-      .mergeAll(3, 1)(
-        ZStream.repeatZIOWithSchedule(commandQueue.offer(Command.Poll), Schedule.fixed(pollFrequency)).drain,
-        ZStream.fromQueue(commandQueue),
-        ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c)))
-      )
-      .tap(cmd => diagnostics.emitIfEnabled(DiagnosticEvent.RunloopEvent(cmd)))
-      .runFoldZIO(State.initial) { (state, cmd) =>
-        ZIO.ifZIO(isShutdown)(onTrue = handleShutdown(state, cmd), onFalse = handleOperational(state, cmd))
-      }
-      .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
-      .onError(cause => partitions.offer(Take.failCause(cause))))
-      .forkScoped
+    Promise.make[Nothing, Unit].flatMap { initialized =>
+      (ZStream
+        .mergeAll(3, 1)(
+          // Poll commands repeatedly until we're getting requests to drive the polling
+          ZStream.repeat(Command.Poll).interruptWhen(initialized),
+          ZStream.fromQueue(commandQueue),
+          (ZStream
+            .fromQueue(requestQueue)
+            .mapChunks(c => Chunk.single(Command.Requests(c)))
+            .tap(_ => initialized.succeed(()))
+            .timeout(pollFrequency) concat
+            ZStream
+              .fromZIO(initialized.isDone)
+              .mapConcatZIO(isInitialized =>
+                if (isInitialized) {
+                  ZIO.logInfo("Executing poll because no requests").as(List(Command.Poll))
+                } else {
+                  ZIO.succeed(List.empty[Command])
+                }
+              )).forever // Execute a poll if we haven't seen any requests in `pollFrequency`
+        )
+        .tap(cmd => diagnostics.emitIfEnabled(DiagnosticEvent.RunloopEvent(cmd)))
+        // TODO something to poll if we haven't seen a request in a while.. Gotta keep up to date with rebalances and stuff
+        .runFoldZIO(State.initial) { (state, cmd) =>
+          ZIO.ifZIO(isShutdown)(onTrue = handleShutdown(state, cmd), onFalse = handleOperational(state, cmd))
+        }
+        .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
+        .onError(cause => partitions.offer(Take.failCause(cause))))
+        .forkScoped
+    }
 }
 
 private[consumer] object Runloop {
@@ -721,8 +740,8 @@ private[consumer] object Runloop {
   ): ZIO[Scope, Throwable, Runloop] =
     for {
       rebalancingRef     <- Ref.make(false)
-      requestQueue       <- ZIO.acquireRelease(Queue.unbounded[Runloop.Request])(_.shutdown)
-      commandQueue       <- ZIO.acquireRelease(Queue.unbounded[Command])(_.shutdown)
+      requestQueue       <- ZIO.acquireRelease(Queue.bounded[Runloop.Request](1024))(_.shutdown)
+      commandQueue       <- ZIO.acquireRelease(Queue.bounded[Command](1024))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       partitions <- ZIO.acquireRelease(
                       Queue
@@ -730,7 +749,7 @@ private[consumer] object Runloop {
                           Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
                         ]
                     )(_.shutdown)
-      shutdownRef     <- Ref.make(false)
+      shutdownRef     <- ZIO.acquireRelease(Ref.make(false))(_.set(true) *> ZIO.logTrace("Set shutdownRef to true"))
       currentStateRef <- Ref.make(State.initial)
       runtime         <- ZIO.runtime[Any]
       runloop = new Runloop(
