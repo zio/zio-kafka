@@ -1034,7 +1034,44 @@ object ConsumerSpec extends ZIOKafkaSpec {
 //          testForPartitionAssignmentStrategy[CooperativeStickyAssignor] // TODO not yet supported
         )
 
-      }: _*) @@ TestAspect.nonFlaky(3)
+      }: _*) @@ TestAspect.nonFlaky(3),
+      test("a new stream polls the java consumer") {
+        for {
+          topic      <- randomTopic
+          clientId   <- randomClient
+          _          <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic))
+          settings   <- consumerSettings(clientId)
+          consumer   <- Consumer.make(settings.withPollTimeout(50.millis))
+          recordsOut <- Queue.unbounded[Unit]
+          _          <- produceOne(topic, "key1", "message1")
+          _ <- consumer
+                 .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                 .debug
+                 .foreach(_ => recordsOut.offer(()))
+                 .forkScoped
+          _ <- recordsOut.take
+        } yield assertCompletes
+      },
+      test("running streams don't stall after a poll timeout") {
+        for {
+          topic      <- randomTopic
+          clientId   <- randomClient
+          _          <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic))
+          settings   <- consumerSettings(clientId)
+          consumer   <- Consumer.make(settings.withPollTimeout(50.millis))
+          recordsOut <- Queue.unbounded[Unit]
+          _          <- produceOne(topic, "key1", "message1")
+          _ <- consumer
+                 .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                 .debug
+                 .foreach(_ => recordsOut.offer(()))
+                 .forkScoped
+          _ <- recordsOut.take       // first record consumed
+          _ <- ZIO.sleep(200.millis) // wait for `pollTimeout`
+          _ <- produceOne(topic, "key2", "message2")
+          _ <- recordsOut.take
+        } yield assertCompletes
+      }
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
     ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(180.seconds)
