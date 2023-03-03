@@ -546,7 +546,10 @@ private[consumer] final class Runloop(
                   s"Should Never Happen: Some requests are pending but the consumer is not subscribed. Current State: $state"
                 )
               )
-          } else ZIO.succeed(state)
+          } else {
+            ZIO.logWarning("Not doing a poll after requests.") *>
+              ZIO.succeed(state)
+          }
         }
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
@@ -629,12 +632,8 @@ private[consumer] final class Runloop(
             .timeout(pollFrequency) concat
             ZStream
               .fromZIO(initialized.isDone)
-              .mapConcatZIO(isInitialized =>
-                if (isInitialized) {
-                  ZIO.logInfo("Executing poll because no requests").as(List(Command.Poll))
-                } else {
-                  ZIO.succeed(List.empty[Command])
-                }
+              .mapConcat(isInitialized =>
+                Option.when(isInitialized)(Command.Poll)
               )).forever // Execute a poll if we haven't seen any requests in `pollFrequency`
         )
         .tap(cmd => diagnostics.emitIfEnabled(DiagnosticEvent.RunloopEvent(cmd)))
