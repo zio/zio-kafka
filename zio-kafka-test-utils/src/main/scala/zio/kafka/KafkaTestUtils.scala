@@ -70,7 +70,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
-    `max.poll.records`: Int = 10,
+    `max.poll.records`: Int = 100,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
@@ -81,8 +81,10 @@ object KafkaTestUtils {
           ConsumerConfig.AUTO_OFFSET_RESET_CONFIG        -> "earliest",
           ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",
           ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "3000",
-          ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "250",
+          ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG     -> "10000",
+          ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "1000",
           ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> s"${`max.poll.records`}",
+          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "100",
           ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
         .withPerPartitionChunkPrefetch(16)
