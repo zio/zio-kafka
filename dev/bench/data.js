@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1677685656537,
+  "lastUpdate": 1678039173366,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -1078,6 +1078,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
             "value": 1243101940.0809484,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ouertani@gmail.com",
+            "name": "slim",
+            "username": "ouertani"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "062a53709374ecead129cbc81e52e08e1ffbaeaf",
+          "message": "doc: remove extra clock from consumer documentation (#685)",
+          "timestamp": "2023-03-05T18:56:55+01:00",
+          "tree_id": "f83e699bdd7671bd4bbdc951f4091ed3eeddd17f",
+          "url": "https://github.com/zio/zio-kafka/commit/062a53709374ecead129cbc81e52e08e1ffbaeaf"
+        },
+        "date": 1678039172635,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1990664343.3712785,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
