@@ -617,7 +617,7 @@ private[consumer] final class Runloop(
             ZStream
               .fromZIO(isRebalancing)
               .mapConcat { isRebalancing =>
-                Option.when(isRebalancing)(Command.Poll)
+                if (isRebalancing) Some(Command.Poll) else None
               }).forever // Execute a poll if we haven't seen any requests in `pollFrequency`.
           // This is needed when rebalancing after all partitions were revoked and there are no pending requests
         )
