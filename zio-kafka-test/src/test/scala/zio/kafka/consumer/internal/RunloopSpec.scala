@@ -59,5 +59,5 @@ object RunloopSpec extends ZIOKafkaSpec {
   override def spec: Spec[TestEnvironment with Kafka with Scope, Any] =
     suite("Runloop")(
       runSpec
-    )
+    ) @@ TestAspect.timeout(180.seconds)
 }
