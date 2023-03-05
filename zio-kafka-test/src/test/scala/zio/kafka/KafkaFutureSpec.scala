@@ -62,7 +62,7 @@ object KafkaFutureSpec extends ZIOSpecDefault {
           }
         }
       } @@ flaky
-    )
+    ) @@ TestAspect.timeout(180.seconds)
 
   def withKafkaFuture: ZIO[Scope, Nothing, KafkaFutureImpl[Boolean]] =
     ZIO.acquireRelease {

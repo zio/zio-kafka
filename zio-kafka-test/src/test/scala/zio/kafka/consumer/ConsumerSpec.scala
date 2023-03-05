@@ -1009,8 +1009,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
       }: _*) @@ TestAspect.nonFlaky(3)
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
-    ) @@ withLiveClock @@
-//      TestAspect.sequential @@
-      timeout(180.seconds)
+    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(180.seconds)
 
 }
