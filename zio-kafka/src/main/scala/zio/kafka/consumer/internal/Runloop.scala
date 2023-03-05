@@ -80,10 +80,8 @@ private[consumer] final class Runloop(
     Promise
       .make[Throwable, Unit]
       .flatMap { cont =>
-        ZIO.logTrace(s"Enqueuing ChangeSubscription command. subscription=${subscription}") *>
-          commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
-          cont.await *>
-          ZIO.logTrace(s"Done awaiting ChangeSubscription command. subscription=${subscription}")
+        commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
+          cont.await
       }
       .unlessZIO(isShutdown)
       .unit
