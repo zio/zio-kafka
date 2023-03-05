@@ -48,7 +48,9 @@ private[consumer] final class Runloop(
     for {
       interruptionPromise <- Promise.make[Throwable, Unit]
       drainQueue          <- Queue.unbounded[Take[Nothing, ByteArrayCommittableRecord]]
-      stream = ZStream.repeatZIOChunkOption {
+      stream = ZStream.finalizer(
+                 ZIO.logDebug(s"Partition stream for ${tp.toString} has ended")
+               ) *> ZStream.repeatZIOChunkOption {
                  for {
                    request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
                    _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
@@ -213,11 +215,12 @@ private[consumer] final class Runloop(
       ZIO.foreachDiscard(revokedStreams) { case (tp, control) =>
         val remaining = bufferedRecords.recs.getOrElse(tp, Chunk.empty)
 
-        control.finishWith(
-          remaining.map(
-            CommittableRecord(_, commit, getConsumerGroupMetadataIfAny)
+        ZIO.logDebug(s"Revoking topic-partition ${tp} with ${remaining.size} remaining records") *>
+          control.finishWith(
+            remaining.map(
+              CommittableRecord(_, commit, getConsumerGroupMetadataIfAny)
+            )
           )
-        )
       }
 
     val acc = ChunkBuilder.make[Runloop.Request]()
@@ -227,7 +230,13 @@ private[consumer] final class Runloop(
     val unfulfilledRequests = acc.result()
     val newBufferedRecords  = BufferedRecords.fromMutableMap(buf)
 
-    revokeAction.as(Runloop.RevokeResult(unfulfilledRequests, newBufferedRecords, assignedStreams))
+    val endRevokedRequests = ZIO.foreachDiscard(requests.filter(req => isRevoked(req.tp))) { req =>
+      ZIO.logInfo(s"Ending request for TP ${req.tp}") *> req.end.unit
+    }
+
+    endRevokedRequests *> revokeAction.as(
+      Runloop.RevokeResult(unfulfilledRequests, newBufferedRecords, assignedStreams)
+    )
   }
 
   /**
@@ -485,22 +494,6 @@ private[consumer] final class Runloop(
       state.subscription
     )
 
-  private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): UIO[State] =
-    ZIO.ifZIO(isRebalancing)(
-      onTrue = if (restartStreamsOnRebalancing || !state.isSubscribed) {
-        ZIO.foreachDiscard(reqs)(_.end).as(state)
-      } else {
-        ZIO.succeed(state.addRequests(reqs))
-      },
-      onFalse = consumer
-        .withConsumer(_.assignment.asScala)
-        .flatMap { assignment =>
-          val (toQueue, toEnd) = reqs.partition(req => assignment.contains(req.tp))
-          ZIO.foreach(toEnd)(_.end).as(state.addRequests(toQueue))
-        }
-        .orElseSucceed(state.addRequests(reqs))
-    )
-
   private def handleCommit(state: State, cmd: Command.Commit): UIO[State] =
     ZIO.ifZIO(isRebalancing)(
       onTrue = ZIO.succeed(state.addCommit(cmd)),
@@ -535,22 +528,15 @@ private[consumer] final class Runloop(
           handlePoll(state).tap(state => commandQueue.offer(Command.Poll).when(state.pendingRequests.nonEmpty))
         else ZIO.succeed(state)
       case Command.Requests(reqs) =>
-        handleRequests(state, reqs).flatMap { state =>
-          // Optimization: eagerly poll if we have pending requests instead of waiting
-          // for the next scheduled poll.
-          if (state.pendingRequests.nonEmpty) {
-            if (state.isSubscribed) commandQueue.offer(Command.Poll).as(state)
-            else
-              ZIO.fail(
-                new IllegalStateException(
-                  s"Should Never Happen: Some requests are pending but the consumer is not subscribed. Current State: $state"
-                )
-              )
-          } else {
-            ZIO.logWarning("Not doing a poll after requests.") *>
-              ZIO.succeed(state)
-          }
-        }
+        // Optimization: eagerly poll if we have pending requests instead of waiting
+        // for the next scheduled poll.
+        if (state.isSubscribed) commandQueue.offer(Command.Poll).as(state.addRequests(reqs))
+        else
+          ZIO.fail(
+            new IllegalStateException(
+              s"Should Never Happen: Some requests are pending but the consumer is not subscribed. Current State: $state"
+            )
+          )
       case cmd @ Command.Commit(_, _) =>
         handleCommit(state, cmd)
       case cmd @ Command.ChangeSubscription(_, _, _) =>
@@ -632,9 +618,10 @@ private[consumer] final class Runloop(
             .timeout(pollFrequency) concat
             ZStream
               .fromZIO(initialized.isDone)
-              .mapConcat(isInitialized =>
+              .mapConcat { isInitialized =>
                 Option.when(isInitialized)(Command.Poll)
-              )).forever // Execute a poll if we haven't seen any requests in `pollFrequency`
+              }).forever // Execute a poll if we haven't seen any requests in `pollFrequency`.
+          // This is needed when rebalancing after all partitions were revoked and there are no pending requests
         )
         .tap(cmd => diagnostics.emitIfEnabled(DiagnosticEvent.RunloopEvent(cmd)))
         // TODO something to poll if we haven't seen a request in a while.. Gotta keep up to date with rebalances and stuff
