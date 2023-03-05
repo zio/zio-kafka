@@ -528,7 +528,10 @@ private[consumer] final class Runloop(
       case Command.Requests(reqs) =>
         // Optimization: eagerly poll if we have pending requests instead of waiting
         // for the next scheduled poll.
-        if (state.isSubscribed) commandQueue.offer(Command.Poll).as(state.addRequests(reqs))
+        if (state.isSubscribed)
+          handlePoll(state.addRequests(reqs)).tap(state =>
+            commandQueue.offer(Command.Poll).when(state.pendingRequests.nonEmpty)
+          )
         else
           ZIO.fail(
             new IllegalStateException(
