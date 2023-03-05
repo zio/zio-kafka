@@ -541,32 +541,34 @@ object ConsumerSpec extends ZIOKafkaSpec {
 
         final case class ValidAssignmentsNotSeen(st: String) extends RuntimeException(s"Valid assignment not seen: $st")
 
-        def run(instance: Int, topic: String, allAssignments: Ref[Map[Int, List[Int]]]) = {
-          val subscription = Subscription.topics(topic)
-          Consumer
-            .partitionedStream(subscription, Serde.string, Serde.string)
-            .map { case (tp, partStream) =>
-              val registerAssignment = ZStream.fromZIO(allAssignments.update { current =>
-                current.get(instance) match {
-                  case Some(currentList) => current.updated(instance, currentList :+ tp.partition())
-                  case None              => current.updated(instance, List(tp.partition()))
-                }
-              })
-              val deregisterAssignment = ZStream.fromZIO(allAssignments.update({ current =>
-                current.get(instance) match {
-                  case Some(currentList) =>
-                    val idx = currentList.indexOf(tp.partition())
-                    if (idx != -1) current.updated(instance, currentList.patch(idx, Nil, 1))
-                    else current
-                  case None => current
-                }
-              }))
+        def run(instance: Int, topic: String, allAssignments: Ref[Map[Int, List[Int]]]) =
+          ZIO.logAnnotate("consumer", instance.toString) {
+            val subscription = Subscription.topics(topic)
+            Consumer
+              .partitionedStream(subscription, Serde.string, Serde.string)
+              .flatMapPar(Int.MaxValue) { case (tp, partStream) =>
+                val registerAssignment = ZStream.logInfo(s"Registering partition ${tp.partition()}") *>
+                  ZStream.fromZIO(allAssignments.update { current =>
+                    current.get(instance) match {
+                      case Some(currentList) => current.updated(instance, currentList :+ tp.partition())
+                      case None              => current.updated(instance, List(tp.partition()))
+                    }
+                  })
+                val deregisterAssignment = ZStream.logInfo(s"Deregistering partition ${tp.partition()}") *>
+                  ZStream.fromZIO(allAssignments.update({ current =>
+                    current.get(instance) match {
+                      case Some(currentList) =>
+                        val idx = currentList.indexOf(tp.partition())
+                        if (idx != -1) current.updated(instance, currentList.patch(idx, Nil, 1))
+                        else current
+                      case None => current
+                    }
+                  }))
 
-              registerAssignment.drain ++ partStream.schedule(Schedule.fixed(10.millis)) ++ deregisterAssignment.drain
-            }
-            .flattenParUnbounded()
-            .runDrain
-        }
+                registerAssignment.drain ++ partStream ++ deregisterAssignment.drain
+              }
+              .runDrain
+          }
 
         def checkAssignments(allAssignments: Ref[Map[Int, List[Int]]])(instances: Set[Int]) =
           ZStream
@@ -828,6 +830,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
          */
         def testForPartitionAssignmentStrategy[T <: ConsumerPartitionAssignor: ClassTag] =
           test(implicitly[ClassTag[T]].runtimeClass.getName) {
+            println("Starting test")
             val partitionCount                                    = 6
             val messageCount                                      = 5000
             val allMessages                                       = (1 to messageCount).map(i => s"$i" -> f"msg$i%06d")
@@ -857,7 +860,11 @@ object ConsumerSpec extends ZIOKafkaSpec {
             ): ZIO[Kafka, Throwable, Unit] =
               ZIO.logAnnotate("consumer", name) {
                 for {
-                  consumedMessagesCounter      <- Ref.make(0)
+                  consumedMessagesCounter <- Ref.make(0)
+                  _ <- consumedMessagesCounter.get
+                         .flatMap(consumed => ZIO.logInfo(s"Consumed so far: ${consumed}"))
+                         .repeat(Schedule.fixed(1.second))
+                         .fork
                   streamCompleteOnRebalanceRef <- Ref.make[Option[Promise[Nothing, Unit]]](None)
                   tConsumer <-
                     Consumer
@@ -874,7 +881,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                  .mapChunksZIO { records =>
                                    ZIO.scoped {
                                      for {
-                                       _ <- consumedMessagesCounter.update(_ + records.size)
                                        t <- tProducer.createTransaction
                                        _ <- t.produceChunkBatch(
                                               records.map(r => new ProducerRecord(toTopic, r.key, r.value)),
@@ -882,6 +888,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                               Serde.string,
                                               OffsetBatch(records.map(_.offset))
                                             )
+                                       _ <- consumedMessagesCounter.update(_ + records.size)
                                      } yield Chunk.empty
                                    }.uninterruptible
                                  }
@@ -890,8 +897,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                    for {
                                      _ <- streamCompleteOnRebalanceRef.set(None)
                                      _ <- p.succeed(())
-                                     c <- consumedMessagesCounter.get
-                                     _ <- ZIO.logInfo(s"Consumed $c messages")
+//                                     c <- consumedMessagesCounter.get
+//                                     _ <- ZIO.logInfo(s"Consumed $c messages")
                                    } yield ()
                                  }
                         } yield s
@@ -908,7 +915,14 @@ object ConsumerSpec extends ZIOKafkaSpec {
                               implicitly[ClassTag[T]].runtimeClass.getName,
                             ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200"
                           ),
-                          rebalanceListener = transactionalRebalanceListener(streamCompleteOnRebalanceRef)
+                          rebalanceListener = transactionalRebalanceListener(streamCompleteOnRebalanceRef),
+                          diagnostics = {
+                            case e: DiagnosticEvent.Rebalance =>
+                              ZIO.logInfo(e.toString)
+//                            case DiagnosticEvent.RunloopEvent(Runloop.Command.Poll) =>
+//                              ZIO.logInfo("Doing a poll")
+                            case _ => ZIO.unit
+                          }
                         )
                       )
                       .tapError(e => ZIO.logError(s"Error: ${e}")) <* ZIO.logInfo("Done")
@@ -928,9 +942,9 @@ object ConsumerSpec extends ZIOKafkaSpec {
 
               copyingGroup <- randomGroup
 
-              _               <- ZIO.logInfo("Starting copier 1")
-              copier1ClientId <- randomClient
-              copier1Created  <- Promise.make[Nothing, Unit]
+              _ <- ZIO.logInfo("Starting copier 1")
+              copier1ClientId = copyingGroup + "-1"
+              copier1Created <- Promise.make[Nothing, Unit]
               copier1 <- makeCopyingTransactionalConsumer(
                            "1",
                            copyingGroup,
@@ -942,9 +956,9 @@ object ConsumerSpec extends ZIOKafkaSpec {
                          ).fork
               _ <- copier1Created.await
 
-              _               <- ZIO.logInfo("Starting copier 2")
-              copier2ClientId <- randomClient
-              copier2Created  <- Promise.make[Nothing, Unit]
+              _ <- ZIO.logInfo("Starting copier 2")
+              copier2ClientId = copyingGroup + "-2"
+              copier2Created <- Promise.make[Nothing, Unit]
               copier2 <- makeCopyingTransactionalConsumer(
                            "2",
                            copyingGroup,
@@ -967,7 +981,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                     Consumer
                                       .plainStream(Subscription.topics(topicB), Serde.string, Serde.string)
                                       .map(_.value)
-                                      .timeout(30.seconds)
+                                      .timeout(5.seconds)
                                       .runCollect
                                       .provideSome[Kafka](
                                         transactionalConsumer(
@@ -995,6 +1009,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
       }: _*) @@ TestAspect.nonFlaky(3)
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
-    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(600.seconds)
+    ) @@ withLiveClock @@
+//      TestAspect.sequential @@
+      timeout(60.seconds)
 
 }
