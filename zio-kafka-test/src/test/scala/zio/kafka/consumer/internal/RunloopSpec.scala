@@ -5,7 +5,6 @@ import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Runloop.Command
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 import zio.kafka.embedded.Kafka
-import zio.test.TestAspect.flaky
 import zio.test._
 import zio.{ durationInt, Scope, ZIO }
 
