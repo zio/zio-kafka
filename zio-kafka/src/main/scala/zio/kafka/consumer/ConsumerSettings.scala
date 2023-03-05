@@ -5,6 +5,19 @@ import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.security.KafkaCredentialStore
 
+/**
+ * @param bootstrapServers
+ * @param properties
+ * @param closeTimeout
+ * @param pollInterval
+ * @param pollTimeout
+ *   When there are no pending requests from partition streams, the frequency of polling for liveness and getting
+ *   partition assignments.
+ * @param perPartitionChunkPrefetch
+ * @param offsetRetrieval
+ * @param rebalanceListener
+ * @param restartStreamOnRebalancing
+ */
 case class ConsumerSettings(
   bootstrapServers: List[String],
   properties: Map[String, AnyRef],
