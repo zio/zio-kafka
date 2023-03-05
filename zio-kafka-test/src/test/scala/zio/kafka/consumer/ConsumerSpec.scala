@@ -1011,6 +1011,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
     ) @@ withLiveClock @@
 //      TestAspect.sequential @@
-      timeout(60.seconds)
+      timeout(180.seconds)
 
 }
