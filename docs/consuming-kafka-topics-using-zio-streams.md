@@ -12,7 +12,7 @@ import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
 val consumerScoped: ZIO[Scope, Throwable, Consumer] =
   Consumer.make(consumerSettings)
-val consumer: ZLayer[Clock, Throwable, Consumer] =
+val consumer: ZLayer[Any, Throwable, Consumer] =
   ZLayer.scoped(consumerScoped)
 ```
 
@@ -26,8 +26,7 @@ import zio._
 import zio.kafka.consumer._
 import zio.kafka.serde._
 
-val data: RIO[Clock, 
-              Chunk[CommittableRecord[String, String]]] = 
+val data: Task[Chunk[CommittableRecord[String, String]]] = 
   Consumer.plainStream(Subscription.topics("topic"), Serde.string, Serde.string).take(50).runCollect
     .provideSomeLayer(consumer)
 ```
@@ -35,7 +34,7 @@ val data: RIO[Clock,
 You may stream data from Kafka using the `plainStream` method:
 
 ```scala
-import zio.Clock, zio.Console.printLine
+import zio.Console.printLine
 import zio.kafka.consumer._
 
 Consumer.plainStream(Subscription.topics("topic150"), Serde.string, Serde.string)
@@ -49,7 +48,7 @@ Consumer.plainStream(Subscription.topics("topic150"), Serde.string, Serde.string
 To process partitions assigned to the consumer in parallel, you may use the `Consumer#partitionedStream` method, which creates a nested stream of partitions:
 
 ```scala
-import zio.Clock, zio.Console.printLine
+import zio.Console.printLine
 import zio.kafka.consumer._
 
 Consumer.partitionedStream(Subscription.topics("topic150"), Serde.string, Serde.string)
