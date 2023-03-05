@@ -617,14 +617,13 @@ private[consumer] final class Runloop(
             .tap(_ => initialized.succeed(()))
             .timeout(pollFrequency) concat
             ZStream
-              .fromZIO(initialized.isDone)
-              .mapConcat { isInitialized =>
-                Option.when(isInitialized)(Command.Poll)
+              .fromZIO(isRebalancing)
+              .mapConcat { isRebalancing =>
+                Option.when(isRebalancing)(Command.Poll)
               }).forever // Execute a poll if we haven't seen any requests in `pollFrequency`.
           // This is needed when rebalancing after all partitions were revoked and there are no pending requests
         )
         .tap(cmd => diagnostics.emitIfEnabled(DiagnosticEvent.RunloopEvent(cmd)))
-        // TODO something to poll if we haven't seen a request in a while.. Gotta keep up to date with rebalances and stuff
         .runFoldZIO(State.initial) { (state, cmd) =>
           ZIO.ifZIO(isShutdown)(onTrue = handleShutdown(state, cmd), onFalse = handleOperational(state, cmd))
         }
