@@ -124,7 +124,7 @@ private[consumer] final class Runloop(
                       s"onRevoked called on rebalance listener with pending assigned event"
                     )
                   )
-              }
+              }.unlessZIO(isShutdown).unit
             }
           }
     )
@@ -512,7 +512,7 @@ private[consumer] final class Runloop(
       case r @ Command.ChangeSubscription(_, _, _) =>
         r.succeed.as(state)
       case _ @Command.Commit(_, cont) =>
-        cont.fail(new KafkaException("Consumer is shutting down")).as(state)
+        cont.fail(new KafkaException("Consumer is shutting down")).as(state) // TODO can we just allow it?
 
     }
 
