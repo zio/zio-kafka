@@ -53,4 +53,24 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
              )
     } yield ()
   }: Unit
+
+  @Benchmark
+  @BenchmarkMode(Array(Mode.AverageTime))
+  def throughputWithCommits(): Unit = runZIO {
+    for {
+      client <- randomThing("client")
+      group  <- randomThing("group")
+
+      _ <- Consumer
+             .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
+             .take(nrMessages.toLong)
+             .map(_.offset)
+             .aggregateAsync(Consumer.offsetBatches)
+             .mapZIO(_.commit)
+             .runDrain
+             .provideSome[Kafka](
+               consumer(client, Some(group), properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"))
+             )
+    } yield ()
+  }: Unit
 }
