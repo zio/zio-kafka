@@ -50,7 +50,7 @@ jobs:
           key: ${{ runner.os }}-benchmark
 
       - name: Store benchmark result
-        uses: benchmark-action/github-action-benchmark@v1.15.0
+        uses: benchmark-action/github-action-benchmark@v1.16.0
         with:
           name: JMH Benchmark
           tool: 'jmh'
