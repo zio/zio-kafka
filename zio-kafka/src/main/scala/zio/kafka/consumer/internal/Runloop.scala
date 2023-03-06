@@ -234,7 +234,7 @@ private[consumer] final class Runloop(
     val newBufferedRecords  = BufferedRecords.fromMutableMap(buf)
 
     val endRevokedRequests = ZIO.foreachDiscard(requests.filter(req => isRevoked(req.tp))) { req =>
-      ZIO.logInfo(s"Ending request for TP ${req.tp}") *> req.end.unit
+      ZIO.logTrace(s"Ending request for TP ${req.tp}") *> req.end.unit
     }
 
     endRevokedRequests *> revokeAction.as(

@@ -77,6 +77,8 @@ object KafkaTestUtils {
       val settings = ConsumerSettings(kafka.bootstrapServers)
         .withClientId(clientId)
         .withCloseTimeout(5.seconds)
+        .withPollTimeout(100.millis)
+        .withPollInterval(100.millis)
         .withProperties(
           ConsumerConfig.AUTO_OFFSET_RESET_CONFIG        -> "earliest",
           ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",
@@ -84,7 +86,6 @@ object KafkaTestUtils {
           ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG     -> "10000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "1000",
           ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> s"${`max.poll.records`}",
-          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "100",
           ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
         .withPerPartitionChunkPrefetch(16)
@@ -135,7 +136,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
-    `max.poll.records`: Int = 10,
+    `max.poll.records`: Int = 100,
     properties: Map[String, String] = Map.empty
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
