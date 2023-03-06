@@ -11,7 +11,7 @@ import zio.kafka.consumer.{ Consumer, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.{ &, ZIO, ZLayer }
+import zio.{ &, durationInt, ZIO, ZLayer }
 
 object ConsumerBenchmark {
   @throws[RunnerException]
@@ -51,6 +51,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
              .provideSome[Kafka](
                consumer(client, Some(group), properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"))
              )
+             .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
     } yield ()
   }: Unit
 
@@ -71,6 +72,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
              .provideSome[Kafka](
                consumer(client, Some(group), properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"))
              )
+             .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
     } yield ()
   }: Unit
 }
