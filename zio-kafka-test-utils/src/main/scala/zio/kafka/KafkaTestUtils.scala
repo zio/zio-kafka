@@ -124,7 +124,8 @@ object KafkaTestUtils {
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
-    restartStreamOnRebalancing: Boolean = false
+    restartStreamOnRebalancing: Boolean = false,
+    properties: Map[String, String] = Map.empty
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
       consumerSettings(
@@ -133,7 +134,8 @@ object KafkaTestUtils {
         clientInstanceId,
         allowAutoCreateTopics,
         offsetRetrieval,
-        restartStreamOnRebalancing
+        restartStreamOnRebalancing,
+        properties
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 

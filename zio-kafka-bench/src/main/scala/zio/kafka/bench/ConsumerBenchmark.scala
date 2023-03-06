@@ -1,9 +1,17 @@
 package zio.kafka.bench
 
-import org.openjdk.jmh.annotations.Benchmark
-import org.openjdk.jmh.runner.Runner
-import org.openjdk.jmh.runner.RunnerException
+import io.github.embeddedkafka.EmbeddedKafka
+import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.openjdk.jmh.annotations.{ Benchmark, BenchmarkMode, Mode }
+import org.openjdk.jmh.runner.{ Runner, RunnerException }
 import org.openjdk.jmh.runner.options.OptionsBuilder
+import zio.kafka.KafkaTestUtils.{ consumer, produceMany, producer }
+import zio.kafka.consumer.{ Consumer, Subscription }
+import zio.kafka.embedded.Kafka
+import zio.kafka.serde.Serde
+import zio.{ Task, Unsafe, ZIO }
+
+import java.util.UUID
 
 // Copied from https://raw.githubusercontent.com/openjdk/jmh/master/jmh-samples/src/main/java/org/openjdk/jmh/samples/JMHSample_01_HelloWorld.java
 // TODO Jules: TO DELETE when first real benchmark is added
@@ -39,7 +47,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-object JMHSample_01_HelloWorld {
+object ConsumerBenchmark {
   /*
    * ============================== HOW TO RUN THIS TEST: ====================================
    *
@@ -62,42 +70,45 @@ object JMHSample_01_HelloWorld {
    */
   @throws[RunnerException]
   def main(args: Array[String]): Unit = {
-    val opt = new OptionsBuilder().include(classOf[JMHSample_01_HelloWorld].getSimpleName).forks(1).build
+    val opt = new OptionsBuilder().include(classOf[ConsumerBenchmark].getSimpleName).forks(1).build
     new Runner(opt).run
     ()
   }
 }
 
-class JMHSample_01_HelloWorld {
-  /*
-   * This is our first benchmark method.
-   *
-   * JMH works as follows: users annotate the methods with @Benchmark, and
-   * then JMH produces the generated code to run this particular benchmark as
-   * reliably as possible. In general one might think about @Benchmark methods
-   * as the benchmark "payload", the things we want to measure. The
-   * surrounding infrastructure is provided by the harness itself.
-   *
-   * Read the Javadoc for @Benchmark annotation for complete semantics and
-   * restrictions. At this point we only note that the methods names are
-   * non-essential, and it only matters that the methods are marked with
-   * @Benchmark. You can have multiple benchmark methods within the same
-   * class.
-   *
-   * Note: if the benchmark method never finishes, then JMH run never finishes
-   * as well. If you throw an exception from the method body the JMH run ends
-   * abruptly for this benchmark and JMH will run the next benchmark down the
-   * list.
-   *
-   * Although this benchmark measures "nothing" it is a good showcase for the
-   * overheads the infrastructure bear on the code you measure in the method.
-   * There are no magical infrastructures which incur no overhead, and it is
-   * important to know what are the infra overheads you are dealing with. You
-   * might find this thought unfolded in future examples by having the
-   * "baseline" measurements to compare against.
-   */
-  @Benchmark def wellHelloThere(): Unit = {
+class ConsumerBenchmark {
+  @Benchmark
+  @BenchmarkMode(Array(Mode.AverageTime))
+  def throughput(): Unit = {
+    def program = {
 
-    // this method was intentionally left blank.
+      val nrPartitions = 6
+      val nrMessages   = 50000
+      val kvs          = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+      for {
+        topic  <- randomThing("topic")
+        client <- randomThing("client")
+        group  <- randomThing("group")
+
+        _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+
+        _ <- produceMany(topic, kvs)
+
+        _ <- Consumer
+               .plainStream(Subscription.Topics(Set(topic)), Serde.byteArray, Serde.byteArray)
+               .take(nrMessages)
+               .runDrain
+               .provideSome[Kafka](
+                 consumer(client, Some(group), properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"))
+               )
+      } yield ()
+    }
+
+    Unsafe.unsafe { implicit unsafe =>
+      zio.Runtime.default.unsafe.run(program.provide(producer, Kafka.embedded))
+    }
   }
+
+  private def randomThing(prefix: String): Task[String] =
+    ZIO.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
 }

@@ -156,7 +156,7 @@ lazy val zioKafkaBench =
     .enablePlugins(JmhPlugin)
     .settings(stdSettings("zio-kafka-bench"))
     .settings(publish / skip := true)
-    .dependsOn(zioKafka)
+    .dependsOn(zioKafka, zioKafkaTestUtils)
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
