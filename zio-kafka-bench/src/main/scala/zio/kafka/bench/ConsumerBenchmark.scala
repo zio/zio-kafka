@@ -96,7 +96,7 @@ class ConsumerBenchmark {
 
         _ <- Consumer
                .plainStream(Subscription.Topics(Set(topic)), Serde.byteArray, Serde.byteArray)
-               .take(nrMessages)
+               .take(nrMessages.toLong)
                .runDrain
                .provideSome[Kafka](
                  consumer(client, Some(group), properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"))
@@ -105,7 +105,7 @@ class ConsumerBenchmark {
     }
 
     Unsafe.unsafe { implicit unsafe =>
-      zio.Runtime.default.unsafe.run(program.provide(producer, Kafka.embedded))
+      zio.Runtime.default.unsafe.run(program.provide(producer, Kafka.embedded)).getOrThrow()
     }
   }
 
