@@ -1,18 +1,13 @@
 package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.common.{ KafkaException, TopicPartition }
 import org.apache.kafka.common.errors.RebalanceInProgressException
+import org.apache.kafka.common.{ KafkaException, TopicPartition }
 import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.Runloop.{
-  BufferedRecords,
-  ByteArrayCommittableRecord,
-  ByteArrayConsumerRecord,
-  Command
-}
+import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.{ CommittableRecord, RebalanceConsumer, RebalanceListener, Subscription }
 import zio.stream._
 
@@ -28,6 +23,7 @@ private[consumer] final class Runloop(
   pollFrequency: Duration,
   pollTimeout: Duration,
   requestQueue: Queue[Runloop.Request],
+  commitQueue: Queue[Commit],
   commandQueue: Queue[Command],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
   val partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
@@ -145,19 +141,19 @@ private[consumer] final class Runloop(
   private def commit(offsets: Map[TopicPartition, Long]): Task[Unit] =
     for {
       p <- Promise.make[Throwable, Unit]
-      _ <- commandQueue.offer(Command.Commit(offsets, p)).unit
+      _ <- commitQueue.offer(Commit(offsets, p)).unit
       _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
       _ <- p.await
     } yield ()
 
-  private def doCommit(cmds: Chunk[Command.Commit]): UIO[Unit] = {
+  private def doCommit(cmds: Chunk[Commit]): UIO[Unit] = {
     val offsets   = aggregateOffsets(cmds)
     val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(cmds)(_.cont.done(e))
     val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
         ZIO.logDebug(s"Rebalance in progress, retrying commit for offsets ${offsets}") *>
-          commandQueue.offerAll(cmds).unit.delay(pollFrequency)
+          commandQueue.offer(Command.Commits(cmds)).unit.delay(pollFrequency)
       case err =>
         cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
     }
@@ -172,7 +168,7 @@ private[consumer] final class Runloop(
   }
 
   // Returns the highest offset to commit per partition
-  private def aggregateOffsets(cmds: Chunk[Command.Commit]): Map[TopicPartition, OffsetAndMetadata] = {
+  private def aggregateOffsets(cmds: Chunk[Commit]): Map[TopicPartition, OffsetAndMetadata] = {
     val offsets = mutable.Map[TopicPartition, OffsetAndMetadata]()
 
     cmds.foreach { commit =>
@@ -498,14 +494,14 @@ private[consumer] final class Runloop(
       state.subscription
     )
 
-  private def handleCommit(state: State, cmd: Command.Commit): UIO[State] =
+  private def handleCommit(state: State, cmd: Command.Commits): UIO[State] =
     // TODO this does not work with cooperative rebalancing, we get a RebalanceInProgressException. Should we just remove the check?
 //    ZIO.ifZIO(isRebalancing)(
 //      onTrue = ZIO.succeed(state.addCommit(cmd)),
 //      onFalse =
-    doCommit(Chunk(cmd)) *> commandQueue
+    doCommit(cmd.commits) *> commandQueue
       .offer(Command.Poll)
-      .as(state.addCommit(cmd)) // Gotta poll to get the commit confirmation
+      .as(state.addCommits(cmd.commits)) // Gotta poll to get the commit confirmation
 //    )
 
   /**
@@ -522,7 +518,7 @@ private[consumer] final class Runloop(
           handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = BufferedRecords.empty))
       case Command.Requests(reqs) =>
         ZIO.foreachDiscard(reqs)(_.end).as(state)
-      case cmd @ Command.Commit(_, _) =>
+      case cmd @ Command.Commits(_) =>
         handleCommit(state, cmd)
       case r @ Command.ChangeSubscription(_, _, _) =>
         r.succeed.as(state)
@@ -550,7 +546,7 @@ private[consumer] final class Runloop(
         } else {
           ZIO.foreachDiscard(reqs)(_.end).as(state)
         }
-      case cmd @ Command.Commit(_, _) =>
+      case cmd @ Command.Commits(_) =>
         handleCommit(state, cmd)
       case cmd @ Command.ChangeSubscription(_, _, _) =>
         handleChangeSubscription(state, cmd).flatMap { state =>
@@ -621,13 +617,16 @@ private[consumer] final class Runloop(
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] =
     Promise.make[Nothing, Unit].flatMap { initialized =>
       (ZStream
-        .mergeAll(3, 1)(
+        .mergeAll(4, 1)(
           // Poll commands repeatedly until we're getting requests to drive the polling
           ZStream.repeat(Command.Poll).interruptWhen(initialized),
+          ZStream.fromQueue(commitQueue).aggregateAsync(ZSink.collectAll[Commit]).map(Command.Commits),
           ZStream.fromQueue(commandQueue),
           (ZStream
             .fromQueue(requestQueue)
-            .mapChunks(c => Chunk.single(Command.Requests(c)))
+            .aggregateAsync(ZSink.collectAll[Request])
+            .map(c => Chunk.single(Command.Requests(c)))
+            .flattenChunks
             .tap(_ => initialized.succeed(()))
             .timeout(pollFrequency) concat
             ZStream
@@ -660,6 +659,9 @@ private[consumer] object Runloop {
     @inline def end: UIO[Boolean]                                              = cont.fail(None)
     @inline def fail(throwable: Throwable): UIO[Boolean]                       = cont.fail(Some(throwable))
   }
+
+  final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit])
+
   final case class PollResult(
     newlyAssigned: Set[TopicPartition],
     unfulfilledRequests: Chunk[Runloop.Request],
@@ -688,9 +690,9 @@ private[consumer] object Runloop {
 
   sealed abstract class Command
   object Command {
-    final case class Requests(requests: Chunk[Request])                                         extends Command
-    case object Poll                                                                            extends Command
-    final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
+    final case class Requests(requests: Chunk[Request]) extends Command
+    case object Poll                                    extends Command
+    final case class Commits(commits: Chunk[Commit])    extends Command
     final case class ChangeSubscription(
       subscription: Option[Subscription],
       offsetRetrieval: OffsetRetrieval,
@@ -741,7 +743,8 @@ private[consumer] object Runloop {
     for {
       rebalancingRef     <- Ref.make(false)
       requestQueue       <- ZIO.acquireRelease(Queue.bounded[Runloop.Request](1024))(_.shutdown)
-      commandQueue       <- ZIO.acquireRelease(Queue.bounded[Command](1024))(_.shutdown)
+      commitQueue        <- ZIO.acquireRelease(Queue.bounded[Runloop.Commit](1024))(_.shutdown)
+      commandQueue       <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](1024))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       partitions <- ZIO.acquireRelease(
                       Queue
@@ -759,6 +762,7 @@ private[consumer] object Runloop {
                   pollFrequency,
                   pollTimeout,
                   requestQueue,
+                  commitQueue,
                   commandQueue,
                   lastRebalanceEvent,
                   partitions,
@@ -777,14 +781,12 @@ private[consumer] object Runloop {
 
 private[internal] final case class State(
   pendingRequests: Chunk[Runloop.Request],
-  pendingCommits: Chunk[Command.Commit],
+  pendingCommits: Chunk[Commit],
   bufferedRecords: BufferedRecords,
   assignedStreams: Map[TopicPartition, PartitionStreamControl],
   subscription: Option[Subscription]
 ) {
-  def addCommit(c: Command.Commit): State         = copy(pendingCommits = c +: pendingCommits)
-  def addCommits(c: Chunk[Command.Commit]): State = copy(pendingCommits = pendingCommits ++ c)
-//  def addRequest(c: Runloop.Request): State         = copy(pendingRequests = c +: pendingRequests)
+  def addCommits(c: Chunk[Commit]): State           = copy(pendingCommits = pendingCommits ++ c)
   def addRequests(c: Chunk[Runloop.Request]): State = copy(pendingRequests = c ++ pendingRequests)
   def addBufferedRecords(recs: BufferedRecords): State =
     copy(bufferedRecords = bufferedRecords ++ recs)
