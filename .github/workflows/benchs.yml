@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - throughput-bbenchmark
 
 permissions:
   # deployments permission to deploy GitHub pages website
