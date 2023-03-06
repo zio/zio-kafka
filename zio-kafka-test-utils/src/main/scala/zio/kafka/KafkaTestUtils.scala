@@ -84,7 +84,7 @@ object KafkaTestUtils {
           ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "3000",
           ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG     -> "10000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "1000",
-          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "100",
+          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "1000",
           ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
         .withPerPartitionChunkPrefetch(16)

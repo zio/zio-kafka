@@ -472,7 +472,9 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                consumer(client2, Some(group), offsetRetrieval = offsetRetrieval)
                              )
           // Check that we only got the records starting from the manually seek'd offset
-        } yield assert(secondResults.map(rec => rec.key() -> rec.value()).toList)(equalTo(data.drop(manualOffsetSeek)))
+        } yield assert(secondResults.map(rec => rec.key() -> rec.value()).toList)(
+          equalTo(data.drop(manualOffsetSeek))
+        )
       },
       test("commit offsets for all consumed messages") {
         val nrMessages = 50
@@ -638,7 +640,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
 
         for {
           // Produce messages on several partitions
-          _ <- ZIO.logInfo("Starting test")
+          _       <- ZIO.logInfo("Starting test")
           topic   <- randomTopic
           group   <- randomGroup
           client1 <- randomClient
