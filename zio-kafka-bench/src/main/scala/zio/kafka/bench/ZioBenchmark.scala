@@ -9,13 +9,15 @@ trait ZioBenchmark[Environment] {
 
   @Setup
   def setup(): Unit =
-    runtime = Unsafe.unsafe(implicit unsafe => zio.Runtime.unsafe.fromLayer(bootstrap))
+    runtime = Unsafe.unsafe(implicit unsafe => zio.Runtime.unsafe.fromLayer(bootstrap >+> ZLayer.fromZIO(initialize)))
 
   @TearDown
   def tearDown(): Unit =
     runtime.shutdown0()
 
   protected def bootstrap: ZLayer[Any, Nothing, Environment]
+
+  protected def initialize: ZIO[Environment, Throwable, Any] = ZIO.unit
 
   protected def runZIO(program: ZIO[Environment, Throwable, Any]) =
     Unsafe.unsafe(implicit unsafe => runtime.unsafe.run(program).getOrThrow())

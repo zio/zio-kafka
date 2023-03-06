@@ -24,27 +24,28 @@ object ConsumerBenchmark {
 
 @State(Scope.Benchmark)
 class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
+  val topic1       = "topic1"
+  val nrPartitions = 6
+  val nrMessages   = 50000
+  val kvs          = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
 
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka & Producer] =
     ZLayer.make[Kafka & Producer](Kafka.embedded, producer).orDie
 
+  override def initialize: ZIO[Producer, Throwable, Unit] = for {
+    _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = nrPartitions))
+    _ <- produceMany(topic1, kvs)
+  } yield ()
+
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   def throughput(): Unit = runZIO {
-    val nrPartitions = 6
-    val nrMessages   = 50000
-    val kvs          = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
     for {
-      topic  <- randomThing("topic")
       client <- randomThing("client")
       group  <- randomThing("group")
 
-      _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-
-      _ <- produceMany(topic, kvs)
-
       _ <- Consumer
-             .plainStream(Subscription.Topics(Set(topic)), Serde.byteArray, Serde.byteArray)
+             .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
              .take(nrMessages.toLong)
              .runDrain
              .provideSome[Kafka](
