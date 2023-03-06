@@ -32,7 +32,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka & Producer] =
     ZLayer.make[Kafka & Producer](Kafka.embedded, producer).orDie
 
-  override def initialize: ZIO[Kafka & Producer, Throwable, Unit] = for {
+  override def initialize: ZIO[Kafka & Producer, Throwable, Any] = for {
     _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = nrPartitions))
     _ <- produceMany(topic1, kvs)
   } yield ()
