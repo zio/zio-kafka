@@ -76,6 +76,8 @@ object KafkaTestUtils {
       val settings = ConsumerSettings(kafka.bootstrapServers)
         .withClientId(clientId)
         .withCloseTimeout(5.seconds)
+        .withPollTimeout(100.millis)
+        .withPollInterval(100.millis)
         .withProperties(
           ConsumerConfig.AUTO_OFFSET_RESET_CONFIG        -> "earliest",
           ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",
@@ -125,7 +127,8 @@ object KafkaTestUtils {
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
-    restartStreamOnRebalancing: Boolean = false
+    restartStreamOnRebalancing: Boolean = false,
+    properties: Map[String, String] = Map.empty
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
       consumerSettings(
@@ -134,7 +137,8 @@ object KafkaTestUtils {
         clientInstanceId,
         allowAutoCreateTopics,
         offsetRetrieval,
-        restartStreamOnRebalancing
+        restartStreamOnRebalancing,
+        properties
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
