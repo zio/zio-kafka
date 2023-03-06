@@ -524,10 +524,10 @@ private[consumer] final class Runloop(
         } else {
           req.end.as(state)
         }
-      case c @ Command.Commit(_, _) =>
-        doCommit(Chunk(c)).as(state.addCommit(c))
-      case c @ Command.ChangeSubscription(_, _, _) =>
-        handleChangeSubscription(state, c).flatMap { state =>
+      case cmd @ Command.Commit(_, _) =>
+        doCommit(Chunk(cmd)).as(state.addCommit(cmd))
+      case cmd @ Command.ChangeSubscription(_, _, _) =>
+        handleChangeSubscription(state, cmd).flatMap { state =>
           if (state.isSubscribed) {
             ZIO.succeed(state)
           } else {
