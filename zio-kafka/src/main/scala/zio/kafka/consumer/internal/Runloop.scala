@@ -507,10 +507,6 @@ private[consumer] final class Runloop(
    */
   private def handleShutdown(state: State, cmd: Command): Task[State] =
     cmd match {
-//      case Command.Poll =>
-//        // End all pending requests
-//        ZIO.foreachDiscard(state.pendingRequests)(_.end) *>
-//          handlePoll(state.copy(pendingRequests = Chunk.empty, bufferedRecords = BufferedRecords.empty))
       case req: Request =>
         req.end.as(state)
       case r @ Command.ChangeSubscription(_, _, _) =>
