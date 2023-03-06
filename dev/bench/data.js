@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1678129699835,
+  "lastUpdate": 1678131238741,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -1198,6 +1198,36 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
             "value": 4.174873884466666,
+            "unit": "s/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@gmail.com",
+            "name": "Steven Vroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "svroonland@gmail.com",
+            "name": "Steven Vroonland",
+            "username": "svroonland"
+          },
+          "distinct": true,
+          "id": "a5ae5d5fb3daee37d0c403c23bc42b306b7e4dff",
+          "message": "Extract some stuff for ZIO running",
+          "timestamp": "2023-03-06T20:30:34+01:00",
+          "tree_id": "77ca07542675085982bb19b2527ae227a809558d",
+          "url": "https://github.com/zio/zio-kafka/commit/a5ae5d5fb3daee37d0c403c23bc42b306b7e4dff"
+        },
+        "date": 1678131238358,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 1.1163283556999999,
             "unit": "s/op",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
