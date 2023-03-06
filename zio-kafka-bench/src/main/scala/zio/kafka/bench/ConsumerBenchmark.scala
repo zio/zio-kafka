@@ -7,6 +7,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder
 import org.openjdk.jmh.runner.{ Runner, RunnerException }
 import zio.kafka.KafkaTestUtils.{ consumer, produceMany, producer }
 import zio.kafka.bench.ZioBenchmark.randomThing
+import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.{ Consumer, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
@@ -49,7 +50,12 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
              .take(nrMessages.toLong)
              .runDrain
              .provideSome[Kafka](
-               consumer(client, Some(group), properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"))
+               consumer(
+                 client,
+                 Some(group),
+                 properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"),
+                 offsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)
+               )
              )
              .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
     } yield ()
@@ -70,7 +76,12 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
              .mapZIO(_.commit)
              .runDrain
              .provideSome[Kafka](
-               consumer(client, Some(group), properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"))
+               consumer(
+                 client,
+                 Some(group),
+                 properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"),
+                 offsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)
+               )
              )
              .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
     } yield ()
