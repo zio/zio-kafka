@@ -6,13 +6,12 @@ import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.runner.options.OptionsBuilder
 import org.openjdk.jmh.runner.{ Runner, RunnerException }
 import zio.kafka.KafkaTestUtils.{ consumer, produceMany, producer }
+import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.consumer.{ Consumer, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.{ &, Task, ZIO, ZLayer }
-
-import java.util.UUID
+import zio.{ &, ZIO, ZLayer }
 
 object ConsumerBenchmark {
   @throws[RunnerException]
@@ -53,7 +52,4 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
              )
     } yield ()
   }: Unit
-
-  private def randomThing(prefix: String): Task[String] =
-    ZIO.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
 }
