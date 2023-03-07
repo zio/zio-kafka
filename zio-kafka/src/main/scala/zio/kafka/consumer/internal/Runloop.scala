@@ -596,10 +596,12 @@ private[consumer] final class Runloop(
       .onError(cause => partitions.offer(Take.failCause(cause)))
       .forkScoped
 
-  private def pollLoop(initialized: Boolean, state: State): ZIO[Any, Throwable, State] = {
-    def processCommands(state: State) = for {
+  private def pollLoop(initialized: Boolean, state: State, wait: Boolean = false): ZIO[Any, Throwable, State] = {
+    def processCommands(state: State, wait: Boolean) = for {
       // Gather available commands or return immediately if nothing in the queue
-      commands   <- commandQueue.takeAll
+      commands <- if (wait) commandQueue.takeBetween(1, 128).timeoutTo(Chunk.empty)(identity)(pollTimeout)
+                  else commandQueue.takeAll
+
       isShutdown <- isShutdown
       updatedState <- ZIO.foldLeft(commands)(state) { case (s, cmd) =>
                         (if (isShutdown) handleShutdown(s, cmd) else handleOperational(s, cmd)) <*
@@ -619,11 +621,12 @@ private[consumer] final class Runloop(
               s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
             )
             .when(shouldPoll)
-        newState <- if (shouldPoll) handlePoll(state) else ZIO.succeed(state)
-      } yield (isInitialized, newState)
+        newState <-
+          if (shouldPoll) handlePoll(state) else ZIO.succeed(state) // TODO replace with poll frequency
+      } yield (isInitialized, newState, !shouldPoll)
 
-    processCommands(state).flatMap(doPollIfPendingActions).flatMap { case (initialized, state) =>
-      pollLoop(initialized, state)
+    processCommands(state, wait).flatMap(doPollIfPendingActions).flatMap { case (initialized, state, wait) =>
+      pollLoop(initialized, state, wait)
     }
   }
 }
