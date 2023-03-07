@@ -12,7 +12,7 @@ import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.stream.ZSink
-import zio.{ &, durationInt, Ref, Schedule, ZIO, ZLayer }
+import zio.{ durationInt, Ref, Schedule, ZIO, ZLayer }
 
 object ConsumerBenchmark {
   @throws[RunnerException]
@@ -25,16 +25,16 @@ object ConsumerBenchmark {
 
 @State(Scope.Benchmark)
 @Fork(0)
-class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
+class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   val topic1       = "topic1"
   val nrPartitions = 6
   val nrMessages   = 50000
   val kvs          = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
 
-  override protected def bootstrap: ZLayer[Any, Nothing, Kafka & Producer] =
-    ZLayer.make[Kafka & Producer](Kafka.embedded, producer).orDie
+  override protected def bootstrap: ZLayer[Any, Nothing, Kafka with Producer] =
+    ZLayer.make[Kafka with Producer](Kafka.embedded, producer).orDie
 
-  override def initialize: ZIO[Kafka & Producer, Throwable, Any] = for {
+  override def initialize: ZIO[Kafka with Producer, Throwable, Any] = for {
     _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = nrPartitions))
     _ <- produceMany(topic1, kvs)
   } yield ()
