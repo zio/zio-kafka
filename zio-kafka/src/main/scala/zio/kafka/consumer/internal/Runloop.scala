@@ -21,6 +21,7 @@ private[consumer] final class Runloop(
   runtime: Runtime[Any],
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
+  pollFrequency: Duration,
   pollTimeout: Duration,
   commandQueue: Queue[Command],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
@@ -332,7 +333,7 @@ private[consumer] final class Runloop(
   }
 
   private def doPoll(c: ByteArrayKafkaConsumer) = {
-    val records = c.poll(this.pollTimeout)
+    val records = c.poll(pollTimeout)
 
     if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
   }
@@ -491,12 +492,11 @@ private[consumer] final class Runloop(
                                if (!isDone) ZIO.some(c) else ZIO.none
                              }
                            }
-    } yield State(
-      pollResult.unfulfilledRequests,
-      newPendingCommits.flatten,
-      pollResult.bufferedRecords,
-      pollResult.assignedStreams ++ newAssignedStreams,
-      state.subscription
+    } yield state.copy(
+      pendingRequests = pollResult.unfulfilledRequests,
+      pendingCommits = newPendingCommits.flatten,
+      bufferedRecords = pollResult.bufferedRecords,
+      assignedStreams = pollResult.assignedStreams ++ newAssignedStreams
     )
 
   /**
@@ -590,17 +590,11 @@ private[consumer] final class Runloop(
       _ => command.succeed.as(state.copy(subscription = command.subscription))
     )
 
-  def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] =
-    pollLoop(false, State.initial)
-      .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
-      .onError(cause => partitions.offer(Take.failCause(cause)))
-      .forkScoped
-
-  private def pollLoop(initialized: Boolean, state: State, wait: Boolean = false): ZIO[Any, Throwable, State] = {
-    def processCommands(state: State, wait: Boolean) = for {
-      // Gather available commands or return immediately if nothing in the queue
-      commands <- if (wait) commandQueue.takeBetween(1, 128).timeoutTo(Chunk.empty)(identity)(pollTimeout)
-                  else commandQueue.takeAll
+  def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] = {
+    def processCommands(state: State, wait: Boolean): Task[State] = for {
+      commands <- if (wait)
+                    commandQueue.takeBetween(1, commandQueueSize).timeoutTo(Chunk.empty)(identity)(pollFrequency)
+                  else commandQueue.takeAll // Gather available commands or return immediately if nothing in the queue
 
       isShutdown <- isShutdown
       updatedState <- ZIO.foldLeft(commands)(state) { case (s, cmd) =>
@@ -609,10 +603,10 @@ private[consumer] final class Runloop(
                       }
     } yield updatedState
 
-    def doPollIfPendingActions(state: State) =
+    def doPollIfPendingActions(state: State): Task[(State, Boolean)] =
       for {
         isRebalancing <- isRebalancing
-        isInitialized = initialized || state.pendingRequests.nonEmpty
+        isInitialized = state.initialized || state.pendingRequests.nonEmpty
         shouldPoll =
           state.isSubscribed && (state.pendingRequests.nonEmpty || state.pendingCommits.nonEmpty || !isInitialized || isRebalancing)
         _ <-
@@ -622,18 +616,26 @@ private[consumer] final class Runloop(
             )
             .when(shouldPoll)
         newState <-
-          if (shouldPoll) handlePoll(state) else ZIO.succeed(state) // TODO replace with poll frequency
-      } yield (isInitialized, newState, !shouldPoll)
+          if (shouldPoll) handlePoll(state) else ZIO.succeed(state)
+      } yield (newState.copy(initialized = isInitialized), !shouldPoll)
 
-    processCommands(state, wait).flatMap(doPollIfPendingActions).flatMap { case (initialized, state, wait) =>
-      pollLoop(initialized, state, wait)
-    }
+    def loop(state: State, wait: Boolean): ZIO[Any, Throwable, Nothing] = processCommands(state, wait)
+      .flatMap(doPollIfPendingActions)
+      .flatMap { case (state, wait) => loop(state, wait) }
+
+    loop(State.initial, false)
+      .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
+      .onError(cause => partitions.offer(Take.failCause(cause)))
+      .forkScoped
   }
 }
 
 private[consumer] object Runloop {
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
   type ByteArrayConsumerRecord    = ConsumerRecord[Array[Byte], Array[Byte]]
+
+  // Internal parameters, should not be necessary to tune
+  val commandQueueSize = 1024
 
   final case class PollResult(
     newlyAssigned: Set[TopicPartition],
@@ -713,6 +715,7 @@ private[consumer] object Runloop {
   def apply(
     hasGroupId: Boolean,
     consumer: ConsumerAccess,
+    pollFrequency: Duration,
     pollTimeout: Duration,
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval,
@@ -720,8 +723,8 @@ private[consumer] object Runloop {
     restartStreamsOnRebalancing: Boolean
   ): ZIO[Scope, Throwable, Runloop] =
     for {
-      rebalancingRef <- Ref.make(false)
-      commandQueue   <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](1024))(_.shutdown) // TODO make 1024 a setting
+      rebalancingRef     <- Ref.make(false)
+      commandQueue       <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](commandQueueSize))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       partitions <- ZIO.acquireRelease(
                       Queue
@@ -737,6 +740,7 @@ private[consumer] object Runloop {
                   hasGroupId,
                   consumer,
                   pollTimeout,
+                  pollFrequency,
                   commandQueue,
                   lastRebalanceEvent,
                   partitions,
@@ -758,7 +762,8 @@ private[internal] final case class State(
   pendingCommits: Chunk[Commit],
   bufferedRecords: BufferedRecords,
   assignedStreams: Map[TopicPartition, PartitionStreamControl],
-  subscription: Option[Subscription]
+  subscription: Option[Subscription],
+  initialized: Boolean
 ) {
   def addCommit(c: Commit): State   = copy(pendingCommits = pendingCommits :+ c)
   def addRequest(r: Request): State = copy(pendingRequests = r +: pendingRequests)
@@ -770,5 +775,5 @@ private[internal] final case class State(
 }
 
 object State {
-  val initial: State = State(Chunk.empty, Chunk.empty, BufferedRecords.empty, Map.empty, None)
+  val initial: State = State(Chunk.empty, Chunk.empty, BufferedRecords.empty, Map.empty, None, false)
 }

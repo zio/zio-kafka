@@ -10,9 +10,9 @@ import zio.kafka.security.KafkaCredentialStore
  * @param properties
  * @param closeTimeout
  * @param pollInterval
- * @param pollTimeout
  *   When there are no pending requests from partition streams, the frequency of polling for liveness and getting
  *   partition assignments.
+ * @param pollTimeout
  * @param perPartitionChunkPrefetch
  * @param offsetRetrieval
  * @param rebalanceListener
@@ -22,7 +22,7 @@ case class ConsumerSettings(
   bootstrapServers: List[String],
   properties: Map[String, AnyRef],
   closeTimeout: Duration,
-  pollInterval: Duration, // TODO remove
+  pollInterval: Duration,
   pollTimeout: Duration,
   perPartitionChunkPrefetch: Int,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
