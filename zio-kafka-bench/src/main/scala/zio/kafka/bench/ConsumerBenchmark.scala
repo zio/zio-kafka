@@ -7,12 +7,12 @@ import org.openjdk.jmh.runner.options.OptionsBuilder
 import org.openjdk.jmh.runner.{ Runner, RunnerException }
 import zio.kafka.KafkaTestUtils.{ consumer, produceMany, producer }
 import zio.kafka.bench.ZioBenchmark.randomThing
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
-import zio.kafka.consumer.{ Consumer, Subscription }
+import zio.kafka.consumer.{ Consumer, Offset, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.{ &, durationInt, Schedule, ZIO, ZLayer }
+import zio.stream.ZSink
+import zio.{ &, durationInt, Ref, Schedule, ZIO, ZLayer }
 
 object ConsumerBenchmark {
   @throws[RunnerException]
@@ -24,6 +24,7 @@ object ConsumerBenchmark {
 }
 
 @State(Scope.Benchmark)
+@Fork(0)
 class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
   val topic1       = "topic1"
   val nrPartitions = 6
@@ -53,8 +54,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
                consumer(
                  client,
                  Some(group),
-                 properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"),
-                 offsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)
+                 properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
                )
              )
              .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
@@ -65,25 +65,29 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
   @BenchmarkMode(Array(Mode.AverageTime))
   def throughputWithCommits(): Unit = runZIO {
     for {
-      client <- randomThing("client2")
-      group  <- randomThing("group2")
+      client <- randomThing("client")
+      group  <- randomThing("group")
 
-      _ <- Consumer
-             .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
-             .take(nrMessages.toLong)
-             .map(_.offset)
-             .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.spaced(100.millis))
-             .mapZIO(_.commit)
-             .runDrain
-             .provideSome[Kafka](
-               consumer(
-                 client,
-                 Some(group),
-                 properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"),
-                 offsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)
+      counter <- Ref.make(0)
+      _ <- ZIO.logAnnotate("consumer", "1") {
+             Consumer
+               .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
+               .map(_.offset)
+               .tap(_ => counter.update(_ + 1))
+               .aggregateAsyncWithin(ZSink.collectAll[Offset], Schedule.spaced(100.millis))
+               .map(OffsetBatch.apply)
+               .mapZIO(_.commit)
+               .takeUntilZIO(_ => counter.get.map(_ == nrMessages))
+               .runDrain
+               .provideSome[Kafka](
+                 consumer(
+                   client,
+                   Some(group),
+                   properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
+                 )
                )
-             )
-             .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
+               .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
+           }
     } yield ()
   }: Unit
 }

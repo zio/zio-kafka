@@ -156,6 +156,7 @@ lazy val zioKafkaBench =
     .enablePlugins(JmhPlugin)
     .settings(stdSettings("zio-kafka-bench"))
     .settings(publish / skip := true)
+    .settings(libraryDependencies += logback)
     .dependsOn(zioKafka, zioKafkaTestUtils)
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
