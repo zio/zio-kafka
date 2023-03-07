@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1678215857652,
+  "lastUpdate": 1678216976718,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -1470,6 +1470,42 @@ window.BENCHMARK_DATA = {
             "value": 1.5008247723333332,
             "unit": "s/op",
             "extra": "iterations: 3\nforks: 0\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@gmail.com",
+            "name": "Steven Vroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "svroonland@gmail.com",
+            "name": "Steven Vroonland",
+            "username": "svroonland"
+          },
+          "distinct": true,
+          "id": "51e94f9b051aa6f73bff27312da99154610df955",
+          "message": "Restore fork",
+          "timestamp": "2023-03-07T20:05:11+01:00",
+          "tree_id": "265c9f0f020e9576e06e6d0d31197d530df205ae",
+          "url": "https://github.com/zio/zio-kafka/commit/51e94f9b051aa6f73bff27312da99154610df955"
+        },
+        "date": 1678216975925,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 0.8363956125333334,
+            "unit": "s/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 1.4671222126666665,
+            "unit": "s/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
         ]
       }
