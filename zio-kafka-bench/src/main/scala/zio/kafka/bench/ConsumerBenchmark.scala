@@ -24,7 +24,6 @@ object ConsumerBenchmark {
 }
 
 @State(Scope.Benchmark)
-@Fork(0)
 class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   val topic1       = "topic1"
   val nrPartitions = 6
