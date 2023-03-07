@@ -368,6 +368,7 @@ object Consumer {
       runloop <- Runloop(
                    hasGroupId = settings.hasGroupId,
                    consumer = wrapper,
+                   pollFrequency = settings.pollInterval,
                    pollTimeout = settings.pollTimeout,
                    diagnostics = diagnostics,
                    offsetRetrieval = settings.offsetRetrieval,
