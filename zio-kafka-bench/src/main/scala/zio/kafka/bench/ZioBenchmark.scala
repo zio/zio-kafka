@@ -10,7 +10,9 @@ trait ZioBenchmark[Environment] {
   @Setup
   def setup(): Unit =
     runtime = Unsafe.unsafe(implicit unsafe =>
-      zio.Runtime.unsafe.fromLayer(bootstrap >+> Runtime.addLogger(logger) >+> ZLayer.fromZIO(initialize))
+      zio.Runtime.unsafe.fromLayer(
+        bootstrap >+> Runtime.removeDefaultLoggers >+> Runtime.addLogger(logger) >+> ZLayer.fromZIO(initialize)
+      )
     )
 
   @TearDown
@@ -24,7 +26,7 @@ trait ZioBenchmark[Environment] {
   protected def runZIO(program: ZIO[Environment, Throwable, Any]) =
     Unsafe.unsafe(implicit unsafe => runtime.unsafe.run(program).getOrThrow())
 
-  val logger: ZLogger[String, Unit] =
+  lazy val logger: ZLogger[String, Unit] =
     new ZLogger[String, Unit] {
       override def apply(
         trace: Trace,

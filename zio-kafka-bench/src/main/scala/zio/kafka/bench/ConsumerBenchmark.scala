@@ -12,7 +12,7 @@ import zio.kafka.consumer.{ Consumer, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.{ &, durationInt, ZIO, ZLayer }
+import zio.{ &, durationInt, Schedule, ZIO, ZLayer }
 
 object ConsumerBenchmark {
   @throws[RunnerException]
@@ -65,14 +65,14 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
   @BenchmarkMode(Array(Mode.AverageTime))
   def throughputWithCommits(): Unit = runZIO {
     for {
-      client <- randomThing("client")
-      group  <- randomThing("group")
+      client <- randomThing("client2")
+      group  <- randomThing("group2")
 
       _ <- Consumer
              .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
              .take(nrMessages.toLong)
              .map(_.offset)
-             .aggregateAsync(Consumer.offsetBatches)
+             .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.spaced(100.millis))
              .mapZIO(_.commit)
              .runDrain
              .provideSome[Kafka](
