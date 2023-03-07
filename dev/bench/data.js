@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1678131714869,
+  "lastUpdate": 1678156224325,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -1259,6 +1259,36 @@ window.BENCHMARK_DATA = {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
             "value": 1.0408086470000002,
             "unit": "s/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "41898282+github-actions[bot]@users.noreply.github.com",
+            "name": "github-actions[bot]",
+            "username": "github-actions[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "bc988f2d20a0b9b6c3c467390219ba3981376ec1",
+          "message": "Update zio, zio-streams, zio-test, ... to 2.0.10 (#690)\n\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>",
+          "timestamp": "2023-03-07T10:23:29+08:00",
+          "tree_id": "eb4e6f913625cf177921a560a9b41702e6e09450",
+          "url": "https://github.com/zio/zio-kafka/commit/bc988f2d20a0b9b6c3c467390219ba3981376ec1"
+        },
+        "date": 1678156223571,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
+            "value": 1703427952.20542,
+            "unit": "ops/s",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
         ]
