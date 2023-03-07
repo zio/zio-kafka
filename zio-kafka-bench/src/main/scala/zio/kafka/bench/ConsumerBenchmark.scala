@@ -41,7 +41,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  def throughput(): Unit = runZIO {
+  def throughput(): Any = runZIO {
     for {
       client <- randomThing("client")
       group  <- randomThing("group")
@@ -59,11 +59,11 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
              )
              .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
     } yield ()
-  }: Unit
+  }
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  def throughputWithCommits(): Unit = runZIO {
+  def throughputWithCommits(): Any = runZIO {
     for {
       client <- randomThing("client")
       group  <- randomThing("group")
@@ -89,5 +89,5 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka & Producer] {
                .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
            }
     } yield ()
-  }: Unit
+  }
 }
