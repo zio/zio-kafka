@@ -14,6 +14,8 @@ import zio.kafka.serde.Serde
 import zio.stream.ZSink
 import zio.{ durationInt, Ref, Schedule, ZIO, ZLayer }
 
+import java.util.concurrent.TimeUnit
+
 object ConsumerBenchmark {
   @throws[RunnerException]
   def main(args: Array[String]): Unit = {
@@ -23,6 +25,7 @@ object ConsumerBenchmark {
   }
 }
 
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
 class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   val topic1       = "topic1"
