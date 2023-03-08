@@ -1,8 +1,8 @@
 package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.common.{ KafkaException, TopicPartition }
 import org.apache.kafka.common.errors.RebalanceInProgressException
+import org.apache.kafka.common.{ KafkaException, TopicPartition }
 import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
@@ -487,14 +487,10 @@ private[consumer] final class Runloop(
             .map(_.map { case (tp, control, _) =>
               tp -> control
             })
-      newPendingCommits <- ZIO.foreach(state.pendingCommits) { c =>
-                             c.cont.isDone.flatMap { isDone =>
-                               if (!isDone) ZIO.some(c) else ZIO.none
-                             }
-                           }
+      newPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
     } yield state.copy(
       pendingRequests = pollResult.unfulfilledRequests,
-      pendingCommits = newPendingCommits.flatten,
+      pendingCommits = newPendingCommits,
       bufferedRecords = pollResult.bufferedRecords,
       assignedStreams = pollResult.assignedStreams ++ newAssignedStreams
     )
@@ -665,7 +661,10 @@ private[consumer] object Runloop {
 
   sealed trait Command
   object Command {
-    final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
+    final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command {
+      @inline def isDone: UIO[Boolean]    = cont.isDone
+      @inline def isPending: UIO[Boolean] = isDone.negate
+    }
     final case class Request(
       tp: TopicPartition,
       private val cont: Promise[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
