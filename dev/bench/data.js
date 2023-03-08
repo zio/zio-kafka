@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1678267975290,
+  "lastUpdate": 1678269486118,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -1612,6 +1612,42 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
             "value": 973.8317433,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@users.noreply.github.com",
+            "name": "svroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "574ebbba50e4e1f49db818c94b8b4d4c169bb73c",
+          "message": "Consumer benchmark (#689)\n\nCo-authored-by: Jules Ivanic <guizmaii@users.noreply.github.com>",
+          "timestamp": "2023-03-08T10:53:09+01:00",
+          "tree_id": "2cfe35c10126d0d818e75fa63253f671f1fa4839",
+          "url": "https://github.com/zio/zio-kafka/commit/574ebbba50e4e1f49db818c94b8b4d4c169bb73c"
+        },
+        "date": 1678269485731,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 757.5444812,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 1000.3645129333332,
             "unit": "ms/op",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
