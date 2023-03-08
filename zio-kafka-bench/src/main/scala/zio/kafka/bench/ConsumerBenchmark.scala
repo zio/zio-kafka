@@ -3,8 +3,6 @@ package zio.kafka.bench
 import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.openjdk.jmh.annotations._
-import org.openjdk.jmh.runner.options.OptionsBuilder
-import org.openjdk.jmh.runner.{ Runner, RunnerException }
 import zio.kafka.KafkaTestUtils.{ consumer, produceMany, producer }
 import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.consumer.{ Consumer, Offset, OffsetBatch, Subscription }
@@ -16,17 +14,8 @@ import zio.{ durationInt, Ref, Schedule, ZIO, ZLayer }
 
 import java.util.concurrent.TimeUnit
 
-object ConsumerBenchmark {
-  @throws[RunnerException]
-  def main(args: Array[String]): Unit = {
-    val opt = new OptionsBuilder().include(classOf[ConsumerBenchmark].getSimpleName).forks(1).build
-    new Runner(opt).run
-    ()
-  }
-}
-
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
 class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   val topic1       = "topic1"
   val nrPartitions = 6
