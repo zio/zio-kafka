@@ -4,7 +4,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import org.apache.kafka.common.{ KafkaException, TopicPartition }
 import zio._
-import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.Runloop.Command.{ Commit, Request }
@@ -23,6 +23,7 @@ private[consumer] final class Runloop(
   consumer: ConsumerAccess,
   pollFrequency: Duration,
   pollTimeout: Duration,
+  runloopTimeout: Duration,
   commandQueue: Queue[Command],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
   val partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
@@ -617,6 +618,7 @@ private[consumer] final class Runloop(
 
     def loop(state: State, wait: Boolean): ZIO[Any, Throwable, Nothing] = processCommands(state, wait)
       .flatMap(doPollIfPendingActions)
+      .timeoutFail(RunloopTimeout)(runloopTimeout)
       .flatMap { case (state, wait) => loop(state, wait) }
 
     loop(State.initial, false)
@@ -719,7 +721,8 @@ private[consumer] object Runloop {
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
-    restartStreamsOnRebalancing: Boolean
+    restartStreamsOnRebalancing: Boolean,
+    runloopTimeout: Duration
   ): ZIO[Scope, Throwable, Runloop] =
     for {
       rebalancingRef     <- Ref.make(false)
@@ -740,6 +743,7 @@ private[consumer] object Runloop {
                   consumer,
                   pollTimeout,
                   pollFrequency,
+                  runloopTimeout,
                   commandQueue,
                   lastRebalanceEvent,
                   partitions,
