@@ -154,6 +154,8 @@ trait Consumer {
 
 object Consumer {
 
+  case object RunloopTimeout extends RuntimeException("Timeout in Runloop")
+
   private final case class Live(
     private val consumer: ConsumerAccess,
     private val settings: ConsumerSettings,
@@ -373,7 +375,8 @@ object Consumer {
                    diagnostics = diagnostics,
                    offsetRetrieval = settings.offsetRetrieval,
                    userRebalanceListener = settings.rebalanceListener,
-                   restartStreamsOnRebalancing = settings.restartStreamOnRebalancing
+                   restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
+                   runloopTimeout = settings.runloopTimeout
                  )
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 
