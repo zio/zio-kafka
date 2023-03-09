@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+      - improve-poll-behavior
+      - improve-poll-behavior_benchs
   pull_request:
     types: [ opened, reopened, synchronize ]
 
