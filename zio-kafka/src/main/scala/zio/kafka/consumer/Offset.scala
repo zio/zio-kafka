@@ -1,15 +1,16 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, RetriableCommitFailedException }
+import org.apache.kafka.clients.consumer.RetriableCommitFailedException
 import org.apache.kafka.common.TopicPartition
 import zio.{ RIO, Schedule, Task }
 
-sealed trait Offset {
-  def topicPartition: TopicPartition
-  def offset: Long
-  def commit: Task[Unit]
-  def batch: OffsetBatch
-  def consumerGroupMetadata: Option[ConsumerGroupMetadata]
+final case class Offset(
+  topicPartition: TopicPartition,
+  offset: Long,
+  private[zio] val commitHandle: Map[TopicPartition, Long] => Task[Unit]
+) {
+
+  def commit: Task[Unit] = commitHandle(Map(topicPartition -> offset))
 
   /**
    * Attempts to commit and retries according to the given policy when the commit fails with a
@@ -30,14 +31,4 @@ object Offset {
         case _                                 => false
       } && policy
     )
-}
-
-private final case class OffsetImpl(
-  topicPartition: TopicPartition,
-  offset: Long,
-  commitHandle: Map[TopicPartition, Long] => Task[Unit],
-  consumerGroupMetadata: Option[ConsumerGroupMetadata]
-) extends Offset {
-  def commit: Task[Unit] = commitHandle(Map(topicPartition -> offset))
-  def batch: OffsetBatch = OffsetBatchImpl(Map(topicPartition -> offset), commitHandle, consumerGroupMetadata)
 }

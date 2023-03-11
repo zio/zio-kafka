@@ -4,12 +4,12 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata
 import org.apache.kafka.common.TopicPartition
 import zio.{ RIO, Schedule, Task, ZIO }
 
-sealed trait OffsetBatch {
-  def offsets: Map[TopicPartition, Long]
-  def commit: Task[Unit]
-  def merge(offset: Offset): OffsetBatch
-  def merge(offsets: OffsetBatch): OffsetBatch
-  def consumerGroupMetadata: Option[ConsumerGroupMetadata]
+final case class OffsetBatch(
+  offsets: Map[TopicPartition, Long],
+  commitHandle: Map[TopicPartition, Long] => Task[Unit],
+  consumerGroupMetadata: Option[ConsumerGroupMetadata]
+) {
+  def commit: Task[Unit] = commitHandle(offsets)
 
   /**
    * Attempts to commit and retries according to the given policy when the commit fails with a
@@ -17,20 +17,6 @@ sealed trait OffsetBatch {
    */
   def commitOrRetry[R](policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
     Offset.commitOrRetry(commit, policy)
-}
-
-object OffsetBatch {
-  val empty: OffsetBatch = EmptyOffsetBatch
-
-  def apply(offsets: Iterable[Offset]): OffsetBatch = offsets.foldLeft(empty)(_ merge _)
-}
-
-private final case class OffsetBatchImpl(
-  offsets: Map[TopicPartition, Long],
-  commitHandle: Map[TopicPartition, Long] => Task[Unit],
-  consumerGroupMetadata: Option[ConsumerGroupMetadata]
-) extends OffsetBatch {
-  def commit: Task[Unit] = commitHandle(offsets)
 
   def merge(offset: Offset): OffsetBatch =
     copy(
@@ -51,10 +37,8 @@ private final case class OffsetBatchImpl(
   }
 }
 
-case object EmptyOffsetBatch extends OffsetBatch {
-  val offsets: Map[TopicPartition, Long]                   = Map.empty
-  val commit: Task[Unit]                                   = ZIO.unit
-  def merge(offset: Offset): OffsetBatch                   = offset.batch
-  def merge(offsets: OffsetBatch): OffsetBatch             = offsets
-  def consumerGroupMetadata: Option[ConsumerGroupMetadata] = None
+object OffsetBatch {
+  val empty: OffsetBatch = OffsetBatch(offsets = Map.empty, commitHandle = _ => ZIO.unit, None)
+
+  def apply(offsets: Iterable[Offset]): OffsetBatch = offsets.foldLeft(empty)(_ merge _)
 }

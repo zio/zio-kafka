@@ -314,7 +314,7 @@ object Consumer {
         r <- ZIO.environment[R & R1]
         _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
                .flatMapPar(Int.MaxValue, bufferSize = settings.perPartitionChunkPrefetch) { case (_, partitionStream) =>
-                 partitionStream.mapChunksZIO(_.mapZIO { case committable @ CommittableRecord(record, _, _, _) =>
+                 partitionStream.mapChunksZIO(_.mapZIO { case committable @ CommittableRecord(record, _, _) =>
                    f(record).as(committable.offset)
                  })
                }
@@ -366,7 +366,6 @@ object Consumer {
     for {
       wrapper <- ConsumerAccess.make(settings)
       runloop <- Runloop(
-                   hasGroupId = settings.hasGroupId,
                    consumer = wrapper,
                    pollFrequency = settings.pollInterval,
                    pollTimeout = settings.pollTimeout,

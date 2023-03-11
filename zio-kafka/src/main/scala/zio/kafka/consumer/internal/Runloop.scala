@@ -19,11 +19,9 @@ import zio.stream._
 import java.util
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.util.control.NonFatal
 
 private[consumer] final class Runloop(
   runtime: Runtime[Any],
-  hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollFrequency: Duration,
   pollTimeout: Duration,
@@ -214,7 +212,7 @@ private[consumer] final class Runloop(
 
         control.finishWith(
           remaining.map(
-            CommittableRecord(_, tp, commit, getConsumerGroupMetadataIfAny)
+            CommittableRecord(_, tp, commit)
           )
         )
       }
@@ -259,8 +257,7 @@ private[consumer] final class Runloop(
           CommittableRecord(
             record = record,
             req.tp,
-            commitHandle = commit,
-            consumerGroupMetadata = getConsumerGroupMetadataIfAny
+            commitHandle = commit
           )
         })
         buf -= req.tp
@@ -271,12 +268,6 @@ private[consumer] final class Runloop(
 
     fulfillAction.as(Runloop.FulfillResult(unfulfilledRequests, newBufferedRecords))
   }
-
-  private lazy val getConsumerGroupMetadataIfAny: Option[ConsumerGroupMetadata] =
-    if (hasGroupId)
-      try Some(consumer.consumer.groupMetadata())
-      catch { case NonFatal(_) => None }
-    else None
 
   private def bufferRecordsForUnrequestedPartitions(
     records: ConsumerRecords[Array[Byte], Array[Byte]],
@@ -711,7 +702,6 @@ private[consumer] object Runloop {
   }
 
   def apply(
-    hasGroupId: Boolean,
     consumer: ConsumerAccess,
     pollFrequency: Duration,
     pollTimeout: Duration,
@@ -736,7 +726,6 @@ private[consumer] object Runloop {
       runtime         <- ZIO.runtime[Any]
       runloop = new Runloop(
                   runtime,
-                  hasGroupId,
                   consumer,
                   pollFrequency,
                   pollTimeout,
