@@ -23,7 +23,7 @@ trait ZioBenchmark[Environment] {
 
   protected def initialize: ZIO[Environment, Throwable, Any] = ZIO.unit
 
-  protected def runZIO(program: ZIO[Environment, Throwable, Any]) =
+  protected def runZIO(program: ZIO[Environment, Throwable, Any]): Any =
     Unsafe.unsafe(implicit unsafe => runtime.unsafe.run(program).getOrThrow())
 }
 
