@@ -1,7 +1,7 @@
 package zio.kafka.bench
 
 import io.github.embeddedkafka.EmbeddedKafka
-import org.apache.kafka.clients.consumer.{ ConsumerConfig, KafkaConsumer }
+import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.openjdk.jmh.annotations._
 import zio.kafka.KafkaTestUtils.{ consumerSettings, produceMany, producer, simpleConsumer }
@@ -51,7 +51,7 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
       consumerSettings(
         clientId = randomThing("client"),
         groupId = Some(randomThing("client")),
-        properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
+        `max.poll.records` = 1000
       )
     )
 

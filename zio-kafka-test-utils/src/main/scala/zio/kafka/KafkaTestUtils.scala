@@ -70,6 +70,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
+    `max.poll.records`: Int = 10,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
@@ -81,7 +82,7 @@ object KafkaTestUtils {
           ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",
           ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "3000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "250",
-          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "1000",
+          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> s"${`max.poll.records`}",
           ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
         .withPerPartitionChunkPrefetch(16)
@@ -100,6 +101,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
+    `max.poll.records`: Int = 10,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     consumerSettings(
@@ -109,6 +111,7 @@ object KafkaTestUtils {
       allowAutoCreateTopics,
       offsetRetrieval,
       restartStreamOnRebalancing,
+      `max.poll.records`,
       properties
     )
       .map(
@@ -130,6 +133,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
+    `max.poll.records`: Int = 10,
     properties: Map[String, String] = Map.empty
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
@@ -140,6 +144,7 @@ object KafkaTestUtils {
         allowAutoCreateTopics,
         offsetRetrieval,
         restartStreamOnRebalancing,
+        `max.poll.records`,
         properties
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
@@ -152,6 +157,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
+    `max.poll.records`: Int = 10,
     properties: Map[String, String] = Map.empty,
     rebalanceListener: RebalanceListener = RebalanceListener.noop
   ): ZLayer[Kafka, Throwable, Consumer] =
@@ -163,6 +169,7 @@ object KafkaTestUtils {
         allowAutoCreateTopics,
         offsetRetrieval,
         restartStreamOnRebalancing,
+        `max.poll.records`,
         properties
       ).map(_.withRebalanceListener(rebalanceListener))
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
