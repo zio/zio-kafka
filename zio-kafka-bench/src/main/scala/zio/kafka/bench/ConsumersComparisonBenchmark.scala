@@ -29,7 +29,7 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
   val topic1       = "topic1"
   val nrPartitions = 6
   val nrMessages   = 1_000_000
-  val kvs          = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+  val kvs          = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
 
   val kafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
     ZLayer.scoped {
