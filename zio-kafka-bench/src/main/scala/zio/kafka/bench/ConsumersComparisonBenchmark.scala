@@ -14,7 +14,7 @@ import zio.{ ULayer, ZIO, ZLayer }
 
 import java.time.Duration
 import java.util.concurrent.TimeUnit
-import scala.jdk.CollectionConverters.MapHasAsJava
+import scala.jdk.CollectionConverters._
 
 object ConsumersComparisonBenchmark {
   type LowLevelKafka = KafkaConsumer[Array[Byte], Array[Byte]]
@@ -28,7 +28,7 @@ import zio.kafka.bench.ConsumersComparisonBenchmark._
 class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
   val topic1       = "topic1"
   val nrPartitions = 6
-  val nrMessages   = 1_000_000
+  val nrMessages   = 1000000
   val kvs          = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
 
   val kafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
