@@ -2,10 +2,23 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, ConsumerRecord }
 import org.apache.kafka.common.TopicPartition
-import zio.{ RIO, Task }
 import zio.kafka.serde.Deserializer
+import zio.{ RIO, Task }
 
-final case class CommittableRecord[K, V](record: ConsumerRecord[K, V], offset: Offset) {
+final case class CommittableRecord[K, V](
+  record: ConsumerRecord[K, V],
+  private[zio] val topicPartition: TopicPartition,
+  private[zio] val commitHandle: Map[TopicPartition, Long] => Task[Unit],
+  private[zio] val consumerGroupMetadata: Option[ConsumerGroupMetadata]
+) {
+  def offset: Offset =
+    OffsetImpl(
+      topicPartition = topicPartition,
+      offset = record.offset(),
+      commitHandle = commitHandle,
+      consumerGroupMetadata = consumerGroupMetadata
+    )
+
   def deserializeWith[R, K1, V1](
     keyDeserializer: Deserializer[R, K1],
     valueDeserializer: Deserializer[R, V1]
@@ -33,21 +46,4 @@ final case class CommittableRecord[K, V](record: ConsumerRecord[K, V], offset: O
   def value: V        = record.value()
   def partition: Int  = record.partition()
   def timestamp: Long = record.timestamp()
-}
-
-object CommittableRecord {
-  def apply[K, V](
-    record: ConsumerRecord[K, V],
-    commitHandle: Map[TopicPartition, Long] => Task[Unit],
-    consumerGroupMetadata: Option[ConsumerGroupMetadata]
-  ): CommittableRecord[K, V] =
-    CommittableRecord(
-      record,
-      OffsetImpl(
-        new TopicPartition(record.topic(), record.partition()),
-        record.offset(),
-        commitHandle,
-        consumerGroupMetadata
-      )
-    )
 }

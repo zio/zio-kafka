@@ -214,7 +214,7 @@ private[consumer] final class Runloop(
 
         control.finishWith(
           remaining.map(
-            CommittableRecord(_, commit, getConsumerGroupMetadataIfAny)
+            CommittableRecord(_, tp, commit, getConsumerGroupMetadataIfAny)
           )
         )
       }
@@ -258,6 +258,7 @@ private[consumer] final class Runloop(
         fulfillAction = fulfillAction *> req.succeed(concatenatedChunk.map { record =>
           CommittableRecord(
             record = record,
+            req.tp,
             commitHandle = commit,
             consumerGroupMetadata = getConsumerGroupMetadataIfAny
           )
