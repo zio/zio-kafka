@@ -135,13 +135,14 @@ private[consumer] final class Runloop(
     }
   }
 
-  private def commit(offsets: Map[TopicPartition, Long]): Task[Unit] =
-    for {
-      p <- Promise.make[Throwable, Unit]
-      _ <- commandQueue.offer(Command.Commit(offsets, p)).unit
-      _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
-      _ <- p.await
-    } yield ()
+  private val commit: Map[TopicPartition, Long] => Task[Unit] =
+    (offsets: Map[TopicPartition, Long]) =>
+      for {
+        p <- Promise.make[Throwable, Unit]
+        _ <- commandQueue.offer(Command.Commit(offsets, p)).unit
+        _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
+        _ <- p.await
+      } yield ()
 
   private def doCommit(cmds: Chunk[Command.Commit]): UIO[Unit] = {
     val offsets   = aggregateOffsets(cmds)
@@ -270,7 +271,7 @@ private[consumer] final class Runloop(
     fulfillAction.as(Runloop.FulfillResult(unfulfilledRequests, newBufferedRecords))
   }
 
-  private def getConsumerGroupMetadataIfAny: Option[ConsumerGroupMetadata] =
+  private lazy val getConsumerGroupMetadataIfAny: Option[ConsumerGroupMetadata] =
     if (hasGroupId)
       try Some(consumer.consumer.groupMetadata())
       catch { case NonFatal(_) => None }
