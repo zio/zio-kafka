@@ -17,10 +17,6 @@ jobs:
   benchmark: # See https://github.com/marketplace/actions/continuous-benchmark
     name: Run benchmark
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        scala: [ '2.12.x', '2.13.x', '3.2.x' ]
     steps:
       - name: Checkout current branch
         uses: actions/checkout@v3
@@ -34,7 +30,7 @@ jobs:
           check-latest: true
 
       - name: compile
-        run: sbt ++${{ matrix.scala }} compile
+        run: sbt compile
 
       - name: run benchmarks
         # To list all possible options and undestand these configurations, see run `sbt "zioKafkaBench/Jmh/run -h"`
@@ -47,7 +43,7 @@ jobs:
         #  - "-t 1": Number of worker threads to run with. 1 thread
         #  - "-rf json": Format type for machine-readable results. JSON
         #  - "-foe true": Should JMH fail immediately if any benchmark had experienced an unrecoverable error?. True
-        run: sbt "++${{ matrix.scala }} zioKafkaBench/Jmh/run -wi 10 -i 10 -r 1 -w 1 -t 1 -rf json -foe true"
+        run: sbt "zioKafkaBench/Jmh/run -wi 10 -i 10 -r 1 -w 1 -t 1 -rf json -foe true"
 
       - name: Download previous benchmark data
         uses: actions/cache@v3
