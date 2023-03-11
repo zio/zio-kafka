@@ -99,6 +99,5 @@ class ConsumersComparisionBenchmark extends ZioBenchmark[Env] {
         .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
         .take(nrMessages.toLong)
         .runDrain
-        .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
     }
 }
