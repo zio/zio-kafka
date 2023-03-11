@@ -10,7 +10,7 @@ import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.{ durationInt, ULayer, ZIO, ZLayer }
+import zio.{ ULayer, ZIO, ZLayer }
 
 import java.time.Duration
 import java.util.concurrent.TimeUnit
