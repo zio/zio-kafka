@@ -16,16 +16,16 @@ import java.time.Duration
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.MapHasAsJava
 
-object CompetitionConsumerBenchmark {
+object ConsumersComparisionBenchmark {
   type LowLevelKafka = KafkaConsumer[Array[Byte], Array[Byte]]
 
   type Env = Kafka with Producer with Consumer with LowLevelKafka
 }
-import zio.kafka.bench.CompetitionConsumerBenchmark._
+import zio.kafka.bench.ConsumersComparisionBenchmark._
 
 @State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-class CompetitionConsumerBenchmark extends ZioBenchmark[Env] {
+class ConsumersComparisionBenchmark extends ZioBenchmark[Env] {
   val topic1       = "topic1"
   val nrPartitions = 6
   val nrMessages   = 50000
