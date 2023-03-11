@@ -10,23 +10,26 @@ import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.{ durationInt, ZIO, ZLayer }
+import zio.{ durationInt, ULayer, ZIO, ZLayer }
 
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.MapHasAsJava
 
-type LowLevelKafka = KafkaConsumer[Array[Byte], Array[Byte]]
+object CompetitionConsumerBenchmark {
+  type LowLevelKafka = KafkaConsumer[Array[Byte], Array[Byte]]
+}
+import zio.kafka.bench.CompetitionConsumerBenchmark._
 
 @State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 class CompetitionConsumerBenchmark extends ZioBenchmark[Kafka with Producer with Consumer with LowLevelKafka] {
-  private val topic1       = "topic1"
-  private val nrPartitions = 6
-  private val nrMessages   = 50000L
-  private val kvs          = (1L to nrMessages).map(i => (s"key$i", s"msg$i"))
+  val topic1       = "topic1"
+  val nrPartitions = 6
+  val nrMessages   = 50000
+  val kvs          = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
 
-  private val kafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
+  val kafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
     ZLayer.scoped {
       ZIO.acquireRelease {
         ZIO.attemptBlocking {
@@ -41,9 +44,7 @@ class CompetitionConsumerBenchmark extends ZioBenchmark[Kafka with Producer with
       }(c => ZIO.attemptBlocking(c.close()).orDie)
     }
 
-  override protected def bootstrap: ZLayer[
-    Any,
-    Nothing,
+  override protected def bootstrap: ULayer[
     Kafka with Producer with ConsumerSettings with Consumer with LowLevelKafka
   ] =
     ZLayer
@@ -72,7 +73,7 @@ class CompetitionConsumerBenchmark extends ZioBenchmark[Kafka with Producer with
   @BenchmarkMode(Array(Mode.AverageTime))
   def kafkaClients(): Any =
     runZIO {
-      ZIO.serviceWithZIO[LowLevelKafka] { consumer =>
+      ZIO.service[LowLevelKafka].flatMap { consumer =>
         ZIO.attemptBlocking {
           consumer.subscribe(java.util.Arrays.asList(topic1))
 
@@ -81,17 +82,11 @@ class CompetitionConsumerBenchmark extends ZioBenchmark[Kafka with Producer with
             val records = consumer.poll(Duration.ofMillis(1000))
             count += records.count()
           }
+
+          consumer.unsubscribe()
         }
       }
     }
-
-  @Benchmark
-  @BenchmarkMode(Array(Mode.AverageTime))
-  def monixKafka(): Any = println("Hello world")
-
-  @Benchmark
-  @BenchmarkMode(Array(Mode.AverageTime))
-  def fs2Kafka(): Any = println("Hello world")
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
@@ -99,7 +94,7 @@ class CompetitionConsumerBenchmark extends ZioBenchmark[Kafka with Producer with
     runZIO {
       Consumer
         .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
-        .take(nrMessages)
+        .take(nrMessages.toLong)
         .runDrain
         .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
     }
