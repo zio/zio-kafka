@@ -20,7 +20,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   val topic1                      = "topic1"
   val nrPartitions                = 6
   val nrMessages                  = 50000
-  val kvs: List[(String, String)] = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+  val kvs: List[(String, String)] = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
 
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka with Producer] =
     ZLayer.make[Kafka with Producer](Kafka.embedded, producer).orDie
@@ -33,32 +33,24 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   def throughput(): Any = runZIO {
-    for {
-      client <- randomThing("client")
-      group  <- randomThing("group")
-
-      _ <- Consumer
-             .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
-             .take(nrMessages.toLong)
-             .runDrain
-             .provideSome[Kafka](
-               consumer(
-                 client,
-                 Some(group),
-                 properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
-               )
-             )
-             .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
-    } yield ()
+    Consumer
+      .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
+      .take(nrMessages.toLong)
+      .runDrain
+      .provideSome[Kafka](
+        consumer(
+          randomThing("client"),
+          Some(randomThing("group")),
+          properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
+        )
+      )
+      .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
   }
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   def throughputWithCommits(): Any = runZIO {
     for {
-      client <- randomThing("client")
-      group  <- randomThing("group")
-
       counter <- Ref.make(0)
       _ <- ZIO.logAnnotate("consumer", "1") {
              Consumer
@@ -72,8 +64,8 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                .runDrain
                .provideSome[Kafka](
                  consumer(
-                   client,
-                   Some(group),
+                   randomThing("client"),
+                   Some(randomThing("group")),
                    properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
                  )
                )

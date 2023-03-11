@@ -3,8 +3,8 @@
 
 name: CI
 env:
-  JDK_JAVA_OPTIONS: -XX:+PrintCommandLineFlags -Xmx6G -Xss4M -XX:+UseG1GC
-  JVM_OPTS: -XX:+PrintCommandLineFlags -Xmx6G -Xss4M -XX:+UseG1GC
+  JDK_JAVA_OPTIONS: -XX:+PrintCommandLineFlags -XmS6G -Xmx6G -Xss4M -XX:+UseG1GC
+  JVM_OPTS: -XX:+PrintCommandLineFlags -XmS6G -Xmx6G -Xss4M -XX:+UseG1GC
   NODE_OPTIONS: --max_old_space_size=6144
 'on':
   workflow_dispatch: {}
