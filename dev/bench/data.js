@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1678434292619,
+  "lastUpdate": 1678513744438,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -1792,6 +1792,42 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
             "value": 463.8691512111111,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "jules.ivanic@gmail.com",
+            "name": "jules Ivanic",
+            "username": "guizmaii"
+          },
+          "committer": {
+            "email": "jules.ivanic@gmail.com",
+            "name": "jules Ivanic",
+            "username": "guizmaii"
+          },
+          "distinct": true,
+          "id": "34e51ca90fa03a866ed459286012e785fcb0f849",
+          "message": "Run benchs on each supported Scala version",
+          "timestamp": "2023-03-11T13:43:42+08:00",
+          "tree_id": "690824562232093d03f0870b1ea6c9bed3114ad6",
+          "url": "https://github.com/zio/zio-kafka/commit/34e51ca90fa03a866ed459286012e785fcb0f849"
+        },
+        "date": 1678513744111,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 733.0095856999999,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 1012.5509649,
             "unit": "ms/op",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
