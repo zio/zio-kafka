@@ -18,12 +18,14 @@ import scala.jdk.CollectionConverters.MapHasAsJava
 
 object CompetitionConsumerBenchmark {
   type LowLevelKafka = KafkaConsumer[Array[Byte], Array[Byte]]
+
+  type Env = Kafka with Producer with Consumer with LowLevelKafka
 }
 import zio.kafka.bench.CompetitionConsumerBenchmark._
 
 @State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-class CompetitionConsumerBenchmark extends ZioBenchmark[Kafka with Producer with Consumer with LowLevelKafka] {
+class CompetitionConsumerBenchmark extends ZioBenchmark[Env] {
   val topic1       = "topic1"
   val nrPartitions = 6
   val nrMessages   = 50000
@@ -32,19 +34,19 @@ class CompetitionConsumerBenchmark extends ZioBenchmark[Kafka with Producer with
   val kafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
     ZLayer.scoped {
       ZIO.acquireRelease {
-        ZIO.attemptBlocking {
-          ZIO.serviceWith[ConsumerSettings] { settings =>
+        ZIO.service[ConsumerSettings].flatMap { settings =>
+          ZIO.attemptBlocking {
             new KafkaConsumer[Array[Byte], Array[Byte]](
               settings.driverSettings.asJava,
               new ByteArrayDeserializer(),
               new ByteArrayDeserializer()
             )
           }
-        }.flatten
+        }
       }(c => ZIO.attemptBlocking(c.close()).orDie)
     }
 
-  val settings =
+  val settings: ZLayer[Kafka, Nothing, ConsumerSettings] =
     ZLayer.fromZIO(
       consumerSettings(
         clientId = randomThing("client"),
@@ -53,9 +55,9 @@ class CompetitionConsumerBenchmark extends ZioBenchmark[Kafka with Producer with
       )
     )
 
-  override protected def bootstrap: ULayer[Kafka with Producer with Consumer with LowLevelKafka] =
+  override protected def bootstrap: ULayer[Env] =
     ZLayer
-      .make[Kafka with Producer with Consumer with LowLevelKafka](
+      .make[Env](
         Kafka.embedded,
         producer,
         settings,
@@ -64,7 +66,7 @@ class CompetitionConsumerBenchmark extends ZioBenchmark[Kafka with Producer with
       )
       .orDie
 
-  override def initialize: ZIO[Kafka with Producer, Throwable, Any] =
+  override def initialize: ZIO[Env, Throwable, Any] =
     for {
       _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = nrPartitions))
       _ <- produceMany(topic1, kvs)
