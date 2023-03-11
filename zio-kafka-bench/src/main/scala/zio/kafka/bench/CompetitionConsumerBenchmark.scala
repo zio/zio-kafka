@@ -44,20 +44,21 @@ class CompetitionConsumerBenchmark extends ZioBenchmark[Kafka with Producer with
       }(c => ZIO.attemptBlocking(c.close()).orDie)
     }
 
-  override protected def bootstrap: ULayer[
-    Kafka with Producer with ConsumerSettings with Consumer with LowLevelKafka
-  ] =
+  val settings =
+    ZLayer.fromZIO(
+      consumerSettings(
+        clientId = randomThing("client"),
+        groupId = Some(randomThing("client")),
+        properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
+      )
+    )
+
+  override protected def bootstrap: ULayer[Kafka with Producer with Consumer with LowLevelKafka] =
     ZLayer
-      .make[Kafka with Producer with ConsumerSettings with Consumer with LowLevelKafka](
+      .make[Kafka with Producer with Consumer with LowLevelKafka](
         Kafka.embedded,
         producer,
-        ZLayer.fromZIO(
-          consumerSettings(
-            clientId = randomThing("client"),
-            groupId = Some(randomThing("client")),
-            properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
-          )
-        ),
+        settings,
         simpleConsumer(),
         kafkaConsumer
       )
