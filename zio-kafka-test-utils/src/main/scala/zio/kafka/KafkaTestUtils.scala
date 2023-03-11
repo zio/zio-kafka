@@ -117,6 +117,11 @@ object KafkaTestUtils {
         )
       )
 
+  def simpleConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
+    ZLayer.makeSome[ConsumerSettings, Consumer](
+      ZLayer.succeed(diagnostics) >>> Consumer.live
+    )
+
   def consumer(
     clientId: String,
     groupId: Option[String] = None,
