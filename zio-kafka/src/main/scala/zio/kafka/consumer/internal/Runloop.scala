@@ -212,11 +212,7 @@ private[consumer] final class Runloop(
       ZIO.foreachDiscard(revokedStreams) { case (tp, control) =>
         val remaining = bufferedRecords.recs.getOrElse(tp, Chunk.empty)
 
-        control.finishWith(
-          remaining.map(
-            CommittableRecord(_, commit, getConsumerGroupMetadataIfAny)
-          )
-        )
+        control.finishWith(remaining.map(CommittableRecord(_, commit, None)))
       }
 
     val acc = ChunkBuilder.make[Runloop.Request]()
@@ -255,13 +251,17 @@ private[consumer] final class Runloop(
       } else {
         val concatenatedChunk = bufferedChunk ++ Chunk.fromJavaIterable(reqRecs)
 
-        fulfillAction = fulfillAction *> req.succeed(concatenatedChunk.map { record =>
-          CommittableRecord(
-            record = record,
-            commitHandle = commit,
-            consumerGroupMetadata = getConsumerGroupMetadataIfAny
-          )
-        })
+        fulfillAction = fulfillAction *>
+          getConsumerGroupMetadataIfAny.flatMap { groupMetadata =>
+            req.succeed(concatenatedChunk.map { record =>
+              CommittableRecord(
+                record = record,
+                commitHandle = commit,
+                consumerGroupMetadata = groupMetadata
+              )
+            })
+          }
+
         buf -= req.tp
       }
     }
@@ -271,11 +271,13 @@ private[consumer] final class Runloop(
     fulfillAction.as(Runloop.FulfillResult(unfulfilledRequests, newBufferedRecords))
   }
 
-  private lazy val getConsumerGroupMetadataIfAny: Option[ConsumerGroupMetadata] =
-    if (hasGroupId)
-      try Some(consumer.consumer.groupMetadata())
-      catch { case NonFatal(_) => None }
-    else None
+  private val getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
+    if (hasGroupId) {
+      ZIO.succeedBlocking {
+        try Some(consumer.consumer.groupMetadata())
+        catch { case NonFatal(_) => None }
+      }
+    } else ZIO.none
 
   private def bufferRecordsForUnrequestedPartitions(
     records: ConsumerRecords[Array[Byte], Array[Byte]],
