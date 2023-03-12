@@ -187,8 +187,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                          .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
                                          .mapConcatZIO { committableRecords =>
                                            val records = committableRecords.map(_.record)
-                                           val offsetBatch =
-                                             committableRecords.foldLeft(OffsetBatch.empty)(_ add _.offset)
+                                           val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
 
                                            offsetBatch.commit.as(records)
                                          }
@@ -206,8 +205,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                  .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
                                  .mapConcatZIO { committableRecords =>
                                    val records = committableRecords.map(_.record)
-                                   val offsetBatch =
-                                     committableRecords.foldLeft(OffsetBatch.empty)(_ add _.offset)
+                                   val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
 
                                    offsetBatch.commit.as(records)
                                  }
@@ -454,8 +452,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                  .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
                  .mapConcatZIO { committableRecords =>
                    val records = committableRecords.map(_.record)
-                   val offsetBatch =
-                     committableRecords.foldLeft(OffsetBatch.empty)(_ add _.offset)
+                   val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
 
                    offsetBatch.commit.as(records)
                  }
