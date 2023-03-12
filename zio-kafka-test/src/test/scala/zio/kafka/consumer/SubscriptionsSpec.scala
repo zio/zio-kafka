@@ -188,10 +188,10 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .take(40)
             .transduce(
-              Consumer.offsetBatches.contramap[CommittableRecord[String, String]](_.offset) <&> ZSink
+              Consumer.offsetBatchesSink.contramap[CommittableRecord[String, String]](_.offset) <&> ZSink
                 .collectAll[CommittableRecord[String, String]]
             )
-            .mapZIO { case (offsetBatch, records) => offsetBatch.commit.as(records) }
+            .mapZIO { case (offsetBatch, records) => Consumer.commitBatch(offsetBatch).as(records) }
             .flattenChunks
             .runCollect
             .tap(records => recordsConsumed.update(_ ++ records))

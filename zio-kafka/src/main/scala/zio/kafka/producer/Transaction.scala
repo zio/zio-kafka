@@ -1,10 +1,11 @@
 package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
-import zio.kafka.consumer.{ Offset, OffsetBatch }
+import zio.kafka.consumer.Offset
 import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
 import zio.kafka.serde.Serializer
-import zio.{ Chunk, IO, RIO, Ref, UIO, ZIO }
+import zio.kafka.types.{ OffsetBatch, TransactionalOffsetBatch }
+import zio.{ Chunk, IO, RIO, Ref, Task, UIO, ZIO }
 
 trait Transaction {
   def produce[R, K, V](
@@ -40,9 +41,9 @@ trait Transaction {
   def abort: IO[TransactionalProducer.UserInitiatedAbort.type, Nothing]
 }
 
-final private[producer] class TransactionImpl(
+private[producer] final class TransactionImpl(
   private val producer: Producer,
-  private[producer] val offsetBatchRef: Ref[OffsetBatch],
+  private[producer] val offsetBatchRef: Ref[TransactionalOffsetBatch],
   private val closed: Ref[Boolean]
 ) extends Transaction {
   def produce[R, K, V](
@@ -61,8 +62,7 @@ final private[producer] class TransactionImpl(
     valueSerializer: Serializer[R, V],
     offset: Option[Offset]
   ): RIO[R, RecordMetadata] =
-    haltIfClosed *>
-      ZIO.whenCase(offset) { case Some(offset) => offsetBatchRef.update(_ merge offset) } *>
+    haltIfClosed *> updateOffsetBatchRef(offset) *>
       producer.produce[R, K, V](producerRecord, keySerializer, valueSerializer)
 
   def produceChunk[R, K, V](
@@ -71,8 +71,7 @@ final private[producer] class TransactionImpl(
     valueSerializer: Serializer[R, V],
     offset: Option[Offset]
   ): RIO[R, Chunk[RecordMetadata]] =
-    haltIfClosed *>
-      ZIO.whenCase(offset) { case Some(offset) => offsetBatchRef.update(_ merge offset) } *>
+    haltIfClosed *> updateOffsetBatchRef(offset) *>
       producer.produceChunk[R, K, V](records, keySerializer, valueSerializer)
 
   def produceChunkBatch[R, K, V](
@@ -82,13 +81,20 @@ final private[producer] class TransactionImpl(
     offsets: OffsetBatch
   ): RIO[R, Chunk[RecordMetadata]] =
     haltIfClosed *>
-      offsetBatchRef.update(_ merge offsets) *>
+      offsetBatchRef.update(v => v.copy(offsetBatch = v.offsetBatch merge offsets)) *>
       producer.produceChunk[R, K, V](records, keySerializer, valueSerializer)
 
   def abort: IO[TransactionalProducer.UserInitiatedAbort.type, Nothing] =
     ZIO.fail(UserInitiatedAbort)
 
   private[producer] def markAsClosed: UIO[Unit] = closed.set(true)
+
+  private def updateOffsetBatchRef(offset: Option[Offset]): Task[Unit] =
+    ZIO
+      .whenCase(offset) { case Some(offset) =>
+        offsetBatchRef.update(v => v.copy(offsetBatch = v.offsetBatch.add(offset)))
+      }
+      .unit
 
   private def haltIfClosed: IO[TransactionLeaked, Unit] =
     offsetBatchRef.get

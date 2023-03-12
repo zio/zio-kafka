@@ -17,6 +17,7 @@ import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.TransactionalProducer
 import zio.kafka.serde.Serde
+import zio.kafka.types.OffsetBatch
 import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._
@@ -186,11 +187,10 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                          .take(5)
                                          .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
                                          .mapConcatZIO { committableRecords =>
-                                           val records = committableRecords.map(_.record)
-                                           val offsetBatch =
-                                             committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+                                           val records     = committableRecords.map(_.record)
+                                           val offsetBatch = OffsetBatch.from(committableRecords.map(_.offset))
 
-                                           offsetBatch.commit.as(records)
+                                           Consumer.commitBatch(offsetBatch).as(records)
                                          }
                                          .runCollect
                                          .provideSomeLayer[Kafka](
@@ -205,11 +205,10 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                  .take(5)
                                  .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
                                  .mapConcatZIO { committableRecords =>
-                                   val records = committableRecords.map(_.record)
-                                   val offsetBatch =
-                                     committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+                                   val records     = committableRecords.map(_.record)
+                                   val offsetBatch = OffsetBatch.from(committableRecords.map(_.offset))
 
-                                   offsetBatch.commit.as(records)
+                                   Consumer.commitBatch(offsetBatch).as(records)
                                  }
                                  .runCollect
                                  .provideSomeLayer[Kafka](
@@ -304,8 +303,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                           _  <- Consumer.stopConsumption.when(nr == 1)
                         } yield record.offset
                       }
-                      .transduce(Consumer.offsetBatches)
-                      .mapZIO(_.commit)
+                      .transduce(Consumer.offsetBatchesSink)
+                      .mapZIO(Consumer.commitBatch)
                       .runDrain *>
                       Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head))
                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
@@ -332,9 +331,9 @@ object ConsumerSpec extends ZIOKafkaSpec {
                        .partitionedStream(subscription, Serde.string, Serde.string)
                        .flatMapPar(nrPartitions)(_._2.map(_.offset))
                        .take(nrMessages.toLong)
-                       .transduce(Consumer.offsetBatches)
+                       .transduce(Consumer.offsetBatchesSink)
                        .take(1)
-                       .mapZIO(_.commit)
+                       .mapZIO(Consumer.commitBatch)
                        .runDrain *>
                        Consumer.committed((0 until nrPartitions).map(new TopicPartition(topic, _)).toSet))
                        .provideSomeLayer[Kafka](consumer(client, Some(group)))
@@ -453,11 +452,10 @@ object ConsumerSpec extends ZIOKafkaSpec {
                  .take(5)
                  .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
                  .mapConcatZIO { committableRecords =>
-                   val records = committableRecords.map(_.record)
-                   val offsetBatch =
-                     committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+                   val records     = committableRecords.map(_.record)
+                   val offsetBatch = OffsetBatch.from(committableRecords.map(_.offset))
 
-                   offsetBatch.commit.as(records)
+                   Consumer.commitBatch(offsetBatch).as(records)
                  }
                  .runCollect
                  .provideSomeLayer[Kafka](consumer(client1, Some(group)))
@@ -659,7 +657,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                        .fromIterable(partitions.map(_._2))
                        .flatMapPar(Int.MaxValue)(s => s)
                        .mapZIO(record => messagesReceived(record.partition).update(_ + 1).as(record))
-                       .mapZIO(record => record.offset.commit)
+                       .mapZIO(record => Consumer.commit(record.offset))
                        .runDrain
                    }
                    .mapZIO(_ =>
@@ -774,8 +772,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                     .flatMapPar(Int.MaxValue)(s => s)
                     .mapZIO(record => messagesReceivedConsumer1.update(_ + 1).as(record))
                     .map(_.offset)
-                    .aggregateAsync(Consumer.offsetBatches)
-                    .mapZIO(offsetBatch => offsetBatch.commit)
+                    .aggregateAsync(Consumer.offsetBatchesSink)
+                    .mapZIO(Consumer.commitBatch)
                     .runDrain
               }
               .mapZIO(_ => drainCount.updateAndGet(_ + 1))
@@ -796,8 +794,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
               .plainStream(subscription, Serde.string, Serde.string)
               .mapZIO(record => messagesReceivedConsumer2.update(_ + 1).as(record))
               .map(_.offset)
-              .aggregateAsync(Consumer.offsetBatches)
-              .mapZIO(offsetBatch => offsetBatch.commit)
+              .aggregateAsync(Consumer.offsetBatchesSink)
+              .mapZIO(Consumer.commitBatch)
               .runDrain
               .provideSomeLayer[Kafka](
                 customConsumer("consumer2", Some(group))
@@ -880,7 +878,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                               records.map(r => new ProducerRecord(toTopic, r.key, r.value)),
                                               Serde.string,
                                               Serde.string,
-                                              OffsetBatch(records.map(_.offset))
+                                              OffsetBatch.from(records.map(_.offset))
                                             )
                                      } yield Chunk.empty
                                    }.uninterruptible

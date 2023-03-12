@@ -4,11 +4,12 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.KafkaTestUtils._
-import zio.kafka.consumer.{ CommittableRecord, Consumer, ConsumerSettings, OffsetBatch, Subscription }
+import zio.kafka.consumer.{ CommittableRecord, Consumer, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
-import zio.kafka.producer.{ Producer, Transaction, TransactionalProducer }
 import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
+import zio.kafka.producer.{ Producer, Transaction, TransactionalProducer }
 import zio.kafka.serde.Serde
+import zio.kafka.types.TransactionalOffsetBatch
 import zio.stream.Take
 import zio.test.Assertion._
 import zio.test.TestAspect.withLiveClock
@@ -442,7 +443,7 @@ object ProducerSpec extends ZIOKafkaSpec {
             t <- transactionThief.get
             _ <- t.get.produce(topic, 0, 0, Serde.int, Serde.int, None)
           } yield ()
-          assertZIO(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
+          assertZIO(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(TransactionalOffsetBatch.empty)))))
         },
         test("fails if transaction leaks in an open transaction") {
           val test = for {
@@ -460,7 +461,7 @@ object ProducerSpec extends ZIOKafkaSpec {
                    }
                  }
           } yield ()
-          assertZIO(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
+          assertZIO(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(TransactionalOffsetBatch.empty)))))
         }
       )
     ).provideSomeLayerShared[TestEnvironment & Kafka](

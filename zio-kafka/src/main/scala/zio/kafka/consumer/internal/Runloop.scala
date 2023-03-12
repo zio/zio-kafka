@@ -26,11 +26,11 @@ private[consumer] final class Runloop(
   pollFrequency: Duration,
   pollTimeout: Duration,
   requestQueue: Queue[Runloop.Request],
-  commandQueue: Queue[Command],
+  val commandQueue: Queue[Command],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
   val partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
   rebalancingRef: Ref[Boolean],
-  diagnostics: Diagnostics,
+  val diagnostics: Diagnostics,
   shutdownRef: Ref[Boolean],
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
@@ -133,15 +133,6 @@ private[consumer] final class Runloop(
     }
   }
 
-  private val commit: Map[TopicPartition, Long] => Task[Unit] =
-    (offsets: Map[TopicPartition, Long]) =>
-      for {
-        p <- Promise.make[Throwable, Unit]
-        _ <- commandQueue.offer(Command.Commit(offsets, p)).unit
-        _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
-        _ <- p.await
-      } yield ()
-
   private def doCommit(cmds: Chunk[Command.Commit]): UIO[Unit] = {
     val offsets   = aggregateOffsets(cmds)
     val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(cmds)(_.cont.done(e))
@@ -165,7 +156,7 @@ private[consumer] final class Runloop(
 
   // Returns the highest offset to commit per partition
   private def aggregateOffsets(cmds: Chunk[Command.Commit]): Map[TopicPartition, OffsetAndMetadata] = {
-    val offsets = mutable.Map[TopicPartition, OffsetAndMetadata]()
+    val offsets = mutable.Map.empty[TopicPartition, OffsetAndMetadata]
 
     cmds.foreach { commit =>
       commit.offsets.foreach { case (tp, offset) =>
@@ -211,9 +202,7 @@ private[consumer] final class Runloop(
         val remaining = bufferedRecords.recs.getOrElse(tp, Chunk.empty)
 
         control.finishWith(
-          remaining.map(
-            CommittableRecord(_, tp, commit)
-          )
+          remaining.map(CommittableRecord(_))
         )
       }
 
@@ -253,13 +242,7 @@ private[consumer] final class Runloop(
       } else {
         val concatenatedChunk = bufferedChunk ++ Chunk.fromJavaIterable(reqRecs)
 
-        fulfillAction = fulfillAction *> req.succeed(concatenatedChunk.map { record =>
-          CommittableRecord(
-            record = record,
-            req.tp,
-            commitHandle = commit
-          )
-        })
+        fulfillAction = fulfillAction *> req.succeed(concatenatedChunk.map(CommittableRecord(_)))
         buf -= req.tp
       }
     }

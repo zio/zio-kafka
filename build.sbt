@@ -11,6 +11,7 @@ lazy val embeddedKafkaVersion = "3.4.0" // Should be the same as kafkaVersion, e
 lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
 lazy val zio                   = "dev.zio"                   %% "zio"                     % zioVersion
 lazy val zioStreams            = "dev.zio"                   %% "zio-streams"             % zioVersion
+lazy val prelude               = "dev.zio"                   %% "zio-prelude"             % "1.0.0-RC18"
 lazy val zioTest               = "dev.zio"                   %% "zio-test"                % zioVersion
 lazy val zioTestSbt            = "dev.zio"                   %% "zio-test-sbt"            % zioVersion
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.9.0"
@@ -81,7 +82,8 @@ def stdSettings(prjName: String) = Seq(
   (Compile / doc) := Def.taskDyn {
     val default = (Compile / doc).taskValue
     Def.task(default.value)
-  }.value
+  }.value,
+  libraryDependencies += prelude
 )
 
 lazy val zioKafka =

@@ -1,15 +1,22 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp }
+import org.apache.kafka.clients.consumer.{
+  ConsumerGroupMetadata,
+  ConsumerRecord,
+  OffsetAndMetadata,
+  OffsetAndTimestamp
+}
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition }
 import zio._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
 import zio.kafka.serde.{ Deserializer, Serde }
+import zio.kafka.types.OffsetBatch
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
+import scala.util.control.NonFatal
 
 trait Consumer {
 
@@ -150,6 +157,12 @@ trait Consumer {
    * Expose internal consumer metrics
    */
   def metrics: Task[Map[MetricName, Metric]]
+
+  def groupMetadata: UIO[Option[ConsumerGroupMetadata]]
+
+  def commit(offset: Offset): Task[Unit]
+
+  def commitBatch(offsetBatch: OffsetBatch): Task[Unit]
 }
 
 object Consumer {
@@ -163,7 +176,6 @@ object Consumer {
       Take[Throwable, Chunk[(TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord])]]
     ]
   ) extends Consumer {
-
     override def assignment: Task[Set[TopicPartition]] =
       consumer.withConsumer(_.assignment().asScala.toSet)
 
@@ -312,16 +324,17 @@ object Consumer {
     ): ZIO[R & R1, Throwable, Unit] =
       for {
         r <- ZIO.environment[R & R1]
-        _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
-               .flatMapPar(Int.MaxValue, bufferSize = settings.perPartitionChunkPrefetch) { case (_, partitionStream) =>
-                 partitionStream.mapChunksZIO(_.mapZIO { case committable @ CommittableRecord(record, _, _) =>
-                   f(record).as(committable.offset)
-                 })
-               }
-               .provideEnvironment(r)
-               .aggregateAsync(offsetBatches)
-               .mapZIO(_.commitOrRetry(commitRetryPolicy))
-               .runDrain
+        _ <-
+          partitionedStream(subscription, keyDeserializer, valueDeserializer)
+            .flatMapPar(Int.MaxValue, bufferSize = settings.perPartitionChunkPrefetch) { case (_, partitionStream) =>
+              partitionStream.mapChunksZIO(_.mapZIO(committable => f(committable.record).as(committable.offset)))
+            }
+            .provideEnvironment(r)
+            .aggregateAsync(
+              ZSink.collectAllToMap[Offset, TopicPartition](o => new TopicPartition(o.topic, o.partition))(_ max _)
+            )
+            .mapZIO(offsets => commitBatchOrRetry(commitRetryPolicy)(OffsetBatch(offsets)))
+            .runDrain
       } yield ()
 
     private def subscribe(subscription: Subscription): Task[Unit] =
@@ -335,10 +348,28 @@ object Consumer {
 
     override def metrics: Task[Map[MetricName, Metric]] =
       consumer.withConsumer(_.metrics().asScala.toMap)
+
+    override private[zio] def groupMetadata: UIO[Option[ConsumerGroupMetadata]] =
+      ZIO.succeedBlocking {
+        if (settings.hasGroupId)
+          try Some(consumer.consumer.groupMetadata())
+          catch { case NonFatal(_) => None }
+        else None
+      }
+
+    @inline private def commitBatchOrRetry[R](policy: Schedule[R, Throwable, Any])(
+      offsets: OffsetBatch
+    ): RIO[R, Unit] =
+      Offset.commitBatchOrRetry(runloop.commandQueue, runloop.diagnostics)(offsets)(policy)
+
+    override def commit(offset: Offset): Task[Unit] = Offset.commit(runloop.commandQueue, runloop.diagnostics)(offset)
+
+    override def commitBatch(offsetBatch: OffsetBatch): Task[Unit] =
+      Offset.commitBatch(runloop.commandQueue, runloop.diagnostics)(offsetBatch)
   }
 
-  val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
-    ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
+  val offsetBatchesSink: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
+    ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
 
   def live: RLayer[ConsumerSettings & Diagnostics, Consumer] =
     ZLayer.scoped {
@@ -570,6 +601,10 @@ object Consumer {
    */
   def metrics: RIO[Consumer, Map[MetricName, Metric]] =
     ZIO.serviceWithZIO(_.metrics)
+
+  def commit(offset: Offset): RIO[Consumer, Unit] = ZIO.serviceWithZIO(_.commit(offset))
+
+  def commitBatch(offsetBatch: OffsetBatch): RIO[Consumer, Unit] = ZIO.serviceWithZIO(_.commitBatch(offsetBatch))
 
   sealed trait OffsetRetrieval
   object OffsetRetrieval {

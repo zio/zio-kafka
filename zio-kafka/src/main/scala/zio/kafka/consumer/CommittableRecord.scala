@@ -1,20 +1,17 @@
 package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.TopicPartition
+import zio.RIO
 import zio.kafka.serde.Deserializer
-import zio.{ RIO, Task }
 
 final case class CommittableRecord[K, V](
-  record: ConsumerRecord[K, V],
-  topicPartition: TopicPartition,
-  private[zio] val commitHandle: Map[TopicPartition, Long] => Task[Unit]
+  record: ConsumerRecord[K, V]
 ) {
   def offset: Offset =
     Offset(
-      topicPartition = topicPartition,
-      offset = record.offset(),
-      commitHandle = commitHandle
+      topic = record.topic(),
+      partition = record.partition(),
+      offset = record.offset()
     )
 
   def deserializeWith[R, K1, V1](

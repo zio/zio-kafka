@@ -5,10 +5,11 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.openjdk.jmh.annotations._
 import zio.kafka.KafkaTestUtils.{ consumer, produceMany, producer }
 import zio.kafka.bench.ZioBenchmark.randomThing
-import zio.kafka.consumer.{ Consumer, Offset, OffsetBatch, Subscription }
+import zio.kafka.consumer.{ Consumer, Offset, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
+import zio.kafka.types.OffsetBatch
 import zio.stream.ZSink
 import zio.{ durationInt, Ref, Schedule, ZIO, ZLayer }
 
@@ -58,8 +59,8 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                .map(_.offset)
                .aggregateAsyncWithin(ZSink.collectAll[Offset], Schedule.fixed(100.millis))
                .tap(batch => counter.update(_ + batch.size))
-               .map(OffsetBatch.apply)
-               .mapZIO(_.commit)
+               .map(OffsetBatch.from)
+               .mapZIO(Consumer.commitBatch)
                .takeUntilZIO(_ => counter.get.map(_ == nrMessages))
                .runDrain
                .provideSome[Kafka](

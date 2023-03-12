@@ -4,7 +4,7 @@ import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin.{ ConfigEntry, RecordsToDelete }
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{ Node => JNode }
-import zio.kafka.{ KafkaTestUtils, ZIOKafkaSpec }
+import zio._
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.admin.AdminClient.{
   AlterConfigOp,
@@ -22,15 +22,16 @@ import zio.kafka.admin.AdminClient.{
   TopicPartition
 }
 import zio.kafka.admin.acl._
-import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
+import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
+import zio.kafka.consumer.{ CommittableRecord, Consumer, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
+import zio.kafka.types.OffsetBatch
+import zio.kafka.{ KafkaTestUtils, ZIOKafkaSpec }
 import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio._
-import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 
 import java.util.UUID
 import java.util.concurrent.TimeoutException
@@ -230,11 +231,10 @@ object AdminSpec extends ZIOKafkaSpec {
               .take(count)
               .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
               .mapConcatZIO { committableRecords =>
-                val records = committableRecords.map(_.record)
-                val offsetBatch =
-                  committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+                val records     = committableRecords.map(_.record)
+                val offsetBatch = OffsetBatch.from(committableRecords.map(_.offset))
 
-                offsetBatch.commit.as(records)
+                Consumer.commitBatch(offsetBatch).as(records)
               }
               .runCollect
               .provideSomeLayer[Kafka](consumer("adminspec-topic10", Some(consumerGroupID)))
@@ -302,7 +302,7 @@ object AdminSpec extends ZIOKafkaSpec {
           Consumer
             .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
             .take(count)
-            .foreach(_.offset.commit)
+            .foreach(record => Consumer.commit(record.offset))
             .provideSomeLayer[Kafka](consumer(topic, Some(groupId)))
 
         KafkaTestUtils.withAdmin { client =>
@@ -343,7 +343,7 @@ object AdminSpec extends ZIOKafkaSpec {
           Consumer
             .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
             .take(count)
-            .foreach(_.offset.commit)
+            .foreach(record => Consumer.commit(record.offset))
             .provideSomeLayer[Kafka](consumer(topic, Some(groupId)))
 
         KafkaTestUtils.withAdmin { client =>
@@ -644,7 +644,7 @@ object AdminSpec extends ZIOKafkaSpec {
     groupInstanceId: Option[String] = None
   ): ZIO[Kafka, Throwable, Unit] = Consumer
     .plainStream(Subscription.topics(topicName), Serde.string, Serde.string)
-    .foreach(_.offset.commit)
+    .foreach(record => Consumer.commit(record.offset))
     .provideSomeLayer(consumer(clientId, Some(groupId), groupInstanceId))
 
   private def getStableConsumerGroupDescription(
