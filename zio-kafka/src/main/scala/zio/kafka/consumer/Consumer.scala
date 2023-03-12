@@ -349,13 +349,13 @@ object Consumer {
     override def metrics: Task[Map[MetricName, Metric]] =
       consumer.withConsumer(_.metrics().asScala.toMap)
 
-    override private[zio] def groupMetadata: UIO[Option[ConsumerGroupMetadata]] =
-      ZIO.succeedBlocking {
-        if (settings.hasGroupId)
+    override def groupMetadata: UIO[Option[ConsumerGroupMetadata]] =
+      if (settings.hasGroupId)
+        ZIO.succeedBlocking {
           try Some(consumer.consumer.groupMetadata())
           catch { case NonFatal(_) => None }
-        else None
-      }
+        }
+      else ZIO.none
 
     @inline private def commitBatchOrRetry[R](policy: Schedule[R, Throwable, Any])(
       offsets: OffsetBatch
