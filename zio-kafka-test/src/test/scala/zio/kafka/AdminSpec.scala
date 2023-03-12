@@ -232,7 +232,7 @@ object AdminSpec extends ZIOKafkaSpec {
               .mapConcatZIO { committableRecords =>
                 val records = committableRecords.map(_.record)
                 val offsetBatch =
-                  committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+                  committableRecords.foldLeft(OffsetBatch.empty)(_ add _.offset)
 
                 offsetBatch.commit.as(records)
               }

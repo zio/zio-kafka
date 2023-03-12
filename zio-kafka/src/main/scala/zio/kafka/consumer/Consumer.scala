@@ -338,7 +338,7 @@ object Consumer {
   }
 
   val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
-    ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ merge _)
+    ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
 
   def live: RLayer[ConsumerSettings & Diagnostics, Consumer] =
     ZLayer.scoped {

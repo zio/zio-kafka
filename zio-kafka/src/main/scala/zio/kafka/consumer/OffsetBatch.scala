@@ -7,7 +7,7 @@ import zio.{ RIO, Schedule, Task, ZIO }
 sealed trait OffsetBatch {
   def offsets: Map[TopicPartition, Long]
   def commit: Task[Unit]
-  def merge(offset: Offset): OffsetBatch
+  def add(offset: Offset): OffsetBatch
   def merge(offsets: OffsetBatch): OffsetBatch
   def consumerGroupMetadata: Option[ConsumerGroupMetadata]
 
@@ -22,7 +22,7 @@ sealed trait OffsetBatch {
 object OffsetBatch {
   val empty: OffsetBatch = EmptyOffsetBatch
 
-  def apply(offsets: Iterable[Offset]): OffsetBatch = offsets.foldLeft(empty)(_ merge _)
+  def apply(offsets: Iterable[Offset]): OffsetBatch = offsets.foldLeft(empty)(_ add _)
 }
 
 private final case class OffsetBatchImpl(
@@ -32,7 +32,7 @@ private final case class OffsetBatchImpl(
 ) extends OffsetBatch {
   def commit: Task[Unit] = commitHandle(offsets)
 
-  def merge(offset: Offset): OffsetBatch =
+  def add(offset: Offset): OffsetBatch =
     copy(
       offsets = offsets + (offset.topicPartition -> (offsets
         .getOrElse(offset.topicPartition, -1L) max offset.offset))
@@ -54,7 +54,7 @@ private final case class OffsetBatchImpl(
 case object EmptyOffsetBatch extends OffsetBatch {
   val offsets: Map[TopicPartition, Long]                   = Map.empty
   val commit: Task[Unit]                                   = ZIO.unit
-  def merge(offset: Offset): OffsetBatch                   = offset.batch
+  def add(offset: Offset): OffsetBatch                     = offset.batch
   def merge(offsets: OffsetBatch): OffsetBatch             = offsets
   def consumerGroupMetadata: Option[ConsumerGroupMetadata] = None
 }

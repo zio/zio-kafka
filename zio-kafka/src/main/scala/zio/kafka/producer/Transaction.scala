@@ -62,7 +62,7 @@ final private[producer] class TransactionImpl(
     offset: Option[Offset]
   ): RIO[R, RecordMetadata] =
     haltIfClosed *>
-      ZIO.whenCase(offset) { case Some(offset) => offsetBatchRef.update(_ merge offset) } *>
+      ZIO.whenCase(offset) { case Some(offset) => offsetBatchRef.update(_ add offset) } *>
       producer.produce[R, K, V](producerRecord, keySerializer, valueSerializer)
 
   def produceChunk[R, K, V](
@@ -72,7 +72,7 @@ final private[producer] class TransactionImpl(
     offset: Option[Offset]
   ): RIO[R, Chunk[RecordMetadata]] =
     haltIfClosed *>
-      ZIO.whenCase(offset) { case Some(offset) => offsetBatchRef.update(_ merge offset) } *>
+      ZIO.whenCase(offset) { case Some(offset) => offsetBatchRef.update(_ add offset) } *>
       producer.produceChunk[R, K, V](records, keySerializer, valueSerializer)
 
   def produceChunkBatch[R, K, V](
