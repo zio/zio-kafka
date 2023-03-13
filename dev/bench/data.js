@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1678704333784,
+  "lastUpdate": 1678732761249,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -3458,6 +3458,42 @@ window.BENCHMARK_DATA = {
             "value": 3001.349496640001,
             "unit": "ms/op",
             "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@gmail.com",
+            "name": "Steven Vroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "svroonland@gmail.com",
+            "name": "Steven Vroonland",
+            "username": "svroonland"
+          },
+          "distinct": true,
+          "id": "a296bca5a098ad205917f70773e9c35efb7bfdb6",
+          "message": "Merge remote-tracking branch 'origin/master' into improve-poll-behavior",
+          "timestamp": "2023-03-13T19:34:29+01:00",
+          "tree_id": "985327f662496bae1a0ffca28972d30c16078838",
+          "url": "https://github.com/zio/zio-kafka/commit/a296bca5a098ad205917f70773e9c35efb7bfdb6"
+        },
+        "date": 1678732760585,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 399.80577089444444,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 474.4291336777777,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
         ]
       }
