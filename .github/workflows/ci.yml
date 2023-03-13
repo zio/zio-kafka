@@ -47,6 +47,11 @@ jobs:
           distribution: temurin
           java-version: ${{ matrix.java }}
           check-latest: true
+      - name: Use CI sbt jvmopts
+        shell: bash
+        run: |
+          mv .jvmopts-ci .jvmopts
+          cat .jvmopts
       - name: Run tests
         run: sbt ++${{ matrix.scala }} test
 

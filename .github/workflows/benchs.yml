@@ -28,6 +28,11 @@ jobs:
           distribution: temurin
           java-version: 17
           check-latest: true
+      - name: Use CI sbt jvmopts
+        shell: bash
+        run: |
+          mv .jvmopts-ci .jvmopts
+          cat .jvmopts
 
       - name: compile
         run: sbt compile
