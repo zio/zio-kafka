@@ -8,6 +8,8 @@ sealed trait OffsetBatch {
   def offsets: Map[TopicPartition, Long]
   def commit: Task[Unit]
   def add(offset: Offset): OffsetBatch
+  @deprecated("Use add(Offset) instead", "2.1.4")
+  def merge(offset: Offset): OffsetBatch
   def merge(offsets: OffsetBatch): OffsetBatch
   def consumerGroupMetadata: Option[ConsumerGroupMetadata]
 
