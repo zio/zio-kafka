@@ -31,6 +31,7 @@ jobs:
       - name: Use CI sbt jvmopts
         shell: bash
         run: |
+          mv .jvmopts .jvmopts_old
           mv .jvmopts-ci .jvmopts
           cat .jvmopts
 
@@ -55,6 +56,13 @@ jobs:
         with:
           path: ./cache
           key: ${{ runner.os }}-benchmark
+
+      - name: Rollback - Use CI sbt jvmopts
+        shell: bash
+        run: |
+          mv .jvmopts .jvmopts-ci
+          mv .jvmopts_old .jvmopts
+          cat .jvmopts
 
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1.16.0
