@@ -27,7 +27,6 @@ private[consumer] final class Runloop(
   commandQueue: Queue[Command],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
   val partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
-  rebalancingRef: Ref[Boolean],
   diagnostics: Diagnostics,
   shutdownRef: Ref[Boolean],
   offsetRetrieval: OffsetRetrieval,
@@ -35,8 +34,7 @@ private[consumer] final class Runloop(
   restartStreamsOnRebalancing: Boolean,
   currentState: Ref[State]
 ) {
-  private val isRebalancing = rebalancingRef.get
-  private val isShutdown    = shutdownRef.get
+  private val isShutdown = shutdownRef.get
 
   def newPartitionStream(
     tp: TopicPartition
@@ -86,11 +84,6 @@ private[consumer] final class Runloop(
       .unit
 
   val rebalanceListener: RebalanceListener = {
-    val trackRebalancing = RebalanceListener(
-      onAssigned = (_, _) => rebalancingRef.set(false),
-      onRevoked = (_, _) => rebalancingRef.set(true)
-    )
-
     val emitDiagnostics = RebalanceListener(
       (assigned, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(assigned)),
       (revoked, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked)),
@@ -132,9 +125,9 @@ private[consumer] final class Runloop(
     )
 
     if (restartStreamsOnRebalancing) {
-      trackRebalancing ++ emitDiagnostics ++ revokeTopics ++ userRebalanceListener
+      emitDiagnostics ++ revokeTopics ++ userRebalanceListener
     } else {
-      trackRebalancing ++ emitDiagnostics ++ userRebalanceListener
+      emitDiagnostics ++ userRebalanceListener
     }
   }
 
@@ -600,12 +593,11 @@ private[consumer] final class Runloop(
                       }
     } yield updatedState
 
-    def doPollIfPendingActions(state: State): Task[(State, Boolean)] =
+    def doPollIfPendingActions(state: State): Task[(State, Boolean)] = {
+      val shouldPoll =
+        state.isSubscribed && (state.pendingRequests.nonEmpty || state.pendingCommits.nonEmpty || state.assignedStreams.isEmpty)
+
       for {
-        isRebalancing <- isRebalancing
-        isInitialized = state.initialized || state.pendingRequests.nonEmpty
-        shouldPoll =
-          state.isSubscribed && (state.pendingRequests.nonEmpty || state.pendingCommits.nonEmpty || !isInitialized || isRebalancing)
         _ <-
           ZIO
             .logTrace(
@@ -614,7 +606,8 @@ private[consumer] final class Runloop(
             .when(shouldPoll)
         newState <-
           if (shouldPoll) handlePoll(state) else ZIO.succeed(state)
-      } yield (newState.copy(initialized = isInitialized), !shouldPoll)
+      } yield (newState, !shouldPoll)
+    }
 
     def loop(state: State, wait: Boolean): ZIO[Any, Throwable, Nothing] = processCommands(state, wait)
       .flatMap(doPollIfPendingActions)
@@ -725,7 +718,6 @@ private[consumer] object Runloop {
     runloopTimeout: Duration
   ): ZIO[Scope, Throwable, Runloop] =
     for {
-      rebalancingRef     <- Ref.make(false)
       commandQueue       <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](commandQueueSize))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       partitions <- ZIO.acquireRelease(
@@ -747,7 +739,6 @@ private[consumer] object Runloop {
                   commandQueue,
                   lastRebalanceEvent,
                   partitions,
-                  rebalancingRef,
                   diagnostics,
                   shutdownRef,
                   offsetRetrieval,
