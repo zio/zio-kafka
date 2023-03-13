@@ -1,0 +1,3629 @@
+--- Execution profile ---
+Total samples       : 2451
+
+--- 342138952 bytes (18.72%), 95 samples
+  [ 0] java.nio.HeapByteBuffer
+  [ 1] org.apache.kafka.common.utils.ByteUtils.readUnsignedVarint
+  [ 2] org.apache.kafka.common.utils.ByteUtils.readVarint
+  [ 3] org.apache.kafka.common.record.DefaultRecord.readFrom
+  [ 4] org.apache.kafka.common.record.DefaultRecord.readFrom
+  [ 5] org.apache.kafka.common.record.DefaultRecordBatch$3.readNext
+  [ 6] org.apache.kafka.common.record.DefaultRecordBatch$RecordIterator.next
+  [ 7] org.apache.kafka.common.record.DefaultRecordBatch$RecordIterator.next
+  [ 8] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.nextFetchedRecord
+  [ 9] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [10] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [11] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [12] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [13] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [14] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [15] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [16] zio.kafka.consumer.internal.Runloop.doPoll
+  [17] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [18] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [19] zio.ZIO$.$anonfun$suspend$1
+  [20] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [21] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [22] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [23] zio.internal.FiberRuntime.runLoop
+  [24] zio.internal.FiberRuntime.runLoop
+  [25] zio.internal.FiberRuntime.runLoop
+  [26] zio.internal.FiberRuntime.runLoop
+  [27] zio.internal.FiberRuntime.evaluateEffect
+  [28] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [29] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [30] zio.internal.FiberRuntime.run
+  [31] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [32] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [33] java.lang.Thread.run
+
+--- 216245936 bytes (11.83%), 62 samples
+  [ 0] org.apache.kafka.clients.consumer.ConsumerRecord
+  [ 1] org.apache.kafka.common.utils.Utils.toArray
+  [ 2] org.apache.kafka.common.utils.Utils.toArray
+  [ 3] org.apache.kafka.clients.consumer.internals.Fetcher.parseRecord
+  [ 4] org.apache.kafka.clients.consumer.internals.Fetcher.access$3400
+  [ 5] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [ 6] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [ 7] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [ 8] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [ 9] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [10] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [11] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [12] zio.kafka.consumer.internal.Runloop.doPoll
+  [13] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [14] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [15] zio.ZIO$.$anonfun$suspend$1
+  [16] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [17] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [18] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.evaluateEffect
+  [24] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [25] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [26] zio.internal.FiberRuntime.run
+  [27] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [28] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [29] java.lang.Thread.run
+
+--- 171366672 bytes (9.37%), 53 samples
+  [ 0] org.apache.kafka.common.record.DefaultRecord
+  [ 1] org.apache.kafka.common.utils.ByteUtils.readUnsignedVarint
+  [ 2] org.apache.kafka.common.utils.ByteUtils.readVarint
+  [ 3] org.apache.kafka.common.record.DefaultRecord.readFrom
+  [ 4] org.apache.kafka.common.record.DefaultRecord.readFrom
+  [ 5] org.apache.kafka.common.record.DefaultRecordBatch$3.readNext
+  [ 6] org.apache.kafka.common.record.DefaultRecordBatch$RecordIterator.next
+  [ 7] org.apache.kafka.common.record.DefaultRecordBatch$RecordIterator.next
+  [ 8] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.nextFetchedRecord
+  [ 9] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [10] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [11] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [12] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [13] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [14] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [15] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [16] zio.kafka.consumer.internal.Runloop.doPoll
+  [17] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [18] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [19] zio.ZIO$.$anonfun$suspend$1
+  [20] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [21] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [22] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [23] zio.internal.FiberRuntime.runLoop
+  [24] zio.internal.FiberRuntime.runLoop
+  [25] zio.internal.FiberRuntime.runLoop
+  [26] zio.internal.FiberRuntime.runLoop
+  [27] zio.internal.FiberRuntime.evaluateEffect
+  [28] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [29] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [30] zio.internal.FiberRuntime.run
+  [31] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [32] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [33] java.lang.Thread.run
+
+--- 100368400 bytes (5.49%), 30 samples
+  [ 0] byte[]
+  [ 1] org.apache.kafka.common.header.internals.RecordHeaders.<init>
+  [ 2] org.apache.kafka.clients.consumer.internals.Fetcher.parseRecord
+  [ 3] org.apache.kafka.clients.consumer.internals.Fetcher.access$3400
+  [ 4] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [ 5] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [ 6] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [ 7] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [ 8] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [ 9] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [10] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [11] zio.kafka.consumer.internal.Runloop.doPoll
+  [12] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [13] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [14] zio.ZIO$.$anonfun$suspend$1
+  [15] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [16] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [17] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.evaluateEffect
+  [23] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [24] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [25] zio.internal.FiberRuntime.run
+  [26] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [27] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [28] java.lang.Thread.run
+
+--- 97754672 bytes (5.35%), 27 samples
+  [ 0] org.apache.kafka.common.TopicPartition
+  [ 1] zio.kafka.consumer.internal.Runloop.getConsumerGroupMetadataIfAny
+  [ 2] zio.kafka.consumer.internal.Runloop.$anonfun$fulfillRequests$4
+  [ 3] zio.kafka.consumer.internal.Runloop$$Lambda$2994.0x0000000801377560.apply
+  [ 4] zio.Chunk$Arr.mapChunk
+  [ 5] zio.ChunkLike.map
+  [ 6] zio.ChunkLike.map$
+  [ 7] zio.Chunk.map
+  [ 8] zio.kafka.consumer.internal.Runloop.$anonfun$fulfillRequests$3
+  [ 9] zio.kafka.consumer.internal.Runloop$$Lambda$2993.0x0000000801377028.apply
+  [10] zio.ZIO.$anonfun$$times$greater$1
+  [11] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.evaluateEffect
+  [19] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [20] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [21] zio.internal.FiberRuntime.run
+  [22] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [23] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [24] java.lang.Thread.run
+
+--- 95571800 bytes (5.23%), 26 samples
+  [ 0] zio.kafka.consumer.OffsetImpl
+  [ 1] zio.kafka.consumer.internal.Runloop.getConsumerGroupMetadataIfAny
+  [ 2] zio.kafka.consumer.internal.Runloop.$anonfun$fulfillRequests$4
+  [ 3] zio.kafka.consumer.internal.Runloop$$Lambda$2994.0x0000000801377560.apply
+  [ 4] zio.Chunk$Arr.mapChunk
+  [ 5] zio.ChunkLike.map
+  [ 6] zio.ChunkLike.map$
+  [ 7] zio.Chunk.map
+  [ 8] zio.kafka.consumer.internal.Runloop.$anonfun$fulfillRequests$3
+  [ 9] zio.kafka.consumer.internal.Runloop$$Lambda$2993.0x0000000801377028.apply
+  [10] zio.ZIO.$anonfun$$times$greater$1
+  [11] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.evaluateEffect
+  [19] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [20] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [21] zio.internal.FiberRuntime.run
+  [22] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [23] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [24] java.lang.Thread.run
+
+--- 92954160 bytes (5.08%), 25 samples
+  [ 0] org.apache.kafka.common.header.internals.RecordHeaders
+  [ 1] org.apache.kafka.clients.consumer.internals.Fetcher.parseRecord
+  [ 2] org.apache.kafka.clients.consumer.internals.Fetcher.access$3400
+  [ 3] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [ 4] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [ 5] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [ 6] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [ 7] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [ 8] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 9] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [10] zio.kafka.consumer.internal.Runloop.doPoll
+  [11] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [12] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [13] zio.ZIO$.$anonfun$suspend$1
+  [14] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [15] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [16] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.evaluateEffect
+  [22] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [23] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [24] zio.internal.FiberRuntime.run
+  [25] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [26] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [27] java.lang.Thread.run
+
+--- 88017200 bytes (4.81%), 25 samples
+  [ 0] byte[]
+  [ 1] org.apache.kafka.common.utils.Utils.toArray
+  [ 2] org.apache.kafka.common.utils.Utils.toArray
+  [ 3] org.apache.kafka.clients.consumer.internals.Fetcher.parseRecord
+  [ 4] org.apache.kafka.clients.consumer.internals.Fetcher.access$3400
+  [ 5] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [ 6] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [ 7] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [ 8] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [ 9] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [10] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [11] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [12] zio.kafka.consumer.internal.Runloop.doPoll
+  [13] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [14] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [15] zio.ZIO$.$anonfun$suspend$1
+  [16] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [17] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [18] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.evaluateEffect
+  [24] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [25] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [26] zio.internal.FiberRuntime.run
+  [27] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [28] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [29] java.lang.Thread.run
+
+--- 70228688 bytes (3.84%), 19 samples
+  [ 0] java.util.ArrayList
+  [ 1] org.apache.kafka.common.header.internals.RecordHeaders.<init>
+  [ 2] org.apache.kafka.common.header.internals.RecordHeaders.<init>
+  [ 3] org.apache.kafka.clients.consumer.internals.Fetcher.parseRecord
+  [ 4] org.apache.kafka.clients.consumer.internals.Fetcher.access$3400
+  [ 5] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [ 6] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [ 7] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [ 8] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [ 9] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [10] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [11] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [12] zio.kafka.consumer.internal.Runloop.doPoll
+  [13] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [14] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [15] zio.ZIO$.$anonfun$suspend$1
+  [16] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [17] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [18] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.evaluateEffect
+  [24] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [25] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [26] zio.internal.FiberRuntime.run
+  [27] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [28] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [29] java.lang.Thread.run
+
+--- 65226736 bytes (3.57%), 17 samples
+  [ 0] java.util.Arrays$ArrayList
+  [ 1] org.apache.kafka.clients.consumer.internals.Fetcher.parseRecord
+  [ 2] org.apache.kafka.clients.consumer.internals.Fetcher.access$3400
+  [ 3] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [ 4] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [ 5] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [ 6] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [ 7] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [ 8] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 9] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [10] zio.kafka.consumer.internal.Runloop.doPoll
+  [11] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [12] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [13] zio.ZIO$.$anonfun$suspend$1
+  [14] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [15] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [16] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.evaluateEffect
+  [22] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [23] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [24] zio.internal.FiberRuntime.run
+  [25] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [26] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [27] java.lang.Thread.run
+
+--- 43673104 bytes (2.39%), 14 samples
+  [ 0] zio.kafka.consumer.CommittableRecord
+  [ 1] zio.kafka.consumer.internal.Runloop.getConsumerGroupMetadataIfAny
+  [ 2] zio.kafka.consumer.internal.Runloop.$anonfun$fulfillRequests$4
+  [ 3] zio.kafka.consumer.internal.Runloop$$Lambda$2994.0x0000000801377560.apply
+  [ 4] zio.Chunk$Arr.mapChunk
+  [ 5] zio.ChunkLike.map
+  [ 6] zio.ChunkLike.map$
+  [ 7] zio.Chunk.map
+  [ 8] zio.kafka.consumer.internal.Runloop.$anonfun$fulfillRequests$3
+  [ 9] zio.kafka.consumer.internal.Runloop$$Lambda$2993.0x0000000801377028.apply
+  [10] zio.ZIO.$anonfun$$times$greater$1
+  [11] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.evaluateEffect
+  [19] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [20] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [21] zio.internal.FiberRuntime.run
+  [22] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [23] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [24] java.lang.Thread.run
+
+--- 41618416 bytes (2.28%), 12 samples
+  [ 0] java.lang.Object[]
+  [ 1] java.util.Arrays.copyOf
+  [ 2] java.util.Arrays.copyOf
+  [ 3] java.util.ArrayList.grow
+  [ 4] java.util.ArrayList.grow
+  [ 5] java.util.ArrayList.add
+  [ 6] java.util.ArrayList.add
+  [ 7] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [ 8] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [ 9] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [10] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [11] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [12] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [13] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [14] zio.kafka.consumer.internal.Runloop.doPoll
+  [15] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [16] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [17] zio.ZIO$.$anonfun$suspend$1
+  [18] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [19] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [20] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.runLoop
+  [24] zio.internal.FiberRuntime.runLoop
+  [25] zio.internal.FiberRuntime.evaluateEffect
+  [26] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [27] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [28] zio.internal.FiberRuntime.run
+  [29] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [30] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [31] java.lang.Thread.run
+
+--- 33094472 bytes (1.81%), 9 samples
+  [ 0] java.lang.Object[]
+  [ 1] scala.collection.mutable.ArrayBuilder$ofRef.mkArray
+  [ 2] scala.collection.mutable.ArrayBuilder$ofRef.resize
+  [ 3] scala.collection.mutable.ArrayBuilder.ensureSize
+  [ 4] scala.collection.mutable.ArrayBuilder$ofRef.addOne
+  [ 5] scala.collection.mutable.ArrayBuilder$ofRef.addOne
+  [ 6] zio.ChunkBuilder$$anon$1.addOne
+  [ 7] zio.ChunkBuilder$$anon$1.addOne
+  [ 8] scala.collection.mutable.Growable.$plus$eq
+  [ 9] scala.collection.mutable.Growable.$plus$eq$
+  [10] zio.ChunkBuilder.$plus$eq
+  [11] zio.Chunk$.fromJavaIterator
+  [12] zio.Chunk$.fromJavaIterable
+  [13] zio.kafka.consumer.internal.Runloop.$anonfun$fulfillRequests$1
+  [14] zio.kafka.consumer.internal.Runloop$$Lambda$2588.0x00000008012fb0a8.apply
+  [15] scala.collection.ArrayOps$.foreach$extension
+  [16] zio.Chunk$Arr.foreach
+  [17] zio.kafka.consumer.internal.Runloop.fulfillRequests
+  [18] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$16
+  [19] zio.kafka.consumer.internal.Runloop$$Lambda$2584.0x00000008012fa370.apply
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.runLoop
+  [24] zio.internal.FiberRuntime.evaluateEffect
+  [25] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [26] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [27] zio.internal.FiberRuntime.run
+  [28] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [29] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [30] java.lang.Thread.run
+
+--- 27643680 bytes (1.51%), 10 samples
+  [ 0] java.util.Optional
+  [ 1] org.apache.kafka.common.utils.Utils.toArray
+  [ 2] org.apache.kafka.common.utils.Utils.toArray
+  [ 3] org.apache.kafka.clients.consumer.internals.Fetcher.parseRecord
+  [ 4] org.apache.kafka.clients.consumer.internals.Fetcher.access$3400
+  [ 5] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [ 6] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [ 7] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [ 8] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [ 9] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [10] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [11] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [12] zio.kafka.consumer.internal.Runloop.doPoll
+  [13] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [14] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [15] zio.ZIO$.$anonfun$suspend$1
+  [16] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [17] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [18] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.evaluateEffect
+  [24] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [25] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [26] zio.internal.FiberRuntime.run
+  [27] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [28] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [29] java.lang.Thread.run
+
+--- 25388592 bytes (1.39%), 14 samples
+  [ 0] byte[]
+  [ 1] java.nio.ByteBuffer.allocate
+  [ 2] org.apache.kafka.common.memory.MemoryPool$1.tryAllocate
+  [ 3] org.apache.kafka.common.network.NetworkReceive.readFrom
+  [ 4] org.apache.kafka.common.network.KafkaChannel.receive
+  [ 5] org.apache.kafka.common.network.KafkaChannel.read
+  [ 6] org.apache.kafka.common.network.Selector.attemptRead
+  [ 7] org.apache.kafka.common.network.Selector.pollSelectionKeys
+  [ 8] org.apache.kafka.common.network.Selector.poll
+  [ 9] org.apache.kafka.clients.NetworkClient.poll
+  [10] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.transmitSends
+  [11] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [12] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [13] zio.kafka.consumer.internal.Runloop.doPoll
+  [14] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [15] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [16] zio.ZIO$.$anonfun$suspend$1
+  [17] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [18] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [19] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.runLoop
+  [24] zio.internal.FiberRuntime.evaluateEffect
+  [25] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [26] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [27] zio.internal.FiberRuntime.run
+  [28] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [29] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [30] java.lang.Thread.run
+
+--- 18875448 bytes (1.03%), 7 samples
+  [ 0] byte[]
+  [ 1] java.nio.ByteBuffer.allocate
+  [ 2] org.apache.kafka.common.memory.MemoryPool$1.tryAllocate
+  [ 3] org.apache.kafka.common.network.NetworkReceive.readFrom
+  [ 4] org.apache.kafka.common.network.KafkaChannel.receive
+  [ 5] org.apache.kafka.common.network.KafkaChannel.read
+  [ 6] org.apache.kafka.common.network.Selector.attemptRead
+  [ 7] org.apache.kafka.common.network.Selector.pollSelectionKeys
+  [ 8] org.apache.kafka.common.network.Selector.poll
+  [ 9] org.apache.kafka.clients.NetworkClient.poll
+  [10] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll
+  [11] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll
+  [12] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [13] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [14] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [15] zio.kafka.consumer.internal.Runloop.doPoll
+  [16] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [17] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [18] zio.ZIO$.$anonfun$suspend$1
+  [19] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [20] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [21] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.runLoop
+  [24] zio.internal.FiberRuntime.runLoop
+  [25] zio.internal.FiberRuntime.runLoop
+  [26] zio.internal.FiberRuntime.evaluateEffect
+  [27] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [28] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [29] zio.internal.FiberRuntime.run
+  [30] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [31] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [32] java.lang.Thread.run
+
+--- 8388608 bytes (0.46%), 2 samples
+  [ 0] zio.ZIO$EvaluationStep[]
+  [ 1] zio.internal.PinchableArray.pinch
+  [ 2] zio.internal.FiberRuntime.evaluateEffect
+  [ 3] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 4] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 5] zio.internal.FiberRuntime.run
+  [ 6] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 7] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [ 8] java.lang.Thread.run
+
+--- 7817752 bytes (0.43%), 2 samples
+  [ 0] java.util.HashMap$Node[]
+  [ 1] java.util.HashMap.resize
+  [ 2] java.util.HashMap.putVal
+  [ 3] java.util.HashMap.put
+  [ 4] java.util.HashSet.add
+  [ 5] java.util.AbstractCollection.addAll
+  [ 6] java.util.HashSet.<init>
+  [ 7] org.apache.kafka.clients.consumer.internals.SubscriptionState.assignedPartitions
+  [ 8] org.apache.kafka.clients.consumer.KafkaConsumer.assignment
+  [ 9] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$8
+  [10] zio.kafka.consumer.internal.Runloop$$Lambda$2569.0x00000008012f61d0.apply
+  [11] zio.ZIO$IfZIO$.$anonfun$apply$3
+  [12] zio.ZIO$IfZIO$.$anonfun$apply$3$adapted
+  [13] zio.ZIO$IfZIO$$$Lambda$1889.0x0000000801202000.apply
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.evaluateEffect
+  [19] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [20] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [21] zio.internal.FiberRuntime.run
+  [22] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [23] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [24] java.lang.Thread.run
+
+--- 7203296 bytes (0.39%), 2 samples
+  [ 0] java.lang.Object[]
+  [ 1] java.util.Arrays.copyOf
+  [ 2] java.util.Arrays.copyOf
+  [ 3] scala.collection.mutable.ArrayBuilder$ofRef.mkArray
+  [ 4] scala.collection.mutable.ArrayBuilder$ofRef.result
+  [ 5] scala.collection.mutable.ArrayBuilder$ofRef.result
+  [ 6] zio.ChunkBuilder$$anon$1.result
+  [ 7] zio.ChunkBuilder$$anon$1.result
+  [ 8] zio.Chunk$.fromJavaIterator
+  [ 9] zio.Chunk$.fromJavaIterable
+  [10] zio.kafka.consumer.internal.Runloop.$anonfun$fulfillRequests$1
+  [11] zio.kafka.consumer.internal.Runloop$$Lambda$2588.0x00000008012fb0a8.apply
+  [12] scala.collection.ArrayOps$.foreach$extension
+  [13] zio.Chunk$Arr.foreach
+  [14] zio.kafka.consumer.internal.Runloop.fulfillRequests
+  [15] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$16
+  [16] zio.kafka.consumer.internal.Runloop$$Lambda$2584.0x00000008012fa370.apply
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.evaluateEffect
+  [22] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [23] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [24] zio.internal.FiberRuntime.run
+  [25] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [26] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [27] java.lang.Thread.run
+
+--- 5971728 bytes (0.33%), 24 samples
+  [ 0] java.lang.InterruptedException
+  [ 1] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await
+  [ 2] java.util.concurrent.LinkedBlockingQueue.take
+  [ 3] java.util.concurrent.ThreadPoolExecutor.getTask
+  [ 4] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 5] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [ 6] java.lang.Thread.run
+
+--- 4194304 bytes (0.23%), 1 sample
+  [ 0] java.util.HashMap$Node
+  [ 1] java.util.HashMap.putVal
+  [ 2] java.util.HashMap.put
+  [ 3] java.util.HashSet.add
+  [ 4] java.util.AbstractCollection.addAll
+  [ 5] java.util.HashSet.<init>
+  [ 6] org.apache.kafka.clients.consumer.internals.SubscriptionState.assignedPartitions
+  [ 7] org.apache.kafka.clients.consumer.KafkaConsumer.assignment
+  [ 8] zio.kafka.consumer.internal.Runloop.$anonfun$handleRequests$8
+  [ 9] zio.kafka.consumer.internal.Runloop$$Lambda$2900.0x0000000801353328.apply
+  [10] zio.kafka.consumer.internal.ConsumerAccess.$anonfun$withConsumer$2
+  [11] zio.kafka.consumer.internal.ConsumerAccess$$Lambda$2907.0x0000000801354bb0.apply
+  [12] zio.ZIOCompanionVersionSpecific.$anonfun$attempt$1
+  [13] zio.ZIOCompanionVersionSpecific$$Lambda$359.0x0000000800ddc000.apply
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.evaluateEffect
+  [19] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [20] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [21] zio.internal.FiberRuntime.run
+  [22] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [23] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [24] java.lang.Thread.run
+
+--- 4194304 bytes (0.23%), 1 sample
+  [ 0] java.util.concurrent.ConcurrentLinkedQueue$Itr
+  [ 1] java.util.concurrent.ConcurrentLinkedQueue.iterator
+  [ 2] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient$UnsentRequests.requestIterator
+  [ 3] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.trySend
+  [ 4] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.transmitSends
+  [ 5] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 6] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 7] zio.kafka.consumer.internal.Runloop.doPoll
+  [ 8] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [ 9] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [10] zio.ZIO$.$anonfun$suspend$1
+  [11] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [12] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [13] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.evaluateEffect
+  [19] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [20] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [21] zio.internal.FiberRuntime.run
+  [22] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [23] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [24] java.lang.Thread.run
+
+--- 4194304 bytes (0.23%), 1 sample
+  [ 0] byte[]
+  [ 1] java.lang.AbstractStringBuilder.append
+  [ 2] java.lang.StringBuilder.append
+  [ 3] org.apache.kafka.common.network.Selector$SelectorMetrics.recordBytesReceived
+  [ 4] org.apache.kafka.common.network.Selector.attemptRead
+  [ 5] org.apache.kafka.common.network.Selector.pollSelectionKeys
+  [ 6] org.apache.kafka.common.network.Selector.poll
+  [ 7] org.apache.kafka.clients.NetworkClient.poll
+  [ 8] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll
+  [ 9] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll
+  [10] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [11] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [12] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [13] zio.kafka.consumer.internal.Runloop.doPoll
+  [14] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [15] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [16] zio.ZIO$.$anonfun$suspend$1
+  [17] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [18] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [19] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.runLoop
+  [24] zio.internal.FiberRuntime.evaluateEffect
+  [25] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [26] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [27] zio.internal.FiberRuntime.run
+  [28] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [29] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [30] java.lang.Thread.run
+
+--- 4194304 bytes (0.23%), 1 sample
+  [ 0] org.apache.kafka.common.record.DefaultRecord
+  [ 1] org.apache.kafka.common.utils.ByteUtils.readUnsignedVarint
+  [ 2] org.apache.kafka.common.utils.ByteUtils.readVarint
+  [ 3] org.apache.kafka.common.record.DefaultRecord.readFrom
+  [ 4] org.apache.kafka.common.record.DefaultRecord.readFrom
+  [ 5] org.apache.kafka.common.record.DefaultRecordBatch$3.readNext
+  [ 6] org.apache.kafka.common.record.DefaultRecordBatch$RecordIterator.next
+  [ 7] org.apache.kafka.common.record.DefaultRecordBatch$RecordIterator.next
+  [ 8] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.nextFetchedRecord
+  [ 9] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [10] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [11] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [12] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [13] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [14] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [15] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [16] zio.kafka.consumer.internal.Runloop.doPoll
+  [17] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [18] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [19] zio.ZIO$.$anonfun$suspend$1
+  [20] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [21] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [22] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [23] zio.internal.FiberRuntime.runLoop
+  [24] zio.internal.FiberRuntime.runLoop
+  [25] zio.internal.FiberRuntime.runLoop
+  [26] zio.internal.FiberRuntime.runLoop
+  [27] zio.internal.FiberRuntime.evaluateEffect
+  [28] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [29] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [30] zio.internal.FiberRuntime.run
+  [31] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [32] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [33] java.lang.Thread.run
+
+--- 4194304 bytes (0.23%), 1 sample
+  [ 0] byte[]
+  [ 1] java.lang.String.substring
+  [ 2] javax.management.ObjectName.getDomain
+  [ 3] com.sun.jmx.mbeanserver.Repository.addMBean
+  [ 4] com.sun.jmx.interceptor.DefaultMBeanServerInterceptor.registerWithRepository
+  [ 5] com.sun.jmx.interceptor.DefaultMBeanServerInterceptor.registerDynamicMBean
+  [ 6] com.sun.jmx.interceptor.DefaultMBeanServerInterceptor.registerObject
+  [ 7] com.sun.jmx.interceptor.DefaultMBeanServerInterceptor.registerMBean
+  [ 8] com.sun.jmx.mbeanserver.JmxMBeanServer.registerMBean
+  [ 9] org.apache.kafka.common.metrics.JmxReporter.reregister
+  [10] org.apache.kafka.common.metrics.JmxReporter.metricChange
+  [11] org.apache.kafka.common.metrics.Metrics.registerMetric
+  [12] org.apache.kafka.common.metrics.Sensor.add
+  [13] org.apache.kafka.common.metrics.Sensor.add
+  [14] org.apache.kafka.clients.consumer.internals.Fetcher$FetchManagerMetrics.recordPartitionLead
+  [15] org.apache.kafka.clients.consumer.internals.Fetcher$FetchManagerMetrics.access$2200
+  [16] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [17] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [18] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [19] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [20] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [21] zio.kafka.consumer.internal.Runloop.doPoll
+  [22] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [23] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [24] zio.ZIO$.$anonfun$suspend$1
+  [25] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [26] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [27] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [28] zio.internal.FiberRuntime.runLoop
+  [29] zio.internal.FiberRuntime.runLoop
+  [30] zio.internal.FiberRuntime.runLoop
+  [31] zio.internal.FiberRuntime.runLoop
+  [32] zio.internal.FiberRuntime.evaluateEffect
+  [33] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [34] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [35] zio.internal.FiberRuntime.run
+  [36] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [37] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [38] java.lang.Thread.run
+
+--- 4194304 bytes (0.23%), 1 sample
+  [ 0] java.nio.HeapByteBuffer
+  [ 1] org.apache.kafka.common.utils.ByteUtils.readUnsignedVarint
+  [ 2] org.apache.kafka.common.utils.ByteUtils.readVarint
+  [ 3] org.apache.kafka.common.record.DefaultRecord.readFrom
+  [ 4] org.apache.kafka.common.record.DefaultRecord.readFrom
+  [ 5] org.apache.kafka.common.record.DefaultRecordBatch$3.readNext
+  [ 6] org.apache.kafka.common.record.DefaultRecordBatch$RecordIterator.next
+  [ 7] org.apache.kafka.common.record.DefaultRecordBatch$RecordIterator.next
+  [ 8] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.nextFetchedRecord
+  [ 9] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [10] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [11] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [12] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [13] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [14] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [15] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [16] zio.kafka.consumer.internal.Runloop.doPoll
+  [17] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [18] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [19] zio.ZIO$.$anonfun$suspend$1
+  [20] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [21] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [22] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [23] zio.internal.FiberRuntime.runLoop
+  [24] zio.internal.FiberRuntime.runLoop
+  [25] zio.internal.FiberRuntime.runLoop
+  [26] zio.internal.FiberRuntime.runLoop
+  [27] zio.internal.FiberRuntime.evaluateEffect
+  [28] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [29] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [30] zio.internal.FiberRuntime.run
+  [31] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [32] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [33] java.lang.Thread.run
+
+--- 4194304 bytes (0.23%), 1 sample
+  [ 0] zio.ZIO$ReleaseExit$$Lambda$1280+0x00000008011278f8
+  [ 1] zio.ZIO$ReleaseExit$$Lambda$1267.0x0000000801120b30.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 8] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [ 9] java.lang.Thread.run
+
+--- 4194304 bytes (0.23%), 1 sample
+  [ 0] java.util.Collections$UnmodifiableCollection$1
+  [ 1] java.util.Collections$UnmodifiableCollection$1.<init>
+  [ 2] java.util.Collections$UnmodifiableCollection.iterator
+  [ 3] java.util.AbstractCollection.addAll
+  [ 4] java.util.HashSet.<init>
+  [ 5] org.apache.kafka.clients.consumer.internals.SubscriptionState.assignedPartitions
+  [ 6] org.apache.kafka.clients.consumer.KafkaConsumer.assignment
+  [ 7] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [ 8] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [ 9] zio.ZIO$.$anonfun$suspend$1
+  [10] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [11] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [12] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.evaluateEffect
+  [18] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [19] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [20] zio.internal.FiberRuntime.run
+  [21] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [22] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [23] java.lang.Thread.run
+
+--- 4194304 bytes (0.23%), 1 sample
+  [ 0] java.util.HashMap$KeyIterator
+  [ 1] java.util.HashSet.iterator
+  [ 2] java.util.Collections$UnmodifiableCollection$1.<init>
+  [ 3] java.util.Collections$UnmodifiableCollection.iterator
+  [ 4] scala.collection.convert.JavaCollectionWrappers$JSetWrapper.iterator
+  [ 5] scala.collection.mutable.Growable.addAll
+  [ 6] scala.collection.mutable.Growable.addAll$
+  [ 7] scala.collection.immutable.SetBuilderImpl.addAll
+  [ 8] scala.collection.immutable.Set$.from
+  [ 9] scala.collection.IterableOnceOps.toSet
+  [10] scala.collection.IterableOnceOps.toSet$
+  [11] scala.collection.AbstractIterable.toSet
+  [12] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [13] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [14] zio.ZIO$.$anonfun$suspend$1
+  [15] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [16] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [17] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.evaluateEffect
+  [23] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [24] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [25] zio.internal.FiberRuntime.run
+  [26] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [27] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [28] java.lang.Thread.run
+
+--- 4194304 bytes (0.23%), 1 sample
+  [ 0] int[]
+  [ 1] scala.collection.immutable.HashMapBuilder.insertValue
+  [ 2] scala.collection.immutable.HashMapBuilder.update
+  [ 3] scala.collection.immutable.HashMapBuilder.addOne
+  [ 4] scala.collection.immutable.HashMapBuilder.addOne
+  [ 5] scala.collection.StrictOptimizedIterableOps.$anonfun$partition$1
+  [ 6] scala.collection.StrictOptimizedIterableOps$$Lambda$994.0x0000000801094fd0.apply
+  [ 7] scala.collection.IterableOnceOps.foreach
+  [ 8] scala.collection.IterableOnceOps.foreach$
+  [ 9] scala.collection.immutable.MapKeyValueTupleIterator.foreach
+  [10] scala.collection.StrictOptimizedIterableOps.partition
+  [11] scala.collection.StrictOptimizedIterableOps.partition$
+  [12] scala.collection.immutable.HashMap.partition
+  [13] zio.kafka.consumer.internal.Runloop.endRevoked
+  [14] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$11
+  [15] zio.kafka.consumer.internal.Runloop$$Lambda$2575.0x00000008012f8000.apply
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.evaluateEffect
+  [21] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [22] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [23] zio.internal.FiberRuntime.run
+  [24] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [25] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [26] java.lang.Thread.run
+
+--- 4194304 bytes (0.23%), 1 sample
+  [ 0] java.util.HashMap$Node
+  [ 1] java.util.HashMap.putVal
+  [ 2] java.util.HashMap.put
+  [ 3] java.util.HashSet.add
+  [ 4] org.apache.kafka.clients.consumer.internals.Fetcher.fetchablePartitions
+  [ 5] org.apache.kafka.clients.consumer.internals.Fetcher.prepareFetchRequests
+  [ 6] org.apache.kafka.clients.consumer.internals.Fetcher.sendFetches
+  [ 7] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 8] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 9] zio.kafka.consumer.internal.Runloop.doPoll
+  [10] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [11] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [12] zio.ZIO$.$anonfun$suspend$1
+  [13] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [14] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [15] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.evaluateEffect
+  [21] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [22] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [23] zio.internal.FiberRuntime.run
+  [24] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [25] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [26] java.lang.Thread.run
+
+--- 4194304 bytes (0.23%), 1 sample
+  [ 0] scala.Tuple2
+  [ 1] zio.kafka.consumer.internal.Runloop.endRevoked
+  [ 2] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$11
+  [ 3] zio.kafka.consumer.internal.Runloop$$Lambda$2575.0x00000008012f8000.apply
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.evaluateEffect
+  [ 9] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [10] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [11] zio.internal.FiberRuntime.run
+  [12] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [13] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [14] java.lang.Thread.run
+
+--- 3791544 bytes (0.21%), 1 sample
+  [ 0] byte[]
+  [ 1] org.apache.kafka.common.TopicPartition.toString
+  [ 2] java.lang.String.valueOf
+  [ 3] java.lang.StringBuilder.append
+  [ 4] org.apache.kafka.clients.consumer.internals.Fetcher$FetchManagerMetrics.partitionLagMetricName
+  [ 5] org.apache.kafka.clients.consumer.internals.Fetcher$FetchManagerMetrics.recordPartitionLag
+  [ 6] org.apache.kafka.clients.consumer.internals.Fetcher$FetchManagerMetrics.access$2100
+  [ 7] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [ 8] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [ 9] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [10] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [11] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [12] zio.kafka.consumer.internal.Runloop.doPoll
+  [13] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [14] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [15] zio.ZIO$.$anonfun$suspend$1
+  [16] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [17] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [18] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.evaluateEffect
+  [24] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [25] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [26] zio.internal.FiberRuntime.run
+  [27] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [28] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [29] java.lang.Thread.run
+
+--- 3444648 bytes (0.19%), 27 samples
+  [ 0] zio.ChunkBuilder$$anon$1
+  [ 1] java.lang.invoke.VarHandleLongs$Array.setRelease
+  [ 2] java.lang.invoke.VarHandleGuards.guard_LIJ_V
+  [ 3] java.util.concurrent.atomic.AtomicLongArray.lazySet
+  [ 4] zio.internal.RingBuffer.pollUpTo
+  [ 5] zio.internal.ZScheduler$$anon$4.run
+
+--- 3270144 bytes (0.18%), 1 sample
+  [ 0] zio.kafka.consumer.OffsetImpl
+  [ 1] zio.kafka.consumer.internal.Runloop.getConsumerGroupMetadataIfAny
+  [ 2] zio.kafka.consumer.internal.Runloop.$anonfun$fulfillRequests$4
+  [ 3] zio.kafka.consumer.internal.Runloop$$Lambda$2994.0x0000000801377560.apply
+  [ 4] zio.Chunk$Arr.mapChunk
+  [ 5] zio.ChunkLike.map
+  [ 6] zio.ChunkLike.map$
+  [ 7] zio.Chunk.map
+  [ 8] zio.kafka.consumer.internal.Runloop.$anonfun$fulfillRequests$3
+  [ 9] zio.kafka.consumer.internal.Runloop$$Lambda$2993.0x0000000801377028.apply
+  [10] zio.ZIO.$anonfun$$times$greater$1
+  [11] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.evaluateEffect
+  [20] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [21] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [22] zio.internal.FiberRuntime.run
+  [23] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [24] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [25] java.lang.Thread.run
+
+--- 3046032 bytes (0.17%), 1 sample
+  [ 0] zio.ZIO$Stateful
+  [ 1] zio.kafka.consumer.internal.ConsumerAccess$$Lambda$2538.0x00000008012ee318.apply
+  [ 2] zio.ZIO$.$anonfun$suspend$1
+  [ 3] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [ 4] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [ 5] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.evaluateEffect
+  [11] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [12] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [13] zio.internal.FiberRuntime.run
+  [14] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [15] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [16] java.lang.Thread.run
+
+--- 2953760 bytes (0.16%), 1 sample
+  [ 0] java.util.ArrayList
+  [ 1] org.apache.kafka.clients.NetworkClient.poll
+  [ 2] org.apache.kafka.clients.producer.internals.Sender.runOnce
+  [ 3] org.apache.kafka.clients.producer.internals.Sender.run
+  [ 4] java.lang.Thread.run
+
+--- 2923520 bytes (0.16%), 1 sample
+  [ 0] java.lang.Object[]
+  [ 1] scala.collection.mutable.ArrayBuilder$ofRef.mkArray
+  [ 2] scala.collection.mutable.ArrayBuilder$ofRef.resize
+  [ 3] scala.collection.mutable.ArrayBuilder.sizeHint
+  [ 4] zio.ChunkBuilder$$anon$1.addOne
+  [ 5] zio.ChunkBuilder$$anon$1.addOne
+  [ 6] scala.collection.mutable.Growable.$plus$eq
+  [ 7] scala.collection.mutable.Growable.$plus$eq$
+  [ 8] zio.ChunkBuilder.$plus$eq
+  [ 9] zio.Chunk$Arr.mapChunk
+  [10] zio.ChunkLike.map
+  [11] zio.ChunkLike.map$
+  [12] zio.Chunk.map
+  [13] zio.kafka.consumer.internal.Runloop.$anonfun$fulfillRequests$3
+  [14] zio.kafka.consumer.internal.Runloop$$Lambda$2993.0x0000000801377028.apply
+  [15] zio.ZIO.$anonfun$$times$greater$1
+  [16] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.evaluateEffect
+  [24] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [25] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [26] zio.internal.FiberRuntime.run
+  [27] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [28] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [29] java.lang.Thread.run
+
+--- 2097288 bytes (0.11%), 1 sample
+  [ 0] byte[]
+  [ 1] java.nio.ByteBuffer.allocate
+  [ 2] org.apache.kafka.common.memory.MemoryPool$1.tryAllocate
+  [ 3] org.apache.kafka.common.network.NetworkReceive.readFrom
+  [ 4] org.apache.kafka.common.network.KafkaChannel.receive
+  [ 5] org.apache.kafka.common.network.KafkaChannel.read
+  [ 6] org.apache.kafka.common.network.Selector.attemptRead
+  [ 7] org.apache.kafka.common.network.Selector.pollSelectionKeys
+  [ 8] org.apache.kafka.common.network.Selector.poll
+  [ 9] org.apache.kafka.clients.NetworkClient.poll
+  [10] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll
+  [11] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.pollNoWakeup
+  [12] org.apache.kafka.clients.consumer.internals.AbstractCoordinator$HeartbeatThread.run
+
+--- 1936200 bytes (0.11%), 16 samples
+  [ 0] zio.Chunk$Slice
+  [ 1] zio.Chunk.drop
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] zio.internal.ZScheduler$$anon$4.run
+
+--- 1885648 bytes (0.10%), 6 samples
+  [ 0] byte[]
+  [ 1] java.nio.ByteBuffer.allocate
+  [ 2] org.apache.zookeeper.server.NIOServerCnxn.readLength
+  [ 3] org.apache.zookeeper.server.NIOServerCnxn.doIO
+  [ 4] org.apache.zookeeper.server.NIOServerCnxnFactory$IOWorkRequest.doWork
+  [ 5] org.apache.zookeeper.server.WorkerService$ScheduledWorkRequest.run
+  [ 6] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 7] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [ 8] java.lang.Thread.run
+
+--- 1756568 bytes (0.10%), 2 samples
+  [ 0] zio.Exit$$Lambda$3178+0x00000008013a9c50
+  [ 1] java.lang.invoke.DirectMethodHandle$Holder.newInvokeSpecial
+  [ 2] java.lang.invoke.Invokers$Holder.linkToTargetMethod
+  [ 3] zio.Exit.getOrThrow
+  [ 4] zio.Exit.getOrThrow$
+  [ 5] zio.Exit$Success.getOrThrow
+  [ 6] zio.kafka.bench.ZioBenchmark.$anonfun$runZIO$1
+  [ 7] zio.kafka.bench.ZioBenchmark$$Lambda$2479.0x00000008012de000.apply
+  [ 8] zio.Unsafe$.unsafe
+  [ 9] zio.kafka.bench.ZioBenchmark.runZIO
+  [10] zio.kafka.bench.ZioBenchmark.runZIO$
+  [11] zio.kafka.bench.ConsumersComparisonBenchmark.runZIO
+  [12] zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka
+  [13] zio.kafka.bench.jmh_generated.ConsumersComparisonBenchmark_zioKafka_jmhTest.zioKafka_avgt_jmhStub
+  [14] zio.kafka.bench.jmh_generated.ConsumersComparisonBenchmark_zioKafka_jmhTest.zioKafka_AverageTime
+  [15] jdk.internal.reflect.NativeMethodAccessorImpl.invoke0
+  [16] jdk.internal.reflect.NativeMethodAccessorImpl.invoke
+  [17] jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke
+  [18] java.lang.reflect.Method.invoke
+  [19] org.openjdk.jmh.runner.BenchmarkHandler$BenchmarkTask.call
+  [20] org.openjdk.jmh.runner.BenchmarkHandler$BenchmarkTask.call
+  [21] java.util.concurrent.FutureTask.run
+  [22] java.util.concurrent.Executors$RunnableAdapter.call
+  [23] java.util.concurrent.FutureTask.run
+  [24] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [25] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [26] java.lang.Thread.run
+
+--- 1568176 bytes (0.09%), 1 sample
+  [ 0] byte[]
+  [ 1] org.apache.kafka.common.header.internals.RecordHeaders.<init>
+  [ 2] org.apache.kafka.clients.consumer.internals.Fetcher.parseRecord
+  [ 3] org.apache.kafka.clients.consumer.internals.Fetcher.access$3400
+  [ 4] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.fetchRecords
+  [ 5] org.apache.kafka.clients.consumer.internals.Fetcher$CompletedFetch.access$1900
+  [ 6] org.apache.kafka.clients.consumer.internals.Fetcher.fetchRecords
+  [ 7] org.apache.kafka.clients.consumer.internals.Fetcher.collectFetch
+  [ 8] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [ 9] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [10] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [11] zio.kafka.consumer.internal.Runloop.doPoll
+  [12] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [13] zio.kafka.consumer.internal.Runloop$$Lambda$2554.0x00000008012f22d8.apply
+  [14] zio.ZIO$.$anonfun$suspend$1
+  [15] zio.ZIO$$$Lambda$2540.0x00000008012ee9a8.apply
+  [16] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [17] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011b7378.apply
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.evaluateEffect
+  [23] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [24] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [25] zio.internal.FiberRuntime.run
+  [26] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [27] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [28] java.lang.Thread.run
+
+--- 1566040 bytes (0.09%), 7 samples
+  [ 0] java.util.Collections$UnmodifiableMap$UnmodifiableEntrySet$1
+  [ 1] java.util.Collections$UnmodifiableMap$UnmodifiableEntrySet.iterator
+  [ 2] jdk.vm.ci.services.Services.serializeProperties
+  [ 3] jdk.vm.ci.services.Services.serializeSavedProperties
+
+--- 1481728 bytes (0.08%), 10 samples
+  [ 0] zio.Chunk$AnyRefArray
+  [ 1] scala.reflect.ClassTag$.apply
+  [ 2] zio.Chunk$Arr.<init>
+  [ 3] zio.Chunk$AnyRefArray.<init>
+  [ 4] zio.Chunk$.fromArray
+  [ 5] zio.internal.PinchableArray.pinch
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 1468776 bytes (0.08%), 11 samples
+  [ 0] zio.Chunk$AnyRefArray
+  [ 1] scala.reflect.ClassTag$.apply
+  [ 2] zio.Chunk$Arr.<init>
+  [ 3] zio.Chunk$AnyRefArray.<init>
+  [ 4] zio.Chunk$.fromArray
+  [ 5] zio.ChunkBuilder$$anon$1.result
+  [ 6] zio.ChunkBuilder$$anon$1.result
+  [ 7] zio.internal.RingBuffer.pollUpTo
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 1392728 bytes (0.08%), 10 samples
+  [ 0] zio.ZIO$Sync
+  [ 1] java.lang.invoke.LambdaForm$DMH.0x0000000800d9cc00.newInvokeSpecial
+  [ 2] java.lang.invoke.Invokers$Holder.linkToTargetMethod
+  [ 3] zio.stream.internal.ChannelExecutor$.read$1
+  [ 4] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$10
+  [ 5] zio.stream.internal.ChannelExecutor$$$Lambda$1558.0x0000000801197768.apply
+  [ 6] zio.ZIO.$anonfun$$times$greater$1
+  [ 7] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 1308632 bytes (0.07%), 7 samples
+  [ 0] java.util.concurrent.LinkedBlockingQueue$Itr
+  [ 1] java.util.concurrent.LinkedBlockingQueue.iterator
+  [ 2] org.apache.zookeeper.server.NIOServerCnxn.handleWrite
+  [ 3] org.apache.zookeeper.server.NIOServerCnxn.doIO
+  [ 4] org.apache.zookeeper.server.NIOServerCnxnFactory$IOWorkRequest.doWork
+  [ 5] org.apache.zookeeper.server.WorkerService$ScheduledWorkRequest.run
+  [ 6] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 7] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [ 8] java.lang.Thread.run
+
+--- 1274824 bytes (0.07%), 11 samples
+  [ 0] scala.collection.mutable.ArrayBuilder$ofRef
+  [ 1] scala.collection.mutable.ArrayBuilder$.make
+  [ 2] zio.ChunkBuilder$$anon$1.addOne
+  [ 3] zio.ChunkBuilder$$anon$1.addOne
+  [ 4] scala.collection.mutable.Growable.$plus$eq
+  [ 5] scala.collection.mutable.Growable.$plus$eq$
+  [ 6] zio.ChunkBuilder.$plus$eq
+  [ 7] zio.internal.RingBuffer.pollUpTo
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 1166864 bytes (0.06%), 7 samples
+  [ 0] java.lang.String
+
+--- 1130080 bytes (0.06%), 9 samples
+  [ 0] zio.ZIO$OnSuccess
+  [ 1] zio.ZIO.$anonfun$onExit$6
+  [ 2] zio.ZIO$$Lambda$167.0x0000000800d81b88.apply
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.evaluateEffect
+  [ 5] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 6] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 7] zio.internal.FiberRuntime.run
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 1115240 bytes (0.06%), 2 samples
+  [ 0] java.util.concurrent.locks.AbstractQueuedSynchronizer$SharedNode
+  [ 1] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 2] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquireSharedInterruptibly
+  [ 3] java.util.concurrent.CountDownLatch.await
+  [ 4] org.openjdk.jmh.runner.InfraControlL2.awaitWarmdownReady
+  [ 5] org.openjdk.jmh.runner.InfraControl.awaitWarmdownReady
+  [ 6] org.openjdk.jmh.runner.BenchmarkHandler.runIteration
+  [ 7] org.openjdk.jmh.runner.BaseRunner.runBenchmark
+  [ 8] org.openjdk.jmh.runner.BaseRunner.runBenchmark
+  [ 9] org.openjdk.jmh.runner.BaseRunner.doSingle
+  [10] org.openjdk.jmh.runner.BaseRunner.runBenchmarksForked
+  [11] org.openjdk.jmh.runner.ForkedRunner.run
+  [12] org.openjdk.jmh.runner.ForkedMain.main
+
+--- 1093928 bytes (0.06%), 9 samples
+  [ 0] scala.Tuple2
+  [ 1] scala.collection.immutable.Map$Map4$Map4Iterator.next
+  [ 2] scala.collection.IterableOnceOps.foldLeft
+  [ 3] scala.collection.IterableOnceOps.foldLeft$
+  [ 4] scala.collection.AbstractIterable.foldLeft
+  [ 5] zio.FiberRefs.joinAs
+  [ 6] zio.internal.FiberRuntime.$anonfun$inheritAll$1
+  [ 7] zio.internal.FiberRuntime$$Lambda$1232.0x0000000801112e98.apply
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.evaluateEffect
+  [11] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [12] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [13] zio.internal.FiberRuntime.run
+  [14] zio.internal.ZScheduler$$anon$4.run
+
+--- 1004344 bytes (0.05%), 9 samples
+  [ 0] zio.Chunk$Slice
+  [ 1] scala.reflect.ClassTag$.apply
+  [ 2] zio.Chunk$Arr.<init>
+  [ 3] zio.Chunk$AnyRefArray.<init>
+  [ 4] zio.Chunk$.fromArray
+  [ 5] zio.internal.PinchableArray.pinch
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 1003344 bytes (0.05%), 1 sample
+  [ 0] java.util.HashMap$KeyIterator
+  [ 1] java.util.HashSet.iterator
+  [ 2] sun.nio.ch.Util$2.iterator
+  [ 3] org.apache.zookeeper.server.NIOServerCnxnFactory$AcceptThread.select
+  [ 4] org.apache.zookeeper.server.NIOServerCnxnFactory$AcceptThread.run
+
+--- 996536 bytes (0.05%), 9 samples
+  [ 0] zio.ZIO$OnSuccess
+  [ 1] java.lang.invoke.LambdaForm$DMH.0x0000000800d9cc00.newInvokeSpecial
+  [ 2] java.lang.invoke.Invokers$Holder.linkToTargetMethod
+  [ 3] zio.stream.internal.ChannelExecutor$.read$1
+  [ 4] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$10
+  [ 5] zio.stream.internal.ChannelExecutor$$$Lambda$1558.0x0000000801197768.apply
+  [ 6] zio.ZIO.$anonfun$$times$greater$1
+  [ 7] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 971184 bytes (0.05%), 5 samples
+  [ 0] java.util.HashMap$Node
+  [ 1] java.util.HashMap.putVal
+  [ 2] java.util.HashMap.put
+  [ 3] java.util.HashSet.add
+  [ 4] sun.nio.ch.SelectorImpl.processReadyEvents
+  [ 5] sun.nio.ch.KQueueSelectorImpl.processEvents
+  [ 6] sun.nio.ch.KQueueSelectorImpl.doSelect
+  [ 7] sun.nio.ch.SelectorImpl.lockAndDoSelect
+  [ 8] sun.nio.ch.SelectorImpl.select
+  [ 9] org.apache.zookeeper.server.NIOServerCnxnFactory$SelectorThread.select
+  [10] org.apache.zookeeper.server.NIOServerCnxnFactory$SelectorThread.run
+
+--- 952824 bytes (0.05%), 6 samples
+  [ 0] zio.ZIO$$Lambda$136+0x0000000800d47cb0
+  [ 1] zio.internal.FiberRuntime.runLoop
+  [ 2] zio.internal.FiberRuntime.evaluateEffect
+  [ 3] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 4] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 5] zio.internal.FiberRuntime.run
+  [ 6] zio.internal.ZScheduler$$anon$4.run
+
+--- 947864 bytes (0.05%), 8 samples
+  [ 0] zio.ZIO$OnSuccessAndFailure
+  [ 1] zio.stream.internal.ChannelExecutor.run
+  [ 2] zio.stream.internal.ChannelExecutor$.read$1
+  [ 3] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$10
+  [ 4] zio.stream.internal.ChannelExecutor$$$Lambda$1558.0x0000000801197768.apply
+  [ 5] zio.ZIO.$anonfun$$times$greater$1
+  [ 6] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.evaluateEffect
+  [ 9] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [10] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [11] zio.internal.FiberRuntime.run
+  [12] zio.internal.ZScheduler$$anon$4.run
+
+--- 940904 bytes (0.05%), 8 samples
+  [ 0] zio.ZIO$$Lambda$1153+0x00000008010e77e8
+  [ 1] zio.ZIO.$anonfun$onExit$6
+  [ 2] zio.ZIO$$Lambda$167.0x0000000800d81b88.apply
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.evaluateEffect
+  [ 5] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 6] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 7] zio.internal.FiberRuntime.run
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 937520 bytes (0.05%), 8 samples
+  [ 0] java.lang.Object[]
+  [ 1] zio.stream.ZChannel.interpret$2
+  [ 2] zio.stream.ZChannel.$anonfun$toPull$12
+  [ 3] zio.stream.ZChannel$$Lambda$1713.0x00000008011cf1c0.apply
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.evaluateEffect
+  [ 9] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [10] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [11] zio.internal.FiberRuntime.run
+  [12] zio.internal.ZScheduler$$anon$4.run
+
+--- 915544 bytes (0.05%), 7 samples
+  [ 0] java.lang.InterruptedException
+  [ 1] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await
+  [ 2] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 3] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 4] java.util.concurrent.ThreadPoolExecutor.getTask
+  [ 5] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 6] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [ 7] java.lang.Thread.run
+
+--- 877640 bytes (0.05%), 9 samples
+  [ 0] zio.stream.internal.ChannelExecutor$$Lambda$1530+0x0000000801190d48
+  [ 1] zio.stream.internal.ChannelExecutor.run
+  [ 2] zio.stream.internal.ChannelExecutor$.read$1
+  [ 3] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$10
+  [ 4] zio.stream.internal.ChannelExecutor$$$Lambda$1558.0x0000000801197768.apply
+  [ 5] zio.ZIO.$anonfun$$times$greater$1
+  [ 6] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.evaluateEffect
+  [ 9] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [10] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [11] zio.internal.FiberRuntime.run
+  [12] zio.internal.ZScheduler$$anon$4.run
+
+--- 838096 bytes (0.05%), 7 samples
+  [ 0] zio.ZIO$Sync
+  [ 1] zio.internal.FiberRuntime.runLoop
+  [ 2] zio.internal.FiberRuntime.evaluateEffect
+  [ 3] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 4] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 5] zio.internal.FiberRuntime.run
+  [ 6] zio.internal.ZScheduler$$anon$4.run
+
+--- 779584 bytes (0.04%), 6 samples
+  [ 0] java.lang.Object[]
+  [ 1] scala.collection.mutable.ArrayBuilder$ofRef.mkArray
+  [ 2] scala.collection.mutable.ArrayBuilder$ofRef.resize
+  [ 3] scala.collection.mutable.ArrayBuilder.sizeHint
+  [ 4] zio.ChunkBuilder$$anon$1.addOne
+  [ 5] zio.ChunkBuilder$$anon$1.addOne
+  [ 6] scala.collection.mutable.Growable.$plus$eq
+  [ 7] scala.collection.mutable.Growable.$plus$eq$
+  [ 8] zio.ChunkBuilder.$plus$eq
+  [ 9] zio.internal.RingBuffer.pollUpTo
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 771784 bytes (0.04%), 1 sample
+  [ 0] java.lang.InterruptedException
+  [ 1] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await
+  [ 2] java.util.concurrent.ArrayBlockingQueue.take
+  [ 3] kafka.server.LogDirFailureChannel.takeNextOfflineLogDir
+  [ 4] kafka.server.ReplicaManager$LogDirFailureHandler.doWork
+  [ 5] kafka.utils.ShutdownableThread.run
+
+--- 766016 bytes (0.04%), 5 samples
+  [ 0] zio.internal.ReifyStack$Trampoline
+  [ 1] zio.internal.FiberRuntime.runLoop
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] zio.internal.ZScheduler$$anon$4.run
+
+--- 733576 bytes (0.04%), 9 samples
+  [ 0] zio.stream.internal.ChannelExecutor$$$Lambda$1558+0x0000000801197768
+  [ 1] scala.collection.mutable.ArrayDeque.scala$collection$mutable$ArrayDeque$$prependAssumingCapacity
+  [ 2] scala.collection.mutable.ArrayDeque.prepend
+  [ 3] scala.collection.mutable.Stack.push
+  [ 4] zio.stream.internal.ChannelExecutor$.read$1
+  [ 5] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$10
+  [ 6] zio.stream.internal.ChannelExecutor$$$Lambda$1558.0x0000000801197768.apply
+  [ 7] zio.ZIO.$anonfun$$times$greater$1
+  [ 8] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.evaluateEffect
+  [11] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [12] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [13] zio.internal.FiberRuntime.run
+  [14] zio.internal.ZScheduler$$anon$4.run
+
+--- 681080 bytes (0.04%), 3 samples
+  [ 0] java.lang.InterruptedException
+  [ 1] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await
+  [ 2] java.util.concurrent.LinkedBlockingQueue.take
+  [ 3] kafka.common.ZkNodeChangeNotificationListener$ChangeEventProcessThread.doWork
+  [ 4] kafka.utils.ShutdownableThread.run
+
+--- 671304 bytes (0.04%), 4 samples
+  [ 0] java.lang.InterruptedException
+  [ 1] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.awaitNanos
+  [ 2] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 3] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 4] java.util.concurrent.ThreadPoolExecutor.getTask
+  [ 5] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 6] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [ 7] java.lang.Thread.run
+
+--- 625848 bytes (0.03%), 4 samples
+  [ 0] zio.ZIO$EvaluationStep[]
+  [ 1] zio.internal.PinchableArray.pinch
+  [ 2] zio.internal.FiberRuntime.evaluateEffect
+  [ 3] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 4] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 5] zio.internal.FiberRuntime.run
+  [ 6] zio.internal.ZScheduler$$anon$4.run
+
+--- 623496 bytes (0.03%), 5 samples
+  [ 0] java.util.concurrent.ConcurrentLinkedQueue$Node
+  [ 1] java.util.concurrent.ConcurrentLinkedQueue.offer
+  [ 2] java.util.concurrent.ConcurrentLinkedQueue.add
+  [ 3] zio.internal.FiberRuntime.tell
+  [ 4] zio.internal.FiberRuntime.evaluateEffect
+  [ 5] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 6] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 7] zio.internal.FiberRuntime.run
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 615736 bytes (0.03%), 5 samples
+  [ 0] zio.FiberRefs
+  [ 1] zio.FiberRefs.updatedAs
+  [ 2] zio.internal.FiberRuntime.setFiberRef
+  [ 3] zio.internal.FiberRuntime.getFiberRefs
+  [ 4] zio.internal.FiberRuntime.$anonfun$inheritAll$1
+  [ 5] zio.internal.FiberRuntime$$Lambda$1232.0x0000000801112e98.apply
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.evaluateEffect
+  [ 9] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [10] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [11] zio.internal.FiberRuntime.run
+  [12] zio.internal.ZScheduler$$anon$4.run
+
+--- 609424 bytes (0.03%), 4 samples
+  [ 0] zio.ZIO$OnSuccess
+  [ 1] zio.kafka.consumer.internal.ConsumerAccess$$Lambda$2533.0x00000008012ed118.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.evaluateEffect
+  [14] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [15] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [16] zio.internal.FiberRuntime.run
+  [17] zio.internal.ZScheduler$$anon$4.run
+
+--- 606624 bytes (0.03%), 4 samples
+  [ 0] kafka.utils.KafkaScheduler$$Lambda$854+0x000000080103cd30
+  [ 1] java.lang.invoke.DirectMethodHandle$Holder.newInvokeSpecial
+  [ 2] java.lang.invoke.Invokers$Holder.linkToTargetMethod
+  [ 3] kafka.utils.KafkaScheduler.$anonfun$schedule$2
+  [ 4] kafka.utils.KafkaScheduler$$Lambda$645.0x0000000800f8e8a0.run
+  [ 5] java.util.concurrent.Executors$RunnableAdapter.call
+  [ 6] java.util.concurrent.FutureTask.runAndReset
+  [ 7] java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run
+  [ 8] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 9] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [10] java.lang.Thread.run
+
+--- 581856 bytes (0.03%), 4 samples
+  [ 0] scala.collection.immutable.Map$Map4
+  [ 1] scala.collection.immutable.Map$Map4.updated
+  [ 2] scala.collection.immutable.Map$Map4.updated
+  [ 3] zio.FiberRefs.updatedAs
+  [ 4] zio.internal.FiberRuntime.setFiberRef
+  [ 5] zio.internal.FiberRuntime.getFiberRefs
+  [ 6] zio.internal.FiberRuntime.$anonfun$inheritAll$1
+  [ 7] zio.internal.FiberRuntime$$Lambda$1232.0x0000000801112e98.apply
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.evaluateEffect
+  [11] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [12] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [13] zio.internal.FiberRuntime.run
+  [14] zio.internal.ZScheduler$$anon$4.run
+
+--- 561872 bytes (0.03%), 5 samples
+  [ 0] zio.stream.internal.ChannelExecutor$$Lambda$1604+0x00000008011a7c18
+  [ 1] zio.stream.internal.ChannelExecutor.run
+  [ 2] zio.stream.internal.ChannelExecutor$.read$1
+  [ 3] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$10
+  [ 4] zio.stream.internal.ChannelExecutor$$$Lambda$1558.0x0000000801197768.apply
+  [ 5] zio.ZIO.$anonfun$$times$greater$1
+  [ 6] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.evaluateEffect
+  [ 9] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [10] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [11] zio.internal.FiberRuntime.run
+  [12] zio.internal.ZScheduler$$anon$4.run
+
+--- 555312 bytes (0.03%), 3 samples
+  [ 0] org.apache.zookeeper.server.DataTree$ProcessTxnResult
+  [ 1] org.apache.zookeeper.server.ZooKeeperServer.processTxn
+  [ 2] org.apache.zookeeper.server.FinalRequestProcessor.processRequest
+  [ 3] org.apache.zookeeper.server.SyncRequestProcessor.run
+
+--- 549400 bytes (0.03%), 3 samples
+  [ 0] java.util.ArrayList
+  [ 1] org.apache.kafka.clients.NetworkClient.poll
+  [ 2] kafka.common.InterBrokerSendThread.pollOnce
+  [ 3] kafka.server.BrokerToControllerRequestThread.doWork
+  [ 4] kafka.utils.ShutdownableThread.run
+
+--- 540368 bytes (0.03%), 3 samples
+  [ 0] byte[]
+  [ 1] java.lang.Long.toUnsignedString0
+  [ 2] java.lang.Long.toHexString
+  [ 3] org.apache.zookeeper.server.SessionTrackerImpl.checkSession
+  [ 4] org.apache.zookeeper.server.PrepRequestProcessor.pRequest
+  [ 5] org.apache.zookeeper.server.PrepRequestProcessor.run
+
+--- 539152 bytes (0.03%), 4 samples
+  [ 0] zio.ZIO$OnSuccess
+  [ 1] zio.ZIO.$anonfun$repeatUntilZIO$1
+  [ 2] zio.ZIO$$Lambda$1721.0x00000008011d43d0.apply
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.evaluateEffect
+  [ 5] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 6] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 7] zio.internal.FiberRuntime.run
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 533544 bytes (0.03%), 5 samples
+  [ 0] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode
+  [ 1] java.lang.Thread.interrupted
+  [ 2] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.awaitNanos
+  [ 3] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 4] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 5] java.util.concurrent.ThreadPoolExecutor.getTask
+  [ 6] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 7] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [ 8] java.lang.Thread.run
+
+--- 530624 bytes (0.03%), 3 samples
+  [ 0] zio.ZIO$EvaluationStep[]
+  [ 1] scala.reflect.ClassTag$GenericClassTag.newArray
+  [ 2] zio.internal.PinchableArray.ensureCapacity
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.evaluateEffect
+  [14] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [15] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [16] zio.internal.FiberRuntime.run
+  [17] zio.internal.ZScheduler$$anon$4.run
+
+--- 530528 bytes (0.03%), 4 samples
+  [ 0] java.util.HashMap$EntryIterator
+  [ 1] java.util.HashMap.entrySet
+  [ 2] zio.stm.ZSTM$internal$.isValid
+  [ 3] zio.stm.ZSTM$internal$.$anonfun$tryCommitSync$2
+  [ 4] zio.stm.ZSTM$internal$.tryCommitSync
+  [ 5] zio.stm.ZSTM$.$anonfun$unsafeAtomically$1
+  [ 6] zio.stm.ZSTM$$$Lambda$187.0x0000000800d8e1a0.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 527408 bytes (0.03%), 3 samples
+  [ 0] java.lang.Long
+  [ 1] java.lang.Long.valueOf
+  [ 2] org.apache.zookeeper.server.SessionTrackerImpl.touchSession
+  [ 3] org.apache.zookeeper.server.ZooKeeperServer.touch
+  [ 4] org.apache.zookeeper.server.ZooKeeperServer.submitRequestNow
+  [ 5] org.apache.zookeeper.server.RequestThrottler.run
+
+--- 525304 bytes (0.03%), 1 sample
+  [ 0] java.lang.InterruptedException
+  [ 1] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await
+  [ 2] java.util.concurrent.LinkedBlockingQueue.take
+  [ 3] kafka.server.FinalizedFeatureChangeListener$ChangeNotificationProcessorThread.doWork
+  [ 4] kafka.utils.ShutdownableThread.run
+
+--- 500912 bytes (0.03%), 4 samples
+  [ 0] zio.ZIO$$Lambda$1153+0x00000008010e77e8
+  [ 1] zio.ZIO.$anonfun$onExit$6
+  [ 2] zio.ZIO$$Lambda$167.0x0000000800d81b88.apply
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.evaluateEffect
+  [ 5] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 6] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 7] zio.internal.FiberRuntime.run
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 498080 bytes (0.03%), 3 samples
+  [ 0] zio.ZIO$UpdateRuntimeFlagsWithin$DynamicNoBox
+  [ 1] zio.ZIOCompanionVersionSpecific$$Lambda$324.0x0000000800dc9de8.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.evaluateEffect
+  [13] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [14] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [15] zio.internal.FiberRuntime.run
+  [16] zio.internal.ZScheduler$$anon$4.run
+
+--- 490728 bytes (0.03%), 4 samples
+  [ 0] java.util.HashMap
+  [ 1] zio.stm.ZSTM$internal$.collectTodos
+  [ 2] zio.stm.ZSTM$internal$.completeTodos
+  [ 3] zio.stm.ZSTM$internal$.tryCommitSync
+  [ 4] zio.stm.ZSTM$.$anonfun$unsafeAtomically$1
+  [ 5] zio.stm.ZSTM$$$Lambda$187.0x0000000800d8e1a0.apply
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.evaluateEffect
+  [ 9] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [10] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [11] zio.internal.FiberRuntime.run
+  [12] zio.internal.ZScheduler$$anon$4.run
+
+--- 490504 bytes (0.03%), 3 samples
+  [ 0] zio.stream.Take$$$Lambda$3032+0x00000008013867f0
+  [ 1] jdk.internal.misc.Unsafe.allocateInstance
+  [ 2] java.lang.invoke.DirectMethodHandle.allocateInstance
+  [ 3] java.lang.invoke.DirectMethodHandle$Holder.newInvokeSpecial
+  [ 4] java.lang.invoke.Invokers$Holder.linkToTargetMethod
+  [ 5] zio.stream.Take$.fold$extension
+  [ 6] zio.stream.ZStream.$anonfun$bufferChunks$4
+  [ 7] zio.stream.ZStream.$anonfun$bufferChunks$4$adapted
+  [ 8] zio.stream.ZStream$$Lambda$2790.0x00000008013392a0.apply
+  [ 9] zio.stream.internal.ChannelExecutor.doneSucceed
+  [10] zio.stream.internal.ChannelExecutor.$anonfun$run$20
+  [11] zio.stream.internal.ChannelExecutor$$Lambda$1606.0x00000008011a83d0.apply
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.evaluateEffect
+  [14] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [15] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [16] zio.internal.FiberRuntime.run
+  [17] zio.internal.ZScheduler$$anon$4.run
+
+--- 486104 bytes (0.03%), 3 samples
+  [ 0] zio.ZIO$$Lambda$76+0x0000000800cee858
+  [ 1] zio.ZIO.map
+  [ 2] zio.ZIO.map$
+  [ 3] zio.ZIO$OnSuccess.map
+  [ 4] zio.ZIO.as
+  [ 5] zio.ZIO.as$
+  [ 6] zio.ZIO$OnSuccess.as
+  [ 7] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$32
+  [ 8] zio.kafka.consumer.internal.Runloop$$Lambda$2597.0x00000008012fd290.apply
+  [ 9] zio.ZIO$IfZIO$.$anonfun$apply$3
+  [10] zio.ZIO$IfZIO$.$anonfun$apply$3$adapted
+  [11] zio.ZIO$IfZIO$$$Lambda$1889.0x0000000801202000.apply
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.evaluateEffect
+  [15] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [16] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [17] zio.internal.FiberRuntime.run
+  [18] zio.internal.ZScheduler$$anon$4.run
+
+--- 483088 bytes (0.03%), 3 samples
+  [ 0] zio.ZIO$OnSuccessAndFailure
+  [ 1] zio.stream.internal.ChannelExecutor.run
+  [ 2] zio.stream.ZChannel.$anonfun$toPull$12
+  [ 3] zio.stream.ZChannel$$Lambda$1713.0x00000008011cf1c0.apply
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 480496 bytes (0.03%), 4 samples
+  [ 0] zio.ZIO$Sync
+  [ 1] zio.stream.ZChannel$$$Lambda$1780.0x00000008011e29e0.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] zio.internal.ZScheduler$$anon$4.run
+
+--- 479880 bytes (0.03%), 1 sample
+  [ 0] java.util.concurrent.ConcurrentHashMap$EntryIterator
+  [ 1] java.util.concurrent.ConcurrentHashMap$EntrySetView.iterator
+  [ 2] org.apache.kafka.common.metrics.Metrics$ExpireSensorTask.run
+  [ 3] java.util.concurrent.Executors$RunnableAdapter.call
+  [ 4] java.util.concurrent.FutureTask.runAndReset
+  [ 5] java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run
+  [ 6] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 7] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [ 8] java.lang.Thread.run
+
+--- 478520 bytes (0.03%), 4 samples
+  [ 0] java.util.HashMap$EntryIterator
+  [ 1] java.util.HashMap.entrySet
+  [ 2] zio.stm.ZSTM$internal$.analyzeJournal
+  [ 3] zio.stm.ZSTM$internal$.tryCommitSync
+  [ 4] zio.stm.ZSTM$.$anonfun$unsafeAtomically$1
+  [ 5] zio.stm.ZSTM$$$Lambda$187.0x0000000800d8e1a0.apply
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.evaluateEffect
+  [ 9] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [10] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [11] zio.internal.FiberRuntime.run
+  [12] zio.internal.ZScheduler$$anon$4.run
+
+--- 472632 bytes (0.03%), 4 samples
+  [ 0] zio.internal.FiberMessage$Resume
+  [ 1] zio.internal.FiberRuntime.evaluateEffect
+  [ 2] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 3] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 4] zio.internal.FiberRuntime.run
+  [ 5] zio.internal.ZScheduler$$anon$4.run
+
+--- 472568 bytes (0.03%), 3 samples
+  [ 0] scala.collection.immutable.$colon$colon
+  [ 1] zio.FiberRefs.updatedAs
+  [ 2] zio.internal.FiberRuntime.setFiberRef
+  [ 3] zio.internal.FiberRuntime.getFiberRefs
+  [ 4] zio.internal.FiberRuntime.$anonfun$inheritAll$1
+  [ 5] zio.internal.FiberRuntime$$Lambda$1232.0x0000000801112e98.apply
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.evaluateEffect
+  [ 9] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [10] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [11] zio.internal.FiberRuntime.run
+  [12] zio.internal.ZScheduler$$anon$4.run
+
+--- 470120 bytes (0.03%), 3 samples
+  [ 0] zio.stm.ZSTM$Release$$Lambda$220+0x0000000800da38c8
+  [ 1] zio.stm.ZSTM$Release.$anonfun$apply$8
+  [ 2] zio.stm.ZSTM$Release$$Lambda$214.0x0000000800d99f28.apply
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.evaluateEffect
+  [13] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [14] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [15] zio.internal.FiberRuntime.run
+  [16] zio.internal.ZScheduler$$anon$4.run
+
+--- 469616 bytes (0.03%), 5 samples
+  [ 0] java.util.HashMap$EntryIterator
+  [ 1] java.util.HashMap.entrySet
+  [ 2] zio.stm.ZSTM$internal$.commitJournal
+  [ 3] zio.stm.ZSTM$internal$.$anonfun$tryCommitSync$2
+  [ 4] zio.stm.ZSTM$internal$.tryCommitSync
+  [ 5] zio.stm.ZSTM$.$anonfun$unsafeAtomically$1
+  [ 6] zio.stm.ZSTM$$$Lambda$187.0x0000000800d8e1a0.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 468416 bytes (0.03%), 4 samples
+  [ 0] zio.ZIO$$Lambda$136+0x0000000800d47cb0
+  [ 1] zio.ZIO$$Lambda$76.0x0000000800cee858.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] zio.internal.ZScheduler$$anon$4.run
+
+--- 468344 bytes (0.03%), 4 samples
+  [ 0] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode
+  [ 1] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await
+  [ 2] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 3] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 4] java.util.concurrent.ThreadPoolExecutor.getTask
+  [ 5] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 6] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [ 7] java.lang.Thread.run
+
+--- 467368 bytes (0.03%), 3 samples
+  [ 0] zio.ZIO$EvaluationStep[]
+  [ 1] scala.reflect.ClassTag$GenericClassTag.newArray
+  [ 2] zio.internal.PinchableArray.ensureCapacity
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 455936 bytes (0.02%), 3 samples
+  [ 0] zio.stm.TSemaphore$$Lambda$199+0x0000000800d93930
+  [ 1] zio.stm.TSemaphore.withPermits
+  [ 2] zio.stm.TSemaphore.withPermit
+  [ 3] zio.Semaphore$$anon$1.withPermit
+  [ 4] zio.kafka.consumer.internal.ConsumerAccess.withConsumerM
+  [ 5] zio.kafka.consumer.internal.Runloop.doCommit
+  [ 6] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$32
+  [ 7] zio.kafka.consumer.internal.Runloop$$Lambda$2597.0x00000008012fd290.apply
+  [ 8] zio.ZIO$IfZIO$.$anonfun$apply$3
+  [ 9] zio.ZIO$IfZIO$.$anonfun$apply$3$adapted
+  [10] zio.ZIO$IfZIO$$$Lambda$1889.0x0000000801202000.apply
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.evaluateEffect
+  [14] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [15] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [16] zio.internal.FiberRuntime.run
+  [17] zio.internal.ZScheduler$$anon$4.run
+
+--- 453032 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$$Lambda$76+0x0000000800cee858
+  [ 1] zio.ZIO$Stateful.map
+  [ 2] zio.Dequeue.$anonfun$takeBetween$3
+  [ 3] zio.Dequeue$$Lambda$1658.0x00000008011b51a0.apply
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.evaluateEffect
+  [15] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [16] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [17] zio.internal.FiberRuntime.run
+  [18] zio.internal.ZScheduler$$anon$4.run
+
+--- 452672 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$$$Lambda$1266+0x0000000801120580
+  [ 1] zio.ZIO$ReleaseExit$$Lambda$1264.0x0000000801119a38.apply
+  [ 2] zio.ZIO$.$anonfun$uninterruptibleMask$1
+  [ 3] zio.ZIO$$$Lambda$164.0x0000000800d7b9d0.apply
+  [ 4] zio.ZIO$UpdateRuntimeFlagsWithin$DynamicNoBox.scope
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.evaluateEffect
+  [ 8] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 9] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [10] zio.internal.FiberRuntime.run
+  [11] zio.internal.ZScheduler$$anon$4.run
+
+--- 446744 bytes (0.02%), 5 samples
+  [ 0] zio.ZIO$OnSuccessAndFailure
+  [ 1] java.lang.invoke.LambdaForm$DMH.0x0000000800d9cc00.newInvokeSpecial
+  [ 2] java.lang.invoke.Invokers$Holder.linkToTargetMethod
+  [ 3] zio.stream.internal.ChannelExecutor$.read$1
+  [ 4] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$10
+  [ 5] zio.stream.internal.ChannelExecutor$$$Lambda$1558.0x0000000801197768.apply
+  [ 6] zio.ZIO.$anonfun$$times$greater$1
+  [ 7] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 435760 bytes (0.02%), 3 samples
+  [ 0] zio.stream.ZChannel$Fold
+  [ 1] zio.stream.ZStream$$$Lambda$1963.0x00000008012241e8.apply
+  [ 2] zio.stream.ZChannel.$anonfun$$times$greater$1
+  [ 3] zio.stream.ZChannel$$Lambda$1758.0x00000008011dc818.apply
+  [ 4] zio.stream.internal.ChannelExecutor.doneSucceed
+  [ 5] zio.stream.internal.ChannelExecutor.run
+  [ 6] zio.stream.ZChannel.$anonfun$toPull$12
+  [ 7] zio.stream.ZChannel$$Lambda$1713.0x00000008011cf1c0.apply
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.evaluateEffect
+  [11] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [12] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [13] zio.internal.FiberRuntime.run
+  [14] zio.internal.ZScheduler$$anon$4.run
+
+--- 433864 bytes (0.02%), 4 samples
+  [ 0] zio.stm.ZSTM$Release$$Lambda$243+0x0000000800daa298
+  [ 1] zio.stm.ZSTM$Release.$anonfun$apply$13
+  [ 2] zio.stm.ZSTM$Release$$Lambda$220.0x0000000800da38c8.apply
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.evaluateEffect
+  [ 5] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 6] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 7] zio.internal.FiberRuntime.run
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 426184 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$OnSuccess
+  [ 1] zio.ZIO.flatMap
+  [ 2] zio.ZIO.flatMap$
+  [ 3] zio.ZIO$Sync.flatMap
+  [ 4] zio.ZIO$.suspendSucceed
+  [ 5] zio.Promise.await
+  [ 6] zio.kafka.consumer.internal.Runloop.$anonfun$newPartitionStream$7
+  [ 7] zio.kafka.consumer.internal.Runloop$$Lambda$2879.0x000000080134a5b0.apply
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.evaluateEffect
+  [15] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [16] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [17] zio.internal.FiberRuntime.run
+  [18] zio.internal.ZScheduler$$anon$4.run
+
+--- 425424 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$UpdateRuntimeFlagsWithin$DynamicNoBox
+  [ 1] zio.ZIOCompanionVersionSpecific$$Lambda$324.0x0000000800dc9de8.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.evaluateEffect
+  [14] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [15] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [16] zio.internal.FiberRuntime.run
+  [17] zio.internal.ZScheduler$$anon$4.run
+
+--- 425296 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$OnSuccessAndFailure
+  [ 1] java.lang.invoke.LambdaForm$DMH.0x0000000800d9cc00.newInvokeSpecial
+  [ 2] java.lang.invoke.Invokers$Holder.linkToTargetMethod
+  [ 3] zio.stream.internal.ChannelExecutor$.read$1
+  [ 4] zio.stream.internal.ChannelExecutor$.readUpstream
+  [ 5] zio.stream.ZChannel.interpret$2
+  [ 6] zio.stream.ZChannel.$anonfun$toPull$12
+  [ 7] zio.stream.ZChannel$$Lambda$1713.0x00000008011cf1c0.apply
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.evaluateEffect
+  [13] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [14] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [15] zio.internal.FiberRuntime.run
+  [16] zio.internal.ZScheduler$$anon$4.run
+
+--- 424616 bytes (0.02%), 3 samples
+  [ 0] zio.Promise
+  [ 1] zio.Promise$$$Lambda$230.0x0000000800da71e8.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 424136 bytes (0.02%), 3 samples
+  [ 0] zio.stream.internal.ChannelExecutor$$$Lambda$1610+0x00000008011a9200
+  [ 1] zio.stream.internal.ChannelExecutor$.read$1
+  [ 2] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$10
+  [ 3] zio.stream.internal.ChannelExecutor$$$Lambda$1558.0x0000000801197768.apply
+  [ 4] zio.ZIO.$anonfun$$times$greater$1
+  [ 5] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.evaluateEffect
+  [ 8] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 9] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [10] zio.internal.FiberRuntime.run
+  [11] zio.internal.ZScheduler$$anon$4.run
+
+--- 416344 bytes (0.02%), 3 samples
+  [ 0] zio.internal.PinchableArray
+  [ 1] zio.internal.FiberRuntime.getChildren
+  [ 2] zio.internal.FiberRuntime.addChild
+  [ 3] zio.internal.FiberScope$Local.add
+  [ 4] zio.ZIO$unsafe$.makeChildFiber
+  [ 5] zio.ZIO.$anonfun$raceFibersWith$1
+  [ 6] zio.ZIO$$Lambda$1797.0x00000008011ead80.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.evaluateEffect
+  [12] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [13] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [14] zio.internal.FiberRuntime.run
+  [15] zio.internal.ZScheduler$$anon$4.run
+
+--- 414680 bytes (0.02%), 3 samples
+  [ 0] zio.stream.internal.ChannelExecutor$ChannelState$Read
+  [ 1] zio.stream.internal.ChannelExecutor.run
+  [ 2] zio.stream.internal.ChannelExecutor$.read$1
+  [ 3] zio.stream.internal.ChannelExecutor$.readUpstream
+  [ 4] zio.stream.ZChannel.interpret$1
+  [ 5] zio.stream.ZChannel.$anonfun$runScoped$12
+  [ 6] zio.stream.ZChannel$$Lambda$1535.0x0000000801192788.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 412696 bytes (0.02%), 3 samples
+  [ 0] zio.kafka.consumer.internal.ConsumerAccess$$Lambda$2530+0x00000008012ec230
+  [ 1] zio.kafka.consumer.internal.ConsumerAccess.withConsumerNoPermit
+  [ 2] zio.kafka.consumer.internal.ConsumerAccess.withConsumerM
+  [ 3] zio.kafka.consumer.internal.Runloop.doCommit
+  [ 4] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$32
+  [ 5] zio.kafka.consumer.internal.Runloop$$Lambda$2597.0x00000008012fd290.apply
+  [ 6] zio.ZIO$IfZIO$.$anonfun$apply$3
+  [ 7] zio.ZIO$IfZIO$.$anonfun$apply$3$adapted
+  [ 8] zio.ZIO$IfZIO$$$Lambda$1889.0x0000000801202000.apply
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.evaluateEffect
+  [12] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [13] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [14] zio.internal.FiberRuntime.run
+  [15] zio.internal.ZScheduler$$anon$4.run
+
+--- 410888 bytes (0.02%), 4 samples
+  [ 0] java.lang.Object[]
+  [ 1] zio.stream.internal.ChannelExecutor$.readUpstream
+  [ 2] zio.stream.ZChannel.interpret$1
+  [ 3] zio.stream.ZChannel.$anonfun$runScoped$12
+  [ 4] zio.stream.ZChannel$$Lambda$1535.0x0000000801192788.apply
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.evaluateEffect
+  [ 8] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 9] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [10] zio.internal.FiberRuntime.run
+  [11] zio.internal.ZScheduler$$anon$4.run
+
+--- 409552 bytes (0.02%), 3 samples
+  [ 0] java.lang.Object[]
+  [ 1] scala.collection.mutable.ArrayBuilder$ofRef.mkArray
+  [ 2] scala.collection.mutable.ArrayBuilder$ofRef.resize
+  [ 3] scala.collection.mutable.ArrayBuilder.ensureSize
+  [ 4] scala.collection.mutable.ArrayBuilder$ofRef.addOne
+  [ 5] scala.collection.mutable.ArrayBuilder$ofRef.addOne
+  [ 6] zio.ChunkBuilder$$anon$1.addOne
+  [ 7] zio.ChunkBuilder$$anon$1.addOne
+  [ 8] scala.collection.StrictOptimizedIterableOps.$anonfun$partition$1
+  [ 9] scala.collection.StrictOptimizedIterableOps$$Lambda$994.0x0000000801094fd0.apply
+  [10] scala.collection.IterableOnceOps.foreach
+  [11] scala.collection.IterableOnceOps.foreach$
+  [12] scala.collection.AbstractIterator.foreach
+  [13] scala.collection.StrictOptimizedIterableOps.partition
+  [14] scala.collection.StrictOptimizedIterableOps.partition$
+  [15] zio.Chunk.partition
+  [16] zio.kafka.consumer.internal.Runloop.$anonfun$handleRequests$9
+  [17] zio.kafka.consumer.internal.Runloop$$Lambda$2902.0x0000000801353ac0.apply
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.evaluateEffect
+  [20] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [21] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [22] zio.internal.FiberRuntime.run
+  [23] zio.internal.ZScheduler$$anon$4.run
+
+--- 407248 bytes (0.02%), 3 samples
+  [ 0] zio.stream.internal.ChannelExecutor$$$Lambda$1609+0x00000008011a8e30
+  [ 1] zio.stream.internal.ChannelExecutor$.read$1
+  [ 2] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$10
+  [ 3] zio.stream.internal.ChannelExecutor$$$Lambda$1558.0x0000000801197768.apply
+  [ 4] zio.ZIO.$anonfun$$times$greater$1
+  [ 5] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.evaluateEffect
+  [ 8] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 9] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [10] zio.internal.FiberRuntime.run
+  [11] zio.internal.ZScheduler$$anon$4.run
+
+--- 405472 bytes (0.02%), 1 sample
+  [ 0] java.lang.Long
+  [ 1] java.lang.Long.valueOf
+  [ 2] org.apache.zookeeper.server.ExpiryQueue.poll
+  [ 3] org.apache.zookeeper.server.NIOServerCnxnFactory$ConnectionExpirerThread.run
+
+--- 395632 bytes (0.02%), 3 samples
+  [ 0] scala.Tuple2
+  [ 1] scala.collection.immutable.Map$Map3$Map3Iterator.next
+  [ 2] scala.collection.IterableOnceOps.foldLeft
+  [ 3] scala.collection.IterableOnceOps.foldLeft$
+  [ 4] scala.collection.AbstractIterable.foldLeft
+  [ 5] zio.FiberRefs.joinAs
+  [ 6] zio.internal.FiberRuntime.$anonfun$inheritAll$1
+  [ 7] zio.internal.FiberRuntime$$Lambda$1232.0x0000000801112e98.apply
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.evaluateEffect
+  [11] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [12] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [13] zio.internal.FiberRuntime.run
+  [14] zio.internal.ZScheduler$$anon$4.run
+
+--- 390832 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$Sync
+  [ 1] zio.FiberRef$unsafe$$anon$2$$Lambda$145.0x0000000800d6ab70.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.evaluateEffect
+  [ 6] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 7] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 8] zio.internal.FiberRuntime.run
+  [ 9] zio.internal.ZScheduler$$anon$4.run
+
+--- 389168 bytes (0.02%), 2 samples
+  [ 0] java.lang.Integer
+  [ 1] java.util.concurrent.atomic.AtomicInteger.getAndIncrement
+  [ 2] zio.FiberId$.make
+  [ 3] zio.ZIO$unsafe$.makeChildFiber
+  [ 4] zio.ZIO$unsafe$.fork
+  [ 5] zio.ZIO.$anonfun$forkWithScopeOverride$2
+  [ 6] zio.ZIO$$Lambda$317.0x0000000800dc7270.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.evaluateEffect
+  [14] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [15] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [16] zio.internal.FiberRuntime.run
+  [17] zio.internal.ZScheduler$$anon$4.run
+
+--- 385040 bytes (0.02%), 3 samples
+  [ 0] java.util.HashMap$EntryIterator
+  [ 1] java.util.HashMap.entrySet
+  [ 2] zio.stm.ZSTM$internal$.collectTodos
+  [ 3] zio.stm.ZSTM$internal$.completeTodos
+  [ 4] zio.stm.ZSTM$internal$.tryCommitSync
+  [ 5] zio.stm.ZSTM$.$anonfun$unsafeAtomically$1
+  [ 6] zio.stm.ZSTM$$$Lambda$187.0x0000000800d8e1a0.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 379280 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$OnFailure
+  [ 1] zio.stream.internal.ChannelExecutor$.read$1
+  [ 2] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$8
+  [ 3] zio.stream.internal.ChannelExecutor$$$Lambda$1610.0x00000008011a9200.apply
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.evaluateEffect
+  [ 6] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 7] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 8] zio.internal.FiberRuntime.run
+  [ 9] zio.internal.ZScheduler$$anon$4.run
+
+--- 378712 bytes (0.02%), 3 samples
+  [ 0] scala.Some
+  [ 1] scala.collection.immutable.Map$Map4.get
+  [ 2] zio.FiberRefs.updatedAs
+  [ 3] zio.internal.FiberRuntime.setFiberRef
+  [ 4] zio.internal.FiberRuntime.addInterruptedCause
+  [ 5] zio.internal.FiberRuntime.processNewInterruptSignal
+  [ 6] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 7] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 8] zio.internal.FiberRuntime.run
+  [ 9] zio.internal.ZScheduler$$anon$4.run
+
+--- 376360 bytes (0.02%), 3 samples
+  [ 0] zio.Exit$Success
+  [ 1] zio.ZIO$$Lambda$167.0x0000000800d81b88.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] zio.internal.ZScheduler$$anon$4.run
+
+--- 373704 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$$Lambda$1779+0x00000008011e23c8
+  [ 1] zio.ZIO.$anonfun$repeatUntilZIO$1
+  [ 2] zio.ZIO$$Lambda$1721.0x00000008011d43d0.apply
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.evaluateEffect
+  [ 5] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 6] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 7] zio.internal.FiberRuntime.run
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 372144 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$$$Lambda$164+0x0000000800d7b9d0
+  [ 1] zio.ZIOCompanionVersionSpecific$$Lambda$324.0x0000000800dc9de8.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 370272 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$ReleaseExit$$Lambda$1264+0x0000000801119a38
+  [ 1] zio.ZIO$$$Lambda$1251.0x000000080111dbb8.apply
+  [ 2] zio.ZIO$.$anonfun$descriptorWith$1
+  [ 3] zio.ZIO$$$Lambda$226.0x0000000800da56b8.apply
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 369360 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$EvaluationStep$UpdateRuntimeFlags$$anon$28
+  [ 1] zio.internal.FiberRuntime.runLoop
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.evaluateEffect
+  [ 6] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 7] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 8] zio.internal.FiberRuntime.run
+  [ 9] zio.internal.ZScheduler$$anon$4.run
+
+--- 368520 bytes (0.02%), 3 samples
+  [ 0] scala.runtime.LazyRef
+  [ 1] zio.internal.FiberRuntime._exitValue_$eq
+  [ 2] zio.internal.FiberRuntime.setExitValue
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] zio.internal.ZScheduler$$anon$4.run
+
+--- 365696 bytes (0.02%), 3 samples
+  [ 0] scala.collection.immutable.$colon$colon
+  [ 1] zio.FiberRefs.$anonfun$joinAs$3
+  [ 2] zio.FiberRefs$$Lambda$1241.0x0000000801115cb8.apply
+  [ 3] scala.Option.fold
+  [ 4] zio.FiberRefs.$anonfun$joinAs$1
+  [ 5] zio.FiberRefs$$Lambda$1237.0x0000000801113ea8.apply
+  [ 6] scala.collection.IterableOnceOps.foldLeft
+  [ 7] scala.collection.IterableOnceOps.foldLeft$
+  [ 8] scala.collection.AbstractIterable.foldLeft
+  [ 9] zio.FiberRefs.joinAs
+  [10] zio.internal.FiberRuntime.$anonfun$inheritAll$1
+  [11] zio.internal.FiberRuntime$$Lambda$1232.0x0000000801112e98.apply
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.evaluateEffect
+  [15] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [16] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [17] zio.internal.FiberRuntime.run
+  [18] zio.internal.ZScheduler$$anon$4.run
+
+--- 365496 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$EvaluationStep$UpdateRuntimeFlags$$anon$28
+  [ 1] zio.internal.FiberRuntime.runLoop
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 362560 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$EvaluationStep[]
+  [ 1] scala.reflect.ClassTag$GenericClassTag.newArray
+  [ 2] zio.internal.PinchableArray.ensureCapacity
+  [ 3] zio.internal.PinchableArray.$plus$eq
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 361840 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$Sync
+  [ 1] zio.stream.ZChannel$$$Lambda$1780.0x00000008011e29e0.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.evaluateEffect
+  [ 5] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 6] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 7] zio.internal.FiberRuntime.run
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 355896 bytes (0.02%), 3 samples
+  [ 0] zio.Fiber$Status$Running
+  [ 1] zio.internal.FiberRuntime.runLoop
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] zio.internal.ZScheduler$$anon$4.run
+
+--- 350760 bytes (0.02%), 4 samples
+  [ 0] scala.collection.immutable.$colon$colon
+  [ 1] zio.internal.FiberRuntime.setExitValue
+  [ 2] zio.internal.FiberRuntime.evaluateEffect
+  [ 3] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 4] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 5] zio.internal.FiberRuntime.run
+  [ 6] zio.internal.ZScheduler$$anon$4.run
+
+--- 350640 bytes (0.02%), 2 samples
+  [ 0] scala.collection.immutable.Map$Map4
+  [ 1] scala.collection.immutable.Map$Map3.updated
+  [ 2] scala.collection.immutable.Map$Map3.updated
+  [ 3] zio.FiberRefs.updatedAs
+  [ 4] zio.internal.FiberRuntime.setFiberRef
+  [ 5] zio.internal.FiberRuntime.addInterruptedCause
+  [ 6] zio.internal.FiberRuntime.processNewInterruptSignal
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 350496 bytes (0.02%), 3 samples
+  [ 0] zio.stream.ZChannel$$Lambda$1871+0x00000008011fe3e0
+  [ 1] zio.stream.ZChannel$$Lambda$1588.0x00000008011a0898.apply
+  [ 2] zio.stream.internal.ChannelExecutor.$anonfun$run$15
+  [ 3] zio.stream.internal.ChannelExecutor$$Lambda$1529.0x0000000801190978.apply
+  [ 4] zio.stream.internal.ChannelExecutor$.read$1
+  [ 5] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$8
+  [ 6] zio.stream.internal.ChannelExecutor$$$Lambda$1610.0x00000008011a9200.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.evaluateEffect
+  [ 9] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [10] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [11] zio.internal.FiberRuntime.run
+  [12] zio.internal.ZScheduler$$anon$4.run
+
+--- 349728 bytes (0.02%), 4 samples
+  [ 0] zio.Chunk$AnyRefArray
+  [ 1] scala.reflect.ClassTag$.apply
+  [ 2] zio.Chunk$Arr.<init>
+  [ 3] zio.Chunk$AnyRefArray.<init>
+  [ 4] zio.Chunk$.fromArray
+  [ 5] zio.ChunkBuilder$$anon$1.result
+  [ 6] zio.ChunkBuilder$$anon$1.result
+  [ 7] zio.internal.RingBuffer.pollUpTo
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 347488 bytes (0.02%), 2 samples
+  [ 0] java.lang.Object[]
+  [ 1] scala.collection.mutable.ArrayBuilder$ofRef.mkArray
+  [ 2] scala.collection.mutable.ArrayBuilder$ofRef.resize
+  [ 3] scala.collection.mutable.ArrayBuilder.sizeHint
+  [ 4] zio.ChunkBuilder$$anon$1.addOne
+  [ 5] zio.ChunkBuilder$$anon$1.addOne
+  [ 6] scala.collection.mutable.Growable.addAll
+  [ 7] scala.collection.mutable.Growable.addAll$
+  [ 8] zio.ChunkBuilder.addAll
+  [ 9] scala.collection.mutable.Growable.$plus$plus$eq
+  [10] scala.collection.mutable.Growable.$plus$plus$eq$
+  [11] zio.ChunkBuilder.$plus$plus$eq
+  [12] zio.Chunk$.fromIterable
+  [13] zio.Chunk$.apply
+  [14] zio.Queue$$anon$1.$anonfun$offer$1
+  [15] zio.Queue$$anon$1$$Lambda$1852.0x00000008011f9ee8.apply
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.evaluateEffect
+  [20] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [21] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [22] zio.internal.FiberRuntime.run
+  [23] zio.internal.ZScheduler$$anon$4.run
+
+--- 344424 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$Sync
+  [ 1] zio.internal.FiberRuntime.runLoop
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] zio.internal.ZScheduler$$anon$4.run
+
+--- 344248 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$Stateful
+  [ 1] zio.ZIO$ReleaseExit$$Lambda$1264.0x0000000801119a38.apply
+  [ 2] zio.ZIO$.$anonfun$uninterruptibleMask$1
+  [ 3] zio.ZIO$$$Lambda$164.0x0000000800d7b9d0.apply
+  [ 4] zio.ZIO$UpdateRuntimeFlagsWithin$DynamicNoBox.scope
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.evaluateEffect
+  [ 8] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 9] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [10] zio.internal.FiberRuntime.run
+  [11] zio.internal.ZScheduler$$anon$4.run
+
+--- 343760 bytes (0.02%), 2 samples
+  [ 0] zio.stream.ZChannel$Read
+  [ 1] zio.stream.ZChannel$.readWith
+  [ 2] zio.stream.ZSink$.reader$4
+  [ 3] zio.stream.ZSink$.$anonfun$foldZIO$7
+  [ 4] zio.stream.ZSink$$$Lambda$1875.0x00000008011ff6b8.apply
+  [ 5] zio.stream.internal.ChannelExecutor.doneSucceed
+  [ 6] zio.stream.internal.ChannelExecutor.$anonfun$run$20
+  [ 7] zio.stream.internal.ChannelExecutor$$Lambda$1606.0x00000008011a83d0.apply
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 338528 bytes (0.02%), 1 sample
+  [ 0] byte[]
+  [ 1] java.lang.AbstractStringBuilder.append
+  [ 2] java.lang.StringBuilder.append
+  [ 3] java.lang.invoke.InnerClassLambdaMetafactory.lambdaClassName
+  [ 4] java.lang.invoke.InnerClassLambdaMetafactory.<init>
+  [ 5] java.lang.invoke.LambdaMetafactory.altMetafactory
+  [ 6] java.lang.invoke.DirectMethodHandle$Holder.invokeStatic
+  [ 7] java.lang.invoke.DelegatingMethodHandle$Holder.delegate
+  [ 8] java.lang.invoke.LambdaForm$MH.0x0000000800cac000.invokeExact_MT
+  [ 9] java.lang.invoke.BootstrapMethodInvoker.invoke
+  [10] java.lang.invoke.CallSite.makeSite
+  [11] java.lang.invoke.MethodHandleNatives.linkCallSiteImpl
+  [12] java.lang.invoke.MethodHandleNatives.linkCallSite
+  [13] kafka.zookeeper.ZooKeeperClient$ZooKeeperClientWatcher$.process
+  [14] org.apache.zookeeper.ClientCnxn$EventThread.processEvent
+  [15] org.apache.zookeeper.ClientCnxn$EventThread.run
+
+--- 338248 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$Stateful
+  [ 1] zio.ZIO$$$Lambda$1248.0x000000080111cea0.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.evaluateEffect
+  [ 5] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 6] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 7] zio.internal.FiberRuntime.run
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 337224 bytes (0.02%), 3 samples
+  [ 0] scala.collection.immutable.Map$Map4
+  [ 1] scala.collection.immutable.Map$Map4.updated
+  [ 2] scala.collection.immutable.Map$Map4.updated
+  [ 3] zio.FiberRefs.updatedAs
+  [ 4] zio.internal.FiberRuntime.setFiberRef
+  [ 5] zio.ZIO$.$anonfun$shift$1
+  [ 6] zio.ZIO$$$Lambda$1266.0x0000000801120580.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.evaluateEffect
+  [12] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [13] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [14] zio.internal.FiberRuntime.run
+  [15] zio.internal.ZScheduler$$anon$4.run
+
+--- 331048 bytes (0.02%), 2 samples
+  [ 0] scala.collection.immutable.$colon$colon
+  [ 1] zio.Cause.loop$2
+  [ 2] zio.Cause.foldContext
+  [ 3] zio.Cause.isInterruptedOnly
+  [ 4] zio.internal.FiberRuntime.reportExitValue$1
+  [ 5] zio.internal.FiberRuntime.setExitValue
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 330544 bytes (0.02%), 2 samples
+  [ 0] zio.internal.FiberRuntime
+  [ 1] zio.ZIO$unsafe$.makeChildFiber
+  [ 2] zio.ZIO$unsafe$.fork
+  [ 3] zio.ZIO.$anonfun$forkWithScopeOverride$2
+  [ 4] zio.ZIO$$Lambda$317.0x0000000800dc7270.apply
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 330264 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$$Lambda$244+0x0000000800daa558
+  [ 1] java.lang.invoke.LambdaForm$DMH.0x0000000800d9cc00.newInvokeSpecial
+  [ 2] java.lang.invoke.Invokers$Holder.linkToTargetMethod
+  [ 3] zio.stream.internal.ChannelExecutor$.read$1
+  [ 4] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$10
+  [ 5] zio.stream.internal.ChannelExecutor$$$Lambda$1558.0x0000000801197768.apply
+  [ 6] zio.ZIO.$anonfun$$times$greater$1
+  [ 7] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 329224 bytes (0.02%), 2 samples
+  [ 0] zio.Exit$Failure
+  [ 1] zio.ZIO.$anonfun$onInterrupt$1
+  [ 2] zio.ZIO$$Lambda$327.0x0000000800dcb1b0.apply
+  [ 3] zio.ZIO.$anonfun$onExit$3
+  [ 4] zio.ZIO$$Lambda$166.0x0000000800d817b8.apply
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 328448 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$$Lambda$166+0x0000000800d817b8
+  [ 1] zio.ZIO.$anonfun$onExit$1
+  [ 2] zio.ZIO$$Lambda$163.0x0000000800d7b600.apply
+  [ 3] zio.ZIO$.$anonfun$uninterruptibleMask$1
+  [ 4] zio.ZIO$$$Lambda$164.0x0000000800d7b9d0.apply
+  [ 5] zio.ZIO$UpdateRuntimeFlagsWithin$DynamicNoBox.scope
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 327576 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$OnSuccess
+  [ 1] zio.ZIO.map
+  [ 2] zio.ZIO.map$
+  [ 3] zio.ZIO$Sync.map
+  [ 4] zio.ZIO.as
+  [ 5] zio.ZIO.as$
+  [ 6] zio.ZIO$Sync.as
+  [ 7] zio.stream.ZStream.$anonfun$tap$1
+  [ 8] zio.stream.ZStream$$Lambda$1525.0x0000000801181798.apply
+  [ 9] zio.stream.ZStream.$anonfun$mapZIO$1
+  [10] zio.stream.ZStream$$Lambda$1858.0x00000008011faf28.apply
+  [11] zio.stream.internal.ChannelExecutor.run
+  [12] zio.stream.internal.ChannelExecutor$.read$1
+  [13] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$8
+  [14] zio.stream.internal.ChannelExecutor$$$Lambda$1610.0x00000008011a9200.apply
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.evaluateEffect
+  [17] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [18] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [19] zio.internal.FiberRuntime.run
+  [20] zio.internal.ZScheduler$$anon$4.run
+
+--- 327264 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$Stateful
+  [ 1] zio.ZIO$.withFiberRuntime
+  [ 2] zio.ZIO.forkWithScopeOverride
+  [ 3] zio.ZIO.forkWithScopeOverride$
+  [ 4] zio.ZIO$OnSuccess.forkWithScopeOverride
+  [ 5] zio.ZIO.forkDaemon
+  [ 6] zio.ZIO.forkDaemon$
+  [ 7] zio.ZIO$OnSuccess.forkDaemon
+  [ 8] zio.stream.ZChannel.$anonfun$mergeWith$17
+  [ 9] zio.stream.ZChannel$$Lambda$3027.0x0000000801385708.apply
+  [10] zio.stream.internal.ChannelExecutor.run
+  [11] zio.stream.internal.ChannelExecutor$.read$1
+  [12] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$10
+  [13] zio.stream.internal.ChannelExecutor$$$Lambda$1558.0x0000000801197768.apply
+  [14] zio.ZIO.$anonfun$$times$greater$1
+  [15] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.evaluateEffect
+  [18] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [19] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [20] zio.internal.FiberRuntime.run
+  [21] zio.internal.ZScheduler$$anon$4.run
+
+--- 326632 bytes (0.02%), 3 samples
+  [ 0] zio.stream.internal.ChannelExecutor$$$Lambda$1609+0x00000008011a8e30
+  [ 1] zio.stream.internal.ChannelExecutor$.read$1
+  [ 2] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$8
+  [ 3] zio.stream.internal.ChannelExecutor$$$Lambda$1610.0x00000008011a9200.apply
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.evaluateEffect
+  [ 6] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 7] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 8] zio.internal.FiberRuntime.run
+  [ 9] zio.internal.ZScheduler$$anon$4.run
+
+--- 324880 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$OnSuccess
+  [ 1] zio.ZIO.$anonfun$onExit$6
+  [ 2] zio.ZIO$$Lambda$167.0x0000000800d81b88.apply
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.evaluateEffect
+  [ 5] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 6] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 7] zio.internal.FiberRuntime.run
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 322392 bytes (0.02%), 3 samples
+  [ 0] zio.stream.internal.ChannelExecutor$$Lambda$1604+0x00000008011a7c18
+  [ 1] zio.stream.internal.ChannelExecutor.run
+  [ 2] zio.stream.internal.ChannelExecutor$.read$1
+  [ 3] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$8
+  [ 4] zio.stream.internal.ChannelExecutor$$$Lambda$1610.0x00000008011a9200.apply
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 322192 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$$Lambda$76+0x0000000800cee858
+  [ 1] zio.ZIO.map
+  [ 2] zio.ZIO.map$
+  [ 3] zio.ZIO$OnSuccess.map
+  [ 4] zio.stream.ZStream$.$anonfun$repeatZIOChunkOption$1
+  [ 5] zio.stream.ZStream$$$Lambda$1407.0x0000000801166a88.apply
+  [ 6] zio.stream.ZStream$.$anonfun$unfoldChunkZIO$1
+  [ 7] zio.stream.ZStream$$$Lambda$1410.0x00000008011678b8.apply
+  [ 8] zio.stream.internal.ChannelExecutor.run
+  [ 9] zio.stream.ZChannel.$anonfun$toPull$12
+  [10] zio.stream.ZChannel$$Lambda$1713.0x00000008011cf1c0.apply
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.evaluateEffect
+  [14] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [15] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [16] zio.internal.FiberRuntime.run
+  [17] zio.internal.ZScheduler$$anon$4.run
+
+--- 321520 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$OnSuccessAndFailure
+  [ 1] zio.ZIO.$anonfun$onExit$1
+  [ 2] zio.ZIO$$Lambda$163.0x0000000800d7b600.apply
+  [ 3] zio.ZIO$.$anonfun$uninterruptibleMask$1
+  [ 4] zio.ZIO$$$Lambda$164.0x0000000800d7b9d0.apply
+  [ 5] zio.ZIO$UpdateRuntimeFlagsWithin$DynamicNoBox.scope
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.evaluateEffect
+  [16] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [17] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [18] zio.internal.FiberRuntime.run
+  [19] zio.internal.ZScheduler$$anon$4.run
+
+--- 320384 bytes (0.02%), 1 sample
+  [ 0] scala.collection.MapOps$$anon$1
+  [ 1] scala.collection.MapOps.values
+  [ 2] scala.collection.MapOps.values$
+  [ 3] scala.collection.AbstractMap.values
+  [ 4] kafka.log.LogCleanerManager.$anonfun$maintainUncleanablePartitions$1
+  [ 5] kafka.log.LogCleanerManager.maintainUncleanablePartitions
+  [ 6] kafka.log.LogCleaner$CleanerThread.doWork
+  [ 7] kafka.utils.ShutdownableThread.run
+
+--- 320384 bytes (0.02%), 2 samples
+  [ 0] scala.Some
+  [ 1] scala.collection.immutable.Map$Map4.get
+  [ 2] zio.FiberRefs.get
+  [ 3] zio.FiberRefs.getOrDefault
+  [ 4] zio.internal.FiberRuntime.getFiberRef
+  [ 5] zio.ZIO$.$anonfun$descriptorWith$1
+  [ 6] zio.ZIO$$$Lambda$226.0x0000000800da56b8.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.evaluateEffect
+  [10] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [11] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [12] zio.internal.FiberRuntime.run
+  [13] zio.internal.ZScheduler$$anon$4.run
+
+--- 320264 bytes (0.02%), 2 samples
+  [ 0] scala.Tuple2
+  [ 1] zio.FiberRefs.updatedAs
+  [ 2] zio.internal.FiberRuntime.setFiberRef
+  [ 3] zio.internal.FiberRuntime.addInterruptedCause
+  [ 4] zio.internal.FiberRuntime.processNewInterruptSignal
+  [ 5] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 6] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 7] zio.internal.FiberRuntime.run
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 318976 bytes (0.02%), 2 samples
+  [ 0] zio.Fiber$Status$Running
+  [ 1] zio.internal.FiberRuntime.drainQueueWhileRunning
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] zio.internal.ZScheduler$$anon$4.run
+
+--- 317872 bytes (0.02%), 2 samples
+  [ 0] zio.internal.FiberRuntime
+  [ 1] zio.internal.FiberRuntime.getChildren
+  [ 2] zio.internal.FiberRuntime.addChild
+  [ 3] zio.internal.FiberScope$Local.add
+  [ 4] zio.ZIO$unsafe$.makeChildFiber
+  [ 5] zio.ZIO$unsafe$.fork
+  [ 6] zio.ZIO.$anonfun$forkWithScopeOverride$2
+  [ 7] zio.ZIO$$Lambda$317.0x0000000800dc7270.apply
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.evaluateEffect
+  [15] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [16] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [17] zio.internal.FiberRuntime.run
+  [18] zio.internal.ZScheduler$$anon$4.run
+
+--- 313512 bytes (0.02%), 2 samples
+  [ 0] scala.collection.immutable.Map$Map4
+  [ 1] scala.collection.immutable.Map$Map4.updated
+  [ 2] scala.collection.immutable.Map$Map4.updated
+  [ 3] zio.FiberRefs.updatedAs
+  [ 4] zio.internal.FiberRuntime.setFiberRef
+  [ 5] zio.internal.FiberRuntime.addInterruptedCause
+  [ 6] zio.internal.FiberRuntime.processNewInterruptSignal
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 311928 bytes (0.02%), 1 sample
+  [ 0] scala.collection.convert.JavaCollectionWrappers$JIteratorWrapper
+  [ 1] scala.collection.convert.AsScalaConverters.asScala
+  [ 2] scala.collection.convert.AsScalaConverters.asScala$
+  [ 3] scala.collection.convert.AsScalaExtensions$IteratorHasAsScala.asScala
+  [ 4] scala.collection.convert.JavaCollectionWrappers$JSetWrapper.iterator
+  [ 5] scala.collection.IterableOnceOps.foreach
+  [ 6] scala.collection.IterableOnceOps.foreach$
+  [ 7] scala.collection.AbstractIterable.foreach
+  [ 8] kafka.common.InterBrokerSendThread.sendRequests
+  [ 9] kafka.common.InterBrokerSendThread.pollOnce
+  [10] kafka.server.BrokerToControllerRequestThread.doWork
+  [11] kafka.utils.ShutdownableThread.run
+
+--- 311464 bytes (0.02%), 2 samples
+  [ 0] scala.util.Right
+  [ 1] zio.stream.ZChannel$$Lambda$1766.0x00000008011e4258.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] zio.internal.ZScheduler$$anon$4.run
+
+--- 311232 bytes (0.02%), 4 samples
+  [ 0] zio.stream.internal.ChannelExecutor$ChannelState$Read[]
+  [ 1] zio.stream.ZChannel.interpret$2
+  [ 2] zio.stream.ZChannel.$anonfun$toPull$12
+  [ 3] zio.stream.ZChannel$$Lambda$1713.0x00000008011cf1c0.apply
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.evaluateEffect
+  [ 9] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [10] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [11] zio.internal.FiberRuntime.run
+  [12] zio.internal.ZScheduler$$anon$4.run
+
+--- 311024 bytes (0.02%), 3 samples
+  [ 0] zio.ZIO$Sync
+  [ 1] zio.ZIO$IfZIO$.apply$extension
+  [ 2] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$28
+  [ 3] zio.kafka.consumer.internal.Runloop$$Lambda$2594.0x00000008012fc940.apply
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.evaluateEffect
+  [ 6] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 7] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 8] zio.internal.FiberRuntime.run
+  [ 9] zio.internal.ZScheduler$$anon$4.run
+
+--- 308928 bytes (0.02%), 3 samples
+  [ 0] zio.stream.ZChannel$$$Lambda$1626+0x00000008011ad350
+  [ 1] zio.stream.ZChannel$.identity
+  [ 2] zio.stream.ZChannel$.$anonfun$identity$2
+  [ 3] zio.stream.ZChannel$$$Lambda$2419.0x00000008012cc840.apply
+  [ 4] zio.stream.ZChannel.$anonfun$$times$greater$1
+  [ 5] zio.stream.ZChannel$$Lambda$1758.0x00000008011dc818.apply
+  [ 6] zio.stream.internal.ChannelExecutor.doneSucceed
+  [ 7] zio.stream.internal.ChannelExecutor.run
+  [ 8] zio.stream.internal.ChannelExecutor$.read$1
+  [ 9] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$10
+  [10] zio.stream.internal.ChannelExecutor$$$Lambda$1558.0x0000000801197768.apply
+  [11] zio.ZIO.$anonfun$$times$greater$1
+  [12] zio.ZIO$$Lambda$244.0x0000000800daa558.apply
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.evaluateEffect
+  [15] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [16] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [17] zio.internal.FiberRuntime.run
+  [18] zio.internal.ZScheduler$$anon$4.run
+
+--- 305768 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$OnSuccessAndFailure
+  [ 1] zio.ZIO.foldCauseZIO
+  [ 2] zio.ZIO.foldCauseZIO$
+  [ 3] zio.ZIO$OnSuccess.foldCauseZIO
+  [ 4] zio.ZIO.tryOrElse
+  [ 5] zio.ZIO.orElse
+  [ 6] zio.ZIO.orElse$
+  [ 7] zio.ZIO$OnSuccess.orElse
+  [ 8] zio.ZIO.orElseSucceed
+  [ 9] zio.ZIO.orElseSucceed$
+  [10] zio.ZIO$OnSuccess.orElseSucceed
+  [11] zio.kafka.consumer.internal.Runloop.$anonfun$handleRequests$7
+  [12] zio.kafka.consumer.internal.Runloop$$Lambda$2888.0x0000000801348400.apply
+  [13] zio.ZIO$IfZIO$.$anonfun$apply$3
+  [14] zio.ZIO$IfZIO$.$anonfun$apply$3$adapted
+  [15] zio.ZIO$IfZIO$$$Lambda$1889.0x0000000801202000.apply
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.evaluateEffect
+  [23] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [24] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [25] zio.internal.FiberRuntime.run
+  [26] zio.internal.ZScheduler$$anon$4.run
+
+--- 305656 bytes (0.02%), 5 samples
+  [ 0] java.util.HashMap$KeyIterator
+  [ 1] java.util.HashSet.iterator
+  [ 2] sun.nio.ch.Util$2.iterator
+  [ 3] org.apache.zookeeper.ClientCnxnSocketNIO.doTransport
+  [ 4] org.apache.zookeeper.ClientCnxn$SendThread.run
+
+--- 305528 bytes (0.02%), 2 samples
+  [ 0] zio.Queue$$anon$1$$Lambda$1676+0x00000008011bce30
+  [ 1] zio.Queue$$anon$1.$anonfun$take$1
+  [ 2] zio.Queue$$anon$1$$Lambda$1668.0x00000008011b6fa8.apply
+  [ 3] zio.ZIO$.$anonfun$fiberIdWith$1
+  [ 4] zio.ZIO$$$Lambda$225.0x0000000800da52e8.apply
+  [ 5] zio.ZIO$.$anonfun$descriptorWith$1
+  [ 6] zio.ZIO$$$Lambda$226.0x0000000800da56b8.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.evaluateEffect
+  [19] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [20] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [21] zio.internal.FiberRuntime.run
+  [22] zio.internal.ZScheduler$$anon$4.run
+
+--- 305448 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$$$Lambda$226+0x0000000800da56b8
+  [ 1] zio.ZIO$$$Lambda$1248.0x000000080111cea0.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.evaluateEffect
+  [ 5] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 6] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 7] zio.internal.FiberRuntime.run
+  [ 8] zio.internal.ZScheduler$$anon$4.run
+
+--- 305064 bytes (0.02%), 2 samples
+  [ 0] zio.Queue$Strategy$BackPressure$$Lambda$2960+0x000000080136d1f8
+  [ 1] jdk.internal.misc.Unsafe.allocateInstance
+  [ 2] java.lang.invoke.DirectMethodHandle.allocateInstance
+  [ 3] java.lang.invoke.LambdaForm$DMH.0x0000000800dad800.newInvokeSpecial
+  [ 4] java.lang.invoke.LambdaForm$MH.0x0000000800dae000.linkToTargetMethod
+  [ 5] zio.Queue$Strategy$BackPressure.$anonfun$handleSurplus$1
+  [ 6] zio.Queue$Strategy$BackPressure$$Lambda$2959.0x000000080136ce28.apply
+  [ 7] zio.ZIO$.$anonfun$fiberIdWith$1
+  [ 8] zio.ZIO$$$Lambda$225.0x0000000800da52e8.apply
+  [ 9] zio.ZIO$.$anonfun$descriptorWith$1
+  [10] zio.ZIO$$$Lambda$226.0x0000000800da56b8.apply
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.evaluateEffect
+  [14] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [15] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [16] zio.internal.FiberRuntime.run
+  [17] zio.internal.ZScheduler$$anon$4.run
+
+--- 304280 bytes (0.02%), 2 samples
+  [ 0] java.lang.ref.WeakReference
+  [ 1] zio.internal.WeakConcurrentBag.graduate
+  [ 2] zio.internal.ZScheduler$$anon$3.run
+
+--- 304112 bytes (0.02%), 2 samples
+  [ 0] scala.runtime.LazyRef
+  [ 1] zio.ZIO$$Lambda$166.0x0000000800d817b8.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] zio.internal.ZScheduler$$anon$4.run
+
+--- 303096 bytes (0.02%), 2 samples
+  [ 0] zio.stream.ZChannel$Fold$$$Lambda$1400+0x0000000801165a98
+  [ 1] zio.stream.ZStream.loop$5
+  [ 2] zio.stream.ZStream.$anonfun$mapZIO$4
+  [ 3] zio.stream.ZStream$$Lambda$1591.0x00000008011a2318.apply
+  [ 4] zio.stream.internal.ChannelExecutor.$anonfun$run$15
+  [ 5] zio.stream.internal.ChannelExecutor$$Lambda$1529.0x0000000801190978.apply
+  [ 6] zio.stream.internal.ChannelExecutor$.read$1
+  [ 7] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$8
+  [ 8] zio.stream.internal.ChannelExecutor$$$Lambda$1610.0x00000008011a9200.apply
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.evaluateEffect
+  [11] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [12] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [13] zio.internal.FiberRuntime.run
+  [14] zio.internal.ZScheduler$$anon$4.run
+
+--- 302520 bytes (0.02%), 2 samples
+  [ 0] java.util.concurrent.ConcurrentLinkedQueue$Node
+  [ 1] java.util.concurrent.ConcurrentLinkedQueue.offer
+  [ 2] java.util.concurrent.ConcurrentLinkedQueue.add
+  [ 3] zio.internal.FiberRuntime.tell
+  [ 4] zio.internal.FiberRuntime.$anonfun$initiateAsync$1
+  [ 5] zio.internal.FiberRuntime.$anonfun$initiateAsync$1$adapted
+  [ 6] zio.internal.FiberRuntime$$Lambda$329.0x0000000800dcb840.apply
+  [ 7] zio.internal.FiberRuntime.processNewInterruptSignal
+  [ 8] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 9] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [10] zio.internal.FiberRuntime.run
+  [11] zio.internal.ZScheduler$$anon$4.run
+
+--- 301808 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$OnSuccessAndFailure
+  [ 1] zio.stream.internal.ChannelExecutor.run
+  [ 2] zio.stream.internal.ChannelExecutor$.read$1
+  [ 3] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$8
+  [ 4] zio.stream.internal.ChannelExecutor$$$Lambda$1610.0x00000008011a9200.apply
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 298648 bytes (0.02%), 2 samples
+  [ 0] zio.Fiber$Status$Running
+  [ 1] zio.internal.FiberRuntime.runLoop
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.evaluateEffect
+  [ 8] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 9] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [10] zio.internal.FiberRuntime.run
+  [11] zio.internal.ZScheduler$$anon$4.run
+
+--- 295824 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$Sync
+  [ 1] zio.stream.ZChannel.interpret$2
+  [ 2] zio.stream.ZChannel.$anonfun$toPull$10
+  [ 3] zio.stream.ZChannel$$Lambda$1724.0x00000008011d4e30.apply
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 295752 bytes (0.02%), 2 samples
+  [ 0] scala.collection.immutable.$colon$colon
+  [ 1] zio.Cause$$Lambda$3017.0x000000080137d650.apply
+  [ 2] scala.collection.LinearSeqOps.foldLeft
+  [ 3] scala.collection.LinearSeqOps.foldLeft$
+  [ 4] scala.collection.immutable.List.foldLeft
+  [ 5] zio.Cause.loop$2
+  [ 6] zio.Cause.foldContext
+  [ 7] zio.Cause.isInterruptedOnly
+  [ 8] zio.internal.FiberRuntime.reportExitValue$1
+  [ 9] zio.internal.FiberRuntime.setExitValue
+  [10] zio.internal.FiberRuntime.evaluateEffect
+  [11] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [12] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [13] zio.internal.FiberRuntime.run
+  [14] zio.internal.ZScheduler$$anon$4.run
+
+--- 294720 bytes (0.02%), 2 samples
+  [ 0] zio.Chunk$AnyRefArray
+  [ 1] scala.reflect.ClassTag$.apply
+  [ 2] zio.Chunk$Arr.<init>
+  [ 3] zio.Chunk$AnyRefArray.<init>
+  [ 4] zio.Chunk$.fromArray
+  [ 5] zio.ChunkBuilder$$anon$1.result
+  [ 6] zio.ChunkBuilder$$anon$1.result
+  [ 7] scala.collection.StrictOptimizedIterableOps.partition
+  [ 8] scala.collection.StrictOptimizedIterableOps.partition$
+  [ 9] zio.Chunk.partition
+  [10] zio.kafka.consumer.internal.Runloop.$anonfun$handleRequests$9
+  [11] zio.kafka.consumer.internal.Runloop$$Lambda$2902.0x0000000801353ac0.apply
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.evaluateEffect
+  [14] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [15] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [16] zio.internal.FiberRuntime.run
+  [17] zio.internal.ZScheduler$$anon$4.run
+
+--- 294600 bytes (0.02%), 2 samples
+  [ 0] java.util.HashMap
+  [ 1] zio.stm.ZSTM$internal$.tryCommitSync
+  [ 2] zio.stm.ZSTM$.$anonfun$unsafeAtomically$1
+  [ 3] zio.stm.ZSTM$$$Lambda$187.0x0000000800d8e1a0.apply
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+--- 294192 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$Sync
+  [ 1] zio.Promise.$anonfun$await$2
+  [ 2] zio.Promise$$Lambda$322.0x0000000800dc9758.apply
+  [ 3] zio.ZIOCompanionVersionSpecific.$anonfun$asyncInterrupt$2
+  [ 4] zio.ZIOCompanionVersionSpecific$$Lambda$325.0x0000000800dcab20.apply
+  [ 5] zio.internal.FiberRuntime.initiateAsync
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.evaluateEffect
+  [19] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [20] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [21] zio.internal.FiberRuntime.run
+  [22] zio.internal.ZScheduler$$anon$4.run
+
+--- 293768 bytes (0.02%), 4 samples
+  [ 0] zio.ZIO$OnSuccess
+  [ 1] zio.ZIO$$Lambda$1779.0x00000008011e23c8.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.evaluateEffect
+  [ 4] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 5] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 6] zio.internal.FiberRuntime.run
+  [ 7] zio.internal.ZScheduler$$anon$4.run
+
+--- 293424 bytes (0.02%), 2 samples
+  [ 0] zio.Cause$Interrupt
+  [ 1] zio.internal.FiberRuntime.sendInterruptSignalToAllChildren
+  [ 2] zio.internal.FiberRuntime.processNewInterruptSignal
+  [ 3] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 4] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 5] zio.internal.FiberRuntime.run
+  [ 6] zio.internal.ZScheduler$$anon$4.run
+
+--- 291432 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$OnSuccessAndFailure
+  [ 1] zio.kafka.consumer.internal.ConsumerAccess.withConsumerNoPermit
+  [ 2] zio.kafka.consumer.internal.ConsumerAccess.withConsumerM
+  [ 3] zio.kafka.consumer.internal.ConsumerAccess.withConsumer
+  [ 4] zio.kafka.consumer.internal.Runloop.$anonfun$handleRequests$7
+  [ 5] zio.kafka.consumer.internal.Runloop$$Lambda$2888.0x0000000801348400.apply
+  [ 6] zio.ZIO$IfZIO$.$anonfun$apply$3
+  [ 7] zio.ZIO$IfZIO$.$anonfun$apply$3$adapted
+  [ 8] zio.ZIO$IfZIO$$$Lambda$1889.0x0000000801202000.apply
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.evaluateEffect
+  [16] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [17] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [18] zio.internal.FiberRuntime.run
+  [19] zio.internal.ZScheduler$$anon$4.run
+
+--- 289328 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$OnSuccessAndFailure
+  [ 1] zio.ZIO.$anonfun$onExit$1
+  [ 2] zio.ZIO$$Lambda$163.0x0000000800d7b600.apply
+  [ 3] zio.ZIO$.$anonfun$uninterruptibleMask$1
+  [ 4] zio.ZIO$$$Lambda$164.0x0000000800d7b9d0.apply
+  [ 5] zio.ZIO$UpdateRuntimeFlagsWithin$DynamicNoBox.scope
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.evaluateEffect
+  [18] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [19] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [20] zio.internal.FiberRuntime.run
+  [21] zio.internal.ZScheduler$$anon$4.run
+
+--- 289312 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$$Lambda$167+0x0000000800d81b88
+  [ 1] zio.ZIO.$anonfun$onExit$1
+  [ 2] zio.ZIO$$Lambda$163.0x0000000800d7b600.apply
+  [ 3] zio.ZIO$.$anonfun$uninterruptibleMask$1
+  [ 4] zio.ZIO$$$Lambda$164.0x0000000800d7b9d0.apply
+  [ 5] zio.ZIO$UpdateRuntimeFlagsWithin$DynamicNoBox.scope
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.evaluateEffect
+  [13] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [14] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [15] zio.internal.FiberRuntime.run
+  [16] zio.internal.ZScheduler$$anon$4.run
+
+--- 288576 bytes (0.02%), 2 samples
+  [ 0] java.util.HashMap
+  [ 1] zio.stm.ZSTM$internal$.tryCommitSync
+  [ 2] zio.stm.ZSTM$.$anonfun$unsafeAtomically$1
+  [ 3] zio.stm.ZSTM$$$Lambda$187.0x0000000800d8e1a0.apply
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.evaluateEffect
+  [16] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [17] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [18] zio.internal.FiberRuntime.run
+  [19] zio.internal.ZScheduler$$anon$4.run
+
+--- 288184 bytes (0.02%), 2 samples
+  [ 0] scala.collection.immutable.$colon$colon
+  [ 1] zio.Promise.$anonfun$await$2
+  [ 2] zio.Promise$$Lambda$322.0x0000000800dc9758.apply
+  [ 3] zio.ZIOCompanionVersionSpecific.$anonfun$asyncInterrupt$2
+  [ 4] zio.ZIOCompanionVersionSpecific$$Lambda$325.0x0000000800dcab20.apply
+  [ 5] zio.internal.FiberRuntime.initiateAsync
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.evaluateEffect
+  [17] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [18] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [19] zio.internal.FiberRuntime.run
+  [20] zio.internal.ZScheduler$$anon$4.run
+
+--- 286544 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$$Lambda$163+0x0000000800d7b600
+  [ 1] zio.Queue$$anon$1.$anonfun$take$1
+  [ 2] zio.Queue$$anon$1$$Lambda$1668.0x00000008011b6fa8.apply
+  [ 3] zio.ZIO$.$anonfun$fiberIdWith$1
+  [ 4] zio.ZIO$$$Lambda$225.0x0000000800da52e8.apply
+  [ 5] zio.ZIO$.$anonfun$descriptorWith$1
+  [ 6] zio.ZIO$$$Lambda$226.0x0000000800da56b8.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.evaluateEffect
+  [19] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [20] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [21] zio.internal.FiberRuntime.run
+  [22] zio.internal.ZScheduler$$anon$4.run
+
+--- 285264 bytes (0.02%), 2 samples
+  [ 0] zio.internal.PinchableArray
+  [ 1] zio.internal.FiberRuntime.getChildren
+  [ 2] zio.internal.FiberRuntime.addChild
+  [ 3] zio.internal.FiberScope$Local.add
+  [ 4] zio.ZIO$unsafe$.makeChildFiber
+  [ 5] zio.ZIO.$anonfun$raceFibersWith$1
+  [ 6] zio.ZIO$$Lambda$1797.0x00000008011ead80.apply
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.evaluateEffect
+  [12] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [13] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [14] zio.internal.FiberRuntime.run
+  [15] zio.internal.ZScheduler$$anon$4.run
+
+--- 284928 bytes (0.02%), 2 samples
+  [ 0] zio.stream.ZSink$$$Lambda$1886+0x0000000801206668
+  [ 1] zio.stream.ZSink$.fold$4
+  [ 2] zio.stream.ZSink$.foldChunkSplitZIO$1
+  [ 3] zio.stream.ZSink$.$anonfun$foldZIO$6
+  [ 4] zio.stream.ZSink$$$Lambda$1873.0x00000008011fed40.apply
+  [ 5] zio.stream.internal.ChannelExecutor.run
+  [ 6] zio.stream.internal.ChannelExecutor$.read$1
+  [ 7] zio.stream.internal.ChannelExecutor$.$anonfun$readUpstream$8
+  [ 8] zio.stream.internal.ChannelExecutor$$$Lambda$1610.0x00000008011a9200.apply
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.evaluateEffect
+  [11] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [12] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [13] zio.internal.FiberRuntime.run
+  [14] zio.internal.ZScheduler$$anon$4.run
+
+--- 281232 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$OnSuccess
+  [ 1] zio.ZIO.flatMap
+  [ 2] zio.ZIO.flatMap$
+  [ 3] zio.ZIO$OnSuccessAndFailure.flatMap
+  [ 4] zio.ZIO.map
+  [ 5] zio.ZIO.map$
+  [ 6] zio.ZIO$OnSuccessAndFailure.map
+  [ 7] zio.stream.ZStream$.$anonfun$unfoldChunkZIO$1
+  [ 8] zio.stream.ZStream$$$Lambda$1410.0x00000008011678b8.apply
+  [ 9] zio.stream.internal.ChannelExecutor.run
+  [10] zio.stream.ZChannel.$anonfun$toPull$12
+  [11] zio.stream.ZChannel$$Lambda$1713.0x00000008011cf1c0.apply
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.evaluateEffect
+  [15] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [16] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [17] zio.internal.FiberRuntime.run
+  [18] zio.internal.ZScheduler$$anon$4.run
+
+--- 281088 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$Async
+  [ 1] zio.ZIOCompanionVersionSpecific$$Lambda$324.0x0000000800dc9de8.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.runLoop
+  [ 7] zio.internal.FiberRuntime.runLoop
+  [ 8] zio.internal.FiberRuntime.runLoop
+  [ 9] zio.internal.FiberRuntime.runLoop
+  [10] zio.internal.FiberRuntime.runLoop
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.evaluateEffect
+  [14] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [15] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [16] zio.internal.FiberRuntime.run
+  [17] zio.internal.ZScheduler$$anon$4.run
+
+--- 280264 bytes (0.02%), 2 samples
+  [ 0] zio.ZIO$$Lambda$317+0x0000000800dc7270
+  [ 1] zio.ZIO$$Lambda$313.0x0000000800dc5378.apply
+  [ 2] zio.internal.FiberRuntime.runLoop
+  [ 3] zio.internal.FiberRuntime.runLoop
+  [ 4] zio.internal.FiberRuntime.runLoop
+  [ 5] zio.internal.FiberRuntime.runLoop
+  [ 6] zio.internal.FiberRuntime.evaluateEffect
+  [ 7] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [ 8] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [ 9] zio.internal.FiberRuntime.run
+  [10] zio.internal.ZScheduler$$anon$4.run
+
+       bytes  percent  samples  top
+  ----------  -------  -------  ---
+   346378376   18.95%       98  java.nio.HeapByteBuffer
+   254061232   13.90%      205  byte[]
+   216245936   11.83%       62  org.apache.kafka.clients.consumer.ConsumerRecord
+   175560976    9.60%       54  org.apache.kafka.common.record.DefaultRecord
+    98841944    5.41%       27  zio.kafka.consumer.OffsetImpl
+    97781880    5.35%       28  org.apache.kafka.common.TopicPartition
+    92954160    5.08%       25  org.apache.kafka.common.header.internals.RecordHeaders
+    89956024    4.92%       77  java.lang.Object[]
+    73897168    4.04%       27  java.util.ArrayList
+    65241312    3.57%       19  java.util.Arrays$ArrayList
+    43673104    2.39%       14  zio.kafka.consumer.CommittableRecord
+    27655536    1.51%       11  java.util.Optional
+    10487384    0.57%       16  zio.ZIO$EvaluationStep[]
+    10397272    0.57%       84  zio.ZIO$Sync
+    10003136    0.55%       22  java.util.HashMap$Node
+     9937800    0.54%       85  zio.ZIO$OnSuccess
+     9937632    0.54%       42  java.lang.InterruptedException
+     8615136    0.47%       11  java.util.HashMap$Node[]
+     7343504    0.40%       28  scala.Tuple2
+     6544240    0.36%       53  zio.ZIO$OnSuccessAndFailure
+     5652600    0.31%       22  java.util.HashMap$KeyIterator
+     5342224    0.29%       18  zio.ZIO$Stateful
+     5247856    0.29%       43  scala.collection.immutable.$colon$colon
+     4889152    0.27%       30  int[]
+     4753480    0.26%       47  scala.Some
+     4194304    0.23%        1  java.util.Collections$UnmodifiableCollection$1
+     4194304    0.23%        1  java.util.concurrent.ConcurrentLinkedQueue$Itr
+     4194304    0.23%        1  zio.ZIO$ReleaseExit$$Lambda$1280+0x00000008011278f8
+     3747432    0.20%       28  zio.Chunk$AnyRefArray
+     3678480    0.20%       30  zio.ChunkBuilder$$anon$1
+     3406816    0.19%       29  zio.Chunk$Slice
+     2941192    0.16%       24  zio.ZIO$EvaluationStep$UpdateRuntimeFlags$$anon$28
+     2878752    0.16%       28  java.util.concurrent.ConcurrentLinkedQueue$Node
+     2444624    0.13%       27  java.util.HashMap$EntryIterator
+     2255960    0.12%       17  zio.ZIO$UpdateRuntimeFlagsWithin$DynamicNoBox
+     2226192    0.12%       18  zio.ZIO$$Lambda$76+0x0000000800cee858
+     2165600    0.12%       16  scala.collection.immutable.Map$Map4
+     2054400    0.11%       26  java.lang.String
+     1888304    0.10%       13  zio.ZIO$$Lambda$136+0x0000000800d47cb0
+     1850312    0.10%       17  zio.stream.ZChannel$Fold$K
+     1789760    0.10%        8  java.util.Collections$UnmodifiableMap$UnmodifiableEntrySet$1
+     1778400    0.10%       13  zio.Exit$Success
+     1756568    0.10%        2  zio.Exit$$Lambda$3178+0x00000008013a9c50
+     1703328    0.09%       13  zio.Fiber$Status$Running
+     1702448    0.09%       14  java.util.HashMap
+     1697424    0.09%       14  zio.FiberRefs
+     1590504    0.09%       44  java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode
+     1500792    0.08%       14  scala.collection.mutable.ArrayBuilder$ofRef
+     1441816    0.08%       12  zio.ZIO$$Lambda$1153+0x00000008010e77e8
+     1404008    0.08%       12  zio.stream.ZChannel$Fold
+     1330768    0.07%       11  zio.ZIO$$Lambda$166+0x0000000800d817b8
+     1308632    0.07%        7  java.util.concurrent.LinkedBlockingQueue$Itr
+     1248808    0.07%        9  zio.internal.FiberRuntime
+     1228432    0.07%        9  zio.stream.ZChannel$Fold$$$Lambda$1400+0x0000000801165a98
+     1224776    0.07%       16  java.lang.Long
+     1162264    0.06%       10  zio.ZIOCompanionVersionSpecific$$Lambda$324+0x0000000800dc9de8
+     1117952    0.06%       10  zio.stream.internal.ChannelExecutor$$Lambda$1604+0x00000008011a7c18
+     1115240    0.06%        2  java.util.concurrent.locks.AbstractQueuedSynchronizer$SharedNode
+     1113832    0.06%       10  zio.stream.internal.ChannelExecutor$$$Lambda$1609+0x00000008011a8e30
+     1099040    0.06%        8  zio.stream.internal.ChannelExecutor$ChannelState$Read
+     1069144    0.06%        7  zio.ZIO$Async
+     1054832    0.06%       15  zio.internal.FiberMessage$Resume
+     1041480    0.06%       15  java.lang.Integer
+     1015384    0.06%       11  zio.stream.internal.ChannelExecutor$$Lambda$1530+0x0000000801190d48
+     1000376    0.05%        7  zio.ZIO$$Lambda$167+0x0000000800d81b88
+      992848    0.05%        9  zio.Promise$internal$Pending
+      958840    0.05%       10  zio.ZIO$$Lambda$244+0x0000000800daa558
+      954704    0.05%        7  zio.internal.PinchableArray
+      923696    0.05%        8  java.util.concurrent.atomic.AtomicBoolean
+      899416    0.05%        6  zio.internal.ReifyStack$Trampoline
+      864712    0.05%        6  zio.ZIO$$Lambda$163+0x0000000800d7b600
+      861536    0.05%        9  zio.ZIO$$$Lambda$164+0x0000000800d7b9d0
+      858040    0.05%        7  scala.collection.immutable.Map$Map3
+      829680    0.05%        6  scala.runtime.LazyRef
+      772080    0.04%        7  zio.FiberId$Runtime
+      758088    0.04%        6  zio.ZIOCompanionVersionSpecific$$Lambda$331+0x0000000800dcc520
+      755120    0.04%        6  zio.ZIO$$Lambda$327+0x0000000800dcb1b0
+      746752    0.04%       14  java.util.regex.Matcher
+      735624    0.04%       10  zio.stream.internal.ChannelExecutor$$$Lambda$1558+0x0000000801197768
+      732240    0.04%       19  javax.management.MBeanAttributeInfo
+      685816    0.04%        5  zio.FiberRefs$$Lambda$132+0x0000000800d32b70
+      681392    0.04%        5  zio.ZIO$$$Lambda$226+0x0000000800da56b8
+      680272    0.04%        6  zio.ZIO$OnFailure
+      679832    0.04%        5  zio.Promise
+      623688    0.03%        2  java.util.concurrent.ConcurrentHashMap$EntryIterator
+      606624    0.03%        4  kafka.utils.KafkaScheduler$$Lambda$854+0x000000080103cd30
+      603056    0.03%        3  java.util.concurrent.atomic.AtomicReference
+      589584    0.03%        4  zio.internal.FiberRuntime$$Lambda$329+0x0000000800dcb840
+      580648    0.03%        4  zio.stream.ZChannel$$Lambda$1758+0x00000008011dc818
+      568288    0.03%        4  zio.stm.TSemaphore$$Lambda$199+0x0000000800d93930
+      555312    0.03%        3  org.apache.zookeeper.server.DataTree$ProcessTxnResult
+      545784    0.03%        4  zio.Exit$Failure
+      542296    0.03%        4  scala.collection.immutable.BitmapIndexedMapNode
+      542248    0.03%        4  zio.ZIO$$Lambda$1229+0x0000000801112180
+      538312    0.03%        6  zio.stream.internal.ChannelExecutor$ChannelState$Read[]
+      536752    0.03%        4  zio.stream.ZChannel$Emit
+      535408    0.03%        4  zio.ZIO$$Lambda$272+0x0000000800db7a40
+      531864    0.03%        4  zio.stream.internal.ChannelExecutor$$$Lambda$1610+0x00000008011a9200
+      503864    0.03%        3  zio.stm.ZSTM$internal$Entry$$anon$4
+      502968    0.03%        4  zio.stream.ZChannel$$Lambda$1871+0x00000008011fe3e0
+      491424    0.03%        4  zio.Chunk$Singleton
+      490504    0.03%        3  zio.stream.Take$$$Lambda$3032+0x00000008013867f0
+      480616    0.03%        4  zio.Promise$$Lambda$236+0x0000000800d9dc48
+      476840    0.03%        3  zio.Queue$$anon$1$$Lambda$1676+0x00000008011bce30
+      470120    0.03%        3  zio.stm.ZSTM$Release$$Lambda$220+0x0000000800da38c8
+      456792    0.02%        3  zio.internal.FiberRuntime$$Lambda$2543+0x00000008012ef408
+      452672    0.02%        3  zio.ZIO$$$Lambda$1266+0x0000000801120580
+      452312    0.02%        4  zio.stream.internal.ChannelExecutor$$Lambda$1606+0x00000008011a83d0
+      435440    0.02%        3  zio.stm.ZSTM$$$Lambda$187+0x0000000800d8e1a0
+      433864    0.02%        4  zio.stm.ZSTM$Release$$Lambda$243+0x0000000800daa298
+      426032    0.02%        3  zio.ZIO$$Lambda$313+0x0000000800dc5378
+      425688    0.02%        3  zio.Cause$Interrupt
+      423552    0.02%        4  scala.collection.mutable.Stack
+      414744    0.02%        4  zio.kafka.consumer.internal.ConsumerAccess$$Lambda$2530+0x00000008012ec230
+      413648    0.02%        3  zio.ZIO$$Lambda$317+0x0000000800dc7270
+      413072    0.02%        3  scala.util.Right
+      406200    0.02%        3  zio.stm.ZSTM$Effect
+      393864    0.02%        3  zio.stream.internal.ChannelExecutor$Subexecutor$Emit
+      390640    0.02%        3  zio.stm.ZSTM$Release
+      382528    0.02%        3  zio.ZIO$$Lambda$1651+0x00000008011b3188
+      381352    0.02%        3  zio.stream.ZStream$$Lambda$3031+0x0000000801386420
+      373704    0.02%        3  zio.ZIO$$Lambda$1779+0x00000008011e23c8
+      370272    0.02%        3  zio.ZIO$ReleaseExit$$Lambda$1264+0x0000000801119a38
+      368888    0.02%        3  scala.collection.immutable.HashMap
+      360472    0.02%        3  zio.Promise$$Lambda$323+0x0000000800dc9b28
+      360456    0.02%        2  zio.internal.FiberRuntime$$Lambda$1224+0x0000000801110c40
+      358688    0.02%        3  zio.ZIO$$Lambda$1721+0x00000008011d43d0
+      353336    0.02%        3  zio.stm.ZSTM$Release$$Lambda$245+0x0000000800daa928
+      348024    0.02%        3  zio.stm.ZSTM$SucceedNow
+      346072    0.02%        2  scala.collection.immutable.ArraySeq$ofRef
+      343760    0.02%        2  zio.stream.ZChannel$Read
+      341368    0.02%        2  zio.stm.ZSTM$Release$$Lambda$211+0x0000000800d994a8
+      340600    0.02%        3  zio.ZIO$$$Lambda$1250+0x000000080111d4b8
+      326640    0.02%        4  zio.ZIO$YieldNow
+      326152    0.02%        2  zio.stm.ZSTM$internal$TExit$Succeed
+      320384    0.02%        1  scala.collection.MapOps$$anon$1
+      311928    0.02%        1  scala.collection.convert.JavaCollectionWrappers$JIteratorWrapper
+      309864    0.02%        4  java.lang.Double
+      308928    0.02%        3  zio.stream.ZChannel$$$Lambda$1626+0x00000008011ad350
+      305904    0.02%        2  java.nio.ByteBuffer[]
+      305392    0.02%        2  zio.Promise$$Lambda$322+0x0000000800dc9758
+      305232    0.02%        3  zio.stream.internal.ChannelExecutor$ChannelState$Effect
+      305064    0.02%        2  zio.Queue$Strategy$BackPressure$$Lambda$2960+0x000000080136d1f8
+      304280    0.02%        2  java.lang.ref.WeakReference
+      285816    0.02%        2  scala.runtime.ObjectRef
+      284928    0.02%        2  zio.stream.ZSink$$$Lambda$1886+0x0000000801206668
+      283048    0.02%        2  scala.collection.IndexedSeqView$Id
+      280216    0.02%        3  zio.ZIO$$Lambda$1648+0x00000008011b29e8
+      273680    0.01%        2  zio.ZIO$$$Lambda$1255+0x000000080111edf0
+      270968    0.01%        2  zio.kafka.consumer.internal.State
+      269880    0.01%        2  zio.stream.ZSink$$$Lambda$1875+0x00000008011ff6b8
+      269576    0.01%        2  zio.ZIO$$$Lambda$1251+0x000000080111dbb8
+      264064    0.01%        2  zio.ZIO$$Lambda$2531+0x00000008012ec978
+      262520    0.01%        2  zio.Promise$$anon$1
+      260008    0.01%        2  zio.ZIO$ReleaseExit
+      259208    0.01%        4  zio.ZIO$$$Lambda$225+0x0000000800da52e8
+      258672    0.01%        2  zio.ZIO$$$Lambda$1265+0x00000008011202c0
+      256128    0.01%        2  zio.Cause$Then
+      255704    0.01%        2  zio.kafka.consumer.internal.ConsumerAccess$$Lambda$2538+0x00000008012ee318
+      254072    0.01%        2  zio.kafka.consumer.internal.Runloop$$Lambda$2606+0x00000008012ff1b0
+      252480    0.01%        2  zio.ZIO$EvaluationStep$UpdateTrace
+      250608    0.01%        2  java.util.Formatter$FormatSpecifier
+      246912    0.01%        4  zio.ZIO$$Lambda$241+0x0000000800da9c78
+      245824    0.01%        2  zio.stm.TSemaphore$$Lambda$205+0x0000000800d96e28
+      245376    0.01%        2  zio.ZIO$$Lambda$255+0x0000000800dae800
+      244712    0.01%        3  java.util.WeakHashMap$Entry
+      242824    0.01%        5  java.lang.String[]
+      241424    0.01%        4  scala.util.Left
+      240968    0.01%        2  zio.ZIOCompanionVersionSpecific$$Lambda$325+0x0000000800dcab20
+      239232    0.01%        2  zio.stream.ZChannel$$$Lambda$1742+0x00000008011d17d0
+      238592    0.01%        2  zio.Fiber$$Lambda$1227+0x0000000801111af8
+      235640    0.01%        3  zio.internal.FiberRuntime$$Lambda$1232+0x0000000801112e98
+      235600    0.01%        2  scala.collection.mutable.ListBuffer
+      231632    0.01%        4  java.util.regex.IntHashSet[]
+      229904    0.01%        2  zio.FiberRef$unsafe$$anon$2$$Lambda$145+0x0000000800d6ab70
+      229344    0.01%        1  zio.stream.ZChannel$$Lambda$1829+0x00000008011f4000
+      229344    0.01%        1  zio.Scope$$anon$2
+      229128    0.01%        2  zio.Fiber$Descriptor
+      229040    0.01%        2  java.util.HashMap$KeySet
+      228992    0.01%        2  zio.stream.ZPipeline$$$Lambda$2484+0x00000008012df960
+      228192    0.01%        1  java.util.concurrent.ConcurrentLinkedQueue
+      227856    0.01%        4  jdk.internal.org.objectweb.asm.SymbolTable$Entry[]
+      223784    0.01%        1  java.util.regex.Pattern
+      223736    0.01%        1  kafka.log.UnifiedLog$$Lambda$2361+0x00000008012b6000
+      223736    0.01%        1  java.lang.invoke.DirectMethodHandle$Constructor
+      216456    0.01%        2  scala.collection.ArrayOps$ArrayIterator
+      214664    0.01%        2  zio.stream.ZChannel$$Lambda$2861+0x000000080134c820
+      214024    0.01%        2  zio.ZIO$UpdateRuntimeFlagsWithin$Interruptible
+      213264    0.01%        3  zio.ZIO$ReleaseExit$$Lambda$1267+0x0000000801120b30
+      213000    0.01%        2  zio.Cause$$Lambda$3006+0x000000080137a3a8
+      208832    0.01%        2  zio.ZIO$$Lambda$208+0x0000000800d987a8
+      203936    0.01%        2  zio.Cause$Interrupt$$anon$6
+      201424    0.01%        2  zio.Fiber$$Lambda$2999+0x0000000801378e30
+      201216    0.01%       10  kafka.server.KafkaRequestHandler$$Lambda$1158+0x00000008010e3c90
+      193624    0.01%        1  zio.ZIO$$Lambda$1819+0x00000008011f0a60
+      193616    0.01%        1  zio.stream.ZChannel$MergeState$BothRunning
+      175984    0.01%        1  zio.kafka.consumer.internal.Runloop$$Lambda$2604+0x00000008012fea10
+      174008    0.01%        1  zio.stream.internal.ChannelExecutor$$Lambda$1740+0x00000008011d3b10
+      174008    0.01%        1  zio.ZIO$$Lambda$1797+0x00000008011ead80
+      173480    0.01%        1  zio.stream.ZChannel$$Lambda$2772+0x0000000801335440

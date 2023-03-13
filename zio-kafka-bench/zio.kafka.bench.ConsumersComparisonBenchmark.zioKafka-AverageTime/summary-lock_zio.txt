@@ -1,0 +1,623 @@
+--- Execution profile ---
+Total samples       : 438
+
+--- 1838984483 ns (96.82%), 176 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$FairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll
+  [ 8] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.pollNoWakeup
+  [ 9] org.apache.kafka.clients.consumer.internals.AbstractCoordinator$HeartbeatThread.run
+
+--- 22376384 ns (1.18%), 68 samples
+  [ 0] org.apache.kafka.clients.consumer.internals.ConsumerCoordinator
+  [ 1] org.apache.kafka.clients.consumer.internals.AbstractCoordinator.pollHeartbeat
+  [ 2] org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.poll
+  [ 3] org.apache.kafka.clients.consumer.KafkaConsumer.updateAssignmentMetadataIfNeeded
+  [ 4] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 5] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 6] zio.kafka.consumer.internal.Runloop.doPoll
+  [ 7] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [ 8] zio.kafka.consumer.internal.Runloop$$Lambda$2543.0x00000008012f0e28.apply
+  [ 9] zio.ZIO$.$anonfun$suspend$1
+  [10] zio.ZIO$$$Lambda$2529.0x00000008012ed920.apply
+  [11] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [12] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011bc3d0.apply
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.evaluateEffect
+  [18] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [19] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [20] zio.internal.FiberRuntime.run
+  [21] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [22] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [23] java.lang.Thread.run
+
+--- 13548662 ns (0.71%), 71 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] java.util.concurrent.ThreadPoolExecutor.processWorkerExit
+  [ 8] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 9] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [10] java.lang.Thread.run
+
+--- 11748468 ns (0.62%), 39 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await
+  [ 5] java.util.concurrent.LinkedBlockingQueue.take
+  [ 6] java.util.concurrent.ThreadPoolExecutor.getTask
+  [ 7] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 8] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [ 9] java.lang.Thread.run
+
+--- 3765118 ns (0.20%), 11 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] java.util.concurrent.ThreadPoolExecutor.interruptIdleWorkers
+  [ 8] java.util.concurrent.ThreadPoolExecutor.tryTerminate
+  [ 9] java.util.concurrent.ThreadPoolExecutor.processWorkerExit
+  [10] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [11] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [12] java.lang.Thread.run
+
+--- 1852252 ns (0.10%), 7 samples
+  [ 0] org.apache.kafka.common.metrics.Metrics
+  [ 1] org.apache.kafka.common.metrics.Metrics.removeSensor
+  [ 2] org.apache.kafka.common.network.Selector$SelectorMetrics.close
+  [ 3] org.apache.kafka.common.utils.Utils.closeQuietly
+  [ 4] org.apache.kafka.common.network.Selector.close
+  [ 5] kafka.network.Processor.closeAll
+  [ 6] kafka.network.Processor.$anonfun$run$8
+  [ 7] kafka.network.Processor$$Lambda$3248.0x00000008013bda68.apply$mcV$sp
+  [ 8] kafka.utils.CoreUtils$.swallow
+  [ 9] kafka.network.Processor.run
+  [10] java.lang.Thread.run
+
+--- 1691213 ns (0.09%), 2 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] java.util.concurrent.ThreadPoolExecutor.shutdown
+  [ 8] org.apache.zookeeper.server.WorkerService.stop
+  [ 9] org.apache.zookeeper.server.NIOServerCnxnFactory.stop
+  [10] org.apache.zookeeper.server.NIOServerCnxnFactory$SelectorThread.run
+
+--- 1195348 ns (0.06%), 18 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await
+  [ 5] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 6] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 7] java.util.concurrent.ThreadPoolExecutor.getTask
+  [ 8] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 9] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [10] java.lang.Thread.run
+
+--- 1037432 ns (0.05%), 3 samples
+  [ 0] org.apache.kafka.clients.consumer.internals.ConsumerCoordinator
+  [ 1] org.apache.kafka.clients.consumer.internals.AbstractCoordinator.timeToNextHeartbeat
+  [ 2] org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.timeToNextPoll
+  [ 3] org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches
+  [ 4] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 5] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 6] zio.kafka.consumer.internal.Runloop.doPoll
+  [ 7] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [ 8] zio.kafka.consumer.internal.Runloop$$Lambda$2543.0x00000008012f0e28.apply
+  [ 9] zio.ZIO$.$anonfun$suspend$1
+  [10] zio.ZIO$$$Lambda$2529.0x00000008012ed920.apply
+  [11] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [12] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011bc3d0.apply
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.evaluateEffect
+  [18] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [19] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [20] zio.internal.FiberRuntime.run
+  [21] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [22] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [23] java.lang.Thread.run
+
+--- 625980 ns (0.03%), 2 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] java.util.concurrent.ThreadPoolExecutor.tryTerminate
+  [ 8] java.util.concurrent.ThreadPoolExecutor.processWorkerExit
+  [ 9] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [10] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [11] java.lang.Thread.run
+
+--- 566272 ns (0.03%), 1 sample
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] java.util.concurrent.ThreadPoolExecutor.interruptIdleWorkers
+  [ 8] java.util.concurrent.ThreadPoolExecutor.tryTerminate
+  [ 9] java.util.concurrent.ThreadPoolExecutor.shutdown
+  [10] org.apache.zookeeper.server.WorkerService.stop
+  [11] org.apache.zookeeper.server.NIOServerCnxnFactory.stop
+  [12] org.apache.zookeeper.server.NIOServerCnxnFactory$SelectorThread.run
+
+--- 309367 ns (0.02%), 1 sample
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.size
+  [ 8] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.isEmpty
+  [ 9] java.util.concurrent.ThreadPoolExecutor.getTask
+  [10] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [11] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [12] java.lang.Thread.run
+
+--- 252342 ns (0.01%), 2 samples
+  [ 0] org.apache.kafka.common.metrics.Metrics
+  [ 1] org.apache.kafka.common.metrics.Metrics.removeMetric
+  [ 2] org.apache.kafka.common.metrics.internals.IntGaugeSuite.performPendingMetricsOperations
+  [ 3] org.apache.kafka.common.metrics.internals.IntGaugeSuite.close
+  [ 4] org.apache.kafka.common.network.Selector$SelectorMetrics.close
+  [ 5] org.apache.kafka.common.utils.Utils.closeQuietly
+  [ 6] org.apache.kafka.common.network.Selector.close
+  [ 7] kafka.network.Processor.closeAll
+  [ 8] kafka.network.Processor.$anonfun$run$8
+  [ 9] kafka.network.Processor$$Lambda$3248.0x00000008013bda68.apply$mcV$sp
+  [10] kafka.utils.CoreUtils$.swallow
+  [11] kafka.network.Processor.run
+  [12] java.lang.Thread.run
+
+--- 232145 ns (0.01%), 1 sample
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.remove
+  [ 8] java.util.concurrent.ScheduledThreadPoolExecutor.onShutdown
+  [ 9] java.util.concurrent.ThreadPoolExecutor.shutdown
+  [10] java.util.concurrent.ScheduledThreadPoolExecutor.shutdown
+  [11] kafka.utils.KafkaScheduler.shutdown
+  [12] kafka.server.KafkaServer.$anonfun$shutdown$7
+  [13] kafka.server.KafkaServer$$Lambda$3277.0x00000008013c38b0.apply$mcV$sp
+  [14] kafka.utils.CoreUtils$.swallow
+  [15] kafka.server.KafkaServer.shutdown
+  [16] io.github.embeddedkafka.EmbeddedK.stop
+  [17] zio.kafka.embedded.Kafka$EmbeddedKafkaService.$anonfun$stop$1
+  [18] zio.kafka.embedded.Kafka$EmbeddedKafkaService$$Lambda$3211.0x00000008013b5a50.apply$mcV$sp
+  [19] scala.runtime.java8.JFunction0$mcV$sp.apply
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.runLoop
+  [24] zio.internal.FiberRuntime.runLoop
+  [25] zio.internal.FiberRuntime.runLoop
+  [26] zio.internal.FiberRuntime.runLoop
+  [27] zio.internal.FiberRuntime.runLoop
+  [28] zio.internal.FiberRuntime.runLoop
+  [29] zio.internal.FiberRuntime.runLoop
+  [30] zio.internal.FiberRuntime.runLoop
+  [31] zio.internal.FiberRuntime.runLoop
+  [32] zio.internal.FiberRuntime.runLoop
+  [33] zio.internal.FiberRuntime.runLoop
+  [34] zio.internal.FiberRuntime.runLoop
+  [35] zio.internal.FiberRuntime.runLoop
+  [36] zio.internal.FiberRuntime.runLoop
+  [37] zio.internal.FiberRuntime.runLoop
+  [38] zio.internal.FiberRuntime.runLoop
+  [39] zio.internal.FiberRuntime.runLoop
+  [40] zio.internal.FiberRuntime.runLoop
+  [41] zio.internal.FiberRuntime.runLoop
+  [42] zio.internal.FiberRuntime.runLoop
+  [43] zio.internal.FiberRuntime.runLoop
+  [44] zio.internal.FiberRuntime.runLoop
+  [45] zio.internal.FiberRuntime.runLoop
+  [46] zio.internal.FiberRuntime.runLoop
+  [47] zio.internal.FiberRuntime.runLoop
+  [48] zio.internal.FiberRuntime.runLoop
+  [49] zio.internal.FiberRuntime.runLoop
+  [50] zio.internal.FiberRuntime.runLoop
+  [51] zio.internal.FiberRuntime.runLoop
+  [52] zio.internal.FiberRuntime.runLoop
+  [53] zio.internal.FiberRuntime.runLoop
+  [54] zio.internal.FiberRuntime.runLoop
+  [55] zio.internal.FiberRuntime.runLoop
+  [56] zio.internal.FiberRuntime.runLoop
+  [57] zio.internal.FiberRuntime.runLoop
+  [58] zio.internal.FiberRuntime.runLoop
+  [59] zio.internal.FiberRuntime.runLoop
+  [60] zio.internal.FiberRuntime.evaluateEffect
+  [61] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [62] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [63] zio.internal.FiberRuntime.run
+  [64] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [65] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [66] java.lang.Thread.run
+
+--- 209820 ns (0.01%), 3 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$FairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.isUnavailable
+  [ 8] org.apache.kafka.clients.consumer.internals.AbstractCoordinator.checkAndGetCoordinator
+  [ 9] org.apache.kafka.clients.consumer.internals.AbstractCoordinator.coordinatorUnknown
+  [10] org.apache.kafka.clients.consumer.internals.AbstractCoordinator$HeartbeatThread.run
+
+--- 209070 ns (0.01%), 2 samples
+  [ 0] org.apache.kafka.common.metrics.Metrics
+  [ 1] org.apache.kafka.common.metrics.Metrics.removeMetric
+  [ 2] org.apache.kafka.common.network.Selector$SelectorMetrics.close
+  [ 3] org.apache.kafka.common.utils.Utils.closeQuietly
+  [ 4] org.apache.kafka.common.network.Selector.close
+  [ 5] kafka.network.Processor.closeAll
+  [ 6] kafka.network.Processor.$anonfun$run$8
+  [ 7] kafka.network.Processor$$Lambda$3248.0x00000008013bda68.apply$mcV$sp
+  [ 8] kafka.utils.CoreUtils$.swallow
+  [ 9] kafka.network.Processor.run
+  [10] java.lang.Thread.run
+
+--- 164481 ns (0.01%), 1 sample
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] java.util.concurrent.ThreadPoolExecutor.shutdown
+  [ 8] org.apache.zookeeper.server.WorkerService.stop
+  [ 9] org.apache.zookeeper.server.NIOServerCnxnFactory.stop
+  [10] org.apache.zookeeper.server.NIOServerCnxnFactory$AcceptThread.run
+
+--- 133280 ns (0.01%), 2 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$FairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.isUnavailable
+  [ 8] org.apache.kafka.clients.consumer.internals.Fetcher.prepareFetchRequests
+  [ 9] org.apache.kafka.clients.consumer.internals.Fetcher.sendFetches
+  [10] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [11] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [12] zio.kafka.consumer.internal.Runloop.doPoll
+  [13] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [14] zio.kafka.consumer.internal.Runloop$$Lambda$2543.0x00000008012f0e28.apply
+  [15] zio.ZIO$.$anonfun$suspend$1
+  [16] zio.ZIO$$$Lambda$2529.0x00000008012ed920.apply
+  [17] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [18] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011bc3d0.apply
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.runLoop
+  [22] zio.internal.FiberRuntime.runLoop
+  [23] zio.internal.FiberRuntime.evaluateEffect
+  [24] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [25] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [26] zio.internal.FiberRuntime.run
+  [27] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [28] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [29] java.lang.Thread.run
+
+--- 128566 ns (0.01%), 2 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$FairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.transmitSends
+  [ 8] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 9] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [10] zio.kafka.consumer.internal.Runloop.doPoll
+  [11] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [12] zio.kafka.consumer.internal.Runloop$$Lambda$2543.0x00000008012f0e28.apply
+  [13] zio.ZIO$.$anonfun$suspend$1
+  [14] zio.ZIO$$$Lambda$2529.0x00000008012ed920.apply
+  [15] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [16] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011bc3d0.apply
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.evaluateEffect
+  [22] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [23] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [24] zio.internal.FiberRuntime.run
+  [25] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [26] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [27] java.lang.Thread.run
+
+--- 102664 ns (0.01%), 1 sample
+  [ 0] org.apache.kafka.common.metrics.Metrics
+  [ 1] org.apache.kafka.common.metrics.Metrics.removeSensor
+  [ 2] org.apache.kafka.common.metrics.Metrics.removeSensor
+  [ 3] org.apache.kafka.common.network.Selector$SelectorMetrics.close
+  [ 4] org.apache.kafka.common.utils.Utils.closeQuietly
+  [ 5] org.apache.kafka.common.network.Selector.close
+  [ 6] kafka.network.Processor.closeAll
+  [ 7] kafka.network.Processor.$anonfun$run$8
+  [ 8] kafka.network.Processor$$Lambda$3248.0x00000008013bda68.apply$mcV$sp
+  [ 9] kafka.utils.CoreUtils$.swallow
+  [10] kafka.network.Processor.run
+  [11] java.lang.Thread.run
+
+--- 60515 ns (0.00%), 1 sample
+  [ 0] org.apache.kafka.clients.consumer.internals.Fetcher
+  [ 1] org.apache.kafka.clients.consumer.internals.Fetcher.sendFetches
+  [ 2] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 3] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 4] zio.kafka.consumer.internal.Runloop.doPoll
+  [ 5] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [ 6] zio.kafka.consumer.internal.Runloop$$Lambda$2543.0x00000008012f0e28.apply
+  [ 7] zio.ZIO$.$anonfun$suspend$1
+  [ 8] zio.ZIO$$$Lambda$2529.0x00000008012ed920.apply
+  [ 9] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [10] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011bc3d0.apply
+  [11] zio.internal.FiberRuntime.runLoop
+  [12] zio.internal.FiberRuntime.runLoop
+  [13] zio.internal.FiberRuntime.runLoop
+  [14] zio.internal.FiberRuntime.runLoop
+  [15] zio.internal.FiberRuntime.evaluateEffect
+  [16] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [17] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [18] zio.internal.FiberRuntime.run
+  [19] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [20] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [21] java.lang.Thread.run
+
+--- 60103 ns (0.00%), 2 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.awaitNanos
+  [ 5] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 6] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 7] java.util.concurrent.ThreadPoolExecutor.getTask
+  [ 8] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [ 9] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [10] java.lang.Thread.run
+
+--- 41469 ns (0.00%), 1 sample
+  [ 0] java.util.concurrent.locks.ReentrantLock$FairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lock
+  [ 6] java.util.concurrent.locks.ReentrantLock.lock
+  [ 7] org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.hasPendingRequests
+  [ 8] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 9] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [10] zio.kafka.consumer.internal.Runloop.doPoll
+  [11] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [12] zio.kafka.consumer.internal.Runloop$$Lambda$2543.0x00000008012f0e28.apply
+  [13] zio.ZIO$.$anonfun$suspend$1
+  [14] zio.ZIO$$$Lambda$2529.0x00000008012ed920.apply
+  [15] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [16] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011bc3d0.apply
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.runLoop
+  [20] zio.internal.FiberRuntime.runLoop
+  [21] zio.internal.FiberRuntime.evaluateEffect
+  [22] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [23] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [24] zio.internal.FiberRuntime.run
+  [25] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [26] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [27] java.lang.Thread.run
+
+--- 27835 ns (0.00%), 1 sample
+  [ 0] org.apache.kafka.common.metrics.Metrics
+  [ 1] org.apache.kafka.common.metrics.Metrics.removeMetric
+  [ 2] kafka.network.Processor.close
+  [ 3] kafka.network.Acceptor.$anonfun$close$1
+  [ 4] kafka.network.Acceptor.$anonfun$close$1$adapted
+  [ 5] kafka.network.Acceptor$$Lambda$3259.0x00000008013c0000.apply
+  [ 6] scala.collection.IterableOnceOps.foreach
+  [ 7] scala.collection.IterableOnceOps.foreach$
+  [ 8] scala.collection.AbstractIterable.foreach
+  [ 9] kafka.network.Acceptor.close
+  [10] kafka.network.SocketServer.$anonfun$stopProcessingRequests$4
+  [11] kafka.network.SocketServer.$anonfun$stopProcessingRequests$4$adapted
+  [12] kafka.network.SocketServer$$Lambda$3251.0x00000008013be308.apply
+  [13] scala.collection.IterableOnceOps.foreach
+  [14] scala.collection.IterableOnceOps.foreach$
+  [15] scala.collection.AbstractIterable.foreach
+  [16] kafka.network.SocketServer.stopProcessingRequests
+  [17] kafka.server.KafkaServer.$anonfun$shutdown$4
+  [18] kafka.server.KafkaServer$$Lambda$3237.0x00000008013bb3a0.apply$mcV$sp
+  [19] kafka.utils.CoreUtils$.swallow
+  [20] kafka.server.KafkaServer.shutdown
+  [21] io.github.embeddedkafka.EmbeddedK.stop
+  [22] zio.kafka.embedded.Kafka$EmbeddedKafkaService.$anonfun$stop$1
+  [23] zio.kafka.embedded.Kafka$EmbeddedKafkaService$$Lambda$3211.0x00000008013b5a50.apply$mcV$sp
+  [24] scala.runtime.java8.JFunction0$mcV$sp.apply
+  [25] zio.internal.FiberRuntime.runLoop
+  [26] zio.internal.FiberRuntime.runLoop
+  [27] zio.internal.FiberRuntime.runLoop
+  [28] zio.internal.FiberRuntime.runLoop
+  [29] zio.internal.FiberRuntime.runLoop
+  [30] zio.internal.FiberRuntime.runLoop
+  [31] zio.internal.FiberRuntime.runLoop
+  [32] zio.internal.FiberRuntime.runLoop
+  [33] zio.internal.FiberRuntime.runLoop
+  [34] zio.internal.FiberRuntime.runLoop
+  [35] zio.internal.FiberRuntime.runLoop
+  [36] zio.internal.FiberRuntime.runLoop
+  [37] zio.internal.FiberRuntime.runLoop
+  [38] zio.internal.FiberRuntime.runLoop
+  [39] zio.internal.FiberRuntime.runLoop
+  [40] zio.internal.FiberRuntime.runLoop
+  [41] zio.internal.FiberRuntime.runLoop
+  [42] zio.internal.FiberRuntime.runLoop
+  [43] zio.internal.FiberRuntime.runLoop
+  [44] zio.internal.FiberRuntime.runLoop
+  [45] zio.internal.FiberRuntime.runLoop
+  [46] zio.internal.FiberRuntime.runLoop
+  [47] zio.internal.FiberRuntime.runLoop
+  [48] zio.internal.FiberRuntime.runLoop
+  [49] zio.internal.FiberRuntime.runLoop
+  [50] zio.internal.FiberRuntime.runLoop
+  [51] zio.internal.FiberRuntime.runLoop
+  [52] zio.internal.FiberRuntime.runLoop
+  [53] zio.internal.FiberRuntime.runLoop
+  [54] zio.internal.FiberRuntime.runLoop
+  [55] zio.internal.FiberRuntime.runLoop
+  [56] zio.internal.FiberRuntime.runLoop
+  [57] zio.internal.FiberRuntime.runLoop
+  [58] zio.internal.FiberRuntime.runLoop
+  [59] zio.internal.FiberRuntime.runLoop
+  [60] zio.internal.FiberRuntime.runLoop
+  [61] zio.internal.FiberRuntime.runLoop
+  [62] zio.internal.FiberRuntime.runLoop
+  [63] zio.internal.FiberRuntime.runLoop
+  [64] zio.internal.FiberRuntime.runLoop
+  [65] zio.internal.FiberRuntime.evaluateEffect
+  [66] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [67] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [68] zio.internal.FiberRuntime.run
+  [69] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [70] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [71] java.lang.Thread.run
+
+--- 11462 ns (0.00%), 13 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.awaitNanos
+  [ 5] java.util.concurrent.ArrayBlockingQueue.poll
+  [ 6] kafka.network.RequestChannel.receiveRequest
+  [ 7] kafka.server.KafkaRequestHandler.run
+  [ 8] java.lang.Thread.run
+
+--- 10286 ns (0.00%), 1 sample
+  [ 0] org.apache.kafka.clients.consumer.internals.ConsumerCoordinator
+  [ 1] org.apache.kafka.clients.consumer.internals.AbstractCoordinator.initiateJoinGroup
+  [ 2] org.apache.kafka.clients.consumer.internals.AbstractCoordinator.joinGroupIfNeeded
+  [ 3] org.apache.kafka.clients.consumer.internals.AbstractCoordinator.ensureActiveGroup
+  [ 4] org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.poll
+  [ 5] org.apache.kafka.clients.consumer.KafkaConsumer.updateAssignmentMetadataIfNeeded
+  [ 6] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 7] org.apache.kafka.clients.consumer.KafkaConsumer.poll
+  [ 8] zio.kafka.consumer.internal.Runloop.doPoll
+  [ 9] zio.kafka.consumer.internal.Runloop.$anonfun$handlePoll$3
+  [10] zio.kafka.consumer.internal.Runloop$$Lambda$2543.0x00000008012f0e28.apply
+  [11] zio.ZIO$.$anonfun$suspend$1
+  [12] zio.ZIO$$$Lambda$2529.0x00000008012ed920.apply
+  [13] zio.FiberRef$unsafe$$anon$2.$anonfun$getWith$1
+  [14] zio.FiberRef$unsafe$$anon$2$$Lambda$1667.0x00000008011bc3d0.apply
+  [15] zio.internal.FiberRuntime.runLoop
+  [16] zio.internal.FiberRuntime.runLoop
+  [17] zio.internal.FiberRuntime.runLoop
+  [18] zio.internal.FiberRuntime.runLoop
+  [19] zio.internal.FiberRuntime.evaluateEffect
+  [20] zio.internal.FiberRuntime.evaluateMessageWhileSuspended
+  [21] zio.internal.FiberRuntime.drainQueueOnCurrentThread
+  [22] zio.internal.FiberRuntime.run
+  [23] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [24] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [25] java.lang.Thread.run
+
+--- 9393 ns (0.00%), 1 sample
+  [ 0] scala.collection.mutable.HashMap
+  [ 1] kafka.network.ConnectionQuotas.dec
+  [ 2] kafka.network.Processor.$anonfun$processDisconnected$1
+  [ 3] kafka.network.Processor$$Lambda$1134.0x00000008010de450.accept
+  [ 4] java.util.HashMap$KeySet.forEach
+  [ 5] kafka.network.Processor.processDisconnected
+  [ 6] kafka.network.Processor.run
+  [ 7] java.lang.Thread.run
+
+--- 4166 ns (0.00%), 1 sample
+  [ 0] java.lang.ThreadGroup
+  [ 1] java.lang.ThreadGroup.threadTerminated
+  [ 2] java.lang.Thread.exit
+
+--- 3552 ns (0.00%), 1 sample
+  [ 0] org.apache.kafka.common.utils.KafkaThread
+
+--- 1718 ns (0.00%), 2 samples
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.awaitNanos
+  [ 5] java.util.concurrent.ArrayBlockingQueue.poll
+  [ 6] kafka.network.RequestChannel.receiveRequest
+  [ 7] kafka.server.KafkaRequestHandler.run
+  [ 8] java.lang.Thread.run
+
+--- 311 ns (0.00%), 1 sample
+  [ 0] java.util.concurrent.locks.ReentrantLock$NonfairSync
+  [ 1] jdk.internal.misc.Unsafe.park
+  [ 2] java.util.concurrent.locks.LockSupport.park
+  [ 3] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire
+  [ 4] java.util.concurrent.locks.AbstractQueuedSynchronizer.acquireInterruptibly
+  [ 5] java.util.concurrent.locks.ReentrantLock$Sync.lockInterruptibly
+  [ 6] java.util.concurrent.locks.ReentrantLock.lockInterruptibly
+  [ 7] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 8] java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take
+  [ 9] java.util.concurrent.ThreadPoolExecutor.getTask
+  [10] java.util.concurrent.ThreadPoolExecutor.runWorker
+  [11] java.util.concurrent.ThreadPoolExecutor$Worker.run
+  [12] java.lang.Thread.run
+
+          ns  percent  samples  top
+  ----------  -------  -------  ---
+  1839497618   96.85%      184  java.util.concurrent.locks.ReentrantLock$FairSync
+    33920648    1.79%      165  java.util.concurrent.locks.ReentrantLock$NonfairSync
+    23424102    1.23%       72  org.apache.kafka.clients.consumer.internals.ConsumerCoordinator
+     2444163    0.13%       13  org.apache.kafka.common.metrics.Metrics
+       60515    0.00%        1  org.apache.kafka.clients.consumer.internals.Fetcher
+        9393    0.00%        1  scala.collection.mutable.HashMap
+        4166    0.00%        1  java.lang.ThreadGroup
+        3552    0.00%        1  org.apache.kafka.common.utils.KafkaThread
