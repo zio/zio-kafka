@@ -3,5 +3,3 @@
 -Xms5G
 -Xmx5G
 -XX:+UseG1GC
---add-opens=java.base/java.util=ALL-UNNAMED
---add-opens=java.base/java.lang=ALL-UNNAMED
