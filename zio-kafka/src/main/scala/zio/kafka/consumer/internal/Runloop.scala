@@ -588,21 +588,40 @@ private[consumer] final class Runloop(
     )
 
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] = {
-    def processCommands(state: State): Task[State] = for {
-      commands   <- commandQueue.takeBetween(1, commandQueueSize).timeoutTo(Chunk.empty)(identity)(pollFrequency)
+    def processCommands(state: State, wait: Boolean): Task[State] = for {
+      commands <- if (wait)
+                    commandQueue.takeBetween(1, commandQueueSize).timeoutTo(Chunk.empty)(identity)(pollFrequency)
+                  else commandQueue.takeAll // Gather available commands or return immediately if nothing in the queue
+
       isShutdown <- isShutdown
       updatedState <- ZIO.foldLeft(commands)(state) { case (s, cmd) =>
                         (if (isShutdown) handleShutdown(s, cmd) else handleOperational(s, cmd)) <*
                           diagnostics.emitIfEnabled(DiagnosticEvent.RunloopEvent(cmd))
                       }
-      newState <- handlePoll(updatedState)
-    } yield newState
+    } yield updatedState
 
-    def loop(state: State): ZIO[Any, Throwable, Nothing] = processCommands(state)
+    def doPollIfPendingActions(state: State): Task[(State, Boolean)] =
+      for {
+        isRebalancing <- isRebalancing
+        isInitialized = state.initialized || state.pendingRequests.nonEmpty
+        shouldPoll =
+          state.isSubscribed && (state.pendingRequests.nonEmpty || state.pendingCommits.nonEmpty || !isInitialized || isRebalancing)
+        _ <-
+          ZIO
+            .logTrace(
+              s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
+            )
+            .when(shouldPoll)
+        newState <-
+          if (shouldPoll) handlePoll(state) else ZIO.succeed(state)
+      } yield (newState.copy(initialized = isInitialized), !shouldPoll)
+
+    def loop(state: State, wait: Boolean): ZIO[Any, Throwable, Nothing] = processCommands(state, wait)
+      .flatMap(doPollIfPendingActions)
       .timeoutFail(RunloopTimeout)(runloopTimeout)
-      .flatMap(state => loop(state))
+      .flatMap { case (state, wait) => loop(state, wait) }
 
-    loop(State.initial)
+    loop(State.initial, false)
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitions.offer(Take.failCause(cause)))
       .forkScoped
@@ -746,7 +765,8 @@ private[internal] final case class State(
   pendingCommits: Chunk[Commit],
   bufferedRecords: BufferedRecords,
   assignedStreams: Map[TopicPartition, PartitionStreamControl],
-  subscription: Option[Subscription]
+  subscription: Option[Subscription],
+  initialized: Boolean
 ) {
   def addCommit(c: Commit): State   = copy(pendingCommits = pendingCommits :+ c)
   def addRequest(r: Request): State = copy(pendingRequests = r +: pendingRequests)
@@ -758,5 +778,5 @@ private[internal] final case class State(
 }
 
 object State {
-  val initial: State = State(Chunk.empty, Chunk.empty, BufferedRecords.empty, Map.empty, None)
+  val initial: State = State(Chunk.empty, Chunk.empty, BufferedRecords.empty, Map.empty, None, false)
 }
