@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1678678786925,
+  "lastUpdate": 1678698041924,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -3202,6 +3202,42 @@ window.BENCHMARK_DATA = {
             "value": 2887.99249042,
             "unit": "ms/op",
             "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "49699333+dependabot[bot]@users.noreply.github.com",
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e82cdf14c86d1ea860ad2cafc58907db4e0b947c",
+          "message": "Bump benchmark-action/github-action-benchmark from 1.16.0 to 1.16.2 (#704)\n\nSigned-off-by: dependabot[bot] <support@github.com>\r\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+          "timestamp": "2023-03-13T16:53:53+08:00",
+          "tree_id": "3d2b40f16c8ea01faa9a03fa4b685ad57cf80d40",
+          "url": "https://github.com/zio/zio-kafka/commit/e82cdf14c86d1ea860ad2cafc58907db4e0b947c"
+        },
+        "date": 1678698041044,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 823.1956368999998,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 1009.0800292000002,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
         ]
       }
