@@ -226,9 +226,9 @@ private[consumer] final class Runloop(
       ZIO.logTrace(s"Ending request for TP ${req.tp}") *> req.end.unit
     }
 
-    endRevokedRequests *> revokeAction.as(
-      Runloop.RevokeResult(unfulfilledRequests, newBufferedRecords, assignedStreams)
-    )
+    endRevokedRequests *>
+      revokeAction *>
+      ZIO.succeed(Runloop.RevokeResult(unfulfilledRequests, newBufferedRecords, assignedStreams))
   }
 
   /**
