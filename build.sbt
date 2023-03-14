@@ -12,7 +12,8 @@ enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
 inThisBuild(
   List(
-    name                     := "ZIO Kafka",
+    name := "ZIO Kafka",
+    crossScalaVersions -= scala211.value,
     ciEnabledBranches        := Seq("master", "series/0.x"),
     useCoursier              := false,
     Test / parallelExecution := false,
