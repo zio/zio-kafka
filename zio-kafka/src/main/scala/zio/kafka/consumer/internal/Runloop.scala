@@ -482,11 +482,12 @@ private[consumer] final class Runloop(
               tp -> control
             })
       newPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
-    } yield state.copy(
+    } yield State(
       pendingRequests = pollResult.unfulfilledRequests,
       pendingCommits = newPendingCommits,
       bufferedRecords = pollResult.bufferedRecords,
-      assignedStreams = pollResult.assignedStreams ++ newAssignedStreams
+      assignedStreams = pollResult.assignedStreams ++ newAssignedStreams,
+      subscription = state.subscription
     )
 
   /**
@@ -756,8 +757,7 @@ private[internal] final case class State(
   pendingCommits: Chunk[Commit],
   bufferedRecords: BufferedRecords,
   assignedStreams: Map[TopicPartition, PartitionStreamControl],
-  subscription: Option[Subscription],
-  initialized: Boolean
+  subscription: Option[Subscription]
 ) {
   def addCommit(c: Commit): State   = copy(pendingCommits = pendingCommits :+ c)
   def addRequest(r: Request): State = copy(pendingRequests = r +: pendingRequests)
@@ -769,5 +769,5 @@ private[internal] final case class State(
 }
 
 object State {
-  val initial: State = State(Chunk.empty, Chunk.empty, BufferedRecords.empty, Map.empty, None, false)
+  val initial: State = State(Chunk.empty, Chunk.empty, BufferedRecords.empty, Map.empty, None)
 }
