@@ -1,3 +1,5 @@
+import sbt.Def
+
 lazy val scala212  = "2.12.17"
 lazy val scala213  = "2.13.10"
 lazy val scala3    = "3.2.2"
@@ -11,7 +13,6 @@ lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients" 
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.9.0"
 lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.2"
 lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.6"
-lazy val embeddedKafka         = "io.github.embeddedkafka"   %% "embedded-kafka"          % embeddedKafkaVersion
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
@@ -90,6 +91,14 @@ lazy val zioKafka =
       )
     )
 
+lazy val `embedded-kafka`: Def.Initialize[Seq[sbt.ModuleID]] = {
+  val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion
+  dependenciesOnOrElse("3")(
+    embeddedKafka
+      .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
+  )(embeddedKafka)
+}
+
 lazy val zioKafkaTestUtils =
   project
     .in(file("zio-kafka-test-utils"))
@@ -103,13 +112,7 @@ lazy val zioKafkaTestUtils =
         "dev.zio" %% "zio-test" % zioVersion.value,
         kafkaClients,
         scalaCollectionCompat
-      ) ++
-        dependenciesOnOrElse("3")(
-          embeddedKafka
-            .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
-        )(
-          embeddedKafka
-        ).value
+      ) ++ `embedded-kafka`.value
     )
 
 lazy val zioKafkaTest =
@@ -127,14 +130,7 @@ lazy val zioKafkaTest =
         jacksonDatabind,
         logback % Test,
         scalaCollectionCompat
-      ) ++ {
-        if (scalaBinaryVersion.value == "3")
-          Seq(
-            embeddedKafka
-              .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
-          )
-        else Seq(embeddedKafka)
-      }
+      ) ++ `embedded-kafka`.value
     )
 
 lazy val zioKafkaBench =
