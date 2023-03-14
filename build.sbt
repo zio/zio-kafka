@@ -18,8 +18,12 @@ lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databin
 lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.6"
 lazy val embeddedKafka         = "io.github.embeddedkafka"   %% "embedded-kafka"          % embeddedKafkaVersion
 
+enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
+
 inThisBuild(
   List(
+    name                     := "ZIO Kafka",
+    ciEnabledBranches        := Seq("master"),
     organization             := "dev.zio",
     homepage                 := Some(url("https://zio.dev/zio-kafka")),
     licenses                 := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
@@ -170,7 +174,6 @@ lazy val docs = project
     projectName                                := "ZIO Kafka",
     mainModuleName                             := (zioKafka / moduleName).value,
     projectStage                               := ProjectStage.ProductionReady,
-    docsPublishBranch                          := "master",
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioKafka),
     readmeCredits :=
       "This library is heavily inspired and made possible by the research and implementation done in " +

@@ -1,6 +1,9 @@
-addSbtPlugin("org.scalameta"             % "sbt-scalafmt"    % "2.5.0")
+val zioSbtVersion = "0.3.10+78-eb4ed5f9-SNAPSHOT"
+
+addSbtPlugin("dev.zio"      % "zio-sbt-ecosystem" % zioSbtVersion)
+addSbtPlugin("dev.zio"      % "zio-sbt-website"   % zioSbtVersion)
+addSbtPlugin("dev.zio"      % "zio-sbt-ci"        % zioSbtVersion)
+
 addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat"    % "0.4.2")
-addSbtPlugin("com.eed3si9n"              % "sbt-buildinfo"   % "0.11.0")
-addSbtPlugin("com.github.sbt"            % "sbt-ci-release"  % "1.5.11")
-addSbtPlugin("dev.zio"                   % "zio-sbt-website" % "0.3.10")
-addSbtPlugin("pl.project13.scala"        % "sbt-jmh"         % "0.4.4")
+
+resolvers ++= Resolver.sonatypeOssRepos("public")
