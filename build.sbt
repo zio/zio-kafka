@@ -103,14 +103,13 @@ lazy val zioKafkaTestUtils =
         "dev.zio" %% "zio-test" % zioVersion.value,
         kafkaClients,
         scalaCollectionCompat
-      ) ++ {
-        if (scalaBinaryVersion.value == "3")
-          Seq(
-            embeddedKafka
-              .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
-          )
-        else Seq(embeddedKafka)
-      }
+      ) ++
+        dependenciesOnOrElse("3")(
+          embeddedKafka
+            .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
+        )(
+          embeddedKafka
+        ).value
     )
 
 lazy val zioKafkaTest =
