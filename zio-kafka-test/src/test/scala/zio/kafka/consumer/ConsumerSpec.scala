@@ -859,7 +859,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
          */
         def testForPartitionAssignmentStrategy[T <: ConsumerPartitionAssignor: ClassTag] =
           test(implicitly[ClassTag[T]].runtimeClass.getName) {
-            println("Starting test")
             val partitionCount                                    = 6
             val messageCount                                      = 5000
             val allMessages                                       = (1 to messageCount).map(i => s"$i" -> f"msg$i%06d")
@@ -926,8 +925,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                    for {
                                      _ <- streamCompleteOnRebalanceRef.set(None)
                                      _ <- p.succeed(())
-//                                     c <- consumedMessagesCounter.get
-//                                     _ <- ZIO.logInfo(s"Consumed $c messages")
+                                     c <- consumedMessagesCounter.get
+                                     _ <- ZIO.logInfo(s"Consumed $c messages")
                                    } yield ()
                                  }
                         } yield s
@@ -944,14 +943,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                               implicitly[ClassTag[T]].runtimeClass.getName,
                             ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200"
                           ),
-                          rebalanceListener = transactionalRebalanceListener(streamCompleteOnRebalanceRef),
-                          diagnostics = {
-                            case e: DiagnosticEvent.Rebalance =>
-                              ZIO.logInfo(e.toString)
-//                            case DiagnosticEvent.RunloopEvent(Runloop.Command.Poll) =>
-//                              ZIO.logInfo("Doing a poll")
-                            case _ => ZIO.unit
-                          }
+                          rebalanceListener = transactionalRebalanceListener(streamCompleteOnRebalanceRef)
                         )
                       )
                       .tapError(e => ZIO.logError(s"Error: ${e}")) <* ZIO.logInfo("Done")

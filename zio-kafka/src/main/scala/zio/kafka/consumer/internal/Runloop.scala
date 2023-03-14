@@ -250,7 +250,7 @@ private[consumer] final class Runloop(
 
     pendingRequests.foreach { req =>
       val bufferedChunk = buf.getOrElse(req.tp, Chunk.empty)
-      val reqRecs       = records.records(req.tp)
+      val reqRecs       = polledRecords.records(req.tp)
 
       if (bufferedChunk.isEmpty && reqRecs.isEmpty) {
         acc += req
