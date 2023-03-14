@@ -240,7 +240,7 @@ private[consumer] final class Runloop(
   private def fulfillRequests(
     pendingRequests: Chunk[Request],
     bufferedRecords: BufferedRecords,
-    records: ConsumerRecords[Array[Byte], Array[Byte]]
+    polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
   ): UIO[Runloop.FulfillResult] = {
     val acc = ChunkBuilder.make[Request]()
     val buf = mutable.Map.empty[TopicPartition, Chunk[ByteArrayConsumerRecord]]
