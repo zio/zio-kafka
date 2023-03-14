@@ -24,21 +24,12 @@ inThisBuild(
   List(
     name                     := "ZIO Kafka",
     ciEnabledBranches        := Seq("master"),
-    organization             := "dev.zio",
-    homepage                 := Some(url("https://zio.dev/zio-kafka")),
-    licenses                 := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
     useCoursier              := false,
     scalaVersion             := mainScala,
     crossScalaVersions       := allScala,
     Test / parallelExecution := false,
     Test / fork              := true,
     run / fork               := true,
-    pgpPublicRing            := file("/tmp/public.asc"),
-    pgpSecretRing            := file("/tmp/secret.asc"),
-    pgpPassphrase            := sys.env.get("PGP_PASSWORD").map(_.toArray),
-    scmInfo := Some(
-      ScmInfo(url("https://github.com/zio/zio-kafka/"), "scm:git:git@github.com:zio/zio-kafka.git")
-    ),
     developers := List(
       Developer(
         "iravid",
