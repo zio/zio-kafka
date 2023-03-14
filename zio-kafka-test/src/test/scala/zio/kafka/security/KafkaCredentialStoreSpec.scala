@@ -5,7 +5,7 @@ import zio.test._
 import zio.Scope
 
 object KafkaCredentialStoreSpec extends ZIOSpecDefault {
-  override def spec: Spec[Environment with TestEnvironment with Scope,Any] = suite("KafkaCredentialStore")(
+  override def spec: Spec[Environment with TestEnvironment with Scope, Any] = suite("KafkaCredentialStore")(
     suite("fromPemStrigs")(
       test("KafkaCredentialStore.properties works properly") {
         val caCert =

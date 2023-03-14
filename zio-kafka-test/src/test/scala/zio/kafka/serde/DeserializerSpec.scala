@@ -7,7 +7,7 @@ import zio.test._
 import zio.ZAny
 
 object DeserializerSpec extends ZIOSpecDefault {
-  override def spec: Spec[ZAny with Any,Throwable] = suite("Deserializer")(
+  override def spec: Spec[ZAny with Any, Throwable] = suite("Deserializer")(
     suite("asOption")(
       test("deserialize to None when value is null") {
         assertZIO(stringDeserializer.asOption.deserialize("topic1", new RecordHeaders, null))(isNone)

@@ -6,7 +6,7 @@ import zio.test._
 import zio.ZAny
 
 object SerializerSpec extends ZIOSpecDefault {
-  override def spec: Spec[ZAny with Any,Throwable] = suite("Serializer")(
+  override def spec: Spec[ZAny with Any, Throwable] = suite("Serializer")(
     suite("asOption")(
       test("serialize None values to null") {
         assertZIO(stringSerializer.asOption.serialize("topic1", new RecordHeaders, None))(isNull)
