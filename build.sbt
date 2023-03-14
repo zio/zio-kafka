@@ -64,7 +64,7 @@ def stdSettings(prjName: String) = Seq(
     val default = (Compile / doc).taskValue
     Def.task(default.value)
   }.value
-)
+) ++ scalafixSettings
 
 lazy val zioKafka =
   project

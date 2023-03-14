@@ -60,7 +60,7 @@ object RebalanceListener {
   ): RebalanceListener =
     RebalanceListener(onAssigned, onRevoked, onRevoked)
 
-  val noop = RebalanceListener(
+  val noop: RebalanceListener = RebalanceListener(
     (_, _) => ZIO.unit,
     (_, _) => ZIO.unit,
     (_, _) => ZIO.unit
