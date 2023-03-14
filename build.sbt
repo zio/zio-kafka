@@ -4,15 +4,10 @@ lazy val scala3    = "3.2.2"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-lazy val zioVersion           = "2.0.10"
 lazy val kafkaVersion         = "3.4.0"
 lazy val embeddedKafkaVersion = "3.4.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
-lazy val zio                   = "dev.zio"                   %% "zio"                     % zioVersion
-lazy val zioStreams            = "dev.zio"                   %% "zio-streams"             % zioVersion
-lazy val zioTest               = "dev.zio"                   %% "zio-test"                % zioVersion
-lazy val zioTestSbt            = "dev.zio"                   %% "zio-test-sbt"            % zioVersion
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.9.0"
 lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.2"
 lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.6"
@@ -22,14 +17,15 @@ enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
 inThisBuild(
   List(
-    name                     := "ZIO Kafka",
-    ciEnabledBranches        := Seq("master"),
-    useCoursier              := false,
-    scalaVersion             := mainScala,
-    crossScalaVersions       := allScala,
-    Test / parallelExecution := false,
-    Test / fork              := true,
-    run / fork               := true,
+    name                                        := "ZIO Kafka",
+    ciEnabledBranches                           := Seq("master"),
+    ZioSbtEcosystemPlugin.autoImport.zioVersion := "2.0.10",
+    useCoursier                                 := false,
+    scalaVersion                                := mainScala,
+    crossScalaVersions                          := allScala,
+    Test / parallelExecution                    := false,
+    Test / fork                                 := true,
+    run / fork                                  := true,
     developers := List(
       Developer(
         "iravid",
@@ -85,9 +81,9 @@ lazy val zioKafka =
     .enablePlugins(BuildInfoPlugin)
     .settings(stdSettings("zio-kafka"))
     .settings(buildInfoSettings("zio.kafka"))
+    .settings(enableZIO(enableStreaming = true))
     .settings(
       libraryDependencies ++= Seq(
-        zioStreams,
         kafkaClients,
         jacksonDatabind,
         scalaCollectionCompat
@@ -103,8 +99,8 @@ lazy val zioKafkaTestUtils =
     .settings(buildInfoSettings("zio.kafka"))
     .settings(
       libraryDependencies ++= Seq(
-        zio,
-        zioTest,
+        "dev.zio" %% "zio"      % zioVersion.value,
+        "dev.zio" %% "zio-test" % zioVersion.value,
         kafkaClients,
         scalaCollectionCompat
       ) ++ {
@@ -124,12 +120,10 @@ lazy val zioKafkaTest =
     .enablePlugins(BuildInfoPlugin)
     .settings(stdSettings("zio-kafka-test"))
     .settings(buildInfoSettings("zio.kafka"))
+    .settings(enableZIO(enableStreaming = true))
     .settings(publish / skip := true)
     .settings(
       libraryDependencies ++= Seq(
-        zioStreams,
-        zioTest    % Test,
-        zioTestSbt % Test,
         kafkaClients,
         jacksonDatabind,
         logback % Test,
@@ -141,8 +135,7 @@ lazy val zioKafkaTest =
               .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
           )
         else Seq(embeddedKafka)
-      },
-      testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
+      }
     )
 
 lazy val zioKafkaBench =
