@@ -12,13 +12,12 @@ enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
 inThisBuild(
   List(
-    name                                        := "ZIO Kafka",
-    ciEnabledBranches                           := Seq("master", "series/0.x"),
-    ZioSbtEcosystemPlugin.autoImport.zioVersion := "2.0.10",
-    useCoursier                                 := false,
-    Test / parallelExecution                    := false,
-    Test / fork                                 := true,
-    run / fork                                  := true,
+    name                     := "ZIO Kafka",
+    ciEnabledBranches        := Seq("master", "series/0.x"),
+    useCoursier              := false,
+    Test / parallelExecution := false,
+    Test / fork              := true,
+    run / fork               := true,
     developers := List(
       Developer(
         "iravid",
@@ -47,19 +46,11 @@ lazy val root = project
     docs
   )
 
-def buildInfoSettings(packageName: String) =
-  Seq(
-    buildInfoKeys := Seq[BuildInfoKey](organization, moduleName, name, version, scalaVersion, sbtVersion, isSnapshot),
-    buildInfoPackage := packageName
-  )
-
 def stdSettings(prjName: String) = Seq(
   name              := s"$prjName",
-  scalafmtOnCompile := !(insideCI.value),
-  Compile / compile / scalacOptions ++= {
-    if (scalaBinaryVersion.value == "2.13") Seq("-Wconf:cat=unused-nowarn:s")
-    else Seq()
-  },
+  scalafmtOnCompile := !insideCI.value,
+  Compile / compile / scalacOptions ++=
+    optionsOn("2.13")("-Wconf:cat=unused-nowarn:s").value,
   scalacOptions -= "-Xlint:infer-any",
   // workaround for bad constant pool issue
   (Compile / doc) := Def.taskDyn {
