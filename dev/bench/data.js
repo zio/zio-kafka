@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1678776545094,
+  "lastUpdate": 1678825930370,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -3564,6 +3564,42 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
             "value": 408.84190713333334,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "49699333+dependabot[bot]@users.noreply.github.com",
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f7931a60f10278af7d3ace6e81706816e7776918",
+          "message": "Bump hmarr/auto-approve-action from 3.1.0 to 3.2.0 (#705)\n\nSigned-off-by: dependabot[bot] <support@github.com>\r\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+          "timestamp": "2023-03-14T21:27:12+01:00",
+          "tree_id": "2ce5c24e5f9bdea6e7ba8474305d59656efa138a",
+          "url": "https://github.com/zio/zio-kafka/commit/f7931a60f10278af7d3ace6e81706816e7776918"
+        },
+        "date": 1678825929487,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 754.9956327333333,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 956.3049514999999,
             "unit": "ms/op",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
