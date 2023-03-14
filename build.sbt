@@ -1,11 +1,5 @@
 import sbt.Def
 
-lazy val scala212  = "2.12.17"
-lazy val scala213  = "2.13.10"
-lazy val scala3    = "3.2.2"
-lazy val mainScala = scala213
-lazy val allScala  = Seq(scala212, scala3, mainScala)
-
 lazy val kafkaVersion         = "3.4.0"
 lazy val embeddedKafkaVersion = "3.4.0" // Should be the same as kafkaVersion, except for the patch part
 
@@ -19,11 +13,9 @@ enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 inThisBuild(
   List(
     name                                        := "ZIO Kafka",
-    ciEnabledBranches                           := Seq("master"),
+    ciEnabledBranches                           := Seq("master", "series/0.x"),
     ZioSbtEcosystemPlugin.autoImport.zioVersion := "2.0.10",
     useCoursier                                 := false,
-    scalaVersion                                := mainScala,
-    crossScalaVersions                          := allScala,
     Test / parallelExecution                    := false,
     Test / fork                                 := true,
     run / fork                                  := true,
