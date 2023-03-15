@@ -12,14 +12,13 @@ import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.{ ULayer, ZIO, ZLayer }
 
-import java.time.Duration
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
 
 object ConsumersComparisonBenchmark {
   type LowLevelKafka = KafkaConsumer[Array[Byte], Array[Byte]]
 
-  type Env = Kafka with Producer with Consumer with LowLevelKafka
+  type Env = Kafka with Producer with Consumer with LowLevelKafka with ConsumerSettings
 }
 import zio.kafka.bench.ConsumersComparisonBenchmark._
 
@@ -50,8 +49,7 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
     ZLayer.fromZIO(
       consumerSettings(
         clientId = randomThing("client"),
-        groupId = Some(randomThing("client")),
-        `max.poll.records` = 1000
+        groupId = Some(randomThing("client"))
       )
     )
 
@@ -76,17 +74,19 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
   @BenchmarkMode(Array(Mode.AverageTime))
   def kafkaClients(): Any =
     runZIO {
-      ZIO.service[LowLevelKafka].flatMap { consumer =>
-        ZIO.attemptBlocking {
-          consumer.subscribe(java.util.Arrays.asList(topic1))
+      ZIO.service[ConsumerSettings].flatMap { settings =>
+        ZIO.service[LowLevelKafka].flatMap { consumer =>
+          ZIO.attemptBlocking {
+            consumer.subscribe(java.util.Arrays.asList(topic1))
 
-          var count = 0L
-          while (count < nrMessages) {
-            val records = consumer.poll(Duration.ofMillis(1000))
-            count += records.count()
+            var count = 0L
+            while (count < nrMessages) {
+              val records = consumer.poll(settings.pollTimeout)
+              count += records.count()
+            }
+
+            consumer.unsubscribe()
           }
-
-          consumer.unsubscribe()
         }
       }
     }

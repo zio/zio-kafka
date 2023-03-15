@@ -136,19 +136,17 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
-    `max.poll.records`: Int = 10,
     properties: Map[String, String] = Map.empty
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
       consumerSettings(
-        clientId,
-        groupId,
-        clientInstanceId,
-        allowAutoCreateTopics,
-        offsetRetrieval,
-        restartStreamOnRebalancing,
-        `max.poll.records`,
-        properties
+        clientId = clientId,
+        groupId = groupId,
+        clientInstanceId = clientInstanceId,
+        allowAutoCreateTopics = allowAutoCreateTopics,
+        offsetRetrieval = offsetRetrieval,
+        restartStreamOnRebalancing = restartStreamOnRebalancing,
+        properties = properties
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
@@ -160,20 +158,18 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
-    `max.poll.records`: Int = 10,
     properties: Map[String, String] = Map.empty,
     rebalanceListener: RebalanceListener = RebalanceListener.noop
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
       transactionalConsumerSettings(
-        groupId,
-        clientId,
-        clientInstanceId,
-        allowAutoCreateTopics,
-        offsetRetrieval,
-        restartStreamOnRebalancing,
-        `max.poll.records`,
-        properties
+        groupId = groupId,
+        clientId = clientId,
+        clientInstanceId = clientInstanceId,
+        allowAutoCreateTopics = allowAutoCreateTopics,
+        offsetRetrieval = offsetRetrieval,
+        restartStreamOnRebalancing = restartStreamOnRebalancing,
+        properties = properties
       ).map(_.withRebalanceListener(rebalanceListener))
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 

@@ -1,5 +1,5 @@
 # This is a comment
 -Dfile.encoding=UTF8
--Xms265M
+-Xms8G
 -Xmx8G
 -XX:+UseG1GC
