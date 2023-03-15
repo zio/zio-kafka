@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1678825930370,
+  "lastUpdate": 1678884494262,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -3602,6 +3602,54 @@ window.BENCHMARK_DATA = {
             "value": 956.3049514999999,
             "unit": "ms/op",
             "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@gmail.com",
+            "name": "Steven Vroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "jules.ivanic@gmail.com",
+            "name": "jules Ivanic",
+            "username": "guizmaii"
+          },
+          "distinct": true,
+          "id": "a0fa5523f3dae3f09f85ec3df80869393ea8f79e",
+          "message": "Cleanup",
+          "timestamp": "2023-03-15T20:32:55+08:00",
+          "tree_id": "7d8cff696a98fb3517eb74bc2b70c092307299b7",
+          "url": "https://github.com/zio/zio-kafka/commit/a0fa5523f3dae3f09f85ec3df80869393ea8f79e"
+        },
+        "date": 1678884493655,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 257.2591304973334,
+            "unit": "ms/op",
+            "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 310.49985664166667,
+            "unit": "ms/op",
+            "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.kafkaClients",
+            "value": 657.58696084,
+            "unit": "ms/op",
+            "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
+            "value": 2534.05138918,
+            "unit": "ms/op",
+            "extra": "iterations: 10\nforks: 5\nthreads: 1"
           }
         ]
       }
