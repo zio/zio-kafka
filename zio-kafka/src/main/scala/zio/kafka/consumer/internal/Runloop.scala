@@ -43,11 +43,10 @@ private[consumer] final class Runloop(
       _                   <- ZIO.logTrace(s"Creating partition stream for ${tp.toString}")
       interruptionPromise <- Promise.make[Throwable, Unit]
       drainQueue          <- Queue.unbounded[Take[Nothing, ByteArrayCommittableRecord]]
-      stream = ZStream.logAnnotate("topic", tp.topic()) *>
-                 ZStream.logAnnotate("partition", tp.partition().toString) *>
-                 ZStream.finalizer(
-                   ZIO.logDebug(s"Partition stream for ${tp.toString} has ended")
-                 ) *> ZStream.repeatZIOChunkOption {
+      stream =
+        ZStream.logAnnotate(LogAnnotation("topic", tp.topic()), LogAnnotation("partition", tp.partition().toString)) *>
+          ZStream.finalizer(ZIO.logDebug(s"Partition stream for ${tp.toString} has ended")) *>
+          ZStream.repeatZIOChunkOption {
                    for {
                      request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
                      _       <- commandQueue.offer(Request(tp, request)).unit
