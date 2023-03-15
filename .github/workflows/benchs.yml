@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - improve-poll-behavior
 
 permissions:
   # deployments permission to deploy GitHub pages website
