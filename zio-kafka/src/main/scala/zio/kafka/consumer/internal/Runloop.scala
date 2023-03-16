@@ -254,12 +254,13 @@ private[consumer] final class Runloop(
       if (bufferedChunk.isEmpty && reqRecs.isEmpty) {
         acc += req
       } else {
+        val consumerGroupMetadata = getConsumerGroupMetadataIfAny
         val concatenatedChunk =
           (bufferedChunk ++ Chunk.fromJavaIterable(reqRecs)).map { record =>
             CommittableRecord(
               record = record,
               commitHandle = commit,
-              consumerGroupMetadata = getConsumerGroupMetadataIfAny
+              consumerGroupMetadata = consumerGroupMetadata
             )
           }
 
