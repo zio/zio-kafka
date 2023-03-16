@@ -756,7 +756,7 @@ private[internal] final case class State(
   subscription: Option[Subscription]
 ) {
   def addCommit(c: Commit): State   = copy(pendingCommits = pendingCommits :+ c)
-  def addRequest(r: Request): State = copy(pendingRequests = r +: pendingRequests)
+  def addRequest(r: Request): State = copy(pendingRequests = pendingRequests :+ r)
 
   def addBufferedRecords(recs: BufferedRecords): State =
     copy(bufferedRecords = bufferedRecords ++ recs)
