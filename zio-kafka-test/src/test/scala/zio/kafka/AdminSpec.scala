@@ -635,7 +635,7 @@ object AdminSpec extends ZIOKafkaSpec {
             assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
         }
       }
-    ) @@ withLiveClock @@ sequential
+    ) @@ withLiveClock @@ sequential @@ TestAspect.timeout(180.seconds)
 
   private def consumeNoop(
     topicName: String,

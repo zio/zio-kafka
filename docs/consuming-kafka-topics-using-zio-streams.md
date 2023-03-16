@@ -12,7 +12,7 @@ import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
 val consumerScoped: ZIO[Scope, Throwable, Consumer] =
   Consumer.make(consumerSettings)
-val consumer: ZLayer[Clock, Throwable, Consumer] =
+val consumer: ZLayer[Any, Throwable, Consumer] =
   ZLayer.scoped(consumerScoped)
 ```
 
@@ -26,17 +26,15 @@ import zio._
 import zio.kafka.consumer._
 import zio.kafka.serde._
 
-val data: RIO[Clock, 
-              Chunk[CommittableRecord[String, String]]] = 
+val data: Task[Chunk[CommittableRecord[String, String]]] = 
   Consumer.plainStream(Subscription.topics("topic"), Serde.string, Serde.string).take(50).runCollect
     .provideSomeLayer(consumer)
 ```
 
-You may stream data from Kafka using the `plainStream`
-methods:
+You may stream data from Kafka using the `plainStream` method:
 
 ```scala
-import zio.Clock, zio.Console.printLine
+import zio.Console.printLine
 import zio.kafka.consumer._
 
 Consumer.plainStream(Subscription.topics("topic150"), Serde.string, Serde.string)
@@ -47,19 +45,19 @@ Consumer.plainStream(Subscription.topics("topic150"), Serde.string, Serde.string
   .runDrain
 ```
 
-If you need to distinguish between the different partitions assigned
-to the consumer, you may use the `Consumer#partitionedStream` method,
-which creates a nested stream of partitions:
+To process partitions assigned to the consumer in parallel, you may use the `Consumer#partitionedStream` method, which creates a nested stream of partitions:
 
 ```scala
-import zio.Clock, zio.Console.printLine
+import zio.Console.printLine
 import zio.kafka.consumer._
 
 Consumer.partitionedStream(Subscription.topics("topic150"), Serde.string, Serde.string)
-  .tap(tpAndStr => printLine(s"topic: ${tpAndStr._1.topic}, partition: ${tpAndStr._1.partition}"))
-  .flatMap(_._2)
-  .tap(cr => printLine(s"key: ${cr.record.key}, value: ${cr.record.value}"))
-  .map(_.offset)
+  .flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
+    ZStream.fromZIO(printLine(s"Starting stream for topic '${topicPartition.topic}' partition ${topicPartition.partition}")) *>
+      partitionStream
+        .tap(record => printLine(s"key: ${record.key}, value: ${record.value}")) // Replace with a custom message handling effect
+        .map(_.offset)
+  }
   .aggregateAsync(Consumer.offsetBatches)
   .mapZIO(_.commit)
   .runDrain

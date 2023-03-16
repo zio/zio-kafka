@@ -10,6 +10,7 @@ import zio.kafka.serde.{ Deserializer, Serde }
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
+import scala.util.control.NoStackTrace
 
 trait Consumer {
 
@@ -154,6 +155,8 @@ trait Consumer {
 
 object Consumer {
 
+  case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
+
   private final case class Live(
     private val consumer: ConsumerAccess,
     private val settings: ConsumerSettings,
@@ -225,7 +228,7 @@ object Consumer {
         Subscription.unionAll(newSubscriptions) match {
           case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
           case Some(union) =>
-            ZIO.logInfo(s"Changing kafka subscription to $union") *>
+            ZIO.logDebug(s"Changing kafka subscription to $union") *>
               subscribe(union).as(newSubscriptions.toSet)
         }
       }
@@ -236,9 +239,9 @@ object Consumer {
 
         (newUnion match {
           case Some(union) =>
-            ZIO.logInfo(s"Reducing kafka subscription to $union") *> subscribe(union)
+            ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union)
           case None =>
-            ZIO.logInfo(s"Unsubscribing kafka consumer") *> unsubscribe
+            ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe
         }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
       }
 
@@ -371,7 +374,8 @@ object Consumer {
                    diagnostics = diagnostics,
                    offsetRetrieval = settings.offsetRetrieval,
                    userRebalanceListener = settings.rebalanceListener,
-                   perPartitionChunkPrefetch = settings.perPartitionChunkPrefetch
+                   perPartitionChunkPrefetch = settings.perPartitionChunkPrefetch,
+                   runloopTimeout = settings.runloopTimeout
                  )
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 

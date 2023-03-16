@@ -15,6 +15,12 @@ import zio.kafka.consumer.internal.Runloop.{
   RebalanceEvent,
   RevokeResult
 }
+import zio._
+import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
+import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
+import zio.kafka.consumer.internal.Runloop.Command.{ Commit, Request }
+import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.{ CommittableRecord, RebalanceConsumer, RebalanceListener, Subscription }
 import zio.stream._
 
@@ -29,10 +35,9 @@ private[consumer] final class Runloop(
   consumer: ConsumerAccess,
   pollFrequency: Duration,
   pollTimeout: Duration,
-  requestQueue: Queue[Runloop.Request],
+  runloopTimeout: Duration,
   commandQueue: Queue[Command],
   val partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
-  rebalancingRef: Ref[Boolean],
   diagnostics: Diagnostics,
   shutdownRef: Ref[Boolean],
   offsetRetrieval: OffsetRetrieval,
@@ -40,8 +45,7 @@ private[consumer] final class Runloop(
   perPartitionChunkPrefetch: Int,
   handlePollRebalanceListenerRef: Ref[Option[RebalanceListener]]
 ) {
-  private val isRebalancing = rebalancingRef.get
-  private val isShutdown    = shutdownRef.get
+  private val isShutdown = shutdownRef.get
 
   def newPartitionStream(
     tp: TopicPartition,
@@ -67,7 +71,7 @@ private[consumer] final class Runloop(
             for {
               request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
               _       <- ZIO.logTrace(s"Queueing request")
-              _       <- requestQueue.offer(Runloop.Request(tp, request)).unit
+              _       <- commandQueue.offer(Request(tp, request)).unit
               _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
               result <-
                 request.await.tapError {
@@ -170,11 +174,6 @@ private[consumer] final class Runloop(
       .unit
 
   val rebalanceListener: RebalanceListener = {
-    val trackRebalancing = RebalanceListener(
-      onAssigned = (_, _) => rebalancingRef.set(false),
-      onRevoked = (_, _) => rebalancingRef.set(true)
-    )
-
     val emitDiagnostics = RebalanceListener(
       (assigned, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(assigned)),
       (revoked, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked)),
@@ -188,25 +187,25 @@ private[consumer] final class Runloop(
         handlePollRebalanceListenerRef.get.some.flatMap(_.onRevoked(revoked, consumer)).option.unit
     )
 
-    trackRebalancing ++ emitDiagnostics ++ handlePollRebalanceListener ++ userRebalanceListener
+    emitDiagnostics ++ handlePollRebalanceListener ++ userRebalanceListener
   }
 
   private def commit(offsets: Map[TopicPartition, Long]): Task[Unit] =
     for {
       p <- Promise.make[Throwable, Unit]
-      _ <- commandQueue.offer(Command.Commit(offsets, p)).unit
+      _ <- commandQueue.offer(Commit(offsets, p)).unit
       _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
       _ <- p.await
     } yield ()
 
-  private def doCommit(cmds: Chunk[Command.Commit]): UIO[Unit] = {
+  private def doCommit(cmds: Chunk[Commit]): UIO[Unit] = {
     val offsets   = aggregateOffsets(cmds)
     val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(cmds)(_.cont.done(e))
     val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
-        ZIO.logInfo(s"Rebalance in progress, retrying ${cmds.size.toString} commits") *>
-          commandQueue.offerAll(cmds).unit.delay(100.millis) // TODO magic nr
+        ZIO.logDebug(s"Rebalance in progress, retrying commit for offsets ${offsets}") *>
+          commandQueue.offerAll(cmds).unit
       case err =>
         cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
     }
@@ -221,7 +220,7 @@ private[consumer] final class Runloop(
   }
 
   // Returns the highest offset to commit per partition
-  private def aggregateOffsets(cmds: Chunk[Command.Commit]): Map[TopicPartition, OffsetAndMetadata] = {
+  private def aggregateOffsets(cmds: Chunk[Commit]): Map[TopicPartition, OffsetAndMetadata] = {
     val offsets = mutable.Map[TopicPartition, OffsetAndMetadata]()
 
     cmds.foreach { commit =>
@@ -255,7 +254,7 @@ private[consumer] final class Runloop(
    *   New pending requests, new buffered records and active assigned streams
    */
   private def endRevoked(
-    requests: Chunk[Runloop.Request],
+    requests: Chunk[Request],
     bufferedRecords: BufferedRecords,
     currentAssignedStreams: Map[TopicPartition, PartitionStreamControl],
     isRevoked: TopicPartition => Boolean
@@ -267,14 +266,15 @@ private[consumer] final class Runloop(
       ZIO.foreachDiscard(revokedStreams) { case (tp, control) =>
         val remaining = bufferedRecords.recs.getOrElse(tp, Chunk.empty)
 
-        control.finishWith(
-          remaining.map(
-            CommittableRecord(_, commit, getConsumerGroupMetadataIfAny)
+        ZIO.logDebug(s"Revoking topic-partition ${tp} with ${remaining.size} remaining records") *>
+          control.finishWith(
+            remaining.map(
+              CommittableRecord(_, commit, getConsumerGroupMetadataIfAny)
+            )
           )
-        )
       }
 
-    val acc = ChunkBuilder.make[Runloop.Request]()
+    val acc = ChunkBuilder.make[Request]()
     val buf = mutable.Map.empty[TopicPartition, Chunk[ByteArrayConsumerRecord]]
     buf ++= bufferedRecords.recs
     requests.foreach(req => if (isRevoked(req.tp)) buf -= req.tp else acc += req)
@@ -282,7 +282,13 @@ private[consumer] final class Runloop(
     val unfulfilledRequests = acc.result()
     val newBufferedRecords  = BufferedRecords.fromMutableMap(buf)
 
-    revokeAction.as(Runloop.RevokeResult(unfulfilledRequests, newBufferedRecords, assignedStreams, revokedStreams))
+    val endRevokedRequests = ZIO.foreachDiscard(requests.filter(req => isRevoked(req.tp))) { req =>
+      ZIO.logTrace(s"Ending request for TP ${req.tp}") *> req.end.unit
+    }
+
+    endRevokedRequests *>
+      revokeAction *>
+      ZIO.succeed(Runloop.RevokeResult(unfulfilledRequests, newBufferedRecords, assignedStreams, revokedStreams))
   }
 
   /**
@@ -292,11 +298,11 @@ private[consumer] final class Runloop(
    *   Remaining pending requests and remaining/new buffered records
    */
   private def fulfillRequests(
-    pendingRequests: Chunk[Runloop.Request],
+    pendingRequests: Chunk[Request],
     bufferedRecords: BufferedRecords,
-    records: ConsumerRecords[Array[Byte], Array[Byte]]
+    polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
   ): UIO[Runloop.FulfillResult] = {
-    val acc = ChunkBuilder.make[Runloop.Request]()
+    val acc = ChunkBuilder.make[Request]()
     val buf = mutable.Map.empty[TopicPartition, Chunk[ByteArrayConsumerRecord]]
     buf ++= bufferedRecords.recs
 
@@ -304,14 +310,16 @@ private[consumer] final class Runloop(
 
     pendingRequests.foreach { req =>
       val bufferedChunk = buf.getOrElse(req.tp, Chunk.empty)
-      val reqRecs       = records.records(req.tp)
+      val reqRecs       = polledRecords.records(req.tp)
 
       if (bufferedChunk.isEmpty && reqRecs.isEmpty) {
         acc += req
       } else {
         val concatenatedChunk = bufferedChunk ++ Chunk.fromJavaIterable(reqRecs)
 
-        fulfillAction = fulfillAction *> req.succeed(concatenatedChunk.map { record =>
+        fulfillAction = fulfillAction <* ZIO
+          .logTrace(s"Fulfilling ${bufferedChunk.size} buffered records")
+          .when(bufferedChunk.nonEmpty) *> req.succeed(concatenatedChunk.map { record =>
           CommittableRecord(
             record = record,
             commitHandle = commit,
@@ -366,9 +374,7 @@ private[consumer] final class Runloop(
     if (toPause.nonEmpty) c.pause(toPause.asJava)
   }
 
-  private def doPoll(c: ByteArrayKafkaConsumer, requestedPartitions: Set[TopicPartition]) = {
-    val pollTimeout: Duration = if (requestedPartitions.nonEmpty) this.pollTimeout else Duration.Zero
-
+  private def doPoll(c: ByteArrayKafkaConsumer) = {
     val records = c.poll(pollTimeout)
 
     if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
@@ -466,7 +472,7 @@ private[consumer] final class Runloop(
 
                   resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
-                  val records = doPoll(c, requestedPartitions)
+                  val records = doPoll(c)
 
                   val newGroupGenerationId = getConsumerGroupMetadataIfAny
                   val tpsInResponse        = records.partitions.asScala.toSet
@@ -486,8 +492,15 @@ private[consumer] final class Runloop(
                                                    }
 
                     // TODO what to do with buffered records in combination with seeking
-                    unrequestedRecords =
-                      bufferRecordsForUnrequestedPartitions(records, tpsInResponse -- remainingRequestedPartitions)
+                    unrequestedRecords = offsetRetrieval match {
+                                           case OffsetRetrieval.Manual(_) =>
+                                             BufferedRecords.empty
+                                           case _ =>
+                                             bufferRecordsForUnrequestedPartitions(
+                                               records,
+                                               tpsInResponse -- remainingRequestedPartitions
+                                             )
+                                         }
 
                     revokeResult <-
                       revokeResult
@@ -579,11 +592,7 @@ private[consumer] final class Runloop(
             .filterNot(pollResult.finishingStreams.toSeq) { case (_, control) => control.streamCompleted.isDone }
             .map(_.toMap)
         newAssignedStreams <- createNewPartitionStreams(pollResult.newlyAssigned, updatedFinishingStreams)
-        newPendingCommits <-
-          ZIO.ifZIO(isRebalancing)(
-            onTrue = ZIO.succeed(state.pendingCommits),
-            onFalse = doCommit(state.pendingCommits).when(state.pendingCommits.nonEmpty).as(Chunk.empty)
-          )
+        newPendingCommits  <- ZIO.filter(state.pendingCommits)(_.isPending)
       } yield State(
         pollResult.unfulfilledRequests,
         newPendingCommits,
@@ -624,37 +633,6 @@ private[consumer] final class Runloop(
         })
     }
 
-  /*
-  When getting requests during rebalancing, end the partition stream. Otherwise allow the request unless
-  we're not assigned the TP or there's a revoked stream that is not yet done draining.
-   */
-  private def handleRequests(state: State, reqs: Chunk[Runloop.Request]): UIO[State] =
-    // TODO I think we don't need this check anymore
-    if (!state.isSubscribed) {
-      ZIO.foreachDiscard(reqs)(_.end).as(state)
-    } else {
-      consumer
-        .withConsumer(_.assignment.asScala)
-        .flatMap { assignment =>
-          ZIO.foldLeft(reqs)(state) { (state, req) =>
-            val partitionIsAssigned = assignment.contains(req.tp)
-            val previousStreamFinished =
-              state.finishingStreams.get(req.tp).map(_.streamCompleted.isDone).getOrElse(ZIO.succeed(true))
-            ZIO.ifZIO(previousStreamFinished.map(_ && partitionIsAssigned))(
-              onTrue = ZIO.succeed(state.addRequest(req)),
-              onFalse = req.end.as(state)
-            )
-          }
-        }
-        .orElseSucceed(state.addRequests(reqs))
-    }
-
-  private def handleCommit(state: State, cmd: Command.Commit): UIO[State] =
-    ZIO.ifZIO(isRebalancing)(
-      onTrue = ZIO.succeed(state.addCommit(cmd)),
-      onFalse = doCommit(Chunk(cmd)).as(state)
-    )
-
   /**
    * After shutdown, we end all pending requests (ending their partition streams) and pause all partitions, but keep
    * executing commits and polling
@@ -663,43 +641,32 @@ private[consumer] final class Runloop(
    */
   private def handleShutdown(state: State, cmd: Command): Task[State] =
     cmd match {
-      case Command.Poll =>
-        handlePoll(state.copy(bufferedRecords = BufferedRecords.empty))
-      case Command.Requests(reqs) =>
-        ZIO.foreachDiscard(reqs)(_.end).as(state)
-      case cmd @ Command.Commit(_, _) =>
-        handleCommit(state, cmd)
+      case req: Request =>
+        req.end.as(state)
       case r @ Command.ChangeSubscription(_, _, _) =>
         r.succeed.as(state)
+      case cmd @ Command.Commit(_, _) =>
+        doCommit(Chunk.single(cmd)).as(state.addCommit(cmd))
     }
 
   private def handleOperational(state: State, cmd: Command): Task[State] =
     cmd match {
-      case Command.Poll =>
-        // The consumer will throw an IllegalStateException if no call to subscribe
-        if (state.isSubscribed) handlePoll(state) else ZIO.succeed(state)
-      case Command.Requests(reqs) =>
-        handleRequests(state, reqs).flatMap { state =>
-          // Optimization: eagerly poll if we have pending requests instead of waiting
-          // for the next scheduled poll.
-          // Do not execute handlePoll directly so that other queued commands get a fair treatment
-          if (state.pendingRequests.nonEmpty) {
-            if (state.isSubscribed) handlePoll(state)
-            else
-              ZIO.fail(
-                new IllegalStateException(
-                  s"Should Never Happen: Some requests are pending but the consumer is not subscribed. Current State: $state"
-                )
-              )
-          } else ZIO.succeed(state)
-        }
+      case req: Request =>
+        /* When getting requests during rebalancing, end the partition stream. Otherwise allow the request unless
+        we're not assigned the TP or there's a revoked stream that is not yet done draining. */
+        val partitionIsAssigned = state.assignedStreams.contains(req.tp)
+        val previousStreamFinished =
+          state.finishingStreams.get(req.tp).map(_.streamCompleted.isDone).getOrElse(ZIO.succeed(true))
+        ZIO.ifZIO(previousStreamFinished.map(_ && partitionIsAssigned))(
+          onTrue = ZIO.succeed(state.addRequest(req)),
+          onFalse = req.end.as(state)
+        )
       case cmd @ Command.Commit(_, _) =>
-        handleCommit(state, cmd)
+        doCommit(Chunk.single(cmd)).as(state.addCommit(cmd))
       case cmd @ Command.ChangeSubscription(_, _, _) =>
         handleChangeSubscription(state, cmd).flatMap { state =>
           if (state.isSubscribed) {
-            // This updates the assignment and will end partition streams which we are no longer subscribed to
-            handlePoll(state)
+            ZIO.succeed(state)
           } else {
             // End pending requests
             endRevoked(state.pendingRequests, state.bufferedRecords, state.assignedStreams, _ => true).as(
@@ -760,54 +727,65 @@ private[consumer] final class Runloop(
       _ => command.succeed.as(state.copy(subscription = command.subscription))
     )
 
-  def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Unit]] =
-    (ZStream
-      .repeatZIOWithSchedule(
-//        ZIO.debug("Offering to poll queue") *>
-        commandQueue.offer(Command.Poll),
-        Schedule.fixed(pollFrequency)
-      )
-      .runDrain zipPar ZStream
-      .mergeAll(2, 1)(
-        ZStream.fromQueue(requestQueue).mapChunks(c => Chunk.single(Command.Requests(c))),
-        ZStream.fromQueue(commandQueue)
-      )
-      .tap(cmd => diagnostics.emitIfEnabled(DiagnosticEvent.RunloopEvent(cmd)))
-      .runFoldZIO(State.initial) { (state, cmd) =>
-        ZIO.ifZIO(isShutdown)(onTrue = handleShutdown(state, cmd), onFalse = handleOperational(state, cmd))
-      }
+  def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] = {
+    def processCommands(state: State, wait: Boolean): Task[State] = for {
+      commands <- if (wait)
+                    commandQueue.takeBetween(1, commandQueueSize).timeoutTo(Chunk.empty)(ZIO.identityFn)(pollFrequency)
+                  else commandQueue.takeAll // Gather available commands or return immediately if nothing in the queue
+
+      isShutdown <- isShutdown
+      updatedState <- ZIO.foldLeft(commands)(state) { case (s, cmd) =>
+                        (if (isShutdown) handleShutdown(s, cmd) else handleOperational(s, cmd)) <*
+                          diagnostics.emitIfEnabled(DiagnosticEvent.RunloopEvent(cmd))
+                      }
+    } yield updatedState
+
+    def doPollIfPendingActions(state: State): Task[(State, Boolean)] = {
+      def logPollStart: UIO[Unit] =
+        ZIO
+          .logTrace(
+            s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
+          )
+
+      val shouldPoll =
+        state.isSubscribed && (state.pendingRequests.nonEmpty || state.pendingCommits.nonEmpty || state.assignedStreams.isEmpty)
+      if (shouldPoll) logPollStart *> handlePoll(state).map(_ -> false) else ZIO.succeed(state -> true)
+    }
+
+    def loop(state: State, wait: Boolean): ZIO[Any, Throwable, Nothing] = processCommands(state, wait)
+      .flatMap(doPollIfPendingActions)
+      .timeoutFail(RunloopTimeout)(runloopTimeout)
+      .flatMap { case (state, wait) => loop(state, wait) }
+
+    loop(State.initial, wait = true)
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitions.offer(Take.failCause(cause)))
-      .unit).forkScoped
+      .forkScoped
+  }
 }
 
 private[consumer] object Runloop {
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
   type ByteArrayConsumerRecord    = ConsumerRecord[Array[Byte], Array[Byte]]
 
-  final case class Request(
-    tp: TopicPartition,
-    private val cont: Promise[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-  ) {
-    @inline def succeed(data: Chunk[ByteArrayCommittableRecord]): UIO[Boolean] = cont.succeed(data)
-    @inline def end: UIO[Boolean]                                              = cont.fail(None)
-    @inline def fail(throwable: Throwable): UIO[Boolean]                       = cont.fail(Some(throwable))
-  }
+  // Internal parameters, should not be necessary to tune
+  val commandQueueSize = 1024
+
   final case class PollResult(
     newlyAssigned: Set[TopicPartition],
-    unfulfilledRequests: Chunk[Runloop.Request],
+    unfulfilledRequests: Chunk[Request],
     bufferedRecords: BufferedRecords,
     assignedStreams: Map[TopicPartition, PartitionStreamControl],
     finishingStreams: Map[TopicPartition, PartitionStreamControl]
   )
   final case class RevokeResult(
-    unfulfilledRequests: Chunk[Runloop.Request],
+    unfulfilledRequests: Chunk[Request],
     bufferedRecords: BufferedRecords,
     assignedStreams: Map[TopicPartition, PartitionStreamControl],
     revokedStreams: Map[TopicPartition, PartitionStreamControl]
   )
   final case class FulfillResult(
-    unfulfilledRequests: Chunk[Runloop.Request],
+    unfulfilledRequests: Chunk[Request],
     bufferedRecords: BufferedRecords
   )
 
@@ -819,11 +797,21 @@ private[consumer] object Runloop {
         extends RebalanceEvent
   }
 
-  sealed abstract class Command
+  sealed trait Command
   object Command {
-    final case class Requests(requests: Chunk[Request])                                         extends Command
-    case object Poll                                                                            extends Command
-    final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command
+    final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command {
+      @inline def isDone: UIO[Boolean]    = cont.isDone
+      @inline def isPending: UIO[Boolean] = isDone.negate
+    }
+    final case class Request(
+      tp: TopicPartition,
+      private val cont: Promise[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
+    ) extends Command {
+      @inline def succeed(data: Chunk[ByteArrayCommittableRecord]): UIO[Boolean] = cont.succeed(data)
+      @inline def end: UIO[Boolean]                                              = cont.fail(None)
+      @inline def fail(throwable: Throwable): UIO[Boolean]                       = cont.fail(Some(throwable))
+    }
+
     final case class ChangeSubscription(
       subscription: Option[Subscription],
       offsetRetrieval: OffsetRetrieval,
@@ -869,12 +857,11 @@ private[consumer] object Runloop {
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
-    perPartitionChunkPrefetch: Int
+    perPartitionChunkPrefetch: Int,
+    runloopTimeout: Duration
   ): ZIO[Scope, Throwable, Runloop] =
     for {
-      rebalancingRef                 <- Ref.make(false)
-      requestQueue                   <- ZIO.acquireRelease(Queue.unbounded[Runloop.Request])(_.shutdown)
-      commandQueue                   <- ZIO.acquireRelease(Queue.unbounded[Command])(_.shutdown)
+      commandQueue                   <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](commandQueueSize))(_.shutdown)
       handlePollRebalanceListenerRef <- Ref.make[Option[RebalanceListener]](None)
       partitions <- ZIO.acquireRelease(
                       Queue
@@ -882,18 +869,17 @@ private[consumer] object Runloop {
                           Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
                         ]
                     )(_.shutdown)
-      shutdownRef <- ZIO.acquireRelease(Ref.make(false))(_.set(true))
+      shutdownRef <- ZIO.acquireRelease(Ref.make(false))(_.set(true) *> ZIO.logTrace("Set shutdownRef to true"))
       runtime     <- ZIO.runtime[Any]
       runloop = new Runloop(
                   runtime,
                   hasGroupId,
                   consumer,
-                  pollFrequency,
                   pollTimeout,
-                  requestQueue,
+                  pollFrequency,
+                  runloopTimeout,
                   commandQueue,
                   partitions,
-                  rebalancingRef,
                   diagnostics,
                   shutdownRef,
                   offsetRetrieval,
@@ -907,21 +893,18 @@ private[consumer] object Runloop {
 }
 
 private[internal] final case class State(
-  pendingRequests: Chunk[Runloop.Request],
-  pendingCommits: Chunk[Command.Commit],
+  pendingRequests: Chunk[Request],
+  pendingCommits: Chunk[Commit],
   bufferedRecords: BufferedRecords,
   assignedStreams: Map[TopicPartition, PartitionStreamControl],
   finishingStreams: Map[TopicPartition, PartitionStreamControl],
   subscription: Option[Subscription]
 ) {
-  def addCommit(c: Command.Commit): State           = copy(pendingCommits = c +: pendingCommits)
-  def addRequest(c: Runloop.Request): State         = copy(pendingRequests = c +: pendingRequests)
-  def addRequests(c: Chunk[Runloop.Request]): State = copy(pendingRequests = c ++ pendingRequests)
+  def addCommit(c: Commit): State   = copy(pendingCommits = pendingCommits :+ c)
+  def addRequest(r: Request): State = copy(pendingRequests = pendingRequests :+ r)
+
   def addBufferedRecords(recs: BufferedRecords): State =
     copy(bufferedRecords = bufferedRecords ++ recs)
-
-  def removeBufferedRecordsFor(tp: TopicPartition): State =
-    copy(bufferedRecords = bufferedRecords.remove(tp))
 
   def isSubscribed: Boolean = subscription.isDefined
 }

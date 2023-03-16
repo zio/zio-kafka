@@ -14,7 +14,7 @@ import zio.kafka.consumer._
 
 // Create a single Consumer instance
 val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
-val consumer: ZLayer[Clock, Throwable, Consumer] = ZLayer.scoped(Consumer.make(consumerSettings))
+val consumer: ZLayer[Any, Throwable, Consumer] = ZLayer.scoped(Consumer.make(consumerSettings))
 
 // Define two streams, each for a different topic and key-value types
 val stream1 = Consumer.plainStream(Subscription.topics("topic1"), Serde.string, Serde.string)

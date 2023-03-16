@@ -269,7 +269,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           _ => assert("result")(equalTo("Expected consumeWith to fail"))
         )
       } @@ timeout(10.seconds),
-      test("stopConsumption must stop the stream") {
+      test("stopConsumption must end streams while still processing commits") {
 
         val diagnostics = Diagnostics { case e: DiagnosticEvent.Rebalance =>
           ZIO.logInfo(s"$e")
@@ -285,7 +285,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           _ <- Consumer
                  .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                  .zipWithIndex
-                 .tap { case (_, idx) => Consumer.stopConsumption.when(idx == 3) }
+                 .tap { case (record, idx) => Consumer.stopConsumption.when(idx == 3) *> record.offset.commit }
                  .runDrain
                  .provideSomeLayer[Kafka](
                    consumer(client, Some(group), diagnostics = diagnostics)
@@ -735,7 +735,9 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                consumer(client2, Some(group), offsetRetrieval = offsetRetrieval)
                              )
           // Check that we only got the records starting from the manually seek'd offset
-        } yield assert(secondResults.map(rec => rec.key() -> rec.value()).toList)(equalTo(data.drop(manualOffsetSeek)))
+        } yield assert(secondResults.map(rec => rec.key() -> rec.value()).toList)(
+          equalTo(data.drop(manualOffsetSeek))
+        )
       },
       test("commit offsets for all consumed messages") {
         val nrMessages = 50
@@ -1008,7 +1010,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           testForPartitionAssignmentStrategy[RangeAssignor],
           testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
-      }: _*) @@ TestAspect.timeout(60.seconds) @@ TestAspect.nonFlaky(3),
+      }: _*) @@ TestAspect.nonFlaky(3),
       test("handles RebalanceInProgressExceptions transparently") {
         // Committing during rebalancing must not throw exceptions. Since we can't directly observe this happening,
         // the best we can do is make the situation occur and check that we don't get any errors
@@ -1125,7 +1127,11 @@ object ConsumerSpec extends ZIOKafkaSpec {
             ): ZIO[Kafka, Throwable, Unit] =
               ZIO.logAnnotate("consumer", name) {
                 for {
-                  consumedMessagesCounter      <- Ref.make(0)
+                  consumedMessagesCounter <- Ref.make(0)
+                  _ <- consumedMessagesCounter.get
+                         .flatMap(consumed => ZIO.logInfo(s"Consumed so far: ${consumed}"))
+                         .repeat(Schedule.fixed(1.second))
+                         .fork
                   streamCompleteOnRebalanceRef <- Ref.make[Option[Promise[Nothing, Unit]]](None)
                   tConsumer <-
                     Consumer
@@ -1142,7 +1148,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                  .mapChunksZIO { records =>
                                    ZIO.scoped {
                                      for {
-                                       _ <- consumedMessagesCounter.update(_ + records.size)
                                        t <- tProducer.createTransaction
                                        _ <- t.produceChunkBatch(
                                               records.map(r => new ProducerRecord(toTopic, r.key, r.value)),
@@ -1150,6 +1155,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                               Serde.string,
                                               OffsetBatch(records.map(_.offset))
                                             )
+                                       _ <- consumedMessagesCounter.update(_ + records.size)
                                      } yield Chunk.empty
                                    }.uninterruptible
                                  }
@@ -1198,9 +1204,9 @@ object ConsumerSpec extends ZIOKafkaSpec {
 
               copyingGroup <- randomGroup
 
-              _               <- ZIO.logInfo("Starting copier 1")
-              copier1ClientId <- randomClient
-              copier1Created  <- Promise.make[Nothing, Unit]
+              _ <- ZIO.logInfo("Starting copier 1")
+              copier1ClientId = copyingGroup + "-1"
+              copier1Created <- Promise.make[Nothing, Unit]
               copier1 <- makeCopyingTransactionalConsumer(
                            "1",
                            copyingGroup,
@@ -1212,9 +1218,9 @@ object ConsumerSpec extends ZIOKafkaSpec {
                          ).fork
               _ <- copier1Created.await
 
-              _               <- ZIO.logInfo("Starting copier 2")
-              copier2ClientId <- randomClient
-              copier2Created  <- Promise.make[Nothing, Unit]
+              _ <- ZIO.logInfo("Starting copier 2")
+              copier2ClientId = copyingGroup + "-2"
+              copier2Created <- Promise.make[Nothing, Unit]
               copier2 <- makeCopyingTransactionalConsumer(
                            "2",
                            copyingGroup,
@@ -1237,7 +1243,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                     Consumer
                                       .plainStream(Subscription.topics(topicB), Serde.string, Serde.string)
                                       .map(_.value)
-                                      .timeout(10.seconds)
+                                      .timeout(5.seconds)
                                       .runCollect
                                       .provideSome[Kafka](
                                         transactionalConsumer(
@@ -1265,6 +1271,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
       }: _*) @@ TestAspect.nonFlaky(3)
     ).provideSomeLayerShared[TestEnvironment & Kafka](
       producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
-    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(600.seconds)
+    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(180.seconds)
 
 }

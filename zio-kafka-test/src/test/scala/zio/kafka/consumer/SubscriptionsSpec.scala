@@ -1,5 +1,6 @@
 package zio.kafka.consumer
 import io.github.embeddedkafka.EmbeddedKafka
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio._
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.ZIOKafkaSpec
@@ -124,7 +125,9 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
             )
             .interruptWhen(consumer1GotMessage.await *> consumer2GotMessage.await)
             .runCollect)
-            .provideSomeLayer[Kafka & Scope](consumer(client, Some(group)))
+            .provideSomeLayer[Kafka & Scope](
+              consumer(client, Some(group), properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "10"))
+            )
       } yield assertCompletes
     } @@ TestAspect.nonFlaky(5),
     test("can handle unsubscribing during the lifetime of other streams") {
@@ -202,5 +205,5 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
     } @@ TestAspect.nonFlaky(3)
   ).provideSomeLayerShared[TestEnvironment & Kafka](
     producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
-  ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(600.seconds)
+  ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(180.seconds)
 }

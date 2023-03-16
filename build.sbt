@@ -4,7 +4,7 @@ lazy val scala3    = "3.2.2"
 lazy val mainScala = scala213
 lazy val allScala  = Seq(scala212, scala3, mainScala)
 
-lazy val zioVersion           = "2.0.9"
+lazy val zioVersion           = "2.0.10"
 lazy val kafkaVersion         = "3.4.0"
 lazy val embeddedKafkaVersion = "3.4.0" // Should be the same as kafkaVersion, except for the patch part
 
@@ -15,7 +15,7 @@ lazy val zioTest               = "dev.zio"                   %% "zio-test"      
 lazy val zioTestSbt            = "dev.zio"                   %% "zio-test-sbt"            % zioVersion
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.9.0"
 lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.2"
-lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.5"
+lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.6"
 lazy val embeddedKafka         = "io.github.embeddedkafka"   %% "embedded-kafka"          % embeddedKafkaVersion
 
 inThisBuild(
@@ -156,7 +156,7 @@ lazy val zioKafkaBench =
     .enablePlugins(JmhPlugin)
     .settings(stdSettings("zio-kafka-bench"))
     .settings(publish / skip := true)
-    .dependsOn(zioKafka)
+    .dependsOn(zioKafka, zioKafkaTestUtils)
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
