@@ -595,19 +595,16 @@ private[consumer] final class Runloop(
     } yield updatedState
 
     def doPollIfPendingActions(state: State): Task[(State, Boolean)] = {
+      def logPollStart: UIO[Unit] =
+        ZIO
+          .logTrace(
+            s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
+          )
+
       val shouldPoll =
         state.isSubscribed && (state.pendingRequests.nonEmpty || state.pendingCommits.nonEmpty || state.assignedStreams.isEmpty)
-
-      for {
-        _ <-
-          ZIO
-            .logTrace(
-              s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
-            )
-            .when(shouldPoll)
-        newState <-
-          if (shouldPoll) handlePoll(state) else ZIO.succeed(state)
-      } yield (newState, !shouldPoll)
+      if (shouldPoll) logPollStart *> handlePoll(state).map(_ -> false) else ZIO.succeed(state -> true)
+    }
     }
 
     def loop(state: State, wait: Boolean): ZIO[Any, Throwable, Nothing] = processCommands(state, wait)
