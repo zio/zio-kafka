@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - stabilize-benchmark
 
 permissions:
   # deployments permission to deploy GitHub pages website
