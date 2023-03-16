@@ -603,7 +603,6 @@ private[consumer] final class Runloop(
         state.isSubscribed && (state.pendingRequests.nonEmpty || state.pendingCommits.nonEmpty || state.assignedStreams.isEmpty)
       if (shouldPoll) logPollStart *> handlePoll(state).map(_ -> false) else ZIO.succeed(state -> true)
     }
-    }
 
     def loop(state: State, wait: Boolean): ZIO[Any, Throwable, Nothing] = processCommands(state, wait)
       .flatMap(doPollIfPendingActions)
