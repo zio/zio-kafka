@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1678884494262,
+  "lastUpdate": 1678944106161,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -3650,6 +3650,42 @@ window.BENCHMARK_DATA = {
             "value": 2534.05138918,
             "unit": "ms/op",
             "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "41898282+github-actions[bot]@users.noreply.github.com",
+            "name": "github-actions[bot]",
+            "username": "github-actions[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "749c69c01de184519c8d392e07ec6a82b21f6117",
+          "message": "Update logback-classic to 1.3.6 (#709)\n\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>",
+          "timestamp": "2023-03-16T13:17:06+08:00",
+          "tree_id": "6fe21c95effdb04498dc6bd06048b5d759ab853a",
+          "url": "https://github.com/zio/zio-kafka/commit/749c69c01de184519c8d392e07ec6a82b21f6117"
+        },
+        "date": 1678944105546,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 796.9578525000001,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 981.8127904666667,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
         ]
       }
