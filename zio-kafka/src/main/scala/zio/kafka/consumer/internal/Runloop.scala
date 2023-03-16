@@ -515,7 +515,7 @@ private[consumer] final class Runloop(
           req.end.as(state)
         }
       case cmd @ Command.Commit(_, _) =>
-        doCommit(Chunk(cmd)).as(state.addCommit(cmd))
+        doCommit(Chunk.single(cmd)).as(state.addCommit(cmd))
       case cmd @ Command.ChangeSubscription(_, _, _) =>
         handleChangeSubscription(state, cmd).flatMap { state =>
           if (state.isSubscribed) {
