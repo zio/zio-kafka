@@ -138,18 +138,24 @@ private[consumer] final class Runloop(
       _ <- p.await
     } yield ()
 
-  private def doCommit(cmds: Chunk[Commit]): UIO[Unit] = {
-    val offsets   = aggregateOffsets(cmds)
-    val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(cmds)(_.cont.done(e))
+  private def doCommit(cmd: Commit): UIO[Unit] = {
+    val offsets   = aggregateOffsets(cmd)
+    val cont      = (e: Exit[Throwable, Unit]) => cmd.cont.done(e).asInstanceOf[UIO[Unit]]
     val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
         ZIO.logDebug(s"Rebalance in progress, retrying commit for offsets ${offsets}") *>
-          commandQueue.offerAll(cmds).unit
+          commandQueue.offer(cmd).unit
       case err =>
         cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
     }
-    val callback = makeOffsetCommitCallback(onSuccess, onFailure)
+    val callback =
+      new OffsetCommitCallback {
+        override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
+          Unsafe.unsafe { implicit u =>
+            runtime.unsafe.run(if (exception eq null) onSuccess else onFailure(exception)).getOrThrowFiberFailure()
+          }
+      }
 
     consumer.withConsumerM { c =>
       // We don't wait for the completion of the commit here, because it
@@ -160,31 +166,20 @@ private[consumer] final class Runloop(
   }
 
   // Returns the highest offset to commit per partition
-  private def aggregateOffsets(cmds: Chunk[Commit]): Map[TopicPartition, OffsetAndMetadata] = {
+  private def aggregateOffsets(commit: Commit): Map[TopicPartition, OffsetAndMetadata] = {
     val offsets = mutable.Map[TopicPartition, OffsetAndMetadata]()
+    offsets.sizeHint(commit.offsets.size)
 
-    cmds.foreach { commit =>
-      commit.offsets.foreach { case (tp, offset) =>
-        val existing = offsets.get(tp).fold(-1L)(_.offset())
+    commit.offsets.foreach { case (tp, offset) =>
+      val existing = offsets.get(tp).fold(-1L)(_.offset())
 
-        if (existing < offset)
-          offsets += tp -> new OffsetAndMetadata(offset + 1)
+      if (existing < offset) {
+        offsets += tp -> new OffsetAndMetadata(offset + 1)
       }
     }
 
     offsets.toMap
   }
-
-  private def makeOffsetCommitCallback(
-    onSuccess: Task[Unit],
-    onFailure: Exception => Task[Unit]
-  ): OffsetCommitCallback =
-    new OffsetCommitCallback {
-      override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
-        Unsafe.unsafe { implicit u =>
-          runtime.unsafe.run(if (exception eq null) onSuccess else onFailure(exception)).getOrThrowFiberFailure()
-        }
-    }
 
   /**
    * Does all needed to end revoked partitions:
@@ -499,12 +494,9 @@ private[consumer] final class Runloop(
    */
   private def handleShutdown(state: State, cmd: Command): Task[State] =
     cmd match {
-      case req: Request =>
-        req.end.as(state)
-      case r @ Command.ChangeSubscription(_, _, _) =>
-        r.succeed.as(state)
-      case cmd @ Command.Commit(_, _) =>
-        doCommit(Chunk.single(cmd)).as(state.addCommit(cmd))
+      case req: Request                  => req.end.as(state)
+      case r: Command.ChangeSubscription => r.succeed.as(state)
+      case cmd: Command.Commit           => doCommit(cmd).as(state.addCommit(cmd))
     }
 
   private def handleOperational(state: State, cmd: Command): Task[State] =
@@ -516,7 +508,7 @@ private[consumer] final class Runloop(
           req.end.as(state)
         }
       case cmd @ Command.Commit(_, _) =>
-        doCommit(Chunk.single(cmd)).as(state.addCommit(cmd))
+        doCommit(cmd).as(state.addCommit(cmd))
       case cmd @ Command.ChangeSubscription(_, _, _) =>
         handleChangeSubscription(state, cmd).flatMap { state =>
           if (state.isSubscribed) {
@@ -531,7 +523,6 @@ private[consumer] final class Runloop(
               )
             )
           }
-
         }
     }
 
@@ -582,17 +573,16 @@ private[consumer] final class Runloop(
     )
 
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] = {
-    def processCommands(state: State, wait: Boolean): Task[State] = for {
-      commands <- if (wait)
-                    commandQueue.takeBetween(1, commandQueueSize).timeoutTo(Chunk.empty)(ZIO.identityFn)(pollFrequency)
-                  else commandQueue.takeAll // Gather available commands or return immediately if nothing in the queue
+    def processCommands(state: State, wait: Boolean): Task[State] =
+      for {
+        commands <-
+          if (wait) commandQueue.takeBetween(1, commandQueueSize).timeoutTo(Chunk.empty)(ZIO.identityFn)(pollFrequency)
+          else commandQueue.takeAll // Gather available commands or return immediately if nothing in the queue
 
-      isShutdown <- isShutdown
-      updatedState <- ZIO.foldLeft(commands)(state) { case (s, cmd) =>
-                        (if (isShutdown) handleShutdown(s, cmd) else handleOperational(s, cmd)) <*
-                          diagnostics.emitIfEnabled(DiagnosticEvent.RunloopEvent(cmd))
-                      }
-    } yield updatedState
+        isShutdown <- isShutdown
+        handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
+        updatedState <- ZIO.foldLeft(commands)(state)(handleCommand)
+      } yield updatedState
 
     def doPollIfPendingActions(state: State): Task[(State, Boolean)] = {
       def logPollStart: UIO[Unit] =
@@ -606,10 +596,11 @@ private[consumer] final class Runloop(
       if (shouldPoll) logPollStart *> handlePoll(state).map(_ -> false) else ZIO.succeed(state -> true)
     }
 
-    def loop(state: State, wait: Boolean): ZIO[Any, Throwable, Nothing] = processCommands(state, wait)
-      .flatMap(doPollIfPendingActions)
-      .timeoutFail(RunloopTimeout)(runloopTimeout)
-      .flatMap { case (state, wait) => loop(state, wait) }
+    def loop(state: State, wait: Boolean): ZIO[Any, Throwable, Nothing] =
+      processCommands(state, wait)
+        .flatMap(doPollIfPendingActions)
+        .timeoutFail(RunloopTimeout)(runloopTimeout)
+        .flatMap { case (state, wait) => loop(state, wait) }
 
     loop(State.initial, wait = true)
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
