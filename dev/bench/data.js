@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1678954951845,
+  "lastUpdate": 1679000142282,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -3730,6 +3730,42 @@ window.BENCHMARK_DATA = {
             "value": 2184.164894039999,
             "unit": "ms/op",
             "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "khajavi@gmail.com",
+            "name": "Milad Khajavi",
+            "username": "khajavi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "728591e664f0a57595f2dca4ffd8986140f5c9bc",
+          "message": "Apply ZIO SBT Ecosystem and CI Plugins (#702)",
+          "timestamp": "2023-03-16T21:50:30+01:00",
+          "tree_id": "a112aa96f326fb5a4b1f6aa16f8974b58a1dd2d9",
+          "url": "https://github.com/zio/zio-kafka/commit/728591e664f0a57595f2dca4ffd8986140f5c9bc"
+        },
+        "date": 1679000141302,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 244.75487744444447,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 376.2832496166667,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
         ]
       }
