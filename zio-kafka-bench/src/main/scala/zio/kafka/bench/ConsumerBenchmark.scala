@@ -37,9 +37,12 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
       client <- randomThing("client")
       group  <- randomThing("group")
 
+      counter <- Ref.make(0)
       _ <- Consumer
              .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
-             .take(nrMessages.toLong)
+             .tap { _ =>
+               counter.updateAndGet(_ + 1).flatMap(count => Consumer.stopConsumption.when(count == nrMessages))
+             }
              .runDrain
              .provideSome[Kafka](
                consumer(
@@ -68,7 +71,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                .tap(batch => counter.update(_ + batch.size))
                .map(OffsetBatch.apply)
                .mapZIO(_.commit)
-               .takeUntilZIO(_ => counter.get.map(_ == nrMessages))
+               .takeUntilZIO(_ => counter.get.map(_ >= nrMessages))
                .runDrain
                .provideSome[Kafka](
                  consumer(
