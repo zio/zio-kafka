@@ -1,8 +1,8 @@
 package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer._
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
-import org.apache.kafka.common.{ KafkaException, TopicPartition }
 import zio._
 import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
@@ -502,9 +502,8 @@ private[consumer] final class Runloop(
         req.end.as(state)
       case r @ Command.ChangeSubscription(_, _, _) =>
         r.succeed.as(state)
-      case _ @Command.Commit(_, cont) =>
-        cont.fail(new KafkaException("Consumer is shutting down")).as(state) // TODO can we just allow it?
-
+      case cmd @ Command.Commit(_, _) =>
+        doCommit(Chunk.single(cmd)).as(state.addCommit(cmd))
     }
 
   private def handleOperational(state: State, cmd: Command): Task[State] =

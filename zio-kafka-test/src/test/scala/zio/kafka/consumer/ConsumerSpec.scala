@@ -269,7 +269,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           _ => assert("result")(equalTo("Expected consumeWith to fail"))
         )
       } @@ timeout(10.seconds),
-      test("stopConsumption must stop the stream") {
+      test("stopConsumption must end streams while still processing commits") {
         for {
           topic  <- randomTopic
           group  <- randomGroup
@@ -280,7 +280,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           _ <- Consumer
                  .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                  .zipWithIndex
-                 .tap { case (_, idx) => Consumer.stopConsumption.when(idx == 3) }
+                 .tap { case (record, idx) => Consumer.stopConsumption.when(idx == 3) *> record.offset.commit }
                  .runDrain
                  .provideSomeLayer[Kafka](
                    consumer(client, Some(group))
