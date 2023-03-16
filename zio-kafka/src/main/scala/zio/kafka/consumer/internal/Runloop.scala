@@ -583,7 +583,7 @@ private[consumer] final class Runloop(
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] = {
     def processCommands(state: State, wait: Boolean): Task[State] = for {
       commands <- if (wait)
-                    commandQueue.takeBetween(1, commandQueueSize).timeoutTo(Chunk.empty)(identity)(pollFrequency)
+                    commandQueue.takeBetween(1, commandQueueSize).timeoutTo(Chunk.empty)(ZIO.identityFn)(pollFrequency)
                   else commandQueue.takeAll // Gather available commands or return immediately if nothing in the queue
 
       isShutdown <- isShutdown
