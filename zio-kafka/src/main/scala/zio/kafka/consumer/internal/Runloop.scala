@@ -47,18 +47,18 @@ private[consumer] final class Runloop(
         ZStream.logAnnotate(LogAnnotation("topic", tp.topic()), LogAnnotation("partition", tp.partition().toString)) *>
           ZStream.finalizer(ZIO.logDebug(s"Partition stream for ${tp.toString} has ended")) *>
           ZStream.repeatZIOChunkOption {
-                   for {
-                     request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-                     _       <- commandQueue.offer(Request(tp, request)).unit
-                     _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
-                     result  <- request.await
-                   } yield result
-                 }.interruptWhen(interruptionPromise)
-                   .concat(
-                     ZStream
-                       .fromQueue(drainQueue)
-                       .flattenTake
-                   )
+            for {
+              request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
+              _       <- commandQueue.offer(Request(tp, request)).unit
+              _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
+              result  <- request.await
+            } yield result
+          }.interruptWhen(interruptionPromise)
+            .concat(
+              ZStream
+                .fromQueue(drainQueue)
+                .flattenTake
+            )
     } yield (tp, PartitionStreamControl(interruptionPromise, drainQueue), stream)
 
   def gracefulShutdown: UIO[Unit] =
