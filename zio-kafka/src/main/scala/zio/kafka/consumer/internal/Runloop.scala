@@ -254,17 +254,18 @@ private[consumer] final class Runloop(
       if (bufferedChunk.isEmpty && reqRecs.isEmpty) {
         acc += req
       } else {
-        val concatenatedChunk = bufferedChunk ++ Chunk.fromJavaIterable(reqRecs)
+        val concatenatedChunk =
+          (bufferedChunk ++ Chunk.fromJavaIterable(reqRecs)).map { record =>
+            CommittableRecord(
+              record = record,
+              commitHandle = commit,
+              consumerGroupMetadata = getConsumerGroupMetadataIfAny
+            )
+          }
 
         fulfillAction = fulfillAction <* ZIO
           .logTrace(s"Fulfilling ${bufferedChunk.size} buffered records")
-          .when(bufferedChunk.nonEmpty) *> req.succeed(concatenatedChunk.map { record =>
-          CommittableRecord(
-            record = record,
-            commitHandle = commit,
-            consumerGroupMetadata = getConsumerGroupMetadataIfAny
-          )
-        })
+          .when(bufferedChunk.nonEmpty) *> req.succeed(concatenatedChunk)
         buf -= req.tp
       }
     }
