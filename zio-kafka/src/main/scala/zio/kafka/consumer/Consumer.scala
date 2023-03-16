@@ -10,6 +10,7 @@ import zio.kafka.serde.{ Deserializer, Serde }
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
+import scala.util.control.NoStackTrace
 
 trait Consumer {
 
@@ -153,6 +154,8 @@ trait Consumer {
 }
 
 object Consumer {
+
+  case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
 
   private final case class Live(
     private val consumer: ConsumerAccess,
@@ -373,7 +376,8 @@ object Consumer {
                    diagnostics = diagnostics,
                    offsetRetrieval = settings.offsetRetrieval,
                    userRebalanceListener = settings.rebalanceListener,
-                   restartStreamsOnRebalancing = settings.restartStreamOnRebalancing
+                   restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
+                   runloopTimeout = settings.runloopTimeout
                  )
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 

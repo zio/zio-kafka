@@ -5,6 +5,24 @@ import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.security.KafkaCredentialStore
 
+/**
+ * @param bootstrapServers
+ * @param properties
+ * @param closeTimeout
+ * @param pollInterval
+ *   When there are no pending requests from partition streams, the frequency of polling for liveness and getting
+ *   partition assignments.
+ * @param pollTimeout
+ * @param perPartitionChunkPrefetch
+ * @param offsetRetrieval
+ * @param rebalanceListener
+ * @param restartStreamOnRebalancing
+ * @param runloopTimeout
+ *   Internal timeout for each iteration of the command processing and polling loop, use to detect stalling. This should
+ *   be much larger than the pollTimeout and the time it takes to process chunks of records. If your consumer is not
+ *   subscribed for long periods during its lifetime, this timeout should take that into account as well. When the
+ *   timeout expires, the plainStream/partitionedStream/etc will fail with a [[Consumer.RunloopTimeout]].
+ */
 case class ConsumerSettings(
   bootstrapServers: List[String],
   properties: Map[String, AnyRef],
@@ -14,7 +32,8 @@ case class ConsumerSettings(
   perPartitionChunkPrefetch: Int,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
-  restartStreamOnRebalancing: Boolean = false
+  restartStreamOnRebalancing: Boolean = false,
+  runloopTimeout: Duration
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
@@ -85,6 +104,7 @@ object ConsumerSettings {
       pollInterval = 50.millis,
       pollTimeout = 50.millis,
       perPartitionChunkPrefetch = 2,
-      offsetRetrieval = OffsetRetrieval.Auto()
+      offsetRetrieval = OffsetRetrieval.Auto(),
+      runloopTimeout = 30.seconds
     )
 }
