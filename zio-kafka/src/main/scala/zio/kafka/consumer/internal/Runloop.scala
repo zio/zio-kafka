@@ -256,9 +256,10 @@ private[consumer] final class Runloop(
       } else {
         val concatenatedChunk = bufferedChunk ++ Chunk.fromJavaIterable(reqRecs)
 
-        fulfillAction = fulfillAction <* ZIO
-          .logTrace(s"Fulfilling ${bufferedChunk.size} buffered records")
-          .when(bufferedChunk.nonEmpty) *> req.succeed(concatenatedChunk.map { record =>
+        fulfillAction =
+          if (bufferedChunk.nonEmpty)
+            ZIO.logTrace(s"Fulfilling ${bufferedChunk.size} buffered records") *> req.succeed(concatenatedChunk)
+          else req.succeed(concatenatedChunk)
           CommittableRecord(
             record = record,
             commitHandle = commit,
