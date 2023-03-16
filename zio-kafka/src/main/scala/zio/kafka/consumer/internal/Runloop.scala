@@ -214,16 +214,13 @@ private[consumer] final class Runloop(
           )
       }
 
-    val acc = ChunkBuilder.make[Request]()
-    val buf = mutable.Map.empty[TopicPartition, Chunk[ByteArrayConsumerRecord]]
-    buf ++= bufferedRecords.recs
-    requests.foreach(req => if (isRevoked(req.tp)) buf -= req.tp else acc += req)
-    val unfulfilledRequests = acc.result()
-    val newBufferedRecords  = BufferedRecords.fromMutableMap(buf)
+    val (revokedRequests, unfulfilledRequests) = requests.partition(req => isRevoked(req.tp))
+    val newBufferedRecords = BufferedRecords.fromMap(bufferedRecords.recs -- revokedRequests.map(_.tp))
 
-    val endRevokedRequests = ZIO.foreachDiscard(requests.filter(req => isRevoked(req.tp))) { req =>
-      ZIO.logTrace(s"Ending request for TP ${req.tp}") *> req.end.unit
-    }
+    val endRevokedRequests =
+      ZIO.foreachDiscard(revokedRequests) { req =>
+        ZIO.logTrace(s"Ending request for TP ${req.tp}") *> req.end
+      }
 
     endRevokedRequests *>
       revokeAction *>
