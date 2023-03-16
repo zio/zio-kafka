@@ -1,39 +1,29 @@
-lazy val scala212  = "2.12.17"
-lazy val scala213  = "2.13.10"
-lazy val scala3    = "3.2.2"
-lazy val mainScala = scala213
-lazy val allScala  = Seq(scala212, scala3, mainScala)
+import sbt.Def
 
-lazy val zioVersion           = "2.0.10"
 lazy val kafkaVersion         = "3.4.0"
 lazy val embeddedKafkaVersion = "3.4.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
-lazy val zio                   = "dev.zio"                   %% "zio"                     % zioVersion
-lazy val zioStreams            = "dev.zio"                   %% "zio-streams"             % zioVersion
-lazy val zioTest               = "dev.zio"                   %% "zio-test"                % zioVersion
-lazy val zioTestSbt            = "dev.zio"                   %% "zio-test-sbt"            % zioVersion
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.9.0"
 lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.2"
 lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.6"
-lazy val embeddedKafka         = "io.github.embeddedkafka"   %% "embedded-kafka"          % embeddedKafkaVersion
+
+enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
 inThisBuild(
   List(
-    organization             := "dev.zio",
-    homepage                 := Some(url("https://zio.dev/zio-kafka")),
-    licenses                 := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
+    name := "ZIO Kafka",
+    crossScalaVersions -= scala211.value,
+    ciEnabledBranches        := Seq("master", "series/0.x"),
     useCoursier              := false,
-    scalaVersion             := mainScala,
-    crossScalaVersions       := allScala,
     Test / parallelExecution := false,
     Test / fork              := true,
     run / fork               := true,
-    pgpPublicRing            := file("/tmp/public.asc"),
-    pgpSecretRing            := file("/tmp/secret.asc"),
-    pgpPassphrase            := sys.env.get("PGP_PASSWORD").map(_.toArray),
-    scmInfo := Some(
-      ScmInfo(url("https://github.com/zio/zio-kafka/"), "scm:git:git@github.com:zio/zio-kafka.git")
+    supportedScalaVersions := Map(
+      (zioKafka / thisProject).value.id          -> (zioKafka / crossScalaVersions).value,
+      (zioKafkaBench / thisProject).value.id     -> (zioKafkaBench / crossScalaVersions).value,
+      (zioKafkaTest / thisProject).value.id      -> (zioKafkaTest / crossScalaVersions).value,
+      (zioKafkaTestUtils / thisProject).value.id -> (zioKafkaTestUtils / crossScalaVersions).value
     ),
     developers := List(
       Developer(
@@ -63,26 +53,18 @@ lazy val root = project
     docs
   )
 
-def buildInfoSettings(packageName: String) =
-  Seq(
-    buildInfoKeys := Seq[BuildInfoKey](organization, moduleName, name, version, scalaVersion, sbtVersion, isSnapshot),
-    buildInfoPackage := packageName
-  )
-
 def stdSettings(prjName: String) = Seq(
   name              := s"$prjName",
-  scalafmtOnCompile := !(insideCI.value),
-  Compile / compile / scalacOptions ++= {
-    if (scalaBinaryVersion.value == "2.13") Seq("-Wconf:cat=unused-nowarn:s")
-    else Seq()
-  },
+  scalafmtOnCompile := !insideCI.value,
+  Compile / compile / scalacOptions ++=
+    optionsOn("2.13")("-Wconf:cat=unused-nowarn:s").value,
   scalacOptions -= "-Xlint:infer-any",
   // workaround for bad constant pool issue
   (Compile / doc) := Def.taskDyn {
     val default = (Compile / doc).taskValue
     Def.task(default.value)
   }.value
-)
+) ++ scalafixSettings
 
 lazy val zioKafka =
   project
@@ -90,14 +72,22 @@ lazy val zioKafka =
     .enablePlugins(BuildInfoPlugin)
     .settings(stdSettings("zio-kafka"))
     .settings(buildInfoSettings("zio.kafka"))
+    .settings(enableZIO(enableStreaming = true))
     .settings(
       libraryDependencies ++= Seq(
-        zioStreams,
         kafkaClients,
         jacksonDatabind,
         scalaCollectionCompat
       )
     )
+
+lazy val `embedded-kafka`: Def.Initialize[Seq[sbt.ModuleID]] = {
+  val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion
+  dependenciesOnOrElse("3")(
+    embeddedKafka
+      .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
+  )(embeddedKafka)
+}
 
 lazy val zioKafkaTestUtils =
   project
@@ -108,18 +98,11 @@ lazy val zioKafkaTestUtils =
     .settings(buildInfoSettings("zio.kafka"))
     .settings(
       libraryDependencies ++= Seq(
-        zio,
-        zioTest,
+        "dev.zio" %% "zio"      % zioVersion.value,
+        "dev.zio" %% "zio-test" % zioVersion.value,
         kafkaClients,
         scalaCollectionCompat
-      ) ++ {
-        if (scalaBinaryVersion.value == "3")
-          Seq(
-            embeddedKafka
-              .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
-          )
-        else Seq(embeddedKafka)
-      }
+      ) ++ `embedded-kafka`.value
     )
 
 lazy val zioKafkaTest =
@@ -129,25 +112,15 @@ lazy val zioKafkaTest =
     .enablePlugins(BuildInfoPlugin)
     .settings(stdSettings("zio-kafka-test"))
     .settings(buildInfoSettings("zio.kafka"))
+    .settings(enableZIO(enableStreaming = true))
     .settings(publish / skip := true)
     .settings(
       libraryDependencies ++= Seq(
-        zioStreams,
-        zioTest    % Test,
-        zioTestSbt % Test,
         kafkaClients,
         jacksonDatabind,
         logback % Test,
         scalaCollectionCompat
-      ) ++ {
-        if (scalaBinaryVersion.value == "3")
-          Seq(
-            embeddedKafka
-              .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
-          )
-        else Seq(embeddedKafka)
-      },
-      testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
+      ) ++ `embedded-kafka`.value
     )
 
 lazy val zioKafkaBench =
@@ -170,7 +143,6 @@ lazy val docs = project
     projectName                                := "ZIO Kafka",
     mainModuleName                             := (zioKafka / moduleName).value,
     projectStage                               := ProjectStage.ProductionReady,
-    docsPublishBranch                          := "master",
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioKafka),
     readmeCredits :=
       "This library is heavily inspired and made possible by the research and implementation done in " +

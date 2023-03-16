@@ -1409,7 +1409,7 @@ object AdminClient {
   }
 
   final case class ListConsumerGroupOffsetsSpec(partitions: Chunk[TopicPartition]) {
-    def asJava = {
+    def asJava: JListConsumerGroupOffsetsSpec = {
       val opts = new JListConsumerGroupOffsetsSpec
       opts.topicPartitions(partitions.map(_.asJava).asJava)
       opts

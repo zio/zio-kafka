@@ -9,11 +9,12 @@ import scala.reflect.ClassTag
 object SerdeSpec extends ZIOSpecDefault {
   case class TestDataStructure(value: String)
 
-  val testDataStructureSerde = Serde.string.inmap[TestDataStructure](TestDataStructure.apply)(_.value)
+  val testDataStructureSerde: Serde[Any, TestDataStructure] =
+    Serde.string.inmap[TestDataStructure](TestDataStructure.apply)(_.value)
 
   private val anyBytes = Gen.listOf(Gen.byte).map(bytes => new org.apache.kafka.common.utils.Bytes(bytes.toArray))
 
-  override def spec = suite("Serde")(
+  override def spec: Spec[Any, Throwable] = suite("Serde")(
     testSerde(Serde.string, Gen.string),
     testSerde(Serde.int, Gen.int),
     testSerde(Serde.short, Gen.short),

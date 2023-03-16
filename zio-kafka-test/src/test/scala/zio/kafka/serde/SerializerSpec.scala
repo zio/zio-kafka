@@ -3,9 +3,10 @@ package zio.kafka.serde
 import org.apache.kafka.common.header.internals.RecordHeaders
 import zio.test.Assertion._
 import zio.test._
+import zio.ZAny
 
 object SerializerSpec extends ZIOSpecDefault {
-  override def spec = suite("Serializer")(
+  override def spec: Spec[ZAny with Any, Throwable] = suite("Serializer")(
     suite("asOption")(
       test("serialize None values to null") {
         assertZIO(stringSerializer.asOption.serialize("topic1", new RecordHeaders, None))(isNull)

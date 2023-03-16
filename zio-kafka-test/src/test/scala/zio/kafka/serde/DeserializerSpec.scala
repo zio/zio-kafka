@@ -4,9 +4,10 @@ import org.apache.kafka.common.header.internals.RecordHeaders
 import zio._
 import zio.test.Assertion._
 import zio.test._
+import zio.ZAny
 
 object DeserializerSpec extends ZIOSpecDefault {
-  override def spec = suite("Deserializer")(
+  override def spec: Spec[ZAny with Any, Throwable] = suite("Deserializer")(
     suite("asOption")(
       test("deserialize to None when value is null") {
         assertZIO(stringDeserializer.asOption.deserialize("topic1", new RecordHeaders, null))(isNone)
