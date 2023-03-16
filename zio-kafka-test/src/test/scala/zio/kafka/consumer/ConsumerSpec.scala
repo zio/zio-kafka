@@ -186,9 +186,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                          .take(5)
                                          .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
                                          .mapConcatZIO { committableRecords =>
-                                           val records = committableRecords.map(_.record)
-                                           val offsetBatch =
-                                             committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+                                           val records     = committableRecords.map(_.record)
+                                           val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
 
                                            offsetBatch.commit.as(records)
                                          }
@@ -205,9 +204,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                  .take(5)
                                  .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
                                  .mapConcatZIO { committableRecords =>
-                                   val records = committableRecords.map(_.record)
-                                   val offsetBatch =
-                                     committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+                                   val records     = committableRecords.map(_.record)
+                                   val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
 
                                    offsetBatch.commit.as(records)
                                  }
@@ -453,9 +451,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
                  .take(5)
                  .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
                  .mapConcatZIO { committableRecords =>
-                   val records = committableRecords.map(_.record)
-                   val offsetBatch =
-                     committableRecords.foldLeft(OffsetBatch.empty)(_ merge _.offset)
+                   val records     = committableRecords.map(_.record)
+                   val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
 
                    offsetBatch.commit.as(records)
                  }

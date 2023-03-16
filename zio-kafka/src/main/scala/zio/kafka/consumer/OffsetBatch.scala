@@ -7,6 +7,8 @@ import zio.{ RIO, Schedule, Task, ZIO }
 sealed trait OffsetBatch {
   def offsets: Map[TopicPartition, Long]
   def commit: Task[Unit]
+  def add(offset: Offset): OffsetBatch
+  @deprecated("Use add(Offset) instead", "2.1.4")
   def merge(offset: Offset): OffsetBatch
   def merge(offsets: OffsetBatch): OffsetBatch
   def consumerGroupMetadata: Option[ConsumerGroupMetadata]
@@ -22,7 +24,7 @@ sealed trait OffsetBatch {
 object OffsetBatch {
   val empty: OffsetBatch = EmptyOffsetBatch
 
-  def apply(offsets: Iterable[Offset]): OffsetBatch = offsets.foldLeft(empty)(_ merge _)
+  def apply(offsets: Iterable[Offset]): OffsetBatch = offsets.foldLeft(empty)(_ add _)
 }
 
 private final case class OffsetBatchImpl(
@@ -30,15 +32,17 @@ private final case class OffsetBatchImpl(
   commitHandle: Map[TopicPartition, Long] => Task[Unit],
   consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) extends OffsetBatch {
-  def commit: Task[Unit] = commitHandle(offsets)
+  override def commit: Task[Unit] = commitHandle(offsets)
 
-  def merge(offset: Offset): OffsetBatch =
+  override def add(offset: Offset): OffsetBatch =
     copy(
       offsets = offsets + (offset.topicPartition -> (offsets
         .getOrElse(offset.topicPartition, -1L) max offset.offset))
     )
 
-  def merge(otherOffsets: OffsetBatch): OffsetBatch = {
+  override def merge(offset: Offset): OffsetBatch = add(offset)
+
+  override def merge(otherOffsets: OffsetBatch): OffsetBatch = {
     val newOffsets = Map.newBuilder[TopicPartition, Long]
     newOffsets ++= offsets
     otherOffsets.offsets.foreach { case (tp, offset) =>
@@ -52,9 +56,10 @@ private final case class OffsetBatchImpl(
 }
 
 case object EmptyOffsetBatch extends OffsetBatch {
-  val offsets: Map[TopicPartition, Long]                   = Map.empty
-  val commit: Task[Unit]                                   = ZIO.unit
-  def merge(offset: Offset): OffsetBatch                   = offset.batch
-  def merge(offsets: OffsetBatch): OffsetBatch             = offsets
-  def consumerGroupMetadata: Option[ConsumerGroupMetadata] = None
+  override val offsets: Map[TopicPartition, Long]                   = Map.empty
+  override val commit: Task[Unit]                                   = ZIO.unit
+  override def add(offset: Offset): OffsetBatch                     = offset.batch
+  override def merge(offset: Offset): OffsetBatch                   = add(offset)
+  override def merge(offsets: OffsetBatch): OffsetBatch             = offsets
+  override def consumerGroupMetadata: Option[ConsumerGroupMetadata] = None
 }
