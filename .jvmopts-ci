@@ -1,0 +1,5 @@
+# See GHA machines spec: https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
+-Dfile.encoding=UTF8
+-Xms5G
+-Xmx5G
+-XX:+UseG1GC
