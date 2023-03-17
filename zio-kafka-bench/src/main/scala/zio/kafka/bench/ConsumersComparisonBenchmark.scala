@@ -25,10 +25,10 @@ import zio.kafka.bench.ConsumersComparisonBenchmark._
 @State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
-  val topic1       = "topic1"
-  val nrPartitions = 6
-  val nrMessages   = 1000000
-  val kvs          = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
+  val topic1                      = "topic1"
+  val nrPartitions                = 6
+  val nrMessages                  = 1000000
+  val kvs: List[(String, String)] = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
 
   val kafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
     ZLayer.scoped {
