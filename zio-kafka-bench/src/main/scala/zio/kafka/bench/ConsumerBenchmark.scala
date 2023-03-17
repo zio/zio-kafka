@@ -10,7 +10,7 @@ import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.stream.ZSink
-import zio.{ durationInt, Ref, Schedule, ZIO, ZLayer }
+import zio.{ durationInt, Ref, Schedule, ZIO, ZIOAppDefault, ZLayer }
 
 import java.util.concurrent.TimeUnit
 
@@ -21,6 +21,8 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   val nrPartitions                = 6
   val nrMessages                  = 50000
   val kvs: List[(String, String)] = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+
+  override protected def enableLogging: Boolean = true
 
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka with Producer] =
     ZLayer.make[Kafka with Producer](Kafka.embedded, producer).orDie
@@ -61,6 +63,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
     for {
       client <- randomThing("client")
       group  <- randomThing("group")
+      _      <- ZIO.logDebug("test")
 
       counter <- Ref.make(0)
       _ <- ZIO.logAnnotate("consumer", "1") {
@@ -84,4 +87,17 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
            }
     } yield ()
   }
+}
+
+object ConsumerBenchmark extends ZIOAppDefault {
+  override def run =
+    ZIO.acquireRelease {
+      ZIO.attempt {
+        val b = new ConsumerBenchmark
+        b.setup()
+        b
+      }
+    }(b => ZIO.succeed(b.tearDown())).flatMap { b =>
+      ZIO.attempt(b.throughputWithCommits()).repeatN(100)
+    }
 }
