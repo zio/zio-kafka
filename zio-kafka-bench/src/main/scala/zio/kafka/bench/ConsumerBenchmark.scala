@@ -20,7 +20,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   val topic1       = "topic1"
   val nrPartitions = 6
   val nrMessages   = 50000
-  val kvs          = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
+  val kvs: List[(String, String)]          = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
 
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka with Producer] =
     ZLayer.make[Kafka with Producer](Kafka.embedded, producer).orDie
