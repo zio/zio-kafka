@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1679036478137,
+  "lastUpdate": 1679036901874,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -3880,6 +3880,50 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
             "value": 2117.85703236,
+            "unit": "ms/op",
+            "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "committer": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "id": "d1ca697e17fac3afedddd688235702c6ef69e601",
+          "message": "Add profiling in the CI",
+          "timestamp": "2023-03-15T17:12:22Z",
+          "url": "https://github.com/zio/zio-kafka/pull/696/commits/d1ca697e17fac3afedddd688235702c6ef69e601"
+        },
+        "date": 1679036900930,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 228.56525297838095,
+            "unit": "ms/op",
+            "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 326.3839002733333,
+            "unit": "ms/op",
+            "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.kafkaClients",
+            "value": 638.4842713699999,
+            "unit": "ms/op",
+            "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
+            "value": 2201.1161359000002,
             "unit": "ms/op",
             "extra": "iterations: 10\nforks: 5\nthreads: 1"
           }
