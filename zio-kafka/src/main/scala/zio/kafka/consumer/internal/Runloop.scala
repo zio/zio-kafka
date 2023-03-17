@@ -139,7 +139,7 @@ private[consumer] final class Runloop(
     } yield ()
 
   private def doCommit(cmd: Commit): UIO[Unit] = {
-    val offsets   = aggregateOffsets(cmd)
+    val offsets   = cmd.offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
     val cont      = (e: Exit[Throwable, Unit]) => cmd.cont.done(e).asInstanceOf[UIO[Unit]]
     val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
     val onFailure: Throwable => UIO[Unit] = {
@@ -163,22 +163,6 @@ private[consumer] final class Runloop(
       ZIO.attempt(c.commitAsync(offsets.asJava, callback))
     }
       .catchAll(onFailure)
-  }
-
-  // Returns the highest offset to commit per partition
-  private def aggregateOffsets(commit: Commit): Map[TopicPartition, OffsetAndMetadata] = {
-    val offsets = mutable.Map[TopicPartition, OffsetAndMetadata]()
-    offsets.sizeHint(commit.offsets.size)
-
-    commit.offsets.foreach { case (tp, offset) =>
-      val existing = offsets.get(tp).fold(-1L)(_.offset())
-
-      if (existing < offset) {
-        offsets += tp -> new OffsetAndMetadata(offset + 1)
-      }
-    }
-
-    offsets.toMap
   }
 
   /**
