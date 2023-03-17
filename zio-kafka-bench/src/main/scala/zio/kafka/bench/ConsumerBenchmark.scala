@@ -28,6 +28,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
     ZLayer.make[Kafka with Producer](Kafka.embedded, producer).orDie
 
   override def initialize: ZIO[Kafka with Producer, Throwable, Any] = for {
+    _ <- ZIO.succeed(EmbeddedKafka.deleteTopics(List(topic1))).ignore
     _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = nrPartitions))
     _ <- produceMany(topic1, kvs)
   } yield ()
@@ -79,6 +80,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                )
                .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
            }
+      _ <- counter.get.flatMap(cnt => ZIO.logInfo(s"CONSUMED ${cnt} messages"))
     } yield ()
   }
 }
