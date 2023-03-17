@@ -78,7 +78,7 @@ private[consumer] final class Runloop(
       .flatMap { cont =>
         commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
           cont.await.timeoutFailCause(Cause.die(new RuntimeException("Subscription change timed out")))(
-            10 * pollTimeout
+            pollTimeout.multipliedBy(10)
           )
       }
       .unlessZIO(isShutdown)
