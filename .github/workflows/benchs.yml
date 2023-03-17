@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - stabilize-benchmark
   pull_request:
     types: [ opened, reopened, synchronize ]
 
