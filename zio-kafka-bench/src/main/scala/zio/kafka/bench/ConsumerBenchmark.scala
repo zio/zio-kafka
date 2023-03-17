@@ -17,10 +17,10 @@ import java.util.concurrent.TimeUnit
 @State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
-  val topic1                      = "topic1"
-  val nrPartitions                = 6
-  val nrMessages                  = 50000
-  val kvs: List[(String, String)] = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
+  val topic1       = "topic1"
+  val nrPartitions = 6
+  val nrMessages   = 50000
+  val kvs          = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
 
   override protected def enableLogging: Boolean = true
 
@@ -36,9 +36,6 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   @BenchmarkMode(Array(Mode.AverageTime))
   def throughput(): Any = runZIO {
     for {
-      client <- randomThing("client")
-      group  <- randomThing("group")
-
       counter <- Ref.make(0)
       _ <- Consumer
              .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
@@ -48,8 +45,8 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
              .runDrain
              .provideSome[Kafka](
                consumer(
-                 client,
-                 Some(group),
+                 randomThing("client"),
+                 Some(randomThing("group")),
                  properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
                )
              )
@@ -61,10 +58,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   @BenchmarkMode(Array(Mode.AverageTime))
   def throughputWithCommits(): Any = runZIO {
     for {
-      client <- randomThing("client")
-      group  <- randomThing("group")
-      _      <- ZIO.logDebug("test")
-
+      _       <- ZIO.logDebug("Starting test")
       counter <- Ref.make(0)
       _ <- ZIO.logAnnotate("consumer", "1") {
              Consumer
@@ -78,8 +72,8 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                .runDrain
                .provideSome[Kafka](
                  consumer(
-                   client,
-                   Some(group),
+                   randomThing("client"),
+                   Some(randomThing("group")),
                    properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
                  )
                )

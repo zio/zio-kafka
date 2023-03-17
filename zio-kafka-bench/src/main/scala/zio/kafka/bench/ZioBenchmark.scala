@@ -1,6 +1,6 @@
 package zio.kafka.bench
 import org.openjdk.jmh.annotations.{ Setup, TearDown }
-import zio._
+import zio.{ Runtime, Unsafe, ZIO, ZLayer, _ }
 
 import java.util.UUID
 
@@ -59,7 +59,5 @@ trait ZioBenchmark[Environment] {
 }
 
 object ZioBenchmark {
-  def randomThing(prefix: String): Task[String] =
-    ZIO.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
-
+  def randomThing(prefix: String): String = s"$prefix-${UUID.randomUUID()}"
 }

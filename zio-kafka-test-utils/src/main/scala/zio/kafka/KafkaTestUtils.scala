@@ -70,6 +70,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
+    `max.poll.records`: Int = 1000,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
@@ -84,7 +85,7 @@ object KafkaTestUtils {
           ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "3000",
           ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG     -> "10000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "1000",
-          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> "1000",
+          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> s"${`max.poll.records`}",
           ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
         .withPerPartitionChunkPrefetch(16)
@@ -106,19 +107,24 @@ object KafkaTestUtils {
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     consumerSettings(
-      clientId,
-      Some(groupId),
-      clientInstanceId,
-      allowAutoCreateTopics,
-      offsetRetrieval,
-      restartStreamOnRebalancing,
-      properties
+      clientId = clientId,
+      groupId = Some(groupId),
+      clientInstanceId = clientInstanceId,
+      allowAutoCreateTopics = allowAutoCreateTopics,
+      offsetRetrieval = offsetRetrieval,
+      restartStreamOnRebalancing = restartStreamOnRebalancing,
+      properties = properties
     )
       .map(
         _.withProperties(
           ConsumerConfig.ISOLATION_LEVEL_CONFIG -> "read_committed"
         )
       )
+
+  def simpleConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
+    ZLayer.makeSome[ConsumerSettings, Consumer](
+      ZLayer.succeed(diagnostics) >>> Consumer.live
+    )
 
   def consumer(
     clientId: String,
@@ -132,13 +138,13 @@ object KafkaTestUtils {
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
       consumerSettings(
-        clientId,
-        groupId,
-        clientInstanceId,
-        allowAutoCreateTopics,
-        offsetRetrieval,
-        restartStreamOnRebalancing,
-        properties
+        clientId = clientId,
+        groupId = groupId,
+        clientInstanceId = clientInstanceId,
+        allowAutoCreateTopics = allowAutoCreateTopics,
+        offsetRetrieval = offsetRetrieval,
+        restartStreamOnRebalancing = restartStreamOnRebalancing,
+        properties = properties
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
@@ -155,13 +161,13 @@ object KafkaTestUtils {
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
       transactionalConsumerSettings(
-        groupId,
-        clientId,
-        clientInstanceId,
-        allowAutoCreateTopics,
-        offsetRetrieval,
-        restartStreamOnRebalancing,
-        properties
+        groupId = groupId,
+        clientId = clientId,
+        clientInstanceId = clientInstanceId,
+        allowAutoCreateTopics = allowAutoCreateTopics,
+        offsetRetrieval = offsetRetrieval,
+        restartStreamOnRebalancing = restartStreamOnRebalancing,
+        properties = properties
       ).map(_.withRebalanceListener(rebalanceListener))
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 

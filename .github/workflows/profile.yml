@@ -1,0 +1,77 @@
+# Copied from Flavio W. Brasil's work on Kyo: https://github.com/fwbrasil/kyo
+name: profile
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [ opened, reopened, synchronize ]
+
+permissions:
+  contents: write
+  deployments: write
+
+jobs:
+  benchmark:
+    name: Profile benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3.0.2
+        with:
+          fetch-depth: 0
+      - name: Setup Java
+        uses: actions/setup-java@v3.10.0
+        with:
+          distribution: temurin
+          java-version: 17
+          check-latest: true
+      - name: Use CI sbt jvmopts
+        shell: bash
+        run: |
+          mv .jvmopts .jvmopts_old
+          mv .jvmopts-ci .jvmopts
+          cat .jvmopts
+
+      - name: install async-profiler
+        run: |
+          ls -al
+          cd /home/runner
+          wget https://github.com/jvm-profiling-tools/async-profiler/releases/download/v2.9/async-profiler-2.9-linux-x64.tar.gz
+          tar -xvzf async-profiler-2.9-linux-x64.tar.gz
+          sudo mkdir -p /usr/java/packages/lib/
+          sudo cp async-profiler-2.9-linux-x64/build/libasyncProfiler.so /usr/java/packages/lib/
+          sudo sysctl kernel.perf_event_paranoid=1
+          sudo sysctl kernel.kptr_restrict=0
+
+      - name: run benchmarks
+        run: |
+          ls -al
+          cd /home/runner/work/zio-kafka/zio-kafka/
+          sbt "zioKafkaBench/Jmh/run -wi 10 -i 10 -r 1 -w 1 -t 1 -rf json -foe true -prof async:output=flamegraph"
+
+      - name: Rollback - Use CI sbt jvmopts
+        shell: bash
+        run: |
+          mv .jvmopts .jvmopts-ci
+          mv .jvmopts_old .jvmopts
+          cat .jvmopts
+
+      - name: Store flamegraphs
+        run: |
+          git config pull.rebase true 
+          export REV=$(git rev-parse --short HEAD)
+          ls -al zio-kafka-bench/
+          mv zio-kafka-bench/zio.kafka.bench.* /tmp
+          git clean -fdx
+          git checkout gh-pages
+          git pull
+          mkdir -p dev/profile/$REV
+          mv /tmp/zio.kafka.bench.* dev/profile/$REV
+          cd dev/profile
+          find . -maxdepth 1 -type d \( ! -name . \) -exec bash -c "cd '{}' && tree -H . -o index.html" \;
+          cd ../../
+          git config --global user.name "zio-kafka CI"
+          git config --global user.email "ziokafkaci@users.noreply.github.com"
+          git add .
+          git commit -m "flamegraphs for $REV"
+          git push
