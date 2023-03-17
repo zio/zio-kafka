@@ -17,15 +17,16 @@ import java.util.concurrent.TimeUnit
 @State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
-  val topic1       = "topic1"
-  val nrPartitions = 6
-  val nrMessages   = 50000
-  val kvs          = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
+  val topic1                      = "topic1"
+  val nrPartitions                = 6
+  val nrMessages                  = 50000
+  val kvs: List[(String, String)] = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
 
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka with Producer] =
     ZLayer.make[Kafka with Producer](Kafka.embedded, producer).orDie
 
   override def initialize: ZIO[Kafka with Producer, Throwable, Any] = for {
+    _ <- ZIO.succeed(EmbeddedKafka.deleteTopics(List(topic1))).ignore
     _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = nrPartitions))
     _ <- produceMany(topic1, kvs)
   } yield ()
@@ -33,18 +34,23 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   def throughput(): Any = runZIO {
-    Consumer
-      .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
-      .take(nrMessages.toLong)
-      .runDrain
-      .provideSome[Kafka](
-        consumer(
-          randomThing("client"),
-          Some(randomThing("group")),
-          properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
-        )
-      )
-      .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
+    for {
+      counter <- Ref.make(0)
+      _ <- Consumer
+             .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
+             .tap { _ =>
+               counter.updateAndGet(_ + 1).flatMap(count => Consumer.stopConsumption.when(count == nrMessages))
+             }
+             .runDrain
+             .provideSome[Kafka](
+               consumer(
+                 randomThing("client"),
+                 Some(randomThing("group")),
+                 properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
+               )
+             )
+             .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
+    } yield ()
   }
 
   @Benchmark
@@ -60,7 +66,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                .tap(batch => counter.update(_ + batch.size))
                .map(OffsetBatch.apply)
                .mapZIO(_.commit)
-               .takeUntilZIO(_ => counter.get.map(_ == nrMessages))
+               .takeUntilZIO(_ => counter.get.map(_ >= nrMessages))
                .runDrain
                .provideSome[Kafka](
                  consumer(
