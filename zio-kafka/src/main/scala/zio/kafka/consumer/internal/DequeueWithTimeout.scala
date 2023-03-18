@@ -13,12 +13,12 @@ class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Not
   def takeBetweenWithTimeout(min: Int, max: Int, timeout: Duration): UIO[Chunk[A]] =
     finishPreviousDequeueOrExecuteNew(q.takeBetween(min, max), timeout)
 
-  private def finishPreviousDequeueOrExecuteNew(f: UIO[Chunk[A]], timeout: Duration): UIO[Chunk[A]] =
+  private def finishPreviousDequeueOrExecuteNew(newDequeue: UIO[Chunk[A]], timeout: Duration): UIO[Chunk[A]] =
     for {
       previousAwait <- previousDequeue.get
       awaitAction = previousAwait match {
-                      case Some(fib) => fib.join.flatMap(as => q.takeAll.map(as ++ _))
-                      case None      => f
+                      case Some(fib) => fib.join
+                      case None      => newDequeue
                     }
       result <- awaitAction
                   .raceWith[Any, Nothing, Nothing, Chunk[A], Chunk[A]](

@@ -563,8 +563,16 @@ private[consumer] final class Runloop(
       dequeueWithTimeout: DequeueWithTimeout[Command]
     ): Task[State] =
       for {
-        commands <- if (wait) dequeueWithTimeout.takeBetweenWithTimeout(1, commandQueueSize, pollFrequency)
-                    else dequeueWithTimeout.takeAllWithTimeout(pollFrequency)
+        commands <-
+          if (wait)
+            dequeueWithTimeout
+              .takeBetweenWithTimeout(1, commandQueueSize, pollFrequency)
+              .flatMap(as =>
+                // Optimization: if the takeBetween from the previous iteration timed out and here we have resumed it,
+                // there may be additional new elements in the queue, so add an additional takeAll, which will return immediately
+                if (as.nonEmpty) dequeueWithTimeout.takeAllWithTimeout(pollFrequency).map(as ++ _) else ZIO.succeed(as)
+              )
+          else dequeueWithTimeout.takeAllWithTimeout(pollFrequency)
 
         isShutdown <- isShutdown
         handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
