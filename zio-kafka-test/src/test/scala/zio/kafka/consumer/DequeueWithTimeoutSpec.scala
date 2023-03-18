@@ -39,6 +39,17 @@ object DequeueWithTimeoutSpec extends ZIOSpecDefault {
         _       <- q.offerAll(List(1, 2, 3, 4))
         result2 <- d.takeAll(1.second)
       } yield assertTrue(result1.isEmpty && result2 == Chunk(1, 2, 3, 4))
+    },
+    test("handles interruption") {
+      for {
+        q       <- Queue.unbounded[Int]
+        d       <- DequeueWithTimeout.make(q)
+        fib     <- d.takeBetween(1, 10, 2.second).fork
+        _       <- TestClock.adjust(1.second)
+        _       <- fib.interrupt
+        _       <- q.offerAll(List(1, 2, 3, 4))
+        result2 <- d.takeAll(1.second)
+      } yield assertTrue(result2 == Chunk(1, 2, 3, 4))
     }
   ) @@ TestAspect.nonFlaky(10)
 

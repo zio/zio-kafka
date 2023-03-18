@@ -31,17 +31,19 @@ class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Not
                       case Some(fib) => finishPrevious(fib.join)
                       case None      => newDequeue
                     }
-      result <- awaitAction
-                  .raceWith[Any, Nothing, Nothing, Chunk[A], Chunk[A]](
-                    ZIO.sleep(timeout).as(Chunk.empty[A])
-                  )(
-                    leftDone = { case (leftExit, sleepFiber) =>
-                      previousDequeue.set(None) *> sleepFiber.interrupt *> ZIO.done(leftExit)
-                    },
-                    rightDone = { case (rightExit, actionFiber) =>
-                      previousDequeue.set(Some(actionFiber)) *> ZIO.done(rightExit)
-                    }
-                  )
+      result <- ZIO.interruptibleMask { restore =>
+                  restore(awaitAction)
+                    .raceWith[Any, Nothing, Nothing, Chunk[A], Chunk[A]](
+                      restore(ZIO.sleep(timeout).as(Chunk.empty[A]))
+                    )(
+                      leftDone = { case (leftExit, sleepFiber) =>
+                        previousDequeue.set(None) *> sleepFiber.interrupt *> ZIO.done(leftExit)
+                      },
+                      rightDone = { case (rightExit, actionFiber) =>
+                        previousDequeue.set(Some(actionFiber)) *> ZIO.done(rightExit)
+                      }
+                    )
+                }
     } yield result
 }
 
