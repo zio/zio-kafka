@@ -563,19 +563,25 @@ private[consumer] final class Runloop(
       previousDequeue: Ref[Option[Fiber[Nothing, Chunk[Command]]]]
     ): Task[State] =
       for {
+        previousAwait <- previousDequeue.get
+        awaitAction = previousAwait match {
+                        case Some(fib) => fib.join.flatMap(commands1 => commandQueue.takeAll.map(commands1 ++ _))
+                        case None if wait =>
+                          commandQueue.takeBetween(1, commandQueueSize)
+                        case None =>
+                          // Gather available commands or return immediately if nothing in the queue
+                          commandQueue.takeAll
+                      }
         commands <-
-          if (wait) {
-            commandQueue
-              .takeBetween(1, commandQueueSize)
-              .raceWith(ZIO.sleep(pollFrequency).as(Chunk.empty[Command]))(
-                leftDone = { case (leftExit, sleepFiber) =>
-                  sleepFiber.interrupt *> ZIO.done(leftExit)
-                },
-                rightDone = { case (rightExit, takeFiber) =>
-                  previousDequeue.set(Some(takeFiber)) *> ZIO.done(rightExit)
-                }
-              )
-          } else commandQueue.takeAll // Gather available commands or return immediately if nothing in the queue
+          awaitAction
+            .raceWith(ZIO.sleep(pollFrequency).as(Chunk.empty[Command]))(
+              leftDone = { case (leftExit, sleepFiber) =>
+                sleepFiber.interrupt *> ZIO.done(leftExit)
+              },
+              rightDone = { case (rightExit, takeFiber) =>
+                previousDequeue.set(Some(takeFiber)) *> ZIO.done(rightExit)
+              }
+            )
 
         isShutdown <- isShutdown
         handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
