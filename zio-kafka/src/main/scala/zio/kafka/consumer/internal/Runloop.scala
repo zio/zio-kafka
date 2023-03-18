@@ -14,6 +14,7 @@ import zio.stream._
 
 import java.util
 import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
@@ -224,7 +225,7 @@ private[consumer] final class Runloop(
     val buf = mutable.Map.empty[TopicPartition, Chunk[ByteArrayConsumerRecord]]
     buf ++= bufferedRecords.recs
 
-    var fulfillAction: UIO[_] = ZIO.unit
+    val fulfillActionsBuffer = ListBuffer.empty[UIO[Boolean]]
 
     pendingRequests.foreach { req =>
       val bufferedChunk = buf.getOrElse(req.tp, Chunk.empty)
@@ -243,16 +244,21 @@ private[consumer] final class Runloop(
             )
           }
 
-        fulfillAction = fulfillAction <* ZIO
-          .logTrace(s"Fulfilling ${bufferedChunk.size} buffered records")
-          .when(bufferedChunk.nonEmpty) *> req.succeed(concatenatedChunk)
+        fulfillActionsBuffer +=
+          (
+            // written this way to have as few ZIOs as possible to evaluate
+            if (bufferedChunk.isEmpty) req.succeed(concatenatedChunk)
+            else ZIO.logTrace(s"Fulfilling ${bufferedChunk.size} buffered records") *> req.succeed(concatenatedChunk)
+          )
+
         buf -= req.tp
       }
     }
-    val unfulfilledRequests = acc.result()
-    val newBufferedRecords  = BufferedRecords.fromMutableMap(buf)
+    val unfulfilledRequests: Chunk[Request] = acc.result()
+    val newBufferedRecords: BufferedRecords = BufferedRecords.fromMutableMap(buf)
+    val fulfillActions: List[UIO[Boolean]]  = fulfillActionsBuffer.result()
 
-    fulfillAction.as(Runloop.FulfillResult(unfulfilledRequests, newBufferedRecords))
+    ZIO.collectAllDiscard(fulfillActions).as(Runloop.FulfillResult(unfulfilledRequests, newBufferedRecords))
   }
 
   private def getConsumerGroupMetadataIfAny: Option[ConsumerGroupMetadata] =
