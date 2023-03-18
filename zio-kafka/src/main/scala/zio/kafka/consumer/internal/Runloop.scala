@@ -560,8 +560,18 @@ private[consumer] final class Runloop(
     def processCommands(state: State, wait: Boolean): Task[State] =
       for {
         commands <-
-          if (wait) commandQueue.takeBetween(1, commandQueueSize).timeoutTo(Chunk.empty)(ZIO.identityFn)(pollFrequency)
-          else commandQueue.takeAll // Gather available commands or return immediately if nothing in the queue
+          if (wait) {
+            commandQueue
+              .takeBetween(1, commandQueueSize)
+              .raceWith(ZIO.sleep(pollFrequency).as(Chunk.empty[Command]))(
+                leftDone = { case (leftExit, sleepFiber) =>
+                  sleepFiber.interrupt *> ZIO.done(leftExit)
+                },
+                rightDone = { case (rightExit, takeFiber) =>
+                  takeFiber.interrupt *> ZIO.done(rightExit)
+                }
+              )
+          } else commandQueue.takeAll // Gather available commands or return immediately if nothing in the queue
 
         isShutdown <- isShutdown
         handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
