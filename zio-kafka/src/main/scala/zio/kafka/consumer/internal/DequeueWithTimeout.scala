@@ -6,18 +6,29 @@ import zio.{ Chunk, Dequeue, Duration, Fiber, Ref, UIO, ZIO }
  * interrupted dequeue action and finishing it before starting a new dequeue
  */
 class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Nothing, Chunk[A]]]]) {
-  // Takes all available commands without blocking, unless there was a previously interrupted dequeue
+
+  /**
+   * Takes all current commands in the queue without blocking, unless there was a previously interrupted dequeue, in
+   * which case it awaits it up to the timeout and then adds all currently available commands
+   */
   def takeAllWithTimeout(timeout: Duration): UIO[Chunk[A]] =
-    finishPreviousDequeueOrExecuteNew(q.takeAll, timeout)
+    finishPreviousDequeueOrExecuteNew(_.flatMap(as => q.takeAll.map(as ++ _)), q.takeAll, timeout)
 
+  /**
+   * Takes between min and max elements from the queue within the timeout
+   */
   def takeBetweenWithTimeout(min: Int, max: Int, timeout: Duration): UIO[Chunk[A]] =
-    finishPreviousDequeueOrExecuteNew(q.takeBetween(min, max), timeout)
+    finishPreviousDequeueOrExecuteNew(ZIO.identityFn, q.takeBetween(min, max), timeout)
 
-  private def finishPreviousDequeueOrExecuteNew(newDequeue: UIO[Chunk[A]], timeout: Duration): UIO[Chunk[A]] =
+  private def finishPreviousDequeueOrExecuteNew(
+    finishPrevious: UIO[Chunk[A]] => UIO[Chunk[A]],
+    newDequeue: UIO[Chunk[A]],
+    timeout: Duration
+  ): UIO[Chunk[A]] =
     for {
       previousAwait <- previousDequeue.get
       awaitAction = previousAwait match {
-                      case Some(fib) => fib.join
+                      case Some(fib) => finishPrevious(fib.join)
                       case None      => newDequeue
                     }
       result <- awaitAction
