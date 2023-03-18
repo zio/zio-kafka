@@ -606,8 +606,8 @@ private[consumer] final class Runloop(
       .flatMap { dequeueWithTimeout =>
         loop(State.initial, wait = true, dequeueWithTimeout)
       }
-      .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
-      .onError(cause => partitions.offer(Take.failCause(cause)))
+      .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause).unless(cause.isInterruptedOnly))
+      .onError(cause => partitions.offer(Take.failCause(cause)).unless(cause.isInterruptedOnly))
       .forkScoped
   }
 }
