@@ -436,7 +436,7 @@ private[consumer] final class Runloop(
               ZIO.logTrace(s"Offering partition assignment ${pollResult.newlyAssigned}") *>
                 partitions.offer(Take.chunk(Chunk.fromIterable(newStreams.map(_.tpStream))))
             }
-      updatedPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
+      updatedPendingCommits    <- ZIO.filter(state.pendingCommits)(_.isPending)
       completedTopicPartitions <- ZIO.filter(pollResult.assignedStreams.values)(_.isCompleted).map(_.map(_.tp))
       updatedAssignedStreams =
         pollResult.assignedStreams -- completedTopicPartitions ++
