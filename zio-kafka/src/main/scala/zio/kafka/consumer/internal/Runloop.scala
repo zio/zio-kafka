@@ -565,22 +565,24 @@ private[consumer] final class Runloop(
       for {
         previousAwait <- previousDequeue.get
         awaitAction = previousAwait match {
-                        case Some(fib) => fib.join.flatMap(commands1 => commandQueue.takeAll.map(commands1 ++ _))
                         case None if wait =>
+                          // Wait for at least one command
                           commandQueue.takeBetween(1, commandQueueSize)
                         case None =>
                           // Gather available commands or return immediately if nothing in the queue
                           commandQueue.takeAll
+                        case Some(fib) =>
+                          // Continue the previous dequeue command and add new available commands (takeAll)
+                          fib.join.flatMap(commands1 => commandQueue.takeAll.map(commands1 ++ _))
                       }
+        // Wait for a timeout. This is really awaitAction.timeoutTo(Chunk.empty)(identity)(pollFrequency)
+        // but we avoid a race condition between commandQueue.take and the ZIO.sleep, which would result in losing
+        // the dequeued commands. We store the fiber doing the await and join it in the next iteration.
         commands <-
           awaitAction
             .raceWith(ZIO.sleep(pollFrequency).as(Chunk.empty[Command]))(
-              leftDone = { case (leftExit, sleepFiber) =>
-                sleepFiber.interrupt *> ZIO.done(leftExit)
-              },
-              rightDone = { case (rightExit, takeFiber) =>
-                previousDequeue.set(Some(takeFiber)) *> ZIO.done(rightExit)
-              }
+              leftDone = { case (leftExit, sleepFiber) => sleepFiber.interrupt *> ZIO.done(leftExit) },
+              rightDone = { case (rightExit, takeFiber) => previousDequeue.set(Some(takeFiber)) *> ZIO.done(rightExit) }
             )
 
         isShutdown <- isShutdown
