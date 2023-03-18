@@ -557,7 +557,11 @@ private[consumer] final class Runloop(
     )
 
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] = {
-    def processCommands(state: State, wait: Boolean): Task[State] =
+    def processCommands(
+      state: State,
+      wait: Boolean,
+      previousDequeue: Ref[Option[Fiber[Nothing, Chunk[Command]]]]
+    ): Task[State] =
       for {
         commands <-
           if (wait) {
@@ -568,7 +572,7 @@ private[consumer] final class Runloop(
                   sleepFiber.interrupt *> ZIO.done(leftExit)
                 },
                 rightDone = { case (rightExit, takeFiber) =>
-                  takeFiber.interrupt *> ZIO.done(rightExit)
+                  previousDequeue.set(Some(takeFiber)) *> ZIO.done(rightExit)
                 }
               )
           } else commandQueue.takeAll // Gather available commands or return immediately if nothing in the queue
@@ -590,13 +594,21 @@ private[consumer] final class Runloop(
       if (shouldPoll) logPollStart *> handlePoll(state).map(_ -> false) else ZIO.succeed(state -> true)
     }
 
-    def loop(state: State, wait: Boolean): ZIO[Any, Throwable, Nothing] =
-      processCommands(state, wait)
+    def loop(
+      state: State,
+      wait: Boolean,
+      previousDequeue: Ref[Option[Fiber[Nothing, Chunk[Command]]]]
+    ): ZIO[Any, Throwable, Nothing] =
+      processCommands(state, wait, previousDequeue)
         .flatMap(doPollIfPendingActions)
         .timeoutFail(RunloopTimeout)(runloopTimeout)
-        .flatMap { case (state, wait) => loop(state, wait) }
+        .flatMap { case (state, wait) => loop(state, wait, previousDequeue) }
 
-    loop(State.initial, wait = true)
+    Ref
+      .make(Option.empty[Fiber[Nothing, Chunk[Command]]])
+      .flatMap { ref =>
+        loop(State.initial, wait = true, ref)
+      }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitions.offer(Take.failCause(cause)))
       .forkScoped
