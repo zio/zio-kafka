@@ -6,7 +6,6 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.openjdk.jmh.annotations._
 import zio.kafka.KafkaTestUtils.{ consumerSettings, produceMany, producer, simpleConsumer }
 import zio.kafka.bench.ZioBenchmark.randomThing
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
