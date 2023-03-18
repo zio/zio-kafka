@@ -10,7 +10,8 @@ import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.{ ULayer, ZIO, ZLayer }
+import zio.stream.ZStream
+import zio.{ Chunk, ULayer, ZIO, ZLayer }
 
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
@@ -89,6 +90,25 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
           }
         }
       }
+    }
+
+  @Benchmark
+  @BenchmarkMode(Array(Mode.AverageTime))
+  def kafkaClientsWithPrefetch(): Any =
+    runZIO {
+      for {
+        settings <- ZIO.service[ConsumerSettings]
+        consumer <- ZIO.service[LowLevelKafka]
+        _        <- ZIO.attemptBlocking(consumer.subscribe(java.util.Arrays.asList(topic1)))
+        _ <- ZStream
+               .repeatZIO(ZIO.attemptBlocking(consumer.poll(settings.pollTimeout)))
+               .map(records => Chunk.fromIterable(records.asScala))
+               .bufferChunks(if (settings.perPartitionChunkPrefetch > 1) settings.perPartitionChunkPrefetch else 16)
+               .flattenChunks
+               .take(nrMessages.toLong)
+               .runDrain
+        _ <- ZIO.attemptBlocking(consumer.unsubscribe())
+      } yield ()
     }
 
   @Benchmark
