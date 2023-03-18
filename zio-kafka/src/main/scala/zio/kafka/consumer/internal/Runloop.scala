@@ -36,37 +36,16 @@ private[consumer] final class Runloop(
 ) {
   private val isShutdown = shutdownRef.get
 
-  def newPartitionStream(
-    tp: TopicPartition
-  ): UIO[(TopicPartition, PartitionStreamControl, ZStream[Any, Throwable, ByteArrayCommittableRecord])] =
-    for {
-      _                   <- ZIO.logTrace(s"Creating partition stream for ${tp.toString}")
-      interruptionPromise <- Promise.make[Throwable, Unit]
-      drainQueue          <- Queue.unbounded[Take[Nothing, ByteArrayCommittableRecord]]
-      stream =
-        ZStream.logAnnotate(LogAnnotation("topic", tp.topic()), LogAnnotation("partition", tp.partition().toString)) *>
-          ZStream.finalizer(ZIO.logDebug(s"Partition stream for ${tp.toString} has ended")) *>
-          ZStream.repeatZIOChunkOption {
-            for {
-              request <- Promise.make[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
-              _       <- commandQueue.offer(Request(tp, request)).unit
-              _       <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
-              result  <- request.await
-            } yield result
-          }.interruptWhen(interruptionPromise)
-            .concat(
-              ZStream
-                .fromQueue(drainQueue)
-                .flattenTake
-            )
-    } yield (tp, PartitionStreamControl(interruptionPromise, drainQueue), stream)
+  private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
+    PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics)
 
   def gracefulShutdown: UIO[Unit] =
     for {
       wasShutdown <- shutdownRef.getAndSet(true)
       state       <- currentState.get
       _           <- partitions.offer(Take.end).when(!wasShutdown)
-      _           <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.finishWith(Chunk.empty) }
+      _           <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.end() }
+      _           <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.awaitCompleted().ignore }
     } yield ()
 
   def changeSubscription(
@@ -186,7 +165,7 @@ private[consumer] final class Runloop(
         val remaining = bufferedRecords.recs.getOrElse(tp, Chunk.empty)
 
         ZIO.logDebug(s"Revoking topic-partition ${tp} with ${remaining.size} remaining records") *>
-          control.finishWith(
+          control.endWith(
             remaining.map(
               CommittableRecord(_, commit, getConsumerGroupMetadataIfAny)
             )
@@ -200,12 +179,7 @@ private[consumer] final class Runloop(
     val unfulfilledRequests = acc.result()
     val newBufferedRecords  = BufferedRecords.fromMutableMap(buf)
 
-    val endRevokedRequests = ZIO.foreachDiscard(requests.filter(req => isRevoked(req.tp))) { req =>
-      ZIO.logTrace(s"Ending request for TP ${req.tp}") *> req.end.unit
-    }
-
-    endRevokedRequests *>
-      revokeAction *>
+    revokeAction *>
       ZIO.succeed(Runloop.RevokeResult(unfulfilledRequests, newBufferedRecords, assignedStreams))
   }
 
@@ -446,27 +420,20 @@ private[consumer] final class Runloop(
         }
       newAssignedStreams <-
         if (pollResult.newlyAssigned.isEmpty)
-          ZIO.succeed(Set.empty[(TopicPartition, PartitionStreamControl)])
+          ZIO.succeed(Seq.empty[PartitionStreamControl])
         else
           ZIO
             .foreach(pollResult.newlyAssigned)(newPartitionStream)
             .tap { newStreams =>
               ZIO.logTrace(s"Offering partition assignment ${pollResult.newlyAssigned}") *>
-                partitions.offer(
-                  Take.chunk(
-                    Chunk.fromIterable(newStreams.map { case (tp, _, stream) => tp -> stream })
-                  )
-                )
+                partitions.offer(Take.chunk(Chunk.fromIterable(newStreams.map(_.tpStream))))
             }
-            .map(_.map { case (tp, control, _) =>
-              tp -> control
-            })
       newPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
     } yield State(
       pendingRequests = pollResult.unfulfilledRequests,
       pendingCommits = newPendingCommits,
       bufferedRecords = pollResult.bufferedRecords,
-      assignedStreams = pollResult.assignedStreams ++ newAssignedStreams,
+      assignedStreams = pollResult.assignedStreams ++ newAssignedStreams.map(control => control.tp -> control),
       subscription = state.subscription
     )
 
@@ -478,7 +445,7 @@ private[consumer] final class Runloop(
    */
   private def handleShutdown(state: State, cmd: Command): Task[State] =
     cmd match {
-      case req: Request                  => req.end.as(state)
+      case _: Request                    => /* Ignore requests during shutdown. */ ZIO.succeed(state)
       case r: Command.ChangeSubscription => r.succeed.as(state)
       case cmd: Command.Commit           => doCommit(cmd).as(state.addCommit(cmd))
     }
@@ -489,7 +456,7 @@ private[consumer] final class Runloop(
         if (state.isSubscribed) {
           ZIO.succeed(state.addRequest(req))
         } else {
-          req.end.as(state)
+          ZIO.succeed(state)
         }
       case cmd @ Command.Commit(_, _) =>
         doCommit(cmd).as(state.addCommit(cmd))
@@ -532,13 +499,7 @@ private[consumer] final class Runloop(
             case Subscription.Manual(topicPartitions) =>
               ZIO.attempt(c.assign(topicPartitions.asJava)) *>
                 ZIO.foreach(topicPartitions)(newPartitionStream).flatMap { partitionStreams =>
-                  partitions.offer(
-                    Take.chunk(
-                      Chunk.fromIterable(partitionStreams.map { case (tp, _, stream) =>
-                        tp -> stream
-                      })
-                    )
-                  )
+                  partitions.offer(Take.chunk(Chunk.fromIterable(partitionStreams.map(_.tpStream))))
                 } *> {
                   offsetRetrieval match {
                     case OffsetRetrieval.Manual(getOffsets) =>
@@ -632,13 +593,12 @@ private[consumer] object Runloop {
       @inline def isDone: UIO[Boolean]    = cont.isDone
       @inline def isPending: UIO[Boolean] = isDone.negate
     }
+
     final case class Request(
       tp: TopicPartition,
-      private val cont: Promise[Option[Throwable], Chunk[ByteArrayCommittableRecord]]
+      private val dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]]
     ) extends Command {
-      @inline def succeed(data: Chunk[ByteArrayCommittableRecord]): UIO[Boolean] = cont.succeed(data)
-      @inline def end: UIO[Boolean]                                              = cont.fail(None)
-      @inline def fail(throwable: Throwable): UIO[Boolean]                       = cont.fail(Some(throwable))
+      @inline def succeed(data: Chunk[ByteArrayCommittableRecord]): UIO[Boolean] = dataQueue.offer(Take.chunk(data))
     }
 
     final case class ChangeSubscription(
