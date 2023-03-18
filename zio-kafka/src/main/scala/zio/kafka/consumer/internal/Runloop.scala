@@ -493,27 +493,30 @@ private[consumer] final class Runloop(
         }
       case cmd @ Command.Commit(_, _) =>
         doCommit(cmd).as(state.addCommit(cmd))
-      case cmd @ Command.ChangeSubscription(_, _, _) =>
-        handleChangeSubscription(state, cmd).flatMap { state =>
-          if (state.isSubscribed) {
-            ZIO.succeed(state)
-          } else {
-            // End pending requests
-            endRevoked(state.pendingRequests, state.bufferedRecords, state.assignedStreams, _ => true).as(
-              state.copy(
-                pendingRequests = Chunk.empty,
-                assignedStreams = Map.empty,
-                bufferedRecords = BufferedRecords.empty
+      case cmd @ Command.ChangeSubscription(subscription, _, _) =>
+        handleChangeSubscription(cmd)
+          .as(state.copy(subscription = subscription))
+          .flatMap { state =>
+            if (state.isSubscribed) {
+              ZIO.succeed(state)
+            } else {
+              // End pending requests
+              endRevoked(state.pendingRequests, state.bufferedRecords, state.assignedStreams, _ => true).as(
+                state.copy(
+                  pendingRequests = Chunk.empty,
+                  assignedStreams = Map.empty,
+                  bufferedRecords = BufferedRecords.empty
+                )
               )
-            )
+            }
           }
-        }
+          .tapBoth(e => cmd.fail(e), _ => cmd.succeed)
+          .uninterruptible
     }
 
   private def handleChangeSubscription(
-    state: State,
     command: Command.ChangeSubscription
-  ): Task[State] =
+  ): Task[Any] =
     consumer.withConsumerM { c =>
       command.subscription match {
         case None =>
@@ -548,16 +551,15 @@ private[consumer] final class Runloop(
                     case OffsetRetrieval.Auto(_) => ZIO.unit
                   }
                 }
-
           }
       }
-    }.foldZIO(
-      e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> command.fail(e).as(state),
-      _ => command.succeed.as(state.copy(subscription = command.subscription))
-    )
+    }
 
-  def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] = {
-    def processCommands(state: State, wait: Boolean): Task[State] =
+  def run(stop: Ref[Boolean]): ZIO[Scope, Throwable, Any] = {
+    def processCommands(
+      state: State,
+      wait: Boolean
+    ): Task[State] =
       for {
         commands <-
           if (wait) commandQueue.takeBetween(1, commandQueueSize).timeoutTo(Chunk.empty)(ZIO.identityFn)(pollFrequency)
@@ -577,19 +579,22 @@ private[consumer] final class Runloop(
 
       val shouldPoll =
         state.isSubscribed && (state.pendingRequests.nonEmpty || state.pendingCommits.nonEmpty || state.assignedStreams.isEmpty)
+
       if (shouldPoll) logPollStart *> handlePoll(state).map(_ -> false) else ZIO.succeed(state -> true)
     }
 
-    def loop(state: State, wait: Boolean): ZIO[Any, Throwable, Nothing] =
+    def loop(
+      state: State,
+      wait: Boolean
+    ): ZIO[Any, Throwable, Any] =
       processCommands(state, wait)
         .flatMap(doPollIfPendingActions)
         .timeoutFail(RunloopTimeout)(runloopTimeout)
-        .flatMap { case (state, wait) => loop(state, wait) }
+        .flatMap { case (state, wait) => loop(state, wait).unlessZIO(stop.get) }
 
     loop(State.initial, wait = true)
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitions.offer(Take.failCause(cause)))
-      .forkScoped
   }
 }
 
@@ -718,8 +723,10 @@ private[consumer] object Runloop {
                   restartStreamsOnRebalancing,
                   currentStateRef
                 )
-      _ <- ZIO.addFinalizer(ZIO.logDebug("Shut down Runloop"))
-      _ <- runloop.run
+      _    <- ZIO.logDebug("Starting Runloop").withFinalizer(_ => ZIO.logDebug("Shut down Runloop"))
+      stop <- Ref.make(false)
+      fib  <- runloop.run(stop).fork
+      _    <- ZIO.addFinalizer(ZIO.logTrace("Shutting down Runloop") *> stop.set(true) *> fib.join.orDie)
     } yield runloop
 }
 
