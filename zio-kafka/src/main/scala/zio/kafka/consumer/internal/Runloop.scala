@@ -566,13 +566,13 @@ private[consumer] final class Runloop(
         commands <-
           if (wait)
             dequeueWithTimeout
-              .takeBetweenWithTimeout(1, commandQueueSize, pollFrequency)
+              .takeBetween(1, commandQueueSize, pollFrequency)
               .flatMap(as =>
                 // Optimization: if the takeBetween from the previous iteration timed out and here we have resumed it,
                 // there may be additional new elements in the queue, so add an additional takeAll, which will return immediately
-                if (as.nonEmpty) dequeueWithTimeout.takeAllWithTimeout(pollFrequency).map(as ++ _) else ZIO.succeed(as)
+                if (as.nonEmpty) dequeueWithTimeout.takeAll(pollFrequency).map(as ++ _) else ZIO.succeed(as)
               )
-          else dequeueWithTimeout.takeAllWithTimeout(pollFrequency)
+          else dequeueWithTimeout.takeAll(pollFrequency)
 
         isShutdown <- isShutdown
         handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
@@ -602,7 +602,7 @@ private[consumer] final class Runloop(
         .flatMap { case (state, wait) => loop(state, wait, dequeueWithTimeout) }
 
     DequeueWithTimeout
-      .make[Command](commandQueue)
+      .make(commandQueue)
       .flatMap { dequeueWithTimeout =>
         loop(State.initial, wait = true, dequeueWithTimeout)
       }

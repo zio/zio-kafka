@@ -11,13 +11,13 @@ class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Not
    * Takes all current commands in the queue without blocking, unless there was a previously interrupted dequeue, in
    * which case it awaits it up to the timeout and then adds all currently available commands
    */
-  def takeAllWithTimeout(timeout: Duration): UIO[Chunk[A]] =
+  def takeAll(timeout: Duration): UIO[Chunk[A]] =
     finishPreviousDequeueOrExecuteNew(_.flatMap(as => q.takeAll.map(as ++ _)), q.takeAll, timeout)
 
   /**
    * Takes between min and max elements from the queue within the timeout
    */
-  def takeBetweenWithTimeout(min: Int, max: Int, timeout: Duration): UIO[Chunk[A]] =
+  def takeBetween(min: Int, max: Int, timeout: Duration): UIO[Chunk[A]] =
     finishPreviousDequeueOrExecuteNew(ZIO.identityFn, q.takeBetween(min, max), timeout)
 
   private def finishPreviousDequeueOrExecuteNew(
@@ -36,7 +36,7 @@ class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Not
                     ZIO.sleep(timeout).as(Chunk.empty[A])
                   )(
                     leftDone = { case (leftExit, sleepFiber) =>
-                      sleepFiber.interrupt *> ZIO.done(leftExit)
+                      previousDequeue.set(None) *> sleepFiber.interrupt *> ZIO.done(leftExit)
                     },
                     rightDone = { case (rightExit, actionFiber) =>
                       previousDequeue.set(Some(actionFiber)) *> ZIO.done(rightExit)
