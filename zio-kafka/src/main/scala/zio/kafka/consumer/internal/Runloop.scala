@@ -560,35 +560,11 @@ private[consumer] final class Runloop(
     def processCommands(
       state: State,
       wait: Boolean,
-      previousDequeue: Ref[Option[Fiber[Nothing, Chunk[Command]]]]
+      dequeueWithTimeout: DequeueWithTimeout[Command]
     ): Task[State] =
       for {
-        previousAwait <- previousDequeue.get
-        awaitAction = previousAwait match {
-                        case None if wait =>
-                          // Wait for at least one command
-                          commandQueue.takeBetween(1, commandQueueSize)
-                        case None =>
-                          // Gather available commands or return immediately if nothing in the queue
-                          commandQueue.takeAll
-                        case Some(fib) =>
-                          // Continue the previous dequeue command and add new available commands (takeAll)
-                          fib.join.flatMap(commands => commandQueue.takeAll.map(commands ++ _))
-                      }
-        // Wait for a timeout. This is really awaitAction.timeoutTo(Chunk.empty)(identity)(pollFrequency)
-        // but we avoid a race condition between commandQueue.take and the ZIO.sleep, which would result in losing
-        // the dequeued commands. We store the fiber doing the await and join it in the next iteration.
-        commands <- awaitAction
-                      .raceWith[Any, Throwable, Throwable, Chunk[Command], Chunk[Command]](
-                        ZIO.sleep(pollFrequency).as(Chunk.empty[Command])
-                      )(
-                        leftDone = { case (leftExit, sleepFiber) =>
-                          sleepFiber.interrupt *> ZIO.done(leftExit)
-                        },
-                        rightDone = { case (rightExit, takeFiber) =>
-                          previousDequeue.set(Some(takeFiber)) *> ZIO.done(rightExit)
-                        }
-                      )
+        commands <- if (wait) dequeueWithTimeout.takeBetweenWithTimeout(1, commandQueueSize, pollFrequency)
+                    else dequeueWithTimeout.takeAllWithTimeout(pollFrequency)
 
         isShutdown <- isShutdown
         handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
@@ -610,17 +586,17 @@ private[consumer] final class Runloop(
     def loop(
       state: State,
       wait: Boolean,
-      previousDequeue: Ref[Option[Fiber[Nothing, Chunk[Command]]]]
+      dequeueWithTimeout: DequeueWithTimeout[Command]
     ): ZIO[Any, Throwable, Nothing] =
-      processCommands(state, wait, previousDequeue)
+      processCommands(state, wait, dequeueWithTimeout)
         .flatMap(doPollIfPendingActions)
         .timeoutFail(RunloopTimeout)(runloopTimeout)
-        .flatMap { case (state, wait) => loop(state, wait, previousDequeue) }
+        .flatMap { case (state, wait) => loop(state, wait, dequeueWithTimeout) }
 
-    Ref
-      .make(Option.empty[Fiber[Nothing, Chunk[Command]]])
-      .flatMap { ref =>
-        loop(State.initial, wait = true, ref)
+    DequeueWithTimeout
+      .make[Command](commandQueue)
+      .flatMap { dequeueWithTimeout =>
+        loop(State.initial, wait = true, dequeueWithTimeout)
       }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitions.offer(Take.failCause(cause)))
