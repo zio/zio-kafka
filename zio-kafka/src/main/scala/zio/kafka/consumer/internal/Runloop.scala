@@ -39,13 +39,21 @@ private[consumer] final class Runloop(
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics)
 
+  /** Initiate a graceful shutdown. */
   def gracefulShutdown: UIO[Unit] =
     for {
       wasShutdown <- shutdownRef.getAndSet(true)
       state       <- currentState.get
       _           <- partitions.offer(Take.end).when(!wasShutdown)
-      _           <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.end() }
-      _           <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.awaitCompleted().ignore }
+      _           <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.end() }.when(!wasShutdown)
+    } yield ()
+
+  /** Wait until a graceful shutdown was completed. */
+  def awaitShutdown: UIO[Unit] =
+    for {
+      _     <- shutdownRef.get.filterOrDie(identity)(new IllegalStateException("Was not shutdown"))
+      state <- currentState.get
+      _     <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.awaitCompleted().ignore }
     } yield ()
 
   def changeSubscription(

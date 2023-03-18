@@ -274,7 +274,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           client <- randomClient
 
           keepProducing <- Ref.make(true)
-          _             <- (produceOne(topic, "key", "value") *> keepProducing.get).repeatWhile(b => b).fork
+          _             <- produceOne(topic, "key", "value").repeatWhileZIO(_ => keepProducing.get).fork
           _ <- Consumer
                  .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                  .zipWithIndex
