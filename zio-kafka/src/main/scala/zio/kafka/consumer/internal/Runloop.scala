@@ -606,11 +606,6 @@ private[consumer] final class Runloop(
         (if (shouldPoll) logPollStart *> handlePoll(state).map(_ -> false) else ZIO.succeed(state -> true))
     }
 
-//    ZStream
-//      .fromQueue(commandQueue)
-//      .aggregateAsync(ZSink.collectAll)
-//      .foldS
-
     def loop(
       state: State,
       wait: Boolean,

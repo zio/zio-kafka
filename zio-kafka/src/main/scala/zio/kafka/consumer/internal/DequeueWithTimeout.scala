@@ -28,8 +28,12 @@ class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Not
     for {
       previousAwait <- previousDequeue.get
       awaitAction = previousAwait match {
-                      case Some(fib) => finishPrevious(fib.join)
-                      case None      => newDequeue
+                      case Some(fib) =>
+                        ZIO.logTrace("Dequeue has previous") *>
+                          finishPrevious(fib.join)
+                      case None =>
+                        ZIO.logTrace("Dequeue has no previous") *>
+                          newDequeue
                     }
       result <- ZIO.interruptibleMask { restore =>
                   restore(awaitAction)
@@ -37,10 +41,12 @@ class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Not
                       restore(ZIO.sleep(timeout).as(Chunk.empty[A]))
                     )(
                       leftDone = { case (leftExit, sleepFiber) =>
-                        previousDequeue.set(None) *> sleepFiber.interrupt *> ZIO.done(leftExit)
+                        ZIO.logTrace("Left wins") *>
+                          previousDequeue.set(None) *> sleepFiber.interrupt *> ZIO.done(leftExit)
                       },
                       rightDone = { case (rightExit, actionFiber) =>
-                        previousDequeue.set(Some(actionFiber)) *> ZIO.done(rightExit)
+                        ZIO.logTrace("Right wins") *>
+                          previousDequeue.set(Some(actionFiber)) *> ZIO.done(rightExit)
                       }
                     )
                 }
