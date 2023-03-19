@@ -76,12 +76,15 @@ private[consumer] final class Runloop(
     Promise
       .make[Throwable, Unit]
       .flatMap { cont =>
+        ZIO.logDebug("In Runloop.changeSubscription: offering command")
         commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
+          ZIO.logDebug("In Runloop.changeSubscription: awaiting command") *>
           cont.await
             .tapErrorCause(e => ZIO.logInfo(s"Timeout!: ${e}, ${e.trace}............ ${e.prettyPrint}"))
       }
       .unlessZIO(isShutdown)
-      .unit
+      .unit <*
+      ZIO.logDebug("In Runloop.changeSubscription: at end")
 
   val rebalanceListener: RebalanceListener = {
     val emitDiagnostics = RebalanceListener(
@@ -479,9 +482,11 @@ private[consumer] final class Runloop(
    */
   private def handleShutdown(state: State, cmd: Command): Task[State] =
     cmd match {
-      case req: Request                  => req.end.as(state)
-      case r: Command.ChangeSubscription => r.succeed.as(state)
-      case cmd: Command.Commit           => doCommit(cmd).as(state.addCommit(cmd))
+      case req: Request => req.end.as(state)
+      case r: Command.ChangeSubscription =>
+        ZIO.logDebug("handleShutdown: ChangeSubscription") *>
+          r.succeed.as(state)
+      case cmd: Command.Commit => doCommit(cmd).as(state.addCommit(cmd))
     }
 
   private def handleOperational(state: State, cmd: Command): Task[State] =
@@ -495,28 +500,29 @@ private[consumer] final class Runloop(
       case cmd @ Command.Commit(_, _) =>
         doCommit(cmd).as(state.addCommit(cmd))
       case cmd @ Command.ChangeSubscription(subscription, _, _) =>
-        handleChangeSubscription(cmd)
-          .as(state.copy(subscription = subscription))
-          .flatMap { state =>
-            if (state.isSubscribed) {
-              ZIO.succeed(state)
-            } else {
-              // End pending requests
-              endRevoked(state.pendingRequests, state.bufferedRecords, state.assignedStreams, _ => true).as(
-                state.copy(
-                  pendingRequests = Chunk.empty,
-                  assignedStreams = Map.empty,
-                  bufferedRecords = BufferedRecords.empty
+        ZIO.logDebug("handleOperational: ChangeSubscription") *>
+          handleChangeSubscription(cmd)
+            .as(state.copy(subscription = subscription))
+            .flatMap { state =>
+              if (state.isSubscribed) {
+                ZIO.succeed(state)
+              } else {
+                // End pending requests
+                endRevoked(state.pendingRequests, state.bufferedRecords, state.assignedStreams, _ => true).as(
+                  state.copy(
+                    pendingRequests = Chunk.empty,
+                    assignedStreams = Map.empty,
+                    bufferedRecords = BufferedRecords.empty
+                  )
                 )
-              )
+              }
             }
-          }
-          .tapBoth(
-            e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> cmd.fail(e),
-            _ => ZIO.logInfo("Runloop succesfully changed subscription") *> cmd.succeed
-          )
-          .uninterruptible
-          .zipLeft(ZIO.logDebug(s"Runloop subscription changed to ${cmd.subscription}"))
+            .tapBoth(
+              e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> cmd.fail(e),
+              _ => ZIO.logInfo("Runloop succesfully changed subscription") *> cmd.succeed
+            )
+            .uninterruptible
+            .zipLeft(ZIO.logDebug(s"Runloop subscription changed to ${cmd.subscription}"))
     }
 
   private def handleChangeSubscription(
@@ -595,6 +601,11 @@ private[consumer] final class Runloop(
         state.isSubscribed && (state.pendingRequests.nonEmpty || state.pendingCommits.nonEmpty || state.assignedStreams.isEmpty)
       if (shouldPoll) logPollStart *> handlePoll(state).map(_ -> false) else ZIO.succeed(state -> true)
     }
+
+//    ZStream
+//      .fromQueue(commandQueue)
+//      .aggregateAsync(ZSink.collectAll)
+//      .foldS
 
     def loop(
       state: State,

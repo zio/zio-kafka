@@ -5,10 +5,7 @@
         </encoder>
     </appender>
 
-    <logger name="org.apache.kafka" level="INFO" />
-    <logger name="org.apache.kafka.clients.admin.AdminClientConfig" level="WARN"/>
-    <logger name="org.apache.kafka.clients.consumer.ConsumerConfig" level="WARN"/>
-    <logger name="org.apache.kafka.clients.producer.ProducerConfig" level="WARN"/>
+    <logger name="org.apache.kafka" level="DEBUG" />
     <logger name="state.change.logger" level="WARN" />
     <logger name="org.apache.kafka.common.utils.AppInfoParser" level="ERROR"/>
 
