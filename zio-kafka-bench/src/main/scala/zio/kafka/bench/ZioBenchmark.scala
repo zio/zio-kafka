@@ -23,10 +23,6 @@ trait ZioBenchmark[Environment] {
       )
     )
 
-  @Setup(Level.Iteration)
-  def beforeInvocations(): Unit =
-    runZIO(ZIO.debug("BeforeIterationSleep") *> ZIO.sleep(1.second)): Unit
-
   @TearDown
   def tearDown(): Unit =
     runtime.shutdown0()
@@ -68,5 +64,5 @@ object ZioBenchmark {
               .now()} ${logLevel.label} [fiber=${fiberId.threadName},${annotations.map { case (k, v) => s"$k=$v" }
               .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint}"
         )
-    }.filterLogLevel(_ >= LogLevel.Trace).map(_ => ())
+    }.filterLogLevel(_ >= LogLevel.Info).map(_ => ())
 }
