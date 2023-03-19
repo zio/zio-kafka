@@ -494,9 +494,9 @@ private[consumer] final class Runloop(
         }
       case cmd @ Command.Commit(_, _) =>
         doCommit(cmd).as(state.addCommit(cmd))
-      case cmd @ Command.ChangeSubscription(_, _, _) =>
-        handleChangeSubscription(state, cmd)
-          .onInterrupt(ZIO.logInfo("Interrupt 222"))
+      case cmd @ Command.ChangeSubscription(subscription, _, _) =>
+        handleChangeSubscription(cmd)
+          .as(state.copy(subscription = subscription))
           .flatMap { state =>
             if (state.isSubscribed) {
               ZIO.succeed(state)
@@ -511,13 +511,17 @@ private[consumer] final class Runloop(
               )
             }
           }
+          .tapBoth(
+            e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> cmd.fail(e),
+            _ => ZIO.logInfo("Runloop succesfully changed subscription") *> cmd.succeed
+          )
+          .uninterruptible
           .zipLeft(ZIO.logDebug(s"Runloop subscription changed to ${cmd.subscription}"))
     }
 
   private def handleChangeSubscription(
-    state: State,
     command: Command.ChangeSubscription
-  ): Task[State] =
+  ): Task[Any] =
     consumer.withConsumerM { c =>
       command.subscription match {
         case None =>
@@ -555,13 +559,7 @@ private[consumer] final class Runloop(
 
           }
       }
-    }.foldZIO(
-      e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> command.fail(e).as(state),
-      _ =>
-        ZIO.logInfo("Runloop succesfully changed subscription") *> command.succeed.as(
-          state.copy(subscription = command.subscription)
-        )
-    )
+    }
 
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] = {
     def processCommands(
