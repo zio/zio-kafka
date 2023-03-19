@@ -1,5 +1,5 @@
 package zio.kafka.bench
-import org.openjdk.jmh.annotations.{ Setup, TearDown }
+import org.openjdk.jmh.annotations.{ Level, Setup, TearDown }
 import zio.{ ZLayer, _ }
 import zio.kafka.bench.ZioBenchmark.logger
 
@@ -22,6 +22,10 @@ trait ZioBenchmark[Environment] {
           ZLayer.fromZIO(initialize)
       )
     )
+
+  @Setup(Level.Iteration)
+  def beforeInvocations: Unit =
+    runZIO(ZIO.debug("BeforeIterationSleep") *> ZIO.sleep(1.second))
 
   @TearDown
   def tearDown(): Unit =
