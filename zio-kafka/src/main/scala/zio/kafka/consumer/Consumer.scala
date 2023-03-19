@@ -223,29 +223,27 @@ object Consumer {
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
     ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
-      def extendSubscriptions =
-        subscriptions.updateZIO { existingSubscriptions =>
-          val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
-          Subscription.unionAll(newSubscriptions) match {
-            case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
-            case Some(union) =>
-              ZIO.logDebug(s"Changing kafka subscription to $union") *>
-                subscribe(union).as(newSubscriptions.toSet)
-          }
+      def extendSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
+        val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
+        Subscription.unionAll(newSubscriptions) match {
+          case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
+          case Some(union) =>
+            ZIO.logDebug(s"Changing kafka subscription to $union") *>
+              subscribe(union).as(newSubscriptions.toSet)
         }
+      }
 
-      def reduceSubscriptions =
-        subscriptions.updateZIO { existingSubscriptions =>
-          val newSubscriptions = NonEmptyChunk.fromIterableOption(existingSubscriptions - subscription)
-          val newUnion         = newSubscriptions.flatMap(Subscription.unionAll)
+      def reduceSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
+        val newSubscriptions = NonEmptyChunk.fromIterableOption(existingSubscriptions - subscription)
+        val newUnion         = newSubscriptions.flatMap(Subscription.unionAll)
 
-          (newUnion match {
-            case Some(union) =>
-              ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union)
-            case None =>
-              ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe
-          }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
-        }
+        (newUnion match {
+          case Some(union) =>
+            ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union)
+          case None =>
+            ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe
+        }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
+      }
 
       val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
 
