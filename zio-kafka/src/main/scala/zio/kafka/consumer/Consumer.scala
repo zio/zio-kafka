@@ -331,11 +331,9 @@ object Consumer {
 
     private def subscribe(subscription: Subscription): Task[Unit] =
       changeSubscription(Some(subscription))
-        .onInterrupt(ZIO.logInfo("INTERRUPTED subscrib"))
 
     private def unsubscribe: Task[Unit] =
       changeSubscription(None)
-        .onInterrupt(ZIO.logInfo("INTERRUPTED unsubscrib"))
 
     private def changeSubscription(subscription: Option[Subscription]): Task[Unit] =
       runloop.changeSubscription(subscription, settings.offsetRetrieval)

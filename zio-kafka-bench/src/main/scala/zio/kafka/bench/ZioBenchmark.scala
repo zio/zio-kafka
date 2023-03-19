@@ -36,8 +36,8 @@ trait ZioBenchmark[Environment] {
       runtime.unsafe
         .run(
           program
-            .tapErrorCause(e => ZIO.debug("Found error!" + e))
-            .timeoutFail(new RuntimeException("Benchmark timed out"))(timeout)
+            .tapErrorCause(e => ZIO.debug("Error in benchmark run: " + e.prettyPrint))
+            .timeoutFail(new RuntimeException("Benchmark run timed out"))(timeout)
             .tapError(_ => Fiber.dumpAll)
         )
         .getOrThrow()
