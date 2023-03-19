@@ -80,7 +80,7 @@ private[consumer] final class Runloop(
           commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
           ZIO.logDebug("In Runloop.changeSubscription: awaiting command") *>
           cont.await
-            .tapErrorCause(e => ZIO.logInfo(s"Timeout!: ${e}, ${e.trace}............ ${e.prettyPrint}"))
+            .tapErrorCause(e => ZIO.logError(s"Timeout!: ${e}, ${e.trace}............ ${e.prettyPrint}"))
       }
       .unlessZIO(isShutdown)
       .unit <*
@@ -519,10 +519,10 @@ private[consumer] final class Runloop(
             }
             .tapBoth(
               e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> cmd.fail(e),
-              _ => ZIO.logInfo("Runloop succesfully changed subscription") *> cmd.succeed
+              _ => ZIO.logTrace("Runloop succesfully changed subscription") *> cmd.succeed
             )
             .uninterruptible
-            .zipLeft(ZIO.logDebug(s"Runloop subscription changed to ${cmd.subscription}"))
+            .zipLeft(ZIO.logTrace(s"Runloop subscription changed to ${cmd.subscription}"))
     }
 
   private def handleChangeSubscription(
@@ -567,7 +567,7 @@ private[consumer] final class Runloop(
       }
     }
 
-  def run(stop: Ref[Boolean]): ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] = {
+  def run(stop: Ref[Boolean]): ZIO[Scope, Throwable, Any] = {
     def processCommands(
       state: State,
       wait: Boolean,
@@ -626,7 +626,6 @@ private[consumer] final class Runloop(
     }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitions.offer(Take.failCause(cause)))
-      .forkScoped
   }
 }
 
@@ -755,12 +754,14 @@ private[consumer] object Runloop {
                   restartStreamsOnRebalancing,
                   currentStateRef
                 )
-      _    <- ZIO.logInfo("Starting Runloop")
+      _    <- ZIO.logDebug("Starting Runloop")
       _    <- ZIO.addFinalizer(ZIO.logDebug("Shut down Runloop"))
-      _    <- ZIO.addFinalizer(ZIO.logInfo("Shutting down command queue") *> commandQueue.shutdown)
+      _    <- ZIO.addFinalizer(ZIO.logDebug("Shutting down command queue") *> commandQueue.shutdown)
       stop <- Ref.make(false)
       _ <-
-        ZIO.acquireRelease(runloop.run(stop))(fib => ZIO.logInfo("Shutting down Runloop") *> stop.set(true) *> fib.join.orDie)
+        ZIO.acquireRelease(runloop.run(stop).fork)(fib =>
+          ZIO.logDebug("Shutting down Runloop") *> stop.set(true) *> fib.join.orDie
+        )
     } yield runloop
 }
 
