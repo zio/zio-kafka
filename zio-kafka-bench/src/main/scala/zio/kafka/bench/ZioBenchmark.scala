@@ -24,8 +24,8 @@ trait ZioBenchmark[Environment] {
     )
 
   @Setup(Level.Iteration)
-  def beforeInvocations: Unit =
-    runZIO(ZIO.debug("BeforeIterationSleep") *> ZIO.sleep(1.second))
+  def beforeInvocations(): Unit =
+    runZIO(ZIO.debug("BeforeIterationSleep") *> ZIO.sleep(1.second)): Unit
 
   @TearDown
   def tearDown(): Unit =
