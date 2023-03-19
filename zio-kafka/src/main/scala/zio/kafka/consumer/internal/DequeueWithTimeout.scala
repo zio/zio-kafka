@@ -34,6 +34,7 @@ class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Not
                         newDequeue
                     }
       result <- ZIO.interruptibleMask { restore =>
+                  // The forking is necessary to prevent interrupted exceptions
                   awaitAction.forkIn(scope).flatMap { awaitFib =>
                     awaitFib.join
                       .raceWith[Any, Nothing, Nothing, Chunk[A], Chunk[A]](

@@ -617,6 +617,7 @@ private[consumer] final class Runloop(
         .tapError(e => ZIO.attempt(println("Error in loop: " + e)))
         .flatMap { case (state, wait) => loop(state, wait, dequeueWithTimeout).unlessZIO(stop.get) }
 
+    // The scoped here is necessary to prevent interrupted exceptions
     ZIO.scoped {
       DequeueWithTimeout
         .make(commandQueue)
