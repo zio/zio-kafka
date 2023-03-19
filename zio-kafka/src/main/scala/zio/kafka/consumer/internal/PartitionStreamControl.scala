@@ -67,15 +67,14 @@ private[internal] object PartitionStreamControl {
                  LogAnnotation("partition", tp.partition().toString)
                ) *>
                  ZStream.finalizer(
-                   completedPromise.succeed(()) *>
-                     // TODO: I'd like to shutdown the queue here, however, for some reason runloop is still interacting with it during shutdown
-                     // dataQueue.shutdown <*
+                   completedPromise.succeed(()) <*
                      ZIO.logDebug(s"Partition stream ${tp.toString} has ended")
                  ) *>
                  ZStream
-                   .paginateChunkZIO(false) { completed =>
-                     if (completed) ZIO.succeed((Chunk.empty, None))
-                     else {
+                   .paginateChunkZIO(false) { streamEnded =>
+                     if (streamEnded) {
+                       ZIO.succeed((Chunk.empty, None))
+                     } else {
                        // First try to take all records that are available right now.
                        // When no data is available, request more data and await its arrival.
                        dataQueue.takeAll
@@ -89,7 +88,7 @@ private[internal] object PartitionStreamControl {
                          // Extract the success values and potential end-of-stream value
                          .map { takes =>
                            val (okTakes, endTakes) = takes.splitWhere(!_.isSuccess)
-                           val records = okTakes
+                           val data = okTakes
                              .map(
                                _.fold(
                                  end = Chunk.empty[ByteArrayCommittableRecord],
@@ -98,8 +97,8 @@ private[internal] object PartitionStreamControl {
                                )
                              )
                              .foldLeft(Chunk.empty[ByteArrayCommittableRecord])(_ ++ _)
-                           val isComplete = endTakes.nonEmpty
-                           (records, Some(isComplete))
+                           val streamEnded = endTakes.nonEmpty
+                           (data, Some(streamEnded))
                          }
                      }
                    }
