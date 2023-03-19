@@ -31,8 +31,8 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
     _ <- produceMany(topic1, kvs)
   } yield ()
 
-//  @Benchmark
-//  @BenchmarkMode(Array(Mode.AverageTime))
+  @Benchmark
+  @BenchmarkMode(Array(Mode.AverageTime))
   def throughput(): Any = runZIO {
     for {
       counter <- Ref.make(0)
@@ -41,9 +41,6 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
              .tap { _ =>
                counter.updateAndGet(_ + 1).flatMap(count => Consumer.stopConsumption.when(count == nrMessages))
              }
-             .tapErrorCause(e =>
-               ZIO.debug(s"Error in bench: ${e.prettyPrint}")
-             ) // It's weird but this prevents an Interrupt error somehow..
              .runDrain
              .provideSome[Kafka](
                consumer(
@@ -69,13 +66,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                .tap(batch => counter.update(_ + batch.size))
                .map(OffsetBatch.apply)
                .mapZIO(_.commit)
-//               .tap { _ =>
-//                 counter.get.flatMap(count => Consumer.stopConsumption.when(count >= nrMessages))
-//               }
                .takeUntilZIO(_ => counter.get.map(_ >= nrMessages))
-               .tapErrorCause(e =>
-                 ZIO.debug(s"Error in bench: ${e.prettyPrint}")
-               ) // It's weird but this prevents an Interrupt error somehow..
                .runDrain
                .provideSome[Kafka](
                  consumer(
