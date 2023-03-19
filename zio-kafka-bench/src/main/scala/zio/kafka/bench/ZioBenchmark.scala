@@ -8,7 +8,7 @@ import java.util.UUID
 trait ZioBenchmark[Environment] {
   var runtime: Runtime.Scoped[Environment] = _
 
-  protected val enableLogging: Boolean = false
+  protected val enableLogging: Boolean = true
 
   @Setup
   def setup(): Unit =
@@ -16,7 +16,7 @@ trait ZioBenchmark[Environment] {
       zio.Runtime.unsafe.fromLayer(
         bootstrap >+>
           (Runtime.removeDefaultLoggers >+>
-            Runtime.addLogger(logger)) >+>
+            (if (enableLogging) Runtime.addLogger(logger) else ZLayer.empty)) >+>
           ZLayer.fromZIO(initialize)
       )
     )
