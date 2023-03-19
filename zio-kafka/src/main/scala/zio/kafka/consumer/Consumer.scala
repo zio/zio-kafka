@@ -232,7 +232,7 @@ object Consumer {
               ZIO.logDebug(s"Changing kafka subscription to $union") *>
                 subscribe(union).as(newSubscriptions.toSet)
           }
-        }.uninterruptible
+        }
 
       def reduceSubscriptions =
         subscriptions.updateZIO { existingSubscriptions =>
@@ -245,7 +245,7 @@ object Consumer {
             case None =>
               ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe
           }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
-        }.uninterruptible
+        }
 
       val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
 
