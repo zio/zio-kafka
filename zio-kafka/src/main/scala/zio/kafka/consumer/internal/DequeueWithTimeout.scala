@@ -29,30 +29,22 @@ class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Not
       previousAwait <- previousDequeue.get
       awaitAction = previousAwait match {
                       case Some(fib) =>
-                        ZIO.logTrace("Dequeue has previous") *>
-                          finishPrevious(fib.join)
+                        finishPrevious(fib.join)
                       case None =>
-                        ZIO.logTrace("Dequeue has no previous") *>
-                          newDequeue
+                        newDequeue
                     }
       result <- ZIO.interruptibleMask { restore =>
-                  awaitAction
-                    .forkIn(scope)
-                    .flatMap { awaitFib =>
-                      restore(awaitFib.join)
-                        .raceWith[Any, Nothing, Nothing, Chunk[A], Chunk[A]](
-                          restore(ZIO.sleep(timeout).as(Chunk.empty[A]))
-                        )(
-                          leftDone = { case (leftExit, sleepFiber) =>
-                            ZIO.logTrace("Left wins") *>
-                              previousDequeue.set(None) *> ZIO.done(leftExit)
-                          },
-                          rightDone = { case (rightExit, actionFiber @ _) =>
-                            ZIO.logTrace("Right wins") *>
-                              actionFiber.interrupt *> previousDequeue.set(Some(awaitFib)) *> ZIO.done(rightExit)
-                          }
-                        )
-                    }
+                  restore(awaitAction)
+                    .raceWith[Any, Nothing, Nothing, Chunk[A], Chunk[A]](
+                      restore(ZIO.sleep(timeout).as(Chunk.empty[A]))
+                    )(
+                      leftDone = { case (leftExit, sleepFiber) =>
+                        previousDequeue.set(None) *> sleepFiber.interrupt *> ZIO.done(leftExit)
+                      },
+                      rightDone = { case (rightExit, actionFiber @ _) =>
+                        actionFiber.interrupt *> previousDequeue.set(Some(actionFiber)) *> ZIO.done(rightExit)
+                      }
+                    )
                 }
     } yield result
 }

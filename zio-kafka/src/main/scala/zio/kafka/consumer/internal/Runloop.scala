@@ -574,7 +574,7 @@ private[consumer] final class Runloop(
       dequeueWithTimeout: DequeueWithTimeout[Command]
     ): Task[State] =
       for {
-        _ <- ZIO.logTrace(s"processCommands: wait? ${wait.toString}")
+//        _ <- ZIO.logTrace(s"processCommands: wait? ${wait.toString}")
         commands <-
           if (wait)
             dequeueWithTimeout
@@ -587,7 +587,7 @@ private[consumer] final class Runloop(
           else dequeueWithTimeout.takeAll(pollFrequency)
 
         isShutdown <- isShutdown
-        _          <- ZIO.logTrace(s"processCommands: handling ${commands.size} commands")
+//        _          <- ZIO.logTrace(s"processCommands: handling ${commands.size} commands")
         handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
         updatedState <- ZIO.foldLeft(commands)(state)(handleCommand)
       } yield updatedState
