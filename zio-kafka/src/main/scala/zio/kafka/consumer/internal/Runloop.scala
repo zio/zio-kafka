@@ -758,10 +758,8 @@ private[consumer] object Runloop {
       _    <- ZIO.addFinalizer(ZIO.logDebug("Shut down Runloop"))
       _    <- ZIO.addFinalizer(ZIO.logDebug("Shutting down command queue") *> commandQueue.shutdown)
       stop <- Ref.make(false)
-      _ <-
-        ZIO.acquireRelease(runloop.run(stop).fork)(fib =>
-          ZIO.logDebug("Shutting down Runloop") *> stop.set(true) *> fib.join.orDie
-        )
+      fib  <- runloop.run(stop).fork
+      _    <- ZIO.addFinalizer(ZIO.logDebug("Shutting down Runloop") *> stop.set(true) *> fib.join.orDie)
     } yield runloop
 }
 

@@ -42,7 +42,7 @@ class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Not
                         previousDequeue.set(None) *> sleepFiber.interrupt *> ZIO.done(leftExit)
                       },
                       rightDone = { case (rightExit, actionFiber @ _) =>
-                        actionFiber.interrupt *> previousDequeue.set(Some(actionFiber)) *> ZIO.done(rightExit)
+                        previousDequeue.set(Some(actionFiber)) *> ZIO.done(rightExit)
                       }
                     )
                 }
