@@ -36,21 +36,23 @@ class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Not
                           newDequeue
                     }
       result <- ZIO.interruptibleMask { restore =>
-                  awaitAction.forkIn(scope).flatMap { awaitFib =>
-                    restore(awaitFib.join)
-                      .raceWith[Any, Nothing, Nothing, Chunk[A], Chunk[A]](
-                        restore(ZIO.sleep(timeout).as(Chunk.empty[A]))
-                      )(
-                        leftDone = { case (leftExit, sleepFiber) =>
-                          ZIO.logTrace("Left wins") *>
-                            previousDequeue.set(None) *> sleepFiber.interrupt *> ZIO.done(leftExit)
-                        },
-                        rightDone = { case (rightExit, actionFiber @ _) =>
-                          ZIO.logTrace("Right wins") *>
-                            previousDequeue.set(Some(awaitFib)) *> ZIO.done(rightExit)
-                        }
-                      )
-                  }
+                  awaitAction
+                    .forkIn(scope)
+                    .flatMap { awaitFib =>
+                      restore(awaitFib.join)
+                        .raceWith[Any, Nothing, Nothing, Chunk[A], Chunk[A]](
+                          restore(ZIO.sleep(timeout).as(Chunk.empty[A]))
+                        )(
+                          leftDone = { case (leftExit, sleepFiber) =>
+                            ZIO.logTrace("Left wins") *>
+                              previousDequeue.set(None) *> ZIO.done(leftExit)
+                          },
+                          rightDone = { case (rightExit, actionFiber @ _) =>
+                            ZIO.logTrace("Right wins") *>
+                              actionFiber.interrupt *> previousDequeue.set(Some(awaitFib)) *> ZIO.done(rightExit)
+                          }
+                        )
+                    }
                 }
     } yield result
 }
@@ -61,6 +63,6 @@ object DequeueWithTimeout {
       .acquireRelease(
         Ref
           .make(Option.empty[Fiber[Nothing, Chunk[A]]])
-      )(ref => ref.get.some.flatMap(_.interrupt).option)
+      )(ref => ref.get.some.flatMap(_.interrupt.ignore).option)
       .flatMap(ref => ZIO.scope.map(new DequeueWithTimeout(queue, ref, _)))
 }

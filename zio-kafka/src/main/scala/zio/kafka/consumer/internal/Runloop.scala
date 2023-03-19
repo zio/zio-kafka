@@ -567,7 +567,7 @@ private[consumer] final class Runloop(
       }
     }
 
-  def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] = {
+  def run(stop: Ref[Boolean]): ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] = {
     def processCommands(
       state: State,
       wait: Boolean,
@@ -610,18 +610,20 @@ private[consumer] final class Runloop(
       state: State,
       wait: Boolean,
       dequeueWithTimeout: DequeueWithTimeout[Command]
-    ): ZIO[Any, Throwable, Nothing] =
+    ): ZIO[Any, Throwable, Any] =
       processCommands(state, wait, dequeueWithTimeout)
         .flatMap(doPollIfPendingActions)
         .timeoutFail(RunloopTimeout)(runloopTimeout)
         .tapError(e => ZIO.attempt(println("Error in loop: " + e)))
-        .flatMap { case (state, wait) => loop(state, wait, dequeueWithTimeout) }
+        .flatMap { case (state, wait) => loop(state, wait, dequeueWithTimeout).unlessZIO(stop.get) }
 
-    DequeueWithTimeout
-      .make(commandQueue)
-      .flatMap { dequeueWithTimeout =>
-        loop(State.initial, wait = true, dequeueWithTimeout)
-      }
+    ZIO.scoped {
+      DequeueWithTimeout
+        .make(commandQueue)
+        .flatMap { dequeueWithTimeout =>
+          loop(State.initial, wait = true, dequeueWithTimeout)
+        }
+    }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitions.offer(Take.failCause(cause)))
       .forkScoped
@@ -753,10 +755,12 @@ private[consumer] object Runloop {
                   restartStreamsOnRebalancing,
                   currentStateRef
                 )
-      _ <- ZIO.addFinalizer(ZIO.logDebug("Shut down Runloop"))
-      _ <- ZIO.logInfo("Starting Runloop")
-      _ <- runloop.run
-      _ <- ZIO.addFinalizer(ZIO.logInfo("Shutting down command queue") *> commandQueue.shutdown)
+      _    <- ZIO.logInfo("Starting Runloop")
+      _    <- ZIO.addFinalizer(ZIO.logDebug("Shut down Runloop"))
+      _    <- ZIO.addFinalizer(ZIO.logInfo("Shutting down command queue") *> commandQueue.shutdown)
+      stop <- Ref.make(false)
+      _ <-
+        ZIO.acquireRelease(runloop.run(stop))(fib => ZIO.logInfo("Shutting down Runloop") *> stop.set(true) *> fib.join.orDie)
     } yield runloop
 }
 
