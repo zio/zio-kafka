@@ -254,9 +254,7 @@ object Consumer {
       ZStream.unwrapScoped {
         for {
           stream <- ZStream.fromHubScoped(partitionAssignments)
-          _      <- ZIO.addFinalizer(ZIO.logInfo("Unsubscribed done"))
           _      <- extendSubscriptions.withFinalizer(_ => reduceSubscriptions.orDie)
-          _      <- ZIO.addFinalizer(ZIO.logInfo("Stop partitionedAssignmentStream"))
         } yield stream
           .map(_.exit)
           .flattenExitOption

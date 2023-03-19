@@ -76,14 +76,9 @@ private[consumer] final class Runloop(
     Promise
       .make[Throwable, Unit]
       .flatMap { cont =>
-        println("Step 1")
-        commandQueue.size.flatMap(size => ZIO.logInfo(s"Command queue size: ${size}")) *>
-          commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
-          ZIO.attempt(println("Step 2")) *>
-          ZIO.uninterruptibleMask { restore =>
-            cont.await
-              .tapErrorCause(e => ZIO.logInfo(s"Timeout!: ${e}, ${e.trace}............ ${e.prettyPrint}"))
-          }
+        commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
+          cont.await
+            .tapErrorCause(e => ZIO.logInfo(s"Timeout!: ${e}, ${e.trace}............ ${e.prettyPrint}"))
       }
       .unlessZIO(isShutdown)
       .unit
