@@ -1,5 +1,5 @@
 package zio.kafka.consumer.internal
-import zio.{ Chunk, Dequeue, Duration, Fiber, Ref, UIO, ZIO }
+import zio.{ Chunk, Dequeue, Duration, Fiber, Ref, Scope, UIO, ZIO }
 
 /**
  * Avoids race conditions between dequeueing and timeout, which would lead to lost dequeued elements, by storing the
@@ -48,8 +48,11 @@ class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Not
 }
 
 object DequeueWithTimeout {
-  def make[A](queue: Dequeue[A]): UIO[DequeueWithTimeout[A]] =
-    Ref
-      .make(Option.empty[Fiber[Nothing, Chunk[A]]])
+  def make[A](queue: Dequeue[A]): ZIO[Scope, Nothing, DequeueWithTimeout[A]] =
+    ZIO
+      .acquireRelease(
+        Ref
+          .make(Option.empty[Fiber[Nothing, Chunk[A]]])
+      )(ref => ref.get.some.flatMap(_.interrupt).option)
       .map(new DequeueWithTimeout(queue, _))
 }

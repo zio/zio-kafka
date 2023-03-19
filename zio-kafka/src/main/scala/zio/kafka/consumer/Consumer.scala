@@ -223,26 +223,30 @@ object Consumer {
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
     ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
-      def extendSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
-        val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
-        Subscription.unionAll(newSubscriptions) match {
-          case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
-          case Some(union) =>
-            ZIO.logDebug(s"Changing kafka subscription to $union") *>
-              subscribe(union).as(newSubscriptions.toSet)
+      def extendSubscriptions = ZIO.uninterruptible {
+        subscriptions.updateZIO { existingSubscriptions =>
+          val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
+          Subscription.unionAll(newSubscriptions) match {
+            case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
+            case Some(union) =>
+              ZIO.logDebug(s"Changing kafka subscription to $union") *>
+                subscribe(union).as(newSubscriptions.toSet).uninterruptible
+          }
         }
       }
 
-      def reduceSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
-        val newSubscriptions = NonEmptyChunk.fromIterableOption(existingSubscriptions - subscription)
-        val newUnion         = newSubscriptions.flatMap(Subscription.unionAll)
+      def reduceSubscriptions = ZIO.uninterruptible {
+        subscriptions.updateZIO { existingSubscriptions =>
+          val newSubscriptions = NonEmptyChunk.fromIterableOption(existingSubscriptions - subscription)
+          val newUnion         = newSubscriptions.flatMap(Subscription.unionAll)
 
-        (newUnion match {
-          case Some(union) =>
-            ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union)
-          case None =>
-            ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe
-        }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
+          (newUnion match {
+            case Some(union) =>
+              ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union).uninterruptible
+            case None =>
+              ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe.uninterruptible
+          }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
+        }
       }
 
       val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
@@ -250,7 +254,9 @@ object Consumer {
       ZStream.unwrapScoped {
         for {
           stream <- ZStream.fromHubScoped(partitionAssignments)
+          _      <- ZIO.addFinalizer(ZIO.logInfo("Unsubscribed done"))
           _      <- extendSubscriptions.withFinalizer(_ => reduceSubscriptions.orDie)
+          _      <- ZIO.addFinalizer(ZIO.logInfo("Stop partitionedAssignmentStream"))
         } yield stream
           .map(_.exit)
           .flattenExitOption
@@ -329,9 +335,11 @@ object Consumer {
 
     private def subscribe(subscription: Subscription): Task[Unit] =
       changeSubscription(Some(subscription))
+        .onInterrupt(ZIO.logInfo("INTERRUPTED subscrib"))
 
     private def unsubscribe: Task[Unit] =
       changeSubscription(None)
+        .onInterrupt(ZIO.logInfo("INTERRUPTED unsubscrib"))
 
     private def changeSubscription(subscription: Option[Subscription]): Task[Unit] =
       runloop.changeSubscription(subscription, settings.offsetRetrieval)

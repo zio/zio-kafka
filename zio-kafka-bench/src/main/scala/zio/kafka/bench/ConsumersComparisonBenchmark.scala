@@ -30,6 +30,8 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
   val nrMessages                      = 1000000
   val kvs: Iterable[(String, String)] = Iterable.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
 
+  override protected val enableLogging: Boolean = true
+
   val kafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
     ZLayer.scoped {
       ZIO.acquireRelease {
