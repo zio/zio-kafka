@@ -574,6 +574,7 @@ private[consumer] final class Runloop(
       dequeueWithTimeout: DequeueWithTimeout[Command]
     ): Task[State] =
       for {
+        _ <- ZIO.logTrace(s"processCommands: wait? ${wait.toString}")
         commands <-
           if (wait)
             dequeueWithTimeout
@@ -586,6 +587,7 @@ private[consumer] final class Runloop(
           else dequeueWithTimeout.takeAll(pollFrequency)
 
         isShutdown <- isShutdown
+        _          <- ZIO.logTrace(s"processCommands: handling ${commands.size} commands")
         handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
         updatedState <- ZIO.foldLeft(commands)(state)(handleCommand)
       } yield updatedState
@@ -599,7 +601,9 @@ private[consumer] final class Runloop(
 
       val shouldPoll =
         state.isSubscribed && (state.pendingRequests.nonEmpty || state.pendingCommits.nonEmpty || state.assignedStreams.isEmpty)
-      if (shouldPoll) logPollStart *> handlePoll(state).map(_ -> false) else ZIO.succeed(state -> true)
+
+      ZIO.logTrace(s"doPollIfPendingActions: shouldPoll=${shouldPoll.toString}") *>
+        (if (shouldPoll) logPollStart *> handlePoll(state).map(_ -> false) else ZIO.succeed(state -> true))
     }
 
 //    ZStream
