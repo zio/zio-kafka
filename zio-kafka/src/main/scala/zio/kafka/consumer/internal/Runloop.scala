@@ -76,8 +76,8 @@ private[consumer] final class Runloop(
     Promise
       .make[Throwable, Unit]
       .flatMap { cont =>
-        ZIO.logDebug("In Runloop.changeSubscription: offering command")
-        commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
+        ZIO.logDebug("In Runloop.changeSubscription: offering command") *>
+          commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
           ZIO.logDebug("In Runloop.changeSubscription: awaiting command") *>
           cont.await
             .tapErrorCause(e => ZIO.logInfo(s"Timeout!: ${e}, ${e.trace}............ ${e.prettyPrint}"))
