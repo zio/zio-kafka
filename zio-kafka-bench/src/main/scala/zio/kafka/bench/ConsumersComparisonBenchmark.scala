@@ -98,6 +98,9 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
       Consumer
         .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
         .take(nrMessages.toLong)
+        .tapErrorCause(e =>
+          ZIO.debug(s"Error in bench: ${e.prettyPrint}")
+        ) // It's weird but this prevents an Interrupt error somehow..
         .runDrain
         .provideLayer(simpleConsumer())
     }

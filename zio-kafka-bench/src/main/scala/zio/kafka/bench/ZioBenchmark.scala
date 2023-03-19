@@ -8,7 +8,7 @@ import java.util.UUID
 trait ZioBenchmark[Environment] {
   var runtime: Runtime.Scoped[Environment] = _
 
-  protected val enableLogging: Boolean = false
+  protected val enableLogging: Boolean = true
 
   @Setup
   def setup(): Unit =
@@ -30,7 +30,14 @@ trait ZioBenchmark[Environment] {
   protected def initialize: ZIO[Environment, Throwable, Any] = ZIO.unit
 
   protected def runZIO(program: ZIO[Environment, Throwable, Any]): Any =
-    Unsafe.unsafe(implicit unsafe => runtime.unsafe.run(program).getOrThrow())
+    Unsafe.unsafe(implicit unsafe =>
+      runtime.unsafe
+        .run(
+          program
+            .tapErrorCause(e => ZIO.debug("Found error!" + e))
+        )
+        .getOrThrow()
+    )
 }
 
 object ZioBenchmark {

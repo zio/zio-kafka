@@ -230,7 +230,7 @@ object Consumer {
             case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
             case Some(union) =>
               ZIO.logDebug(s"Changing kafka subscription to $union") *>
-                subscribe(union).as(newSubscriptions.toSet)
+                subscribe(union).as(newSubscriptions.toSet).uninterruptible
           }
         }
       }
@@ -242,9 +242,9 @@ object Consumer {
 
           (newUnion match {
             case Some(union) =>
-              ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union)
+              ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union).uninterruptible
             case None =>
-              ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe
+              ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe.uninterruptible
           }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
         }
       }
@@ -333,9 +333,11 @@ object Consumer {
 
     private def subscribe(subscription: Subscription): Task[Unit] =
       changeSubscription(Some(subscription))
+        .onInterrupt(ZIO.logInfo("INTERRUPTED subscrib"))
 
     private def unsubscribe: Task[Unit] =
       changeSubscription(None)
+        .onInterrupt(ZIO.logInfo("INTERRUPTED unsubscrib"))
 
     private def changeSubscription(subscription: Option[Subscription]): Task[Unit] =
       runloop.changeSubscription(subscription, settings.offsetRetrieval)
