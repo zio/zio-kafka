@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1679240875029,
+  "lastUpdate": 1679245154765,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -4642,6 +4642,50 @@ window.BENCHMARK_DATA = {
             "value": 2100.2329811800005,
             "unit": "ms/op",
             "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "committer": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "id": "75a37554a73f6bb924254263aa839861a79e99ae",
+          "message": "Safer handling of commandQueue.takeBetween interruption",
+          "timestamp": "2023-03-17T10:26:38Z",
+          "url": "https://github.com/zio/zio-kafka/pull/725/commits/75a37554a73f6bb924254263aa839861a79e99ae"
+        },
+        "date": 1679245153970,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 240.9465951093651,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 372.7011576666667,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.kafkaClients",
+            "value": 514.2775044666668,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
+            "value": 341.09781457777774,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 5\nthreads: 1"
           }
         ]
       }
