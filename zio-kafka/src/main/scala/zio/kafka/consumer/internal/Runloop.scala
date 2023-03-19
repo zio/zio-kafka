@@ -76,15 +76,11 @@ private[consumer] final class Runloop(
     Promise
       .make[Throwable, Unit]
       .flatMap { cont =>
-        ZIO.logDebug("In Runloop.changeSubscription: offering command") *>
-          commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
-          ZIO.logDebug("In Runloop.changeSubscription: awaiting command") *>
+        commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
           cont.await
-            .tapErrorCause(e => ZIO.logError(s"Timeout!: ${e}, ${e.trace}............ ${e.prettyPrint}"))
       }
       .unlessZIO(isShutdown)
-      .unit <*
-      ZIO.logDebug("In Runloop.changeSubscription: at end")
+      .unit
 
   val rebalanceListener: RebalanceListener = {
     val emitDiagnostics = RebalanceListener(
@@ -482,11 +478,9 @@ private[consumer] final class Runloop(
    */
   private def handleShutdown(state: State, cmd: Command): Task[State] =
     cmd match {
-      case req: Request => req.end.as(state)
-      case r: Command.ChangeSubscription =>
-        ZIO.logDebug("handleShutdown: ChangeSubscription") *>
-          r.succeed.as(state)
-      case cmd: Command.Commit => doCommit(cmd).as(state.addCommit(cmd))
+      case req: Request                  => req.end.as(state)
+      case r: Command.ChangeSubscription => r.succeed.as(state)
+      case cmd: Command.Commit           => doCommit(cmd).as(state.addCommit(cmd))
     }
 
   private def handleOperational(state: State, cmd: Command): Task[State] =
@@ -500,29 +494,24 @@ private[consumer] final class Runloop(
       case cmd @ Command.Commit(_, _) =>
         doCommit(cmd).as(state.addCommit(cmd))
       case cmd @ Command.ChangeSubscription(subscription, _, _) =>
-        ZIO.logDebug("handleOperational: ChangeSubscription") *>
-          handleChangeSubscription(cmd)
-            .as(state.copy(subscription = subscription))
-            .flatMap { state =>
-              if (state.isSubscribed) {
-                ZIO.succeed(state)
-              } else {
-                // End pending requests
-                endRevoked(state.pendingRequests, state.bufferedRecords, state.assignedStreams, _ => true).as(
-                  state.copy(
-                    pendingRequests = Chunk.empty,
-                    assignedStreams = Map.empty,
-                    bufferedRecords = BufferedRecords.empty
-                  )
+        handleChangeSubscription(cmd)
+          .as(state.copy(subscription = subscription))
+          .flatMap { state =>
+            if (state.isSubscribed) {
+              ZIO.succeed(state)
+            } else {
+              // End pending requests
+              endRevoked(state.pendingRequests, state.bufferedRecords, state.assignedStreams, _ => true).as(
+                state.copy(
+                  pendingRequests = Chunk.empty,
+                  assignedStreams = Map.empty,
+                  bufferedRecords = BufferedRecords.empty
                 )
-              }
+              )
             }
-            .tapBoth(
-              e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> cmd.fail(e),
-              _ => ZIO.logTrace("Runloop succesfully changed subscription") *> cmd.succeed
-            )
-            .uninterruptible
-            .zipLeft(ZIO.logTrace(s"Runloop subscription changed to ${cmd.subscription}"))
+          }
+          .tapBoth(e => cmd.fail(e), _ => cmd.succeed)
+          .uninterruptible
     }
 
   private def handleChangeSubscription(
@@ -562,7 +551,6 @@ private[consumer] final class Runloop(
                     case OffsetRetrieval.Auto(_) => ZIO.unit
                   }
                 }
-
           }
       }
     }
@@ -574,7 +562,6 @@ private[consumer] final class Runloop(
       dequeueWithTimeout: DequeueWithTimeout[Command]
     ): Task[State] =
       for {
-//        _ <- ZIO.logTrace(s"processCommands: wait? ${wait.toString}")
         commands <-
           if (wait)
             dequeueWithTimeout
@@ -587,7 +574,6 @@ private[consumer] final class Runloop(
           else dequeueWithTimeout.takeAll(pollFrequency)
 
         isShutdown <- isShutdown
-//        _          <- ZIO.logTrace(s"processCommands: handling ${commands.size} commands")
         handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
         updatedState <- ZIO.foldLeft(commands)(state)(handleCommand)
       } yield updatedState
@@ -602,8 +588,7 @@ private[consumer] final class Runloop(
       val shouldPoll =
         state.isSubscribed && (state.pendingRequests.nonEmpty || state.pendingCommits.nonEmpty || state.assignedStreams.isEmpty)
 
-      ZIO.logTrace(s"doPollIfPendingActions: shouldPoll=${shouldPoll.toString}") *>
-        (if (shouldPoll) logPollStart *> handlePoll(state).map(_ -> false) else ZIO.succeed(state -> true))
+      if (shouldPoll) logPollStart *> handlePoll(state).map(_ -> false) else ZIO.succeed(state -> true)
     }
 
     def loop(
@@ -614,7 +599,6 @@ private[consumer] final class Runloop(
       processCommands(state, wait, dequeueWithTimeout)
         .flatMap(doPollIfPendingActions)
         .timeoutFail(RunloopTimeout)(runloopTimeout)
-        .tapError(e => ZIO.attempt(println("Error in loop: " + e)))
         .flatMap { case (state, wait) => loop(state, wait, dequeueWithTimeout).unlessZIO(stop.get) }
 
     // The scoped here is necessary to prevent interrupted exceptions
