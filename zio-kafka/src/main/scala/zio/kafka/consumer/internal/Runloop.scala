@@ -78,7 +78,6 @@ private[consumer] final class Runloop(
       .flatMap { cont =>
         commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
           cont.await
-            .tapErrorCause(e => ZIO.logInfo(s"Timeout!: ${e}, ${e.trace}............ ${e.prettyPrint}"))
       }
       .unlessZIO(isShutdown)
       .unit
@@ -495,23 +494,20 @@ private[consumer] final class Runloop(
       case cmd @ Command.Commit(_, _) =>
         doCommit(cmd).as(state.addCommit(cmd))
       case cmd @ Command.ChangeSubscription(_, _, _) =>
-        handleChangeSubscription(state, cmd)
-          .onInterrupt(ZIO.logInfo("Interrupt 222"))
-          .flatMap { state =>
-            if (state.isSubscribed) {
-              ZIO.succeed(state)
-            } else {
-              // End pending requests
-              endRevoked(state.pendingRequests, state.bufferedRecords, state.assignedStreams, _ => true).as(
-                state.copy(
-                  pendingRequests = Chunk.empty,
-                  assignedStreams = Map.empty,
-                  bufferedRecords = BufferedRecords.empty
-                )
+        handleChangeSubscription(state, cmd).flatMap { state =>
+          if (state.isSubscribed) {
+            ZIO.succeed(state)
+          } else {
+            // End pending requests
+            endRevoked(state.pendingRequests, state.bufferedRecords, state.assignedStreams, _ => true).as(
+              state.copy(
+                pendingRequests = Chunk.empty,
+                assignedStreams = Map.empty,
+                bufferedRecords = BufferedRecords.empty
               )
-            }
+            )
           }
-          .zipLeft(ZIO.logDebug(s"Runloop subscription changed to ${cmd.subscription}"))
+        }
     }
 
   private def handleChangeSubscription(
@@ -557,10 +553,7 @@ private[consumer] final class Runloop(
       }
     }.foldZIO(
       e => ZIO.logErrorCause("Error subscribing", Cause.fail(e)) *> command.fail(e).as(state),
-      _ =>
-        ZIO.logInfo("Runloop succesfully changed subscription") *> command.succeed.as(
-          state.copy(subscription = command.subscription)
-        )
+      _ => command.succeed.as(state.copy(subscription = command.subscription))
     )
 
   def run: ZIO[Scope, Nothing, Fiber.Runtime[Throwable, Any]] = {
@@ -747,9 +740,8 @@ private[consumer] object Runloop {
                   currentStateRef
                 )
       _ <- ZIO.addFinalizer(ZIO.logDebug("Shut down Runloop"))
-      _ <- ZIO.logInfo("Starting Runloop")
       _ <- runloop.run
-      _ <- ZIO.addFinalizer(ZIO.logInfo("Shutting down command queue") *> commandQueue.shutdown)
+      _ <- ZIO.addFinalizer(commandQueue.shutdown)
     } yield runloop
 }
 
