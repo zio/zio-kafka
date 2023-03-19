@@ -465,11 +465,7 @@ private[consumer] final class Runloop(
   private def handleOperational(state: State, cmd: Command): Task[State] =
     cmd match {
       case req: Request =>
-        if (state.isSubscribed) {
-          ZIO.succeed(state.addRequest(req))
-        } else {
-          ZIO.succeed(state)
-        }
+        ZIO.succeed(state.addRequest(req))
       case cmd @ Command.Commit(_, _) =>
         doCommit(cmd).as(state.addCommit(cmd))
       case cmd @ Command.ChangeSubscription(_, _, _) =>
