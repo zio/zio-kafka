@@ -1,7 +1,7 @@
 package zio.kafka.bench
-import org.openjdk.jmh.annotations.{ Level, Setup, TearDown }
-import zio.{ ZLayer, _ }
+import org.openjdk.jmh.annotations.{ Setup, TearDown }
 import zio.kafka.bench.ZioBenchmark.logger
+import zio.{ ZLayer, _ }
 
 import java.util.UUID
 
