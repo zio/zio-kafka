@@ -506,22 +506,20 @@ private[consumer] final class Runloop(
             case Subscription.Topics(topics) =>
               val rc = RebalanceConsumer.Live(c)
               ZIO.attempt(c.subscribe(topics.asJava, rebalanceListener.toKafka(runtime, rc)))
-
-            // For manual subscriptions we have to do some manual work before starting the run loop
             case Subscription.Manual(topicPartitions) =>
-              ZIO.attempt(c.assign(topicPartitions.asJava)) *>
+              // For manual subscriptions we have to do some manual work before starting the run loop
+              ZIO.attempt(c.assign(topicPartitions.asJava)) *> {
+                offsetRetrieval match {
+                  case OffsetRetrieval.Manual(getOffsets) =>
+                    getOffsets(topicPartitions).flatMap { offsets =>
+                      ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) }
+                    }
+                  case OffsetRetrieval.Auto(_) => ZIO.unit
+                }
+              } *>
                 ZIO.foreach(topicPartitions)(newPartitionStream).flatMap { partitionStreams =>
                   partitions.offer(Take.chunk(Chunk.fromIterable(partitionStreams.map(_.tpStream))))
-                } *> {
-                  offsetRetrieval match {
-                    case OffsetRetrieval.Manual(getOffsets) =>
-                      getOffsets(topicPartitions).flatMap { offsets =>
-                        ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) }
-                      }
-                    case OffsetRetrieval.Auto(_) => ZIO.unit
-                  }
                 }
-
           }
       }
     }.foldZIO(
