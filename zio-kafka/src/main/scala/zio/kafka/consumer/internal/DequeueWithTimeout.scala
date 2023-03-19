@@ -5,7 +5,7 @@ import zio.{ Chunk, Dequeue, Duration, Fiber, Ref, Scope, UIO, ZIO }
  * Avoids race conditions between dequeueing and timeout, which would lead to lost dequeued elements, by storing the
  * interrupted dequeue action and finishing it before starting a new dequeue
  */
-class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Nothing, Chunk[A]]]]) {
+class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Nothing, Chunk[A]]]], scope: Scope) {
 
   /**
    * Takes all current commands in the queue without blocking, unless there was a previously interrupted dequeue, in
@@ -34,17 +34,19 @@ class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Not
                         newDequeue
                     }
       result <- ZIO.interruptibleMask { restore =>
-                  restore(awaitAction)
-                    .raceWith[Any, Nothing, Nothing, Chunk[A], Chunk[A]](
-                      restore(ZIO.sleep(timeout).as(Chunk.empty[A]))
-                    )(
-                      leftDone = { case (leftExit, sleepFiber) =>
-                        previousDequeue.set(None) *> sleepFiber.interrupt *> ZIO.done(leftExit)
-                      },
-                      rightDone = { case (rightExit, actionFiber @ _) =>
-                        previousDequeue.set(Some(actionFiber)) *> ZIO.done(rightExit)
-                      }
-                    )
+                  awaitAction.forkIn(scope).flatMap { awaitFib =>
+                    awaitFib.join
+                      .raceWith[Any, Nothing, Nothing, Chunk[A], Chunk[A]](
+                        restore(ZIO.sleep(timeout).as(Chunk.empty[A]))
+                      )(
+                        leftDone = { case (leftExit, sleepFiber) =>
+                          previousDequeue.set(None) *> sleepFiber.interrupt *> ZIO.done(leftExit)
+                        },
+                        rightDone = { case (rightExit, actionFiber) =>
+                          actionFiber.interrupt *> previousDequeue.set(Some(awaitFib)) *> ZIO.done(rightExit)
+                        }
+                      )
+                  }
                 }
     } yield result
 }
@@ -56,5 +58,5 @@ object DequeueWithTimeout {
         Ref
           .make(Option.empty[Fiber[Nothing, Chunk[A]]])
       )(ref => ref.get.some.flatMap(_.interrupt.ignore).option)
-      .map(ref => new DequeueWithTimeout(queue, ref))
+      .flatMap(ref => ZIO.scope.map(new DequeueWithTimeout(queue, ref, _)))
 }
