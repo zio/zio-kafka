@@ -10,6 +10,8 @@ trait ZioBenchmark[Environment] {
 
   protected val enableLogging: Boolean = true
 
+  protected val timeout: Duration = 180.seconds
+
   @Setup
   def setup(): Unit =
     runtime = Unsafe.unsafe(implicit unsafe =>
@@ -35,6 +37,8 @@ trait ZioBenchmark[Environment] {
         .run(
           program
             .tapErrorCause(e => ZIO.debug("Found error!" + e))
+            .timeoutFail(new RuntimeException("Benchmark timed out"))(timeout)
+            .tapError(_ => Fiber.dumpAll)
         )
         .getOrThrow()
     )
