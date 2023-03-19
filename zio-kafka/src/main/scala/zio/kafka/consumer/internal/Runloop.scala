@@ -711,7 +711,7 @@ private[consumer] object Runloop {
     runloopTimeout: Duration
   ): ZIO[Scope, Throwable, Runloop] =
     for {
-      commandQueue       <- Queue.bounded[Runloop.Command](commandQueueSize)
+      commandQueue       <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](commandQueueSize))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       partitions <- ZIO.acquireRelease(
                       Queue
@@ -739,12 +739,10 @@ private[consumer] object Runloop {
                   restartStreamsOnRebalancing,
                   currentStateRef
                 )
-      _    <- ZIO.logDebug("Starting Runloop")
-      _    <- ZIO.addFinalizer(ZIO.logDebug("Shut down Runloop"))
-      _    <- ZIO.addFinalizer(ZIO.logDebug("Shutting down command queue") *> commandQueue.shutdown)
+      _    <- ZIO.logDebug("Starting Runloop").withFinalizer(_ => ZIO.logDebug("Shut down Runloop"))
       stop <- Ref.make(false)
       fib  <- runloop.run(stop).fork
-      _    <- ZIO.addFinalizer(ZIO.logDebug("Shutting down Runloop") *> stop.set(true) *> fib.join.orDie)
+      _    <- ZIO.addFinalizer(ZIO.logTrace("Shutting down Runloop") *> stop.set(true) *> fib.join.orDie)
     } yield runloop
 }
 
