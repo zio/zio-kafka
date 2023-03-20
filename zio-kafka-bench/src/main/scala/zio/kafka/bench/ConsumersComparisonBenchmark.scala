@@ -18,17 +18,17 @@ import scala.jdk.CollectionConverters._
 object ConsumersComparisonBenchmark {
   type LowLevelKafka = KafkaConsumer[Array[Byte], Array[Byte]]
 
-  type Env = Kafka with Producer with Consumer with LowLevelKafka with ConsumerSettings
+  type Env = Kafka with Producer with LowLevelKafka with ConsumerSettings
 }
 import zio.kafka.bench.ConsumersComparisonBenchmark._
 
 @State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
-  val topic1                      = "topic1"
-  val nrPartitions                = 6
-  val nrMessages                  = 1000000
-  val kvs: List[(String, String)] = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
+  val topic1                          = "topic1"
+  val nrPartitions                    = 6
+  val nrMessages                      = 1000000
+  val kvs: Iterable[(String, String)] = Iterable.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
 
   val kafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
     ZLayer.scoped {
@@ -59,13 +59,13 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
         Kafka.embedded,
         producer,
         settings,
-        simpleConsumer(),
         kafkaConsumer
       )
       .orDie
 
   override def initialize: ZIO[Env, Throwable, Any] =
     for {
+      _ <- ZIO.succeed(EmbeddedKafka.deleteTopics(List(topic1))).ignore
       _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = nrPartitions))
       _ <- produceMany(topic1, kvs)
     } yield ()
@@ -99,5 +99,6 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
         .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
         .take(nrMessages.toLong)
         .runDrain
+        .provideLayer(simpleConsumer())
     }
 }
