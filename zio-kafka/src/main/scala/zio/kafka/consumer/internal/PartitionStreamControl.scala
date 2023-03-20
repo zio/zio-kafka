@@ -15,9 +15,10 @@ private[internal] class PartitionStreamControl private (
   completedPromise: Promise[Throwable, Unit]
 ) {
 
-  /** Offer new data for the stream to process. */
-  def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
-    dataQueue.offer(Take.chunk(data)).unit
+  private val logAnnotate = ZIO.logAnnotate(
+    LogAnnotation("topic", tp.topic()),
+    LogAnnotation("partition", tp.partition().toString)
+  )
 
   /** To be invoked when the partition was lost. */
   def lost(): UIO[Boolean] =
@@ -25,22 +26,30 @@ private[internal] class PartitionStreamControl private (
 
   /** To be invoked when the partition was revoked or otherwise needs to be ended. */
   def end(): ZIO[Any, Nothing, Unit] =
-    ZIO.logTrace(s"Partition ${tp.toString} ending") *>
-      dataQueue.offer(Take.end).unit
+    logAnnotate {
+      ZIO.logTrace(s"Partition ${tp.toString} ending") *>
+        dataQueue.offer(Take.end).unit
+    }
 
   /** To be invoked when the partition was revoked or otherwise needs to be ended, after the last data is processed. */
   def endWith(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
-    ZIO.logTrace(s"Partition ${tp.toString} ending after ${data.size} records") *> {
-      if (data.isEmpty) {
-        dataQueue.offer(Take.end).unit
-      } else {
-        dataQueue.offerAll(List(Take.chunk(data), Take.end)).unit
+    logAnnotate {
+      ZIO.logTrace(s"Partition ${tp.toString} ending after ${data.size} records") *> {
+        if (data.isEmpty) {
+          dataQueue.offer(Take.end).unit
+        } else {
+          dataQueue.offerAll(List(Take.chunk(data), Take.end)).unit
+        }
       }
     }
 
   /** Returns true when the stream is done. */
   def isCompleted: ZIO[Any, Nothing, Boolean] =
     completedPromise.isDone
+
+  /** Returns true when the stream is running. */
+  def isRunning: ZIO[Any, Nothing, Boolean] =
+    isCompleted.negate
 
   /** Wait till the stream is done. */
   def awaitCompleted(): ZIO[Any, Throwable, Unit] =

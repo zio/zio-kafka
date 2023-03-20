@@ -44,9 +44,9 @@ private[consumer] final class Runloop(
     ZIO
       .whenZIO(shutdownRef.getAndSet(true).negate) {
         for {
-          _     <- partitions.offer(Take.end)
           state <- currentState.get
-          _     <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.end() }
+          _     <- ZIO.foreachDiscard(state.assignedStreams)(_.end())
+          _     <- partitions.offer(Take.end)
         } yield ()
       }
       .unit
@@ -55,7 +55,7 @@ private[consumer] final class Runloop(
   def awaitShutdown: UIO[Unit] =
     for {
       state <- currentState.get
-      _     <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.awaitCompleted().ignore }
+      _     <- ZIO.foreachDiscard(state.assignedStreams)(_.awaitCompleted().ignore)
     } yield ()
 
   def changeSubscription(
@@ -133,7 +133,7 @@ private[consumer] final class Runloop(
     val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
-        ZIO.logDebug(s"Rebalance in progress, retrying commit for offsets ${offsets}") *>
+        ZIO.logDebug(s"Rebalance in progress, retrying commit for offsets $offsets") *>
           commandQueue.offer(cmd).unit
       case err =>
         cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
@@ -164,17 +164,17 @@ private[consumer] final class Runloop(
   private def endRevoked(
     requests: Chunk[Request],
     bufferedRecords: BufferedRecords,
-    currentAssignedStreams: Map[TopicPartition, PartitionStreamControl],
+    currentAssignedStreams: Seq[PartitionStreamControl],
     isRevoked: TopicPartition => Boolean
   ): UIO[Runloop.RevokeResult] = {
     val (revokedStreams, assignedStreams) =
-      currentAssignedStreams.partition(es => isRevoked(es._1))
+      currentAssignedStreams.partition(control => isRevoked(control.tp))
 
     val revokeAction: UIO[Unit] =
-      ZIO.foreachDiscard(revokedStreams) { case (tp, control) =>
-        val remaining = bufferedRecords.recs.getOrElse(tp, Chunk.empty)
+      ZIO.foreachDiscard(revokedStreams) { control =>
+        val remaining = bufferedRecords.recs.getOrElse(control.tp, Chunk.empty)
 
-        ZIO.logDebug(s"Revoking topic-partition ${tp} with ${remaining.size} remaining records") *>
+        ZIO.logDebug(s"Revoking topic-partition ${control.tp} with ${remaining.size} remaining records") *>
           control.endWith(
             remaining.map(
               CommittableRecord(_, commit, getConsumerGroupMetadataIfAny)
@@ -322,7 +322,7 @@ private[consumer] final class Runloop(
                   Set.empty,
                   state.pendingRequests,
                   BufferedRecords.empty,
-                  Map[TopicPartition, PartitionStreamControl]()
+                  Seq.empty
                 )
               ),
               onFalse = {
@@ -438,16 +438,14 @@ private[consumer] final class Runloop(
               ZIO.logTrace(s"Offering partition assignment ${pollResult.newlyAssigned}") *>
                 partitions.offer(Take.chunk(Chunk.fromIterable(newStreams.map(_.tpStream))))
             }
-      updatedPendingCommits    <- ZIO.filter(state.pendingCommits)(_.isPending)
-      completedTopicPartitions <- ZIO.filter(pollResult.assignedStreams.values)(_.isCompleted).map(_.map(_.tp))
-      updatedAssignedStreams =
-        pollResult.assignedStreams -- completedTopicPartitions ++
-          newAssignedStreams.map(control => control.tp -> control)
+      runningStreams <- ZIO.filter(pollResult.assignedStreams)(_.isRunning)
+      updatedStreams = runningStreams ++ newAssignedStreams
+      updatedPendingCommits  <- ZIO.filter(state.pendingCommits)(_.isPending)
     } yield State(
       pendingRequests = pollResult.unfulfilledRequests,
       pendingCommits = updatedPendingCommits,
       bufferedRecords = pollResult.bufferedRecords,
-      assignedStreams = updatedAssignedStreams,
+      assignedStreams = updatedStreams,
       subscription = state.subscription
     )
 
@@ -479,7 +477,7 @@ private[consumer] final class Runloop(
             endRevoked(state.pendingRequests, state.bufferedRecords, state.assignedStreams, _ => true).as(
               state.copy(
                 pendingRequests = Chunk.empty,
-                assignedStreams = Map.empty,
+                assignedStreams = Seq.empty,
                 bufferedRecords = BufferedRecords.empty
               )
             )
@@ -567,18 +565,18 @@ private[consumer] object Runloop {
   type ByteArrayConsumerRecord    = ConsumerRecord[Array[Byte], Array[Byte]]
 
   // Internal parameters, should not be necessary to tune
-  val commandQueueSize = 1024
+  private val commandQueueSize = 1024
 
   final case class PollResult(
     newlyAssigned: Set[TopicPartition],
     unfulfilledRequests: Chunk[Request],
     bufferedRecords: BufferedRecords,
-    assignedStreams: Map[TopicPartition, PartitionStreamControl]
+    assignedStreams: Seq[PartitionStreamControl]
   )
   final case class RevokeResult(
     unfulfilledRequests: Chunk[Request],
     bufferedRecords: BufferedRecords,
-    assignedStreams: Map[TopicPartition, PartitionStreamControl]
+    assignedStreams: Seq[PartitionStreamControl]
   )
   final case class FulfillResult(
     unfulfilledRequests: Chunk[Request],
@@ -621,9 +619,6 @@ private[consumer] object Runloop {
 
   final case class BufferedRecords(recs: Map[TopicPartition, Chunk[ByteArrayConsumerRecord]]) {
     def partitions: Set[TopicPartition] = recs.keySet
-
-    def remove(partition: TopicPartition): BufferedRecords =
-      BufferedRecords(recs - partition)
 
     def ++(newRecs: BufferedRecords): BufferedRecords =
       BufferedRecords(newRecs.recs.foldLeft(recs) { case (acc, (tp, recs)) =>
@@ -695,7 +690,7 @@ private[internal] final case class State(
   pendingRequests: Chunk[Request],
   pendingCommits: Chunk[Commit],
   bufferedRecords: BufferedRecords,
-  assignedStreams: Map[TopicPartition, PartitionStreamControl],
+  assignedStreams: Seq[PartitionStreamControl],
   subscription: Option[Subscription]
 ) {
   def addCommit(c: Commit): State   = copy(pendingCommits = pendingCommits :+ c)
@@ -708,5 +703,5 @@ private[internal] final case class State(
 }
 
 object State {
-  val initial: State = State(Chunk.empty, Chunk.empty, BufferedRecords.empty, Map.empty, None)
+  val initial: State = State(Chunk.empty, Chunk.empty, BufferedRecords.empty, Seq.empty, None)
 }
