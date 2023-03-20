@@ -70,41 +70,18 @@ private[internal] object PartitionStreamControl {
                    completedPromise.succeed(()) <*
                      ZIO.logDebug(s"Partition stream ${tp.toString} has ended")
                  ) *>
-                 ZStream
-                   .paginateChunkZIO(false) { streamEnded =>
-                     if (streamEnded) {
-                       ZIO.succeed((Chunk.empty, None))
-                     } else {
-                       // First try to take all records that are available right now.
-                       // When no data is available, request more data and await its arrival.
-                       dataQueue.takeAll
-                         .filterOrElse(_.nonEmpty) {
-                           for {
-                             _     <- ZIO.logDebug(s"Partition stream ${tp.toString} creates data request")
-                             _     <- commandQueue.offer(Request(tp, dataQueue)).unit
-                             _     <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
-                             _     <- ZIO.logDebug(s"Partition stream ${tp.toString} has sent data request")
-                             taken <- dataQueue.takeBetween(1, Int.MaxValue)
-                             _     <- ZIO.logDebug(s"Partition stream ${tp.toString} received more data")
-                           } yield taken
-                         }
-                         // Extract the success values and potential end-of-stream value
-                         .map { takes =>
-                           val (okTakes, endTakes) = takes.splitWhere(!_.isSuccess)
-                           val data = okTakes
-                             .map(
-                               _.fold(
-                                 end = Chunk.empty[ByteArrayCommittableRecord],
-                                 error = _ => Chunk.empty[ByteArrayCommittableRecord],
-                                 value = identity
-                               )
-                             )
-                             .foldLeft(Chunk.empty[ByteArrayCommittableRecord])(_ ++ _)
-                           val streamEnded = endTakes.nonEmpty
-                           (data, Some(streamEnded))
-                         }
+                 ZStream.repeatZIOChunk {
+                   // First try to take all records that are available right now.
+                   // When no data is available, request more data and await its arrival.
+                   dataQueue.takeAll
+                     .filterOrElse(_.nonEmpty) {
+                       for {
+                         _     <- commandQueue.offer(Request(tp, dataQueue)).unit
+                         _     <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
+                         taken <- dataQueue.takeBetween(1, Int.MaxValue)
+                       } yield taken
                      }
-                   }
+                 }.flattenTake
                    .interruptWhen(interruptionPromise)
     } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise)
 
