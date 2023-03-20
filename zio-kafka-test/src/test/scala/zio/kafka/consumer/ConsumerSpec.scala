@@ -278,8 +278,13 @@ object ConsumerSpec extends ZIOKafkaSpec {
           _ <- Consumer
                  .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                  .zipWithIndex
-                 .tap { case (record, idx) => Consumer.stopConsumption.when(idx == 3) *> record.offset.commit }
+                 .tap { case (record, idx) =>
+                   (Consumer.stopConsumption <* ZIO.logDebug("Stopped consumption")).when(idx == 3) *>
+                     record.offset.commit <* ZIO.logDebug(s"Committed $idx")
+                 }
+                 .tap { case (_, idx) => ZIO.logDebug(s"Consumed $idx") }
                  .runDrain
+                 .tap(_ => ZIO.logDebug("Stream completed"))
                  .provideSomeLayer[Kafka](
                    consumer(client, Some(group))
                  ) *> keepProducing

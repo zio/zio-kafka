@@ -80,9 +80,12 @@ private[internal] object PartitionStreamControl {
                        dataQueue.takeAll
                          .filterOrElse(_.nonEmpty) {
                            for {
+                             _     <- ZIO.logDebug(s"Partition stream ${tp.toString} creates data request")
                              _     <- commandQueue.offer(Request(tp, dataQueue)).unit
                              _     <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
+                             _     <- ZIO.logDebug(s"Partition stream ${tp.toString} has sent data request")
                              taken <- dataQueue.takeBetween(1, Int.MaxValue)
+                             _     <- ZIO.logDebug(s"Partition stream ${tp.toString} received more data")
                            } yield taken
                          }
                          // Extract the success values and potential end-of-stream value

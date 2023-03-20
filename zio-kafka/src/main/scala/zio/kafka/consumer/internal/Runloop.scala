@@ -41,17 +41,19 @@ private[consumer] final class Runloop(
 
   /** Initiate a graceful shutdown. */
   def gracefulShutdown: UIO[Unit] =
-    for {
-      wasShutdown <- shutdownRef.getAndSet(true)
-      state       <- currentState.get
-      _           <- partitions.offer(Take.end).when(!wasShutdown)
-      _           <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.end() }.when(!wasShutdown)
-    } yield ()
+    ZIO
+      .whenZIO(shutdownRef.getAndSet(true).negate) {
+        for {
+          _     <- partitions.offer(Take.end)
+          state <- currentState.get
+          _     <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.end() }
+        } yield ()
+      }
+      .unit
 
-  /** Wait until a graceful shutdown was completed. */
+  /** Wait until graceful shutdown completes. */
   def awaitShutdown: UIO[Unit] =
     for {
-      _     <- shutdownRef.get.filterOrDie(identity)(new IllegalStateException("Was not shutdown"))
       state <- currentState.get
       _     <- ZIO.foreachDiscard(state.assignedStreams) { case (_, control) => control.awaitCompleted().ignore }
     } yield ()
