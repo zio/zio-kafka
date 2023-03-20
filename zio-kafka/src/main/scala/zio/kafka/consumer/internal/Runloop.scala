@@ -440,7 +440,7 @@ private[consumer] final class Runloop(
             }
       runningStreams <- ZIO.filter(pollResult.assignedStreams)(_.isRunning)
       updatedStreams = runningStreams ++ newAssignedStreams
-      updatedPendingCommits  <- ZIO.filter(state.pendingCommits)(_.isPending)
+      updatedPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
     } yield State(
       pendingRequests = pollResult.unfulfilledRequests,
       pendingCommits = updatedPendingCommits,
