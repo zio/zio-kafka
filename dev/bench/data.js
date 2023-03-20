@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1679299212536,
+  "lastUpdate": 1679301799729,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -5124,6 +5124,50 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
             "value": 2102.0890848999998,
+            "unit": "ms/op",
+            "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "committer": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "id": "83a1eedfb0ba0640bdb00ead23b00cbdb73aafb5",
+          "message": "Safer handling of commandQueue.takeBetween interruption",
+          "timestamp": "2023-03-17T10:26:38Z",
+          "url": "https://github.com/zio/zio-kafka/pull/725/commits/83a1eedfb0ba0640bdb00ead23b00cbdb73aafb5"
+        },
+        "date": 1679301793797,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 228.76201173166675,
+            "unit": "ms/op",
+            "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 443.9074552433335,
+            "unit": "ms/op",
+            "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.kafkaClients",
+            "value": 657.81813748,
+            "unit": "ms/op",
+            "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
+            "value": 2117.0313659599997,
             "unit": "ms/op",
             "extra": "iterations: 10\nforks: 5\nthreads: 1"
           }
