@@ -8,8 +8,8 @@ import zio.{ Chunk, Dequeue, Duration, Fiber, Ref, Scope, UIO, ZIO }
 class DequeueWithTimeout[A](q: Dequeue[A], previousDequeue: Ref[Option[Fiber[Nothing, Chunk[A]]]], scope: Scope) {
 
   /**
-   * Takes all current commands in the queue without blocking, unless there was a previously interrupted dequeue, in
-   * which case it awaits it up to the timeout and then adds all currently available commands
+   * Takes all current elements in the queue without blocking, unless there was a previously interrupted dequeue, in
+   * which case it awaits it up to the timeout and then adds all currently available elements
    */
   def takeAll(timeout: Duration): UIO[Chunk[A]] =
     finishPreviousDequeueOrExecuteNew(_.flatMap(as => q.takeAll.map(as ++ _)), q.takeAll, timeout)
