@@ -7,7 +7,7 @@ import zio._
 import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.Runloop.Command.{ Commit, PeriodicPoll, Request }
+import zio.kafka.consumer.internal.Runloop.Command.{ Commit, Request }
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.{ CommittableRecord, RebalanceConsumer, RebalanceListener, Subscription }
 import zio.stream._
@@ -461,7 +461,7 @@ private[consumer] final class Runloop(
       case _: Request                    => /* Ignore requests during shutdown. */ ZIO.succeed(state)
       case r: Command.ChangeSubscription => r.succeed.as(state)
       case cmd: Command.Commit           => doCommit(cmd).as(state.addCommit(cmd))
-      case PeriodicPoll                  => ZIO.succeed(state)
+      case Command.Poll                  => ZIO.succeed(state)
     }
 
   private def handleOperational(state: State, cmd: Command): Task[State] =
@@ -489,7 +489,7 @@ private[consumer] final class Runloop(
           }
           .tapBoth(e => cmd.fail(e), _ => cmd.succeed)
           .uninterruptible
-      case PeriodicPoll => ZIO.succeed(state)
+      case Command.Poll => ZIO.succeed(state)
     }
 
   private def handleChangeSubscription(
@@ -530,7 +530,7 @@ private[consumer] final class Runloop(
    * Poll behavior:
    *   - Run until stop is set to true
    *   - Process commands as soon as they are queued, unless in the middle of polling
-   *   - Process all currently queued commands instead of one by one
+   *   - Process all currently queued commands before polling instead of one by one
    *   - Immediately after polling, if there are available commands, process them instead of waiting until some periodic
    *     trigger
    *   - Poll only when subscribed (leads to exceptions from the Apache Kafka Consumer if not)
@@ -554,7 +554,7 @@ private[consumer] final class Runloop(
     ZStream
       .fromQueue(commandQueue)
       .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
-      .merge(ZStream.repeatWithSchedule(Command.PeriodicPoll, Schedule.spaced(pollFrequency)))
+      .merge(ZStream.repeatWithSchedule(Command.Poll, Schedule.spaced(pollFrequency)))
       .aggregateAsync(ZSink.collectAllN[Command](commandQueueSize))
       .takeUntilZIO(_ => stop.get)
       .runFoldZIO(State.initial) { case (state, commands) =>
@@ -569,7 +569,7 @@ private[consumer] final class Runloop(
                                    else ZIO.succeed(updatedState)
           _ <-
             commandQueue
-              .offer(Command.PeriodicPoll)
+              .offer(Command.Poll)
               .when(
                 shouldPoll(updatedStateAfterPoll)
               ) // Immediately poll again, after processing all new queued commands
@@ -615,7 +615,7 @@ private[consumer] object Runloop {
 
   sealed trait Command
   object Command {
-    case object PeriodicPoll extends Command
+    case object Poll extends Command
     final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command {
       @inline def isDone: UIO[Boolean]    = cont.isDone
       @inline def isPending: UIO[Boolean] = isDone.negate
