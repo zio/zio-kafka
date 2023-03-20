@@ -541,7 +541,16 @@ private[consumer] final class Runloop(
    * @param stop
    *   Ref that is set to true when polling should stop at Runloop (controlled) shutdown
    */
-  def run(stop: Ref[Boolean]): ZIO[Scope, Throwable, Any] =
+  def run(stop: Ref[Boolean]): ZIO[Scope, Throwable, Any] = {
+    def logPollStart(state: State): UIO[Unit] =
+      ZIO
+        .logTrace(
+          s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
+        )
+
+    def shouldPoll(state: State): Boolean =
+      state.isSubscribed && (state.pendingRequests.nonEmpty || state.pendingCommits.nonEmpty || state.assignedStreams.isEmpty)
+
     ZStream
       .fromZIO(Ref.make(State.initial))
       .flatMap { stateRef =>
@@ -550,23 +559,22 @@ private[consumer] final class Runloop(
           .merge(ZStream.repeatWithSchedule(Command.PeriodicPoll, Schedule.spaced(pollFrequency)))
           .aggregateAsync(ZSink.collectAllN[Command](commandQueueSize))
           .mapZIO { commands =>
-            def logPollStart(state: State): UIO[Unit] =
-              ZIO
-                .logTrace(
-                  s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
-                )
-
             for {
               state      <- stateRef.get
-              _          <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
+              _          <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
               isShutdown <- isShutdown
               handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
               updatedState <- ZIO.foldLeft(commands)(state)(handleCommand)
 
-              shouldPoll =
-                updatedState.isSubscribed && (updatedState.pendingRequests.nonEmpty || updatedState.pendingCommits.nonEmpty || updatedState.assignedStreams.isEmpty)
-              updatedStateAfterPoll <- if (shouldPoll) logPollStart(updatedState) *> handlePoll(updatedState)
+              updatedStateAfterPoll <- if (shouldPoll(updatedState))
+                                         logPollStart(updatedState) *> handlePoll(updatedState)
                                        else ZIO.succeed(updatedState)
+              _ <-
+                commandQueue
+                  .offer(Command.PeriodicPoll)
+                  .when(
+                    shouldPoll(updatedStateAfterPoll)
+                  ) // Immediately poll again, after processing all new queued commands
               _ <- stateRef.set(updatedStateAfterPoll)
             } yield ()
           }
@@ -576,6 +584,7 @@ private[consumer] final class Runloop(
       .runDrain
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitions.offer(Take.failCause(cause)))
+  }
 }
 
 private[consumer] object Runloop {
