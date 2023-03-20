@@ -5,7 +5,7 @@ import zio.{ Chunk, Dequeue, Duration, Fiber, Ref, Scope, Semaphore, UIO, ZIO }
  * Avoids race conditions between dequeueing and timeout, which would lead to lost dequeued elements, by storing the
  * interrupted dequeue action and finishing it before starting a new dequeue
  */
-class DequeueWithTimeout[A](
+final class DequeueWithTimeout[A](
   q: Dequeue[A],
   previousDequeue: Ref[Option[Fiber[Nothing, Chunk[A]]]],
   scope: Scope,
