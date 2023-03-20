@@ -645,7 +645,7 @@ private[consumer] object Runloop {
 
   sealed trait Command
   object Command {
-    final case object PeriodicPoll extends Command
+    case object PeriodicPoll extends Command
     final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command {
       @inline def isDone: UIO[Boolean]    = cont.isDone
       @inline def isPending: UIO[Boolean] = isDone.negate
