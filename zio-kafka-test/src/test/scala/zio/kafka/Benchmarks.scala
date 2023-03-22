@@ -81,7 +81,6 @@ object ZIOKafka extends ZIOAppDefault {
       .withGroupId(s"zio-kafka-${scala.util.Random.nextInt()}")
       .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       .withProperty("fetch.min.bytes", "128000")
-      .withPollInterval(50.millis)
       .withPollTimeout(50.millis)
       .withPerPartitionChunkPrefetch(4)
 

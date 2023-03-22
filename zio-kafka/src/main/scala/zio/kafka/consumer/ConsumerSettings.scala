@@ -10,8 +10,7 @@ import zio.kafka.security.KafkaCredentialStore
  * @param properties
  * @param closeTimeout
  * @param pollInterval
- *   When there are no pending requests from partition streams, the frequency of polling for liveness and getting
- *   partition assignments.
+ *   Deprecated, no longer used.
  * @param pollTimeout
  * @param perPartitionChunkPrefetch
  * @param offsetRetrieval
@@ -27,6 +26,7 @@ case class ConsumerSettings(
   bootstrapServers: List[String],
   properties: Map[String, AnyRef],
   closeTimeout: Duration,
+  @deprecated("Is no longer used", "2.1.3")
   pollInterval: Duration,
   pollTimeout: Duration,
   perPartitionChunkPrefetch: Int,
@@ -70,6 +70,7 @@ case class ConsumerSettings(
   def withPerPartitionChunkPrefetch(prefetch: Int): ConsumerSettings =
     copy(perPartitionChunkPrefetch = prefetch)
 
+  @deprecated("no longer used", "2.1.3")
   def withPollInterval(interval: Duration): ConsumerSettings =
     copy(pollInterval = interval)
 

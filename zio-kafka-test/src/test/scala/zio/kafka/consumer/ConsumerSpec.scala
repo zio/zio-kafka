@@ -773,7 +773,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
               _.withProperties(
                 ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> classOf[CooperativeStickyAssignor].getName
               )
-                .withPollInterval(500.millis)
                 .withPollTimeout(500.millis)
             )
           ) ++ ZLayer.succeed(Diagnostics.NoOp) >>> Consumer.live
