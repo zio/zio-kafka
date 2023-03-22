@@ -78,7 +78,6 @@ object KafkaTestUtils {
         .withClientId(clientId)
         .withCloseTimeout(5.seconds)
         .withPollTimeout(100.millis)
-        .withPollInterval(100.millis)
         .withProperties(
           ConsumerConfig.AUTO_OFFSET_RESET_CONFIG        -> "earliest",
           ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",

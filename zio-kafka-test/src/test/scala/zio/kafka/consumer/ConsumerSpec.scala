@@ -773,7 +773,6 @@ object ConsumerSpec extends ZIOKafkaSpec {
               _.withProperties(
                 ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> classOf[CooperativeStickyAssignor].getName
               )
-                .withPollInterval(500.millis)
                 .withPollTimeout(500.millis)
             )
           ) ++ ZLayer.succeed(Diagnostics.NoOp) >>> Consumer.live
@@ -797,27 +796,30 @@ object ConsumerSpec extends ZIOKafkaSpec {
           subscription = Subscription.topics(topic)
           stopConsumer1 <- Promise.make[Nothing, Unit]
           fib <-
-            Consumer
-              .partitionedAssignmentStream(subscription, Serde.string, Serde.string)
-              .rechunk(1)
-              .mapZIOPar(16) { partitions =>
-                ZIO.logInfo(s"Consumer 1 got new partition assignment: ${partitions.map(_._1.toString)}") *>
-                  ZStream
-                    .fromIterable(partitions.map(_._2))
-                    .flatMapPar(Int.MaxValue)(s => s)
-                    .mapZIO(record => messagesReceivedConsumer1.update(_ + 1).as(record))
-                    .map(_.offset)
-                    .aggregateAsync(Consumer.offsetBatches)
-                    .mapZIO(offsetBatch => offsetBatch.commit)
-                    .runDrain
+            ZIO
+              .logAnnotate("consumer", "1") {
+                Consumer
+                  .partitionedAssignmentStream(subscription, Serde.string, Serde.string)
+                  .rechunk(1)
+                  .mapZIOPar(16) { partitions =>
+                    ZIO.logInfo(s"Consumer 1 got new partition assignment: ${partitions.map(_._1.toString)}") *>
+                      ZStream
+                        .fromIterable(partitions.map(_._2))
+                        .flatMapPar(Int.MaxValue)(s => s)
+                        .mapZIO(record => messagesReceivedConsumer1.update(_ + 1).as(record))
+                        .map(_.offset)
+                        .aggregateAsync(Consumer.offsetBatches)
+                        .mapZIO(offsetBatch => offsetBatch.commit)
+                        .runDrain
+                  }
+                  .mapZIO(_ => drainCount.updateAndGet(_ + 1))
+                  .interruptWhen(stopConsumer1.await)
+                  .runDrain
+                  .provideSomeLayer[Kafka](
+                    customConsumer("consumer1", Some(group)) ++ Scope.default
+                  )
+                  .tapError(e => ZIO.logErrorCause(e.getMessage, Cause.fail(e)))
               }
-              .mapZIO(_ => drainCount.updateAndGet(_ + 1))
-              .interruptWhen(stopConsumer1.await)
-              .runDrain
-              .provideSomeLayer[Kafka](
-                customConsumer("consumer1", Some(group)) ++ Scope.default
-              )
-              .tapError(e => ZIO.logErrorCause(e.getMessage, Cause.fail(e)))
               .forkScoped
 
           _ <- messagesReceivedConsumer1.get
@@ -825,17 +827,20 @@ object ConsumerSpec extends ZIOKafkaSpec {
           _ <- ZIO.logInfo("Starting consumer 2")
 
           fib2 <-
-            Consumer
-              .plainStream(subscription, Serde.string, Serde.string)
-              .mapZIO(record => messagesReceivedConsumer2.update(_ + 1).as(record))
-              .map(_.offset)
-              .aggregateAsync(Consumer.offsetBatches)
-              .mapZIO(offsetBatch => offsetBatch.commit)
-              .runDrain
-              .provideSomeLayer[Kafka](
-                customConsumer("consumer2", Some(group))
-              )
-              .tapError(e => ZIO.logErrorCause("Error in consumer 2", Cause.fail(e)))
+            ZIO
+              .logAnnotate("consumer", "2") {
+                Consumer
+                  .plainStream(subscription, Serde.string, Serde.string)
+                  .mapZIO(record => messagesReceivedConsumer2.update(_ + 1).as(record))
+                  .map(_.offset)
+                  .aggregateAsync(Consumer.offsetBatches)
+                  .mapZIO(offsetBatch => offsetBatch.commit)
+                  .runDrain
+                  .provideSomeLayer[Kafka](
+                    customConsumer("consumer2", Some(group))
+                  )
+                  .tapError(e => ZIO.logErrorCause("Error in consumer 2", Cause.fail(e)))
+              }
               .forkScoped
 
           _ <- messagesReceivedConsumer2.get

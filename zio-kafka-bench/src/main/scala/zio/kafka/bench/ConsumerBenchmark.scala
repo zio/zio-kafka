@@ -49,7 +49,6 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                  properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
                )
              )
-             .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
     } yield ()
   }
 
@@ -75,7 +74,6 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                    properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
                  )
                )
-               .timeoutFail(new RuntimeException("Timeout"))(30.seconds)
            }
     } yield ()
   }
