@@ -493,7 +493,7 @@ private[consumer] final class Runloop(
 
   private def handleChangeSubscription(
     command: Command.ChangeSubscription
-  ): Task[Any] =
+  ): Task[Unit] =
     consumer.withConsumerM { c =>
       command.subscription match {
         case None =>
@@ -523,7 +523,7 @@ private[consumer] final class Runloop(
                 }
           }
       }
-    }
+    }.unit
 
   /**
    * Poll behavior:
@@ -674,7 +674,7 @@ private[consumer] object Runloop {
                           Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
                         ]
                     )(_.shutdown)
-      shutdownRef     <- ZIO.acquireRelease(Ref.make(false))(_.set(true) *> ZIO.logTrace("Set shutdownRef to true"))
+      shutdownRef     <- Ref.make(false)
       currentStateRef <- Ref.make(State.initial)
       runtime         <- ZIO.runtime[Any]
       runloop = new Runloop(
@@ -693,10 +693,18 @@ private[consumer] object Runloop {
                   restartStreamsOnRebalancing,
                   currentStateRef
                 )
-      _ <- ZIO.logDebug("Starting Runloop").withFinalizer(_ => ZIO.logDebug("Shut down Runloop"))
+      _ <- ZIO.logDebug("Starting Runloop")
+
       // Run the entire loop on the blocking thread pool to avoid executor shifts
       fib <- ZIO.blocking(runloop.run).forkScoped
-      _ <- ZIO.addFinalizer(ZIO.logTrace("Shutting down Runloop") *> commandQueue.offer(StopRunloop) *> fib.join.orDie)
+
+      _ <- ZIO.addFinalizer(
+             ZIO.logTrace("Shutting down Runloop") *>
+               shutdownRef.set(true) *>
+               commandQueue.offer(StopRunloop) *>
+               fib.join.orDie *>
+               ZIO.logDebug("Shut down Runloop")
+           )
     } yield runloop
 }
 
