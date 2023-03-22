@@ -704,7 +704,7 @@ private[consumer] object Runloop {
                 )
       _    <- ZIO.logDebug("Starting Runloop").withFinalizer(_ => ZIO.logDebug("Shut down Runloop"))
       stop <- Ref.make(false)
-      fib  <- runloop.run(stop).forkScoped
+      fib  <- ZIO.blocking(runloop.run(stop)).forkScoped
       _    <- ZIO.addFinalizer(ZIO.logTrace("Shutting down Runloop") *> stop.set(true) *> fib.join.orDie)
     } yield runloop
 }
