@@ -9,8 +9,6 @@ import zio.kafka.security.KafkaCredentialStore
  * @param bootstrapServers
  * @param properties
  * @param closeTimeout
- * @param pollInterval
- *   Deprecated, no longer used.
  * @param pollTimeout
  * @param perPartitionChunkPrefetch
  * @param offsetRetrieval
