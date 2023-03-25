@@ -20,6 +20,10 @@ private[internal] class PartitionStreamControl private (
     LogAnnotation("partition", tp.partition().toString)
   )
 
+  /** Offer new data for the stream to process. */
+  def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
+    dataQueue.offer(Take.chunk(data)).unit
+
   /** To be invoked when the partition was lost. */
   def lost(): UIO[Boolean] =
     interruptPromise.fail(new RuntimeException(s"Partition ${tp.toString} was lost"))
@@ -29,18 +33,6 @@ private[internal] class PartitionStreamControl private (
     logAnnotate {
       ZIO.logTrace(s"Partition ${tp.toString} ending") *>
         dataQueue.offer(Take.end).unit
-    }
-
-  /** To be invoked when the partition was revoked or otherwise needs to be ended, after the last data is processed. */
-  def endWith(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
-    logAnnotate {
-      ZIO.logTrace(s"Partition ${tp.toString} ending after ${data.size} records") *> {
-        if (data.isEmpty) {
-          dataQueue.offer(Take.end).unit
-        } else {
-          dataQueue.offerAll(List(Take.chunk(data), Take.end)).unit
-        }
-      }
     }
 
   /** Returns true when the stream is done. */
