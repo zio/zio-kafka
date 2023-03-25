@@ -167,14 +167,17 @@ private[consumer] final class Runloop private (
     val (revokedStreams, assignedStreams) =
       currentAssignedStreams.partition(control => isRevoked(control.tp))
 
-    val pendingRequests = requests.filter(req => !isRevoked(req.tp))
-
     ZIO
       .foreachDiscard(revokedStreams) { control =>
         ZIO.logDebug(s"Revoking topic-partition ${control.tp}") *>
           control.end()
       }
-      .as(Runloop.RevokeResult(pendingRequests, assignedStreams))
+      .as(
+        Runloop.RevokeResult(
+          pendingRequests = requests.filter(req => !isRevoked(req.tp)),
+          assignedStreams = assignedStreams
+        )
+      )
   }
 
   /**
