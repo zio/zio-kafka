@@ -337,12 +337,15 @@ private[consumer] final class Runloop private (
                                       )
                                   }
 
-//                  _ <- diagnostics.emitIfEnabled(
-//                         DiagnosticEvent.Poll(
-//                           requestedPartitions,
-//                           fulfillResult.unfulfilledRequests.map(_.tp).toSet
-//                         )
-//                       )
+                  _ <- diagnostics.emitIfEnabled {
+                         val providedTps = records.partitions().asScala.toSet
+                         DiagnosticEvent.Poll(
+                           tpRequested = requestedPartitions,
+                           tpWithData = providedTps,
+                           tpWithoutData = requestedPartitions -- providedTps
+                         )
+                       }
+
                 } yield Runloop.PollResult(
                   newlyAssigned = newlyAssigned,
                   pendingRequests = revokeResult.pendingRequests,
