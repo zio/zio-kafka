@@ -16,7 +16,7 @@ import java.util
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
-private[consumer] final class Runloop(
+private[consumer] final class Runloop private (
   runtime: Runtime[Any],
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
