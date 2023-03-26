@@ -47,8 +47,7 @@ private[internal] final class PartitionStreamControl private (
   def awaitCompleted(): ZIO[Any, Throwable, Unit] =
     completedPromise.await
 
-  val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
-    (tp, stream)
+  val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) = (tp, stream)
 }
 
 private[internal] object PartitionStreamControl {
