@@ -63,7 +63,7 @@ private[internal] object PartitionStreamControl {
       interruptionPromise <- Promise.make[Throwable, Unit]
       completedPromise    <- Promise.make[Throwable, Unit]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
-      requestData =
+      requestAndAwaitData =
         for {
           _     <- commandQueue.offer(Request(tp, dataQueue))
           _     <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
@@ -81,7 +81,7 @@ private[internal] object PartitionStreamControl {
                  ZStream.repeatZIOChunk {
                    // First try to take all records that are available right now.
                    // When no data is available, request more data and await its arrival.
-                   dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestData else ZIO.succeed(data))
+                   dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
                  }.flattenTake
                    .interruptWhen(interruptionPromise)
     } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise)
