@@ -86,9 +86,14 @@ case class ConsumerSettings(
 
   def withCredentials(credentialsStore: KafkaCredentialStore): ConsumerSettings =
     withProperties(credentialsStore.properties)
+
+  def withRunloopTimeout(timeout: Duration): ConsumerSettings =
+    copy(runloopTimeout = timeout)
 }
 
 object ConsumerSettings {
+  private[zio] val defaultRunloopTimeout: Duration = 30.seconds
+
   def apply(bootstrapServers: List[String]): ConsumerSettings =
     new ConsumerSettings(
       bootstrapServers = bootstrapServers,
@@ -97,6 +102,6 @@ object ConsumerSettings {
       pollTimeout = 50.millis,
       perPartitionChunkPrefetch = 2,
       offsetRetrieval = OffsetRetrieval.Auto(),
-      runloopTimeout = 30.seconds
+      runloopTimeout = defaultRunloopTimeout
     )
 }
