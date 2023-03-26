@@ -10,7 +10,7 @@ import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.{ ULayer, ZIO, ZLayer }
+import zio.{ durationInt, ULayer, ZIO, ZLayer }
 
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
@@ -18,7 +18,7 @@ import scala.jdk.CollectionConverters._
 object ConsumersComparisonBenchmark {
   type LowLevelKafka = KafkaConsumer[Array[Byte], Array[Byte]]
 
-  type Env = Kafka with Producer with LowLevelKafka with ConsumerSettings
+  type Env = Kafka with Consumer with Producer with LowLevelKafka with ConsumerSettings
 }
 import zio.kafka.bench.ConsumersComparisonBenchmark._
 
@@ -49,7 +49,9 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
     ZLayer.fromZIO(
       consumerSettings(
         clientId = randomThing("client"),
-        groupId = Some(randomThing("client"))
+        groupId = Some(randomThing("client")),
+        runloopTimeout =
+          1.hour // Absurdly high timeout to avoid the runloop from being interrupted while we're benchmarking other stuff
       )
     )
 
@@ -59,7 +61,8 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
         Kafka.embedded,
         producer,
         settings,
-        kafkaConsumer
+        kafkaConsumer,
+        simpleConsumer()
       )
       .orDie
 
@@ -99,6 +102,5 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
         .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
         .take(nrMessages.toLong)
         .runDrain
-        .provideLayer(simpleConsumer())
     }
 }
