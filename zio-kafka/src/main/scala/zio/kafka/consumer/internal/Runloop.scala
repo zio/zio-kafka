@@ -537,8 +537,12 @@ private[consumer] object Runloop {
 
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
 
-  // Internal parameters, should not be necessary to tune
-  private val commandQueueSize = 1024
+  /**
+   * Internal parameters, should not be necessary to tune
+   *
+   * We use [[ZStream.DefaultChunkSize]] value to optimize stream chunking and so performances
+   */
+  private val commandQueueSize = ZStream.DefaultChunkSize
 
   private final case class PollResult(
     newlyAssigned: Set[TopicPartition],
