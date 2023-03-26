@@ -161,7 +161,7 @@ private[consumer] final class Runloop private (
    */
   private def endRevoked(
     requests: Chunk[Request],
-    currentAssignedStreams: Seq[PartitionStreamControl],
+    currentAssignedStreams: Chunk[PartitionStreamControl],
     isRevoked: TopicPartition => Boolean
   ): UIO[Runloop.RevokeResult] = {
     val (revokedStreams, assignedStreams) =
@@ -197,7 +197,7 @@ private[consumer] final class Runloop private (
     // then requesting the records per topic-partition.
     val tps                   = polledRecords.partitions().asScala.toSet -- ignoreRecordsForTps
     val consumerGroupMetadata = if (tps.isEmpty) None else getConsumerGroupMetadataIfAny
-    val committableRecords = tps.toSeq.map { tp =>
+    val committableRecords = Chunk.fromIterable(tps).map { tp =>
       val committableRecordsForTp = Chunk
         .fromJavaIterable(polledRecords.records(tp))
         .map { consumerRecord =>
@@ -362,7 +362,7 @@ private[consumer] final class Runloop private (
         }
       newAssignedStreams <-
         if (pollResult.newlyAssigned.isEmpty)
-          ZIO.succeed(Seq.empty[PartitionStreamControl])
+          ZIO.succeed(Chunk.empty[PartitionStreamControl])
         else
           ZIO
             .foreach(pollResult.newlyAssigned)(newPartitionStream)
@@ -435,25 +435,25 @@ private[consumer] final class Runloop private (
    */
   private def handleChangeSubscription(
     command: Command.ChangeSubscription
-  ): Task[Seq[PartitionStreamControl]] =
+  ): Task[Chunk[PartitionStreamControl]] =
     consumer.withConsumerZIO { c =>
       command.subscription match {
         case None =>
           ZIO
             .attempt(c.unsubscribe())
-            .as(Seq.empty)
+            .as(Chunk.empty)
         case Some(subscription) =>
           subscription match {
             case Subscription.Pattern(pattern) =>
               val rc = RebalanceConsumer.Live(c)
               ZIO
                 .attempt(c.subscribe(pattern.pattern, rebalanceListener.toKafka(runtime, rc)))
-                .as(Seq.empty)
+                .as(Chunk.empty)
             case Subscription.Topics(topics) =>
               val rc = RebalanceConsumer.Live(c)
               ZIO
                 .attempt(c.subscribe(topics.asJava, rebalanceListener.toKafka(runtime, rc)))
-                .as(Seq.empty)
+                .as(Chunk.empty)
             case Subscription.Manual(topicPartitions) =>
               // For manual subscriptions we have to do some manual work before starting the run loop
               for {
@@ -465,8 +465,8 @@ private[consumer] final class Runloop private (
                          }
                        case OffsetRetrieval.Auto(_) => ZIO.unit
                      }
-                partitionStreams <- ZIO.foreach(topicPartitions.toSeq)(newPartitionStream)
-                _                <- partitions.offer(Take.chunk(Chunk.fromIterable(partitionStreams.map(_.tpStream))))
+                partitionStreams <- ZIO.foreach(Chunk.fromIterable(topicPartitions))(newPartitionStream)
+                _                <- partitions.offer(Take.chunk(partitionStreams.map(_.tpStream)))
               } yield partitionStreams
           }
       }
@@ -524,13 +524,13 @@ private[consumer] object Runloop {
   private final case class PollResult(
     newlyAssigned: Set[TopicPartition],
     pendingRequests: Chunk[Request],
-    assignedStreams: Seq[PartitionStreamControl],
+    assignedStreams: Chunk[PartitionStreamControl],
     records: ConsumerRecords[Array[Byte], Array[Byte]],
     ignoreRecordsForTps: Set[TopicPartition]
   )
   private final case class RevokeResult(
     pendingRequests: Chunk[Request],
-    assignedStreams: Seq[PartitionStreamControl]
+    assignedStreams: Chunk[PartitionStreamControl]
   )
   private final case class FulfillResult(
     pendingRequests: Chunk[Request]
@@ -632,7 +632,7 @@ private[consumer] object Runloop {
 private[internal] final case class State(
   pendingRequests: Chunk[Request],
   pendingCommits: Chunk[Commit],
-  assignedStreams: Seq[PartitionStreamControl],
+  assignedStreams: Chunk[PartitionStreamControl],
   subscription: Option[Subscription]
 ) {
   def addCommit(c: Commit): State   = copy(pendingCommits = pendingCommits :+ c)
@@ -645,5 +645,10 @@ private[internal] final case class State(
 }
 
 object State {
-  val initial: State = State(Chunk.empty, Chunk.empty, Seq.empty, None)
+  val initial: State = State(
+    pendingRequests = Chunk.empty,
+    pendingCommits = Chunk.empty,
+    assignedStreams = Chunk.empty,
+    subscription = None
+  )
 }

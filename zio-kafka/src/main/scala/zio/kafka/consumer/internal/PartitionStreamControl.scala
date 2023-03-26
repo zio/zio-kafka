@@ -3,13 +3,13 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Runloop.Command.Request
-import zio.{ Chunk, LogAnnotation, Promise, Queue, UIO, ZIO }
 import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, Command }
 import zio.stream.{ Take, ZStream }
+import zio.{ Chunk, LogAnnotation, Promise, Queue, UIO, ZIO }
 
-private[internal] class PartitionStreamControl private (
+private[internal] final class PartitionStreamControl private (
   val tp: TopicPartition,
-  val stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
+  stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
   interruptPromise: Promise[Throwable, Unit],
   completedPromise: Promise[Throwable, Unit]
@@ -63,6 +63,13 @@ private[internal] object PartitionStreamControl {
       interruptionPromise <- Promise.make[Throwable, Unit]
       completedPromise    <- Promise.make[Throwable, Unit]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
+      requestData =
+        for {
+          _     <- commandQueue.offer(Request(tp, dataQueue))
+          _     <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
+          taken <- dataQueue.takeBetween(1, Int.MaxValue)
+        } yield taken
+
       stream = ZStream.logAnnotate(
                  LogAnnotation("topic", tp.topic()),
                  LogAnnotation("partition", tp.partition().toString)
@@ -74,14 +81,7 @@ private[internal] object PartitionStreamControl {
                  ZStream.repeatZIOChunk {
                    // First try to take all records that are available right now.
                    // When no data is available, request more data and await its arrival.
-                   dataQueue.takeAll
-                     .filterOrElse(_.nonEmpty) {
-                       for {
-                         _     <- commandQueue.offer(Request(tp, dataQueue)).unit
-                         _     <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
-                         taken <- dataQueue.takeBetween(1, Int.MaxValue)
-                       } yield taken
-                     }
+                   dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestData else ZIO.succeed(data))
                  }.flattenTake
                    .interruptWhen(interruptionPromise)
     } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise)
