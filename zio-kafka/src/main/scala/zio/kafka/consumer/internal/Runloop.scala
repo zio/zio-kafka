@@ -495,13 +495,12 @@ private[consumer] final class Runloop private (
       .fromQueue(commandQueue)
       .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
       .takeWhile(_ != StopRunloop)
-      .aggregateAsync(ZSink.collectAllN[Command](commandQueueSize))
-      .runFoldZIO(State.initial) { case (state, commands) =>
+      .runFoldZIO(State.initial) { case (state, command) =>
         for {
-          _          <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
+          _          <- ZIO.logTrace(s"Processing command: $command")
           isShutdown <- isShutdown
           handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
-          updatedState <- ZIO.foldLeft(commands)(state)(handleCommand)
+          updatedState <- handleCommand(state, command)
 
           updatedStateAfterPoll <- if (updatedState.shouldPoll)
                                      logPollStart(updatedState) *> handlePoll(updatedState)
