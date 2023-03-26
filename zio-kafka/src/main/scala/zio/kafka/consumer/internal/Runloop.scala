@@ -495,12 +495,12 @@ private[consumer] final class Runloop private (
       .fromQueue(commandQueue)
       .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
       .takeWhile(_ != StopRunloop)
-      .runFoldZIO(State.initial) { case (state, command) =>
+      .runChunksFoldZIO(State.initial) { case (state, commands) =>
         for {
-          _          <- ZIO.logTrace(s"Processing command: $command")
+          _          <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
           isShutdown <- isShutdown
           handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
-          updatedState <- handleCommand(state, command)
+          updatedState <- ZIO.foldLeft(commands)(state)(handleCommand)
 
           updatedStateAfterPoll <- if (updatedState.shouldPoll)
                                      logPollStart(updatedState) *> handlePoll(updatedState)
@@ -515,6 +515,24 @@ private[consumer] final class Runloop private (
 }
 
 private[consumer] object Runloop {
+  private implicit final class RichZStream[R, E, A](private val stream: ZStream[R, E, A]) extends AnyVal {
+
+    /**
+     * Adapted from [[ZStream.runFoldZIO]]
+     */
+    def runChunksFoldZIO[R1 <: R, E1 >: E, S](s: => S)(f: (S, Chunk[A]) => ZIO[R1, E1, S])(implicit
+      trace: Trace
+    ): ZIO[R1, E1, S] = ZIO.scoped[R1](runChunksFoldWhileScopedZIO[R1, E1, S](s)(_ => true)(f))
+
+    /**
+     * Adapted from [[ZStream.runFoldWhileScopedZIO]]
+     */
+    private def runChunksFoldWhileScopedZIO[R1 <: R, E1 >: E, S](
+      s: => S
+    )(cont: S => Boolean)(f: (S, Chunk[A]) => ZIO[R1, E1, S])(implicit trace: Trace): ZIO[R1 with Scope, E1, S] =
+      stream.runScoped(ZSink.foldChunksZIO(s)(cont)(f))
+  }
+
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
 
   // Internal parameters, should not be necessary to tune
