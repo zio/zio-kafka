@@ -5,13 +5,12 @@ import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Runloop.Command.Request
 import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, Command }
 import zio.stream.{ Take, ZStream }
-import zio.{ Chunk, LogAnnotation, Promise, Queue, UIO, ZIO }
+import zio.{ Chunk, LogAnnotation, Promise, Queue, ZIO }
 
 private[internal] final class PartitionStreamControl private (
   val tp: TopicPartition,
   stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
-  interruptPromise: Promise[Throwable, Unit],
   completedPromise: Promise[Throwable, Unit]
 ) {
 
@@ -23,10 +22,6 @@ private[internal] final class PartitionStreamControl private (
   /** Offer new data for the stream to process. */
   def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
     dataQueue.offer(Take.chunk(data)).unit
-
-  /** To be invoked when the partition was lost. */
-  def lost(): UIO[Boolean] =
-    interruptPromise.fail(new RuntimeException(s"Partition ${tp.toString} was lost"))
 
   /** To be invoked when the partition was revoked or otherwise needs to be ended. */
   def end(): ZIO[Any, Nothing, Unit] =
@@ -47,7 +42,8 @@ private[internal] final class PartitionStreamControl private (
   def awaitCompleted(): ZIO[Any, Throwable, Unit] =
     completedPromise.await
 
-  val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) = (tp, stream)
+  val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
+    (tp, stream)
 }
 
 private[internal] object PartitionStreamControl {
@@ -58,10 +54,9 @@ private[internal] object PartitionStreamControl {
     diagnostics: Diagnostics
   ): ZIO[Any, Nothing, PartitionStreamControl] =
     for {
-      _                   <- ZIO.logTrace(s"Creating partition stream ${tp.toString}")
-      interruptionPromise <- Promise.make[Throwable, Unit]
-      completedPromise    <- Promise.make[Throwable, Unit]
-      dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
+      _                <- ZIO.logTrace(s"Creating partition stream ${tp.toString}")
+      completedPromise <- Promise.make[Throwable, Unit]
+      dataQueue        <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
       requestData =
         for {
           _     <- commandQueue.offer(Request(tp, dataQueue))
@@ -82,7 +77,6 @@ private[internal] object PartitionStreamControl {
                    // When no data is available, request more data and await its arrival.
                    dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestData else ZIO.succeed(data))
                  }.flattenTake
-                   .interruptWhen(interruptionPromise)
-    } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise)
+    } yield new PartitionStreamControl(tp, stream, dataQueue, completedPromise)
 
 }
