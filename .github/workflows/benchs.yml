@@ -42,14 +42,15 @@ jobs:
         # To list all possible options and undestand these configurations, see run `sbt "zioKafkaBench/Jmh/run -h"`
         #
         # Used options meaning:
-        #  - "-wi 10": 10 warmup iterations
-        #  - "-i 10": 10 benchmark iterations
+        #  - "-wi 5": 5 warmup iterations
+        #  - "-i 5": 5 benchmark iterations
         #  - "-r 1": Minimum time to spend at each measurement iteration. 1 second
         #  - "-w 1": Minimum time to spend at each warmup iteration. 1 second
         #  - "-t 1": Number of worker threads to run with. 1 thread
         #  - "-rf json": Format type for machine-readable results. JSON
         #  - "-foe true": Should JMH fail immediately if any benchmark had experienced an unrecoverable error?. True
-        run: sbt "zioKafkaBench/Jmh/run -wi 10 -i 10 -r 1 -w 1 -t 1 -rf json -foe true"
+        #  - "-to 60": 1 minute timeout per iteration
+        run: sbt "zioKafkaBench/Jmh/run -wi 5 -i 5 -r 1 -w 1 -t 1 -to 60 -rf json -foe true"
 
       - name: Download previous benchmark data
         uses: actions/cache@v3
