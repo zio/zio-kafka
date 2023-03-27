@@ -198,14 +198,17 @@ private[consumer] final class Runloop private (
     // then requesting the records per topic-partition.
     val tps                   = polledRecords.partitions().asScala.toSet -- ignoreRecordsForTps
     val consumerGroupMetadata = if (tps.isEmpty) None else getConsumerGroupMetadataIfAny
-    val committableRecords =
-      Chunk.fromIterable(tps).map { tp =>
-        val committableRecordsForTp = {
-          val records  = polledRecords.records(tp)
-          val builder  = ChunkBuilder.make[CommittableRecord[Array[Byte], Array[Byte]]](records.size())
-          val iterator = records.iterator()
-          while (iterator.hasNext) {
-            val consumerRecord = iterator.next()
+    val committableRecords = {
+      val builder_0  = ChunkBuilder.make[(TopicPartition, Chunk[CommittableRecord[Array[Byte], Array[Byte]]])](tps.size)
+      val iterator_0 = tps.iterator
+      while (iterator_0.hasNext) {
+        val tp = iterator_0.next()
+        val records = {
+          val records    = polledRecords.records(tp)
+          val builder    = ChunkBuilder.make[CommittableRecord[Array[Byte], Array[Byte]]](records.size())
+          val iterator_1 = records.iterator()
+          while (iterator_1.hasNext) {
+            val consumerRecord = iterator_1.next()
             builder += CommittableRecord[Array[Byte], Array[Byte]](
               record = consumerRecord,
               commitHandle = commit,
@@ -215,8 +218,10 @@ private[consumer] final class Runloop private (
           builder.result()
         }
 
-        tp -> committableRecordsForTp
+        builder_0 += (tp -> records)
       }
+      builder_0.result()
+    }
     val unfulfilledRequests = pendingRequests.filter(req => !tps.contains(req.tp))
 
     ZIO
