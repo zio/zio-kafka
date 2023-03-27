@@ -224,7 +224,6 @@ private[consumer] final class Runloop private (
             )
         }
       }
-      .fork // Do not await fulfilling of results
       .as(Runloop.FulfillResult(unfulfilledRequests))
   }
 
