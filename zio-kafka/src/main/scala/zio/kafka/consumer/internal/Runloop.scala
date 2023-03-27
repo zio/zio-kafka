@@ -192,7 +192,6 @@ private[consumer] final class Runloop private (
     ignoreRecordsForTps: Set[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
   ): UIO[Runloop.FulfillResult] = {
-    import Runloop.ChunkTypeOps
     // The most efficient way to get the records from [[ConsumerRecords]] per
     // topic-partition, is by first getting the set of topic-partitions, and
     // then requesting the records per topic-partition.
@@ -200,16 +199,20 @@ private[consumer] final class Runloop private (
     val consumerGroupMetadata = if (tps.isEmpty) None else getConsumerGroupMetadataIfAny
     val committableRecords =
       Chunk.fromIterable(tps).map { tp =>
-        val committableRecordsForTp =
-          Chunk
-            .fromJavaList(polledRecords.records(tp))
-            .map { consumerRecord =>
-              CommittableRecord[Array[Byte], Array[Byte]](
-                record = consumerRecord,
-                commitHandle = commit _,
-                consumerGroupMetadata = consumerGroupMetadata
-              )
-            }
+        val committableRecordsForTp = {
+          val records  = polledRecords.records(tp)
+          val builder  = ChunkBuilder.make(records.size())
+          val iterator = records.iterator()
+          while (iterator.hasNext) {
+            val consumerRecord = iterator.next()
+            builder += CommittableRecord[Array[Byte], Array[Byte]](
+              record = consumerRecord,
+              commitHandle = commit _,
+              consumerGroupMetadata = consumerGroupMetadata
+            )
+          }
+          builder.result()
+        }
 
         tp -> committableRecordsForTp
       }
@@ -536,16 +539,6 @@ private[consumer] object Runloop {
         )
 
       stream.run(ZSink.fromChannel(reader(s)))
-    }
-  }
-
-  private implicit final class ChunkTypeOps(private val dummy: Chunk.type) extends AnyVal {
-    def fromJavaList[A](list: java.util.List[A]): Chunk[A] = {
-      val builder  = ChunkBuilder.make[A](list.size())
-      val iterator = list.iterator()
-      while (iterator.hasNext)
-        builder += iterator.next()
-      builder.result()
     }
   }
 
