@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1679934410834,
+  "lastUpdate": 1679937380891,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -7754,6 +7754,54 @@ window.BENCHMARK_DATA = {
             "value": 2129.45852288,
             "unit": "ms/op",
             "extra": "iterations: 10\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@users.noreply.github.com",
+            "name": "svroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1fb47201b7b0877386289f97b55066fd4d9bd535",
+          "message": "Tune benchmark parameters (#729)",
+          "timestamp": "2023-03-27T19:04:23+02:00",
+          "tree_id": "e0a47dd7f4e8de4fedd03727711f68572c34f68f",
+          "url": "https://github.com/zio/zio-kafka/commit/1fb47201b7b0877386289f97b55066fd4d9bd535"
+        },
+        "date": 1679937378785,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 506.30789516,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 458.75802458666675,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.kafkaClients",
+            "value": 686.4533068399999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
+            "value": 2576.8280083999994,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       }
