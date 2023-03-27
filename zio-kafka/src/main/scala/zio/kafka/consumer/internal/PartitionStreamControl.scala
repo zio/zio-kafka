@@ -12,7 +12,7 @@ private[internal] final class PartitionStreamControl private (
   stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
   interruptPromise: Promise[Throwable, Unit],
-  completedPromise: Promise[Throwable, Unit]
+  completedPromise: Promise[Nothing, Unit]
 ) {
 
   private val logAnnotate = ZIO.logAnnotate(
@@ -44,7 +44,7 @@ private[internal] final class PartitionStreamControl private (
     isCompleted.negate
 
   /** Wait till the stream is done. */
-  def awaitCompleted(): ZIO[Any, Throwable, Unit] =
+  def awaitCompleted(): ZIO[Any, Nothing, Unit] =
     completedPromise.await
 
   val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
@@ -61,11 +61,11 @@ private[internal] object PartitionStreamControl {
     for {
       _                   <- ZIO.logTrace(s"Creating partition stream ${tp.toString}")
       interruptionPromise <- Promise.make[Throwable, Unit]
-      completedPromise    <- Promise.make[Throwable, Unit]
+      completedPromise    <- Promise.make[Nothing, Unit]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
       requestAndAwaitData =
         for {
-          _     <- commandQueue.offer(Request(tp, dataQueue))
+          _     <- commandQueue.offer(Request(tp))
           _     <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
           taken <- dataQueue.takeBetween(1, Int.MaxValue)
         } yield taken
