@@ -118,13 +118,14 @@ private[consumer] final class Runloop private (
     }
   }
 
-  private def commit(offsets: Map[TopicPartition, Long]): Task[Unit] =
-    for {
-      p <- Promise.make[Throwable, Unit]
-      _ <- commandQueue.offer(Commit(offsets, p)).unit
-      _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
-      _ <- p.await
-    } yield ()
+  private val commit: Map[TopicPartition, Long] => Task[Unit] =
+    offsets =>
+      for {
+        p <- Promise.make[Throwable, Unit]
+        _ <- commandQueue.offer(Commit(offsets, p)).unit
+        _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
+        _ <- p.await
+      } yield ()
 
   private def doCommit(cmd: Commit): UIO[Unit] = {
     val offsets   = cmd.offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
@@ -201,13 +202,13 @@ private[consumer] final class Runloop private (
       Chunk.fromIterable(tps).map { tp =>
         val committableRecordsForTp = {
           val records  = polledRecords.records(tp)
-          val builder  = ChunkBuilder.make(records.size())
+          val builder  = ChunkBuilder.make[CommittableRecord[Array[Byte], Array[Byte]]](records.size())
           val iterator = records.iterator()
           while (iterator.hasNext) {
             val consumerRecord = iterator.next()
             builder += CommittableRecord[Array[Byte], Array[Byte]](
               record = consumerRecord,
-              commitHandle = commit _,
+              commitHandle = commit,
               consumerGroupMetadata = consumerGroupMetadata
             )
           }
