@@ -145,7 +145,7 @@ private[consumer] final class Runloop private (
           }
       }
 
-    consumer.withConsumerZIO { c =>
+    consumer.withConsumerZIONoFork { c =>
       // We don't wait for the completion of the commit here, because it
       // will only complete once we poll again.
       ZIO.attempt(c.commitAsync(offsets.asJava, callback))
@@ -200,19 +200,21 @@ private[consumer] final class Runloop private (
     val committableRecords = Chunk.fromIterable(tps).map { tp =>
       val committableRecordsForTp = Chunk
         .fromJavaIterable(polledRecords.records(tp))
-        .map { consumerRecord =>
-          CommittableRecord[Array[Byte], Array[Byte]](
-            record = consumerRecord,
-            commitHandle = commit _,
-            consumerGroupMetadata = consumerGroupMetadata
-          )
-        }
-      tp -> committableRecordsForTp
-    }
+            .map { consumerRecord =>
+              CommittableRecord[Array[Byte], Array[Byte]](
+                record = consumerRecord,
+                commitHandle = commit _,
+                consumerGroupMetadata = consumerGroupMetadata
+              )
+            }
+
+        tp -> committableRecordsForTp
+      }
+
     val unfulfilledRequests = pendingRequests.filter(req => !tps.contains(req.tp))
 
     ZIO
-      .foreach(committableRecords) { case (tp, records) =>
+      .foreachParDiscard(committableRecords) { case (tp, records) =>
         streams.get(tp) match {
           case Some(streamControl) =>
             streamControl.offerRecords(records)
@@ -222,6 +224,8 @@ private[consumer] final class Runloop private (
             )
         }
       }
+      .withParallelism(committableRecords.size)
+      .fork // Do not await fulfilling of results
       .as(Runloop.FulfillResult(unfulfilledRequests))
   }
 
@@ -271,7 +275,7 @@ private[consumer] final class Runloop private (
     for {
       _ <- currentState.set(state)
       pollResult <-
-        consumer.withConsumerZIO { c =>
+        consumer.withConsumerZIONoFork { c =>
           ZIO.suspend {
 
             val prevAssigned        = c.assignment().asScala.toSet
@@ -436,7 +440,7 @@ private[consumer] final class Runloop private (
   private def handleChangeSubscription(
     command: Command.ChangeSubscription
   ): Task[Chunk[PartitionStreamControl]] =
-    consumer.withConsumerZIO { c =>
+    consumer.withConsumerZIONoFork { c =>
       command.subscription match {
         case None =>
           ZIO

@@ -19,6 +19,13 @@ private[consumer] class ConsumerAccess(
   def withConsumerZIO[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
     access.withPermit(withConsumerNoPermit(f))
 
+  def withConsumerZIONoFork[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
+    access.withPermit {
+      f(consumer)
+    }.catchSome { case _: WakeupException =>
+      ZIO.interrupt
+    }
+
   private[consumer] def withConsumerNoPermit[R, A](
     f: ByteArrayKafkaConsumer => RIO[R, A]
   ): RIO[R, A] =
