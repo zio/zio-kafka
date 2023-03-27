@@ -77,6 +77,25 @@ private[consumer] final class Runloop private (
       (lost, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Lost(lost))
     )
 
+    val lostListener = RebalanceListener(
+      (_, _) => ZIO.unit,
+      (_, _) => ZIO.unit,
+      (lost, _) =>
+        for {
+          state <- currentState.get
+          streamsByTp = state.assignedStreams.map(s => s.tp -> s).toMap
+          _ <- ZIO.foreachDiscard(lost) { tp =>
+                 streamsByTp.get(tp) match {
+                   case Some(streamControl) =>
+                     ZIO.logWarning(s"Interrupting stream for lost partition $tp") *>
+                       streamControl.lost()
+                   case None =>
+                     ZIO.logInfo(s"No stream is handling lost partition $tp. Probably the stream already ended")
+                 }
+               }
+        } yield ()
+    )
+
     def restartStreamsRebalancingListener = RebalanceListener(
       onAssigned = (assigned, _) =>
         ZIO.logDebug("Rebalancing completed") *>
@@ -108,13 +127,14 @@ private[consumer] final class Runloop private (
                   )
               }.unlessZIO(isShutdown).unit
             }
-          }
+          },
+      onLost = (_, _) => ZIO.unit
     )
 
     if (restartStreamsOnRebalancing) {
-      emitDiagnostics ++ restartStreamsRebalancingListener ++ userRebalanceListener
+      emitDiagnostics ++ lostListener ++ restartStreamsRebalancingListener ++ userRebalanceListener
     } else {
-      emitDiagnostics ++ userRebalanceListener
+      emitDiagnostics ++ lostListener ++ userRebalanceListener
     }
   }
 
@@ -372,15 +392,17 @@ private[consumer] final class Runloop private (
             }
       runningStreams <- ZIO.filter(pollResult.assignedStreams)(_.isRunning)
       updatedStreams = runningStreams ++ newAssignedStreams
+      streamsByTp    = updatedStreams.map(s => s.tp -> s).toMap
       fulfillResult <- offerRecordsToStreams(
-                         updatedStreams.map(s => s.tp -> s).toMap,
+                         streamsByTp,
                          pollResult.pendingRequests,
                          pollResult.ignoreRecordsForTps,
                          pollResult.records
                        )
+      updatedPendingRequests = fulfillResult.pendingRequests.filter(req => streamsByTp.contains(req.tp))
       updatedPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
     } yield State(
-      pendingRequests = fulfillResult.pendingRequests,
+      pendingRequests = updatedPendingRequests,
       pendingCommits = updatedPendingCommits,
       assignedStreams = updatedStreams,
       subscription = state.subscription
