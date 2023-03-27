@@ -200,16 +200,16 @@ private[consumer] final class Runloop private (
     val committableRecords = Chunk.fromIterable(tps).map { tp =>
       val committableRecordsForTp = Chunk
         .fromJavaIterable(polledRecords.records(tp))
-            .map { consumerRecord =>
-              CommittableRecord[Array[Byte], Array[Byte]](
-                record = consumerRecord,
-                commitHandle = commit _,
-                consumerGroupMetadata = consumerGroupMetadata
-              )
-            }
+        .map { consumerRecord =>
+          CommittableRecord[Array[Byte], Array[Byte]](
+            record = consumerRecord,
+            commitHandle = commit _,
+            consumerGroupMetadata = consumerGroupMetadata
+          )
+        }
 
-        tp -> committableRecordsForTp
-      }
+      tp -> committableRecordsForTp
+    }
 
     val unfulfilledRequests = pendingRequests.filter(req => !tps.contains(req.tp))
 
