@@ -53,7 +53,7 @@ private[consumer] final class Runloop private (
   def awaitShutdown: UIO[Unit] =
     for {
       state <- currentState.get
-      _     <- ZIO.foreachDiscard(state.assignedStreams)(_.awaitCompleted().ignore)
+      _     <- ZIO.foreachDiscard(state.assignedStreams)(_.awaitCompleted())
     } yield ()
 
   def changeSubscription(
@@ -129,7 +129,7 @@ private[consumer] final class Runloop private (
   private def doCommit(cmd: Commit): UIO[Unit] = {
     val offsets   = cmd.offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
     val cont      = (e: Exit[Throwable, Unit]) => cmd.cont.done(e).asInstanceOf[UIO[Unit]]
-    val onSuccess = cont(Exit.succeed(())) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
+    val onSuccess = cont(Exit.unit) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
         ZIO.logDebug(s"Rebalance in progress, retrying commit for offsets $offsets") *>
@@ -580,12 +580,7 @@ private[consumer] object Runloop {
       @inline def isPending: UIO[Boolean] = isDone.negate
     }
 
-    final case class Request(
-      tp: TopicPartition,
-      private val dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]]
-    ) extends Command {
-      @inline def succeed(data: Chunk[ByteArrayCommittableRecord]): UIO[Boolean] = dataQueue.offer(Take.chunk(data))
-    }
+    final case class Request(tp: TopicPartition) extends Command
 
     final case class ChangeSubscription(
       subscription: Option[Subscription],
