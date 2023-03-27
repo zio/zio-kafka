@@ -14,9 +14,9 @@ private[consumer] class ConsumerAccess(
   access: Semaphore
 ) {
   def withConsumer[A](f: ByteArrayKafkaConsumer => A): Task[A] =
-    withConsumerM[Any, A](c => ZIO.attempt(f(c)))
+    withConsumerZIO[Any, A](c => ZIO.attempt(f(c)))
 
-  def withConsumerM[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
+  def withConsumerZIO[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
     access.withPermit(withConsumerNoPermit(f))
 
   private[consumer] def withConsumerNoPermit[R, A](
