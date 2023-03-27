@@ -214,7 +214,7 @@ private[consumer] final class Runloop private (
     val unfulfilledRequests = pendingRequests.filter(req => !tps.contains(req.tp))
 
     ZIO
-      .foreachParDiscard(committableRecords) { case (tp, records) =>
+      .foreachDiscard(committableRecords) { case (tp, records) =>
         streams.get(tp) match {
           case Some(streamControl) =>
             streamControl.offerRecords(records)
@@ -224,7 +224,6 @@ private[consumer] final class Runloop private (
             )
         }
       }
-      .withParallelism(committableRecords.size)
       .fork // Do not await fulfilling of results
       .as(Runloop.FulfillResult(unfulfilledRequests))
   }
