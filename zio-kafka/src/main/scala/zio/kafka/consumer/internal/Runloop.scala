@@ -495,8 +495,7 @@ private[consumer] final class Runloop private (
       .fromQueue(commandQueue)
       .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
       .takeWhile(_ != StopRunloop)
-      .aggregateAsync(ZSink.collectAllN[Command](commandQueueSize))
-      .runFoldZIO(State.initial) { case (state, commands) =>
+      .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
         for {
           _          <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
           isShutdown <- isShutdown
@@ -516,6 +515,26 @@ private[consumer] final class Runloop private (
 }
 
 private[consumer] object Runloop {
+  private implicit final class StreamOps[R, E, A](private val stream: ZStream[R, E, A]) extends AnyVal {
+
+    /**
+     * Inlined, simplified and specialized for our needs version of [[ZSink.foldChunksZIO]]
+     *
+     * Code initially inspired by the implementation of [[ZStream.runFoldZIO]] with everything we don't need removed and
+     * with chunking added
+     */
+    def runFoldChunksDiscardZIO[R1 <: R, E1 >: E, S](s: S)(f: (S, Chunk[A]) => ZIO[R1, E1, S]): ZIO[R1, E1, Unit] = {
+      def reader(s: S): ZChannel[R1, E1, Chunk[A], Any, E1, Nothing, Unit] =
+        ZChannel.readWith(
+          (in: Chunk[A]) => ZChannel.fromZIO(f(s, in)).flatMap(reader),
+          (err: E1) => ZChannel.fail(err),
+          (_: Any) => ZChannel.unit
+        )
+
+      stream.run(ZSink.fromChannel(reader(s)))
+    }
+  }
+
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
 
   // Internal parameters, should not be necessary to tune
