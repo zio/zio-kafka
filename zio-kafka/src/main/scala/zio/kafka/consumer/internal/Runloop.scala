@@ -192,23 +192,27 @@ private[consumer] final class Runloop private (
     ignoreRecordsForTps: Set[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
   ): UIO[Runloop.FulfillResult] = {
+    import Runloop.ChunkTypeOps
     // The most efficient way to get the records from [[ConsumerRecords]] per
     // topic-partition, is by first getting the set of topic-partitions, and
     // then requesting the records per topic-partition.
     val tps                   = polledRecords.partitions().asScala.toSet -- ignoreRecordsForTps
     val consumerGroupMetadata = if (tps.isEmpty) None else getConsumerGroupMetadataIfAny
-    val committableRecords = Chunk.fromIterable(tps).map { tp =>
-      val committableRecordsForTp = Chunk
-        .fromJavaIterable(polledRecords.records(tp))
-        .map { consumerRecord =>
-          CommittableRecord[Array[Byte], Array[Byte]](
-            record = consumerRecord,
-            commitHandle = commit _,
-            consumerGroupMetadata = consumerGroupMetadata
-          )
-        }
-      tp -> committableRecordsForTp
-    }
+    val committableRecords =
+      Chunk.fromIterable(tps).map { tp =>
+        val committableRecordsForTp =
+          Chunk
+            .fromJavaList(polledRecords.records(tp))
+            .map { consumerRecord =>
+              CommittableRecord[Array[Byte], Array[Byte]](
+                record = consumerRecord,
+                commitHandle = commit _,
+                consumerGroupMetadata = consumerGroupMetadata
+              )
+            }
+
+        tp -> committableRecordsForTp
+      }
     val unfulfilledRequests = pendingRequests.filter(req => !tps.contains(req.tp))
 
     ZIO
@@ -532,6 +536,16 @@ private[consumer] object Runloop {
         )
 
       stream.run(ZSink.fromChannel(reader(s)))
+    }
+  }
+
+  private implicit final class ChunkTypeOps(private val dummy: Chunk.type) extends AnyVal {
+    def fromJavaList[A](list: java.util.List[A]): Chunk[A] = {
+      val builder  = ChunkBuilder.make[A](list.size())
+      val iterator = list.iterator()
+      while (iterator.hasNext)
+        builder += iterator.next()
+      builder.result()
     }
   }
 
