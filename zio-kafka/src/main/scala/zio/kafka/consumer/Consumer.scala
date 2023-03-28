@@ -326,13 +326,10 @@ object Consumer {
       } yield ()
 
     private def subscribe(subscription: Subscription): Task[Unit] =
-      changeSubscription(Some(subscription))
+      runloop.changeSubscription(Some(subscription))
 
     private def unsubscribe: Task[Unit] =
-      changeSubscription(None)
-
-    private def changeSubscription(subscription: Option[Subscription]): Task[Unit] =
-      runloop.changeSubscription(subscription, settings.offsetRetrieval)
+      runloop.changeSubscription(None)
 
     override def metrics: Task[Map[MetricName, Metric]] =
       consumer.withConsumer(_.metrics().asScala.toMap)
