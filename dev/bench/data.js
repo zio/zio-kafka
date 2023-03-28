@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1680020612876,
+  "lastUpdate": 1680021726071,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -8212,6 +8212,54 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
             "value": 2454.7829543200005,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "guizmaii@users.noreply.github.com",
+            "name": "Jules Ivanic",
+            "username": "guizmaii"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "88529107241a35c0d3f6f384e9d6deb4e64d6b09",
+          "message": "Optimise `handlePoll` code: Ensure that both `runningStreams` and `newAssignedStreams` are Chunks to take advantage of the optimised version of `++` when computing the `updatedStreams` (#760)",
+          "timestamp": "2023-03-28T18:23:50+02:00",
+          "tree_id": "b65515ddb02834592d447a14fdcc75c73a099f31",
+          "url": "https://github.com/zio/zio-kafka/commit/88529107241a35c0d3f6f384e9d6deb4e64d6b09"
+        },
+        "date": 1680021723820,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 520.16191024,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 552.1683577933334,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.kafkaClients",
+            "value": 756.8928968600001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
+            "value": 3027.31351072,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
