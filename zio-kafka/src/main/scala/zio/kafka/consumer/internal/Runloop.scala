@@ -14,7 +14,6 @@ import zio.stream._
 
 import java.util
 import scala.jdk.CollectionConverters._
-import scala.util.control.NonFatal
 
 private[consumer] final class Runloop private (
   runtime: Runtime[Any],
@@ -203,38 +202,36 @@ private[consumer] final class Runloop private (
 
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
-      val consumerGroupMetadata = getConsumerGroupMetadataIfAny
+      for {
+        consumerGroupMetadata <- getConsumerGroupMetadataIfAny
+        _ <- ZIO
+               .foreachDiscard(streams) { streamControl =>
+                 val tp = streamControl.tp
+                 val records = {
+                   val records  = polledRecords.records(tp)
+                   val builder  = ChunkBuilder.make[CommittableRecord[Array[Byte], Array[Byte]]](records.size())
+                   val iterator = records.iterator()
+                   while (iterator.hasNext) {
+                     val consumerRecord = iterator.next()
+                     builder += CommittableRecord[Array[Byte], Array[Byte]](
+                       record = consumerRecord,
+                       commitHandle = commit,
+                       consumerGroupMetadata = consumerGroupMetadata
+                     )
+                   }
+                   builder.result()
+                 }
 
-      ZIO
-        .foreachDiscard(streams) { streamControl =>
-          val tp = streamControl.tp
-          val records = {
-            val records  = polledRecords.records(tp)
-            val builder  = ChunkBuilder.make[CommittableRecord[Array[Byte], Array[Byte]]](records.size())
-            val iterator = records.iterator()
-            while (iterator.hasNext) {
-              val consumerRecord = iterator.next()
-              builder += CommittableRecord[Array[Byte], Array[Byte]](
-                record = consumerRecord,
-                commitHandle = commit,
-                consumerGroupMetadata = consumerGroupMetadata
-              )
-            }
-            builder.result()
-          }
-
-          // noinspection SimplifyWhenInspection
-          if (records.nonEmpty) streamControl.offerRecords(records) else ZIO.unit
-        }
-        .as(fulfillResult)
+                 // noinspection SimplifyWhenInspection
+                 if (records.nonEmpty) streamControl.offerRecords(records) else ZIO.unit
+               }
+      } yield fulfillResult
     }
   }
 
-  private def getConsumerGroupMetadataIfAny: Option[ConsumerGroupMetadata] =
-    if (hasGroupId)
-      try Some(consumer.consumer.groupMetadata())
-      catch { case NonFatal(_) => None }
-    else None
+  private def getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
+    if (hasGroupId) consumer.withConsumer(_.groupMetadata()).fold(_ => None, Some(_))
+    else ZIO.none
 
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
     offsetRetrieval match {
