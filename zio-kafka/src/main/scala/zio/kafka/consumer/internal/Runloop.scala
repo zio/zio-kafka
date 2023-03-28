@@ -373,7 +373,7 @@ private[consumer] final class Runloop private (
           ZIO.succeed(Chunk.empty[PartitionStreamControl])
         else
           ZIO
-            .foreach(pollResult.newlyAssigned)(newPartitionStream)
+            .foreach(Chunk.fromIterable(pollResult.newlyAssigned))(newPartitionStream)
             .tap { newStreams =>
               ZIO.logTrace(s"Offering partition assignment ${pollResult.newlyAssigned}") *>
                 partitions.offer(Take.chunk(Chunk.fromIterable(newStreams.map(_.tpStream))))
