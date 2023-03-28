@@ -188,7 +188,7 @@ private[consumer] final class Runloop private (
    *   Remaining pending requests
    */
   private def offerRecordsToStreams(
-    streams: Map[TopicPartition, PartitionStreamControl],
+    updatedStreams: Chunk[PartitionStreamControl],
     pendingRequests: Chunk[Request],
     ignoreRecordsForTps: Set[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
@@ -196,41 +196,38 @@ private[consumer] final class Runloop private (
     // The most efficient way to get the records from [[ConsumerRecords]] per
     // topic-partition, is by first getting the set of topic-partitions, and
     // then requesting the records per topic-partition.
-    val tps                   = polledRecords.partitions().asScala.toSet -- ignoreRecordsForTps
-    val consumerGroupMetadata = if (tps.isEmpty) None else getConsumerGroupMetadataIfAny
-    val committableRecords =
-      Chunk.fromIterable(tps).map { tp =>
-        val committableRecordsForTp = {
-          val records  = polledRecords.records(tp)
-          val builder  = ChunkBuilder.make[CommittableRecord[Array[Byte], Array[Byte]]](records.size())
-          val iterator = records.iterator()
-          while (iterator.hasNext) {
-            val consumerRecord = iterator.next()
-            builder += CommittableRecord[Array[Byte], Array[Byte]](
-              record = consumerRecord,
-              commitHandle = commit,
-              consumerGroupMetadata = consumerGroupMetadata
-            )
+    val tps           = polledRecords.partitions().asScala.toSet -- ignoreRecordsForTps
+    val fulfillResult = Runloop.FulfillResult(pendingRequests = pendingRequests.filter(req => !tps.contains(req.tp)))
+    val streams =
+      if (tps.isEmpty) Chunk.empty else updatedStreams.filter(streamControl => tps.contains(streamControl.tp))
+
+    if (streams.isEmpty) ZIO.succeed(fulfillResult)
+    else {
+      val consumerGroupMetadata = getConsumerGroupMetadataIfAny
+
+      ZIO
+        .foreachDiscard(streams) { streamControl =>
+          val tp = streamControl.tp
+          val records = {
+            val records  = polledRecords.records(tp)
+            val builder  = ChunkBuilder.make[CommittableRecord[Array[Byte], Array[Byte]]](records.size())
+            val iterator = records.iterator()
+            while (iterator.hasNext) {
+              val consumerRecord = iterator.next()
+              builder += CommittableRecord[Array[Byte], Array[Byte]](
+                record = consumerRecord,
+                commitHandle = commit,
+                consumerGroupMetadata = consumerGroupMetadata
+              )
+            }
+            builder.result()
           }
-          builder.result()
-        }
 
-        tp -> committableRecordsForTp
-      }
-    val unfulfilledRequests = pendingRequests.filter(req => !tps.contains(req.tp))
-
-    ZIO
-      .foreach(committableRecords) { case (tp, records) =>
-        streams.get(tp) match {
-          case Some(streamControl) =>
-            streamControl.offerRecords(records)
-          case None =>
-            ZIO.logWarning(
-              s"Dropping ${records.size} records for partition $tp because no stream is handling it. Probably the stream already ended"
-            )
+          // noinspection SimplifyWhenInspection
+          if (records.nonEmpty) streamControl.offerRecords(records) else ZIO.unit
         }
-      }
-      .as(Runloop.FulfillResult(unfulfilledRequests))
+        .as(fulfillResult)
+    }
   }
 
   private def getConsumerGroupMetadataIfAny: Option[ConsumerGroupMetadata] =
@@ -381,7 +378,7 @@ private[consumer] final class Runloop private (
       runningStreams <- ZIO.filter(pollResult.assignedStreams)(_.isRunning)
       updatedStreams = runningStreams ++ newAssignedStreams
       fulfillResult <- offerRecordsToStreams(
-                         updatedStreams.map(s => s.tp -> s).toMap,
+                         updatedStreams,
                          pollResult.pendingRequests,
                          pollResult.ignoreRecordsForTps,
                          pollResult.records
