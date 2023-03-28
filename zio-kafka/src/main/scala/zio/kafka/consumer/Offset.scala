@@ -5,7 +5,8 @@ import org.apache.kafka.common.TopicPartition
 import zio.{ RIO, Schedule, Task }
 
 sealed trait Offset {
-  def topicPartition: TopicPartition
+  def topic: String
+  def partition: Int
   def offset: Long
   def commit: Task[Unit]
   def batch: OffsetBatch
@@ -15,8 +16,10 @@ sealed trait Offset {
    * Attempts to commit and retries according to the given policy when the commit fails with a
    * RetriableCommitFailedException
    */
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
+  final def commitOrRetry[R](policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
     Offset.commitOrRetry(commit, policy)
+
+  final lazy val topicPartition: TopicPartition = new TopicPartition(topic, partition)
 }
 
 object Offset {
@@ -33,7 +36,8 @@ object Offset {
 }
 
 private final case class OffsetImpl(
-  topicPartition: TopicPartition,
+  topic: String,
+  partition: Int,
   offset: Long,
   commitHandle: Map[TopicPartition, Long] => Task[Unit],
   consumerGroupMetadata: Option[ConsumerGroupMetadata]

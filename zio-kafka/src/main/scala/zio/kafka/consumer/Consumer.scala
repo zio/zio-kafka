@@ -317,9 +317,7 @@ object Consumer {
         r <- ZIO.environment[R & R1]
         _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
                .flatMapPar(Int.MaxValue, bufferSize = settings.perPartitionChunkPrefetch) { case (_, partitionStream) =>
-                 partitionStream.mapChunksZIO(_.mapZIO { case CommittableRecord(record, offset) =>
-                   f(record).as(offset)
-                 })
+                 partitionStream.mapChunksZIO(_.mapZIO((c: CommittableRecord[K, V]) => f(c.record).as(c.offset)))
                }
                .provideEnvironment(r)
                .aggregateAsync(offsetBatches)
