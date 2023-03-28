@@ -63,7 +63,8 @@ def stdSettings(prjName: String) = Seq(
   (Compile / doc) := Def.taskDyn {
     val default = (Compile / doc).taskValue
     Def.task(default.value)
-  }.value
+  }.value,
+  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
 ) ++ scalafixSettings
 
 lazy val zioKafka =
