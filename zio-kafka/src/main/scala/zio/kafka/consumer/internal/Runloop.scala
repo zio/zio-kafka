@@ -56,13 +56,12 @@ private[consumer] final class Runloop private (
     } yield ()
 
   def changeSubscription(
-    subscription: Option[Subscription],
-    offsetRetrieval: OffsetRetrieval
+    subscription: Option[Subscription]
   ): Task[Unit] =
     Promise
       .make[Throwable, Unit]
       .flatMap { cont =>
-        commandQueue.offer(Command.ChangeSubscription(subscription, offsetRetrieval, cont)) *>
+        commandQueue.offer(Command.ChangeSubscription(subscription, cont)) *>
           cont.await
       }
       .unlessZIO(isShutdown)
@@ -408,7 +407,7 @@ private[consumer] final class Runloop private (
         ZIO.succeed(state.addRequest(req))
       case cmd @ Command.Commit(_, _) =>
         doCommit(cmd).as(state.addCommit(cmd))
-      case cmd @ Command.ChangeSubscription(subscription, _, _) =>
+      case cmd @ Command.ChangeSubscription(subscription, _) =>
         handleChangeSubscription(cmd).flatMap { newAssignedStreams =>
           val newState = state.copy(
             assignedStreams = state.assignedStreams ++ newAssignedStreams,
@@ -584,7 +583,6 @@ private[consumer] object Runloop {
 
     final case class ChangeSubscription(
       subscription: Option[Subscription],
-      offsetRetrieval: OffsetRetrieval,
       cont: Promise[Throwable, Unit]
     ) extends Command {
       @inline def succeed: UIO[Boolean]                    = cont.succeed(())
