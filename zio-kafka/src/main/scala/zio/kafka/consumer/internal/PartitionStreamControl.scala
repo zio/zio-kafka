@@ -4,6 +4,7 @@ import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Runloop.Command.Request
 import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, Command }
+import zio.stream.ZStreamAspect.annotated
 import zio.stream.{ Take, ZStream }
 import zio.{ Chunk, LogAnnotation, Promise, Queue, UIO, ZIO }
 
@@ -57,7 +58,7 @@ private[internal] object PartitionStreamControl {
     tp: TopicPartition,
     commandQueue: Queue[Command],
     diagnostics: Diagnostics
-  ): ZIO[Any, Nothing, PartitionStreamControl] =
+  ): UIO[PartitionStreamControl] =
     for {
       _                   <- ZIO.logTrace(s"Creating partition stream ${tp.toString}")
       interruptionPromise <- Promise.make[Throwable, Unit]
@@ -65,25 +66,27 @@ private[internal] object PartitionStreamControl {
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
       requestAndAwaitData =
         for {
+          _     <- ZIO.logInfo(s"Offer Request(${tp.toString})")
           _     <- commandQueue.offer(Request(tp))
           _     <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
           taken <- dataQueue.takeBetween(1, Int.MaxValue)
         } yield taken
 
-      stream = ZStream.logAnnotate(
-                 LogAnnotation("topic", tp.topic()),
-                 LogAnnotation("partition", tp.partition().toString)
-               ) *>
+      stream = (
                  ZStream.finalizer(
                    completedPromise.succeed(()) <*
                      ZIO.logDebug(s"Partition stream ${tp.toString} has ended")
                  ) *>
-                 ZStream.repeatZIOChunk {
-                   // First try to take all records that are available right now.
-                   // When no data is available, request more data and await its arrival.
-                   dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
-                 }.flattenTake
-                   .interruptWhen(interruptionPromise)
+                   ZStream.repeatZIOChunk {
+                     // First try to take all records that are available right now.
+                     // When no data is available, request more data and await its arrival.
+                     dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
+                   }.flattenTake
+                     .interruptWhen(interruptionPromise)
+               ) @@ annotated(
+                 "topic"     -> tp.topic(),
+                 "partition" -> tp.partition().toString
+               )
     } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise)
 
 }

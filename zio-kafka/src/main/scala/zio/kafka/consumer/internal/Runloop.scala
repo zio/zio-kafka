@@ -23,7 +23,7 @@ private[consumer] final class Runloop private (
   runloopTimeout: Duration,
   commandQueue: Queue[Command],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
-  val partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
+  val partitionsToto: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
   diagnostics: Diagnostics,
   shutdownRef: Ref[Boolean],
   offsetRetrieval: OffsetRetrieval,
@@ -43,7 +43,7 @@ private[consumer] final class Runloop private (
         for {
           state <- currentState.get
           _     <- ZIO.foreachDiscard(state.assignedStreams)(_.end())
-          _     <- partitions.offer(Take.end)
+          _     <- partitionsToto.offer(Take.end)
         } yield ()
       }
       .unit
@@ -372,7 +372,7 @@ private[consumer] final class Runloop private (
             .foreach(Chunk.fromIterable(pollResult.newlyAssigned))(newPartitionStream)
             .tap { newStreams =>
               ZIO.logTrace(s"Offering partition assignment ${pollResult.newlyAssigned}") *>
-                partitions.offer(Take.chunk(Chunk.fromIterable(newStreams.map(_.tpStream))))
+                partitionsToto.offer(Take.chunk(Chunk.fromIterable(newStreams.map(_.tpStream))))
             }
       runningStreams <- ZIO.filter(pollResult.assignedStreams)(_.isRunning)
       updatedStreams = runningStreams ++ newAssignedStreams
@@ -469,7 +469,7 @@ private[consumer] final class Runloop private (
                        case OffsetRetrieval.Auto(_) => ZIO.unit
                      }
                 partitionStreams <- ZIO.foreach(Chunk.fromIterable(topicPartitions))(newPartitionStream)
-                _                <- partitions.offer(Take.chunk(partitionStreams.map(_.tpStream)))
+                _                <- partitionsToto.offer(Take.chunk(partitionStreams.map(_.tpStream)))
               } yield partitionStreams
           }
       }
@@ -490,30 +490,33 @@ private[consumer] final class Runloop private (
   def run: ZIO[Scope, Throwable, Any] = {
     def logPollStart(state: State): UIO[Unit] =
       ZIO
-        .logTrace(
+        .logInfo(
           s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
         )
 
-    ZStream
-      .fromQueue(commandQueue)
-      .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
-      .takeWhile(_ != StopRunloop)
-      .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
-        for {
-          _          <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
-          isShutdown <- isShutdown
-          handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
-          updatedState <- ZIO.foldLeft(commands)(state)(handleCommand)
+    ZIO.logInfo(s"Start RUNLOOP") *>
+      ZStream
+        .fromQueue(commandQueue)
+        .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
+        .takeWhile(_ != StopRunloop)
+        .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
+          for {
+            _          <- ZIO.logInfo(s"Processing ${commands.size} commands: ${commands.mkString(", ")}")
+            isShutdown <- isShutdown
+            handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
+            updatedState <- ZIO.foldLeft(commands)(state)(handleCommand)
 
-          updatedStateAfterPoll <- if (updatedState.shouldPoll)
-                                     logPollStart(updatedState) *> handlePoll(updatedState)
-                                   else ZIO.succeed(updatedState)
-          // Immediately poll again, after processing all new queued commands
-          _ <- commandQueue.offer(Command.Poll).when(updatedStateAfterPoll.shouldPoll)
-        } yield updatedStateAfterPoll
-      }
-      .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
-      .onError(cause => partitions.offer(Take.failCause(cause)))
+            _ <- ZIO.logInfo(s"Updated state: $updatedState")
+
+            updatedStateAfterPoll <- if (updatedState.shouldPoll)
+                                       logPollStart(updatedState) *> handlePoll(updatedState)
+                                     else ZIO.succeed(updatedState)
+            // Immediately poll again, after processing all new queued commands
+            _ <- commandQueue.offer(Command.Poll).when(updatedStateAfterPoll.shouldPoll)
+          } yield updatedStateAfterPoll
+        }
+        .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
+        .onError(cause => partitionsToto.offer(Take.failCause(cause)))
   }
 }
 
@@ -630,7 +633,7 @@ private[consumer] object Runloop {
                   restartStreamsOnRebalancing,
                   currentStateRef
                 )
-      _ <- ZIO.logDebug("Starting Runloop")
+      _ <- ZIO.logInfo("============================================================ Starting Runloop")
 
       // Run the entire loop on the blocking thread pool to avoid executor shifts
       fib <- ZIO.blocking(runloop.run).forkScoped
@@ -640,7 +643,7 @@ private[consumer] object Runloop {
                shutdownRef.set(true) *>
                commandQueue.offer(StopRunloop) *>
                fib.join.orDie <*
-               ZIO.logDebug("Shut down Runloop")
+               ZIO.logInfo("Shut down Runloop")
            )
     } yield runloop
 }

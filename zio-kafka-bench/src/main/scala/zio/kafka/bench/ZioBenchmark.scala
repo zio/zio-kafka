@@ -1,6 +1,6 @@
 package zio.kafka.bench
 import org.openjdk.jmh.annotations.{ Setup, TearDown }
-import zio.kafka.bench.ZioBenchmark.logger
+import zio.logging.backend.SLF4J
 import zio.{ ZLayer, _ }
 
 import java.util.UUID
@@ -17,8 +17,10 @@ trait ZioBenchmark[Environment] {
     runtime = Unsafe.unsafe(implicit unsafe =>
       zio.Runtime.unsafe.fromLayer(
         bootstrap >+>
-          (Runtime.removeDefaultLoggers >+>
-            (if (enableLogging) Runtime.addLogger(logger) else ZLayer.empty)) >+>
+          (
+            zio.Runtime.removeDefaultLoggers >>>
+              Runtime.addLogger(SLF4J.slf4jLogger(SLF4J.logFormatDefault, _ => "zio-kafka bench"))
+          ) >+>
           ZLayer.fromZIO(initialize)
       )
     )
@@ -46,23 +48,4 @@ trait ZioBenchmark[Environment] {
 
 object ZioBenchmark {
   def randomThing(prefix: String): String = s"$prefix-${UUID.randomUUID()}"
-
-  val logger: ZLogger[String, Unit] =
-    new ZLogger[String, Unit] {
-      override def apply(
-        trace: Trace,
-        fiberId: FiberId,
-        logLevel: LogLevel,
-        message: () => String,
-        cause: Cause[Any],
-        context: FiberRefs,
-        spans: List[LogSpan],
-        annotations: Map[String, String]
-      ): Unit =
-        println(
-          s"${java.time.Instant
-              .now()} ${logLevel.label} [fiber=${fiberId.threadName},${annotations.map { case (k, v) => s"$k=$v" }
-              .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint}"
-        )
-    }.filterLogLevel(_ >= LogLevel.Info).map(_ => ())
 }

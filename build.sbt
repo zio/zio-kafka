@@ -7,6 +7,7 @@ lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients" 
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.9.0"
 lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.2"
 lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.6"
+lazy val byteBuddy             = "net.bytebuddy"              % "byte-buddy"              % "1.14.2"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
@@ -83,7 +84,8 @@ lazy val zioKafka =
       libraryDependencies ++= Seq(
         kafkaClients,
         jacksonDatabind,
-        scalaCollectionCompat
+        scalaCollectionCompat,
+        byteBuddy
       )
     )
 
@@ -136,6 +138,7 @@ lazy val zioKafkaBench =
     .settings(stdSettings("zio-kafka-bench"))
     .settings(publish / skip := true)
     .settings(libraryDependencies += logback)
+    .settings(libraryDependencies += "dev.zio" %% "zio-logging-slf4j2" % "2.1.11")
     .dependsOn(zioKafka, zioKafkaTestUtils)
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")

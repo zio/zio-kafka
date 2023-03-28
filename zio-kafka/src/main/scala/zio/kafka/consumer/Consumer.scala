@@ -241,7 +241,7 @@ object Consumer {
           case Some(union) =>
             ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union)
           case None =>
-            ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe
+            ZIO.logInfo(s"Unsubscribing kafka consumer") *> unsubscribe
         }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
       }.uninterruptible
 
@@ -376,7 +376,7 @@ object Consumer {
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 
       partitionAssignments <- ZStream
-                                .fromQueue(runloop.partitions)
+                                .fromQueue(runloop.partitionsToto)
                                 .map(_.exit)
                                 .flattenExitOption
                                 .toHub(hubCapacity)
