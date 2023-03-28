@@ -324,12 +324,11 @@ object ConsumerSpec extends ZIOKafkaSpec {
           group  <- randomGroup
           client <- randomClient
           _      <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-          _ <- ZIO.foreach(1 to nrMessages) { i =>
+          _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
 
           // Consume messages
-          messagesReceived <- ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
           subscription = Subscription.topics(topic)
           offsets <- (Consumer
                        .partitionedStream(subscription, Serde.string, Serde.string)
