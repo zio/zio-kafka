@@ -90,7 +90,7 @@ private[consumer] final class Runloop private (
         ZIO.logDebug("Rebalancing started") *>
           currentState.get.flatMap { state =>
             // End all streams
-            endRevoked(
+            endRevokedPartitions(
               state.pendingRequests,
               state.assignedStreams,
               _ => true
@@ -158,13 +158,13 @@ private[consumer] final class Runloop private (
    * @return
    *   New pending requests, new active assigned streams
    */
-  private def endRevoked(
-    requests: Chunk[Request],
-    currentAssignedStreams: Chunk[PartitionStreamControl],
+  private def endRevokedPartitions(
+    pendingRequests: Chunk[Request],
+    assignedStreams: Chunk[PartitionStreamControl],
     isRevoked: TopicPartition => Boolean
   ): UIO[Runloop.RevokeResult] = {
-    val (revokedStreams, assignedStreams) =
-      currentAssignedStreams.partition(control => isRevoked(control.tp))
+    val (revokedStreams, newAssignedStreams) =
+      assignedStreams.partition(control => isRevoked(control.tp))
 
     ZIO
       .foreachDiscard(revokedStreams) { control =>
@@ -173,8 +173,8 @@ private[consumer] final class Runloop private (
       }
       .as(
         Runloop.RevokeResult(
-          pendingRequests = requests.filter(req => !isRevoked(req.tp)),
-          assignedStreams = assignedStreams
+          pendingRequests = pendingRequests.filter(req => !isRevoked(req.tp)),
+          assignedStreams = newAssignedStreams
         )
       )
   }
@@ -318,26 +318,29 @@ private[consumer] final class Runloop private (
                   revokeResult <- rebalanceEvent match {
                                     case Some(Runloop.RebalanceEvent.Revoked(result)) =>
                                       // If we get here, `restartStreamsOnRebalancing == true`
-                                      // Use revoke result from endRevoked that was called previously in the rebalance listener
+                                      // Use revoke result from endRevokedPartitions that was called previously in the rebalance listener
                                       ZIO.succeed(result)
                                     case Some(Runloop.RebalanceEvent.RevokedAndAssigned(result, _)) =>
                                       // If we get here, `restartStreamsOnRebalancing == true`
-                                      // Use revoke result from endRevoked that was called previously in the rebalance listener
+                                      // Use revoke result from endRevokedPartitions that was called previously in the rebalance listener
                                       ZIO.succeed(result)
                                     case Some(Runloop.RebalanceEvent.Assigned(_)) =>
                                       // If we get here, `restartStreamsOnRebalancing == true`
-                                      // endRevoked was not called yet in the rebalance listener
-                                      endRevoked(
-                                        state.pendingRequests,
-                                        state.assignedStreams,
-                                        _ => false // not treating any partitions as revoked, as endRevoked was called previously in the rebalance listener
-                                      )
+                                      // not treating any partitions as revoked, as endRevokedPartitions was called previously in the rebalance listener
+                                      ZIO.succeed {
+                                        Runloop.RevokeResult(
+                                          pendingRequests = state.pendingRequests,
+                                          assignedStreams = state.assignedStreams
+                                        )
+                                      }
                                     case None =>
                                       // End streams for partitions that are no longer assigned
-                                      endRevoked(
+                                      val isNotAssigned = (tp: TopicPartition) => !currentAssigned.contains(tp)
+
+                                      endRevokedPartitions(
                                         state.pendingRequests,
                                         state.assignedStreams,
-                                        tp => !currentAssigned(tp)
+                                        isNotAssigned
                                       )
                                   }
 
@@ -413,11 +416,10 @@ private[consumer] final class Runloop private (
             assignedStreams = state.assignedStreams ++ newAssignedStreams,
             subscription = subscription
           )
-          if (subscription.isDefined) {
-            ZIO.succeed(newState)
-          } else {
+          if (subscription.isDefined) ZIO.succeed(newState)
+          else {
             // End all pending requests
-            endRevoked(newState.pendingRequests, newState.assignedStreams, _ => true).map { revokeResult =>
+            endRevokedPartitions(newState.pendingRequests, newState.assignedStreams, _ => true).map { revokeResult =>
               newState.copy(
                 pendingRequests = revokeResult.pendingRequests,
                 assignedStreams = revokeResult.assignedStreams
