@@ -186,7 +186,7 @@ private[consumer] final class Runloop private (
    *   Remaining pending requests
    */
   private def offerRecordsToStreams(
-    partitionStreams: Chunk[PartitionStreamControl],
+    updatedStreams: Chunk[PartitionStreamControl],
     pendingRequests: Chunk[Request],
     ignoreRecordsForTps: Set[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
@@ -197,7 +197,7 @@ private[consumer] final class Runloop private (
     val tps           = polledRecords.partitions().asScala.toSet -- ignoreRecordsForTps
     val fulfillResult = Runloop.FulfillResult(pendingRequests = pendingRequests.filter(req => !tps.contains(req.tp)))
     val streams =
-      if (tps.isEmpty) Chunk.empty else partitionStreams.filter(streamControl => tps.contains(streamControl.tp))
+      if (tps.isEmpty) Chunk.empty else updatedStreams.filter(streamControl => tps.contains(streamControl.tp))
 
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
