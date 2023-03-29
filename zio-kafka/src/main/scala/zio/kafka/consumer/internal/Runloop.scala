@@ -93,7 +93,7 @@ private[consumer] final class Runloop private (
             endRevokedPartitions(
               state.pendingRequests,
               state.assignedStreams,
-              _ => true
+              isRevoked = _ => true
             ).flatMap { result =>
               lastRebalanceEvent.updateZIO {
                 case None =>
@@ -186,7 +186,7 @@ private[consumer] final class Runloop private (
    *   Remaining pending requests
    */
   private def offerRecordsToStreams(
-    updatedStreams: Chunk[PartitionStreamControl],
+    partitionStreams: Chunk[PartitionStreamControl],
     pendingRequests: Chunk[Request],
     ignoreRecordsForTps: Set[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
@@ -197,7 +197,7 @@ private[consumer] final class Runloop private (
     val tps           = polledRecords.partitions().asScala.toSet -- ignoreRecordsForTps
     val fulfillResult = Runloop.FulfillResult(pendingRequests = pendingRequests.filter(req => !tps.contains(req.tp)))
     val streams =
-      if (tps.isEmpty) Chunk.empty else updatedStreams.filter(streamControl => tps.contains(streamControl.tp))
+      if (tps.isEmpty) Chunk.empty else partitionStreams.filter(streamControl => tps.contains(streamControl.tp))
 
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
@@ -335,12 +335,10 @@ private[consumer] final class Runloop private (
                                       }
                                     case None =>
                                       // End streams for partitions that are no longer assigned
-                                      val isNotAssigned = (tp: TopicPartition) => !currentAssigned.contains(tp)
-
                                       endRevokedPartitions(
                                         state.pendingRequests,
                                         state.assignedStreams,
-                                        isNotAssigned
+                                        isRevoked = (tp: TopicPartition) => !currentAssigned.contains(tp)
                                       )
                                   }
 
@@ -418,8 +416,12 @@ private[consumer] final class Runloop private (
           )
           if (subscription.isDefined) ZIO.succeed(newState)
           else {
-            // End all pending requests
-            endRevokedPartitions(newState.pendingRequests, newState.assignedStreams, _ => true).map { revokeResult =>
+            // End all streams and pending requests
+            endRevokedPartitions(
+              newState.pendingRequests,
+              newState.assignedStreams,
+              isRevoked = _ => true
+            ).map { revokeResult =>
               newState.copy(
                 pendingRequests = revokeResult.pendingRequests,
                 assignedStreams = revokeResult.assignedStreams
