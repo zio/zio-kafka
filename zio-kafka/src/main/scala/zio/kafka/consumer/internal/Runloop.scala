@@ -93,7 +93,7 @@ private[consumer] final class Runloop private (
             endRevokedPartitions(
               state.pendingRequests,
               state.assignedStreams,
-              _ => true
+              isRevoked = _ => true
             ).flatMap { result =>
               lastRebalanceEvent.updateZIO {
                 case None =>
@@ -163,7 +163,7 @@ private[consumer] final class Runloop private (
     assignedStreams: Chunk[PartitionStreamControl],
     isRevoked: TopicPartition => Boolean
   ): UIO[Runloop.RevokeResult] = {
-    val (revokedStreams, newAssignedStreams) =
+    val (revokedStreams, continuingStreams) =
       assignedStreams.partition(control => isRevoked(control.tp))
 
     ZIO
@@ -174,7 +174,7 @@ private[consumer] final class Runloop private (
       .as(
         Runloop.RevokeResult(
           pendingRequests = pendingRequests.filter(req => !isRevoked(req.tp)),
-          assignedStreams = newAssignedStreams
+          assignedStreams = continuingStreams
         )
       )
   }
@@ -335,12 +335,10 @@ private[consumer] final class Runloop private (
                                       }
                                     case None =>
                                       // End streams for partitions that are no longer assigned
-                                      val isNotAssigned = (tp: TopicPartition) => !currentAssigned.contains(tp)
-
                                       endRevokedPartitions(
                                         state.pendingRequests,
                                         state.assignedStreams,
-                                        isNotAssigned
+                                        isRevoked = (tp: TopicPartition) => !currentAssigned.contains(tp)
                                       )
                                   }
 
@@ -419,7 +417,11 @@ private[consumer] final class Runloop private (
           if (subscription.isDefined) ZIO.succeed(newState)
           else {
             // End all pending requests
-            endRevokedPartitions(newState.pendingRequests, newState.assignedStreams, _ => true).map { revokeResult =>
+            endRevokedPartitions(
+              newState.pendingRequests,
+              newState.assignedStreams,
+              isRevoked = _ => true
+            ).map { revokeResult =>
               newState.copy(
                 pendingRequests = revokeResult.pendingRequests,
                 assignedStreams = revokeResult.assignedStreams
