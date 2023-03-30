@@ -326,13 +326,13 @@ private[consumer] final class Runloop private (
                                       ZIO.succeed(result)
                                     case Some(Runloop.RebalanceEvent.Assigned(_)) =>
                                       // If we get here, `restartStreamsOnRebalancing == true`
-                                      // not treating any partitions as revoked, as endRevokedPartitions was called previously in the rebalance listener
-                                      ZIO.succeed {
-                                        Runloop.RevokeResult(
-                                          pendingRequests = state.pendingRequests,
-                                          assignedStreams = state.assignedStreams
-                                        )
-                                      }
+                                      // endRevokedPartitions was not called yet in the rebalance listener,
+                                      // and all partitions should be revoked
+                                      endRevokedPartitions(
+                                        state.pendingRequests,
+                                        state.assignedStreams,
+                                        isRevoked = _ => true
+                                      )
                                     case None =>
                                       // End streams for partitions that are no longer assigned
                                       endRevokedPartitions(
