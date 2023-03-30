@@ -29,7 +29,7 @@ case class ConsumerSettings(
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
-  runloopTimeout: Duration
+  runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
@@ -92,7 +92,7 @@ case class ConsumerSettings(
 }
 
 object ConsumerSettings {
-  private[zio] val defaultRunloopTimeout: Duration = 30.seconds
+  val defaultRunloopTimeout: Duration = 30.seconds
 
   def apply(bootstrapServers: List[String]): ConsumerSettings =
     new ConsumerSettings(
