@@ -92,7 +92,7 @@ case class ConsumerSettings(
 }
 
 object ConsumerSettings {
-  val defaultRunloopTimeout: Duration = 30.seconds
+  val defaultRunloopTimeout: Duration = 4.minutes
 
   def apply(bootstrapServers: List[String]): ConsumerSettings =
     new ConsumerSettings(
