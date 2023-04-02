@@ -120,7 +120,9 @@ private[consumer] final class Runloop private (
     offsets =>
       for {
         p <- Promise.make[Throwable, Unit]
-        _ <- commandQueue.offer(Commit(offsets, p)).unit
+        cmd = Commit(offsets, p)
+        _ <- doCommit(cmd)
+        _ <- commandQueue.offer(cmd).unit
         _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await
       } yield ()
@@ -398,7 +400,7 @@ private[consumer] final class Runloop private (
     cmd match {
       case _: Request                    => /* Ignore requests during shutdown. */ ZIO.succeed(state)
       case r: Command.ChangeSubscription => r.succeed.as(state)
-      case cmd: Command.Commit           => doCommit(cmd).as(state.addCommit(cmd))
+      case cmd: Command.Commit           => ZIO.succeed(state.addCommit(cmd))
       case _: Command.Control            => ZIO.succeed(state)
     }
 
@@ -407,7 +409,7 @@ private[consumer] final class Runloop private (
       case req: Request =>
         ZIO.succeed(state.addRequest(req))
       case cmd @ Command.Commit(_, _) =>
-        doCommit(cmd).as(state.addCommit(cmd))
+        ZIO.succeed(state.addCommit(cmd))
       case cmd @ Command.ChangeSubscription(subscription, _) =>
         handleChangeSubscription(cmd).flatMap { newAssignedStreams =>
           val newState = state.copy(
