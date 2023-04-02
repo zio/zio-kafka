@@ -64,7 +64,6 @@ private[consumer] final class Runloop private (
         commandQueue.offer(Command.ChangeSubscription(subscription, cont)) *>
           cont.await
       }
-      .unlessZIO(isShutdown)
       .unit
       .uninterruptible
 
@@ -388,21 +387,7 @@ private[consumer] final class Runloop private (
       subscription = state.subscription
     )
 
-  /**
-   * After shutdown, we end all pending requests (ending their partition streams) and pause all partitions, but keep
-   * executing commits and polling
-   *
-   * Buffered records for paused partitions will be removed to drain the stream as fast as possible.
-   */
-  private def handleShutdown(state: State, cmd: Command): Task[State] =
-    cmd match {
-      case _: Request                    => /* Ignore requests during shutdown. */ ZIO.succeed(state)
-      case r: Command.ChangeSubscription => r.succeed.as(state)
-      case cmd: Command.Commit           => doCommit(cmd).as(state.addCommit(cmd))
-      case _: Command.Control            => ZIO.succeed(state)
-    }
-
-  private def handleOperational(state: State, cmd: Command): Task[State] =
+  private def handleCommand(state: State, cmd: Command): Task[State] =
     cmd match {
       case req: Request =>
         ZIO.succeed(state.addRequest(req))
@@ -502,10 +487,8 @@ private[consumer] final class Runloop private (
       .takeWhile(_ != StopRunloop)
       .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
         for {
-          _          <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
-          isShutdown <- isShutdown
-          handleCommand = if (isShutdown) handleShutdown _ else handleOperational _
-          updatedState <- ZIO.foldLeft(commands)(state)(handleCommand)
+          _            <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
+          updatedState <- ZIO.foldLeft(commands)(state)(handleCommand _)
 
           updatedStateAfterPoll <- if (updatedState.shouldPoll)
                                      logPollStart(updatedState) *> handlePoll(updatedState)
