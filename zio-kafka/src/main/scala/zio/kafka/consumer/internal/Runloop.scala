@@ -134,7 +134,7 @@ private[consumer] final class Runloop private (
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
         ZIO.logDebug(s"Rebalance in progress, retrying commit for offsets $offsets") *>
-          commandQueue.offer(cmd).unit
+          commandQueue.offer(cmd).unit // TODO: retry, but do not add to command queue again
       case err =>
         cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
     }
