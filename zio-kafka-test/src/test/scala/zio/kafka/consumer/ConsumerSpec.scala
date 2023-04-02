@@ -305,7 +305,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                         for {
                           nr <- messagesReceived.updateAndGet(_ + 1)
                           _  <- Consumer.stopConsumption.when(nr == 10)
-                        } yield Option.when(nr < 10)(record.offset).toSeq
+                        } yield if (nr < 10) Seq(record.offset) else Seq.empty
                       }
                       .transduce(Consumer.offsetBatches)
                       .mapZIO(_.commit)
