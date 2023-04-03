@@ -7,7 +7,7 @@ import zio._
 import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.Runloop.Command.{ Commit, Request, StopRunloop }
+import zio.kafka.consumer.internal.Runloop.Command.{ Commit, Request, StopAllStreams, StopRunloop }
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.{ CommittableRecord, RebalanceConsumer, RebalanceListener, Subscription }
 import zio.stream._
@@ -36,7 +36,7 @@ private[consumer] final class Runloop private (
 
   /** Initiate a graceful shutdown. */
   def gracefulShutdown: UIO[Unit] =
-    commandQueue.offer(Command.StopFetching).unit
+    commandQueue.offer(Command.StopAllStreams).unit
 
   /** Wait until graceful shutdown completes. */
   def awaitShutdown: UIO[Unit] =
@@ -384,13 +384,13 @@ private[consumer] final class Runloop private (
         }
           .tapBoth(e => cmd.fail(e), _ => cmd.succeed)
           .uninterruptible
-      case Command.StopFetching =>
+      case Command.StopAllStreams =>
         {
           for {
             _ <- ZIO.logDebug("Graceful shutdown")
             _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end())
             _ <- partitions.offer(Take.end)
-            _ <- ZIO.logTrace("Graceful shutdown done")
+            _ <- ZIO.logTrace("Graceful shutdown initiated")
           } yield ()
         }.as(state.copy(pendingRequests = Chunk.empty))
 
@@ -466,7 +466,7 @@ private[consumer] final class Runloop private (
       .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
         for {
           _            <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
-          updatedState <- ZIO.foldLeft(commands)(state)(handleCommand _)
+          updatedState <- ZIO.foldLeft(commands)(state)(handleCommand)
 
           updatedStateAfterPoll <- if (updatedState.shouldPoll)
                                      logPollStart(updatedState) *> handlePoll(updatedState)
@@ -536,9 +536,9 @@ private[consumer] object Runloop {
     // Used for internal control of the runloop
     sealed trait Control extends Command
 
-    case object Poll         extends Control
-    case object StopRunloop  extends Control
-    case object StopFetching extends Control
+    case object Poll           extends Control
+    case object StopRunloop    extends Control
+    case object StopAllStreams extends Control
 
     final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command {
       @inline def isDone: UIO[Boolean]    = cont.isDone
@@ -599,6 +599,7 @@ private[consumer] object Runloop {
 
       _ <- ZIO.addFinalizer(
              ZIO.logTrace("Shutting down Runloop") *>
+               commandQueue.offer(StopAllStreams) *>
                commandQueue.offer(StopRunloop) *>
                fib.join.orDie <*
                ZIO.logDebug("Shut down Runloop")
