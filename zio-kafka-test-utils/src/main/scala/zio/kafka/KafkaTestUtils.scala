@@ -4,7 +4,7 @@ import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerRecord }
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio._
 import zio.kafka.admin._
-import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.embedded.Kafka
@@ -131,7 +131,7 @@ object KafkaTestUtils {
     clientId: String,
     groupId: Option[String] = None,
     clientInstanceId: Option[String] = None,
-    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
