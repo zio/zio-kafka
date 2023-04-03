@@ -10,7 +10,7 @@ import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.{ durationInt, Ref, ULayer, ZIO, ZLayer }
+import zio.{ durationInt, ULayer, ZIO, ZLayer }
 
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
@@ -52,7 +52,7 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
         groupId = Some(randomThing("client")),
         runloopTimeout =
           1.hour // Absurdly high timeout to avoid the runloop from being interrupted while we're benchmarking other stuff
-      ).map(_.withPerPartitionChunkPrefetch(16))
+      )
     )
 
   override protected def bootstrap: ULayer[Env] =
@@ -73,8 +73,8 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
       _ <- produceMany(topic1, kvs)
     } yield ()
 
-//  @Benchmark
-//  @BenchmarkMode(Array(Mode.AverageTime))
+  @Benchmark
+  @BenchmarkMode(Array(Mode.AverageTime))
   def kafkaClients(): Any =
     runZIO {
       ZIO.service[ConsumerSettings].flatMap { settings =>
@@ -96,32 +96,11 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  def zioKafkaPlainStream(): Any =
+  def zioKafka(): Any =
     runZIO {
       Consumer
         .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
         .take(nrMessages.toLong)
         .runDrain
     }
-
-//  @Benchmark
-//  @BenchmarkMode(Array(Mode.AverageTime))
-//  def zioKafkaPartitionedStream(): Any =
-//    runZIO {
-//      Ref.make(0L).flatMap { counter =>
-//        Consumer
-//          .partitionedStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
-//          .mapZIOPar(Int.MaxValue) { case (tp @ _, partitionStream) =>
-//            partitionStream
-//              .mapChunksZIO(chunk =>
-//                counter
-//                  .updateAndGet(_ + chunk.size)
-//                  .tap(c => Consumer.stopConsumption.when(c >= nrMessages.toLong))
-//                  .as(chunk)
-//              )
-//              .runDrain
-//          }
-//          .runDrain
-//      }
-//    }
 }
