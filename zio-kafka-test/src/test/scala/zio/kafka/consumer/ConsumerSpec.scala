@@ -301,19 +301,19 @@ object ConsumerSpec extends ZIOKafkaSpec {
           messagesReceived <- Ref.make[Int](0)
           offset <- (Consumer
                       .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
-                      .mapZIO { record =>
+                      .mapConcatZIO { record =>
                         for {
                           nr <- messagesReceived.updateAndGet(_ + 1)
-                          _  <- Consumer.stopConsumption.when(nr == 1)
-                        } yield record.offset
+                          _  <- Consumer.stopConsumption.when(nr == 10)
+                        } yield if (nr < 10) Seq(record.offset) else Seq.empty
                       }
                       .transduce(Consumer.offsetBatches)
                       .mapZIO(_.commit)
                       .runDrain *>
                       Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head))
                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
-        } yield assert(offset.map(_.offset))(isSome(isLessThanEqualTo(10L)))
-      } @@ TestAspect.ignore, // Not sure how to test this currently
+        } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
+      },
       test("offset batching collects the latest offset for all partitions") {
         val nrMessages   = 50
         val nrPartitions = 5
