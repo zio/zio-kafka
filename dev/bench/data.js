@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1680547608007,
+  "lastUpdate": 1680547733088,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -9870,6 +9870,54 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
             "value": 2081.4319474,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@gmail.com",
+            "name": "Steven Vroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "svroonland@gmail.com",
+            "name": "Steven Vroonland",
+            "username": "svroonland"
+          },
+          "distinct": true,
+          "id": "a56fd9d730f11d8a46c52aa92b76b78f4347ca2e",
+          "message": "Revert \"Bump actions/setup-java from 3.10.0 to 3.11.0 (#779)\"\n\nThis reverts commit a653bf7f14db8ef5adfebb90368b6334bbbbbeaf.",
+          "timestamp": "2023-04-03T20:33:09+02:00",
+          "tree_id": "d8a309092a91048e8179b20697abe1e04ea02ab1",
+          "url": "https://github.com/zio/zio-kafka/commit/a56fd9d730f11d8a46c52aa92b76b78f4347ca2e"
+        },
+        "date": 1680547730775,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 485.3082322166665,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 379.2500346366666,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.kafkaClients",
+            "value": 660.46605814,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
+            "value": 2219.8070007999995,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
