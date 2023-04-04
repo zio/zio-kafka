@@ -67,10 +67,10 @@ object SslHelper {
         }
       }
       .unit
-      .mapError(e =>
+      .mapError { e =>
         // Mimic behaviour of KafkaAdminClient.createInternal
         new KafkaException("Failed to create new KafkaAdminClient", e)
-      )
+      }
 
   /**
    * Send a simple request to check if connection can be established with current configuration
