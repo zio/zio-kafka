@@ -53,13 +53,13 @@ object SslHelper {
                                 isTls(buffer)
                               }
                        _ <-
-                         ZIO.when(tls)(
+                         ZIO.when(tls) {
                            ZIO.fail(
                              new IllegalArgumentException(
                                s"Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
                              )
                            )
-                         )
+                         }
                      } yield ()
                    }
                  }
