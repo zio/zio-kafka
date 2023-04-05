@@ -329,14 +329,6 @@ private[consumer] final class Runloop private (
             )
           }
         }
-      _ <- {
-        val restartingStreams =
-          state.assignedStreams.filter(control => pollResult.startingTps.contains(control.tp))
-        ZIO.when(restartingStreams.nonEmpty) {
-          ZIO.logDebug(s"Awaiting end of ${restartingStreams.size} restarting streams") *>
-            ZIO.foreachDiscard(restartingStreams)(_.awaitCompleted())
-        }
-      }
       startingStreams <-
         if (pollResult.startingTps.isEmpty) {
           ZIO.succeed(Chunk.empty[PartitionStreamControl])
