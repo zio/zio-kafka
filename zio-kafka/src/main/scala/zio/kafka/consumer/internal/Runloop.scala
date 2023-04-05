@@ -156,10 +156,7 @@ private[consumer] final class Runloop private (
       assignedStreams.partition(control => isRevoked(control.tp))
 
     ZIO
-      .foreachDiscard(revokedStreams) { control =>
-        ZIO.logDebug(s"Revoking topic-partition ${control.tp}") *>
-          control.end()
-      }
+      .foreachDiscard(revokedStreams)(control => control.end())
       .as(
         Runloop.RevokeResult(
           pendingRequests = pendingRequests.filter(req => !isRevoked(req.tp)),
@@ -267,22 +264,12 @@ private[consumer] final class Runloop private (
             val records = doPoll(c)
 
             val currentAssigned = c.assignment().asScala.toSet
+            val newlyAssigned   = currentAssigned -- prevAssigned
 
             for {
-              rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
-
-              newlyAssigned = rebalanceEvent match {
-                                case Some(Runloop.RebalanceEvent.Assigned(assigned)) =>
-                                  assigned
-                                case Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, assigned)) =>
-                                  assigned
-                                case Some(Runloop.RebalanceEvent.Revoked(_)) =>
-                                  currentAssigned -- prevAssigned
-                                case None =>
-                                  currentAssigned -- prevAssigned
-                              }
-
               ignoreRecordsForTps <- doSeekForNewPartitions(c, newlyAssigned)
+
+              rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
 
               revokeResult <- rebalanceEvent match {
                                 case Some(Runloop.RebalanceEvent.Revoked(result)) =>
@@ -311,6 +298,15 @@ private[consumer] final class Runloop private (
                                   )
                               }
 
+              startingTps = rebalanceEvent match {
+                              case Some(_) =>
+                                // If we get here, `restartStreamsOnRebalancing == true` and
+                                // some partitions were revoked and/or assigned.
+                                currentAssigned
+                              case None =>
+                                newlyAssigned
+                            }
+
               _ <- diagnostics.emitIfEnabled {
                      val providedTps = records.partitions().asScala.toSet
                      DiagnosticEvent.Poll(
@@ -321,7 +317,7 @@ private[consumer] final class Runloop private (
                    }
 
             } yield Runloop.PollResult(
-              newlyAssigned = newlyAssigned,
+              startingTps = startingTps,
               pendingRequests = revokeResult.pendingRequests,
               assignedStreams = revokeResult.assignedStreams,
               records = records,
@@ -329,18 +325,25 @@ private[consumer] final class Runloop private (
             )
           }
         }
-      newAssignedStreams <-
-        if (pollResult.newlyAssigned.isEmpty)
+      (restartingStreams, keptStreams) =
+        pollResult.assignedStreams.partition(control => pollResult.startingTps.contains(control.tp))
+      _ <- ZIO.when(restartingStreams.nonEmpty) {
+             ZIO.logInfo(s"Awaiting end of ${restartingStreams.size} restarting streams") *>
+               ZIO.foreachDiscard(restartingStreams)(_.awaitCompleted())
+           }
+      runningStreams <- ZIO.filter(keptStreams)(_.isRunning)
+      startingStreams <-
+        if (pollResult.startingTps.isEmpty) {
           ZIO.succeed(Chunk.empty[PartitionStreamControl])
-        else
+        } else {
           ZIO
-            .foreach(Chunk.fromIterable(pollResult.newlyAssigned))(newPartitionStream)
+            .foreach(Chunk.fromIterable(pollResult.startingTps))(newPartitionStream)
             .tap { newStreams =>
-              ZIO.logTrace(s"Offering partition assignment ${pollResult.newlyAssigned}") *>
+              ZIO.logTrace(s"Offering partition assignment ${pollResult.startingTps}") *>
                 partitions.offer(Take.chunk(Chunk.fromIterable(newStreams.map(_.tpStream))))
             }
-      runningStreams <- ZIO.filter(pollResult.assignedStreams)(_.isRunning)
-      updatedStreams = runningStreams ++ newAssignedStreams
+        }
+      updatedStreams = runningStreams ++ startingStreams
       fulfillResult <- offerRecordsToStreams(
                          updatedStreams,
                          pollResult.pendingRequests,
@@ -507,7 +510,7 @@ private[consumer] object Runloop {
   private val commandQueueSize = 1024
 
   private final case class PollResult(
-    newlyAssigned: Set[TopicPartition],
+    startingTps: Set[TopicPartition],
     pendingRequests: Chunk[Request],
     assignedStreams: Chunk[PartitionStreamControl],
     records: ConsumerRecords[Array[Byte], Array[Byte]],
