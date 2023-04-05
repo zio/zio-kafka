@@ -19,7 +19,7 @@ private[consumer] final class ConsumerAccess(
   def withConsumerZIO[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
     access.withPermit(withConsumerNoPermit(f))
 
-  private[consumer] def withConsumerNoPermit[R, A](
+  private def withConsumerNoPermit[R, A](
     f: ByteArrayKafkaConsumer => RIO[R, A]
   ): RIO[R, A] =
     ZIO
@@ -31,10 +31,17 @@ private[consumer] final class ConsumerAccess(
       .flatMap(fib => fib.join.onInterrupt(ZIO.succeed(consumer.wakeup()) *> fib.interrupt))
 
   /**
-   * Do not use this method outside of the Runloop
+   * Use this method only from Runloop.
    */
   private[internal] def runloopAccess[R, E, A](f: ByteArrayKafkaConsumer => ZIO[R, E, A]): ZIO[R, E, A] =
     access.withPermit(f(consumer))
+
+  /**
+   * Use this method ONLY from the rebalance handler.
+   */
+  private[internal] def rebalanceHandlerAccess[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
+    withConsumerNoPermit(f)
+
 }
 
 private[consumer] object ConsumerAccess {
