@@ -11,8 +11,9 @@ private[internal] final class PartitionStreamControl private (
   val tp: TopicPartition,
   stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
-  interruptPromise: Promise[Throwable, Unit],
-  completedPromise: Promise[Nothing, Unit]
+  endedPromise: Promise[Nothing, Unit],
+  completedPromise: Promise[Nothing, Unit],
+  interruptPromise: Promise[Throwable, Unit]
 ) {
 
   private val logAnnotate = ZIO.logAnnotate(
@@ -32,16 +33,23 @@ private[internal] final class PartitionStreamControl private (
   def end(): ZIO[Any, Nothing, Unit] =
     logAnnotate {
       ZIO.logTrace(s"Partition ${tp.toString} ending") *>
-        dataQueue.offer(Take.end).unit
+        ZIO.whenZIO(endedPromise.succeed(())) {
+          dataQueue.offer(Take.end)
+        }
+          .unit
     }
+
+  /** Returns true when the stream accepts new data. */
+  def acceptsData: ZIO[Any, Nothing, Boolean] =
+    for {
+      ended       <- endedPromise.isDone
+      completed   <- completedPromise.isDone
+      interrupted <- interruptPromise.isDone
+    } yield !ended && !completed && !interrupted
 
   /** Returns true when the stream is done. */
   def isCompleted: ZIO[Any, Nothing, Boolean] =
     completedPromise.isDone
-
-  /** Returns true when the stream is running. */
-  def isRunning: ZIO[Any, Nothing, Boolean] =
-    isCompleted.negate
 
   /** Wait till the stream is done. */
   def awaitCompleted(): ZIO[Any, Nothing, Unit] =
@@ -60,8 +68,9 @@ private[internal] object PartitionStreamControl {
   ): ZIO[Any, Nothing, PartitionStreamControl] =
     for {
       _                   <- ZIO.logTrace(s"Creating partition stream ${tp.toString}")
-      interruptionPromise <- Promise.make[Throwable, Unit]
+      endedPromise        <- Promise.make[Nothing, Unit]
       completedPromise    <- Promise.make[Nothing, Unit]
+      interruptionPromise <- Promise.make[Throwable, Unit]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
       requestAndAwaitData =
         for {
@@ -84,6 +93,6 @@ private[internal] object PartitionStreamControl {
                    dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
                  }.flattenTake
                    .interruptWhen(interruptionPromise)
-    } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise)
+    } yield new PartitionStreamControl(tp, stream, dataQueue, endedPromise, completedPromise, interruptionPromise)
 
 }
