@@ -325,13 +325,14 @@ private[consumer] final class Runloop private (
             )
           }
         }
-      (restartingStreams, keptStreams) =
-        pollResult.assignedStreams.partition(control => pollResult.startingTps.contains(control.tp))
-      _ <- ZIO.when(restartingStreams.nonEmpty) {
-             ZIO.logInfo(s"Awaiting end of ${restartingStreams.size} restarting streams") *>
-               ZIO.foreachDiscard(restartingStreams)(_.awaitCompleted())
-           }
-      runningStreams <- ZIO.filter(keptStreams)(_.isRunning)
+      _ <- {
+        val restartingStreams =
+          state.assignedStreams.filter(control => pollResult.startingTps.contains(control.tp))
+        ZIO.when(restartingStreams.nonEmpty) {
+          ZIO.logDebug(s"Awaiting end of ${restartingStreams.size} restarting streams") *>
+            ZIO.foreachDiscard(restartingStreams)(_.awaitCompleted())
+        }
+      }
       startingStreams <-
         if (pollResult.startingTps.isEmpty) {
           ZIO.succeed(Chunk.empty[PartitionStreamControl])
@@ -343,6 +344,7 @@ private[consumer] final class Runloop private (
                 partitions.offer(Take.chunk(Chunk.fromIterable(newStreams.map(_.tpStream))))
             }
         }
+      runningStreams <- ZIO.filter(pollResult.assignedStreams)(_.isRunning)
       updatedStreams = runningStreams ++ startingStreams
       fulfillResult <- offerRecordsToStreams(
                          updatedStreams,
