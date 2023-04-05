@@ -58,7 +58,7 @@ private final case class OffsetBatchImpl(
 case object EmptyOffsetBatch extends OffsetBatch {
   override val offsets: Map[TopicPartition, Long]                   = Map.empty
   override val commit: Task[Unit]                                   = ZIO.unit
-  override def add(offset: Offset): OffsetBatch                     = offset.batch
+  override def add(offset: Offset): OffsetBatch                     = offset.asOffsetBatch
   override def merge(offset: Offset): OffsetBatch                   = add(offset)
   override def merge(offsets: OffsetBatch): OffsetBatch             = offsets
   override def consumerGroupMetadata: Option[ConsumerGroupMetadata] = None

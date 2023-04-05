@@ -9,7 +9,7 @@ sealed trait Offset {
   def partition: Int
   def offset: Long
   def commit: Task[Unit]
-  def batch: OffsetBatch
+  def asOffsetBatch: OffsetBatch
   def consumerGroupMetadata: Option[ConsumerGroupMetadata]
 
   /**
@@ -42,6 +42,6 @@ private final case class OffsetImpl(
   commitHandle: Map[TopicPartition, Long] => Task[Unit],
   consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) extends Offset {
-  def commit: Task[Unit] = commitHandle(Map(topicPartition -> offset))
-  def batch: OffsetBatch = OffsetBatchImpl(Map(topicPartition -> offset), commitHandle, consumerGroupMetadata)
+  def commit: Task[Unit]         = commitHandle(Map(topicPartition -> offset))
+  def asOffsetBatch: OffsetBatch = OffsetBatchImpl(Map(topicPartition -> offset), commitHandle, consumerGroupMetadata)
 }

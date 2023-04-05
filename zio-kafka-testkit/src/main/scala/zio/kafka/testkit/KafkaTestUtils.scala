@@ -102,6 +102,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
+    rebalanceSafeCommits: Boolean = false,
     `max.poll.records`: Int = 100, // settings this higher can cause concurrency bugs to go unnoticed
     runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
     properties: Map[String, String] = Map.empty
@@ -123,6 +124,7 @@ object KafkaTestUtils {
         )
         .withOffsetRetrieval(offsetRetrieval)
         .withRestartStreamOnRebalancing(restartStreamOnRebalancing)
+        .withRebalanceSafeCommits(rebalanceSafeCommits)
         .withProperties(properties)
 
       val withClientInstanceId = clientInstanceId.fold(settings)(settings.withGroupInstanceId)
@@ -139,6 +141,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
+    rebalanceSafeCommits: Boolean = false,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     consumerSettings(
@@ -148,6 +151,7 @@ object KafkaTestUtils {
       allowAutoCreateTopics = allowAutoCreateTopics,
       offsetRetrieval = offsetRetrieval,
       restartStreamOnRebalancing = restartStreamOnRebalancing,
+      rebalanceSafeCommits = rebalanceSafeCommits,
       properties = properties
     )
       .map(
@@ -187,6 +191,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
+    rebalanceSafeCommits: Boolean = false,
     properties: Map[String, String] = Map.empty
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
@@ -197,6 +202,7 @@ object KafkaTestUtils {
         allowAutoCreateTopics = allowAutoCreateTopics,
         offsetRetrieval = offsetRetrieval,
         restartStreamOnRebalancing = restartStreamOnRebalancing,
+        rebalanceSafeCommits = rebalanceSafeCommits,
         properties = properties
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
@@ -212,6 +218,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
+    rebalanceSafeCommits: Boolean = false,
     properties: Map[String, String] = Map.empty,
     rebalanceListener: RebalanceListener = RebalanceListener.noop
   ): ZLayer[Kafka, Throwable, Consumer] =
@@ -223,6 +230,7 @@ object KafkaTestUtils {
         allowAutoCreateTopics = allowAutoCreateTopics,
         offsetRetrieval = offsetRetrieval,
         restartStreamOnRebalancing = restartStreamOnRebalancing,
+        rebalanceSafeCommits = rebalanceSafeCommits,
         properties = properties
       ).map(_.withRebalanceListener(rebalanceListener))
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
