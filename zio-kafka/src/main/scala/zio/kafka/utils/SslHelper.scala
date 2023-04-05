@@ -108,6 +108,7 @@ object SslHelper {
     val buf = ByteBuffer.allocate(5)
     channel.read(buf)
     buf.position(0)
+    buf
   }
 
   /**
