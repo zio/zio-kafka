@@ -156,7 +156,7 @@ private[consumer] final class Runloop private (
       assignedStreams.partition(control => isRevoked(control.tp))
 
     ZIO
-      .foreachDiscard(revokedStreams)(control => control.end())
+      .foreachDiscard(revokedStreams)(_.end())
       .as(
         Runloop.RevokeResult(
           pendingRequests = pendingRequests.filter(req => !isRevoked(req.tp)),
