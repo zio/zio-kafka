@@ -20,10 +20,7 @@ inThisBuild(
     Test / fork              := true,
     run / fork               := true,
     supportedScalaVersions := Map(
-      (zioKafka / thisProject).value.id          -> (zioKafka / crossScalaVersions).value,
-      (zioKafkaBench / thisProject).value.id     -> (zioKafkaBench / crossScalaVersions).value,
-      (zioKafkaTest / thisProject).value.id      -> (zioKafkaTest / crossScalaVersions).value,
-      (zioKafkaTestUtils / thisProject).value.id -> (zioKafkaTestUtils / crossScalaVersions).value
+      (root / thisProject).value.id -> crossScalaVersions.value
     ),
     developers := List(
       Developer(
