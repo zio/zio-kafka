@@ -156,10 +156,7 @@ private[consumer] final class Runloop private (
       assignedStreams.partition(control => isRevoked(control.tp))
 
     ZIO
-      .foreachDiscard(revokedStreams) { control =>
-        ZIO.logDebug(s"Revoking topic-partition ${control.tp}") *>
-          control.end()
-      }
+      .foreachDiscard(revokedStreams)(control => control.end())
       .as(
         Runloop.RevokeResult(
           pendingRequests = pendingRequests.filter(req => !isRevoked(req.tp)),
@@ -267,20 +264,10 @@ private[consumer] final class Runloop private (
             val records = doPoll(c)
 
             val currentAssigned = c.assignment().asScala.toSet
+            val newlyAssigned   = currentAssigned -- prevAssigned
 
             for {
               rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
-
-              newlyAssigned = rebalanceEvent match {
-                                case Some(Runloop.RebalanceEvent.Assigned(assigned)) =>
-                                  assigned
-                                case Some(Runloop.RebalanceEvent.RevokedAndAssigned(_, assigned)) =>
-                                  assigned
-                                case Some(Runloop.RebalanceEvent.Revoked(_)) =>
-                                  currentAssigned -- prevAssigned
-                                case None =>
-                                  currentAssigned -- prevAssigned
-                              }
 
               ignoreRecordsForTps <- doSeekForNewPartitions(c, newlyAssigned)
 
