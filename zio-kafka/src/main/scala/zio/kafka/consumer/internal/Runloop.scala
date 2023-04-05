@@ -302,7 +302,10 @@ private[consumer] final class Runloop private (
                               case Some(_) =>
                                 // If we get here, `restartStreamsOnRebalancing == true`,
                                 // some partitions were revoked and/or assigned and
-                                // all streams were ended.
+                                // all already assigned streams were ended.
+                                // Therefore, all currently assigned tps are starting,
+                                // either because they are restarting, or because they
+                                // are new.
                                 currentAssigned
                               case None =>
                                 newlyAssigned
