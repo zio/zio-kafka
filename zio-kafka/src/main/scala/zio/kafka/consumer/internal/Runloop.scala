@@ -300,8 +300,9 @@ private[consumer] final class Runloop private (
 
               startingTps = rebalanceEvent match {
                               case Some(_) =>
-                                // If we get here, `restartStreamsOnRebalancing == true` and
-                                // some partitions were revoked and/or assigned.
+                                // If we get here, `restartStreamsOnRebalancing == true`,
+                                // some partitions were revoked and/or assigned and
+                                // all streams were ended.
                                 currentAssigned
                               case None =>
                                 newlyAssigned
