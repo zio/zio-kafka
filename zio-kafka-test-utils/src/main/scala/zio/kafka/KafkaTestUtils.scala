@@ -208,22 +208,19 @@ object KafkaTestUtils {
   def sslAdminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO
       .serviceWith[Kafka](_.bootstrapServers)
-      .flatMap(bootstrap =>
-        ZIO.attempt {
-          AdminClientSettings(bootstrap).withProperties(
-            "security.protocol"       -> "SSL",
-            "ssl.truststore.location" -> trustStoreFile.getAbsolutePath,
-            "ssl.truststore.password" -> "123456",
-            "ssl.keystore.location"   -> keyStoreFile.getAbsolutePath,
-            "ssl.keystore.password"   -> "123456",
-            "ssl.key.password"        -> "123456",
-            "ssl.enabled.protocols"   -> "TLSv1.2",
-            "ssl.truststore.type"     -> "JKS",
-            "ssl.keystore.type"       -> "JKS"
-          )
-        }
+      .map(bootstrap =>
+        AdminClientSettings(bootstrap).withProperties(
+          "security.protocol"       -> "SSL",
+          "ssl.truststore.location" -> trustStoreFile.getAbsolutePath,
+          "ssl.truststore.password" -> "123456",
+          "ssl.keystore.location"   -> keyStoreFile.getAbsolutePath,
+          "ssl.keystore.password"   -> "123456",
+          "ssl.key.password"        -> "123456",
+          "ssl.enabled.protocols"   -> "TLSv1.2",
+          "ssl.truststore.type"     -> "JKS",
+          "ssl.keystore.type"       -> "JKS"
+        )
       )
-      .orDie
 
   def withAdmin[T](f: AdminClient => RIO[Kafka, T]): ZIO[Kafka, Throwable, T] =
     for {
@@ -250,7 +247,7 @@ object KafkaTestUtils {
       fRes     <- withAdminClient(settings)(f)
     } yield fRes
 
-  private def withAdminClient[R, T](settings: AdminClientSettings)(f: AdminClient => RIO[R, T]) =
+  private def withAdminClient[R, T](settings: AdminClientSettings)(f: AdminClient => RIO[R, T]): ZIO[R, Throwable, T] =
     ZIO.scoped[R] {
       AdminClient
         .make(settings)
