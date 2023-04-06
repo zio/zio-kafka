@@ -73,18 +73,9 @@ jobs:
         - '11'
         - '17'
         scala-project:
-        - ++2.12.17 zioKafka
-        - ++2.13.10 zioKafka
-        - ++3.2.2 zioKafka
-        - ++2.12.17 zioKafkaBench
-        - ++2.13.10 zioKafkaBench
-        - ++3.2.2 zioKafkaBench
-        - ++2.12.17 zioKafkaTest
-        - ++2.13.10 zioKafkaTest
-        - ++3.2.2 zioKafkaTest
-        - ++2.12.17 zioKafkaTestUtils
-        - ++2.13.10 zioKafkaTestUtils
-        - ++3.2.2 zioKafkaTestUtils
+        - ++2.12.17 root
+        - ++2.13.10 root
+        - ++3.2.2 root
     steps:
     - name: Install libuv
       run: sudo apt-get update && sudo apt-get install -y libuv1-dev
