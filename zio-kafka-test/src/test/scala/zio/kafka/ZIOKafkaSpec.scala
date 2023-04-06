@@ -4,6 +4,8 @@ import zio._
 
 trait ZIOKafkaSpec extends ZIOSpecWithKafka with KafkaRandom {
 
+  val logLevel = LogLevel.Info
+
   val logger: ZLogger[String, Unit] =
     new ZLogger[String, Unit] {
       override def apply(
@@ -21,6 +23,6 @@ trait ZIOKafkaSpec extends ZIOSpecWithKafka with KafkaRandom {
               .now()} ${logLevel.label} [${annotations.map { case (k, v) => s"$k=$v" }
               .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint}"
         )
-    }.filterLogLevel(_ >= LogLevel.Debug).map(_ => ())
+    }.filterLogLevel(_ >= logLevel).map(_ => ())
 
 }

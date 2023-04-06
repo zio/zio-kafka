@@ -1,19 +1,25 @@
 package zio.kafka.embedded
 
 import _root_.kafka.server.KafkaConfig
-import io.github.embeddedkafka.EmbeddedKafkaConfig.{ defaultKafkaPort, defaultZookeeperPort }
 import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import zio._
+import zio.kafka.KafkaTestUtils
 
-import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicInteger
+import scala.util.control.NonFatal
 
 trait Kafka {
   def bootstrapServers: List[String]
   def stop(): Task[Unit]
 }
 
+final case class EmbeddedKafkaStartException(msg: String, cause: Throwable = null) extends RuntimeException(msg, cause)
+
 object Kafka {
+
+  private val kafkaPort: AtomicInteger     = new AtomicInteger(6000)
+  private val zooKeeperPort: AtomicInteger = new AtomicInteger(7000)
 
   final case class Sasl(value: Kafka) extends AnyVal
 
@@ -41,9 +47,7 @@ object Kafka {
       )
 
     ZIO.acquireRelease(
-      ZIO.attemptBlocking(
-        EmbeddedKafkaService(startKafka(defaultKafkaPort, defaultZookeeperPort, embeddedKafkaConfig))
-      )
+      startKafka(embeddedKafkaConfig).map(EmbeddedKafkaService.apply)
     )(_.stop().orDie)
   }
 
@@ -67,18 +71,14 @@ object Kafka {
       )
 
     ZIO.acquireRelease(
-      ZIO
-        .attemptBlocking(
-          Kafka.Sasl(EmbeddedKafkaService(startKafka(defaultKafkaPort, defaultZookeeperPort, embeddedKafkaConfig)))
-        )
+      startKafka(embeddedKafkaConfig).map(k => Kafka.Sasl(EmbeddedKafkaService(k)))
     )(_.value.stop().orDie)
   }
 
   val sslEmbedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
-    val keyStorePath   = Paths.get(Kafka.getClass.getResource("/keystore/kafka.keystore.jks").toURI).toFile
-    val trustStorePath = Paths.get(Kafka.getClass.getResource("/truststore/kafka.truststore.jks").toURI).toFile
+    def embeddedKafkaConfig(kafkaPort: Int, zookeeperPort: Int): EmbeddedKafkaConfig = {
+      val listener = s"${SecurityProtocol.SSL}://localhost:$kafkaPort"
 
-    def embeddedKafkaConfig(kafkaPort: Int, zookeeperPort: Int): EmbeddedKafkaConfig =
       EmbeddedKafkaConfig(
         zooKeeperPort = zookeeperPort,
         kafkaPort = kafkaPort,
@@ -91,44 +91,35 @@ object Kafka {
           "ssl.enabled.protocols"                 -> "TLSv1.2",
           "ssl.truststore.type"                   -> "JKS",
           "ssl.keystore.type"                     -> "JKS",
-          "ssl.truststore.location"               -> trustStorePath.getAbsolutePath,
+          "ssl.truststore.location"               -> KafkaTestUtils.trustStoreFile.getAbsolutePath,
           "ssl.truststore.password"               -> "123456",
-          "ssl.keystore.location"                 -> keyStorePath.getAbsolutePath,
+          "ssl.keystore.location"                 -> KafkaTestUtils.keyStoreFile.getAbsolutePath,
           "ssl.keystore.password"                 -> "123456",
           "ssl.key.password"                      -> "123456",
+          "zookeeper.session.timeout.ms"          -> 1.minute.toMillis.toString,
+          "zookeeper.connection.timeout.ms"       -> 1.minute.toMillis.toString,
           KafkaConfig.InterBrokerListenerNameProp -> "SSL",
-          KafkaConfig.ListenersProp               -> s"${SecurityProtocol.SSL}://localhost:$kafkaPort",
-          KafkaConfig.AdvertisedListenersProp     -> s"${SecurityProtocol.SSL}://localhost:$kafkaPort"
+          KafkaConfig.ListenersProp               -> listener,
+          KafkaConfig.AdvertisedListenersProp     -> listener
         )
       )
+    }
 
     ZIO.acquireRelease(
-      ZIO.attemptBlocking(
-        EmbeddedKafkaService(startKafka(defaultKafkaPort, defaultZookeeperPort, embeddedKafkaConfig))
-      )
+      startKafka(embeddedKafkaConfig).map(EmbeddedKafkaService.apply)
     )(_.stop().orDie)
   }
 
   private def startKafka(
-    kafkaPort: Int,
-    zooKeeperPort: Int,
-    makeConfig: (Int, Int) => EmbeddedKafkaConfig,
-    maxRetry: Int = 100
-  ): EmbeddedK = {
-    def retry(e: Exception): EmbeddedK =
-      if (maxRetry <= 0) throw new RuntimeException("Failed to start EmbeddedKafka", e)
-      else startKafka(kafkaPort + 1, zooKeeperPort + 1, makeConfig, maxRetry - 1)
-
-    try
-      EmbeddedKafka.start()(makeConfig(kafkaPort, zooKeeperPort))
-    catch {
-      case e: org.apache.kafka.common.KafkaException
-          if e.getCause != null && e.getMessage != null && e.getMessage.contains("Socket server failed to bind to") =>
-        retry(e)
-      case e: java.net.BindException =>
-        retry(e)
+    makeConfig: (Int, Int) => EmbeddedKafkaConfig
+  ): Task[EmbeddedK] =
+    ZIO.attemptBlocking {
+      try
+        EmbeddedKafka.start()(makeConfig(kafkaPort.getAndIncrement(), zooKeeperPort.getAndIncrement()))
+      catch {
+        case NonFatal(e) => throw EmbeddedKafkaStartException("Failed to start embedded Kafka", e)
+      }
     }
-  }
 
   val local: ZLayer[Any, Nothing, Kafka] = ZLayer.succeed(DefaultLocal)
 }
