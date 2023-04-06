@@ -96,8 +96,6 @@ object Kafka {
           "ssl.keystore.location"                 -> KafkaTestUtils.keyStoreFile.getAbsolutePath,
           "ssl.keystore.password"                 -> "123456",
           "ssl.key.password"                      -> "123456",
-          "zookeeper.session.timeout.ms"          -> 1.minute.toMillis.toString,
-          "zookeeper.connection.timeout.ms"       -> 1.minute.toMillis.toString,
           KafkaConfig.InterBrokerListenerNameProp -> "SSL",
           KafkaConfig.ListenersProp               -> listener,
           KafkaConfig.AdvertisedListenersProp     -> listener

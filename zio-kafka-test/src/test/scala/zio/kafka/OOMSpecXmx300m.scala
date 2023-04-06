@@ -14,11 +14,11 @@ import zio.test._
 /**
  * This test checks the fix for the issue https://issues.apache.org/jira/browse/KAFKA-4090
  */
-object OOMSpecXmx300m extends ZIOSpecWithSslKafka {
+object OOMSpecXmx300m extends ZIOSpecDefault with KafkaRandom {
 
   override val kafkaPrefix: String = "oom-spec"
 
-  override def spec: Spec[Kafka, Any] =
+  override def spec: Spec[TestEnvironment, Any] =
     suite("OOM check")(
       test("producer should fail with ssl check") {
         for {
@@ -31,13 +31,20 @@ object OOMSpecXmx300m extends ZIOSpecWithSslKafka {
         } yield assert(result)(
           fails(
             isSubtype[KafkaException](
-              hasField(
+              hasField[KafkaException, String](
                 ".getMessage",
                 _.getMessage,
                 equalTo(
-                  "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
+                  "Failed to create new KafkaAdminClient"
                 )
-              )
+              ) &&
+                hasField(
+                  ".getCause.getMessage",
+                  _.getCause.getMessage,
+                  equalTo(
+                    "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
+                  )
+                )
             )
           )
         )
@@ -59,13 +66,20 @@ object OOMSpecXmx300m extends ZIOSpecWithSslKafka {
         } yield assert(result)(
           fails(
             isSubtype[KafkaException](
-              hasField(
+              hasField[KafkaException, String](
                 ".getMessage",
                 _.getMessage,
                 equalTo(
-                  "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
+                  "Failed to create new KafkaAdminClient"
                 )
-              )
+              ) &&
+                hasField(
+                  ".getCause.getMessage",
+                  _.getCause.getMessage,
+                  equalTo(
+                    "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
+                  )
+                )
             )
           )
         )
@@ -74,16 +88,23 @@ object OOMSpecXmx300m extends ZIOSpecWithSslKafka {
         assertZIO(KafkaTestUtils.withAdmin(_.listTopics()).exit)(
           fails(
             isSubtype[KafkaException](
-              hasField(
+              hasField[KafkaException, String](
                 ".getMessage",
                 _.getMessage,
                 equalTo(
-                  "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
+                  "Failed to create new KafkaAdminClient"
                 )
-              )
+              ) &&
+                hasField(
+                  ".getCause.getMessage",
+                  _.getCause.getMessage,
+                  equalTo(
+                    "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
+                  )
+                )
             )
           )
         )
       }
-    ) @@ withLiveClock @@ sequential
+    ).provideLayerShared(Kafka.sslEmbedded) @@ withLiveClock @@ sequential
 }
