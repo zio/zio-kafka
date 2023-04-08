@@ -33,9 +33,10 @@ private[internal] final class PartitionStreamControl private (
   def end(): ZIO[Any, Nothing, Unit] =
     logAnnotate {
       ZIO.logTrace(s"Partition ${tp.toString} ending") *>
-        ZIO.whenZIO(endedPromise.succeed(())) {
-          dataQueue.offer(Take.end)
-        }
+        ZIO
+          .whenZIO(endedPromise.succeed(())) {
+            dataQueue.offer(Take.end)
+          }
           .unit
     }
 

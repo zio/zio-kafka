@@ -17,19 +17,17 @@ import zio.kafka.security.KafkaCredentialStore
  *   When `true` _all_ streams are restarted during a rebalance, including those streams that are not revoked. The
  *   default is `false`.
  *
- *   Set both `restartStreamOnRebalancing` and `endRevokedStreamsBeforeRebalance` to `true` for
- *   transactional producing.
+ * Set both `restartStreamOnRebalancing` and `endRevokedStreamsBeforeRebalance` to `true` for transactional producing.
  * @param endRevokedStreamsBeforeRebalance
  *   When `true` (the default) streams that need to end because the partition has been revoked, will be ended before the
  *   rebalance starts. The consumer that takes over this partition will continue from the committed offset. However, it
  *   is not possible to commit during a rebalance. So holding up the rebalance until the stream has ended (and done its
  *   commits) will prevent duplicate processing.
  *
- *   Set this to `false` when your streams does need commits, or when you need the extra performance and do not care
- *   for duplicate processing.
+ * Set this to `false` when your streams does need commits, or when you need the extra performance and do not care for
+ * duplicate processing.
  *
- *   Set both `restartStreamOnRebalancing` and
- *   `endRevokedStreamsBeforeRebalance` to `true` for transactional producing.
+ * Set both `restartStreamOnRebalancing` and `endRevokedStreamsBeforeRebalance` to `true` for transactional producing.
  * @param runloopTimeout
  *   Internal timeout for each iteration of the command processing and polling loop, use to detect stalling. This should
  *   be much larger than the pollTimeout and the time it takes to process chunks of records. If your consumer is not
