@@ -2,9 +2,7 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 import org.apache.kafka.common.TopicPartition
-import zio.internal.ExecutionMetrics
-import zio.{ Executor, Runtime, RuntimeFlag, RuntimeFlags, Task, Trace, Unsafe, ZIO, ZLayer }
-
+import zio.{ Runtime, Task, Unsafe, ZIO }
 import scala.jdk.CollectionConverters._
 
 /**
@@ -17,7 +15,6 @@ final case class RebalanceListener(
   onRevoked: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
   onLost: (Set[TopicPartition], RebalanceConsumer) => Task[Unit]
 ) {
-  import RebalanceListener._
 
   /**
    * Combine with another [[RebalanceListener]] and execute their actions sequentially
@@ -38,10 +35,7 @@ final case class RebalanceListener(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe
-          .run(
-            onRevoked(partitions.asScala.toSet, consumer)
-              .provideLayer(SameThreadRuntimeLayer)
-          )
+          .run(onRevoked(partitions.asScala.toSet, consumer))
           .getOrThrowFiberFailure()
         ()
       }
@@ -50,10 +44,7 @@ final case class RebalanceListener(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe
-          .run(
-            onAssigned(partitions.asScala.toSet, consumer)
-              .provideLayer(SameThreadRuntimeLayer)
-          )
+          .run(onAssigned(partitions.asScala.toSet, consumer))
           .getOrThrowFiberFailure()
         ()
       }
@@ -62,10 +53,7 @@ final case class RebalanceListener(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe
-          .run(
-            onLost(partitions.asScala.toSet, consumer)
-              .provideLayer(SameThreadRuntimeLayer)
-          )
+          .run(onLost(partitions.asScala.toSet, consumer))
           .getOrThrowFiberFailure()
         ()
       }
@@ -85,21 +73,4 @@ object RebalanceListener {
     (_, _) => ZIO.unit,
     (_, _) => ZIO.unit
   )
-  private def disableCooperativeYielding(implicit trace: Trace): ZLayer[Any, Nothing, Unit] =
-    ZLayer.scoped {
-      ZIO.withRuntimeFlagsScoped(RuntimeFlags.disable(RuntimeFlag.CooperativeYielding))
-    }
-
-  private val SameThreadRuntimeLayer: ZLayer[Any, Nothing, Unit] = {
-    val sameThreadExecutor = new Executor() {
-      override def metrics(implicit unsafe: Unsafe): Option[ExecutionMetrics] = None
-      override def submit(runnable: Runnable)(implicit unsafe: Unsafe): Boolean = {
-        runnable.run()
-        true
-      }
-    }
-    Runtime.setExecutor(sameThreadExecutor) ++
-      Runtime.setBlockingExecutor(sameThreadExecutor) ++
-      disableCooperativeYielding
-  }
 }

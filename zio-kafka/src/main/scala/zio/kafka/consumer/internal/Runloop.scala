@@ -16,7 +16,7 @@ import java.util
 import scala.jdk.CollectionConverters._
 
 private[consumer] final class Runloop private (
-  runtime: Runtime[Any],
+  sameThreadRuntime: Runtime[Any],
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollTimeout: Duration,
@@ -182,7 +182,9 @@ private[consumer] final class Runloop private (
         new OffsetCommitCallback {
           override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
             Unsafe.unsafe { implicit u =>
-              runtime.unsafe.run(if (exception eq null) onSuccess else onFailure(exception)).getOrThrowFiberFailure()
+              sameThreadRuntime.unsafe
+                .run(if (exception eq null) onSuccess else onFailure(exception))
+                .getOrThrowFiberFailure()
             }
         }
       (offsetsWithMetaData, callback, onFailure)
@@ -422,12 +424,12 @@ private[consumer] final class Runloop private (
             case Subscription.Pattern(pattern) =>
               val rc = RebalanceConsumer.Live(c)
               ZIO
-                .attempt(c.subscribe(pattern.pattern, rebalanceListener.toKafka(runtime, rc)))
+                .attempt(c.subscribe(pattern.pattern, rebalanceListener.toKafka(sameThreadRuntime, rc)))
                 .as(Chunk.empty)
             case Subscription.Topics(topics) =>
               val rc = RebalanceConsumer.Live(c)
               ZIO
-                .attempt(c.subscribe(topics.asJava, rebalanceListener.toKafka(runtime, rc)))
+                .attempt(c.subscribe(topics.asJava, rebalanceListener.toKafka(sameThreadRuntime, rc)))
                 .as(Chunk.empty)
             case Subscription.Manual(topicPartitions) =>
               // For manual subscriptions we have to do some manual work before starting the run loop
@@ -581,10 +583,10 @@ private[consumer] object Runloop {
                           Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
                         ]
                     )(_.shutdown)
-      currentStateRef <- Ref.make(State.initial)
-      runtime         <- ZIO.runtime[Any]
+      currentStateRef   <- Ref.make(State.initial)
+      sameThreadRuntime <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       runloop = new Runloop(
-                  runtime,
+                  sameThreadRuntime,
                   hasGroupId,
                   consumer,
                   pollTimeout,
