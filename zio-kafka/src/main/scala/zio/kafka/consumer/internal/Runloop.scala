@@ -110,13 +110,15 @@ private[consumer] final class Runloop private (
     streamsToEnd: Chunk[PartitionStreamControl]
   ): Task[Chunk[Commit]] =
     for {
-      _ <- ZIO.logTrace(s"Ending ${streamsToEnd.size} partitions")
       _ <- ZIO.foreachDiscard(streamsToEnd)(_.end())
       pendingCommits <-
         if (streamsToEnd.nonEmpty && endRevokedStreamsBeforeRebalance) {
+          // When the queue is empty we still need to call commit (with 0 offsets) so that earlier commits can complete.
+          // We can not use ZStream.fromQueue because that will emit nothing when the queue is empty.
+          // TODO: add timeout; we can't postpone the rebalance for ever
           ZStream
-            .fromQueue(commitQueue)
-            .aggregateAsync(ZSink.collectAll[Commit])
+            .fromZIO(commitQueue.takeAll)
+            .repeat(Schedule.forever)
             .tap(doCommitsFromRebalanceListener(rebalanceConsumer))
             .takeUntilZIO(_ => ZIO.forall(streamsToEnd)(_.isCompleted))
             .runCollect
@@ -138,10 +140,11 @@ private[consumer] final class Runloop private (
     rebalanceConsumer: RebalanceConsumer
   )(commits: Chunk[Commit]): Task[Unit] = {
     val (offsets, callback, onFailure) = asyncCommitParameters(commits)
-    rebalanceConsumer
-      .commitAsync(offsets, callback)
-      .catchAll(onFailure)
-      .unit
+    ZIO.logTrace(s"Async commit of ${offsets.size} offsets for ${commits.size} commits") *>
+      rebalanceConsumer
+        .commitAsync(offsets, callback)
+        .catchAll(onFailure)
+        .unit
   }
 
   private def handleCommits(state: State, commits: Chunk[Commit]): Task[State] = {

@@ -133,7 +133,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           topic  <- randomTopic
 
           _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-          _ <- ZIO.foreach(1 to nrPartitions) { i =>
+          _ <- ZIO.foreachDiscard(1 to nrPartitions) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
           record <- Consumer
