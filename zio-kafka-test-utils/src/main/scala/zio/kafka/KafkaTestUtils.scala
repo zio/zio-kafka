@@ -70,6 +70,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
+    endRevokedStreamsBeforeRebalance: Boolean = true,
     `max.poll.records`: Int = 100, // settings this higher can cause bugs to go unnoticed
     runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
     properties: Map[String, String] = Map.empty
@@ -92,6 +93,7 @@ object KafkaTestUtils {
         .withPerPartitionChunkPrefetch(16)
         .withOffsetRetrieval(offsetRetrieval)
         .withRestartStreamOnRebalancing(restartStreamOnRebalancing)
+        .withEndRevokedStreamsBeforeRebalance(endRevokedStreamsBeforeRebalance)
         .withProperties(properties)
 
       val withClientInstanceId = clientInstanceId.fold(settings)(settings.withGroupInstanceId)
@@ -105,6 +107,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
+    endRevokedStreamsBeforeRebalance: Boolean = true,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     consumerSettings(
@@ -114,6 +117,7 @@ object KafkaTestUtils {
       allowAutoCreateTopics = allowAutoCreateTopics,
       offsetRetrieval = offsetRetrieval,
       restartStreamOnRebalancing = restartStreamOnRebalancing,
+      endRevokedStreamsBeforeRebalance = endRevokedStreamsBeforeRebalance,
       properties = properties
     )
       .map(
@@ -135,6 +139,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
+    endRevokedStreamsBeforeRebalance: Boolean = true,
     properties: Map[String, String] = Map.empty
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
@@ -145,6 +150,7 @@ object KafkaTestUtils {
         allowAutoCreateTopics = allowAutoCreateTopics,
         offsetRetrieval = offsetRetrieval,
         restartStreamOnRebalancing = restartStreamOnRebalancing,
+        endRevokedStreamsBeforeRebalance = endRevokedStreamsBeforeRebalance,
         properties = properties
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
@@ -157,6 +163,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
+    endRevokedStreamsBeforeRebalance: Boolean = true,
     properties: Map[String, String] = Map.empty,
     rebalanceListener: RebalanceListener = RebalanceListener.noop
   ): ZLayer[Kafka, Throwable, Consumer] =
@@ -168,6 +175,7 @@ object KafkaTestUtils {
         allowAutoCreateTopics = allowAutoCreateTopics,
         offsetRetrieval = offsetRetrieval,
         restartStreamOnRebalancing = restartStreamOnRebalancing,
+        endRevokedStreamsBeforeRebalance = endRevokedStreamsBeforeRebalance,
         properties = properties
       ).map(_.withRebalanceListener(rebalanceListener))
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
