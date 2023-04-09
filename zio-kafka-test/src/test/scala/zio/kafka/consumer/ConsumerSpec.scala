@@ -227,7 +227,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           client <- randomClient
 
           _ <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-          _ <- ZIO.foreach(1 to nrMessages) { i =>
+          _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
 
