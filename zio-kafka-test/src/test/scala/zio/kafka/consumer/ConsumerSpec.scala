@@ -542,7 +542,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
         val partitions   = (0 until nrPartitions).toList
         val waitTimeout  = 15.seconds
 
-        final case class ValidAssignmentsNotSeen(st: String) extends RuntimeException(s"Valid assignment not seen: $st")
+        final case class ValidAssignmentsNotSeen(instances: Set[Int], st: String)
+            extends RuntimeException(s"Valid assignment not seen for instances $instances: $st")
 
         def run(instance: Int, topic: String, allAssignments: Ref[Map[Int, List[Int]]]) =
           ZIO.logAnnotate("consumer", instance.toString) {
@@ -551,22 +552,26 @@ object ConsumerSpec extends ZIOKafkaSpec {
               .partitionedStream(subscription, Serde.string, Serde.string)
               .flatMapPar(Int.MaxValue) { case (tp, partStream) =>
                 val registerAssignment = ZStream.logInfo(s"Registering partition ${tp.partition()}") *>
-                  ZStream.fromZIO(allAssignments.update { current =>
-                    current.get(instance) match {
-                      case Some(currentList) => current.updated(instance, currentList :+ tp.partition())
-                      case None              => current.updated(instance, List(tp.partition()))
+                  ZStream.fromZIO {
+                    allAssignments.update { current =>
+                      current.get(instance) match {
+                        case Some(currentList) => current.updated(instance, currentList :+ tp.partition())
+                        case None              => current.updated(instance, List(tp.partition()))
+                      }
                     }
-                  })
+                  }
                 val deregisterAssignment = ZStream.logInfo(s"Deregistering partition ${tp.partition()}") *>
-                  ZStream.fromZIO(allAssignments.update({ current =>
-                    current.get(instance) match {
-                      case Some(currentList) =>
-                        val idx = currentList.indexOf(tp.partition())
-                        if (idx != -1) current.updated(instance, currentList.patch(idx, Nil, 1))
-                        else current
-                      case None => current
+                  ZStream.fromZIO {
+                    allAssignments.update { current =>
+                      current.get(instance) match {
+                        case Some(currentList) =>
+                          val idx = currentList.indexOf(tp.partition())
+                          if (idx != -1) current.updated(instance, currentList.patch(idx, Nil, 1))
+                          else current
+                        case None => current
+                      }
                     }
-                  }))
+                  }
 
                 registerAssignment.drain ++ partStream ++ deregisterAssignment.drain
               }
@@ -583,7 +588,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
             }
             .runHead
             .timeout(waitTimeout)
-            .someOrElseZIO(allAssignments.get.map(as => ValidAssignmentsNotSeen(as.toString)).flip)
+            .someOrElseZIO(allAssignments.get.map(as => ValidAssignmentsNotSeen(instances, as.toString)).flip)
 
         for {
           // Produce messages on several partitions
