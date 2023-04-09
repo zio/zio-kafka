@@ -578,6 +578,11 @@ object ConsumerSpec extends ZIOKafkaSpec {
               .runDrain
           }
 
+        // Check every 30 millis (for at most 15 seconds) that the following condition holds:
+        // - all instances are assigned to a partition,
+        // - each instance has a partition assigned,
+        // - all partitions are assigned.
+        // Fail when the condition is not observed.
         def checkAssignments(allAssignments: Ref[Map[Int, List[Int]]])(instances: Set[Int]) =
           ZStream
             .repeatZIOWithSchedule(allAssignments.get, Schedule.spaced(30.millis))
@@ -589,6 +594,13 @@ object ConsumerSpec extends ZIOKafkaSpec {
             .runHead
             .timeout(waitTimeout)
             .someOrElseZIO(allAssignments.get.map(as => ValidAssignmentsNotSeen(instances, as.toString)).flip)
+
+        def createConsumer(client: String, group: String): ZLayer[Kafka, Throwable, Consumer] =
+          consumer(
+            client,
+            Some(group),
+            offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
+          )
 
         for {
           // Produce messages on several partitions
@@ -602,33 +614,15 @@ object ConsumerSpec extends ZIOKafkaSpec {
           allAssignments <- Ref.make(Map.empty[Int, List[Int]])
           check = checkAssignments(allAssignments)(_)
           fiber0 <- run(0, topic, allAssignments)
-                      .provideSomeLayer[Kafka](
-                        consumer(
-                          client1,
-                          Some(group),
-                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
-                        )
-                      )
+                      .provideSomeLayer[Kafka](createConsumer(client1, group))
                       .fork
           _ <- check(Set(0))
           fiber1 <- run(1, topic, allAssignments)
-                      .provideSomeLayer[Kafka](
-                        consumer(
-                          client2,
-                          Some(group),
-                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
-                        )
-                      )
+                      .provideSomeLayer[Kafka](createConsumer(client2, group))
                       .fork
           _ <- check(Set(0, 1))
           fiber2 <- run(2, topic, allAssignments)
-                      .provideSomeLayer[Kafka](
-                        consumer(
-                          client3,
-                          Some(group),
-                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
-                        )
-                      )
+                      .provideSomeLayer[Kafka](createConsumer(client3, group))
                       .fork
           _ <- check(Set(0, 1, 2))
           _ <- fiber2.interrupt
