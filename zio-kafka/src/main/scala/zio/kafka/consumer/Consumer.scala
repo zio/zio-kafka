@@ -350,7 +350,7 @@ object Consumer {
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZIO[Scope, Throwable, Consumer] = {
+  ): ZIO[Scope, Throwable, Consumer] = ZIO.logAnnotate("clientId", settings.clientId.getOrElse("unknown")) {
     /*
     We must supply a queue size for the partitionAssignments hub below. Under most circumstances,
     a value of 1 should be sufficient, as runloop.partitions is already an unbounded queue. But if

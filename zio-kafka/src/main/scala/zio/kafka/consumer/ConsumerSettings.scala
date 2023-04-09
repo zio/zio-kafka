@@ -46,6 +46,8 @@ case class ConsumerSettings(
   endRevokedStreamsBeforeRebalance: Boolean = true,
   runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout
 ) {
+  def clientId: Option[String] = properties.get(ConsumerConfig.CLIENT_ID_CONFIG).map(_.toString)
+
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
     case OffsetRetrieval.Manual(_)   => Map.empty
