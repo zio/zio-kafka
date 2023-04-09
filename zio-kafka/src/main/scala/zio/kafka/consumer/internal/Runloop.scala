@@ -23,8 +23,8 @@ private[consumer] final class Runloop private (
   runloopTimeout: Duration,
   commandQueue: Queue[Command],
   commitQueue: Queue[Commit],
-  rebalanceListenerInvoked: Ref.Synchronized[Boolean],
-  rebalanceListenerCommits: Ref.Synchronized[Chunk[Commit]],
+  rebalanceListenerInvoked: Ref[Boolean],
+  rebalanceListenerCommits: Ref[Chunk[Commit]],
   val partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
   diagnostics: Diagnostics,
   offsetRetrieval: OffsetRetrieval,
@@ -568,8 +568,8 @@ private[consumer] object Runloop {
     for {
       commandQueue             <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](CommandQueueSize))(_.shutdown)
       commitQueue              <- ZIO.acquireRelease(Queue.bounded[Runloop.Commit](CommitQueueSize))(_.shutdown)
-      rebalanceListenerInvoked <- Ref.Synchronized.make[Boolean](false)
-      rebalanceListenerCommits <- Ref.Synchronized.make[Chunk[Commit]](Chunk.empty)
+      rebalanceListenerInvoked <- Ref.make[Boolean](false)
+      rebalanceListenerCommits <- Ref.make[Chunk[Commit]](Chunk.empty)
       partitions <- ZIO.acquireRelease(
                       Queue
                         .unbounded[
