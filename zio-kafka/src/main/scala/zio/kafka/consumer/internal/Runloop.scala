@@ -114,10 +114,10 @@ private[consumer] final class Runloop private (
     rebalanceConsumer: RebalanceConsumer,
     streamsToEnd: Chunk[PartitionStreamControl]
   ): Task[Chunk[Commit]] =
-    for {
-      _ <- ZIO.foreachDiscard(streamsToEnd)(_.end())
-      pendingCommits <-
-        if (streamsToEnd.nonEmpty && endRevokedStreamsBeforeRebalance) {
+    if (endRevokedStreamsBeforeRebalance && streamsToEnd.nonEmpty) {
+      for {
+        _              <- ZIO.foreachDiscard(streamsToEnd)(_.end())
+        pendingCommits <-
           // When the queue is empty we still need to call commit (with 0 offsets) so that earlier commits can complete.
           // We can not use ZStream.fromQueue because that will emit nothing when the queue is empty.
           // TODO: add timeout; we can't postpone the rebalance for ever
@@ -125,13 +125,14 @@ private[consumer] final class Runloop private (
             .fromZIO(commitQueue.takeAll)
             .repeat(Schedule.forever)
             .tap(doCommitsFromRebalanceListener(rebalanceConsumer))
+            .tap(_ => ZIO.logDebug(s"Waiting for ${streamsToEnd.size} streams to end"))
             .takeUntilZIO(_ => ZIO.forall(streamsToEnd)(_.isCompleted))
             .runCollect
             .map(_.flatten)
-        } else {
-          ZIO.succeed(Chunk.empty)
-        }
-    } yield pendingCommits
+      } yield pendingCommits
+    } else {
+      ZIO.succeed(Chunk.empty)
+    }
 
   /**
    * Handle commits while waiting for revoked streams to end.
