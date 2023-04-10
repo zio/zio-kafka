@@ -179,7 +179,7 @@ private[consumer] final class Runloop private (
             .takeUntilZIO(_ => ZIO.forall(streamsToEnd)(_.isCompleted))
             .runCollect
             .map(_.flatten)
-            .timeoutFail(new RuntimeException("Timeout waiting for stream to end"))(pollTimeout)
+            .timeoutFail(new RuntimeException("Timeout waiting for stream to end"))(runloopTimeout)
       } yield pendingCommits
     } else {
       ZIO.succeed(Chunk.empty)
