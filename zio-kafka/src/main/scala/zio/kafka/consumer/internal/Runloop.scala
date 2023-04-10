@@ -177,6 +177,8 @@ private[consumer] final class Runloop private (
     ignoreRecordsForTps: Set[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
   ): UIO[Runloop.FulfillResult] = {
+    type Record = CommittableRecord[Array[Byte], Array[Byte]]
+
     // The most efficient way to get the records from [[ConsumerRecords]] per
     // topic-partition, is by first getting the set of topic-partitions, and
     // then requesting the records per topic-partition.
@@ -189,26 +191,33 @@ private[consumer] final class Runloop private (
     else {
       for {
         consumerGroupMetadata <- getConsumerGroupMetadataIfAny
+        committableRecords = {
+          val acc             = ChunkBuilder.make[(PartitionStreamControl, Chunk[Record])](streams.size)
+          val streamsIterator = streams.iterator
+          while (streamsIterator.hasNext) {
+            val streamControl = streamsIterator.next()
+            val tp            = streamControl.tp
+            val records       = polledRecords.records(tp)
+            if (!records.isEmpty) {
+              val builder  = ChunkBuilder.make[Record](records.size())
+              val iterator = records.iterator()
+              while (iterator.hasNext) {
+                val consumerRecord = iterator.next()
+                builder +=
+                  CommittableRecord[Array[Byte], Array[Byte]](
+                    record = consumerRecord,
+                    commitHandle = commit,
+                    consumerGroupMetadata = consumerGroupMetadata
+                  )
+              }
+              acc += (streamControl -> builder.result())
+            }
+          }
+          acc.result()
+        }
         _ <- ZIO
-               .foreachDiscard(streams) { streamControl =>
-                 val tp = streamControl.tp
-                 val records = {
-                   val records  = polledRecords.records(tp)
-                   val builder  = ChunkBuilder.make[CommittableRecord[Array[Byte], Array[Byte]]](records.size())
-                   val iterator = records.iterator()
-                   while (iterator.hasNext) {
-                     val consumerRecord = iterator.next()
-                     builder += CommittableRecord[Array[Byte], Array[Byte]](
-                       record = consumerRecord,
-                       commitHandle = commit,
-                       consumerGroupMetadata = consumerGroupMetadata
-                     )
-                   }
-                   builder.result()
-                 }
-
-                 // noinspection SimplifyWhenInspection
-                 if (records.nonEmpty) streamControl.offerRecords(records) else ZIO.unit
+               .foreachDiscard(committableRecords) { case (streamControl, records) =>
+                 streamControl.offerRecords(records)
                }
       } yield fulfillResult
     }
