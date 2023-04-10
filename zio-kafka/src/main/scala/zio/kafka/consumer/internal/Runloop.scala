@@ -168,17 +168,18 @@ private[consumer] final class Runloop private (
       for {
         _              <- ZIO.foreachDiscard(streamsToEnd)(_.end())
         pendingCommits <-
-          // When the queue is empty we still need to call commit (with 0 offsets) so that earlier commits can complete.
+          // When the queue is empty we still need to call commit (with 0 offsets) so that we poll the broker
+          // and earlier commits can complete.
           // We can not use ZStream.fromQueue because that will emit nothing when the queue is empty.
-          // TODO: add timeout; we can't postpone the rebalance for ever
           ZStream
             .fromZIO(commitQueue.takeAll)
             .repeat(Schedule.forever)
             .tap(doCommitsFromRebalanceListener(rebalanceConsumer))
-            .tap(_ => ZIO.logDebug(s"Waiting for ${streamsToEnd.size} streams to end"))
+            .tap(_ => ZIO.logTrace(s"Waiting for ${streamsToEnd.size} streams to end"))
             .takeUntilZIO(_ => ZIO.forall(streamsToEnd)(_.isCompleted))
             .runCollect
             .map(_.flatten)
+            .timeoutFail(new RuntimeException("Timeout waiting for stream to end"))(pollTimeout)
       } yield pendingCommits
     } else {
       ZIO.succeed(Chunk.empty)
