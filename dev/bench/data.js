@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1681126459174,
+  "lastUpdate": 1681126501073,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -10878,6 +10878,54 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
             "value": 1528.2454383200002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "guizmaii@users.noreply.github.com",
+            "name": "Jules Ivanic",
+            "username": "guizmaii"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fa2abd8b9031f906b5418a185a5a2c94f5cdb76f",
+          "message": "Fix CI (#792)",
+          "timestamp": "2023-04-10T13:24:16+02:00",
+          "tree_id": "0588c5f523fbb85102088eaf753ed6d2ee410796",
+          "url": "https://github.com/zio/zio-kafka/commit/fa2abd8b9031f906b5418a185a5a2c94f5cdb76f"
+        },
+        "date": 1681126498356,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 382.1354742113333,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 463.9830085766667,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.kafkaClients",
+            "value": 674.8787340799998,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
+            "value": 1793.6509274000002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
