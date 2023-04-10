@@ -13,6 +13,7 @@ import zio.kafka.consumer.{ CommittableRecord, RebalanceConsumer, RebalanceListe
 import zio.stream._
 
 import java.util
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 // Disable zio-intellij's inspection `SimplifyWhenInspection` because its suggestion is not
@@ -144,35 +145,38 @@ private[consumer] final class Runloop private (
    */
   private def doCommitsFromRebalanceListener(
     rebalanceConsumer: RebalanceConsumer
-  )(commits: Chunk[Commit]): Task[Unit] = {
+  )(commits: Chunk[Commit]): UIO[Unit] = {
     val (offsets, callback, onFailure) = asyncCommitParameters(commits)
+    // Note, as described above, we always call commit, even when offsets is empty.
     ZIO.logTrace(s"Async commit of ${offsets.size} offsets for ${commits.size} commits") *>
       rebalanceConsumer
         .commitAsync(offsets, callback)
         .catchAll(onFailure)
-        .unit
   }
 
-  private def handleCommits(state: State, commits: Chunk[Commit]): Task[State] = {
+  private def handleCommits(state: State, commits: Chunk[Commit]): UIO[State] = {
     val (offsets, callback, onFailure) = asyncCommitParameters(commits)
+    val newState                       = state.addCommits(commits)
     consumer.withConsumerZIO { c =>
       // We don't wait for the completion of the commit here, because it
       // will only complete once we poll again.
       ZIO.attempt(c.commitAsync(offsets.asJava, callback))
     }
       .catchAll(onFailure)
-      .unit
-      .as(state.addCommits(commits))
+      .as(newState)
   }
 
   private def asyncCommitParameters(
     commits: Chunk[Commit]
   ): (Map[TopicPartition, OffsetAndMetadata], OffsetCommitCallback, Throwable => UIO[Unit]) = {
-    val offsets = commits.foldLeft(Map.empty[TopicPartition, Long]) { case (acc, commit) =>
-      commit.offsets.foldLeft(acc) { case (acc, (tp, offset)) =>
-        acc.updated(tp, acc.get(tp).map(_ max offset).getOrElse(offset))
+    val offsets = commits
+      .foldLeft(mutable.Map.empty[TopicPartition, Long]) { case (acc, commit) =>
+        commit.offsets.foreach { case (tp, offset) =>
+          acc += (tp -> acc.get(tp).map(_ max offset).getOrElse(offset))
+        }
+        acc
       }
-    }
+      .toMap
     val offsetsWithMetaData = offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
     val cont                = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
     val onSuccess = cont(Exit.unit) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
@@ -518,14 +522,19 @@ private[consumer] object Runloop {
   )
   private object PollResult {
     def apply(records: ConsumerRecords[Array[Byte], Array[Byte]]): PollResult =
-      PollResult(Chunk.empty, Set.empty, records, Set.empty)
+      PollResult(
+        newCommits = Chunk.empty,
+        startingTps = Set.empty,
+        records = records,
+        ignoreRecordsForTps = Set.empty
+      )
   }
 
   private final case class FulfillResult(
     pendingRequests: Chunk[Request]
   )
 
-  private case class RebalanceEvent(
+  private final case class RebalanceEvent(
     wasInvoked: Boolean,
     newlyAssigned: Set[TopicPartition],
     pendingCommits: Chunk[Commit]
