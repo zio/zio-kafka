@@ -15,6 +15,9 @@ import zio.stream._
 import java.util
 import scala.jdk.CollectionConverters._
 
+// Disable zio-intellij's inspection `SimplifyWhenInspection` because its suggestion is not
+// equivalent performance-wise.
+//noinspection SimplifyWhenInspection
 private[consumer] final class Runloop private (
   sameThreadRuntime: Runtime[Any],
   hasGroupId: Boolean,
@@ -23,8 +26,7 @@ private[consumer] final class Runloop private (
   runloopTimeout: Duration,
   commandQueue: Queue[Command],
   commitQueue: Queue[Commit],
-  rebalanceListenerInvoked: Ref[Boolean],
-  rebalanceListenerCommits: Ref[Chunk[Commit]],
+  rebalanceListenerEvent: Ref[RebalanceEvent],
   val partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
   diagnostics: Diagnostics,
   offsetRetrieval: OffsetRetrieval,
@@ -70,35 +72,38 @@ private[consumer] final class Runloop private (
     val endRevokedStreamsRebalancingListener = RebalanceListener(
       onAssigned = (assigned, rebalanceConsumer) =>
         for {
-          alreadyInvoked <- rebalanceListenerInvoked.get
           _              <- ZIO.logDebug(s"${assigned.size} partitions are assigned")
+          rebalanceEvent <- rebalanceListenerEvent.get
           state          <- currentState.get
-          streamsToEnd = if (restartStreamsOnRebalancing && !alreadyInvoked) state.assignedStreams else Chunk.empty
+          streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) state.assignedStreams
+                         else Chunk.empty
           pendingCommits <- endRevokedStreamsAndAwaitEnd(rebalanceConsumer, streamsToEnd)
-          _              <- rebalanceListenerInvoked.set(true)
-          _              <- rebalanceListenerCommits.update(_ ++ pendingCommits)
+          _              <- rebalanceListenerEvent.set(rebalanceEvent.onAssigned(assigned, pendingCommits))
           _              <- ZIO.logTrace("onAssigned done")
         } yield (),
       onRevoked = (revokedTps, rebalanceConsumer) =>
         for {
-          alreadyInvoked <- rebalanceListenerInvoked.get
           _              <- ZIO.logDebug(s"${revokedTps.size} partitions are revoked")
+          rebalanceEvent <- rebalanceListenerEvent.get
           state          <- currentState.get
-          streamsToEnd = if (restartStreamsOnRebalancing && !alreadyInvoked) state.assignedStreams
+          streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) state.assignedStreams
                          else state.assignedStreams.filter(control => revokedTps.contains(control.tp))
           pendingCommits <- endRevokedStreamsAndAwaitEnd(rebalanceConsumer, streamsToEnd)
-          _              <- rebalanceListenerInvoked.set(true)
-          _              <- rebalanceListenerCommits.update(_ ++ pendingCommits)
+          _              <- rebalanceListenerEvent.set(rebalanceEvent.onRevokedOrLost(pendingCommits))
           _              <- ZIO.logTrace("onRevoked done")
         } yield (),
-      onLost = (lostTps, _) =>
+      onLost = (lostTps, rebalanceConsumer) =>
         for {
-          _     <- ZIO.logDebug(s"${lostTps.size} partitions are lost, interrupting the streams")
-          state <- currentState.get
-          streamsToInterrupt = state.assignedStreams.filter(control => lostTps.contains(control.tp))
-          _ <- ZIO.foreachDiscard(streamsToInterrupt)(_.lost())
-          _ <- rebalanceListenerInvoked.set(true)
-          _ <- ZIO.logTrace(s"onLost done")
+          _              <- ZIO.logDebug(s"${lostTps.size} partitions are lost")
+          rebalanceEvent <- rebalanceListenerEvent.get
+          state          <- currentState.get
+          (lostStreams, remainingStreams) = state.assignedStreams.partition(control => lostTps.contains(control.tp))
+          _ <- ZIO.foreachDiscard(lostStreams)(_.lost())
+          streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) remainingStreams
+                         else Chunk.empty
+          pendingCommits <- endRevokedStreamsAndAwaitEnd(rebalanceConsumer, streamsToEnd)
+          _              <- rebalanceListenerEvent.update(_.onRevokedOrLost(pendingCommits))
+          _              <- ZIO.logTrace(s"onLost done")
         } yield ()
     )
 
@@ -294,8 +299,7 @@ private[consumer] final class Runloop private (
           s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
         )
       _ <- currentState.set(state)
-      _ <- rebalanceListenerInvoked.set(false)
-      _ <- rebalanceListenerCommits.set(Chunk.empty)
+      _ <- rebalanceListenerEvent.set(RebalanceEvent.None)
       pollResult <-
         consumer.withConsumerZIO { c =>
           val prevAssigned        = c.assignment().asScala.toSet
@@ -305,13 +309,14 @@ private[consumer] final class Runloop private (
 
           val records = doPoll(c)
 
-          ZIO.ifZIO(rebalanceListenerInvoked.get)(
-            onTrue = {
+          rebalanceListenerEvent.get.flatMap {
+            case RebalanceEvent(false, _, _) =>
+              // The fast track: rebalance listener was not invoked, no change in assigned partitions.
+              ZIO.succeed(Runloop.PollResult(records))
+
+            case RebalanceEvent(true, newlyAssigned, pendingCommits) =>
               // Some partitions were revoked, lost or assigned,
               // some new commits might have been initiated.
-
-              val currentAssigned = c.assignment().asScala.toSet
-              val newlyAssigned   = currentAssigned -- prevAssigned
 
               // When `restartStreamsOnRebalancing == true`,
               // all already assigned streams were ended.
@@ -319,13 +324,11 @@ private[consumer] final class Runloop private (
               // either because they are restarting, or because they
               // are new.
               val startingTps =
-                if (restartStreamsOnRebalancing) currentAssigned
+                if (restartStreamsOnRebalancing) c.assignment().asScala.toSet
                 else newlyAssigned
 
               for {
                 ignoreRecordsForTps <- doSeekForNewPartitions(c, newlyAssigned)
-
-                newCommits <- rebalanceListenerCommits.get
 
                 _ <- diagnostics.emitIfEnabled {
                        val providedTps = records.partitions().asScala.toSet
@@ -336,12 +339,8 @@ private[consumer] final class Runloop private (
                        )
                      }
 
-              } yield Runloop.PollResult(newCommits, startingTps, records, ignoreRecordsForTps)
-            },
-            onFalse =
-              // No change in assigned partitions, the fast track.
-              ZIO.succeed(Runloop.PollResult(records))
-          )
+              } yield Runloop.PollResult(pendingCommits, startingTps, records, ignoreRecordsForTps)
+          }
         }
       startingStreams <-
         if (pollResult.startingTps.isEmpty) {
@@ -525,6 +524,28 @@ private[consumer] object Runloop {
     pendingRequests: Chunk[Request]
   )
 
+  private case class RebalanceEvent(
+    wasInvoked: Boolean,
+    newlyAssigned: Set[TopicPartition],
+    pendingCommits: Chunk[Commit]
+  ) {
+    def onAssigned(assigned: Set[TopicPartition], commits: Chunk[Commit]): RebalanceEvent =
+      RebalanceEvent(
+        wasInvoked = true,
+        newlyAssigned = newlyAssigned ++ assigned,
+        pendingCommits = pendingCommits ++ commits
+      )
+    def onRevokedOrLost(commits: Chunk[Commit]): RebalanceEvent =
+      copy(
+        wasInvoked = true,
+        pendingCommits = pendingCommits ++ commits
+      )
+  }
+
+  private object RebalanceEvent {
+    val None: RebalanceEvent = RebalanceEvent(wasInvoked = false, Set.empty, Chunk.empty)
+  }
+
   sealed trait Command
   object Command {
     // Used for internal control of the runloop
@@ -566,10 +587,9 @@ private[consumer] object Runloop {
     runloopTimeout: Duration
   ): ZIO[Scope, Throwable, Runloop] =
     for {
-      commandQueue             <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](CommandQueueSize))(_.shutdown)
-      commitQueue              <- ZIO.acquireRelease(Queue.bounded[Runloop.Commit](CommitQueueSize))(_.shutdown)
-      rebalanceListenerInvoked <- Ref.make[Boolean](false)
-      rebalanceListenerCommits <- Ref.make[Chunk[Commit]](Chunk.empty)
+      commandQueue           <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](CommandQueueSize))(_.shutdown)
+      commitQueue            <- ZIO.acquireRelease(Queue.bounded[Runloop.Commit](CommitQueueSize))(_.shutdown)
+      rebalanceListenerEvent <- Ref.make[RebalanceEvent](RebalanceEvent.None)
       partitions <- ZIO.acquireRelease(
                       Queue
                         .unbounded[
@@ -586,8 +606,7 @@ private[consumer] object Runloop {
                   runloopTimeout,
                   commandQueue,
                   commitQueue,
-                  rebalanceListenerInvoked,
-                  rebalanceListenerCommits,
+                  rebalanceListenerEvent,
                   partitions,
                   diagnostics,
                   offsetRetrieval,
