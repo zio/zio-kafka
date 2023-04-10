@@ -46,7 +46,7 @@ private[internal] final class PartitionStreamControl private (
       ended       <- endedPromise.isDone
       completed   <- completedPromise.isDone
       interrupted <- interruptPromise.isDone
-    } yield !ended && !completed && !interrupted
+    } yield !(ended || completed || interrupted)
 
   /** Returns true when the stream is done. */
   def isCompleted: ZIO[Any, Nothing, Boolean] =
