@@ -466,11 +466,11 @@ object AdminClient {
             .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts.asJava))
             .all()
         )
-      }.map(
+      }.map {
         _.asScala.view.map { case (configResource, config) =>
           (ConfigResource(configResource), KafkaConfig(config))
         }.toMap
-      )
+      }
     }
 
     /**
@@ -487,7 +487,7 @@ object AdminClient {
             .fold(adminClient.describeConfigs(asJava))(opts => adminClient.describeConfigs(asJava, opts.asJava))
             .values()
         )
-        .map(
+        .map {
           _.asScala.view.map { case (configResource, configFuture) =>
             (
               ConfigResource(configResource),
@@ -497,7 +497,7 @@ object AdminClient {
             )
 
           }.toMap
-        )
+        }
     }
 
     private def describeCluster(options: Option[DescribeClusterOptions]): Task[DescribeClusterResult] =
@@ -598,12 +598,14 @@ object AdminClient {
           .fold(adminClient.listOffsets(asJava))(opts => adminClient.listOffsets(asJava, opts.asJava))
         topicPartitionsAsJava.map(tp => tp -> listOffsetsResult.partitionResult(tp))
       }
-    }.map(_.view.map { case (topicPartition, listOffsetResultInfoFuture) =>
-      (
-        TopicPartition(topicPartition),
-        ZIO.fromCompletionStage(listOffsetResultInfoFuture.toCompletionStage).map(ListOffsetsResultInfo(_))
-      )
-    }.toMap)
+    }.map {
+      _.view.map { case (topicPartition, listOffsetResultInfoFuture) =>
+        (
+          TopicPartition(topicPartition),
+          ZIO.fromCompletionStage(listOffsetResultInfoFuture.toCompletionStage).map(ListOffsetsResultInfo(_))
+        )
+      }.toMap
+    }
 
     /**
      * List Consumer Group offsets for the specified partitions.
@@ -637,13 +639,12 @@ object AdminClient {
             }.asJava)
             .all()
         )
+      }.map {
+        _.asScala.map { case (groupId, offsets) =>
+          groupId -> offsets.asScala.filter { case (_, om) => om ne null }.toMap
+            .bimap(TopicPartition(_), OffsetAndMetadata(_))
+        }.toMap
       }
-        .map(
-          _.asScala.map { case (groupId, offsets) =>
-            groupId -> offsets.asScala.filter { case (_, om) => om ne null }.toMap
-              .bimap(TopicPartition(_), OffsetAndMetadata(_))
-          }.toMap
-        )
 
     override def listConsumerGroupOffsets(
       groupSpecs: Map[String, ListConsumerGroupOffsetsSpec],
@@ -658,13 +659,12 @@ object AdminClient {
             )
             .all()
         )
+      }.map {
+        _.asScala.map { case (groupId, offsets) =>
+          groupId -> offsets.asScala.filter { case (_, om) => om ne null }.toMap
+            .bimap(TopicPartition(_), OffsetAndMetadata(_))
+        }.toMap
       }
-        .map(
-          _.asScala.map { case (groupId, offsets) =>
-            groupId -> offsets.asScala.filter { case (_, om) => om ne null }.toMap
-              .bimap(TopicPartition(_), OffsetAndMetadata(_))
-          }.toMap
-        )
 
     /**
      * Alter offsets for the specified partitions and consumer group.
@@ -754,9 +754,9 @@ object AdminClient {
         ZIO.attemptBlocking(
           adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).allDescriptions()
         )
-      ).map(
+      ).map {
         _.asScala.toMap.bimap(_.intValue, _.asScala.toMap.bimap(identity, LogDirDescription(_)))
-      )
+      }
 
     /**
      * Describe the log directories of the specified brokers async
@@ -768,7 +768,7 @@ object AdminClient {
         .attemptBlocking(
           adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).descriptions()
         )
-        .map(
+        .map {
           _.asScala.view.map { case (brokerId, descriptionsFuture) =>
             (
               brokerId.intValue(),
@@ -777,7 +777,7 @@ object AdminClient {
                 .map(_.asScala.toMap.map { case (k, v) => (k, LogDirDescription(v)) })
             )
           }.toMap
-        )
+        }
 
     override def incrementalAlterConfigs(
       configs: Map[ConfigResource, Iterable[AlterConfigOp]],

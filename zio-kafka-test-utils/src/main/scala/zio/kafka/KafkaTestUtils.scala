@@ -249,8 +249,6 @@ object KafkaTestUtils {
 
   private def withAdminClient[R, T](settings: AdminClientSettings)(f: AdminClient => RIO[R, T]): ZIO[R, Throwable, T] =
     ZIO.scoped[R] {
-      AdminClient
-        .make(settings)
-        .flatMap(client => f(client))
+      AdminClient.make(settings).flatMap(f)
     }
 }
