@@ -1,4 +1,4 @@
-package zio.kafka
+package zio.kafka.utils
 
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.KafkaException
@@ -7,6 +7,7 @@ import zio.kafka.consumer.{ Consumer, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
+import zio.kafka.{ KafkaRandom, KafkaTestUtils }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
@@ -14,13 +15,13 @@ import zio.test._
 /**
  * This test checks the fix for the issue https://issues.apache.org/jira/browse/KAFKA-4090
  */
-object OOMSpecXmx300m extends ZIOSpecDefault with KafkaRandom {
+object SslHelperSpec extends ZIOSpecDefault with KafkaRandom {
 
   override val kafkaPrefix: String = "oom-spec"
 
   override def spec: Spec[TestEnvironment, Any] =
-    suite("OOM check")(
-      test("producer should fail with ssl check") {
+    suite(".validateEndpoint")(
+      test("Producer should fail due to ssl check") {
         for {
           result <- (
                       for {
@@ -49,7 +50,7 @@ object OOMSpecXmx300m extends ZIOSpecDefault with KafkaRandom {
           )
         )
       },
-      test("consumer should fail with ssl check") {
+      test("Consumer should fail due to ssl check") {
         for {
           result <- (
                       for {
@@ -84,7 +85,7 @@ object OOMSpecXmx300m extends ZIOSpecDefault with KafkaRandom {
           )
         )
       },
-      test("admin client should fail with ssl check") {
+      test("Admin client should fail due to ssl check") {
         assertZIO(KafkaTestUtils.withAdmin(_.listTopics()).exit)(
           fails(
             isSubtype[KafkaException](
