@@ -54,6 +54,7 @@ import zio.kafka.utils.SslHelper
 
 import java.util.Optional
 import scala.annotation.{ nowarn, tailrec }
+import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 import scala.util.{ Failure, Success, Try }
@@ -581,7 +582,7 @@ object AdminClient {
             .all()
         )
       }
-    }.map(_.asScala.toMap.bimap(TopicPartition(_), ListOffsetsResultInfo(_)))
+    }.map(_.asScala.bimap(TopicPartition(_), ListOffsetsResultInfo(_)).toMap)
 
     /**
      * List offset for the specified partitions.
@@ -623,7 +624,7 @@ object AdminClient {
             .partitionsToOffsetAndMetadata()
         )
       }
-        .map(_.asScala.filterNot { case (_, om) => om eq null }.toMap.bimap(TopicPartition(_), OffsetAndMetadata(_)))
+        .map(_.asScala.filter { case (_, om) => om ne null }.bimap(TopicPartition(_), OffsetAndMetadata(_)).toMap)
 
     /**
      * List the consumer group offsets available in the cluster for the specified consumer groups.
@@ -641,8 +642,10 @@ object AdminClient {
         )
       }.map {
         _.asScala.map { case (groupId, offsets) =>
-          groupId -> offsets.asScala.filter { case (_, om) => om ne null }.toMap
-            .bimap(TopicPartition(_), OffsetAndMetadata(_))
+          groupId ->
+            offsets.asScala.filter { case (_, om) => om ne null }
+              .bimap(TopicPartition(_), OffsetAndMetadata(_))
+              .toMap
         }.toMap
       }
 
@@ -661,8 +664,10 @@ object AdminClient {
         )
       }.map {
         _.asScala.map { case (groupId, offsets) =>
-          groupId -> offsets.asScala.filter { case (_, om) => om ne null }.toMap
-            .bimap(TopicPartition(_), OffsetAndMetadata(_))
+          groupId ->
+            offsets.asScala.filter { case (_, om) => om ne null }
+              .bimap(TopicPartition(_), OffsetAndMetadata(_))
+              .toMap
         }.toMap
       }
 
@@ -755,7 +760,7 @@ object AdminClient {
           adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).allDescriptions()
         )
       ).map {
-        _.asScala.toMap.bimap(_.intValue, _.asScala.toMap.bimap(identity, LogDirDescription(_)))
+        _.asScala.bimap(_.intValue, _.asScala.bimap(identity, LogDirDescription(_)).toMap).toMap
       }
 
     /**
@@ -1478,7 +1483,7 @@ object AdminClient {
     def apply(ld: JLogDirDescription): LogDirDescription =
       LogDirDescription(
         error = ld.error(),
-        replicaInfos = ld.replicaInfos().asScala.toMap.bimap(TopicPartition(_), ReplicaInfo(_))
+        replicaInfos = ld.replicaInfos().asScala.bimap(TopicPartition(_), ReplicaInfo(_)).toMap
       )
   }
 
@@ -1510,7 +1515,11 @@ object AdminClient {
     }(client => ZIO.succeed(client.close(settings.closeTimeout)))
 
   implicit final class MapOps[K1, V1](private val v: Map[K1, V1]) extends AnyVal {
-    def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): Map[K2, V2] = v.map(kv => fk(kv._1) -> fv(kv._2))
+    def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): Map[K2, V2] = v.map { case (k, v) => fk(k) -> fv(v) }
+  }
+
+  implicit final class MutableMapOps[K1, V1](private val v: mutable.Map[K1, V1]) extends AnyVal {
+    def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): mutable.Map[K2, V2] = v.map { case (k, v) => fk(k) -> fv(v) }
   }
 
   implicit final class OptionalOps[T](private val v: Optional[T]) extends AnyVal {
