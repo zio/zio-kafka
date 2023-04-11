@@ -13,7 +13,7 @@ enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 inThisBuild(
   List(
     name       := "ZIO Kafka",
-    zioVersion := "2.0.11",
+    zioVersion := "2.0.12",
     crossScalaVersions -= scala211.value,
     ciEnabledBranches        := Seq("master", "series/0.x"),
     useCoursier              := false,
