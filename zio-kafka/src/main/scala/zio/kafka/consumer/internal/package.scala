@@ -21,14 +21,14 @@ package object internal {
       }
     }
 
-    def disableCooperativeYielding(implicit trace: Trace): ZLayer[Any, Nothing, Unit] =
-      ZLayer.scoped {
-        ZIO.withRuntimeFlagsScoped(RuntimeFlags.disable(RuntimeFlag.CooperativeYielding))
-      }
+//    def disableCooperativeYielding(implicit trace: Trace): ZLayer[Any, Nothing, Unit] =
+//      ZLayer.scoped {
+//        ZIO.withRuntimeFlagsScoped(RuntimeFlags.disable(RuntimeFlag.CooperativeYielding))
+//      }
 
     Runtime.setExecutor(sameThreadExecutor) ++
-      Runtime.setBlockingExecutor(sameThreadExecutor) ++
-      disableCooperativeYielding
+      Runtime.setBlockingExecutor(sameThreadExecutor) // ++
+//      disableCooperativeYielding
   }
 
 }
