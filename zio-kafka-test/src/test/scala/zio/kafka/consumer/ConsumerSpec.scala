@@ -558,7 +558,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                     }
                   })
                 val deregisterAssignment = ZStream.logInfo(s"Deregistering partition ${tp.partition()}") *>
-                  ZStream.fromZIO(allAssignments.update({ current =>
+                  ZStream.finalizer(allAssignments.update({ current =>
                     current.get(instance) match {
                       case Some(currentList) =>
                         val idx = currentList.indexOf(tp.partition())
@@ -568,7 +568,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                     }
                   }))
 
-                registerAssignment.drain ++ partStream ++ deregisterAssignment.drain
+                (registerAssignment *> deregisterAssignment *> partStream).drain
               }
               .runDrain
           }
