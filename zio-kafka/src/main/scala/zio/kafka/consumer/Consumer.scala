@@ -359,7 +359,7 @@ object Consumer {
     getting new partition assignments by the faster stream. A value of 32 should be more than sufficient to cover
     this situation.
      */
-    val hubCapacity = 32
+    val hubCapacity = 128
 
     for {
       wrapper <- ConsumerAccess.make(settings)
