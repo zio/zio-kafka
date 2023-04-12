@@ -133,12 +133,13 @@ private[consumer] final class Runloop private (
           }
       }
 
-    consumer.withConsumerZIO { c =>
-      // We don't wait for the completion of the commit here, because it
-      // will only complete once we poll again.
-      ZIO.attempt(c.commitAsync(offsets.asJava, callback))
+    // We don't wait for the completion of the commit here, because it
+    // will only complete once we poll again.
+    consumer.runloopAccess { c =>
+      ZIO
+        .attempt(c.commitAsync(offsets.asJava, callback))
+        .catchAll(onFailure)
     }
-      .catchAll(onFailure)
   }
 
   /**
@@ -224,7 +225,7 @@ private[consumer] final class Runloop private (
   }
 
   private def getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
-    if (hasGroupId) consumer.withConsumer(_.groupMetadata()).fold(_ => None, Some(_))
+    if (hasGroupId) consumer.runloopAccess(c => ZIO.attempt(c.groupMetadata())).fold(_ => None, Some(_))
     else ZIO.none
 
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
@@ -262,7 +263,7 @@ private[consumer] final class Runloop private (
     for {
       _ <- currentState.set(state)
       pollResult <-
-        consumer.withConsumerZIO { c =>
+        consumer.runloopAccess { c =>
           ZIO.suspend {
 
             val prevAssigned        = c.assignment().asScala.toSet
@@ -414,7 +415,7 @@ private[consumer] final class Runloop private (
   private def handleChangeSubscription(
     command: Command.ChangeSubscription
   ): Task[Chunk[PartitionStreamControl]] =
-    consumer.withConsumerZIO { c =>
+    consumer.runloopAccess { c =>
       command.subscription match {
         case None =>
           ZIO
@@ -590,7 +591,7 @@ private[consumer] object Runloop {
       runloop = new Runloop(
                   runtime,
                   hasGroupId,
-                  consumer,
+                  RunloopConsumerAccess.from(consumer),
                   pollTimeout,
                   runloopTimeout,
                   commandQueue,
@@ -604,8 +605,9 @@ private[consumer] object Runloop {
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
-      // Run the entire loop on the blocking thread pool to avoid executor shifts
-      fib <- ZIO.blocking(runloop.run).forkScoped
+      // Run the entire loop on the a dedicated thread to avoid executor shifts
+      executor <- RunloopExecutor.newInstance
+      fib      <- ZIO.onExecutor(executor)(runloop.run).forkScoped
 
       _ <- ZIO.addFinalizer(
              ZIO.logTrace("Shutting down Runloop") *>

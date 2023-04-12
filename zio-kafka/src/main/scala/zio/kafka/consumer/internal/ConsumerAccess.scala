@@ -9,9 +9,9 @@ import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 
 import scala.jdk.CollectionConverters._
 
-private[consumer] class ConsumerAccess(
-  private[consumer] val consumer: ByteArrayKafkaConsumer,
-  access: Semaphore
+private[consumer] final class ConsumerAccess(
+  private[internal] val consumer: ByteArrayKafkaConsumer,
+  private[internal] val access: Semaphore
 ) {
   def withConsumer[A](f: ByteArrayKafkaConsumer => A): Task[A] =
     withConsumerZIO[Any, A](c => ZIO.attempt(f(c)))
@@ -29,6 +29,12 @@ private[consumer] class ConsumerAccess(
       }
       .fork
       .flatMap(fib => fib.join.onInterrupt(ZIO.succeed(consumer.wakeup()) *> fib.interrupt))
+
+  /**
+   * Do not use this method outside of the Runloop
+   */
+  def runloopAccess[R, E, A](f: ByteArrayKafkaConsumer => ZIO[R, E, A]): ZIO[R, E, A] =
+    access.withPermit(f(consumer))
 }
 
 private[consumer] object ConsumerAccess {
