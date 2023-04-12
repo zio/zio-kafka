@@ -55,7 +55,7 @@ private[consumer] final class Runloop private (
           cont.await
       }
       .unit
-  // .uninterruptible
+      .uninterruptible
 
   val rebalanceListener: RebalanceListener = {
     val emitDiagnostics = RebalanceListener(
@@ -406,7 +406,7 @@ private[consumer] final class Runloop private (
           }
         }
           .tapBoth(e => cmd.fail(e), _ => cmd.succeed)
-      // .uninterruptible
+          .uninterruptible
       case Command.StopAllStreams =>
         {
           for {
