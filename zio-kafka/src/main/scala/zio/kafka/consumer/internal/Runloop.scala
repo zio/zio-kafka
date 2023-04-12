@@ -637,10 +637,10 @@ private[consumer] object Runloop {
              .onInterrupt(ZIO.logWarning("Runloop interrupted -- 1"))
 
       _ <- ZIO.addFinalizer(
-             ZIO.logTrace("Shutting down Runloop") *>
+             ZIO.logWarning("Shutting down Runloop") *>
                commandQueue.offer(StopAllStreams) *>
                StopRunloop.make.flatMap(stop => commandQueue.offer(stop) *> stop.await) <*
-               ZIO.logDebug("Shut down Runloop")
+               ZIO.logWarning("Shut down Runloop")
            )
     } yield runloop
 }
