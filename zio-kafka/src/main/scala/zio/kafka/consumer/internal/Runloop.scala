@@ -473,7 +473,10 @@ private[consumer] final class Runloop private (
     ZStream
       .fromQueue(commandQueue)
       .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
-      .takeWhile(_ != StopRunloop)
+      .takeUntilZIO {
+        case stop: StopRunloop => stop.succeed.as(true)
+        case _                 => ZIO.succeed(false)
+      }
       .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
         for {
           _            <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
@@ -548,8 +551,16 @@ private[consumer] object Runloop {
     sealed trait Control extends Command
 
     case object Poll           extends Control
-    case object StopRunloop    extends Control
     case object StopAllStreams extends Control
+    final case class StopRunloop(cont: Promise[Nothing, Unit]) extends Control {
+      def await: IO[Nothing, Unit] = cont.await
+
+      @inline def succeed: UIO[Boolean] = cont.succeed(())
+    }
+    object StopRunloop {
+      def make: ZIO[Scope, Nothing, StopRunloop] =
+        Promise.make[Nothing, Unit].map(StopRunloop(_))
+    }
 
     final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command {
       @inline def isDone: UIO[Boolean]    = cont.isDone
@@ -607,13 +618,12 @@ private[consumer] object Runloop {
 
       // Run the entire loop on the a dedicated thread to avoid executor shifts
       executor <- RunloopExecutor.newInstance
-      fib      <- ZIO.onExecutor(executor)(runloop.run).forkScoped
+      _        <- ZIO.onExecutor(executor)(runloop.run).forkScoped
 
       _ <- ZIO.addFinalizer(
              ZIO.logTrace("Shutting down Runloop") *>
                commandQueue.offer(StopAllStreams) *>
-               commandQueue.offer(StopRunloop) *>
-               fib.join.orDie <*
+               StopRunloop.make.flatMap(stop => commandQueue.offer(stop) *> stop.await) <*
                ZIO.logDebug("Shut down Runloop")
            )
     } yield runloop
