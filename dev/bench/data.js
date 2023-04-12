@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1681294842720,
+  "lastUpdate": 1681301253669,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -11110,6 +11110,50 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
             "value": 2198.73659034,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "committer": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "id": "11ff4e6c0d3d198bd388c9c699e14b2d2c3f9fd6",
+          "message": "Run the Runloop on a dedicated single-threaded thread pool",
+          "timestamp": "2023-04-11T13:22:11Z",
+          "url": "https://github.com/zio/zio-kafka/pull/802/commits/11ff4e6c0d3d198bd388c9c699e14b2d2c3f9fd6"
+        },
+        "date": 1681301250569,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 463.62143473799995,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 459.3419990533333,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.kafkaClients",
+            "value": 724.03841588,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
+            "value": 1864.8899002400003,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
