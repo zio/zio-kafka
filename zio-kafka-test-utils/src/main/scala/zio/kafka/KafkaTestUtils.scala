@@ -12,17 +12,25 @@ import zio.kafka.producer._
 import zio.kafka.serde.{ Deserializer, Serde, Serializer }
 
 import java.io.File
-import java.nio.file.Paths
+import java.nio.file.Files
+import scala.io.{ Codec, Source }
+import scala.jdk.CollectionConverters.IterableHasAsJava
 
 object KafkaTestUtils {
 
   /**
-   * See https://stackoverflow.com/a/17351116/2431728
+   * See https://mkyong.com/java/java-read-a-file-from-resources-folder/
    */
-  val trustStoreFile: File =
-    Paths.get(this.getClass.getClassLoader.getResource("truststore/kafka.truststore.jks").toURI).toFile
-  val keyStoreFile: File =
-    Paths.get(this.getClass.getClassLoader.getResource("/keystore/kafka.keystore.jks").toURI).toFile
+  private def readResourceFile(file: String, tmpFileName: String, tmpFileSuffix: String): File = {
+    val tmpFile = Files.createTempFile(tmpFileName, tmpFileSuffix)
+    val source  = Source.fromResource(file)(Codec.UTF8)
+    Files.write(tmpFile, source.getLines.to(Iterable).asJava)
+    source.close()
+    tmpFile.toFile
+  }
+
+  val trustStoreFile: File = readResourceFile("truststore/kafka.truststore.jks", "truststore", ".jks")
+  val keyStoreFile: File   = readResourceFile("keystore/kafka.keystore.jks", "keystore", ".jks")
 
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(ProducerSettings(_))
