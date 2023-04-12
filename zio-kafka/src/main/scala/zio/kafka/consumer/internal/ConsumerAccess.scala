@@ -10,8 +10,8 @@ import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import scala.jdk.CollectionConverters._
 
 private[consumer] final class ConsumerAccess(
-  private[internal] val consumer: ByteArrayKafkaConsumer,
-  private[internal] val access: Semaphore
+  private[consumer] val consumer: ByteArrayKafkaConsumer,
+  access: Semaphore
 ) {
   def withConsumer[A](f: ByteArrayKafkaConsumer => A): Task[A] =
     withConsumerZIO[Any, A](c => ZIO.attempt(f(c)))
