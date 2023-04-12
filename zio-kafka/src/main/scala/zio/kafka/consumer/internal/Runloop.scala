@@ -55,7 +55,7 @@ private[consumer] final class Runloop private (
           cont.await
       }
       .unit
-      .uninterruptible
+  // .uninterruptible
 
   val rebalanceListener: RebalanceListener = {
     val emitDiagnostics = RebalanceListener(
@@ -249,14 +249,16 @@ private[consumer] final class Runloop private (
     val toResume = assignment intersect requestedPartitions
     val toPause  = assignment -- requestedPartitions
 
+    unsafeLog(s"Resuming partitions $toResume, pausing partitions $toPause")
+
     if (toResume.nonEmpty) c.resume(toResume.asJava)
     if (toPause.nonEmpty) c.pause(toPause.asJava)
   }
 
-  private def doPoll(c: ByteArrayKafkaConsumer) = {
-    val records = c.poll(pollTimeout)
-
-    if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
+  private def unsafeLog(msg: String): Unit = {
+    val _ = Unsafe.unsafe { implicit u =>
+      runtime.unsafe.run(ZIO.logInfo(msg))
+    }
   }
 
   private def handlePoll(state: State): Task[State] =
@@ -269,12 +271,22 @@ private[consumer] final class Runloop private (
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
+            unsafeLog(s"Previous assigned partitions: $prevAssigned, requested partitions: $requestedPartitions")
+
             resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
-            val records = doPoll(c)
+            val records = {
+              val records = c.poll(pollTimeout)
+
+              if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
+            }
+
+            unsafeLog(s"Polled ${records.count()} records")
 
             val currentAssigned = c.assignment().asScala.toSet
             val newlyAssigned   = currentAssigned -- prevAssigned
+
+            unsafeLog(s"Assigned partitions: $currentAssigned, newly assigned partitions: $newlyAssigned")
 
             for {
               ignoreRecordsForTps <- doSeekForNewPartitions(c, newlyAssigned)
@@ -369,9 +381,9 @@ private[consumer] final class Runloop private (
   private def handleCommand(state: State, cmd: Command): Task[State] =
     cmd match {
       case req: Request =>
-        ZIO.succeed(state.addRequest(req))
+        ZIO.succeed(state.addPendingRequest(req))
       case cmd @ Command.Commit(_, _) =>
-        doCommit(cmd).as(state.addCommit(cmd))
+        doCommit(cmd).as(state.addPendingCommit(cmd))
       case cmd @ Command.ChangeSubscription(subscription, _) =>
         handleChangeSubscription(cmd).flatMap { newAssignedStreams =>
           val newState = state.copy(
@@ -394,7 +406,7 @@ private[consumer] final class Runloop private (
           }
         }
           .tapBoth(e => cmd.fail(e), _ => cmd.succeed)
-          .uninterruptible
+      // .uninterruptible
       case Command.StopAllStreams =>
         {
           for {
@@ -466,7 +478,7 @@ private[consumer] final class Runloop private (
   def run: ZIO[Scope, Throwable, Any] = {
     def logPollStart(state: State): UIO[Unit] =
       ZIO
-        .logTrace(
+        .logInfo(
           s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
         )
 
@@ -639,8 +651,8 @@ private[internal] final case class State(
   assignedStreams: Chunk[PartitionStreamControl],
   subscription: Option[Subscription]
 ) {
-  def addCommit(c: Commit): State   = copy(pendingCommits = pendingCommits :+ c)
-  def addRequest(r: Request): State = copy(pendingRequests = pendingRequests :+ r)
+  def addPendingCommit(c: Commit): State   = copy(pendingCommits = pendingCommits :+ c)
+  def addPendingRequest(r: Request): State = copy(pendingRequests = pendingRequests :+ r)
 
   def isSubscribed: Boolean = subscription.isDefined
 

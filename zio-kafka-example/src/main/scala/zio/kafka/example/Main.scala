@@ -1,5 +1,6 @@
 package zio.kafka.example
 
+import io.github.embeddedkafka.EmbeddedKafka
 import zio._
 import zio.kafka.KafkaTestUtils.{ produceMany, producer }
 import zio.kafka.consumer.diagnostics.Diagnostics
@@ -34,13 +35,14 @@ object Main extends ZIOAppDefault {
         topic = "test"
         data  = List.tabulate(1000)(i => (s"key$i", s"msg$i"))
         _               <- ZIO.logInfo(s"Producing messages...")
+        _               <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic, partitions = 6))
         producedRecords <- produceMany(topic, data).provideLayer(producer)
         _               <- ZIO.logInfo(s"Produced ${producedRecords.size} messages")
         stream = Consumer
-                   .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
+                   .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                    .provideLayer(consumerLayer(kafka))
         _        <- ZIO.logInfo(s"Consuming messages...")
-        consumed <- stream.runCount
+        consumed <- stream.take(1000).runCount
         _        <- ZIO.logInfo(s"Consumed $consumed records")
       } yield ()
     ).provideSomeLayer[ZIOAppArgs with Scope](Kafka.embedded)

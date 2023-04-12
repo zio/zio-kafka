@@ -19,6 +19,8 @@
     <logger name="state.change.logger" level="WARN"/>
     <logger name="org.apache.kafka.common.utils.AppInfoParser" level="ERROR"/>
     <logger name="com.yammer.metrics" level="ERROR"/>
+    <logger name="zio.kafka" level="DEBUG"/>
+    <logger name="zio" level="DEBUG"/>
 
     <root level="INFO">
         <appender-ref ref="ASYNC_STDOUT"/>
