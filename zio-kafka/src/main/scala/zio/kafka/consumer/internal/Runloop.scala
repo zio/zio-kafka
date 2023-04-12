@@ -618,7 +618,11 @@ private[consumer] object Runloop {
 
       // Run the entire loop on the a dedicated thread to avoid executor shifts
       executor <- RunloopExecutor.newInstance
-      _        <- ZIO.onExecutor(executor)(runloop.run).forkScoped
+      _ <- ZIO
+             .onExecutor(executor)(runloop.run)
+             .onInterrupt(ZIO.logWarning("Runloop interrupted -- 0"))
+             .forkScoped
+             .onInterrupt(ZIO.logWarning("Runloop interrupted -- 1"))
 
       _ <- ZIO.addFinalizer(
              ZIO.logTrace("Shutting down Runloop") *>
