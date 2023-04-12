@@ -502,9 +502,9 @@ private[consumer] object Runloop {
      */
     def runFoldChunksDiscardZIO[R1 <: R, E1 >: E, S](s: S)(f: (S, Chunk[A]) => ZIO[R1, E1, S]): ZIO[R1, E1, Unit] = {
       def reader(s: S): ZChannel[R1, E1, Chunk[A], Any, E1, Nothing, Unit] =
-        ZChannel.readWith(
+        ZChannel.readWithCause(
           (in: Chunk[A]) => ZChannel.fromZIO(f(s, in)).flatMap(reader),
-          (err: E1) => ZChannel.fail(err),
+          (err: Cause[E1]) => ZChannel.refailCause(err),
           (_: Any) => ZChannel.unit
         )
 
