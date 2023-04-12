@@ -34,16 +34,17 @@ object Main extends ZIOAppDefault {
   }
 
   override def run: ZIO[ZIOAppArgs with Scope, Any, Any] =
-    (
-      for {
-        _ <- ZIO.logInfo(s"Starting app")
-        stream = Consumer
-                   .plainStream(Subscription.topics("wikipedia.parsed"), Serde.string, Serde.string)
-                   .provideLayer(consumerLayer)
-        _        <- ZIO.logInfo(s"Consuming messages...")
-        consumed <- stream.take(100000).runCount
-        _        <- ZIO.logInfo(s"Consumed $consumed records")
-      } yield ()
-    )
+    ZIO.addFinalizer(ZIO.logInfo("Stopping app")) *>
+      (
+        for {
+          _ <- ZIO.logInfo(s"Starting app")
+          stream = Consumer
+                     .plainStream(Subscription.topics("wikipedia.parsed"), Serde.string, Serde.string)
+                     .provideLayer(consumerLayer)
+          _        <- ZIO.logInfo(s"Consuming messages...")
+          consumed <- stream.take(100000).runCount
+          _        <- ZIO.logInfo(s"Consumed $consumed records")
+        } yield ()
+      )
 
 }
