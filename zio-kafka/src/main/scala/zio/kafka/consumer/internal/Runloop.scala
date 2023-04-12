@@ -28,7 +28,8 @@ private[consumer] final class Runloop private (
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
-  currentState: Ref[State]
+  currentState: Ref[State],
+  maxPartitionQueueSize: Int
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
@@ -260,7 +261,8 @@ private[consumer] final class Runloop private (
 
   private def handlePoll(state: State): Task[State] =
     for {
-      _ <- currentState.set(state)
+      _          <- currentState.set(state)
+      queueSizes <- ZIO.foreach(state.assignedStreams)(stream => stream.getQueueSize.map(stream.tp -> _))
       pollResult <-
         consumer.withConsumerZIO { c =>
           ZIO.suspend {
@@ -268,7 +270,11 @@ private[consumer] final class Runloop private (
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-            resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
+            val partitionsToFetch = queueSizes.collect {
+              case (tp, queueSize) if queueSize < maxPartitionQueueSize => tp
+            }
+
+            resumeAndPausePartitions(c, prevAssigned, partitionsToFetch.toSet)
 
             val records = doPoll(c)
 
@@ -574,7 +580,8 @@ private[consumer] object Runloop {
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
-    runloopTimeout: Duration
+    runloopTimeout: Duration,
+    maxPartitionQueueSize: Int
   ): ZIO[Scope, Throwable, Runloop] =
     for {
       commandQueue       <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](commandQueueSize))(_.shutdown)
@@ -600,7 +607,8 @@ private[consumer] object Runloop {
                   offsetRetrieval,
                   userRebalanceListener,
                   restartStreamsOnRebalancing,
-                  currentStateRef
+                  currentStateRef,
+                  maxPartitionQueueSize
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 

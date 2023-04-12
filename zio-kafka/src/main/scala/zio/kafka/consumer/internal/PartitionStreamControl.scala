@@ -5,14 +5,15 @@ import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Runloop.Command.Request
 import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, Command }
 import zio.stream.{ Take, ZStream }
-import zio.{ Chunk, LogAnnotation, Promise, Queue, UIO, ZIO }
+import zio.{ Chunk, LogAnnotation, Promise, Queue, Ref, UIO, ZIO }
 
 private[internal] final class PartitionStreamControl private (
   val tp: TopicPartition,
   stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
   interruptPromise: Promise[Throwable, Unit],
-  completedPromise: Promise[Nothing, Unit]
+  completedPromise: Promise[Nothing, Unit],
+  queueSize: Ref[Int]
 ) {
 
   private val logAnnotate = ZIO.logAnnotate(
@@ -22,7 +23,9 @@ private[internal] final class PartitionStreamControl private (
 
   /** Offer new data for the stream to process. */
   def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
-    dataQueue.offer(Take.chunk(data)).unit
+    queueSize.update(_ + data.size) *> dataQueue.offer(Take.chunk(data)).unit
+
+  def getQueueSize: UIO[Int] = queueSize.get
 
   /** To be invoked when the partition was lost. */
   def lost(): UIO[Boolean] =
@@ -63,6 +66,7 @@ private[internal] object PartitionStreamControl {
       interruptionPromise <- Promise.make[Throwable, Unit]
       completedPromise    <- Promise.make[Nothing, Unit]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
+      queueSize           <- Ref.make(0)
       requestAndAwaitData =
         for {
           _     <- commandQueue.offer(Request(tp))
@@ -83,7 +87,8 @@ private[internal] object PartitionStreamControl {
                    // When no data is available, request more data and await its arrival.
                    dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
                  }.flattenTake
+                   .chunksWith(_.tap(records => queueSize.update(_ - records.size)))
                    .interruptWhen(interruptionPromise)
-    } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise)
+    } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise, queueSize)
 
 }
