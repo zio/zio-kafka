@@ -2,8 +2,7 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 import org.apache.kafka.common.TopicPartition
-import zio.{ Runtime, Task, Unsafe, ZIO }
-import scala.jdk.CollectionConverters._
+import zio.{ Chunk, Runtime, Task, Unsafe, ZIO }
 
 /**
  * ZIO wrapper around Kafka's `ConsumerRebalanceListener` to work with Scala collection types and ZIO effects.
@@ -12,9 +11,9 @@ import scala.jdk.CollectionConverters._
  * when this is not desired.
  */
 final case class RebalanceListener(
-  onAssigned: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
-  onRevoked: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
-  onLost: (Set[TopicPartition], RebalanceConsumer) => Task[Unit]
+  onAssigned: (Chunk[TopicPartition], RebalanceConsumer) => Task[Unit],
+  onRevoked: (Chunk[TopicPartition], RebalanceConsumer) => Task[Unit],
+  onLost: (Chunk[TopicPartition], RebalanceConsumer) => Task[Unit]
 ) {
 
   /**
@@ -36,7 +35,7 @@ final case class RebalanceListener(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe
-          .run(onRevoked(partitions.asScala.toSet, consumer))
+          .run(onRevoked(Chunk.fromJavaIterable(partitions), consumer))
           .getOrThrowFiberFailure()
         ()
       }
@@ -45,7 +44,7 @@ final case class RebalanceListener(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe
-          .run(onAssigned(partitions.asScala.toSet, consumer))
+          .run(onAssigned(Chunk.fromJavaIterable(partitions), consumer))
           .getOrThrowFiberFailure()
         ()
       }
@@ -54,7 +53,7 @@ final case class RebalanceListener(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe
-          .run(onLost(partitions.asScala.toSet, consumer))
+          .run(onLost(Chunk.fromJavaIterable(partitions), consumer))
           .getOrThrowFiberFailure()
         ()
       }
@@ -64,8 +63,8 @@ final case class RebalanceListener(
 
 object RebalanceListener {
   def apply(
-    onAssigned: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
-    onRevoked: (Set[TopicPartition], RebalanceConsumer) => Task[Unit]
+    onAssigned: (Chunk[TopicPartition], RebalanceConsumer) => Task[Unit],
+    onRevoked: (Chunk[TopicPartition], RebalanceConsumer) => Task[Unit]
   ): RebalanceListener =
     RebalanceListener(onAssigned, onRevoked, onRevoked)
 

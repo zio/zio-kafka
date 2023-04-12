@@ -270,13 +270,13 @@ private[consumer] final class Runloop private (
   private def offerRecordsToStreams(
     partitionStreams: Chunk[PartitionStreamControl],
     pendingRequests: Chunk[Request],
-    ignoreRecordsForTps: Set[TopicPartition],
+    ignoreRecordsForTps: Chunk[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
   ): UIO[Runloop.FulfillResult] = {
     // The most efficient way to get the records from [[ConsumerRecords]] per
     // topic-partition, is by first getting the set of topic-partitions, and
     // then requesting the records per topic-partition.
-    val tps           = polledRecords.partitions().asScala.toSet -- ignoreRecordsForTps
+    val tps           = Chunk.fromJavaIterable(polledRecords.partitions()) diff ignoreRecordsForTps
     val fulfillResult = Runloop.FulfillResult(pendingRequests = pendingRequests.filter(req => !tps.contains(req.tp)))
     val streams =
       if (tps.isEmpty) Chunk.empty else partitionStreams.filter(streamControl => tps.contains(streamControl.tp))
@@ -313,7 +313,10 @@ private[consumer] final class Runloop private (
     if (hasGroupId) consumer.withConsumer(_.groupMetadata()).fold(_ => None, Some(_))
     else ZIO.none
 
-  private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
+  private def doSeekForNewPartitions(
+    c: ByteArrayKafkaConsumer,
+    tps: Chunk[TopicPartition]
+  ): Task[Chunk[TopicPartition]] =
     offsetRetrieval match {
       case OffsetRetrieval.Manual(getOffsets) =>
         getOffsets(tps)
@@ -322,17 +325,17 @@ private[consumer] final class Runloop private (
           .as(tps)
 
       case OffsetRetrieval.Auto(_) =>
-        ZIO.succeed(Set.empty)
+        ZIO.succeed(Chunk.empty)
     }
 
   // Pause partitions for which there is no demand and resume those for which there is now demand
   private def resumeAndPausePartitions(
     c: ByteArrayKafkaConsumer,
-    assignment: Set[TopicPartition],
-    requestedPartitions: Set[TopicPartition]
+    assignment: Chunk[TopicPartition],
+    requestedPartitions: Chunk[TopicPartition]
   ): Unit = {
     val toResume = assignment intersect requestedPartitions
-    val toPause  = assignment -- requestedPartitions
+    val toPause  = assignment diff requestedPartitions
 
     if (toResume.nonEmpty) c.resume(toResume.asJava)
     if (toPause.nonEmpty) c.pause(toPause.asJava)
@@ -354,8 +357,8 @@ private[consumer] final class Runloop private (
       _ <- rebalanceListenerEvent.set(RebalanceEvent.None)
       pollResult <-
         consumer.withConsumerZIO { c =>
-          val prevAssigned        = c.assignment().asScala.toSet
-          val requestedPartitions = state.pendingRequests.map(_.tp).toSet
+          val prevAssigned        = Chunk.fromJavaIterable(c.assignment())
+          val requestedPartitions = state.pendingRequests.map(_.tp)
 
           resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
@@ -376,18 +379,18 @@ private[consumer] final class Runloop private (
               // either because they are restarting, or because they
               // are new.
               val startingTps =
-                if (restartStreamsOnRebalancing) c.assignment().asScala.toSet
+                if (restartStreamsOnRebalancing) Chunk.fromJavaIterable(c.assignment())
                 else newlyAssigned
 
               for {
                 ignoreRecordsForTps <- doSeekForNewPartitions(c, newlyAssigned)
 
                 _ <- diagnostics.emitIfEnabled {
-                       val providedTps = records.partitions().asScala.toSet
+                       val providedTps = Chunk.fromJavaIterable(records.partitions())
                        DiagnosticEvent.Poll(
                          tpRequested = requestedPartitions,
                          tpWithData = providedTps,
-                         tpWithoutData = requestedPartitions -- providedTps
+                         tpWithoutData = requestedPartitions diff providedTps
                        )
                      }
 
@@ -408,7 +411,7 @@ private[consumer] final class Runloop private (
       runningStreams <- ZIO.filter(state.assignedStreams)(_.acceptsData)
       updatedStreams = runningStreams ++ startingStreams
       updatedPendingRequests = {
-        val streamTps = updatedStreams.map(_.tp).toSet
+        val streamTps = updatedStreams.map(_.tp)
         state.pendingRequests.filter(req => streamTps.contains(req.tp))
       }
       fulfillResult <- offerRecordsToStreams(
@@ -487,7 +490,7 @@ private[consumer] final class Runloop private (
                 _ <- ZIO.attempt(c.assign(topicPartitions.asJava))
                 _ <- offsetRetrieval match {
                        case OffsetRetrieval.Manual(getOffsets) =>
-                         getOffsets(topicPartitions).flatMap { offsets =>
+                         getOffsets(Chunk.fromIterable(topicPartitions)).flatMap { offsets =>
                            ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) }
                          }
                        case OffsetRetrieval.Auto(_) => ZIO.unit
@@ -563,17 +566,17 @@ private[consumer] object Runloop {
 
   private final case class PollResult(
     newCommits: Chunk[Commit],
-    startingTps: Set[TopicPartition],
+    startingTps: Chunk[TopicPartition],
     records: ConsumerRecords[Array[Byte], Array[Byte]],
-    ignoreRecordsForTps: Set[TopicPartition]
+    ignoreRecordsForTps: Chunk[TopicPartition]
   )
   private object PollResult {
     def apply(records: ConsumerRecords[Array[Byte], Array[Byte]]): PollResult =
       PollResult(
         newCommits = Chunk.empty,
-        startingTps = Set.empty,
+        startingTps = Chunk.empty,
         records = records,
-        ignoreRecordsForTps = Set.empty
+        ignoreRecordsForTps = Chunk.empty
       )
   }
 
@@ -583,10 +586,10 @@ private[consumer] object Runloop {
 
   private final case class RebalanceEvent(
     wasInvoked: Boolean,
-    newlyAssigned: Set[TopicPartition],
+    newlyAssigned: Chunk[TopicPartition],
     pendingCommits: Chunk[Commit]
   ) {
-    def onAssigned(assigned: Set[TopicPartition], commits: Chunk[Commit]): RebalanceEvent =
+    def onAssigned(assigned: Chunk[TopicPartition], commits: Chunk[Commit]): RebalanceEvent =
       RebalanceEvent(
         wasInvoked = true,
         newlyAssigned = newlyAssigned ++ assigned,
@@ -600,7 +603,7 @@ private[consumer] object Runloop {
   }
 
   private object RebalanceEvent {
-    val None: RebalanceEvent = RebalanceEvent(wasInvoked = false, Set.empty, Chunk.empty)
+    val None: RebalanceEvent = RebalanceEvent(wasInvoked = false, Chunk.empty, Chunk.empty)
   }
 
   sealed trait Command
