@@ -189,14 +189,16 @@ trait AdminClient {
   ): Task[Map[TopicPartition, OffsetAndMetadata]]
 
   /**
-   * List the consumer group offsets available in the cluster for the specified consumer groups.
+   * Given a mapping of consumer group IDs and list of partitions, list the consumer group offsets available in the
+   * cluster for the specified consumer groups and partitions.
    */
   def listConsumerGroupOffsets(
     groupSpecs: Map[String, ListConsumerGroupOffsetsSpec]
   ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]]
 
   /**
-   * List the consumer group offsets available in the cluster for the specified consumer groups.
+   * Given a mapping of consumer group IDs and list of partitions, list the consumer group offsets available in the
+   * cluster for the specified consumer groups and partitions.
    */
   def listConsumerGroupOffsets(
     groupSpecs: Map[String, ListConsumerGroupOffsetsSpec],
