@@ -574,7 +574,7 @@ object Consumer {
   sealed trait OffsetRetrieval
   object OffsetRetrieval {
     final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest)                extends OffsetRetrieval
-    final case class Manual(getOffsets: Chunk[TopicPartition] => Task[Map[TopicPartition, Long]]) extends OffsetRetrieval
+    final case class Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]]) extends OffsetRetrieval
   }
 
   sealed trait AutoOffsetStrategy { self =>

@@ -319,7 +319,7 @@ private[consumer] final class Runloop private (
   ): Task[Chunk[TopicPartition]] =
     offsetRetrieval match {
       case OffsetRetrieval.Manual(getOffsets) =>
-        getOffsets(tps)
+        getOffsets(tps.toSet)
           .tap(offsets => ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) })
           .when(tps.nonEmpty)
           .as(tps)
@@ -490,7 +490,7 @@ private[consumer] final class Runloop private (
                 _ <- ZIO.attempt(c.assign(topicPartitions.asJava))
                 _ <- offsetRetrieval match {
                        case OffsetRetrieval.Manual(getOffsets) =>
-                         getOffsets(Chunk.fromIterable(topicPartitions)).flatMap { offsets =>
+                         getOffsets(topicPartitions).flatMap { offsets =>
                            ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) }
                          }
                        case OffsetRetrieval.Auto(_) => ZIO.unit
