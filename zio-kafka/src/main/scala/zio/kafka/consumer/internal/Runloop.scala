@@ -21,49 +21,46 @@ import scala.jdk.CollectionConverters._
  *
  * ## Stream management
  *
- *  - When a partition gets assigned manually or by the broker, a new stream is started.
- *  - When a partition is revoked by the broker, the stream is ended.
- *  - When a partition is reported as lost, the stream is interrupted.
+ *   - When a partition gets assigned manually or by the broker, a new stream is started.
+ *   - When a partition is revoked by the broker, the stream is ended.
+ *   - When a partition is reported as lost, the stream is interrupted.
  *
  * ## Fetching data
  *
- *  - Streams that needs data request this via a [[Request]] command to the command-queue.
- *  - Partitions for which no data is needed are paused. This backpressure prevents unnecessary
- *    buffering of data.
+ *   - Streams that needs data request this via a [[Request]] command to the command-queue.
+ *   - Partitions for which no data is needed are paused. This backpressure prevents unnecessary buffering of data.
  *
  * ## Poll-loop
  *
- * The poll-loop continuously polls the broker for new data. Since polling is also needed for learning about
- * partition assignment changes, or for completing commits, polling also continuous when no partitions are
- * assigned, or when there are pending commits.
+ * The poll-loop continuously polls the broker for new data. Since polling is also needed for learning about partition
+ * assignment changes, or for completing commits, polling also continuous when no partitions are assigned, or when there
+ * are pending commits.
  *
- * When all streams stop processing, polling stops so that the broker can detect that this Kafka client is
- * stalled.
+ * When all streams stop processing, polling stops so that the broker can detect that this Kafka client is stalled.
  *
  * ## Rebalance listener
  *
  * The rebalance listener runs during a poll to the broker. It is used to track changes to partition assignments.
  * Partitions can be assigned, revoked or lost.
  *
- * When a partition is revoked, the stream that handles it will be ended (signal the stream that no more data will
- * be available). Processing however, might continue.
+ * When a partition is revoked, the stream that handles it will be ended (signal the stream that no more data will be
+ * available). Processing however, might continue.
  *
  * ### Rebalance listener - Commit-loop
  *
  * When `endRevokedStreamsBeforeRebalance` is `true` (the default), we wait for the stream to complete running inside
- * the rebalance listener. This gives the stream a chance to commit offsets before its partition is given to
- * another consumer.
+ * the rebalance listener. This gives the stream a chance to commit offsets before its partition is given to another
+ * consumer.
  *
- * While the rebalance listener is waiting for streams to complete, we need to continue sending commits. In addition
- * we need to continue polling the broker so that we hear of completing
- * commits. For both we use commitAsync (in the second case with an empty map of offsets). This forms the commit-loop.
+ * While the rebalance listener is waiting for streams to complete, we need to continue sending commits. In addition we
+ * need to continue polling the broker so that we hear of completing commits. For both we use commitAsync (in the second
+ * case with an empty map of offsets). This forms the commit-loop.
  *
  * The commit-loop ends when the streams completed or a time out occurs.
  *
  * ## The command-queue and the commit-queue
  *
  * TODO: document more here ...
- *
  */
 // Disable zio-intellij's inspection `SimplifyWhenInspection` because its suggestion is not
 // equivalent performance-wise.
@@ -82,7 +79,7 @@ private[consumer] final class Runloop private (
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
-  endRevokedStreamsBeforeRebalance: Boolean,  // TODO: rename to something like 'completeRevokedStreamsDuringRebalance'
+  endRevokedStreamsBeforeRebalance: Boolean, // TODO: rename to something like 'completeRevokedStreamsDuringRebalance'
   currentState: Ref[State]
 ) {
 
@@ -608,6 +605,7 @@ private[consumer] object Runloop {
 
   sealed trait Command
   object Command {
+
     /** Used for internal control of the runloop. */
     sealed trait Control extends Command
 
@@ -617,8 +615,8 @@ private[consumer] object Runloop {
     /** Used as a signal to the poll-loop that commits are available in the commit-queue. */
     case object CommitAvailable extends Control
 
-    case object StopRunloop     extends Control
-    case object StopAllStreams  extends Control
+    case object StopRunloop    extends Control
+    case object StopAllStreams extends Control
 
     /** Used by a stream to request more records. */
     final case class Request(tp: TopicPartition) extends Command

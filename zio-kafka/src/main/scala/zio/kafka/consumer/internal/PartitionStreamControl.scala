@@ -11,6 +11,7 @@ private[internal] final class PartitionStreamControl private (
   val tp: TopicPartition,
   stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
+  startedPromise: Promise[Nothing, Unit],
   endedPromise: Promise[Nothing, Unit],
   completedPromise: Promise[Nothing, Unit],
   interruptPromise: Promise[Throwable, Unit]
@@ -43,10 +44,11 @@ private[internal] final class PartitionStreamControl private (
   /** Returns true when the stream accepts new data. */
   def acceptsData: ZIO[Any, Nothing, Boolean] =
     for {
+      started     <- startedPromise.isDone
       ended       <- endedPromise.isDone
       completed   <- completedPromise.isDone
       interrupted <- interruptPromise.isDone
-    } yield !(ended || completed || interrupted)
+    } yield started && !(ended || completed || interrupted)
 
   /** Returns true when the stream is done. */
   def isCompleted: ZIO[Any, Nothing, Boolean] =
@@ -69,6 +71,7 @@ private[internal] object PartitionStreamControl {
   ): ZIO[Any, Nothing, PartitionStreamControl] =
     for {
       _                   <- ZIO.logTrace(s"Creating partition stream ${tp.toString}")
+      startedPromise      <- Promise.make[Nothing, Unit]
       endedPromise        <- Promise.make[Nothing, Unit]
       completedPromise    <- Promise.make[Nothing, Unit]
       interruptionPromise <- Promise.make[Throwable, Unit]
@@ -80,10 +83,11 @@ private[internal] object PartitionStreamControl {
           taken <- dataQueue.takeBetween(1, Int.MaxValue)
         } yield taken
 
-      stream = ZStream.logAnnotate(
-                 LogAnnotation("topic", tp.topic()),
-                 LogAnnotation("partition", tp.partition().toString)
-               ) *>
+      stream = ZStream.fromZIO(startedPromise.succeed(())) *>
+                 ZStream.logAnnotate(
+                   LogAnnotation("topic", tp.topic()),
+                   LogAnnotation("partition", tp.partition().toString)
+                 ) *>
                  ZStream.finalizer(
                    completedPromise.succeed(()) <*
                      ZIO.logDebug(s"Partition stream ${tp.toString} has ended")
@@ -94,6 +98,14 @@ private[internal] object PartitionStreamControl {
                    dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
                  }.flattenTake
                    .interruptWhen(interruptionPromise)
-    } yield new PartitionStreamControl(tp, stream, dataQueue, endedPromise, completedPromise, interruptionPromise)
+    } yield new PartitionStreamControl(
+      tp,
+      stream,
+      dataQueue,
+      startedPromise,
+      endedPromise,
+      completedPromise,
+      interruptionPromise
+    )
 
 }

@@ -8,7 +8,8 @@ import scala.jdk.CollectionConverters._
 /**
  * ZIO wrapper around Kafka's `ConsumerRebalanceListener` to work with Scala collection types and ZIO effects.
  *
- * Note that the given ZIO effects are executed directly on the Kafka poll thread.
+ * Note that the given ZIO effects are executed directly on the Kafka poll thread. Fork and shift to another executor
+ * when this is not desired.
  */
 final case class RebalanceListener(
   onAssigned: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
