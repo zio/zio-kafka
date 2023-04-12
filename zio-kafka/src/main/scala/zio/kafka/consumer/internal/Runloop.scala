@@ -503,6 +503,7 @@ private[consumer] final class Runloop private (
       }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitions.offer(Take.failCause(cause)))
+      .onInterrupt(ZIO.logWarning("== == == == Runloop interrupted == == == =="))
   }
 }
 
@@ -630,16 +631,17 @@ private[consumer] object Runloop {
 
       // Run the entire loop on the a dedicated thread to avoid executor shifts
       executor <- RunloopExecutor.newInstance
-      _ <- ZIO
-             .onExecutor(executor)(runloop.run)
-             .onInterrupt(ZIO.logWarning("Runloop interrupted -- 0"))
-             .forkScoped
-             .onInterrupt(ZIO.logWarning("Runloop interrupted -- 1"))
+      fiber <- ZIO
+                 .onExecutor(executor)(runloop.run)
+                 .onInterrupt(ZIO.logWarning("Runloop interrupted -- 0"))
+                 .fork
+                 .onInterrupt(ZIO.logWarning("Runloop interrupted -- 1"))
 
       _ <- ZIO.addFinalizer(
              ZIO.logWarning("Shutting down Runloop") *>
                commandQueue.offer(StopAllStreams) *>
-               StopRunloop.make.flatMap(stop => commandQueue.offer(stop) *> stop.await) <*
+               StopRunloop.make.flatMap(stop => commandQueue.offer(stop) *> stop.await) *>
+               fiber.interrupt <*
                ZIO.logWarning("Shut down Runloop")
            )
     } yield runloop
