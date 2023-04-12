@@ -157,6 +157,7 @@ lazy val zioKafkaBench =
 lazy val zioKafkaExample =
   project
     .in(file("zio-kafka-example"))
+    .enablePlugins(JavaAppPackaging)
     .settings(stdSettings("zio-kafka-example"))
     .settings(publish / skip := true)
     .settings(run / fork := false)
