@@ -1,15 +1,15 @@
 package zio.kafka
 
-import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerRecord }
-import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import zio._
 import zio.kafka.admin._
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
+import zio.kafka.consumer.Consumer.{AutoOffsetStrategy, OffsetRetrieval}
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer._
-import zio.kafka.serde.{ Deserializer, Serde, Serializer }
+import zio.kafka.serde.{Deserializer, Serde, Serializer}
 
 object KafkaTestUtils {
 

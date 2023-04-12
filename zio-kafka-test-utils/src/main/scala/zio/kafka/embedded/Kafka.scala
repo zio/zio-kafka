@@ -5,19 +5,19 @@ import zio._
 
 trait Kafka {
   def bootstrapServers: List[String]
-  def stop(): UIO[Unit]
+  def stop(): Task[Unit]
 }
 
 object Kafka {
 
   final case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka {
     override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
-    override def stop(): UIO[Unit]              = ZIO.succeed(embeddedK.stop(true))
+    override def stop(): Task[Unit]             = ZIO.attemptBlocking(embeddedK.stop(true))
   }
 
   case object DefaultLocal extends Kafka {
     override def bootstrapServers: List[String] = List(s"localhost:9092")
-    override def stop(): UIO[Unit]              = ZIO.unit
+    override def stop(): Task[Unit]             = ZIO.unit
   }
 
   val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
@@ -29,7 +29,7 @@ object Kafka {
         "super.users"                      -> "User:ANONYMOUS"
       )
     )
-    ZIO.acquireRelease(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
+    ZIO.acquireRelease(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop().orDie)
   }
 
   val local: ZLayer[Any, Nothing, Kafka] = ZLayer.succeed(DefaultLocal)
