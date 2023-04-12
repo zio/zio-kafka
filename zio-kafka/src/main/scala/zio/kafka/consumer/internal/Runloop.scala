@@ -591,7 +591,7 @@ private[consumer] object Runloop {
       runloop = new Runloop(
                   runtime,
                   hasGroupId,
-                  RunloopConsumerAccess.from(consumer),
+                  consumer,
                   pollTimeout,
                   runloopTimeout,
                   commandQueue,
