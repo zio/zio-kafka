@@ -16,9 +16,13 @@ import java.nio.file.Paths
 
 object KafkaTestUtils {
 
-  val trustStoreFile: File = Paths.get(this.getClass.getResource("/truststore/kafka.truststore.jks").toURI).toFile
-
-  val keyStoreFile: File = Paths.get(this.getClass.getResource("/keystore/kafka.keystore.jks").toURI).toFile
+  /**
+   * See https://stackoverflow.com/a/17351116/2431728
+   */
+  val trustStoreFile: File =
+    Paths.get(this.getClass.getClassLoader.getResource("truststore/kafka.truststore.jks").toURI).toFile
+  val keyStoreFile: File =
+    Paths.get(this.getClass.getClassLoader.getResource("/keystore/kafka.keystore.jks").toURI).toFile
 
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(ProducerSettings(_))
