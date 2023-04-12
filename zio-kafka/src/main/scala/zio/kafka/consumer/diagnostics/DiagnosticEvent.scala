@@ -11,7 +11,6 @@ object DiagnosticEvent {
     tpWithData: Set[TopicPartition],
     tpWithoutData: Set[TopicPartition]
   ) extends DiagnosticEvent
-  // TODO remove
   final case class Request(partition: TopicPartition) extends DiagnosticEvent
 
   sealed trait Commit extends DiagnosticEvent
