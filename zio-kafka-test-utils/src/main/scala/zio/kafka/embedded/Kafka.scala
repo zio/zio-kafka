@@ -48,7 +48,7 @@ object Kafka {
 
     ZIO.acquireRelease(
       startKafka(embeddedKafkaConfig).map(EmbeddedKafkaService.apply)
-    )(_.stop().orDie)
+    )(_.stop())
   }
 
   val saslEmbedded: ZLayer[Any, Throwable, Kafka.Sasl] = ZLayer.scoped {
@@ -72,7 +72,7 @@ object Kafka {
 
     ZIO.acquireRelease(
       startKafka(embeddedKafkaConfig).map(k => Kafka.Sasl(EmbeddedKafkaService(k)))
-    )(_.value.stop().orDie)
+    )(_.value.stop())
   }
 
   val sslEmbedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
@@ -105,7 +105,7 @@ object Kafka {
 
     ZIO.acquireRelease(
       startKafka(embeddedKafkaConfig).map(EmbeddedKafkaService.apply)
-    )(_.stop().orDie)
+    )(_.stop())
   }
 
   private def startKafka(

@@ -12,9 +12,9 @@ import zio.kafka.producer._
 import zio.kafka.serde.{ Deserializer, Serde, Serializer }
 
 import java.io.File
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import scala.io.{ Codec, Source }
-import scala.jdk.CollectionConverters.IterableHasAsJava
 
 object KafkaTestUtils {
 
@@ -24,13 +24,13 @@ object KafkaTestUtils {
   private def readResourceFile(file: String, tmpFileName: String, tmpFileSuffix: String): File = {
     val tmpFile = Files.createTempFile(tmpFileName, tmpFileSuffix)
     val source  = Source.fromResource(file)(Codec.UTF8)
-    Files.write(tmpFile, source.getLines.to(Iterable).asJava)
+    Files.write(tmpFile, source.getLines().mkString("\n").getBytes(StandardCharsets.UTF_8))
     source.close()
     tmpFile.toFile
   }
 
-  val trustStoreFile: File = readResourceFile("truststore/kafka.truststore.jks", "truststore", ".jks")
-  val keyStoreFile: File   = readResourceFile("keystore/kafka.keystore.jks", "keystore", ".jks")
+  def trustStoreFile: File = readResourceFile("truststore/kafka.truststore.jks", "truststore", ".jks")
+  def keyStoreFile: File   = readResourceFile("keystore/kafka.keystore.jks", "keystore", ".jks")
 
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(ProducerSettings(_))
