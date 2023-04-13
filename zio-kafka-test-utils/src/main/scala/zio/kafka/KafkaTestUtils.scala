@@ -12,25 +12,25 @@ import zio.kafka.producer._
 import zio.kafka.serde.{ Deserializer, Serde, Serializer }
 
 import java.io.File
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import scala.io.{ Codec, Source }
+import java.nio.file.{ Files, StandardCopyOption }
 
 object KafkaTestUtils {
 
-  /**
-   * See https://mkyong.com/java/java-read-a-file-from-resources-folder/
-   */
-  private def readResourceFile(file: String, tmpFileName: String, tmpFileSuffix: String): File = {
-    val tmpFile = Files.createTempFile(tmpFileName, tmpFileSuffix)
-    val source  = Source.fromResource(file)(Codec.UTF8)
-    Files.write(tmpFile, source.getLines().mkString("\n").getBytes(StandardCharsets.UTF_8))
-    source.close()
-    tmpFile.toFile
-  }
+  private def readResourceFile(file: String, tmpFileName: String, tmpFileSuffix: String): File =
+    try {
+      val tmpFile = Files.createTempFile(tmpFileName, tmpFileSuffix)
+      Files.copy(getClass.getClassLoader.getResourceAsStream(file), tmpFile, StandardCopyOption.REPLACE_EXISTING)
+      tmpFile.toFile
+    } catch {
+      case e: Throwable =>
+        val _ = Unsafe.unsafe { implicit u =>
+          zio.Runtime.default.unsafe.run(ZIO.logErrorCause("Failed to read resource file", Cause.fail(e)))
+        }
+        throw e
+    }
 
-  def trustStoreFile: File = readResourceFile("truststore/kafka.truststore.jks", "truststore", ".jks")
-  def keyStoreFile: File   = readResourceFile("keystore/kafka.keystore.jks", "keystore", ".jks")
+  val trustStoreFile: File = readResourceFile("truststore/kafka.truststore.jks", "truststore", ".jks")
+  val keyStoreFile: File   = readResourceFile("keystore/kafka.keystore.jks", "keystore", ".jks")
 
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(ProducerSettings(_))
