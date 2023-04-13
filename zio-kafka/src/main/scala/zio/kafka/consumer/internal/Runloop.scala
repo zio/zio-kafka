@@ -249,16 +249,14 @@ private[consumer] final class Runloop private (
     val toResume = assignment intersect requestedPartitions
     val toPause  = assignment -- requestedPartitions
 
-    unsafeLog(s"Resuming partitions $toResume, pausing partitions $toPause")
-
     if (toResume.nonEmpty) c.resume(toResume.asJava)
     if (toPause.nonEmpty) c.pause(toPause.asJava)
   }
 
-  private def unsafeLog(msg: String): Unit = {
-    val _ = Unsafe.unsafe { implicit u =>
-      runtime.unsafe.run(ZIO.logInfo(msg))
-    }
+  private def doPoll(c: ByteArrayKafkaConsumer) = {
+    val records = c.poll(pollTimeout)
+
+    if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
   }
 
   private def handlePoll(state: State): Task[State] =
@@ -271,22 +269,12 @@ private[consumer] final class Runloop private (
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-            unsafeLog(s"Previous assigned partitions: $prevAssigned, requested partitions: $requestedPartitions")
-
             resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
-            val records = {
-              val records = c.poll(pollTimeout)
-
-              if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
-            }
-
-            unsafeLog(s"Polled ${records.count()} records")
+            val records = doPoll(c)
 
             val currentAssigned = c.assignment().asScala.toSet
             val newlyAssigned   = currentAssigned -- prevAssigned
-
-            unsafeLog(s"Assigned partitions: $currentAssigned, newly assigned partitions: $newlyAssigned")
 
             for {
               ignoreRecordsForTps <- doSeekForNewPartitions(c, newlyAssigned)
@@ -381,9 +369,9 @@ private[consumer] final class Runloop private (
   private def handleCommand(state: State, cmd: Command): Task[State] =
     cmd match {
       case req: Request =>
-        ZIO.succeed(state.addPendingRequest(req))
+        ZIO.succeed(state.addRequest(req))
       case cmd @ Command.Commit(_, _) =>
-        doCommit(cmd).as(state.addPendingCommit(cmd))
+        doCommit(cmd).as(state.addCommit(cmd))
       case cmd @ Command.ChangeSubscription(subscription, _) =>
         handleChangeSubscription(cmd).flatMap { newAssignedStreams =>
           val newState = state.copy(
@@ -478,17 +466,14 @@ private[consumer] final class Runloop private (
   def run: ZIO[Scope, Throwable, Any] = {
     def logPollStart(state: State): UIO[Unit] =
       ZIO
-        .logInfo(
+        .logTrace(
           s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
         )
 
     ZStream
       .fromQueue(commandQueue)
       .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
-      .takeUntilZIO {
-        case stop: StopRunloop => stop.succeed.as(true)
-        case _                 => ZIO.succeed(false)
-      }
+      .takeWhile(_ != StopRunloop)
       .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
         for {
           _            <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
@@ -503,7 +488,6 @@ private[consumer] final class Runloop private (
       }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitions.offer(Take.failCause(cause)))
-      .onInterrupt(ZIO.logWarning("== == == == Runloop interrupted == == == =="))
   }
 }
 
@@ -564,16 +548,8 @@ private[consumer] object Runloop {
     sealed trait Control extends Command
 
     case object Poll           extends Control
+    case object StopRunloop    extends Control
     case object StopAllStreams extends Control
-    final case class StopRunloop(cont: Promise[Nothing, Unit]) extends Control {
-      def await: IO[Nothing, Unit] = cont.await
-
-      @inline def succeed: UIO[Boolean] = cont.succeed(())
-    }
-    object StopRunloop {
-      def make: ZIO[Scope, Nothing, StopRunloop] =
-        Promise.make[Nothing, Unit].map(StopRunloop(_))
-    }
 
     final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends Command {
       @inline def isDone: UIO[Boolean]    = cont.isDone
@@ -631,18 +607,14 @@ private[consumer] object Runloop {
 
       // Run the entire loop on the a dedicated thread to avoid executor shifts
       executor <- RunloopExecutor.newInstance
-      fiber <- ZIO
-                 .onExecutor(executor)(runloop.run)
-                 .onInterrupt(ZIO.logWarning("Runloop interrupted -- 0"))
-                 .fork
-                 .onInterrupt(ZIO.logWarning("Runloop interrupted -- 1"))
+      fib      <- ZIO.onExecutor(executor)(runloop.run).forkScoped
 
       _ <- ZIO.addFinalizer(
-             ZIO.logWarning("Shutting down Runloop") *>
+             ZIO.logTrace("Shutting down Runloop") *>
                commandQueue.offer(StopAllStreams) *>
-               StopRunloop.make.flatMap(stop => commandQueue.offer(stop) *> stop.await) *>
-               fiber.interrupt <*
-               ZIO.logWarning("Shut down Runloop")
+               commandQueue.offer(StopRunloop) *>
+               fib.join.orDie <*
+               ZIO.logDebug("Shut down Runloop")
            )
     } yield runloop
 }
@@ -653,8 +625,8 @@ private[internal] final case class State(
   assignedStreams: Chunk[PartitionStreamControl],
   subscription: Option[Subscription]
 ) {
-  def addPendingCommit(c: Commit): State   = copy(pendingCommits = pendingCommits :+ c)
-  def addPendingRequest(r: Request): State = copy(pendingRequests = pendingRequests :+ r)
+  def addCommit(c: Commit): State   = copy(pendingCommits = pendingCommits :+ c)
+  def addRequest(r: Request): State = copy(pendingRequests = pendingRequests :+ r)
 
   def isSubscribed: Boolean = subscription.isDefined
 
