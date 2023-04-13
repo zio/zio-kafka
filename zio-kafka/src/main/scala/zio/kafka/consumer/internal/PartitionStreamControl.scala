@@ -15,6 +15,8 @@ private[internal] final class PartitionStreamControl private (
   completedPromise: Promise[Nothing, Unit]
 ) {
 
+  private var pollResumedHistory: PollHistory = PollHistory.Empty
+
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),
     LogAnnotation("partition", tp.partition().toString)
@@ -45,6 +47,20 @@ private[internal] final class PartitionStreamControl private (
 
   val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
     (tp, stream)
+
+  def optimisticResume: Boolean = pollResumedHistory.optimisticResume
+
+  /**
+   * Add a poll event to the poll history.
+   *
+   * Warning: this method is not multi-thread safe.
+   *
+   * @param resumed
+   *   true when this stream was resumed before the poll, false when it was paused
+   */
+  def addPollHistory(resumed: Boolean): Unit =
+    pollResumedHistory = pollResumedHistory.addPollHistory(resumed)
+
 }
 
 private[internal] object PartitionStreamControl {

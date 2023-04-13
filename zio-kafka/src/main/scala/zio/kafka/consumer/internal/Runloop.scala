@@ -138,6 +138,7 @@ private[consumer] final class Runloop private (
   /**
    * Does all needed to end revoked partitions:
    *   1. Complete the revoked assigned streams 2. Remove from the list of pending requests
+   *
    * @return
    *   New pending requests, new active assigned streams
    */
@@ -233,17 +234,25 @@ private[consumer] final class Runloop private (
         ZIO.succeed(Set.empty)
     }
 
-  // Pause partitions for which there is no demand and resume those for which there is now demand
+  /**
+   * Pause partitions for which there is no demand and resume those for which there is now demand. Optimistically resume
+   * partitions that are likely to need more data in the next poll.
+   */
   private def resumeAndPausePartitions(
     c: ByteArrayKafkaConsumer,
-    assignment: Set[TopicPartition],
-    requestedPartitions: Set[TopicPartition]
+    requestedPartitions: Set[TopicPartition],
+    streams: Chunk[PartitionStreamControl]
   ): Unit = {
-    val toResume = assignment intersect requestedPartitions
-    val toPause  = assignment -- requestedPartitions
-
-    if (toResume.nonEmpty) c.resume(toResume.asJava)
-    if (toPause.nonEmpty) c.pause(toPause.asJava)
+    val resumeTps = new java.util.ArrayList[TopicPartition](streams.size)
+    val pauseTps  = new java.util.ArrayList[TopicPartition](streams.size)
+    streams.foreach { stream =>
+      val tp       = stream.tp
+      val toResume = requestedPartitions.contains(tp) || stream.optimisticResume
+      if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
+      stream.addPollHistory(toResume)
+    }
+    if (!resumeTps.isEmpty) c.resume(resumeTps)
+    if (!pauseTps.isEmpty) c.pause(pauseTps)
   }
 
   private def doPoll(c: ByteArrayKafkaConsumer): ConsumerRecords[Array[Byte], Array[Byte]] = {
@@ -266,7 +275,7 @@ private[consumer] final class Runloop private (
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-            resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
+            resumeAndPausePartitions(c, requestedPartitions, state.assignedStreams)
 
             val records = doPoll(c)
 
