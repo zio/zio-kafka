@@ -66,6 +66,7 @@ lazy val root = project
     zioKafkaTestUtils,
     zioKafkaTest,
     zioKafkaBench,
+    zioKafkaExample,
     docs
   )
 
@@ -163,11 +164,11 @@ lazy val zioKafkaExample =
     .settings(run / fork := false)
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"       %% "zio-logging-slf4j2" % "2.1.12",
-        "ch.qos.logback" % "logback-classic"    % "1.4.6"
+        "dev.zio"       %% "zio"             % "2.0.10",
+        "dev.zio"       %% "zio-kafka"       % "2.1.3",
+        "ch.qos.logback" % "logback-classic" % "1.4.6"
       )
     )
-    .dependsOn(zioKafka, zioKafkaTestUtils)
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
