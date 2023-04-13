@@ -1,12 +1,12 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp }
-import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition }
+import org.apache.kafka.clients.consumer.{ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp}
+import org.apache.kafka.common.{Metric, MetricName, PartitionInfo, TopicPartition}
 import zio._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
-import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
-import zio.kafka.serde.{ Deserializer, Serde }
+import zio.kafka.consumer.internal.{ConsumerAccess, Runloop}
+import zio.kafka.serde.{Deserializer, Serde}
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
@@ -223,7 +223,7 @@ object Consumer {
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
     ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
-      def extendSubscriptions: Task[Unit] = subscriptions.updateZIO { existingSubscriptions =>
+      def extendSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
         val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
         Subscription.unionAll(newSubscriptions) match {
           case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
@@ -233,7 +233,7 @@ object Consumer {
         }
       }.uninterruptible
 
-      def reduceSubscriptions: Task[Unit] = subscriptions.updateZIO { existingSubscriptions =>
+      def reduceSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
         val newSubscriptions = NonEmptyChunk.fromIterableOption(existingSubscriptions - subscription)
         val newUnion         = newSubscriptions.flatMap(Subscription.unionAll)
 
