@@ -52,7 +52,7 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
         groupId = Some(randomThing("client")),
         runloopTimeout =
           1.hour // Absurdly high timeout to avoid the runloop from being interrupted while we're benchmarking other stuff
-      )
+      ).map(_.withMaxPartitionQueueSize(8192))
     )
 
   override protected def bootstrap: ULayer[Env] =
