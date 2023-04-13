@@ -52,9 +52,7 @@ private[consumer] object ConsumerAccess {
                       )
                     }
                   } { consumer =>
-                    ZIO.logError("Closing consumer") *>
-                      ZIO.blocking(access.withPermit(ZIO.succeed(consumer.close(settings.closeTimeout)))) <*
-                      ZIO.logError("Consumer closed")
+                    ZIO.blocking(access.withPermit(ZIO.succeed(consumer.close(settings.closeTimeout))))
                   }
     } yield new ConsumerAccess(consumer, access)
 }
