@@ -98,7 +98,7 @@ object ConsumerSettings {
     new ConsumerSettings(
       bootstrapServers = bootstrapServers,
       properties = Map.empty,
-      closeTimeout = 1.seconds,
+      closeTimeout = 30.seconds,
       pollTimeout = 50.millis,
       perPartitionChunkPrefetch = 2,
       offsetRetrieval = OffsetRetrieval.Auto(),
