@@ -257,11 +257,7 @@ object Consumer {
           .flattenChunks
           .map {
             _.collect {
-              case (tp, partition) if Subscription.subscriptionMatches(subscription, tp) =>
-                val partitionStream =
-                  if (settings.perPartitionChunkPrefetch <= 0) partition
-                  else partition.bufferChunks(settings.perPartitionChunkPrefetch)
-
+              case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
                 val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
                   if (onlyByteArraySerdes) partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
                   else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
@@ -316,7 +312,7 @@ object Consumer {
       for {
         r <- ZIO.environment[R & R1]
         _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
-               .flatMapPar(Int.MaxValue, bufferSize = settings.perPartitionChunkPrefetch) { case (_, partitionStream) =>
+               .flatMapPar(Int.MaxValue, bufferSize = 2) { case (_, partitionStream) =>
                  partitionStream.mapChunksZIO(_.mapZIO((c: CommittableRecord[K, V]) => f(c.record).as(c.offset)))
                }
                .provideEnvironment(r)

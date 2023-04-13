@@ -7,6 +7,7 @@ import zio._
 import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
+import zio.kafka.consumer.internal.OptimisticResume._
 import zio.kafka.consumer.internal.Runloop.Command.{ Commit, Request, StopAllStreams, StopRunloop }
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.{ CommittableRecord, RebalanceConsumer, RebalanceListener, Subscription }
@@ -145,6 +146,7 @@ private[consumer] final class Runloop private (
   /**
    * Does all needed to end revoked partitions:
    *   1. Complete the revoked assigned streams 2. Remove from the list of pending requests
+   *
    * @return
    *   New pending requests, new active assigned streams
    */
@@ -240,17 +242,34 @@ private[consumer] final class Runloop private (
         ZIO.succeed(Set.empty)
     }
 
-  // Pause partitions for which there is no demand and resume those for which there is now demand
+  /**
+   * Pause partitions for which there is no demand and resume those for which there is now demand. Optimistically resume
+   * partitions that are likely to need more data in the next poll.
+   */
   private def resumeAndPausePartitions(
     c: ByteArrayKafkaConsumer,
-    assignment: Set[TopicPartition],
-    requestedPartitions: Set[TopicPartition]
+    requestedPartitions: Set[TopicPartition],
+    streams: Chunk[PartitionStreamControl]
   ): Unit = {
-    val toResume = assignment intersect requestedPartitions
-    val toPause  = assignment -- requestedPartitions
+    val resumeTps = new java.util.ArrayList[TopicPartition](streams.size)
+    val pauseTps  = new java.util.ArrayList[TopicPartition](streams.size)
+    streams.foreach { stream =>
+      val pollHistory = stream.pollHistory()
+      val tp          = stream.tp
+      val toResume = requestedPartitions.contains(tp) ||
+        pollHistory.optimisticResume
 
-    if (toResume.nonEmpty) c.resume(toResume.asJava)
-    if (toPause.nonEmpty) c.pause(toPause.asJava)
+      if (toResume) {
+        if ((pollHistory & 1) == 0) resumeTps.add(tp)
+      } else {
+        if ((pollHistory & 1) == 1) pauseTps.add(tp)
+      }
+
+      stream.addPollHistory(toResume)
+    }
+
+    if (!resumeTps.isEmpty) c.resume(resumeTps)
+    if (!pauseTps.isEmpty) c.pause(pauseTps)
   }
 
   private def doPoll(c: ByteArrayKafkaConsumer) = {
@@ -269,7 +288,7 @@ private[consumer] final class Runloop private (
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-            resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
+            resumeAndPausePartitions(c, requestedPartitions, state.assignedStreams)
 
             val records = doPoll(c)
 

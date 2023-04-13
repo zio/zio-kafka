@@ -2,6 +2,7 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.internal.OptimisticResume._
 import zio.kafka.consumer.internal.Runloop.Command.Request
 import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, Command }
 import zio.stream.{ Take, ZStream }
@@ -14,6 +15,8 @@ private[internal] final class PartitionStreamControl private (
   interruptPromise: Promise[Throwable, Unit],
   completedPromise: Promise[Nothing, Unit]
 ) {
+
+  private var pollResumedHistory: PollHistory = 0
 
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),
@@ -49,6 +52,20 @@ private[internal] final class PartitionStreamControl private (
 
   val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
     (tp, stream)
+
+  def pollHistory(): PollHistory = pollResumedHistory
+
+  /**
+   * Add a poll event to the poll history.
+   *
+   * Warning: this method is not multi-thread safe.
+   *
+   * @param resumed
+   *   true when this stream was resumed before the poll, false when it was paused
+   */
+  def addPollHistory(resumed: Boolean): Unit =
+    pollResumedHistory = pollResumedHistory.addPollHistory(resumed)
+
 }
 
 private[internal] object PartitionStreamControl {

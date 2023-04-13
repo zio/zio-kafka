@@ -10,7 +10,6 @@ import zio.kafka.security.KafkaCredentialStore
  * @param properties
  * @param closeTimeout
  * @param pollTimeout
- * @param perPartitionChunkPrefetch
  * @param offsetRetrieval
  * @param rebalanceListener
  * @param restartStreamOnRebalancing
@@ -25,7 +24,6 @@ case class ConsumerSettings(
   properties: Map[String, AnyRef],
   closeTimeout: Duration,
   pollTimeout: Duration,
-  perPartitionChunkPrefetch: Int,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
@@ -63,9 +61,6 @@ case class ConsumerSettings(
   def withOffsetRetrieval(retrieval: OffsetRetrieval): ConsumerSettings =
     copy(offsetRetrieval = retrieval)
 
-  def withPerPartitionChunkPrefetch(prefetch: Int): ConsumerSettings =
-    copy(perPartitionChunkPrefetch = prefetch)
-
   def withPollTimeout(timeout: Duration): ConsumerSettings =
     copy(pollTimeout = timeout)
 
@@ -100,7 +95,6 @@ object ConsumerSettings {
       properties = Map.empty,
       closeTimeout = 30.seconds,
       pollTimeout = 50.millis,
-      perPartitionChunkPrefetch = 2,
       offsetRetrieval = OffsetRetrieval.Auto(),
       runloopTimeout = defaultRunloopTimeout
     )
