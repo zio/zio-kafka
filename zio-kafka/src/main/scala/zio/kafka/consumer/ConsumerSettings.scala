@@ -88,6 +88,9 @@ case class ConsumerSettings(
 
   def withRunloopTimeout(timeout: Duration): ConsumerSettings =
     copy(runloopTimeout = timeout)
+
+  def withMaxPartitionQueueSize(maxPartitionQueueSize: Int): ConsumerSettings =
+    copy(maxPartitionQueueSize = maxPartitionQueueSize)
 }
 
 object ConsumerSettings {
