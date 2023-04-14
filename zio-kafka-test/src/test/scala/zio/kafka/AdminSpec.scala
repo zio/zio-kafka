@@ -26,7 +26,7 @@ import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternF
 import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
-import zio.kafka.{ KafkaTestUtils, ZIOKafkaSpec }
+import zio.kafka.{ KafkaRandom, KafkaTestUtils }
 import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._
@@ -35,14 +35,14 @@ import zio.test._
 import java.util.UUID
 import java.util.concurrent.TimeoutException
 
-object AdminSpec extends ZIOKafkaSpec {
+object AdminSpec extends ZIOSpecDefault with KafkaRandom {
 
   override val kafkaPrefix: String = "adminspec"
 
   private def listTopicsFiltered(client: AdminClient): ZIO[Any, Throwable, Map[String, AdminClient.TopicListing]] =
     client.listTopics().map(_.filter { case (key, _) => key.startsWith("adminspec-") })
 
-  override def spec: Spec[TestEnvironment with Kafka with Scope, Throwable] =
+  override def spec: Spec[TestEnvironment with Scope, Throwable] =
     suite("client admin test")(
       test("create, list, delete single topic") {
         KafkaTestUtils.withAdmin { client =>
@@ -636,7 +636,7 @@ object AdminSpec extends ZIOKafkaSpec {
             assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
         }
       }
-    ) @@ withLiveClock @@ sequential @@ TestAspect.timeout(180.seconds)
+    ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ sequential @@ TestAspect.timeout(180.seconds)
 
   private def consumeNoop(
     topicName: String,

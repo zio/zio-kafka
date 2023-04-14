@@ -2,11 +2,9 @@ package zio.kafka
 
 import zio._
 
-trait ZIOKafkaSpec extends ZIOSpecWithKafka with KafkaRandom {
+object TestLogger {
 
-  val logLevel = LogLevel.Info
-
-  val logger: ZLogger[String, Unit] =
+  def logger(logLevel: LogLevel = LogLevel.Info): ZLogger[String, Unit] =
     new ZLogger[String, Unit] {
       override def apply(
         trace: Trace,

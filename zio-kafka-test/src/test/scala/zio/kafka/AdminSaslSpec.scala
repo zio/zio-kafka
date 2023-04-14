@@ -1,27 +1,20 @@
 package zio.kafka
 
-import zio.Scope
+import zio.{ Scope, _ }
+import zio.kafka.admin.acl._
+import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
+import zio.kafka.embedded.Kafka
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio._
-import zio.kafka.admin.acl.AclBindingFilter
-import zio.kafka.admin.resource.ResourcePatternFilter
-import zio.kafka.admin.acl.AccessControlEntryFilter
-import zio.kafka.admin.acl.AclBinding
-import zio.kafka.admin.resource.ResourcePattern
-import zio.kafka.admin.acl.AccessControlEntry
-import zio.kafka.admin.acl.AclPermissionType
-import zio.kafka.admin.acl.AclOperation
-import zio.kafka.admin.resource.ResourceType
-import zio.kafka.admin.resource.PatternType
+
 import java.util.concurrent.TimeoutException
 
-object AdminSaslSpec extends ZIOSpecWithSaslKafka {
+object AdminSaslSpec extends ZIOSpecDefault with KafkaRandom {
 
   override def kafkaPrefix: String = "adminsaslspec"
 
-  override def spec: Spec[Environment with TestEnvironment with Scope, Any] =
+  override def spec: Spec[TestEnvironment with Scope, Any] =
     suite("client sasl admin test")(
       test("ACLs") {
         KafkaTestUtils.withSaslAdmin() { client =>
@@ -59,6 +52,6 @@ object AdminSaslSpec extends ZIOSpecWithSaslKafka {
             assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
         }
       }
-    ) @@ withLiveClock @@ sequential
+    ).provideSomeShared[Scope](Kafka.saslEmbedded) @@ withLiveClock @@ sequential
 
 }
