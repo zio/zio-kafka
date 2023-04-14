@@ -2,7 +2,7 @@ package zio.kafka.embedded
 
 import _root_.kafka.server.KafkaConfig
 import io.github.embeddedkafka.EmbeddedKafkaConfig.defaultKafkaPort
-import io.github.embeddedkafka.{EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig}
+import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import zio._
 import zio.kafka.KafkaTestUtils
@@ -33,6 +33,8 @@ object Kafka {
   val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
     def embeddedKafkaConfig: EmbeddedKafkaConfig =
       EmbeddedKafkaConfig(
+        kafkaPort = 0,
+        zooKeeperPort = 0,
         customBrokerProperties = Map(
           "group.min.session.timeout.ms"     -> "500",
           "group.initial.rebalance.delay.ms" -> "0",
@@ -49,6 +51,8 @@ object Kafka {
   val saslEmbedded: ZLayer[Any, Throwable, Kafka.Sasl] = ZLayer.scoped {
     def embeddedKafkaConfig: EmbeddedKafkaConfig =
       EmbeddedKafkaConfig(
+        kafkaPort = 0,
+        zooKeeperPort = 0,
         customBrokerProperties = Map(
           "group.min.session.timeout.ms"         -> "500",
           "group.initial.rebalance.delay.ms"     -> "0",
@@ -73,6 +77,8 @@ object Kafka {
       val listener = s"${SecurityProtocol.SSL}://localhost:$defaultKafkaPort"
 
       EmbeddedKafkaConfig(
+        kafkaPort = 0,
+        zooKeeperPort = 0,
         customBrokerProperties = Map(
           "group.min.session.timeout.ms"          -> "500",
           "group.initial.rebalance.delay.ms"      -> "0",

@@ -5,13 +5,12 @@
         </encoder>
     </appender>
 
-    <logger name="org.apache.kafka" level="WARN" />
-    <logger name="state.change.logger" level="WARN" />
+    <logger name="org.apache.kafka" level="ERROR" />
+    <logger name="org.apache.zookeeper" level="ERROR"/>
+    <logger name="state.change.logger" level="ERROR" />
     <logger name="org.apache.kafka.common.utils.AppInfoParser" level="ERROR"/>
-
-    <logger name="kafka" level="WARN" />
-
-    <logger name="org.apache.zookeeper" level="ERROR" />
+    <logger name="com.yammer.metrics" level="ERROR"/>
+    <logger name="kafka" level="ERROR" />
 
     <root level="INFO">
         <appender-ref ref="STDOUT" />
