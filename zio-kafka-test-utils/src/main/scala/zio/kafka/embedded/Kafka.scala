@@ -1,12 +1,12 @@
 package zio.kafka.embedded
 
 import _root_.kafka.server.KafkaConfig
-import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
+import io.github.embeddedkafka.EmbeddedKafkaConfig.defaultKafkaPort
+import io.github.embeddedkafka.{EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import zio._
 import zio.kafka.KafkaTestUtils
 
-import java.util.concurrent.atomic.AtomicInteger
 import scala.util.control.NonFatal
 
 trait Kafka {
@@ -17,9 +17,6 @@ trait Kafka {
 final case class EmbeddedKafkaStartException(msg: String, cause: Throwable = null) extends RuntimeException(msg, cause)
 
 object Kafka {
-
-  private val kafkaPort: AtomicInteger     = new AtomicInteger(6000)
-  private val zooKeeperPort: AtomicInteger = new AtomicInteger(7000)
 
   final case class Sasl(value: Kafka) extends AnyVal
 
@@ -34,10 +31,8 @@ object Kafka {
   }
 
   val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
-    def embeddedKafkaConfig(kafkaPort: Int, zooKeeperPort: Int): EmbeddedKafkaConfig =
+    def embeddedKafkaConfig: EmbeddedKafkaConfig =
       EmbeddedKafkaConfig(
-        kafkaPort = kafkaPort,
-        zooKeeperPort = zooKeeperPort,
         customBrokerProperties = Map(
           "group.min.session.timeout.ms"     -> "500",
           "group.initial.rebalance.delay.ms" -> "0",
@@ -52,10 +47,8 @@ object Kafka {
   }
 
   val saslEmbedded: ZLayer[Any, Throwable, Kafka.Sasl] = ZLayer.scoped {
-    def embeddedKafkaConfig(kafkaPort: Int, zookeeperPort: Int): EmbeddedKafkaConfig =
+    def embeddedKafkaConfig: EmbeddedKafkaConfig =
       EmbeddedKafkaConfig(
-        zooKeeperPort = zookeeperPort,
-        kafkaPort = kafkaPort,
         customBrokerProperties = Map(
           "group.min.session.timeout.ms"         -> "500",
           "group.initial.rebalance.delay.ms"     -> "0",
@@ -63,8 +56,8 @@ object Kafka {
           "sasl.enabled.mechanisms"              -> "PLAIN",
           "sasl.mechanism.inter.broker.protocol" -> "PLAIN",
           "inter.broker.listener.name"           -> "SASL_PLAINTEXT",
-          "listeners"                            -> s"SASL_PLAINTEXT://localhost:$kafkaPort",
-          "advertised.listeners"                 -> s"SASL_PLAINTEXT://localhost:$kafkaPort",
+          "listeners"                            -> s"SASL_PLAINTEXT://localhost:$defaultKafkaPort",
+          "advertised.listeners"                 -> s"SASL_PLAINTEXT://localhost:$defaultKafkaPort",
           "super.users"                          -> "User:admin",
           "listener.name.sasl_plaintext.plain.sasl.jaas.config" -> """org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_kafkabroker1="kafkabroker1-secret";"""
         )
@@ -76,12 +69,10 @@ object Kafka {
   }
 
   val sslEmbedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
-    def embeddedKafkaConfig(kafkaPort: Int, zookeeperPort: Int): EmbeddedKafkaConfig = {
-      val listener = s"${SecurityProtocol.SSL}://localhost:$kafkaPort"
+    def embeddedKafkaConfig: EmbeddedKafkaConfig = {
+      val listener = s"${SecurityProtocol.SSL}://localhost:$defaultKafkaPort"
 
       EmbeddedKafkaConfig(
-        zooKeeperPort = zookeeperPort,
-        kafkaPort = kafkaPort,
         customBrokerProperties = Map(
           "group.min.session.timeout.ms"          -> "500",
           "group.initial.rebalance.delay.ms"      -> "0",
@@ -98,7 +89,8 @@ object Kafka {
           "ssl.key.password"                      -> "123456",
           KafkaConfig.InterBrokerListenerNameProp -> "SSL",
           KafkaConfig.ListenersProp               -> listener,
-          KafkaConfig.AdvertisedListenersProp     -> listener
+          KafkaConfig.AdvertisedListenersProp     -> listener,
+          KafkaConfig.ZkConnectionTimeoutMsProp   -> s"${30.second.toMillis}"
         )
       )
     }
@@ -109,11 +101,10 @@ object Kafka {
   }
 
   private def startKafka(
-    makeConfig: (Int, Int) => EmbeddedKafkaConfig
+    makeConfig: => EmbeddedKafkaConfig
   ): Task[EmbeddedK] =
     ZIO.attemptBlocking {
-      try
-        EmbeddedKafka.start()(makeConfig(kafkaPort.getAndIncrement(), zooKeeperPort.getAndIncrement()))
+      try EmbeddedKafka.start()(makeConfig)
       catch {
         case NonFatal(e) => throw EmbeddedKafkaStartException("Failed to start embedded Kafka", e)
       }
