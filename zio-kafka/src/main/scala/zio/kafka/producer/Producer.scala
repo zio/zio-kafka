@@ -8,7 +8,6 @@ import zio.kafka.serde.Serializer
 import zio.stream.{ ZPipeline, ZStream }
 
 import java.util.concurrent.atomic.AtomicLong
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 trait Producer {
@@ -171,13 +170,14 @@ object Producer {
                 rec,
                 (metadata: RecordMetadata, err: Exception) =>
                   Unsafe.unsafe { implicit u =>
-                    (if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
-                     else {
-                       res(idx) = metadata
-                       if (count.incrementAndGet == length) {
-                         runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
-                       }
-                     }): @nowarn("msg=discarded non-Unit value")
+                    if (err != null) {
+                      runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
+                    } else {
+                      res(idx) = metadata
+                      if (count.incrementAndGet == length) {
+                        runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
+                      }
+                    }
                     ()
                   }
               )
