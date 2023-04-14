@@ -3,8 +3,9 @@ package zio.kafka.bench
 import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.openjdk.jmh.annotations._
-import zio.kafka.KafkaTestUtils.{ consumer, produceMany, producer }
+import zio.kafka.KafkaTestUtils.{ consumerSettings, produceMany, producer }
 import zio.kafka.bench.ZioBenchmark.randomThing
+import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.{ Consumer, Offset, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
@@ -31,6 +32,14 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
     _ <- produceMany(topic1, kvs)
   } yield ()
 
+  private val env: ZLayer[Kafka, Throwable, Consumer] = (ZLayer.fromZIO(
+    consumerSettings(
+      randomThing("client"),
+      Some(randomThing("group")),
+      properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
+    ).map(_.withMaxPartitionQueueSize(8192))
+  ) ++ ZLayer.succeed(Diagnostics.NoOp)) >>> Consumer.live
+
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   def throughput(): Any = runZIO {
@@ -42,13 +51,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                counter.updateAndGet(_ + 1).flatMap(count => Consumer.stopConsumption.when(count == nrMessages))
              }
              .runDrain
-             .provideSome[Kafka](
-               consumer(
-                 randomThing("client"),
-                 Some(randomThing("group")),
-                 properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
-               )
-             )
+             .provideSome[Kafka](env)
     } yield ()
   }
 
@@ -67,13 +70,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                .mapZIO(_.commit)
                .takeUntilZIO(_ => counter.get.map(_ >= nrMessages))
                .runDrain
-               .provideSome[Kafka](
-                 consumer(
-                   randomThing("client"),
-                   Some(randomThing("group")),
-                   properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
-                 )
-               )
+               .provideSome[Kafka](env)
            }
     } yield ()
   }
