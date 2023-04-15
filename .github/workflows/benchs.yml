@@ -79,4 +79,4 @@ jobs:
           comment-on-alert: true
           fail-on-alert: true
           # Mention these maintainers in the commit comment
-          alert-comment-cc-users: '@iravid,@svroonland,@guizmaii'
+          alert-comment-cc-users: '@svroonland,@guizmaii,@erikvanoosten'
