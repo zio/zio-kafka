@@ -8,7 +8,6 @@ import zio.kafka.serde.Serializer
 import zio.stream.{ ZPipeline, ZStream }
 
 import java.util.concurrent.atomic.AtomicLong
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 trait Producer {
@@ -171,14 +170,20 @@ object Producer {
                 rec,
                 (metadata: RecordMetadata, err: Exception) =>
                   Unsafe.unsafe { implicit u =>
-                    (if (err != null) runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure(): Unit
-                     else {
-                       res(idx) = metadata
-                       if (count.incrementAndGet == length) {
-                         runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure(): Unit
-                       }
-                     }): @nowarn("msg=discarded non-Unit value")
-                    ()
+                    exec {
+                      if (err != null) {
+                        exec {
+                          runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
+                        }
+                      } else {
+                        res(idx) = metadata
+                        if (count.incrementAndGet == length) {
+                          exec {
+                            runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure()
+                          }
+                        }
+                      }
+                    }
                   }
               )
             }
@@ -350,4 +355,10 @@ object Producer {
    */
   val metrics: RIO[Producer, Map[MetricName, Metric]] =
     ZIO.serviceWithZIO(_.metrics)
+
+  /** Used to prevent warnings about not using the result of an expression. */
+  @inline private def exec[A](f: => A): Unit = {
+    val _ = f
+  }
+
 }
