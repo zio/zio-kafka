@@ -133,7 +133,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           topic  <- randomTopic
 
           _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-          _ <- ZIO.foreach(1 to nrPartitions) { i =>
+          _ <- ZIO.foreachDiscard(1 to nrPartitions) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
           record <- Consumer
@@ -227,7 +227,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           client <- randomClient
 
           _ <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-          _ <- ZIO.foreach(1 to nrMessages) { i =>
+          _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
 
@@ -354,7 +354,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
           client2 <- randomClient
 
           _ <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-          _ <- ZIO.foreach(1 to nrMessages) { i =>
+          _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
 
@@ -398,7 +398,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                 client2 <- randomClient
 
                 _ <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
-                _ <- ZIO.foreach(1 to nrMessages) { i =>
+                _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
                        produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                      }
 
@@ -512,13 +512,13 @@ object ConsumerSpec extends ZIOKafkaSpec {
               ) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
           _ <- fib.interrupt
           _ <- produceOne(topic, "key-new", "msg-new")
-          newMessage <- (Consumer
+          newMessage <- Consumer
                           .plainStream(subscription, Serde.string, Serde.string)
                           .take(1)
                           .map(r => (r.record.key(), r.record.value()))
                           .run(ZSink.collectAll[(String, String)])
                           .map(_.head)
-                          .orDie)
+                          .orDie
                           .provideSomeLayer[Kafka](consumer(client, Some(group)))
           consumedMessages <- messagesReceived.get
         } yield assert(consumedMessages)(contains(newMessage).negate)
@@ -542,7 +542,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
         val partitions   = (0 until nrPartitions).toList
         val waitTimeout  = 15.seconds
 
-        final case class ValidAssignmentsNotSeen(st: String) extends RuntimeException(s"Valid assignment not seen: $st")
+        final case class ValidAssignmentsNotSeen(instances: Set[Int], st: String)
+            extends RuntimeException(s"Valid assignment not seen for instances $instances: $st")
 
         def run(instance: Int, topic: String, allAssignments: Ref[Map[Int, List[Int]]]) =
           ZIO.logAnnotate("consumer", instance.toString) {
@@ -551,28 +552,37 @@ object ConsumerSpec extends ZIOKafkaSpec {
               .partitionedStream(subscription, Serde.string, Serde.string)
               .flatMapPar(Int.MaxValue) { case (tp, partStream) =>
                 val registerAssignment = ZStream.logInfo(s"Registering partition ${tp.partition()}") *>
-                  ZStream.fromZIO(allAssignments.update { current =>
-                    current.get(instance) match {
-                      case Some(currentList) => current.updated(instance, currentList :+ tp.partition())
-                      case None              => current.updated(instance, List(tp.partition()))
+                  ZStream.fromZIO {
+                    allAssignments.update { current =>
+                      current.get(instance) match {
+                        case Some(currentList) => current.updated(instance, currentList :+ tp.partition())
+                        case None              => current.updated(instance, List(tp.partition()))
+                      }
                     }
-                  })
+                  }
                 val deregisterAssignment = ZStream.logInfo(s"Deregistering partition ${tp.partition()}") *>
-                  ZStream.fromZIO(allAssignments.update({ current =>
-                    current.get(instance) match {
-                      case Some(currentList) =>
-                        val idx = currentList.indexOf(tp.partition())
-                        if (idx != -1) current.updated(instance, currentList.patch(idx, Nil, 1))
-                        else current
-                      case None => current
+                  ZStream.finalizer {
+                    allAssignments.update { current =>
+                      current.get(instance) match {
+                        case Some(currentList) =>
+                          val idx = currentList.indexOf(tp.partition())
+                          if (idx != -1) current.updated(instance, currentList.patch(idx, Nil, 1))
+                          else current
+                        case None => current
+                      }
                     }
-                  }))
+                  }
 
-                registerAssignment.drain ++ partStream ++ deregisterAssignment.drain
+                (registerAssignment *> deregisterAssignment *> partStream).drain
               }
               .runDrain
           }
 
+        // Check every 30 millis (for at most 15 seconds) that the following condition holds:
+        // - all instances are assigned to a partition,
+        // - each instance has a partition assigned,
+        // - all partitions are assigned.
+        // Fail when the condition is not observed.
         def checkAssignments(allAssignments: Ref[Map[Int, List[Int]]])(instances: Set[Int]) =
           ZStream
             .repeatZIOWithSchedule(allAssignments.get, Schedule.spaced(30.millis))
@@ -583,7 +593,14 @@ object ConsumerSpec extends ZIOKafkaSpec {
             }
             .runHead
             .timeout(waitTimeout)
-            .someOrElseZIO(allAssignments.get.map(as => ValidAssignmentsNotSeen(as.toString)).flip)
+            .someOrElseZIO(allAssignments.get.map(as => ValidAssignmentsNotSeen(instances, as.toString)).flip)
+
+        def createConsumer(client: String, group: String): ZLayer[Kafka, Throwable, Consumer] =
+          consumer(
+            client,
+            Some(group),
+            offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
+          )
 
         for {
           // Produce messages on several partitions
@@ -597,33 +614,15 @@ object ConsumerSpec extends ZIOKafkaSpec {
           allAssignments <- Ref.make(Map.empty[Int, List[Int]])
           check = checkAssignments(allAssignments)(_)
           fiber0 <- run(0, topic, allAssignments)
-                      .provideSomeLayer[Kafka](
-                        consumer(
-                          client1,
-                          Some(group),
-                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
-                        )
-                      )
+                      .provideSomeLayer[Kafka](createConsumer(client1, group))
                       .fork
           _ <- check(Set(0))
           fiber1 <- run(1, topic, allAssignments)
-                      .provideSomeLayer[Kafka](
-                        consumer(
-                          client2,
-                          Some(group),
-                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
-                        )
-                      )
+                      .provideSomeLayer[Kafka](createConsumer(client2, group))
                       .fork
           _ <- check(Set(0, 1))
           fiber2 <- run(2, topic, allAssignments)
-                      .provideSomeLayer[Kafka](
-                        consumer(
-                          client3,
-                          Some(group),
-                          offsetRetrieval = OffsetRetrieval.Auto(reset = AutoOffsetStrategy.Earliest)
-                        )
-                      )
+                      .provideSomeLayer[Kafka](createConsumer(client3, group))
                       .fork
           _ <- check(Set(0, 1, 2))
           _ <- fiber2.interrupt
@@ -896,7 +895,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                 for {
                   consumedMessagesCounter <- Ref.make(0)
                   _ <- consumedMessagesCounter.get
-                         .flatMap(consumed => ZIO.logInfo(s"Consumed so far: ${consumed}"))
+                         .flatMap(consumed => ZIO.logInfo(s"Consumed so far: $consumed"))
                          .repeat(Schedule.fixed(1.second))
                          .fork
                   streamCompleteOnRebalanceRef <- Ref.make[Option[Promise[Nothing, Unit]]](None)
@@ -952,7 +951,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                           rebalanceListener = transactionalRebalanceListener(streamCompleteOnRebalanceRef)
                         )
                       )
-                      .tapError(e => ZIO.logError(s"Error: ${e}")) <* ZIO.logInfo("Done")
+                      .tapError(e => ZIO.logError(s"Error: $e")) <* ZIO.logInfo("Done")
                 } yield tConsumer
               }
 
@@ -1018,7 +1017,7 @@ object ConsumerSpec extends ZIOKafkaSpec {
                                           properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200")
                                         )
                                       )
-                                      .tapError(e => ZIO.logError(s"Error: ${e}")) <* ZIO.logInfo("Done")
+                                      .tapError(e => ZIO.logError(s"Error: $e")) <* ZIO.logInfo("Done")
                                   }
               _ <- copier1.interrupt
               _ <- copier2.interrupt
