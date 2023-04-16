@@ -29,6 +29,24 @@ inThisBuild(
         "Itamar Ravid",
         "iravid@iravid.com",
         url("https://github.com/iravid")
+      ),
+      Developer(
+        "svroonland",
+        "svroonland",
+        "",
+        url("https://github.com/svroonland")
+      ),
+      Developer(
+        "guizmaii",
+        "Jules Ivanic",
+        "",
+        url("https://github.com/guizmaii")
+      ),
+      Developer(
+        "erikvanoosten",
+        "Erik van Oosten",
+        "",
+        url("https://github.com/erikvanoosten")
       )
     )
   )
