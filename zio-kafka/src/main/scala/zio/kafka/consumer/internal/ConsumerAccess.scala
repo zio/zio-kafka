@@ -37,9 +37,9 @@ private[consumer] final class ConsumerAccess(
     access.withPermit(f(consumer))
 
   /**
-   * Use this method ONLY from the rebalance handler.
+   * Use this method ONLY from the rebalance listener.
    */
-  private[internal] def rebalanceHandlerAccess[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
+  private[internal] def rebalanceListenerAccess[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
     withConsumerNoPermit(f)
 
 }

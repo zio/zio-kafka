@@ -45,12 +45,14 @@ import scala.jdk.CollectionConverters._
  * Partitions can be assigned, revoked or lost.
  *
  * When a partition is revoked, the stream that handles it will be ended (signal the stream that no more data will be
- * available). Processing however, might continue.
+ * available). Even though there is no more data, the stream still needs to complete processing the data is already got.
+ * Depending on the the `rebalanceSafeStreamEnd` setting, we either hold up the rebalance until the stream is completed
+ * (or not). (See scaladoc in `ConsumerSettings`.)
  *
  * ### Rebalance listener - Commit-loop
  *
- * When `endRevokedStreamsBeforeRebalance` is `true` (the default), we wait for the stream to complete running inside
- * the rebalance listener. This gives the stream a chance to commit offsets before its partition is given to another
+ * When `rebalanceSafeStreamEnd` is `true` (the default), we wait for the stream to complete running inside the
+ * rebalance listener. This gives the stream a chance to commit offsets before its partition is given to another
  * consumer.
  *
  * While the rebalance listener is waiting for streams to complete, we need to continue sending commits. In addition we
@@ -61,7 +63,7 @@ import scala.jdk.CollectionConverters._
  *
  * ## The command-queue and the commit-queue
  *
- * TODO: document more here ...
+ * TODO: Move this document to a central place.
  */
 // Disable zio-intellij's inspection `SimplifyWhenInspection` because its suggestion is not
 // equivalent performance-wise.
@@ -80,7 +82,7 @@ private[consumer] final class Runloop private (
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
-  endRevokedStreamsBeforeRebalance: Boolean, // TODO: rename to something like 'completeRevokedStreamsDuringRebalance'
+  rebalanceSafeStreamEnd: Boolean,
   currentState: Ref[State]
 ) {
 
@@ -118,8 +120,8 @@ private[consumer] final class Runloop private (
           state          <- currentState.get
           streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) state.assignedStreams
                          else Chunk.empty
-          pendingCommits <- consumer.rebalanceHandlerAccess { consumer =>
-                              endStreams(consumer, streamsToEnd, endRevokedStreamsBeforeRebalance)
+          pendingCommits <- consumer.rebalanceListenerAccess { consumer =>
+                              endStreams(consumer, streamsToEnd, rebalanceSafeStreamEnd)
                             }
           _ <- rebalanceListenerEvent.set(rebalanceEvent.onAssigned(assigned, pendingCommits, streamsToEnd))
           _ <- ZIO.logTrace("onAssigned done")
@@ -131,8 +133,8 @@ private[consumer] final class Runloop private (
           state          <- currentState.get
           streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) state.assignedStreams
                          else state.assignedStreams.filter(control => revokedTps.contains(control.tp))
-          pendingCommits <- consumer.rebalanceHandlerAccess { consumer =>
-                              endStreams(consumer, streamsToEnd, endRevokedStreamsBeforeRebalance)
+          pendingCommits <- consumer.rebalanceListenerAccess { consumer =>
+                              endStreams(consumer, streamsToEnd, rebalanceSafeStreamEnd)
                             }
           _ <- rebalanceListenerEvent.set(rebalanceEvent.onRevokedOrLost(pendingCommits, streamsToEnd))
           _ <- ZIO.logTrace("onRevoked done")
@@ -146,8 +148,8 @@ private[consumer] final class Runloop private (
           _ <- ZIO.foreachDiscard(lostStreams)(_.lost())
           streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) remainingStreams
                          else Chunk.empty
-          pendingCommits <- consumer.rebalanceHandlerAccess { consumer =>
-                              endStreams(consumer, streamsToEnd, endRevokedStreamsBeforeRebalance)
+          pendingCommits <- consumer.rebalanceListenerAccess { consumer =>
+                              endStreams(consumer, streamsToEnd, rebalanceSafeStreamEnd)
                             }
           _ <- rebalanceListenerEvent.update(_.onRevokedOrLost(pendingCommits, streamsToEnd))
           _ <- ZIO.logTrace(s"onLost done")
@@ -157,6 +159,12 @@ private[consumer] final class Runloop private (
     emitDiagnostics ++ endRevokedStreamsRebalancingListener ++ userRebalanceListener
   }
 
+  /**
+   * Ends streams, optionally awaiting until they have ended.
+   *
+   * @return
+   *   all pending commits that were created while waiting for streams the end
+   */
   private def endStreams(
     consumer: ByteArrayKafkaConsumer,
     streamsToEnd: Chunk[PartitionStreamControl],
@@ -166,8 +174,8 @@ private[consumer] final class Runloop private (
       for {
         _ <- ZIO.foreachDiscard(streamsToEnd)(_.end())
         pendingCommits <- if (awaitEnd) {
-                            // When the queue is empty we still need to call commit (with 0 offsets) so that we poll the broker
-                            // and earlier commits can complete.
+                            // When the queue is empty we still need to call commit (with 0 offsets) so that we poll
+                            // the broker and earlier commits can complete.
                             // We can not use ZStream.fromQueue because that will emit nothing when the queue is empty.
                             ZStream
                               .fromZIO(commitQueue.takeAll)
@@ -690,7 +698,7 @@ private[consumer] object Runloop {
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
-    endRevokedStreamsBeforeRebalance: Boolean,
+    rebalanceSafeStreamEnd: Boolean,
     runloopTimeout: Duration
   ): ZIO[Scope, Throwable, Runloop] =
     for {
@@ -719,7 +727,7 @@ private[consumer] object Runloop {
                   offsetRetrieval,
                   userRebalanceListener,
                   restartStreamsOnRebalancing,
-                  endRevokedStreamsBeforeRebalance,
+                  rebalanceSafeStreamEnd,
                   currentStateRef
                 )
       _ <- ZIO.logDebug("Starting Runloop")

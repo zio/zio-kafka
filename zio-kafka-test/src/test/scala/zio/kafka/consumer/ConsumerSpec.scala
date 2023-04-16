@@ -1028,8 +1028,8 @@ object ConsumerSpec extends ZIOKafkaSpec {
 
         // Test for both default partition assignment strategies
         Seq(
-          testForPartitionAssignmentStrategy[RangeAssignor]
-//          testForPartitionAssignmentStrategy[CooperativeStickyAssignor] // TODO not yet supported
+          testForPartitionAssignmentStrategy[RangeAssignor],
+          testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
 
       }: _*) @@ TestAspect.nonFlaky(3),
