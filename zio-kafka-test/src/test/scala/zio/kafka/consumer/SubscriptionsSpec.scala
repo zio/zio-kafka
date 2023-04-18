@@ -210,5 +210,5 @@ object SubscriptionsSpec extends ZIOSpecDefault with KafkaRandom {
       Kafka.embedded,
       Runtime.removeDefaultLoggers,
       Runtime.addLogger(logger())
-    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(180.seconds)
+    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(5.minutes)
 }

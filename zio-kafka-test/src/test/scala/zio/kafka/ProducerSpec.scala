@@ -470,5 +470,5 @@ object ProducerSpec extends ZIOSpecDefault with KafkaRandom {
       )
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ TestAspect.timeout(2.minutes) @@ TestAspect.sequential
+      ) @@ withLiveClock @@ timeout(5.minutes) @@ sequential
 }

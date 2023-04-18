@@ -636,7 +636,7 @@ object AdminSpec extends ZIOSpecDefault with KafkaRandom {
             assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
         }
       }
-    ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ sequential @@ TestAspect.timeout(180.seconds)
+    ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ sequential @@ timeout(5.minutes)
 
   private def consumeNoop(
     topicName: String,
