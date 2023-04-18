@@ -169,7 +169,8 @@ lazy val zioKafkaExample =
         "ch.qos.logback"            % "logback-classic"    % "1.4.6",
         "dev.zio"                  %% "zio-logging-slf4j2" % "2.1.12",
         ("io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion).cross(CrossVersion.for3Use2_13)
-      )
+      ),
+      crossScalaVersions -= scala3.value
     )
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
