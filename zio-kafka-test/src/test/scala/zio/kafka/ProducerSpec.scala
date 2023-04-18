@@ -11,7 +11,7 @@ import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiat
 import zio.kafka.serde.Serde
 import zio.stream.Take
 import zio.test.Assertion._
-import zio.test.TestAspect.withLiveClock
+import zio.test.TestAspect._
 import zio.test._
 
 object ProducerSpec extends ZIOSpecDefault with KafkaRandom {
