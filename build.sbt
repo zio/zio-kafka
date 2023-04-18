@@ -66,6 +66,7 @@ lazy val root = project
     zioKafkaTestUtils,
     zioKafkaTest,
     zioKafkaBench,
+    zioKafkaExample,
     docs
   )
 
@@ -153,6 +154,24 @@ lazy val zioKafkaBench =
     .settings(publish / skip := true)
     .settings(libraryDependencies += logback)
     .dependsOn(zioKafka, zioKafkaTestUtils)
+
+lazy val zioKafkaExample =
+  project
+    .in(file("zio-kafka-example"))
+    .enablePlugins(JavaAppPackaging)
+    .settings(stdSettings("zio-kafka-example"))
+    .settings(publish / skip := true)
+    .settings(run / fork := false)
+    .settings(
+      libraryDependencies ++= Seq(
+        "dev.zio"                 %% "zio"                % "2.0.13",
+        "dev.zio"                 %% "zio-kafka"          % "2.2",
+        "ch.qos.logback"           % "logback-classic"    % "1.4.6",
+        "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.12",
+        "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion
+      ),
+      crossScalaVersions -= scala3.value // Needed because we need https://github.com/embeddedkafka/embedded-kafka/pull/421
+    )
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
