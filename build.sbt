@@ -164,13 +164,13 @@ lazy val zioKafkaExample =
     .settings(run / fork := false)
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                  %% "zio"                % "2.0.13",
-        "dev.zio"                  %% "zio-kafka"          % "2.2",
-        "ch.qos.logback"            % "logback-classic"    % "1.4.6",
-        "dev.zio"                  %% "zio-logging-slf4j2" % "2.1.12",
-        ("io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion).cross(CrossVersion.for3Use2_13)
+        "dev.zio"                 %% "zio"                % "2.0.13",
+        "dev.zio"                 %% "zio-kafka"          % "2.2",
+        "ch.qos.logback"           % "logback-classic"    % "1.4.6",
+        "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.12",
+        "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion
       ),
-      crossScalaVersions -= scala3.value
+      crossScalaVersions -= scala3.value // Needed because we need https://github.com/embeddedkafka/embedded-kafka/pull/421
     )
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
