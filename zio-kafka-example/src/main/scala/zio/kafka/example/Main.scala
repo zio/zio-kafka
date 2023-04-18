@@ -5,6 +5,7 @@ import zio._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.serde.Serde
+import zio.logging.backend.SLF4J
 
 trait Kafka {
   def bootstrapServers: List[String]
@@ -31,6 +32,12 @@ object Kafka {
 }
 
 object Main extends ZIOAppDefault {
+
+  /**
+   * See `zio-logging` documentation: https://zio.github.io/zio-logging/docs/overview/overview_slf4j
+   */
+  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] =
+    zio.Runtime.removeDefaultLoggers >>> SLF4J.slf4j
 
   private val topic = "test-topic"
 
