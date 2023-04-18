@@ -2,7 +2,6 @@ package zio.kafka.embedded
 
 import _root_.kafka.server.KafkaConfig
 import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import zio._
 import zio.kafka.KafkaTestUtils
 
@@ -76,9 +75,7 @@ object Kafka {
   }
 
   val sslEmbedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
-    def embeddedKafkaConfig(kafkaPort: Int, zooKeeperPort: Int): EmbeddedKafkaConfig = {
-      val listener = s"${SecurityProtocol.SSL}://localhost:$kafkaPort"
-
+    def embeddedKafkaConfig(kafkaPort: Int, zooKeeperPort: Int): EmbeddedKafkaConfig =
       EmbeddedKafkaConfig(
         kafkaPort = kafkaPort,
         zooKeeperPort = zooKeeperPort,
@@ -97,12 +94,11 @@ object Kafka {
           "ssl.keystore.password"                 -> "123456",
           "ssl.key.password"                      -> "123456",
           KafkaConfig.InterBrokerListenerNameProp -> "SSL",
-          KafkaConfig.ListenersProp               -> listener,
-          KafkaConfig.AdvertisedListenersProp     -> listener,
+          KafkaConfig.ListenersProp               -> s"SSL://localhost:$kafkaPort",
+          KafkaConfig.AdvertisedListenersProp     -> s"SSL://localhost:$kafkaPort",
           KafkaConfig.ZkConnectionTimeoutMsProp   -> s"${30.second.toMillis}"
         )
       )
-    }
 
     ZIO.acquireRelease(
       startKafka(embeddedKafkaConfig).map(EmbeddedKafkaService.apply)
