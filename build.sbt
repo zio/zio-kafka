@@ -20,9 +20,7 @@ inThisBuild(
     Test / parallelExecution := false,
     Test / fork              := true,
     run / fork               := true,
-    supportedScalaVersions := Map(
-      (root / thisProject).value.id -> crossScalaVersions.value
-    ),
+    ciJvmOptions ++= Seq("-Xms6G", "-Xmx6G", "-Xss4M", "-XX:+UseG1GC"),
     developers := List(
       Developer(
         "iravid",

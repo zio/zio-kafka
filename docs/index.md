@@ -26,7 +26,7 @@ libraryDependencies += "dev.zio" %% "zio-kafka" % "@VERSION@"
 
 Let's write a simple Kafka producer and consumer using ZIO Kafka with ZIO Streams. Before everything, we need a running instance of Kafka. We can do that by saving the following docker-compose script in the `docker-compose.yml` file and run `docker-compose up`:
 
-```docker
+```yaml
 version: '2'
 services:
   zookeeper:
