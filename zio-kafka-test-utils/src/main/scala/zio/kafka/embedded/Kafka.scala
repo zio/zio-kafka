@@ -17,8 +17,8 @@ final case class EmbeddedKafkaStartException(msg: String, cause: Throwable = nul
 
 object Kafka {
 
-  private val ports                = new AtomicReference[(Int, Int)](6000 -> 7000)
-  private def nextPort: (Int, Int) = ports.getAndUpdate { case (k, z) => (k + 1, z + 1) }
+  private val ports                 = new AtomicReference[(Int, Int)](6001 -> 7001)
+  private def nextPorts: (Int, Int) = ports.getAndUpdate { case (k, z) => (k + 1, z + 1) }
 
   final case class Sasl(value: Kafka) extends AnyVal
 
@@ -110,7 +110,7 @@ object Kafka {
   ): Task[EmbeddedK] =
     ZIO.attemptBlocking {
       try {
-        val (k, z) = nextPort
+        val (k, z) = nextPorts
         EmbeddedKafka.start()(makeConfig(k, z))
       } catch {
         case NonFatal(e) => throw EmbeddedKafkaStartException("Failed to start embedded Kafka", e)
