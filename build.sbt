@@ -167,7 +167,11 @@ lazy val zioKafkaExample =
         "ch.qos.logback"           % "logback-classic"    % "1.4.6",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.12",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion
-      )
+      ),
+      // Scala 3 compiling fails with:
+      // [error] Modules were resolved with conflicting cross-version suffixes in ProjectRef(uri("file:/home/runner/work/zio-kafka/zio-kafka/"), "zioKafkaExample"):
+      // [error]    org.scala-lang.modules:scala-collection-compat _3, _2.13
+      crossScalaVersions -= scala3.value
     )
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
