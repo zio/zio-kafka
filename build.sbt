@@ -1,7 +1,7 @@
 import sbt.Def
 
 lazy val kafkaVersion         = "3.4.0"
-lazy val embeddedKafkaVersion = "3.4.0" // Should be the same as kafkaVersion, except for the patch part
+lazy val embeddedKafkaVersion = "3.4.0.1" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.9.0"
@@ -167,8 +167,7 @@ lazy val zioKafkaExample =
         "ch.qos.logback"           % "logback-classic"    % "1.4.6",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.12",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion
-      ),
-      crossScalaVersions -= scala3.value // Needed because we need https://github.com/embeddedkafka/embedded-kafka/pull/421
+      )
     )
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
