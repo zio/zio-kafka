@@ -70,7 +70,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
-    `max.poll.records`: Int = 1000,
+    `max.poll.records`: Int = 100, // settings this higher can cause concurrency bugs to go unnoticed
     runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =

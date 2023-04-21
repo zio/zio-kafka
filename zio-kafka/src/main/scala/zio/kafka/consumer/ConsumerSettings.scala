@@ -14,6 +14,8 @@ import zio.kafka.security.KafkaCredentialStore
  * @param offsetRetrieval
  * @param rebalanceListener
  * @param restartStreamOnRebalancing
+ *   When `true` _all_ streams are restarted during a rebalance, including those streams that are not revoked. The
+ *   default is `false`.
  * @param runloopTimeout
  *   Internal timeout for each iteration of the command processing and polling loop, use to detect stalling. This should
  *   be much larger than the pollTimeout and the time it takes to process chunks of records. If your consumer is not
