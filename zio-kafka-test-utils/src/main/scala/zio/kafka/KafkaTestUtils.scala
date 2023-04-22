@@ -20,7 +20,9 @@ object KafkaTestUtils {
     try {
       val tmpFile = Files.createTempFile(tmpFileName, tmpFileSuffix)
       Files.copy(getClass.getClassLoader.getResourceAsStream(file), tmpFile, StandardCopyOption.REPLACE_EXISTING)
-      tmpFile.toFile
+      val file = tmpFile.toFile
+      file.deleteOnExit()
+      file
     } catch {
       case e: Throwable =>
         val _ = Unsafe.unsafe { implicit u =>
