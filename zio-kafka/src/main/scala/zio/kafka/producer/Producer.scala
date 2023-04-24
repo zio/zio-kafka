@@ -5,6 +5,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.{ Metric, MetricName }
 import zio._
 import zio.kafka.serde.Serializer
+import zio.kafka.utils.SslHelper
 import zio.stream.{ ZPipeline, ZStream }
 
 import java.util.concurrent.atomic.AtomicLong
@@ -252,6 +253,7 @@ object Producer {
   def make(settings: ProducerSettings): ZIO[Scope, Throwable, Producer] =
     for {
       props <- ZIO.attempt(settings.driverSettings)
+      _     <- SslHelper.validateEndpoint(settings.bootstrapServers, props)
       rawProducer <- ZIO.attempt(
                        new KafkaProducer[Array[Byte], Array[Byte]](
                          props.asJava,

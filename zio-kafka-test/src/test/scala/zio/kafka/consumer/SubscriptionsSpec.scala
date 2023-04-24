@@ -2,8 +2,9 @@ package zio.kafka.consumer
 import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio._
+import zio.kafka.KafkaRandom
 import zio.kafka.KafkaTestUtils._
-import zio.kafka.ZIOKafkaSpec
+import zio.kafka.TestLogger.logger
 import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
@@ -12,10 +13,10 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
-object SubscriptionsSpec extends ZIOKafkaSpec {
+object SubscriptionsSpec extends ZIOSpecDefault with KafkaRandom {
   override val kafkaPrefix: String = "subscriptionsspec"
 
-  override def spec = suite("Consumer subscriptions")(
+  override def spec: Spec[TestEnvironment with Scope, Throwable] = suite("Consumer subscriptions")(
     test("consumes from two topic subscriptions") {
       val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
       for {
@@ -203,7 +204,11 @@ object SubscriptionsSpec extends ZIOKafkaSpec {
         consumed <- recordsConsumed.get
       } yield assert(consumed.map(r => r.value))(hasSameElements(Chunk.fromIterable(kvs.map(_._2))))
     } @@ TestAspect.nonFlaky(3)
-  ).provideSomeLayerShared[TestEnvironment & Kafka](
-    producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
-  ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(180.seconds)
+  )
+    .provideSome[Scope & Kafka](producer)
+    .provideSomeShared[Scope](
+      Kafka.embedded,
+      Runtime.removeDefaultLoggers,
+      Runtime.addLogger(logger())
+    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(5.minutes)
 }
