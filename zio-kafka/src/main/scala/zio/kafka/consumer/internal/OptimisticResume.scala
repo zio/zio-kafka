@@ -1,5 +1,7 @@
 package zio.kafka.consumer.internal
 
+import zio.Chunk
+
 /**
  * Optimistically resume partitions for streams that are likely to need more data _before_ the next poll.
  */
@@ -45,8 +47,8 @@ private[internal] object OptimisticResume {
    *
    * As a consequence, if pattern `p` is included, `p1` may _not_ be included.
    */
-  private val OptimisticResumePollPatterns: Seq[(Int, Int)] =
-    Seq(
+  private val OptimisticResumePollPatterns: Chunk[(Int, Int)] =
+    Chunk(
       // Patterns ending with 5 resumes
       "011111",
       // Patterns ending with 4 resumes (require preceding resumes to break feedback cycle)
@@ -78,6 +80,6 @@ private[internal] object OptimisticResume {
         "A pattern of all 1s causes a runaway feedback loop, effectively disabling partition pausing"
       )
       (mask, bitPattern)
-    }.toIndexedSeq
+    }
 
 }
