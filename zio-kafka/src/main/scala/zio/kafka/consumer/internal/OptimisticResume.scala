@@ -15,7 +15,7 @@ private[internal] object OptimisticResume {
    */
   type PollHistory = Int
 
-  implicit class PollHistoryOps(val pollHistory: PollHistory) extends AnyVal {
+  implicit final class PollHistoryOps(private val pollHistory: PollHistory) extends AnyVal {
 
     /**
      * @return
