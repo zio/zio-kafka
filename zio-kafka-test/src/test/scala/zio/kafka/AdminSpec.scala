@@ -4,7 +4,7 @@ import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin.{ ConfigEntry, RecordsToDelete }
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{ Node => JNode }
-import zio.kafka.{ KafkaTestUtils, ZIOKafkaSpec }
+import zio._
 import zio.kafka.KafkaTestUtils._
 import zio.kafka.admin.AdminClient.{
   AlterConfigOp,
@@ -22,27 +22,27 @@ import zio.kafka.admin.AdminClient.{
   TopicPartition
 }
 import zio.kafka.admin.acl._
+import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
 import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
+import zio.kafka.{ KafkaRandom, KafkaTestUtils }
 import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio._
-import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 
 import java.util.UUID
 import java.util.concurrent.TimeoutException
 
-object AdminSpec extends ZIOKafkaSpec {
+object AdminSpec extends ZIOSpecDefault with KafkaRandom {
 
   override val kafkaPrefix: String = "adminspec"
 
   private def listTopicsFiltered(client: AdminClient): ZIO[Any, Throwable, Map[String, AdminClient.TopicListing]] =
     client.listTopics().map(_.filter { case (key, _) => key.startsWith("adminspec-") })
 
-  override def spec: Spec[TestEnvironment with Kafka with Scope, Throwable] =
+  override def spec: Spec[TestEnvironment with Scope, Throwable] =
     suite("client admin test")(
       test("create, list, delete single topic") {
         KafkaTestUtils.withAdmin { client =>
@@ -330,10 +330,12 @@ object AdminSpec extends ZIOKafkaSpec {
               client.listConsumerGroupOffsets(
                 Map(invalidGroupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
               )
-          } yield assert(offsets.get(TopicPartition(topic, 0)).map(_.offset))(isSome(equalTo(msgConsume.toLong))) &&
-            assert(invalidTopicOffsets)(isEmpty) &&
-            assert(invalidTpOffsets)(isEmpty) &&
-            assert(invalidGroupIdOffsets)(isEmpty)
+          } yield assert(offsets.get(groupId).flatMap(_.get(TopicPartition(topic, 0))).map(_.offset))(
+            isSome(equalTo(msgConsume.toLong))
+          ) &&
+            assert(invalidTopicOffsets.get(groupId))(isSome(isEmpty)) &&
+            assert(invalidTpOffsets.get(groupId))(isSome(isEmpty)) &&
+            assert(invalidGroupIdOffsets.get(invalidGroupId))(isSome(isEmpty))
         }
       },
       test("delete consumer group offsets") {
@@ -359,7 +361,7 @@ object AdminSpec extends ZIOKafkaSpec {
             offsets <- client.listConsumerGroupOffsets(
                          Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
                        )
-          } yield assert(offsets.get(TopicPartition(topic, 0)).map(_.offset))(isNone)
+          } yield assert(offsets.get(groupId).flatMap(_.get(TopicPartition(topic, 0))).map(_.offset))(isNone)
         }
       },
       test("describe consumer groups") {
@@ -634,7 +636,7 @@ object AdminSpec extends ZIOKafkaSpec {
             assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
         }
       }
-    ) @@ withLiveClock @@ sequential @@ TestAspect.timeout(180.seconds)
+    ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ sequential @@ timeout(5.minutes)
 
   private def consumeNoop(
     topicName: String,

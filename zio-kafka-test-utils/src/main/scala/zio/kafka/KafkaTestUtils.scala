@@ -11,7 +11,28 @@ import zio.kafka.embedded.Kafka
 import zio.kafka.producer._
 import zio.kafka.serde.{ Deserializer, Serde, Serializer }
 
+import java.io.File
+import java.nio.file.{ Files, StandardCopyOption }
+
 object KafkaTestUtils {
+
+  private def readResourceFile(file: String, tmpFileName: String, tmpFileSuffix: String): File =
+    try {
+      val tmpFile = Files.createTempFile(tmpFileName, tmpFileSuffix)
+      Files.copy(getClass.getClassLoader.getResourceAsStream(file), tmpFile, StandardCopyOption.REPLACE_EXISTING)
+      val result = tmpFile.toFile
+      result.deleteOnExit()
+      result
+    } catch {
+      case e: Throwable =>
+        val _ = Unsafe.unsafe { implicit u =>
+          zio.Runtime.default.unsafe.run(ZIO.logErrorCause("Failed to read resource file", Cause.fail(e)))
+        }
+        throw e
+    }
+
+  val trustStoreFile: File = readResourceFile("truststore/kafka.truststore.jks", "truststore", ".jks")
+  val keyStoreFile: File   = readResourceFile("keystore/kafka.keystore.jks", "keystore", ".jks")
 
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(ProducerSettings(_))
@@ -70,7 +91,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
-    `max.poll.records`: Int = 1000,
+    `max.poll.records`: Int = 100, // settings this higher can cause concurrency bugs to go unnoticed
     runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
@@ -186,13 +207,61 @@ object KafkaTestUtils {
   def adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(AdminClientSettings(_))
 
-  def withAdmin[T](f: AdminClient => RIO[Kafka, T]) =
+  def saslAdminSettings(username: String, password: String): ZIO[Kafka.Sasl, Nothing, AdminClientSettings] =
+    ZIO
+      .serviceWith[Kafka.Sasl](_.value.bootstrapServers)
+      .map(
+        AdminClientSettings(_).withProperties(
+          "sasl.mechanism"    -> "PLAIN",
+          "security.protocol" -> "SASL_PLAINTEXT",
+          "sasl.jaas.config" -> s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="$username" password="$password";"""
+        )
+      )
+
+  def sslAdminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
+    ZIO
+      .serviceWith[Kafka](_.bootstrapServers)
+      .map(bootstrap =>
+        AdminClientSettings(bootstrap).withProperties(
+          "security.protocol"       -> "SSL",
+          "ssl.truststore.location" -> trustStoreFile.getAbsolutePath,
+          "ssl.truststore.password" -> "123456",
+          "ssl.keystore.location"   -> keyStoreFile.getAbsolutePath,
+          "ssl.keystore.password"   -> "123456",
+          "ssl.key.password"        -> "123456",
+          "ssl.enabled.protocols"   -> "TLSv1.2",
+          "ssl.truststore.type"     -> "JKS",
+          "ssl.keystore.type"       -> "JKS"
+        )
+      )
+
+  def withAdmin[T](f: AdminClient => RIO[Kafka, T]): ZIO[Kafka, Throwable, T] =
     for {
       settings <- adminSettings
-      fRes <- ZIO.scoped {
-                AdminClient
-                  .make(settings)
-                  .flatMap(client => f(client))
-              }
+      fRes     <- withAdminClient(settings)(f)
     } yield fRes
+
+  def withSaslAdmin[T](
+    username: String = "admin",
+    password: String = "admin-secret"
+  )(
+    f: AdminClient => RIO[Kafka.Sasl, T]
+  ): ZIO[Kafka.Sasl, Throwable, T] =
+    for {
+      settings <- saslAdminSettings(username, password)
+      fRes     <- withAdminClient(settings)(f)
+    } yield fRes
+
+  def withSslAdmin[T](
+    f: AdminClient => RIO[Kafka, T]
+  ): ZIO[Kafka, Throwable, T] =
+    for {
+      settings <- sslAdminSettings
+      fRes     <- withAdminClient(settings)(f)
+    } yield fRes
+
+  private def withAdminClient[R, T](settings: AdminClientSettings)(f: AdminClient => RIO[R, T]): ZIO[R, Throwable, T] =
+    ZIO.scoped[R] {
+      AdminClient.make(settings).flatMap(f)
+    }
 }

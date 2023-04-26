@@ -10,8 +10,9 @@ import org.apache.kafka.clients.consumer.{
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
+import zio.kafka.KafkaRandom
 import zio.kafka.KafkaTestUtils._
-import zio.kafka.ZIOKafkaSpec
+import zio.kafka.TestLogger.logger
 import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.embedded.Kafka
@@ -24,10 +25,10 @@ import zio.test._
 
 import scala.reflect.ClassTag
 
-object ConsumerSpec extends ZIOKafkaSpec {
+object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
   override val kafkaPrefix: String = "consumespec"
 
-  override def spec: Spec[TestEnvironment & Kafka, Throwable] =
+  override def spec: Spec[TestEnvironment with Scope, Throwable] =
     suite("Consumer Streaming")(
       test("export metrics") {
         for {
@@ -1053,8 +1054,12 @@ object ConsumerSpec extends ZIOKafkaSpec {
           _ <- recordsOut.take
         } yield assertCompletes
       }
-    ).provideSomeLayerShared[TestEnvironment & Kafka](
-      producer ++ Scope.default ++ Runtime.removeDefaultLoggers ++ Runtime.addLogger(logger)
-    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(180.seconds)
+    )
+      .provideSome[Scope & Kafka](producer)
+      .provideSomeShared[Scope](
+        Kafka.embedded,
+        Runtime.removeDefaultLoggers,
+        Runtime.addLogger(logger())
+      ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(5.minutes)
 
 }
