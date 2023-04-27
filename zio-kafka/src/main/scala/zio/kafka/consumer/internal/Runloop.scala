@@ -253,9 +253,9 @@ private[consumer] final class Runloop private (
         pollHistory.optimisticResume
 
       if (toResume) {
-        if ((pollHistory & 1) == 0) resumeTps.add(tp)
+        if (!pollHistory.lastWasResumed) resumeTps.add(tp)
       } else {
-        if ((pollHistory & 1) == 1) pauseTps.add(tp)
+        if (pollHistory.lastWasResumed) pauseTps.add(tp)
       }
 
       stream.addPollHistory(toResume)

@@ -19,6 +19,12 @@ private[internal] object OptimisticResume {
 
     /**
      * @return
+     *   true when the partition in the last poll was resumed, false when it was paused
+     */
+    def lastWasResumed: Boolean = (pollHistory & 1) == 1
+
+    /**
+     * @return
      *   true when based on the poll history an optimistic resume is possible
      */
     def optimisticResume: Boolean =
