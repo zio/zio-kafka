@@ -3,43 +3,56 @@ package zio.kafka.consumer.internal
 import zio.Chunk
 
 /**
- * Optimistically resume partitions for streams that are likely to need more data _before_ the next poll.
+ * Keep track of the partition status ('resumed' or 'paused') just before a poll.
+ *
+ * The goal is to predict when a the stream is likely to need more data _before_ the next poll.
  */
-private[internal] object OptimisticResume {
+private[internal] trait PollHistory {
 
   /**
-   * A sequence of partition statuses (resumed or paused) before a poll. We use one bit per poll, where value 1
-   * indicates that the partition was resumed and value 0 indicates it was paused.
-   *
-   * The most recent poll is in the least significant bit, the oldest poll is in the most significant bit.
+   * @return
+   *   true when -based on the poll history- the stream is likely to need more data _before_ the next poll
    */
-  type PollHistory = Int
+  def optimisticResume: Boolean
 
-  implicit final class PollHistoryOps(private val pollHistory: PollHistory) extends AnyVal {
+  /**
+   * Creates a new poll history by appending the given partition status as the latest poll.
+   *
+   * @param resumed
+   *   true when this partition was 'resumed' before the poll, false when it was 'paused'
+   */
+  def addPollHistory(resumed: Boolean): PollHistory
 
-    /**
-     * @return
-     *   true when the partition in the last poll was resumed, false when it was paused
-     */
-    def lastWasResumed: Boolean = (pollHistory & 1) == 1
+  /**
+   * @return
+   *   true when the partition status in the latest poll was 'resumed', false when it was 'paused'
+   */
+  def latestWasResumed: Boolean
+}
 
-    /**
-     * @return
-     *   true when based on the poll history an optimistic resume is possible
-     */
+private[internal] object PollHistory {
+  val Empty: PollHistory = PollHistoryImpl.Empty
+
+  private class PollHistoryImpl private (resumeBits: Int) extends PollHistory {
+    // ResumeBits is a sequence of partition statuses (resumed or paused) before a poll.
+    // We use one bit per poll, where value 1 indicates that the partition was resumed
+    // and value 0 indicates it was paused.
+    //
+    // The most recent poll is in the least significant bit, the oldest poll is in the most significant bit.
+
     def optimisticResume: Boolean =
       OptimisticResumePollPatterns.exists { case (mask, pattern) =>
-        (pollHistory & mask) == pattern
+        (resumeBits & mask) == pattern
       }
 
-    /**
-     * Updates a poll history by appending the given partition status.
-     *
-     * @param resumed
-     *   true when this partition was resumed before the poll, false when it was paused
-     */
     def addPollHistory(resumed: Boolean): PollHistory =
-      pollHistory << 1 | (if (resumed) 1 else 0)
+      new PollHistoryImpl(resumeBits << 1 | (if (resumed) 1 else 0))
+
+    def latestWasResumed: Boolean = (resumeBits & 1) == 1
+  }
+
+  private object PollHistoryImpl {
+    val Empty = new PollHistoryImpl(0)
   }
 
   /**

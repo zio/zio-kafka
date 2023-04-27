@@ -2,7 +2,6 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.consumer.internal.OptimisticResume._
 import zio.kafka.consumer.internal.Runloop.Command.Request
 import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, Command }
 import zio.stream.{ Take, ZStream }
@@ -16,7 +15,7 @@ private[internal] final class PartitionStreamControl private (
   completedPromise: Promise[Nothing, Unit]
 ) {
 
-  private var pollResumedHistory: PollHistory = 0
+  private var pollResumedHistory: PollHistory = PollHistory.Empty
 
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),

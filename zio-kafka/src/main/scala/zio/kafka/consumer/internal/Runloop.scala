@@ -7,7 +7,6 @@ import zio._
 import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.OptimisticResume._
 import zio.kafka.consumer.internal.Runloop.Command.{ Commit, Request, StopAllStreams, StopRunloop }
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.{ CommittableRecord, RebalanceConsumer, RebalanceListener, Subscription }
@@ -253,9 +252,9 @@ private[consumer] final class Runloop private (
         pollHistory.optimisticResume
 
       if (toResume) {
-        if (!pollHistory.lastWasResumed) resumeTps.add(tp)
+        if (!pollHistory.latestWasResumed) resumeTps.add(tp)
       } else {
-        if (pollHistory.lastWasResumed) pauseTps.add(tp)
+        if (pollHistory.latestWasResumed) pauseTps.add(tp)
       }
 
       stream.addPollHistory(toResume)
