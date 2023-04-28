@@ -23,7 +23,7 @@ object PollHistorySpec extends ZIOSpecDefault {
     }
   )
 
-  private implicit class PollHistoryOps(val s: String) extends AnyVal {
+  private implicit class PollHistoryOps(private val s: String) extends AnyVal {
     def toPollHistory: PollHistory =
       s.foldLeft(PollHistory.Empty) { case (ph, b) =>
         ph.addPollHistory(b == '1')
