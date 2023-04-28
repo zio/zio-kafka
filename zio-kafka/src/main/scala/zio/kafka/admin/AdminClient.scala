@@ -515,11 +515,13 @@ object AdminClient {
       fromKafkaFuture(
         describeCluster(options).map(_.nodes())
       ).flatMap { nodes =>
-        ZIO.foreach(nodes.asScala.toList) { jNode =>
-          ZIO
-            .getOrFailWith(new RuntimeException("NoNode not expected when listing cluster nodes"))(
-              Node(jNode)
-            )
+        ZIO.fromTry {
+          nodes.asScala.toList.forEach { jNode =>
+            Node(jNode) match {
+              case Some(node) => Success(node)
+              case None       => Failure(new RuntimeException("NoNode not expected when listing cluster nodes"))
+            }
+          }
         }
       }
 
