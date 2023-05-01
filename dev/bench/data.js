@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1682923888035,
+  "lastUpdate": 1682963186566,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -15206,6 +15206,50 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
             "value": 1943.01128736,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "committer": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "id": "fa8b28401ba574fae0bc42f7ccfe1b299ee4a60b",
+          "message": "Alternative backpressure mechanism",
+          "timestamp": "2023-04-27T07:17:40Z",
+          "url": "https://github.com/zio/zio-kafka/pull/803/commits/fa8b28401ba574fae0bc42f7ccfe1b299ee4a60b"
+        },
+        "date": 1682963182929,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 224.18165883066666,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 316.6141734366666,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.kafkaClients",
+            "value": 668.45819082,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
+            "value": 1220.9919221400003,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
