@@ -2,22 +2,9 @@ package zio.kafka
 
 import zio._
 
-import java.util.UUID
+object TestLogger {
 
-trait ZIOKafkaSpec extends ZIOSpecWithKafka {
-
-  def kafkaPrefix: String
-
-  def randomThing(prefix: String): Task[String] =
-    ZIO.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
-
-  def randomTopic: Task[String] = randomThing(s"$kafkaPrefix-topic")
-
-  def randomGroup: Task[String] = randomThing(s"$kafkaPrefix-group")
-
-  def randomClient: Task[String] = randomThing(s"$kafkaPrefix-client")
-
-  val logger: ZLogger[String, Unit] =
+  def logger(logLevel: LogLevel = LogLevel.Info): ZLogger[String, Unit] =
     new ZLogger[String, Unit] {
       override def apply(
         trace: Trace,
@@ -34,5 +21,6 @@ trait ZIOKafkaSpec extends ZIOSpecWithKafka {
               .now()} ${logLevel.label} [${annotations.map { case (k, v) => s"$k=$v" }
               .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint}"
         )
-    }.filterLogLevel(_ >= LogLevel.Debug).map(_ => ())
+    }.filterLogLevel(_ >= logLevel).map(_ => ())
+
 }

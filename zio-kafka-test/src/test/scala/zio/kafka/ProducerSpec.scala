@@ -11,10 +11,10 @@ import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiat
 import zio.kafka.serde.Serde
 import zio.stream.Take
 import zio.test.Assertion._
-import zio.test.TestAspect.withLiveClock
+import zio.test.TestAspect._
 import zio.test._
 
-object ProducerSpec extends ZIOKafkaSpec {
+object ProducerSpec extends ZIOSpecDefault with KafkaRandom {
   override val kafkaPrefix: String = "producerspec"
 
   def withConsumerInt(
@@ -25,7 +25,7 @@ object ProducerSpec extends ZIOKafkaSpec {
       c.plainStream(subscription, Serde.string, Serde.int).toQueue()
     }
 
-  override def spec: Spec[TestEnvironment & Kafka, Object] =
+  override def spec: Spec[TestEnvironment with Scope, Object] =
     suite("producer test suite")(
       test("one record") {
         for {
@@ -463,8 +463,12 @@ object ProducerSpec extends ZIOKafkaSpec {
           assertZIO(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
         }
       )
-    ).provideSomeLayerShared[TestEnvironment & Kafka](
-      (KafkaTestUtils.producer ++ transactionalProducer)
-        .mapError(TestFailure.fail)
-    ) @@ withLiveClock @@ TestAspect.timeout(2.minutes) @@ TestAspect.sequential
+    )
+      .provideSome[Kafka](
+        (KafkaTestUtils.producer ++ transactionalProducer)
+          .mapError(TestFailure.fail)
+      )
+      .provideSomeShared[Scope](
+        Kafka.embedded
+      ) @@ withLiveClock @@ timeout(5.minutes) @@ sequential
 }

@@ -39,13 +39,6 @@ private[consumer] final class Runloop private (
   def gracefulShutdown: UIO[Unit] =
     commandQueue.offer(Command.StopAllStreams).unit
 
-  /** Wait until graceful shutdown completes. */
-  def awaitShutdown: UIO[Unit] =
-    for {
-      state <- currentState.get
-      _     <- ZIO.foreachDiscard(state.assignedStreams)(_.awaitCompleted())
-    } yield ()
-
   def changeSubscription(
     subscription: Option[Subscription]
   ): Task[Unit] =
@@ -254,7 +247,7 @@ private[consumer] final class Runloop private (
     if (toPause.nonEmpty) c.pause(toPause.asJava)
   }
 
-  private def doPoll(c: ByteArrayKafkaConsumer) = {
+  private def doPoll(c: ByteArrayKafkaConsumer): ConsumerRecords[Array[Byte], Array[Byte]] = {
     val records = c.poll(pollTimeout)
 
     if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
@@ -262,6 +255,10 @@ private[consumer] final class Runloop private (
 
   private def handlePoll(state: State): Task[State] =
     for {
+      _ <-
+        ZIO.logTrace(
+          s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
+        )
       _          <- currentState.set(state)
       queueSizes <- ZIO.foreach(state.assignedStreams)(stream => stream.getQueueSize.map(stream.tp -> _))
       pollResult <-
@@ -469,32 +466,24 @@ private[consumer] final class Runloop private (
    *   - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *     initialization and rebalancing
    */
-  def run: ZIO[Scope, Throwable, Any] = {
-    def logPollStart(state: State): UIO[Unit] =
-      ZIO
-        .logTrace(
-          s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
-        )
-
+  def run: ZIO[Scope, Throwable, Any] =
     ZStream
       .fromQueue(commandQueue)
       .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
       .takeWhile(_ != StopRunloop)
       .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
         for {
-          _            <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
-          updatedState <- ZIO.foldLeft(commands)(state)(handleCommand)
+          _                  <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
+          stateAfterCommands <- ZIO.foldLeft(commands)(state)(handleCommand)
 
-          updatedStateAfterPoll <- if (updatedState.shouldPoll)
-                                     logPollStart(updatedState) *> handlePoll(updatedState)
-                                   else ZIO.succeed(updatedState)
+          updatedStateAfterPoll <- if (stateAfterCommands.shouldPoll) handlePoll(stateAfterCommands)
+                                   else ZIO.succeed(stateAfterCommands)
           // Immediately poll again, after processing all new queued commands
           _ <- commandQueue.offer(Command.Poll).when(updatedStateAfterPoll.shouldPoll)
         } yield updatedStateAfterPoll
       }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitions.offer(Take.failCause(cause)))
-  }
 }
 
 private[consumer] object Runloop {
@@ -508,9 +497,9 @@ private[consumer] object Runloop {
      */
     def runFoldChunksDiscardZIO[R1 <: R, E1 >: E, S](s: S)(f: (S, Chunk[A]) => ZIO[R1, E1, S]): ZIO[R1, E1, Unit] = {
       def reader(s: S): ZChannel[R1, E1, Chunk[A], Any, E1, Nothing, Unit] =
-        ZChannel.readWith(
+        ZChannel.readWithCause(
           (in: Chunk[A]) => ZChannel.fromZIO(f(s, in)).flatMap(reader),
-          (err: E1) => ZChannel.fail(err),
+          (err: Cause[E1]) => ZChannel.refailCause(err),
           (_: Any) => ZChannel.unit
         )
 
@@ -550,10 +539,13 @@ private[consumer] object Runloop {
 
   sealed trait Command
   object Command {
-    // Used for internal control of the runloop
+
+    /** Used for internal control of the runloop. */
     sealed trait Control extends Command
 
-    case object Poll           extends Control
+    /** Used as a signal that another poll is needed. */
+    case object Poll extends Control
+
     case object StopRunloop    extends Control
     case object StopAllStreams extends Control
 
@@ -562,6 +554,7 @@ private[consumer] object Runloop {
       @inline def isPending: UIO[Boolean] = isDone.negate
     }
 
+    /** Used by a stream to request more records. */
     final case class Request(tp: TopicPartition) extends Command
 
     final case class ChangeSubscription(

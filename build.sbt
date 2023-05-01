@@ -1,34 +1,50 @@
 import sbt.Def
 
 lazy val kafkaVersion         = "3.4.0"
-lazy val embeddedKafkaVersion = "3.4.0" // Should be the same as kafkaVersion, except for the patch part
+lazy val embeddedKafkaVersion = "3.4.0.1" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
-lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.9.0"
-lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.14.2"
-lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.6"
+lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.10.0"
+lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.15.0"
+lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.7"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
 inThisBuild(
   List(
     name       := "ZIO Kafka",
-    zioVersion := "2.0.12",
+    zioVersion := "2.0.13",
     crossScalaVersions -= scala211.value,
     ciEnabledBranches        := Seq("master", "series/0.x"),
     useCoursier              := false,
     Test / parallelExecution := false,
     Test / fork              := true,
     run / fork               := true,
-    supportedScalaVersions := Map(
-      (root / thisProject).value.id -> crossScalaVersions.value
-    ),
+    ciJvmOptions ++= Seq("-Xms6G", "-Xmx6G", "-Xss4M", "-XX:+UseG1GC"),
     developers := List(
       Developer(
         "iravid",
         "Itamar Ravid",
         "iravid@iravid.com",
         url("https://github.com/iravid")
+      ),
+      Developer(
+        "svroonland",
+        "svroonland",
+        "",
+        url("https://github.com/svroonland")
+      ),
+      Developer(
+        "guizmaii",
+        "Jules Ivanic",
+        "",
+        url("https://github.com/guizmaii")
+      ),
+      Developer(
+        "erikvanoosten",
+        "Erik van Oosten",
+        "",
+        url("https://github.com/erikvanoosten")
       )
     )
   )
@@ -48,6 +64,7 @@ lazy val root = project
     zioKafkaTestUtils,
     zioKafkaTest,
     zioKafkaBench,
+    zioKafkaExample,
     docs
   )
 
@@ -135,6 +152,27 @@ lazy val zioKafkaBench =
     .settings(publish / skip := true)
     .settings(libraryDependencies += logback)
     .dependsOn(zioKafka, zioKafkaTestUtils)
+
+lazy val zioKafkaExample =
+  project
+    .in(file("zio-kafka-example"))
+    .enablePlugins(JavaAppPackaging)
+    .settings(stdSettings("zio-kafka-example"))
+    .settings(publish / skip := true)
+    .settings(run / fork := false)
+    .settings(
+      libraryDependencies ++= Seq(
+        "dev.zio"                 %% "zio"                % "2.0.13",
+        "dev.zio"                 %% "zio-kafka"          % "2.2",
+        "ch.qos.logback"           % "logback-classic"    % "1.4.6",
+        "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.12",
+        "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion
+      ),
+      // Scala 3 compiling fails with:
+      // [error] Modules were resolved with conflicting cross-version suffixes in ProjectRef(uri("file:/home/runner/work/zio-kafka/zio-kafka/"), "zioKafkaExample"):
+      // [error]    org.scala-lang.modules:scala-collection-compat _3, _2.13
+      crossScalaVersions -= scala3.value
+    )
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")

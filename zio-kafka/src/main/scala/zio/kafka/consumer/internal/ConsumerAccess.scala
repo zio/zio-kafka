@@ -33,7 +33,7 @@ private[consumer] final class ConsumerAccess(
   /**
    * Do not use this method outside of the Runloop
    */
-  def runloopAccess[R, E, A](f: ByteArrayKafkaConsumer => ZIO[R, E, A]): ZIO[R, E, A] =
+  private[internal] def runloopAccess[R, E, A](f: ByteArrayKafkaConsumer => ZIO[R, E, A]): ZIO[R, E, A] =
     access.withPermit(f(consumer))
 }
 

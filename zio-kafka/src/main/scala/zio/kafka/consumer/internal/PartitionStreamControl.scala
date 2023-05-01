@@ -46,10 +46,6 @@ private[internal] final class PartitionStreamControl private (
   def isRunning: ZIO[Any, Nothing, Boolean] =
     isCompleted.negate
 
-  /** Wait till the stream is done. */
-  def awaitCompleted(): ZIO[Any, Nothing, Unit] =
-    completedPromise.await
-
   val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
     (tp, stream)
 }
