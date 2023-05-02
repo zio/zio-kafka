@@ -246,18 +246,20 @@ private[consumer] final class Runloop private (
     val resumeTps = new java.util.ArrayList[TopicPartition](streams.size)
     val pauseTps  = new java.util.ArrayList[TopicPartition](streams.size)
     streams.foreach { stream =>
-      val pollHistory = stream.pollHistory
-      val tp          = stream.tp
-      val toResume = requestedPartitions.contains(tp) ||
-        pollHistory.optimisticResume
+      val tp       = stream.tp
+      val toResume = requestedPartitions.contains(tp) || stream.optimisticResume
 
       if (toResume) {
-        if (!pollHistory.latestWasResumed) resumeTps.add(tp)
+        if (!stream.latestWasResumed) {
+          resumeTps.add(tp)
+        }
+        stream.addPollHistory(PollHistory.Resumed)
       } else {
-        if (pollHistory.latestWasResumed) pauseTps.add(tp)
+        if (stream.latestWasResumed) {
+          pauseTps.add(tp)
+        }
+        stream.addPollHistory(PollHistory.Paused)
       }
-
-      stream.addPollHistory(toResume)
     }
 
     if (!resumeTps.isEmpty) c.resume(resumeTps)

@@ -2,6 +2,7 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.internal.PollHistory.PoolHistoryBit
 import zio.kafka.consumer.internal.Runloop.Command.Request
 import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, Command }
 import zio.stream.{ Take, ZStream }
@@ -48,7 +49,8 @@ private[internal] final class PartitionStreamControl private (
   val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
     (tp, stream)
 
-  def pollHistory: PollHistory = pollResumedHistory
+  def optimisticResume: Boolean = pollResumedHistory.optimisticResume
+  def latestWasResumed: Boolean = pollResumedHistory.latestWasResumed
 
   /**
    * Add a poll event to the poll history.
@@ -58,7 +60,7 @@ private[internal] final class PartitionStreamControl private (
    * @param resumed
    *   true when this stream was resumed before the poll, false when it was paused
    */
-  def addPollHistory(resumed: Boolean): Unit =
+  def addPollHistory(resumed: PoolHistoryBit): Unit =
     pollResumedHistory = pollResumedHistory.addPollHistory(resumed)
 
 }
