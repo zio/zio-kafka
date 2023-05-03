@@ -13,12 +13,12 @@ object PollHistorySpec extends ZIOSpecDefault {
     },
     test("add to history") {
       assertTrue(
-        PollHistory.Empty.addPollHistory(PollHistory.Resumed).latestWasResumed,
-        "1".toPollHistory.addPollHistory(PollHistory.Resumed).latestWasResumed,
-        "101010".toPollHistory.addPollHistory(PollHistory.Resumed).latestWasResumed,
-        !PollHistory.Empty.addPollHistory(PollHistory.Paused).latestWasResumed,
-        !"1".toPollHistory.addPollHistory(PollHistory.Paused).latestWasResumed,
-        !"101010".toPollHistory.addPollHistory(PollHistory.Paused).latestWasResumed
+        PollHistory.Empty.addPollHistory(true).latestWasResumed,
+        "1".toPollHistory.addPollHistory(true).latestWasResumed,
+        "101010".toPollHistory.addPollHistory(true).latestWasResumed,
+        !PollHistory.Empty.addPollHistory(false).latestWasResumed,
+        !"1".toPollHistory.addPollHistory(false).latestWasResumed,
+        !"101010".toPollHistory.addPollHistory(false).latestWasResumed
       )
     }
   )
@@ -26,7 +26,7 @@ object PollHistorySpec extends ZIOSpecDefault {
   private implicit class PollHistoryOps(private val s: String) extends AnyVal {
     def toPollHistory: PollHistory =
       s.foldLeft(PollHistory.Empty) { case (ph, b) =>
-        ph.addPollHistory(if (b == '1') PollHistory.Resumed else PollHistory.Paused)
+        ph.addPollHistory(b == '1')
       }
   }
 }

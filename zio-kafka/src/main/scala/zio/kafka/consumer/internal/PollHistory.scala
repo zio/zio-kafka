@@ -1,14 +1,13 @@
 package zio.kafka.consumer.internal
 
 import zio.Chunk
-import zio.kafka.consumer.internal.PollHistory.PoolHistoryBit
 
 /**
  * Keep track of the partition status ('resumed' or 'paused') just before a poll.
  *
  * The goal is to predict when a the stream is likely to need more data _before_ the next poll.
  */
-private[internal] trait PollHistory {
+private[internal] sealed trait PollHistory {
 
   /**
    * @return
@@ -22,7 +21,7 @@ private[internal] trait PollHistory {
    * @param resumed
    *   true when this partition was 'resumed' before the poll, false when it was 'paused'
    */
-  def addPollHistory(resumed: PoolHistoryBit): PollHistory
+  def addPollHistory(resumed: Boolean): PollHistory
 
   /**
    * @return
@@ -32,24 +31,7 @@ private[internal] trait PollHistory {
 }
 
 private[internal] object PollHistory {
-
-  /**
-   * An empty poll history.
-   *
-   * The implementation is optimized but is equivalent to `new PollHistoryImpl(0)`.
-   */
-  private object EmptyPollHistory extends PollHistory {
-    override def optimisticResume: Boolean                            = false
-    override def addPollHistory(resumed: PoolHistoryBit): PollHistory = new PollHistoryImpl(resumed)
-    override def latestWasResumed: Boolean                            = false
-  }
-
-  val Empty: PollHistory = EmptyPollHistory
-
-  type PoolHistoryBit = Int
-  // `final` allows the compiler to inline these values
-  final val Resumed: PoolHistoryBit = 1
-  final val Paused: PoolHistoryBit  = 0
+  val Empty: PollHistory = new PollHistoryImpl(0)
 
   private final class PollHistoryImpl private[PollHistory] (resumeBits: Int) extends PollHistory {
     // ResumeBits is a sequence of partition statuses (resumed or paused) before a poll.
@@ -63,8 +45,8 @@ private[internal] object PollHistory {
         (resumeBits & mask) == pattern
       }
 
-    override def addPollHistory(resumed: PoolHistoryBit): PollHistory =
-      new PollHistoryImpl(resumeBits << 1 | resumed)
+    override def addPollHistory(resumed: Boolean): PollHistory =
+      new PollHistoryImpl(resumeBits << 1 | (if (resumed) 1 else 0))
 
     override val latestWasResumed: Boolean = (resumeBits & 1) == 1
   }

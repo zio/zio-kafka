@@ -253,13 +253,13 @@ private[consumer] final class Runloop private (
         if (!stream.latestWasResumed) {
           resumeTps.add(tp)
         }
-        stream.addPollHistory(PollHistory.Resumed)
       } else {
         if (stream.latestWasResumed) {
           pauseTps.add(tp)
         }
-        stream.addPollHistory(PollHistory.Paused)
       }
+
+      stream.addPollHistory(toResume)
     }
 
     if (!resumeTps.isEmpty) c.resume(resumeTps)
