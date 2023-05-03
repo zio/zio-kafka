@@ -7,7 +7,7 @@ import zio.Chunk
  *
  * The goal is to predict when a the stream is likely to need more data _before_ the next poll.
  */
-private[internal] trait PollHistory {
+private[internal] sealed trait PollHistory {
 
   /**
    * @return
@@ -31,28 +31,24 @@ private[internal] trait PollHistory {
 }
 
 private[internal] object PollHistory {
-  val Empty: PollHistory = PollHistoryImpl.Empty
+  val Empty: PollHistory = new PollHistoryImpl(0)
 
-  private class PollHistoryImpl private (resumeBits: Int) extends PollHistory {
+  private final class PollHistoryImpl private[PollHistory] (resumeBits: Int) extends PollHistory {
     // ResumeBits is a sequence of partition statuses (resumed or paused) before a poll.
     // We use one bit per poll, where value 1 indicates that the partition was resumed
     // and value 0 indicates it was paused.
     //
     // The most recent poll is in the least significant bit, the oldest poll is in the most significant bit.
 
-    def optimisticResume: Boolean =
+    override val optimisticResume: Boolean =
       OptimisticResumePollPatterns.exists { case (mask, pattern) =>
         (resumeBits & mask) == pattern
       }
 
-    def addPollHistory(resumed: Boolean): PollHistory =
+    override def addPollHistory(resumed: Boolean): PollHistory =
       new PollHistoryImpl(resumeBits << 1 | (if (resumed) 1 else 0))
 
-    def latestWasResumed: Boolean = (resumeBits & 1) == 1
-  }
-
-  private object PollHistoryImpl {
-    val Empty = new PollHistoryImpl(0)
+    override val latestWasResumed: Boolean = (resumeBits & 1) == 1
   }
 
   /**
