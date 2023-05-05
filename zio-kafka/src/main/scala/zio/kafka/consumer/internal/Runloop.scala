@@ -248,20 +248,9 @@ private[consumer] final class Runloop private (
     streams.foreach { stream =>
       val tp       = stream.tp
       val toResume = requestedPartitions.contains(tp) || stream.optimisticResume
-
-      if (toResume) {
-        if (!stream.latestWasResumed) {
-          resumeTps.add(tp)
-        }
-      } else {
-        if (stream.latestWasResumed) {
-          pauseTps.add(tp)
-        }
-      }
-
+      if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
       stream.addPollHistory(toResume)
     }
-
     if (!resumeTps.isEmpty) c.resume(resumeTps)
     if (!pauseTps.isEmpty) c.pause(pauseTps)
   }

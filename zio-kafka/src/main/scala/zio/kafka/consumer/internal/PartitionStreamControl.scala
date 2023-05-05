@@ -49,7 +49,6 @@ private[internal] final class PartitionStreamControl private (
     (tp, stream)
 
   def optimisticResume: Boolean = pollResumedHistory.optimisticResume
-  def latestWasResumed: Boolean = pollResumedHistory.latestWasResumed
 
   /**
    * Add a poll event to the poll history.
