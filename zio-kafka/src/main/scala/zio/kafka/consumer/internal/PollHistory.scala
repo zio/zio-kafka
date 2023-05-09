@@ -23,22 +23,13 @@ private[internal] sealed trait PollHistory {
    *   true when this partition was 'resumed' before the poll, false when it was 'paused'
    */
   def addPollHistory(resumed: Boolean): PollHistory
-
-  /**
-   * @return
-   *   the recorded history as a bit string where each character is either a '1': the partition was resumed or '0': the
-   *   partition was paused. The oldest poll comes first and the newest last. Leading zeros are removed. Since the
-   *   history length is limited, the return string will always have a bounded length.
-   */
-  def asBitString: String
 }
 
 private[internal] object PollHistory {
 
   /**
    * Patterns that, when they match the end of a poll history, indicate that the partition is likely to be resumed in
-   * the next poll. The pattern is a bit string as described in [[PollHistory.asBitString]] except that leading zeros
-   * are kept and need to match as well.
+   * the next poll.
    *
    * '''Run-away feedback loop'''
    *
@@ -114,7 +105,9 @@ private[internal] object PollHistory {
    * Bit value 1 indicates that the partition was resumed and value 0 indicates it was paused. The most recent poll is
    * in the least significant bit, the oldest poll is in the most significant bit.
    */
-  private final class PollHistoryImpl private[PollHistory] (resumeBits: Int) extends PollHistory {
+  private[internal] final class PollHistoryImpl private[PollHistory] (
+    /* exposed only for tests */ private[internal] val resumeBits: Int
+  ) extends PollHistory {
     override val optimisticResume: Boolean =
       OptimisticResumePollPatterns.exists { case (mask, pattern) =>
         (resumeBits & mask) == pattern
@@ -122,8 +115,6 @@ private[internal] object PollHistory {
 
     override def addPollHistory(resumed: Boolean): PollHistory =
       new PollHistoryImpl(resumeBits << 1 | (if (resumed) 1 else 0))
-
-    override def asBitString: String = resumeBits.toBinaryString
   }
 
   /** An empty poll history. */

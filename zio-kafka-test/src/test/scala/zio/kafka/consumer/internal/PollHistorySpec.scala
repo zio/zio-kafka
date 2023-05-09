@@ -1,6 +1,7 @@
 package zio.kafka.consumer.internal
 
 import zio.Scope
+import zio.kafka.consumer.internal.PollHistory.PollHistoryImpl
 import zio.test._
 
 object PollHistorySpec extends ZIOSpecDefault {
@@ -22,6 +23,11 @@ object PollHistorySpec extends ZIOSpecDefault {
       )
     }
   )
+
+  private implicit class RichPollHistory(private val ph: PollHistory) extends AnyVal {
+    def asBitString: String =
+      ph.asInstanceOf[PollHistoryImpl].resumeBits.toBinaryString
+  }
 
   private implicit class PollHistoryOps(private val s: String) extends AnyVal {
     def toPollHistory: PollHistory =
