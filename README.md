@@ -19,7 +19,7 @@ Kafka has a mature Java client for producing and consuming events, but it has a 
 In order to use this library, we need to add the following line in our `build.sbt` file:
 
 ```scala
-libraryDependencies += "dev.zio" %% "zio-kafka" % "2.2" 
+libraryDependencies += "dev.zio" %% "zio-kafka" % "2.3.0"
 ```
 
 ## Example
@@ -140,5 +140,4 @@ This library is heavily inspired and made possible by the research and implement
 
 [License](LICENSE)
 
-Copyright 2021 Itamar Ravid and the zio-kafka contributors. All rights reserved.
-<!-- TODO: not all rights reserved, rather Apache 2... -->
+Copyright 2021 - 2023 Itamar Ravid and the zio-kafka contributors.
