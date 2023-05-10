@@ -31,6 +31,9 @@ private[internal] object PollHistory {
    * Patterns that, when they match the end of a poll history, indicate that the partition is likely to be resumed in
    * the next poll.
    *
+   * Each pattern is given as a bit string where each character is either a '1': the partition was resumed or '0': the
+   * partition was paused. The oldest poll comes first and the newest last.
+   *
    * '''Run-away feedback loop'''
    *
    * If a pattern matches, the partition will be resumed (causing a `1` to be added to the poll history). If in the next
