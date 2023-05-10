@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1683701736759,
+  "lastUpdate": 1683702568006,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -15870,6 +15870,54 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
             "value": 1783.9398655800003,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "distinct": true,
+          "id": "dc46d3e9b98d589768f31d4051ad17f326f5b0b8",
+          "message": "Optimistically resume partitions early\n\nIncrease throughput and lower latency by optimistically resuming partitions that are likely to need more data in the _next_ poll.\n\nPrefetching is no longer needed and removed (and in fact, prefetching in combination with this PR makes it slower).\n\nThe benchmarks show that this solution makes the consumer 2 times faster.\n\nSolves #800.\n\nCo-authored-by: Jules Ivanic <guizmaii@users.noreply.github.com>",
+          "timestamp": "2023-05-10T08:57:33+02:00",
+          "tree_id": "a18cb1a74f339f5b980edb4e7a54984ed13bdbe1",
+          "url": "https://github.com/zio/zio-kafka/commit/dc46d3e9b98d589768f31d4051ad17f326f5b0b8"
+        },
+        "date": 1683702562838,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 325.0404741933333,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 412.7574132533332,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.kafkaClients",
+            "value": 736.0032168600001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumersComparisonBenchmark.zioKafka",
+            "value": 1492.5855616000001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
