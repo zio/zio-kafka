@@ -140,5 +140,4 @@ This library is heavily inspired and made possible by the research and implement
 
 [License](LICENSE)
 
-Copyright 2021 Itamar Ravid and the zio-kafka contributors. All rights reserved.
-<!-- TODO: not all rights reserved, rather Apache 2... -->
+Copyright 2021-2023 Itamar Ravid and the zio-kafka contributors.
