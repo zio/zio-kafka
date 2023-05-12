@@ -16,21 +16,9 @@ final case class EmbeddedKafkaStartException(msg: String, cause: Throwable = nul
 
 object Kafka {
 
-  private val ports                 = new AtomicReference[(Int, Int)](6001 -> 7001)
-  private def nextPorts: (Int, Int) = ports.getAndUpdate { case (k, z) => (k + 1, z + 1) }
-
-  final case class Sasl(value: Kafka) extends AnyVal
-
-  final case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka {
-    override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
-    override def stop(): UIO[Unit]              = ZIO.succeed(embeddedK.stop(true))
-  }
-
-  case object DefaultLocal extends Kafka {
-    override def bootstrapServers: List[String] = List(s"localhost:9092")
-    override def stop(): UIO[Unit]              = ZIO.unit
-  }
-
+  /**
+   * Creates an in-memory Kafka instance with a random port.
+   */
   val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
     def embeddedKafkaConfig(kafkaPort: Int, zooKeeperPort: Int): EmbeddedKafkaConfig =
       EmbeddedKafkaConfig(
@@ -49,6 +37,9 @@ object Kafka {
     )(_.stop())
   }
 
+  /**
+   * Creates an in-memory Kafka instance with a random port and SASL authentication configured.
+   */
   val saslEmbedded: ZLayer[Any, Throwable, Kafka.Sasl] = ZLayer.scoped {
     def embeddedKafkaConfig(kafkaPort: Int, zooKeeperPort: Int): EmbeddedKafkaConfig =
       EmbeddedKafkaConfig(
@@ -73,6 +64,9 @@ object Kafka {
     )(_.value.stop())
   }
 
+  /**
+   * Creates an in-memory Kafka instance with a random port and SSL authentication configured.
+   */
   val sslEmbedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
     def embeddedKafkaConfig(kafkaPort: Int, zooKeeperPort: Int): EmbeddedKafkaConfig =
       EmbeddedKafkaConfig(
@@ -104,9 +98,27 @@ object Kafka {
     )(_.stop())
   }
 
-  private def startKafka(
-    makeConfig: (Int, Int) => EmbeddedKafkaConfig
-  ): Task[EmbeddedK] =
+  /**
+   * Will connect to a Kafka instance running on localhost:9092 (with Docker, for example).
+   */
+  val local: ULayer[Kafka] = ZLayer.succeed(DefaultLocal)
+
+  final case class Sasl(value: Kafka) extends AnyVal
+
+  final case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka {
+    override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
+    override def stop(): UIO[Unit]              = ZIO.succeed(embeddedK.stop(true))
+  }
+
+  case object DefaultLocal extends Kafka {
+    override def bootstrapServers: List[String] = List(s"localhost:9092")
+    override def stop(): UIO[Unit]              = ZIO.unit
+  }
+
+  private val ports                 = new AtomicReference[(Int, Int)](6001 -> 7001)
+  private def nextPorts: (Int, Int) = ports.getAndUpdate { case (k, z) => (k + 1, z + 1) }
+
+  private def startKafka(makeConfig: (Int, Int) => EmbeddedKafkaConfig): Task[EmbeddedK] =
     ZIO.attemptBlocking {
       try {
         val (k, z) = nextPorts
@@ -116,5 +128,4 @@ object Kafka {
       }
     }
 
-  val local: ZLayer[Any, Nothing, Kafka] = ZLayer.succeed(DefaultLocal)
 }

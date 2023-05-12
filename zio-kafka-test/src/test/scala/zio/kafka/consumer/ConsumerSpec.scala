@@ -15,8 +15,8 @@ import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.producer.TransactionalProducer
 import zio.kafka.serde.Serde
-import zio.kafka.testkit.{ Kafka, KafkaRandom }
 import zio.kafka.testkit.KafkaTestUtils._
+import zio.kafka.testkit.{ Kafka, KafkaRandom }
 import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._
