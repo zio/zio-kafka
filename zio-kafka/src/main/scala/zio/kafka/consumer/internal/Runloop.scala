@@ -243,11 +243,24 @@ private[consumer] final class Runloop private (
     requestedPartitions: Set[TopicPartition],
     streams: Chunk[PartitionStreamControl]
   ): Unit = {
+    // The Kafka client has a tendency to consume everything from 1 partition before going to the
+    // next one. We pre-emptively pause one, long resumed partition to avoid this.
     val resumeTps = new java.util.ArrayList[TopicPartition](streams.size)
     val pauseTps  = new java.util.ArrayList[TopicPartition](streams.size)
+    val longResumedStream = streams
+      .maxByOption(_.resumedPollsCount)
+      .filter(_.resumedPollsCount >= MinimumResumesCountForForcePause)
     streams.foreach { stream =>
+      if (!longResumedStream.contains(stream)) {
+        val tp       = stream.tp
+        val toResume = requestedPartitions.contains(tp) || stream.optimisticResume
+        if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
+        stream.addPollHistory(toResume)
+      }
+    }
+    longResumedStream.foreach { stream =>
       val tp       = stream.tp
-      val toResume = requestedPartitions.contains(tp) || stream.optimisticResume
+      val toResume = (requestedPartitions.contains(tp) || stream.optimisticResume) && resumeTps.size() == 0
       if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
       stream.addPollHistory(toResume)
     }
@@ -514,6 +527,9 @@ private[consumer] object Runloop {
 
   // Internal parameters, should not be necessary to tune
   private val commandQueueSize = 1024
+
+  // The minimum number of resumes before a partition is considered for force pausing
+  private val MinimumResumesCountForForcePause = 4
 
   private final case class PollResult(
     startingTps: Set[TopicPartition],

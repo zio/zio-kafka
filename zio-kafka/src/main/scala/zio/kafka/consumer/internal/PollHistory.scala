@@ -23,6 +23,9 @@ private[internal] sealed trait PollHistory {
    *   true when this partition was 'resumed' before the poll, false when it was 'paused'
    */
   def addPollHistory(resumed: Boolean): PollHistory
+
+  /** @return the number of polls this partition has been resumed */
+  def resumedPollsCount: Int
 }
 
 private[internal] object PollHistory {
@@ -118,6 +121,9 @@ private[internal] object PollHistory {
 
     override def addPollHistory(resumed: Boolean): PollHistory =
       new PollHistoryImpl(resumeBits << 1 | (if (resumed) 1 else 0))
+
+    override def resumedPollsCount: Int =
+      Integer.numberOfTrailingZeros(~resumeBits)
   }
 
   /** An empty poll history. */

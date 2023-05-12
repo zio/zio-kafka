@@ -21,6 +21,16 @@ object PollHistorySpec extends ZIOSpecDefault {
         "1".toPollHistory.addPollHistory(false).asBitString == "10",
         "101010".toPollHistory.addPollHistory(false).asBitString == "1010100"
       )
+    },
+    test("resume count") {
+      assertTrue(
+        "0".toPollHistory.resumedPollsCount == 0,
+        "1".toPollHistory.resumedPollsCount == 1,
+        "11".toPollHistory.resumedPollsCount == 2,
+        "11010111100011011".toPollHistory.resumedPollsCount == 2,
+        ("1" * 31).toPollHistory.resumedPollsCount == 31,
+        ("1" * 32).toPollHistory.resumedPollsCount == 32
+      )
     }
   )
 

@@ -14,7 +14,6 @@ private[internal] final class PartitionStreamControl private (
   interruptPromise: Promise[Throwable, Unit],
   completedPromise: Promise[Nothing, Unit]
 ) {
-
   private var pollResumedHistory: PollHistory = PollHistory.Empty
 
   private val logAnnotate = ZIO.logAnnotate(
@@ -49,6 +48,8 @@ private[internal] final class PartitionStreamControl private (
     (tp, stream)
 
   def optimisticResume: Boolean = pollResumedHistory.optimisticResume
+
+  def resumedPollsCount: Int = pollResumedHistory.resumedPollsCount
 
   /**
    * Add a poll event to the poll history.
