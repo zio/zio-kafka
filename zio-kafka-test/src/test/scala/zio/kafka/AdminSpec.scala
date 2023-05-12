@@ -5,7 +5,6 @@ import org.apache.kafka.clients.admin.{ ConfigEntry, RecordsToDelete }
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{ Node => JNode }
 import zio._
-import zio.kafka.KafkaTestUtils._
 import zio.kafka.admin.AdminClient.{
   AlterConfigOp,
   AlterConfigOpType,
@@ -24,9 +23,10 @@ import zio.kafka.admin.AdminClient.{
 import zio.kafka.admin.acl._
 import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
-import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
-import zio.kafka.{ KafkaRandom, KafkaTestUtils }
+import zio.kafka.testkit.KafkaTestUtils._
+import zio.kafka.testkit._
+import zio.kafka.testkit.embedded.Kafka
 import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._

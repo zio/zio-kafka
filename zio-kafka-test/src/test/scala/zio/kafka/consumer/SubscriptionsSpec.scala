@@ -1,13 +1,14 @@
 package zio.kafka.consumer
+
 import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio._
-import zio.kafka.KafkaRandom
-import zio.kafka.KafkaTestUtils._
+import zio.kafka.testkit.KafkaRandom
+import zio.kafka.testkit.KafkaTestUtils._
 import zio.kafka.TestLogger.logger
-import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
+import zio.kafka.testkit.embedded.Kafka
 import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._

@@ -1,4 +1,4 @@
-package zio.kafka
+package zio.kafka.testkit
 
 import zio.{ Task, ZIO }
 

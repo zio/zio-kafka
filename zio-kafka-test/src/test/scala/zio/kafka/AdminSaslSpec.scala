@@ -1,9 +1,10 @@
 package zio.kafka
 
-import zio.{ Scope, _ }
+import zio._
 import zio.kafka.admin.acl._
 import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
-import zio.kafka.embedded.Kafka
+import zio.kafka.testkit.embedded.Kafka
+import zio.kafka.testkit._
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._

@@ -61,7 +61,7 @@ lazy val root = project
   )
   .aggregate(
     zioKafka,
-    zioKafkaTestUtils,
+    zioKafkaTestkit,
     zioKafkaTest,
     zioKafkaBench,
     zioKafkaExample,
@@ -110,13 +110,12 @@ lazy val `embedded-kafka`: Def.Initialize[Seq[sbt.ModuleID]] = {
   )(embeddedKafka)
 }
 
-lazy val zioKafkaTestUtils =
+lazy val zioKafkaTestkit =
   project
-    .in(file("zio-kafka-test-utils"))
+    .in(file("zio-kafka-testkit"))
     .dependsOn(zioKafka)
     .enablePlugins(BuildInfoPlugin)
-    .settings(stdSettings("zio-kafka-test-utils"))
-    .settings(buildInfoSettings("zio.kafka"))
+    .settings(stdSettings("zio-kafka-testkit"))
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio" %% "zio"      % zioVersion.value,
@@ -129,7 +128,7 @@ lazy val zioKafkaTestUtils =
 lazy val zioKafkaTest =
   project
     .in(file("zio-kafka-test"))
-    .dependsOn(zioKafka, zioKafkaTestUtils)
+    .dependsOn(zioKafka, zioKafkaTestkit)
     .enablePlugins(BuildInfoPlugin)
     .settings(stdSettings("zio-kafka-test"))
     .settings(buildInfoSettings("zio.kafka"))
@@ -151,7 +150,7 @@ lazy val zioKafkaBench =
     .settings(stdSettings("zio-kafka-bench"))
     .settings(publish / skip := true)
     .settings(libraryDependencies += logback)
-    .dependsOn(zioKafka, zioKafkaTestUtils)
+    .dependsOn(zioKafka, zioKafkaTestkit)
 
 lazy val zioKafkaExample =
   project
