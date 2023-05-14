@@ -8,8 +8,7 @@ trait KafkaRandom {
 
   def kafkaPrefix: String
 
-  def randomThing(prefix: String): Task[String] =
-    ZIO.attempt(UUID.randomUUID()).map(uuid => s"$prefix-$uuid")
+  def randomThing(prefix: String): Task[String] = ZIO.attempt(s"$prefix-${UUID.randomUUID()}")
 
   def randomTopic: Task[String] = randomThing(s"$kafkaPrefix-topic")
 

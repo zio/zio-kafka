@@ -3,13 +3,12 @@ package zio.kafka
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
+import zio.kafka.consumer._
+import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
+import zio.kafka.producer.{ Producer, Transaction, TransactionalProducer }
+import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
 import zio.kafka.testkit._
-import zio.kafka.consumer.{ CommittableRecord, Consumer, ConsumerSettings, OffsetBatch, Subscription }
-import zio.kafka.producer.{ Producer, Transaction, TransactionalProducer }
-import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
-import zio.kafka.serde.Serde
-import zio.kafka.testkit.embedded.Kafka
 import zio.stream.Take
 import zio.test.Assertion._
 import zio.test.TestAspect._

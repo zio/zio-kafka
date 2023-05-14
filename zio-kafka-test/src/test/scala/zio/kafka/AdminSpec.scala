@@ -26,7 +26,6 @@ import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscripti
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
 import zio.kafka.testkit._
-import zio.kafka.testkit.embedded.Kafka
 import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._

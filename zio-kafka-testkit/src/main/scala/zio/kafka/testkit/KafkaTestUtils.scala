@@ -9,7 +9,6 @@ import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.producer._
 import zio.kafka.serde.{ Deserializer, Serde, Serializer }
-import zio.kafka.testkit.embedded.Kafka
 
 import java.io.File
 import java.nio.file.{ Files, StandardCopyOption }

@@ -1,9 +1,8 @@
-package zio.kafka.testkit.embedded
+package zio.kafka.testkit
 
 import _root_.kafka.server.KafkaConfig
 import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import zio._
-import zio.kafka.testkit.KafkaTestUtils
 
 import java.util.concurrent.atomic.AtomicReference
 import scala.util.control.NonFatal

@@ -9,8 +9,8 @@ import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
+import zio.kafka.testkit.Kafka
 import zio.kafka.testkit.KafkaTestUtils.{ consumerSettings, produceMany, producer, simpleConsumer }
-import zio.kafka.testkit.embedded.Kafka
 import zio.{ durationInt, ULayer, ZIO, ZLayer }
 
 import java.util.concurrent.TimeUnit

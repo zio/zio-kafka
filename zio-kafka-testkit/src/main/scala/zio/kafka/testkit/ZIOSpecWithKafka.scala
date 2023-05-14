@@ -1,8 +1,7 @@
 package zio.kafka.testkit
 
-import zio.test._
 import zio.ZLayer
-import zio.kafka.testkit.embedded.Kafka
+import zio.test._
 
 /**
  * This trait should be used if you want to run your tests with a shared-across-your-suites embedded Kafka cluster.
