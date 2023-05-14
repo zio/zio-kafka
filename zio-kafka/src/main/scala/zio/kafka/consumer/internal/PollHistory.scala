@@ -24,7 +24,7 @@ private[internal] sealed trait PollHistory {
    */
   def addPollHistory(resumed: Boolean): PollHistory
 
-  /** @return the number of polls this partition has been resumed */
+  /** @return the number of consecutive polls this partition has been resumed up to now */
   def resumedPollsCount: Int
 }
 

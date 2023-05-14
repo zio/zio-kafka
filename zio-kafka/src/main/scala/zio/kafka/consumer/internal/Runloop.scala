@@ -235,21 +235,28 @@ private[consumer] final class Runloop private (
     }
 
   /**
-   * Pause partitions for which there is no demand and resume those for which there is now demand. Optimistically resume
-   * partitions that are likely to need more data in the next poll.
+   * Pause partitions for which there is no demand, and resume those for which there is now demand. Optimistically
+   * resume partitions that are likely to need more data in the next poll. Force-pause long resumed partitions to make
+   * sure all partitions get a chance to be read (prevent read starvation).
+   *
+   * The Kafka client has a tendency to consume everything from 1 partition before going to the next one. This can cause
+   * a partition from not being read for a long time, or even forever. To prevent this, when multiple partitions are
+   * resumed, we force pause the longest resumed partition (though we allow it to be resumed for
+   * [[MinimumAllowedResumesCount]] polls).
+   *
+   * @param requestedPartitions
+   *   partitions for which there is a request for more data
    */
   private def resumeAndPausePartitions(
     c: ByteArrayKafkaConsumer,
     requestedPartitions: Set[TopicPartition],
     streams: Chunk[PartitionStreamControl]
   ): Unit = {
-    // The Kafka client has a tendency to consume everything from 1 partition before going to the
-    // next one. We pre-emptively pause one, long resumed partition to avoid this.
     val resumeTps = new java.util.ArrayList[TopicPartition](streams.size)
     val pauseTps  = new java.util.ArrayList[TopicPartition](streams.size)
     val longResumedStream = streams
       .maxByOption(_.resumedPollsCount)
-      .filter(_.resumedPollsCount >= MinimumResumesCountForForcePause)
+      .filter(_.resumedPollsCount >= MinimumAllowedResumesCount)
     streams.foreach { stream =>
       if (!longResumedStream.contains(stream)) {
         val tp       = stream.tp
@@ -528,8 +535,11 @@ private[consumer] object Runloop {
   // Internal parameters, should not be necessary to tune
   private val commandQueueSize = 1024
 
-  // The minimum number of resumes before a partition is considered for force pausing
-  private val MinimumResumesCountForForcePause = 4
+  /**
+   * The number of polls a partition may stay resumed. A partition that is resumed for longer, will be considered for
+   * force pausing in order to prevent read-starvation of other partitions.
+   */
+  private val MinimumAllowedResumesCount = 4
 
   private final case class PollResult(
     startingTps: Set[TopicPartition],
