@@ -5,6 +5,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.openjdk.jmh.annotations._
 import zio.kafka.KafkaTestUtils.{ consumerSettings, produceMany, producer, simpleConsumer }
+import zio.kafka.admin.AdminClient.TopicPartition
 import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.embedded.Kafka
@@ -19,16 +20,20 @@ object ConsumersComparisonBenchmark {
   type LowLevelKafka = KafkaConsumer[Array[Byte], Array[Byte]]
 
   type Env = Kafka with Consumer with Producer with LowLevelKafka with ConsumerSettings
+
+  def zAssert(p: => Boolean, message: => String): ZIO[Any, AssertionError, Unit] =
+    ZIO.when(!p)(ZIO.fail(new AssertionError(s"Assertion failed: $message"))).unit
 }
 import zio.kafka.bench.ConsumersComparisonBenchmark._
 
 @State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
-  val topic1                          = "topic1"
-  val nrPartitions                    = 6
-  val nrMessages                      = 1000000
-  val kvs: Iterable[(String, String)] = Iterable.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
+  private val topic1: String                        = "topic1"
+  private val nrPartitions: Int                     = 6
+  private val topicPartitions: List[TopicPartition] = (0 until nrPartitions).map(TopicPartition(topic1, _)).toList
+  private val numberOfMessages: Int                 = 1000000
+  private val kvs: Iterable[(String, String)]       = Iterable.tabulate(numberOfMessages)(i => (s"key$i", s"msg$i"))
 
   private val kafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
     ZLayer.scoped {
@@ -79,19 +84,43 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
   def kafkaClients(): Any =
     runZIO {
       ZIO.service[ConsumerSettings].flatMap { settings =>
-        ZIO.service[LowLevelKafka].flatMap { consumer =>
+        ZIO.serviceWithZIO[LowLevelKafka] { consumer =>
           ZIO.attemptBlocking {
             consumer.subscribe(java.util.Arrays.asList(topic1))
 
             var count = 0L
-            while (count < nrMessages) {
+            while (count < numberOfMessages) {
               val records = consumer.poll(settings.pollTimeout)
               count += records.count()
             }
 
             consumer.unsubscribe()
-          }
+            count
+          }.flatMap(r => zAssert(r == numberOfMessages, s"Consumed $r messages instead of $numberOfMessages"))
         }
+      }
+    }
+
+  @Benchmark
+  @BenchmarkMode(Array(Mode.AverageTime))
+  def manualKafkaClients(): Any =
+    runZIO {
+      ZIO.service[ConsumerSettings].flatMap { settings =>
+        ZIO
+          .serviceWithZIO[LowLevelKafka] { consumer =>
+            ZIO.attemptBlocking {
+              consumer.assign(topicPartitions.map(_.asJava).asJava)
+
+              var count = 0L
+              while (count < numberOfMessages) {
+                val records = consumer.poll(settings.pollTimeout)
+                count += records.count()
+              }
+
+              consumer.unsubscribe()
+              count
+            }.flatMap(r => zAssert(r == numberOfMessages, s"Consumed $r messages instead of $numberOfMessages"))
+          }
       }
     }
 
@@ -101,7 +130,23 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
     runZIO {
       Consumer
         .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
-        .take(nrMessages.toLong)
-        .runDrain
+        .take(numberOfMessages.toLong)
+        .runCount
+        .flatMap(r => zAssert(r == numberOfMessages, s"Consumed $r messages instead of $numberOfMessages"))
+    }
+
+  @Benchmark
+  @BenchmarkMode(Array(Mode.AverageTime))
+  def manualZioKafka(): Any =
+    runZIO {
+      Consumer
+        .plainStream(
+          Subscription.manual(topicPartitions.map(tp => tp.name -> tp.partition): _*),
+          Serde.byteArray,
+          Serde.byteArray
+        )
+        .take(numberOfMessages.toLong)
+        .runCount
+        .flatMap(r => zAssert(r == numberOfMessages, s"Consumed $r messages instead of $numberOfMessages"))
     }
 }
