@@ -7,14 +7,16 @@ import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, Command
 import zio.stream.{ Take, ZStream }
 import zio.{ Chunk, LogAnnotation, Promise, Queue, UIO, ZIO }
 
-private[internal] final class PartitionStreamControl private (
+// package private constructor for unit test
+private[internal] final class PartitionStreamControl private[internal] (
   val tp: TopicPartition,
   stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
   interruptPromise: Promise[Throwable, Unit],
   completedPromise: Promise[Nothing, Unit]
 ) {
-  private var pollResumedHistory: PollHistory = PollHistory.Empty
+  // package private for unit test
+  private[internal] var pollResumedHistory: PollHistory = PollHistory.Empty
 
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),

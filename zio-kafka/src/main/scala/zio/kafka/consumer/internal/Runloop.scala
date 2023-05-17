@@ -237,47 +237,6 @@ private[consumer] final class Runloop private (
         ZIO.succeed(Set.empty)
     }
 
-  /**
-   * Pause partitions for which there is no demand, and resume those for which there is now demand. Optimistically
-   * resume partitions that are likely to need more data in the next poll. Force-pause long resumed partitions to make
-   * sure all partitions get a chance to be read (prevent read starvation).
-   *
-   * The Kafka client has a tendency to consume everything from 1 partition before going to the next one. This can cause
-   * a partition from not being read for a long time, or even forever. To prevent this, when multiple partitions are
-   * resumed, we force pause the longest resumed partition (though we allow it to be resumed for
-   * [[MinimumAllowedResumesCount]] polls).
-   *
-   * @param requestedPartitions
-   *   partitions for which there is a request for more data
-   */
-  private def resumeAndPausePartitions(
-    c: ByteArrayKafkaConsumer,
-    requestedPartitions: Set[TopicPartition],
-    streams: Chunk[PartitionStreamControl]
-  ): Unit = {
-    val resumeTps = new java.util.ArrayList[TopicPartition](streams.size)
-    val pauseTps  = new java.util.ArrayList[TopicPartition](streams.size)
-    val longResumedStream = streams
-      .maxByOption(_.resumedPollsCount)
-      .filter(_.resumedPollsCount >= MinimumAllowedResumesCount)
-    streams.foreach { stream =>
-      if (!longResumedStream.contains(stream)) {
-        val tp       = stream.tp
-        val toResume = requestedPartitions.contains(tp) || stream.optimisticResume
-        if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
-        stream.addPollHistory(toResume)
-      }
-    }
-    longResumedStream.foreach { stream =>
-      val tp       = stream.tp
-      val toResume = (requestedPartitions.contains(tp) || stream.optimisticResume) && resumeTps.size() == 0
-      if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
-      stream.addPollHistory(toResume)
-    }
-    if (!resumeTps.isEmpty) c.resume(resumeTps)
-    if (!pauseTps.isEmpty) c.pause(pauseTps)
-  }
-
   private def doPoll(c: ByteArrayKafkaConsumer): ConsumerRecords[Array[Byte], Array[Byte]] = {
     val records = c.poll(pollTimeout)
 
@@ -648,6 +607,49 @@ private[consumer] object Runloop {
                ZIO.logDebug("Shut down Runloop")
            )
     } yield runloop
+
+  /**
+   * Pause partitions for which there is no demand, and resume those for which there is now demand. Optimistically
+   * resume partitions that are likely to need more data in the next poll. Force-pause long resumed partitions to make
+   * sure all partitions get a chance to be read (prevent read starvation).
+   *
+   * The Kafka client has a tendency to consume everything from 1 partition before going to the next one. This can cause
+   * a partition from not being read for a long time, or even forever. To prevent this, when multiple partitions are
+   * resumed, we force pause the longest resumed partition (though we allow it to be resumed for
+   * [[MinimumAllowedResumesCount]] polls).
+   *
+   * @param requestedPartitions
+   *   partitions for which there is a request for more data
+   */
+  // package access for unit testing
+  private[internal] def resumeAndPausePartitions(
+    c: ByteArrayKafkaConsumer,
+    requestedPartitions: Set[TopicPartition],
+    streams: Chunk[PartitionStreamControl]
+  ): Unit = {
+    val resumeTps = new java.util.ArrayList[TopicPartition](streams.size)
+    val pauseTps  = new java.util.ArrayList[TopicPartition](streams.size)
+    val longResumedStream = streams
+      .maxByOption(_.resumedPollsCount)
+      .filter(_.resumedPollsCount >= MinimumAllowedResumesCount)
+    streams.foreach { stream =>
+      if (!longResumedStream.contains(stream)) {
+        val tp       = stream.tp
+        val toResume = requestedPartitions.contains(tp) || stream.optimisticResume
+        if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
+        stream.addPollHistory(toResume)
+      }
+    }
+    longResumedStream.foreach { stream =>
+      val tp       = stream.tp
+      val toResume = (requestedPartitions.contains(tp) || stream.optimisticResume) && resumeTps.size() == 0
+      if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
+      stream.addPollHistory(toResume)
+    }
+    if (!resumeTps.isEmpty) c.resume(resumeTps)
+    if (!pauseTps.isEmpty) c.pause(pauseTps)
+  }
+
 }
 
 private[internal] final case class State(
