@@ -15,6 +15,9 @@ import zio.stream._
 import java.util
 import scala.jdk.CollectionConverters._
 
+// Do not remove, this is needed for scala 2.12 builds:
+import scala.collection.compat._
+
 private[consumer] final class Runloop private (
   runtime: Runtime[Any],
   hasGroupId: Boolean,
