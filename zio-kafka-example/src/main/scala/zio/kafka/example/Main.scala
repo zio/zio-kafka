@@ -7,18 +7,18 @@ import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.serde.Serde
 import zio.logging.backend.SLF4J
 
-trait Kafka {
+trait MyKafka {
   def bootstrapServers: List[String]
   def stop(): UIO[Unit]
 }
 
-object Kafka {
-  final case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka {
+object MyKafka {
+  final case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends MyKafka {
     override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
     override def stop(): UIO[Unit]              = ZIO.succeed(embeddedK.stop(true))
   }
 
-  val embedded: ZLayer[Any, Throwable, Kafka] = ZLayer.scoped {
+  val embedded: ZLayer[Any, Throwable, MyKafka] = ZLayer.scoped {
     implicit val embeddedKafkaConfig: EmbeddedKafkaConfig = EmbeddedKafkaConfig(
       customBrokerProperties = Map(
         "group.min.session.timeout.ms"     -> "500",
@@ -41,7 +41,7 @@ object Main extends ZIOAppDefault {
 
   private val topic = "test-topic"
 
-  private def consumerLayer(kafka: Kafka): ZLayer[Any, Throwable, Consumer] = {
+  private def consumerLayer(kafka: MyKafka): ZLayer[Any, Throwable, Consumer] = {
     val consumerSettings =
       ConsumerSettings(kafka.bootstrapServers)
         .withPollTimeout(500.millis)
@@ -59,7 +59,7 @@ object Main extends ZIOAppDefault {
       (
         for {
           _     <- ZIO.logInfo(s"Starting app")
-          kafka <- ZIO.service[Kafka]
+          kafka <- ZIO.service[MyKafka]
           stream = Consumer
                      .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                      .provideLayer(consumerLayer(kafka))
@@ -67,6 +67,6 @@ object Main extends ZIOAppDefault {
           consumed <- stream.take(1000).tap(r => ZIO.logInfo(s"Consumed record $r")).runCount
           _        <- ZIO.logInfo(s"Consumed $consumed records")
         } yield ()
-      ).provideSomeLayer[ZIOAppArgs with Scope](Kafka.embedded)
+      ).provideSomeLayer[ZIOAppArgs with Scope](MyKafka.embedded)
 
 }

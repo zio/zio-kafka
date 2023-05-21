@@ -11,7 +11,7 @@ const sidebars = {
         "partition-assignment-and-offset-retrieval",
         "sharing-consumer",
         "serialization-and-deserialization",
-        "annotated-tests"
+        "writing-tests"
       ]
     }
   ]
