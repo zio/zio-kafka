@@ -10,14 +10,13 @@ import org.apache.kafka.clients.consumer.{
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
-import zio.kafka.KafkaRandom
-import zio.kafka.KafkaTestUtils._
 import zio.kafka.TestLogger.logger
 import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.embedded.Kafka
 import zio.kafka.producer.TransactionalProducer
 import zio.kafka.serde.Serde
+import zio.kafka.testkit.{ Kafka, KafkaRandom }
+import zio.kafka.testkit.KafkaTestUtils._
 import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._

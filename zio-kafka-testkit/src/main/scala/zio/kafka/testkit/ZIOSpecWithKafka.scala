@@ -1,11 +1,10 @@
-package zio.kafka
+package zio.kafka.testkit
 
-import zio.kafka.embedded.Kafka
-import zio.test._
 import zio.ZLayer
+import zio.test._
 
 /**
- * This should be used if you want to run your tests with a shared-across-your-suites embedded Kafka cluster.
+ * This trait should be used if you want to run your tests with a shared-across-your-suites embedded Kafka cluster.
  *
  * More information about sharing a resource between multiple suites can be found here:
  * https://zio.dev/reference/test/sharing-layers-between-multiple-files/

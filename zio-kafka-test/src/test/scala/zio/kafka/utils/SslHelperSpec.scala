@@ -4,10 +4,9 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.KafkaException
 import zio.ZIO
 import zio.kafka.consumer.{ Consumer, Subscription }
-import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.kafka.{ KafkaRandom, KafkaTestUtils }
+import zio.kafka.testkit.{ Kafka, KafkaRandom, KafkaTestUtils }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
