@@ -182,6 +182,8 @@ object Kafka {
 }
 ```
 
+The in-memory Kafka instances are created using [embedded-kafka](https://github.com/embeddedkafka/embedded-kafka).
+
 ### `KafkaTestUtils` utilities
 
 This object provides several utilities to simplify writing your tests, like layers to boot a `Producer`, a `Consumer`, or an `AdminClient`.     
