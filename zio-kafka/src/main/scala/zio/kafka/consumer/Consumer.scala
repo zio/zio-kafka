@@ -1,11 +1,12 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp }
+import org.apache.kafka.clients.consumer.{ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp}
 import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
-import zio.kafka.serde.{ Deserializer, Serde }
+import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
+import zio.kafka.consumer.internal.{ConsumerAccess, RunloopAccess}
+import zio.kafka.serde.{Deserializer, Serde}
 import zio.kafka.utils.SslHelper
 import zio.stream._
 
@@ -157,11 +158,12 @@ object Consumer {
 
   case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
 
-  private final case class Live(
-    private val consumer: ConsumerAccess,
-    private val settings: ConsumerSettings,
-    private val runloopAccess: RunloopAccess,
-    private val subscriptions: Ref.Synchronized[Set[Subscription]]
+  private final case class Live private (
+    consumer: ConsumerAccess,
+    settings: ConsumerSettings,
+    runloopAccess: RunloopAccess,
+    subscriptions: Ref.Synchronized[Set[Subscription]],
+    partitionsQueue: Queue[Take[Throwable, PartitionAssignment]]
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
@@ -248,13 +250,11 @@ object Consumer {
 
       ZStream.unwrapScoped {
         for {
-          hub    <- runloopAccess.partitionAssignments
-          stream <- ZStream.fromHubScopedWithShutdown(hub)
-          _      <- extendSubscriptions.withFinalizer(_ => reduceSubscriptions.orDie)
-        } yield stream
+          _ <- extendSubscriptions.withFinalizer(_ => reduceSubscriptions.orDie)
+        } yield ZStream
+          .fromQueue(partitionsQueue)
           .map(_.exit)
           .flattenExitOption
-          .flattenChunks
           .map {
             _.collect {
               case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
@@ -350,9 +350,10 @@ object Consumer {
     for {
       _             <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
       wrapper       <- ConsumerAccess.make(settings)
-      runloopAccess <- RunloopAccess.make(settings, diagnostics, wrapper)
+      partitions    <- ZIO.acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
+      runloopAccess <- RunloopAccess.make(settings, diagnostics, wrapper, partitions)
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
-    } yield Live(wrapper, settings, runloopAccess, subscriptions)
+    } yield Live(wrapper, settings, runloopAccess, subscriptions, partitions)
 
   /**
    * Accessor method for [[Consumer.assignment]]
