@@ -19,7 +19,7 @@ import zio.kafka.security.KafkaCredentialStore
  *   Internal timeout for each iteration of the command processing and polling loop, use to detect stalling. This should
  *   be much larger than the pollTimeout and the time it takes to process chunks of records. If your consumer is not
  *   subscribed for long periods during its lifetime, this timeout should take that into account as well. When the
- *   timeout expires, the plainStream/partitionedStream/etc will fail with a [[Consumer.RunloopTimeout]].
+ *   timeout expires, the internal runloop will be interrupted and the consumer will be closed.
  */
 case class ConsumerSettings(
   bootstrapServers: List[String],
