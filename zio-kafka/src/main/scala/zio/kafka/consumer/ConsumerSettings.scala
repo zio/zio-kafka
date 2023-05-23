@@ -15,11 +15,6 @@ import zio.kafka.security.KafkaCredentialStore
  * @param restartStreamOnRebalancing
  *   When `true` _all_ streams are restarted during a rebalance, including those streams that are not revoked. The
  *   default is `false`.
- * @param runloopTimeout
- *   Internal timeout for each iteration of the command processing and polling loop, use to detect stalling. This should
- *   be much larger than the pollTimeout and the time it takes to process chunks of records. If your consumer is not
- *   subscribed for long periods during its lifetime, this timeout should take that into account as well. When the
- *   timeout expires, the plainStream/partitionedStream/etc will fail with a [[Consumer.RunloopTimeout]].
  * @param enableOptimisticResume
  *   When `true` (the default) zio-kafka predicts whether a stream needs more data, slightly ahead of time. Zio-kafka
  *   pauses partitions for which the associated stream is processing previously fetched data. When the stream needs more
@@ -34,7 +29,6 @@ final case class ConsumerSettings(
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
-  runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
   enableOptimisticResume: Boolean = true
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
@@ -90,20 +84,15 @@ final case class ConsumerSettings(
   def withCredentials(credentialsStore: KafkaCredentialStore): ConsumerSettings =
     withProperties(credentialsStore.properties)
 
-  def withRunloopTimeout(timeout: Duration): ConsumerSettings =
-    copy(runloopTimeout = timeout)
 }
 
 object ConsumerSettings {
-  val defaultRunloopTimeout: Duration = 4.minutes
-
   def apply(bootstrapServers: List[String]): ConsumerSettings =
     new ConsumerSettings(
       bootstrapServers = bootstrapServers,
       properties = Map.empty,
       closeTimeout = 30.seconds,
       pollTimeout = 50.millis,
-      offsetRetrieval = OffsetRetrieval.Auto(),
-      runloopTimeout = defaultRunloopTimeout
+      offsetRetrieval = OffsetRetrieval.Auto()
     )
 }
