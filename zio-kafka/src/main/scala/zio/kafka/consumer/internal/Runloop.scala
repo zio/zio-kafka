@@ -23,7 +23,7 @@ private[consumer] final class Runloop private (
   runloopTimeout: Duration,
   commandQueue: Queue[Command],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
-  val partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
+  partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]],
   diagnostics: Diagnostics,
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
@@ -407,7 +407,7 @@ private[consumer] final class Runloop private (
             _ <- ZIO.logDebug("Graceful shutdown")
             _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end())
             _ <- partitions.offer(Take.end)
-            _ <- ZIO.logTrace("Graceful shutdown initiated")
+            _ <- ZIO.logDebug("Graceful shutdown initiated")
           } yield ()
         }.as(state.copy(pendingRequests = Chunk.empty))
 
@@ -577,19 +577,14 @@ private[consumer] object Runloop {
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
-    runloopTimeout: Duration
+    runloopTimeout: Duration,
+    partitions: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]]
   ): ZIO[Scope, Throwable, Runloop] =
     for {
       commandQueue       <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](commandQueueSize))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
-      partitions <- ZIO.acquireRelease(
-                      Queue
-                        .unbounded[
-                          Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
-                        ]
-                    )(_.shutdown)
-      currentStateRef <- Ref.make(State.initial)
-      runtime         <- ZIO.runtime[Any]
+      currentStateRef    <- Ref.make(State.initial)
+      runtime            <- ZIO.runtime[Any]
       runloop = new Runloop(
                   runtime,
                   hasGroupId,
@@ -609,13 +604,13 @@ private[consumer] object Runloop {
 
       // Run the entire loop on the a dedicated thread to avoid executor shifts
       executor <- RunloopExecutor.newInstance
-      fib      <- ZIO.onExecutor(executor)(runloop.run).forkScoped
+      fiber    <- ZIO.onExecutor(executor)(runloop.run).forkScoped
 
       _ <- ZIO.addFinalizer(
-             ZIO.logTrace("Shutting down Runloop") *>
+             ZIO.logDebug("Shutting down Runloop") *>
                commandQueue.offer(StopAllStreams) *>
                commandQueue.offer(StopRunloop) *>
-               fib.join.orDie <*
+               fiber.join.orDie <*
                ZIO.logDebug("Shut down Runloop")
            )
     } yield runloop

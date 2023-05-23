@@ -287,8 +287,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                  .tap(_ => ZIO.logDebug("Stream completed"))
                  .provideSomeLayer[Kafka](
                    consumer(client, Some(group))
-                 ) *> keepProducing
-                 .set(false)
+                 )
+          _ <- keepProducing.set(false)
         } yield assertCompletes
       },
       test("process outstanding commits after a graceful shutdown") {
@@ -1054,7 +1054,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         } yield assertCompletes
       },
       test(
-        "issue#846: Booting a Consumer to do something else than consuming should not throught `RunloopTimeout` exception"
+        "issue #846: Booting a Consumer to do something else than consuming should not throught `RunloopTimeout` exception"
       ) {
         for {
           clientId <- randomClient
@@ -1067,6 +1067,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       .provideSome[Scope & Kafka](producer)
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(5.minutes)
+      ) @@ withLiveClock @@ sequential @@ timeout(2.minutes)
 
 }
