@@ -4,8 +4,7 @@ import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, Of
 import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
-import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
+import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
 import zio.stream._
@@ -161,11 +160,8 @@ object Consumer {
   private final case class Live(
     private val consumer: ConsumerAccess,
     private val settings: ConsumerSettings,
-    private val runloop: Runloop,
-    private val subscriptions: Ref.Synchronized[Set[Subscription]],
-    private val partitionAssignments: Hub[
-      Take[Throwable, Chunk[(TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord])]]
-    ]
+    private val runloopAccess: RunloopAccess,
+    private val subscriptions: Ref.Synchronized[Set[Subscription]]
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
@@ -203,7 +199,7 @@ object Consumer {
      * requests.
      */
     override def stopConsumption: UIO[Unit] =
-      runloop.gracefulShutdown
+      runloopAccess.gracefulShutdown
 
     override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
       consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)
@@ -224,33 +220,36 @@ object Consumer {
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
     ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
-      def extendSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
-        val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
-        Subscription.unionAll(newSubscriptions) match {
-          case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
-          case Some(union) =>
-            ZIO.logDebug(s"Changing kafka subscription to $union") *>
-              subscribe(union).as(newSubscriptions.toSet)
-        }
-      }.uninterruptible
+      def extendSubscriptions: Task[Unit] =
+        subscriptions.updateZIO { existingSubscriptions =>
+          val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
+          Subscription.unionAll(newSubscriptions) match {
+            case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
+            case Some(union) =>
+              ZIO.logDebug(s"Changing kafka subscription to $union") *>
+                subscribe(union).as(newSubscriptions.toSet)
+          }
+        }.uninterruptible
 
-      def reduceSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
-        val newSubscriptions = NonEmptyChunk.fromIterableOption(existingSubscriptions - subscription)
-        val newUnion         = newSubscriptions.flatMap(Subscription.unionAll)
+      def reduceSubscriptions: Task[Unit] =
+        subscriptions.updateZIO { existingSubscriptions =>
+          val newSubscriptions = NonEmptyChunk.fromIterableOption(existingSubscriptions - subscription)
+          val newUnion         = newSubscriptions.flatMap(Subscription.unionAll)
 
-        (newUnion match {
-          case Some(union) =>
-            ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union)
-          case None =>
-            ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe
-        }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
-      }.uninterruptible
+          (newUnion match {
+            case Some(union) =>
+              ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union)
+            case None =>
+              ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe
+          }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
+        }.uninterruptible
 
       val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
 
       ZStream.unwrapScoped {
         for {
-          stream <- ZStream.fromHubScoped(partitionAssignments)
+          hub    <- runloopAccess.partitionAssignments
+          stream <- ZStream.fromHubScopedWithShutdown(hub)
           _      <- extendSubscriptions.withFinalizer(_ => reduceSubscriptions.orDie)
         } yield stream
           .map(_.exit)
@@ -323,10 +322,10 @@ object Consumer {
       } yield ()
 
     private def subscribe(subscription: Subscription): Task[Unit] =
-      runloop.changeSubscription(Some(subscription))
+      runloopAccess.withRunloopZIO(_.changeSubscription(Some(subscription)))
 
     private def unsubscribe: Task[Unit] =
-      runloop.changeSubscription(None)
+      runloopAccess.withRunloopZIO(_.changeSubscription(None))
 
     override def metrics: Task[Map[MetricName, Metric]] =
       consumer.withConsumer(_.metrics().asScala.toMap)
@@ -347,39 +346,13 @@ object Consumer {
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZIO[Scope, Throwable, Consumer] = {
-    /*
-    We must supply a queue size for the partitionAssignments hub below. Under most circumstances,
-    a value of 1 should be sufficient, as runloop.partitions is already an unbounded queue. But if
-    there is a large skew in speed of consuming partition assignments (not the speed of consuming kafka messages)
-    between the subscriptions, there may arise a situation where the faster stream is 'blocked' from
-    getting new partition assignments by the faster stream. A value of 32 should be more than sufficient to cover
-    this situation.
-     */
-    val hubCapacity = 32
-
+  ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _       <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
-      wrapper <- ConsumerAccess.make(settings)
-      runloop <- Runloop(
-                   hasGroupId = settings.hasGroupId,
-                   consumer = wrapper,
-                   pollTimeout = settings.pollTimeout,
-                   diagnostics = diagnostics,
-                   offsetRetrieval = settings.offsetRetrieval,
-                   userRebalanceListener = settings.rebalanceListener,
-                   restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
-                   runloopTimeout = settings.runloopTimeout
-                 )
+      _             <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
+      wrapper       <- ConsumerAccess.make(settings)
+      runloopAccess <- RunloopAccess.make(settings, diagnostics, wrapper)
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
-
-      partitionAssignments <- ZStream
-                                .fromQueue(runloop.partitions)
-                                .map(_.exit)
-                                .flattenExitOption
-                                .toHub(hubCapacity)
-    } yield Live(wrapper, settings, runloop, subscriptions, partitionAssignments)
-  }
+    } yield Live(wrapper, settings, runloopAccess, subscriptions)
 
   /**
    * Accessor method for [[Consumer.assignment]]
