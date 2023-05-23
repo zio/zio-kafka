@@ -1052,6 +1052,16 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _ <- produceOne(topic, "key2", "message2")
           _ <- recordsOut.take
         } yield assertCompletes
+      },
+      test(
+        "issue#846: Booting a Consumer to do something else than consuming should not throught `RunloopTimeout` exception"
+      ) {
+        for {
+          clientId <- randomClient
+          settings <- consumerSettings(clientId = clientId, runloopTimeout = 500.millis)
+          _        <- Consumer.make(settings)
+          _        <- ZIO.sleep(1.second)
+        } yield assertCompletes
       }
     )
       .provideSome[Scope & Kafka](producer)
