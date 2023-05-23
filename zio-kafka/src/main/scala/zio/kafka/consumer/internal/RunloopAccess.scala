@@ -4,8 +4,8 @@ import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.ConsumerSettings
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
-import zio.stream.{Stream, Take}
-import zio.{Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer}
+import zio.stream.{ Stream, Take }
+import zio.{ Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
 
 private[consumer] final class RunloopAccess private (
   runloopRef: Ref.Synchronized[Runloop],

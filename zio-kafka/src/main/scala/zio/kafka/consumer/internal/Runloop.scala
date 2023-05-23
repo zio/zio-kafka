@@ -4,12 +4,12 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
-import zio.kafka.consumer.Consumer.{OffsetRetrieval, RunloopTimeout}
-import zio.kafka.consumer.diagnostics.{DiagnosticEvent, Diagnostics}
+import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
+import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.Runloop.Command.{Commit, Request, StopAllStreams, StopRunloop}
+import zio.kafka.consumer.internal.Runloop.Command.{ Commit, Request, StopAllStreams, StopRunloop }
 import zio.kafka.consumer.internal.Runloop._
-import zio.kafka.consumer.{CommittableRecord, RebalanceConsumer, RebalanceListener, Subscription}
+import zio.kafka.consumer.{ CommittableRecord, RebalanceConsumer, RebalanceListener, Subscription }
 import zio.stream._
 
 import java.util

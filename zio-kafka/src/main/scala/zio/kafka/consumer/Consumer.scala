@@ -1,12 +1,12 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp}
+import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp }
 import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.internal.{ConsumerAccess, RunloopAccess}
-import zio.kafka.serde.{Deserializer, Serde}
+import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
+import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
 import zio.stream._
 
