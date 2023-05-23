@@ -4,8 +4,9 @@ import org.apache.kafka.common.header.internals.RecordHeaders
 import zio.test.Assertion._
 import zio.test._
 import zio.ZAny
+import zio.kafka.ZIOSpecDefaultSlf4j
 
-object SerializerSpec extends ZIOSpecDefault {
+object SerializerSpec extends ZIOSpecDefaultSlf4j {
   override def spec: Spec[ZAny with Any, Throwable] = suite("Serializer")(
     suite("asOption")(
       test("serialize None values to null") {

@@ -7,7 +7,7 @@ import zio.test._
 import zio.test.TestAspect.flaky
 import zio.test.Assertion._
 
-object KafkaFutureSpec extends ZIOSpecDefault {
+object KafkaFutureSpec extends ZIOSpecDefaultSlf4j {
   override def spec: Spec[Any, Nothing] =
     suite("kafka future conversion")(
       test("completes successfully") {

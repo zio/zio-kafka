@@ -10,7 +10,7 @@ import zio.test._
 
 import java.util.concurrent.TimeoutException
 
-object AdminSaslSpec extends ZIOSpecDefault with KafkaRandom {
+object AdminSaslSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
   override def kafkaPrefix: String = "adminsaslspec"
 

@@ -1,10 +1,11 @@
 package zio.kafka.consumer.internal
 
 import zio.Scope
+import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.internal.PollHistory.PollHistoryImpl
 import zio.test._
 
-object PollHistorySpec extends ZIOSpecDefault {
+object PollHistorySpec extends ZIOSpecDefaultSlf4j {
   override def spec: Spec[TestEnvironment with Scope, Any] = suite("PollHistorySpec")(
     test("optimisticResume for listed pattern") {
       assertTrue("011111".toPollHistory.optimisticResume)

@@ -10,7 +10,7 @@ import org.apache.kafka.clients.consumer.{
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
-import zio.kafka.TestLogger.logger
+import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.producer.TransactionalProducer
@@ -24,7 +24,7 @@ import zio.test._
 
 import scala.reflect.ClassTag
 
-object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
+object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "consumespec"
 
   override def spec: Spec[TestEnvironment with Scope, Throwable] =
@@ -551,7 +551,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
             Consumer
               .partitionedStream(subscription, Serde.string, Serde.string)
               .flatMapPar(Int.MaxValue) { case (tp, partStream) =>
-                val registerAssignment = ZStream.logInfo(s"Registering partition ${tp.partition()}") *>
+                val registerAssignment = ZStream.logDebug(s"Registering partition ${tp.partition()}") *>
                   ZStream.fromZIO {
                     allAssignments.update { current =>
                       current.get(instance) match {
@@ -560,7 +560,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                       }
                     }
                   }
-                val deregisterAssignment = ZStream.logInfo(s"Deregistering partition ${tp.partition()}") *>
+                val deregisterAssignment = ZStream.logDebug(s"Deregistering partition ${tp.partition()}") *>
                   ZStream.finalizer {
                     allAssignments.update { current =>
                       current.get(instance) match {
@@ -640,7 +640,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
 
         for {
           // Produce messages on several partitions
-          _       <- ZIO.logInfo("Starting test")
+          _       <- ZIO.logDebug("Starting test")
           topic   <- randomTopic
           group   <- randomGroup
           client1 <- randomClient
@@ -662,11 +662,11 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                        .partitionedAssignmentStream(subscription, Serde.string, Serde.string)
                        .rechunk(1)
                        .mapZIO { partitions =>
-                         ZIO.logInfo(s"Got partition assignment ${partitions.map(_._1).mkString(",")}") *>
+                         ZIO.logDebug(s"Got partition assignment ${partitions.map(_._1).mkString(",")}") *>
                            ZStream
                              .fromIterable(partitions)
                              .flatMapPar(Int.MaxValue) { case (tp, partitionStream) =>
-                               ZStream.finalizer(ZIO.logInfo(s"TP ${tp.toString} finalizer")) *>
+                               ZStream.finalizer(ZIO.logDebug(s"TP ${tp.toString} finalizer")) *>
                                  partitionStream.mapChunksZIO { records =>
                                    OffsetBatch(records.map(_.offset)).commit *> messagesReceived(tp.partition)
                                      .update(_ + records.size)
@@ -677,7 +677,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                        }
                        .mapZIO(_ =>
                          drainCount.updateAndGet(_ + 1).flatMap {
-                           case 2 => ZIO.logInfo("Stopping consumption") *> Consumer.stopConsumption
+                           case 2 => ZIO.logDebug("Stopping consumption") *> Consumer.stopConsumption
                            // 1: when consumer on fib2 starts
                            // 2: when consumer on fib2 stops, end of test
                            case _ => ZIO.unit
@@ -723,7 +723,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
 
           // Waiting until fib1's partition streams got restarted because of the rebalancing
           _ <- drainCount.get.repeat(Schedule.recurUntil((n: Int) => n == 1) && Schedule.fixed(100.millis))
-          _ <- ZIO.logInfo("Consumer 1 finished rebalancing")
+          _ <- ZIO.logDebug("Consumer 1 finished rebalancing")
 
           // All messages processed, the partition streams of fib are still running.
           // Saving the values and resetting the counters
@@ -742,9 +742,9 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
           _ <- fib2.join
-          _ <- ZIO.logInfo("Consumer 2 done")
+          _ <- ZIO.logDebug("Consumer 2 done")
           _ <- fib.join
-          _ <- ZIO.logInfo("Consumer 1 done")
+          _ <- ZIO.logDebug("Consumer 1 done")
           // fib2 terminates after 20 messages, fib terminates after fib2 because of the rebalancing (drainCount==2)
           messagesPerPartition0 <-
             ZIO.foreach(messagesReceived0.values)(_.get) // counts from the first N messages (single consumer)
@@ -800,7 +800,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                   .partitionedAssignmentStream(subscription, Serde.string, Serde.string)
                   .rechunk(1)
                   .mapZIOPar(16) { partitions =>
-                    ZIO.logInfo(s"Consumer 1 got new partition assignment: ${partitions.map(_._1.toString)}") *>
+                    ZIO.logDebug(s"Consumer 1 got new partition assignment: ${partitions.map(_._1.toString)}") *>
                       ZStream
                         .fromIterable(partitions.map(_._2))
                         .flatMapPar(Int.MaxValue)(s => s)
@@ -822,7 +822,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
 
           _ <- messagesReceivedConsumer1.get
                  .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
-          _ <- ZIO.logInfo("Starting consumer 2")
+          _ <- ZIO.logDebug("Starting consumer 2")
 
           fib2 <-
             ZIO
@@ -875,11 +875,11 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                 onRevoked = (_, _) =>
                   streamCompleteOnRebalanceRef.get.flatMap {
                     case Some(p) =>
-                      ZIO.logWarning("onRevoked, awaiting stream completion") *>
+                      ZIO.logDebug("onRevoked, awaiting stream completion") *>
                         p.await.timeoutFail(new InterruptedException("Timed out waiting stream to complete"))(1.minute)
                     case None => ZIO.unit
                   },
-                onLost = (_, _) => ZIO.logWarning("Lost some partitions")
+                onLost = (_, _) => ZIO.logDebug("Lost some partitions")
               )
 
             def makeCopyingTransactionalConsumer(
@@ -895,7 +895,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                 for {
                   consumedMessagesCounter <- Ref.make(0)
                   _ <- consumedMessagesCounter.get
-                         .flatMap(consumed => ZIO.logInfo(s"Consumed so far: $consumed"))
+                         .flatMap(consumed => ZIO.logDebug(s"Consumed so far: $consumed"))
                          .repeat(Schedule.fixed(1.second))
                          .fork
                   streamCompleteOnRebalanceRef <- Ref.make[Option[Promise[Nothing, Unit]]](None)
@@ -906,7 +906,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                         for {
                           p <- Promise.make[Nothing, Unit]
                           _ <- streamCompleteOnRebalanceRef.set(Some(p))
-                          _ <- ZIO.logInfo(s"${assignedPartitions.size} partitions assigned")
+                          _ <- ZIO.logDebug(s"${assignedPartitions.size} partitions assigned")
                           _ <- consumerCreated.succeed(())
                           partitionStreams = assignedPartitions.map(_._2)
                           s <- ZStream
@@ -931,7 +931,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                                      _ <- streamCompleteOnRebalanceRef.set(None)
                                      _ <- p.succeed(())
                                      c <- consumedMessagesCounter.get
-                                     _ <- ZIO.logInfo(s"Consumed $c messages")
+                                     _ <- ZIO.logDebug(s"Consumed $c messages")
                                    } yield ()
                                  }
                         } yield s
@@ -951,7 +951,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                           rebalanceListener = transactionalRebalanceListener(streamCompleteOnRebalanceRef)
                         )
                       )
-                      .tapError(e => ZIO.logError(s"Error: $e")) <* ZIO.logInfo("Done")
+                      .tapError(e => ZIO.logError(s"Error: $e")) <* ZIO.logDebug("Done")
                 } yield tConsumer
               }
 
@@ -968,7 +968,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
 
               copyingGroup <- randomGroup
 
-              _ <- ZIO.logInfo("Starting copier 1")
+              _ <- ZIO.logDebug("Starting copier 1")
               copier1ClientId = copyingGroup + "-1"
               copier1Created <- Promise.make[Nothing, Unit]
               copier1 <- makeCopyingTransactionalConsumer(
@@ -982,7 +982,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                          ).fork
               _ <- copier1Created.await
 
-              _ <- ZIO.logInfo("Starting copier 2")
+              _ <- ZIO.logDebug("Starting copier 2")
               copier2ClientId = copyingGroup + "-2"
               copier2Created <- Promise.make[Nothing, Unit]
               copier2 <- makeCopyingTransactionalConsumer(
@@ -994,13 +994,13 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                            tProducer,
                            copier2Created
                          ).fork
-              _ <- ZIO.logInfo("Waiting for copier 2 to start")
+              _ <- ZIO.logDebug("Waiting for copier 2 to start")
               _ <- copier2Created.await
 
-              _ <- ZIO.logInfo("Producing some more messages")
+              _ <- ZIO.logDebug("Producing some more messages")
               _ <- produceMany(topicA, messagesAfterRebalance)
 
-              _                 <- ZIO.logInfo("Collecting messages on topic B")
+              _                 <- ZIO.logDebug("Collecting messages on topic B")
               groupB            <- randomGroup
               validatorClientId <- randomClient
               messagesOnTopicB <- ZIO.logAnnotate("consumer", "validator") {
@@ -1017,7 +1017,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
                                           properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200")
                                         )
                                       )
-                                      .tapError(e => ZIO.logError(s"Error: $e")) <* ZIO.logInfo("Done")
+                                      .tapError(e => ZIO.logError(s"Error: $e")) <* ZIO.logDebug("Done")
                                   }
               _ <- copier1.interrupt
               _ <- copier2.interrupt
@@ -1044,7 +1044,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
           _          <- produceOne(topic, "key1", "message1")
           _ <- consumer
                  .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
-                 .debug
+                 .tap(r => ZIO.logDebug(r.toString))
                  .foreach(_ => recordsOut.offer(()))
                  .forkScoped
           _ <- recordsOut.take       // first record consumed
@@ -1056,9 +1056,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
     )
       .provideSome[Scope & Kafka](producer)
       .provideSomeShared[Scope](
-        Kafka.embedded,
-        Runtime.removeDefaultLoggers,
-        Runtime.addLogger(logger())
+        Kafka.embedded
       ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(5.minutes)
 
 }

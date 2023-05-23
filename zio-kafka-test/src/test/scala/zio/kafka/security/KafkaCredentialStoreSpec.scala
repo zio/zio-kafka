@@ -3,8 +3,9 @@ package zio.kafka.security
 import zio.test.Assertion._
 import zio.test._
 import zio.Scope
+import zio.kafka.ZIOSpecDefaultSlf4j
 
-object KafkaCredentialStoreSpec extends ZIOSpecDefault {
+object KafkaCredentialStoreSpec extends ZIOSpecDefaultSlf4j {
   override def spec: Spec[Environment with TestEnvironment with Scope, Any] = suite("KafkaCredentialStore")(
     suite("fromPemStrigs")(
       test("KafkaCredentialStore.properties works properly") {

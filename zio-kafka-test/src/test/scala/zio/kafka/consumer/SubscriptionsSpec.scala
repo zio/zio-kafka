@@ -3,7 +3,7 @@ package zio.kafka.consumer
 import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio._
-import zio.kafka.TestLogger.logger
+import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
@@ -13,7 +13,7 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
-object SubscriptionsSpec extends ZIOSpecDefault with KafkaRandom {
+object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "subscriptionsspec"
 
   override def spec: Spec[TestEnvironment with Scope, Throwable] = suite("Consumer subscriptions")(
@@ -207,8 +207,6 @@ object SubscriptionsSpec extends ZIOSpecDefault with KafkaRandom {
   )
     .provideSome[Scope & Kafka](producer)
     .provideSomeShared[Scope](
-      Kafka.embedded,
-      Runtime.removeDefaultLoggers,
-      Runtime.addLogger(logger())
+      Kafka.embedded
     ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(5.minutes)
 }
