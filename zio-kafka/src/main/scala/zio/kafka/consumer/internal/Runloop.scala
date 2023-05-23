@@ -28,7 +28,8 @@ private[consumer] final class Runloop private (
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
-  currentState: Ref[State]
+  currentState: Ref[State],
+  isShuttingDownRef: Ref[Boolean] // Do not use this Ref for anything else than its current usage.
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
@@ -38,17 +39,29 @@ private[consumer] final class Runloop private (
   def gracefulShutdown: UIO[Unit] =
     commandQueue.offer(Command.StopAllStreams).unit
 
+  /**
+   * You cannot change the subscription when the runloop is shutting down.
+   *
+   * That can lead to deadlock if the `Command.ChangeSubscription` if offered and we wait for its Promise while the
+   * runloop doesn't accept more commands. The Promise will never be terminated.
+   */
   def changeSubscription(
     subscription: Option[Subscription]
   ): Task[Unit] =
-    Promise
-      .make[Throwable, Unit]
-      .flatMap { cont =>
-        commandQueue.offer(Command.ChangeSubscription(subscription, cont)) *>
-          cont.await
-      }
-      .unit
-      .uninterruptible
+    isShuttingDownRef.get.flatMap { isDown =>
+      // noinspection SimplifyUnlessInspection
+      if (isDown)
+        ZIO.debug(s"Runloop::changeSubscription called with $subscription while the Runloop is already shutdown")
+      else
+        Promise
+          .make[Throwable, Unit]
+          .flatMap { cont =>
+            commandQueue.offer(Command.ChangeSubscription(subscription, cont)) *>
+              cont.await
+          }
+          .unit
+          .uninterruptible
+    }
 
   val rebalanceListener: RebalanceListener = {
     val emitDiagnostics = RebalanceListener(
@@ -588,8 +601,9 @@ private[consumer] object Runloop {
                           Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]
                         ]
                     )(_.shutdown)
-      currentStateRef <- Ref.make(State.initial)
-      runtime         <- ZIO.runtime[Any]
+      currentStateRef   <- Ref.make(State.initial)
+      runtime           <- ZIO.runtime[Any]
+      isShuttingDownRef <- Ref.make(false)
       runloop = new Runloop(
                   runtime,
                   hasGroupId,
@@ -603,7 +617,8 @@ private[consumer] object Runloop {
                   offsetRetrieval,
                   userRebalanceListener,
                   restartStreamsOnRebalancing,
-                  currentStateRef
+                  currentStateRef,
+                  isShuttingDownRef
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
@@ -612,7 +627,8 @@ private[consumer] object Runloop {
       fib      <- ZIO.onExecutor(executor)(runloop.run).forkScoped
 
       _ <- ZIO.addFinalizer(
-             ZIO.logTrace("Shutting down Runloop") *>
+             ZIO.logDebug("Shutting down Runloop") *>
+               isShuttingDownRef.set(true) *>
                commandQueue.offer(StopAllStreams) *>
                commandQueue.offer(StopRunloop) *>
                fib.join.orDie <*
