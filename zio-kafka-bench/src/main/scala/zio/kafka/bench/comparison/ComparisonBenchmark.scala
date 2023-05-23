@@ -45,8 +45,8 @@ trait ComparisonBenchmark extends ZioBenchmark[Env] {
         clientId = randomThing("client"),
         groupId = Some(randomThing("client")),
         `max.poll.records` = 1000, // A more production worthy value
-        runloopTimeout =
-          1.hour // Absurdly high timeout to avoid the runloop from being interrupted while we're benchmarking other stuff
+        // Absurdly high timeout to avoid the runloop from being interrupted while we're benchmarking other stuff
+        runloopTimeout = 1.hour
       ).map(_.withMaxPartitionQueueSize(8192))
     )
 
