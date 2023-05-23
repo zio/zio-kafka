@@ -20,8 +20,10 @@ object RunloopCommand {
   case object StopAllStreams extends StreamCommand
 
   final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends StreamCommand {
-    @inline def isDone: UIO[Boolean]    = cont.isDone
-    @inline def isPending: UIO[Boolean] = isDone.negate
+    @inline def succeed: UIO[Unit]            = cont.succeed(()).unit
+    @inline def fail(e: Throwable): UIO[Unit] = cont.fail(e).unit
+    @inline def isDone: UIO[Boolean]          = cont.isDone
+    @inline def isPending: UIO[Boolean]       = isDone.negate
   }
 
   /** Used by a stream to request more records. */

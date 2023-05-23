@@ -1,9 +1,11 @@
 package zio.kafka.example
 
 import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
+import org.apache.kafka.clients.producer.ProducerRecord
 import zio._
-import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
+import zio.kafka.consumer.Consumer.AutoOffsetStrategy
+import zio.kafka.consumer.{ Consumer, ConsumerSettings, OffsetBatch, Subscription }
+import zio.kafka.producer.{ Producer, ProducerSettings }
 import zio.kafka.serde.Serde
 import zio.logging.backend.SLF4J
 
@@ -41,32 +43,50 @@ object Main extends ZIOAppDefault {
 
   private val topic = "test-topic"
 
-  private def consumerLayer(kafka: MyKafka): ZLayer[Any, Throwable, Consumer] = {
-    val consumerSettings =
-      ConsumerSettings(kafka.bootstrapServers)
-        .withPollTimeout(500.millis)
-        .withGroupId("test")
+  private val consumerLayer: ZLayer[MyKafka, Throwable, Consumer] =
+    ZLayer.scoped {
+      ZIO.serviceWithZIO[MyKafka] { kafka =>
+        val consumerSettings =
+          ConsumerSettings(kafka.bootstrapServers)
+            .withGroupId("group1")
+            .withOffsetRetrieval(Consumer.OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest))
+        Consumer.make(consumerSettings)
+      }
+    }
 
-    ZLayer.make[Consumer](
-      ZLayer.succeed(consumerSettings),
-      ZLayer.succeed(Diagnostics.NoOp),
-      Consumer.live
-    )
-  }
+  private val producerLayer: ZLayer[MyKafka, Throwable, Producer] =
+    ZLayer.scoped {
+      ZIO.serviceWithZIO[MyKafka] { kafka =>
+        val producerSettings = ProducerSettings(kafka.bootstrapServers)
+        Producer.make(producerSettings)
+      }
+    }
 
   override def run: ZIO[ZIOAppArgs with Scope, Any, Any] =
     ZIO.addFinalizer(ZIO.logInfo("Stopping app")) *>
       (
         for {
-          _     <- ZIO.logInfo(s"Starting app")
-          kafka <- ZIO.service[MyKafka]
-          stream = Consumer
-                     .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
-                     .provideLayer(consumerLayer(kafka))
-          _        <- ZIO.logInfo(s"Consuming messages...")
-          consumed <- stream.take(1000).tap(r => ZIO.logInfo(s"Consumed record $r")).runCount
-          _        <- ZIO.logInfo(s"Consumed $consumed records")
+          _ <- ZIO.logInfo(s"Starting app")
+          _ <- Producer.produceChunk(
+                 Chunk.fromIterable(1 to 1000).map(n => new ProducerRecord(topic, n, n.toString)),
+                 Serde.int,
+                 Serde.string
+               )
+          _ <- Consumer
+                 .plainStream(Subscription.topics(topic), Serde.int, Serde.string)
+                 .take(100)
+                 .groupedWithin(10, 100.millis)
+                 .mapZIOPar(2)(c => ZIO.debug(c.size) as c.map(_.offset))
+                 .map(OffsetBatch.apply)
+                 .debug("Offset")
+                 .mapZIO(_.commit)
+                 .debug("Commit")
+                 .runDrain
+          _ <- ZIO.logInfo("Ready!")
         } yield ()
-      ).provideSomeLayer[ZIOAppArgs with Scope](MyKafka.embedded)
-
+      ).provide(
+        MyKafka.embedded,
+        consumerLayer,
+        producerLayer
+      )
 }
