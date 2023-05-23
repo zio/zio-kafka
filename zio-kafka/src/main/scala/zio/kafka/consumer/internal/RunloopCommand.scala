@@ -2,7 +2,7 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
 import zio._
-import zio.kafka.consumer.{ InvalidSubscriptionUnion, Subscription }
+import zio.kafka.consumer.{ InvalidSubscriptionUnion, OffsetBatch, Subscription }
 
 sealed trait RunloopCommand
 object RunloopCommand {
@@ -19,7 +19,7 @@ object RunloopCommand {
   case object StopRunloop    extends Control
   case object StopAllStreams extends StreamCommand
 
-  final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends StreamCommand {
+  final case class Commit(offsetBatch: OffsetBatch, cont: Promise[Throwable, Unit]) extends StreamCommand {
     @inline def isDone: UIO[Boolean]    = cont.isDone
     @inline def isPending: UIO[Boolean] = isDone.negate
   }

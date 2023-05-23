@@ -5,12 +5,11 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.openjdk.jmh.annotations._
 import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.{ Consumer, Offset, OffsetBatch, Subscription }
+import zio.kafka.consumer.{ Consumer, Subscription }
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
 import zio.kafka.testkit.KafkaTestUtils.{ consumerSettings, produceMany, producer }
-import zio.stream.ZSink
 import zio.{ durationInt, Ref, Schedule, ZIO, ZLayer }
 
 import java.util.concurrent.TimeUnit
@@ -63,11 +62,9 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
       _ <- ZIO.logAnnotate("consumer", "1") {
              Consumer
                .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
-               .map(_.offset)
-               .aggregateAsyncWithin(ZSink.collectAll[Offset], Schedule.fixed(100.millis))
-               .tap(batch => counter.update(_ + batch.size))
-               .map(OffsetBatch.apply)
-               .mapZIO(_.commit)
+               .mapChunksZIO(records => counter.update(_ + records.size).as(records))
+               .aggregateAsyncWithin(Consumer.OffsetBatchesSink, Schedule.fixed(100.millis))
+               .mapZIO(Consumer.commit)
                .takeUntilZIO(_ => counter.get.map(_ >= nrMessages))
                .runDrain
                .provideSome[Kafka](env)

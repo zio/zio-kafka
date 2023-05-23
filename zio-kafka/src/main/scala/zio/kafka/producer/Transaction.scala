@@ -1,7 +1,7 @@
 package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
-import zio.kafka.consumer.{ Offset, OffsetBatch }
+import zio.kafka.consumer.OffsetBatch
 import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
 import zio.kafka.serde.Serializer
 import zio.{ Chunk, IO, RIO, Ref, UIO, ZIO }
@@ -13,21 +13,21 @@ trait Transaction {
     value: V,
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V],
-    offset: Option[Offset]
+    offset: Option[OffsetBatch]
   ): RIO[R, RecordMetadata]
 
   def produce[R, K, V](
     producerRecord: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V],
-    offset: Option[Offset]
+    offset: Option[OffsetBatch]
   ): RIO[R, RecordMetadata]
 
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V],
-    offset: Option[Offset]
+    offset: Option[OffsetBatch]
   ): RIO[R, Chunk[RecordMetadata]]
 
   def produceChunkBatch[R, K, V](
@@ -51,7 +51,7 @@ final private[producer] class TransactionImpl(
     value: V,
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V],
-    offset: Option[Offset]
+    offset: Option[OffsetBatch]
   ): RIO[R, RecordMetadata] =
     produce(new ProducerRecord[K, V](topic, key, value), keySerializer, valueSerializer, offset)
 
@@ -59,20 +59,20 @@ final private[producer] class TransactionImpl(
     producerRecord: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V],
-    offset: Option[Offset]
+    offset: Option[OffsetBatch]
   ): RIO[R, RecordMetadata] =
     haltIfClosed *>
-      ZIO.whenCase(offset) { case Some(offset) => offsetBatchRef.update(_ add offset) } *>
+      ZIO.whenCase(offset) { case Some(offset) => offsetBatchRef.update(_ merge offset) } *>
       producer.produce[R, K, V](producerRecord, keySerializer, valueSerializer)
 
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V],
-    offset: Option[Offset]
+    offset: Option[OffsetBatch]
   ): RIO[R, Chunk[RecordMetadata]] =
     haltIfClosed *>
-      ZIO.whenCase(offset) { case Some(offset) => offsetBatchRef.update(_ add offset) } *>
+      ZIO.whenCase(offset) { case Some(offset) => offsetBatchRef.update(_ merge offset) } *>
       producer.produceChunk[R, K, V](records, keySerializer, valueSerializer)
 
   def produceChunkBatch[R, K, V](

@@ -19,7 +19,6 @@ import scala.jdk.CollectionConverters._
 //noinspection SimplifyWhenInspection,SimplifyUnlessInspection
 private[consumer] final class Runloop private (
   runtime: Runtime[Any],
-  hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollTimeout: Duration,
   runloopTimeout: Duration,
@@ -114,17 +113,16 @@ private[consumer] final class Runloop private (
     }
   }
 
-  private val commit: Map[TopicPartition, Long] => Task[Unit] =
-    offsets =>
-      for {
-        p <- Promise.make[Throwable, Unit]
-        _ <- commandQueue.offer(RunloopCommand.Commit(offsets, p)).unit
-        _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
-        _ <- p.await
-      } yield ()
+  private[internal] def commit(offsetBatch: OffsetBatch): Task[Unit] =
+    for {
+      p <- Promise.make[Throwable, Unit]
+      _ <- commandQueue.offer(RunloopCommand.Commit(offsetBatch, p)).unit
+      _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsetBatch.offsets))
+      _ <- p.await
+    } yield ()
 
   private def doCommit(cmd: RunloopCommand.Commit): UIO[Unit] = {
-    val offsets   = cmd.offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
+    val offsets   = cmd.offsetBatch.offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
     val cont      = (e: Exit[Throwable, Unit]) => cmd.cont.done(e).asInstanceOf[UIO[Unit]]
     val onSuccess = cont(Exit.unit) <* diagnostics.emit(DiagnosticEvent.Commit.Success(offsets))
     val onFailure: Throwable => UIO[Unit] = {
@@ -199,34 +197,24 @@ private[consumer] final class Runloop private (
 
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
-      for {
-        consumerGroupMetadata <- getConsumerGroupMetadataIfAny
-        _ <- ZIO.foreachParDiscard(streams) { streamControl =>
-               val tp      = streamControl.tp
-               val records = polledRecords.records(tp)
-               if (records.isEmpty) ZIO.unit
-               else {
-                 val builder  = ChunkBuilder.make[Record](records.size())
-                 val iterator = records.iterator()
-                 while (iterator.hasNext) {
-                   val consumerRecord = iterator.next()
-                   builder +=
-                     CommittableRecord[Array[Byte], Array[Byte]](
-                       record = consumerRecord,
-                       commitHandle = commit,
-                       consumerGroupMetadata = consumerGroupMetadata
-                     )
-                 }
-                 streamControl.offerRecords(builder.result())
-               }
-             }
-      } yield fulfillResult
+      ZIO
+        .foreachParDiscard(streams) { streamControl =>
+          val tp      = streamControl.tp
+          val records = polledRecords.records(tp)
+          if (records.isEmpty) ZIO.unit
+          else {
+            val builder  = ChunkBuilder.make[Record](records.size())
+            val iterator = records.iterator()
+            while (iterator.hasNext) {
+              val consumerRecord = iterator.next()
+              builder += CommittableRecord[Array[Byte], Array[Byte]](record = consumerRecord)
+            }
+            streamControl.offerRecords(builder.result())
+          }
+        }
+        .as(fulfillResult)
     }
   }
-
-  private val getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
-    if (hasGroupId) consumer.runloopAccess(c => ZIO.attempt(c.groupMetadata())).fold(_ => None, Some(_))
-    else ZIO.none
 
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
     offsetRetrieval match {
@@ -567,7 +555,6 @@ private[consumer] object Runloop {
   private final val commandQueueSize: Int = 1024
 
   def make(
-    hasGroupId: Boolean,
     consumer: ConsumerAccess,
     pollTimeout: Duration,
     diagnostics: Diagnostics,
@@ -586,7 +573,6 @@ private[consumer] object Runloop {
       runtime            <- ZIO.runtime[Any]
       runloop = new Runloop(
                   runtime = runtime,
-                  hasGroupId = hasGroupId,
                   consumer = consumer,
                   pollTimeout = pollTimeout,
                   runloopTimeout = runloopTimeout,

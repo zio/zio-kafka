@@ -7,13 +7,13 @@ import org.apache.kafka.common.errors.InvalidGroupIdException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio._
-import zio.kafka.consumer.OffsetBatch
+import zio.kafka.consumer.{ Consumer, OffsetBatch }
 
 import java.util
 import scala.jdk.CollectionConverters._
 
 trait TransactionalProducer {
-  def createTransaction: ZIO[Scope, Throwable, Transaction]
+  def createTransaction: ZIO[Scope & Consumer, Throwable, Transaction]
 }
 
 object TransactionalProducer {
@@ -26,32 +26,33 @@ object TransactionalProducer {
   ) extends TransactionalProducer {
     private val abortTransaction: Task[Unit] = ZIO.attemptBlocking(live.p.abortTransaction())
 
-    private def commitTransactionWithOffsets(offsetBatch: OffsetBatch): Task[Unit] = {
-      val sendOffsetsToTransaction: Task[Unit] =
-        ZIO.suspendSucceed {
-          @inline def invalidGroupIdException: IO[InvalidGroupIdException, Nothing] =
-            ZIO.fail(
-              new InvalidGroupIdException(
-                "To use the group management or offset commit APIs, you must provide a valid group.id in the consumer configuration."
-              )
+    private def commitTransactionWithOffsets(offsetBatch: OffsetBatch): ZIO[Consumer, Throwable, Unit] = {
+      def sendOffsetsToTransaction: ZIO[Consumer, Throwable, Unit] =
+        for {
+          consumerGroupMetadata <-
+            ZIO.serviceWithZIO[Consumer](
+              _.consumerGroupMetadata.flatMap {
+                case Some(metadata) => ZIO.succeed(metadata)
+                case None =>
+                  ZIO.fail(
+                    new InvalidGroupIdException(
+                      "To use the group management or offset commit APIs, you must provide a valid group.id in the consumer configuration."
+                    )
+                  )
+              }
             )
 
-          offsetBatch.consumerGroupMetadata match {
-            case None => invalidGroupIdException
-            case Some(consumerGroupMetadata) =>
-              val offsets: util.Map[TopicPartition, OffsetAndMetadata] =
-                offsetBatch.offsets.map { case (topicPartition, offset) =>
-                  topicPartition -> new OffsetAndMetadata(offset + 1)
-                }.asJava
+          offsets = offsetBatch.offsets.map { case (topicPartition, offset) =>
+                      topicPartition -> new OffsetAndMetadata(offset + 1)
+                    }.asJava
 
-              ZIO.attemptBlocking(live.p.sendOffsetsToTransaction(offsets, consumerGroupMetadata))
-          }
-        }
+          _ <- ZIO.attemptBlocking(live.p.sendOffsetsToTransaction(offsets, consumerGroupMetadata))
+        } yield ()
 
-      sendOffsetsToTransaction.when(offsetBatch.offsets.nonEmpty) *> ZIO.attemptBlocking(live.p.commitTransaction())
+      sendOffsetsToTransaction.when(offsetBatch.nonEmpty) *> ZIO.attemptBlocking(live.p.commitTransaction())
     }
 
-    private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): UIO[Unit] =
+    private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): URIO[Consumer, Unit] =
       exit match {
         case Exit.Success(_) =>
           transaction.offsetBatchRef.get
@@ -60,7 +61,7 @@ object TransactionalProducer {
         case Exit.Failure(_)                           => abortTransaction.retryN(5).orDie
       }
 
-    override def createTransaction: ZIO[Scope, Throwable, Transaction] =
+    override def createTransaction: ZIO[Scope & Consumer, Throwable, Transaction] =
       semaphore.withPermitScoped *> {
         ZIO.acquireReleaseExit {
           for {
@@ -72,7 +73,7 @@ object TransactionalProducer {
       }
   }
 
-  def createTransaction: ZIO[TransactionalProducer & Scope, Throwable, Transaction] =
+  def createTransaction: ZIO[TransactionalProducer & Scope & Consumer, Throwable, Transaction] =
     ZIO.service[TransactionalProducer].flatMap(_.createTransaction)
 
   val live: RLayer[TransactionalProducerSettings, TransactionalProducer] =

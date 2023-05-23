@@ -17,12 +17,19 @@ import zio.test._
 object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "producerspec"
 
-  def withConsumerInt(
-    subscription: Subscription,
-    settings: ConsumerSettings
-  ): ZIO[Any with Scope, Throwable, Dequeue[Take[Throwable, CommittableRecord[String, Int]]]] =
-    Consumer.make(settings).flatMap { c =>
-      c.plainStream(subscription, Serde.string, Serde.int).toQueue()
+  private def consumeInt(
+    subscription: Subscription
+  ): ZIO[Consumer & Scope, Throwable, Dequeue[Take[Throwable, CommittableRecord[String, Int]]]] =
+    Consumer.plainStream(subscription, Serde.string, Serde.int).toQueue()
+
+  private val consumerLayer: ZLayer[Kafka, Throwable, Consumer] =
+    ZLayer.scoped {
+      for {
+        group    <- randomGroup
+        client   <- randomClient
+        settings <- transactionalConsumerSettings(group, client)
+        consumer <- Consumer.make(settings)
+      } yield consumer
     }
 
   override def spec: Spec[TestEnvironment with Scope, Object] =
@@ -36,10 +43,10 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       test("a non-empty chunk of records") {
         import Subscription._
 
-        def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
-          Consumer.make(settings).flatMap { c =>
-            c.plainStream(subscription, Serde.string, Serde.string).toQueue()
-          }
+        def consume(
+          subscription: Subscription
+        ): ZIO[Consumer & Scope, Throwable, Dequeue[Take[Throwable, CommittableRecord[String, String]]]] =
+          Consumer.plainStream(subscription, Serde.string, Serde.string).toQueue()
 
         for {
           topic1 <- randomTopic
@@ -57,25 +64,27 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           outcome  <- Producer.produceChunk(chunks, Serde.string, Serde.string)
           settings <- consumerSettings(client, Some(group))
           record1 <- ZIO.scoped {
-                       withConsumer(Topics(Set(topic1)), settings).flatMap { consumer =>
+                       consume(Topics(Set(topic1))).flatMap { consumer =>
                          for {
                            messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
                            record = messages
                                       .filter(rec => rec.record.key == key1 && rec.record.value == value1)
                          } yield record
-                       }
+                       }.provideSome[Scope](ZLayer.scoped(Consumer.make(settings)))
                      }
           record2 <- ZIO.scoped {
-                       withConsumer(Topics(Set(topic2)), settings).flatMap { consumer =>
+                       consume(Topics(Set(topic2))).flatMap { consumer =>
                          for {
                            messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
                            record = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
                          } yield record
-                       }
+                       }.provideSome[Scope](ZLayer.scoped(Consumer.make(settings)))
                      }
-        } yield assertTrue(outcome.length == 2) &&
-          assertTrue(record1.nonEmpty) &&
-          assertTrue(record2.nonEmpty)
+        } yield assertTrue(
+          outcome.length == 2,
+          record1.nonEmpty,
+          record2.nonEmpty
+        )
       },
       test("an empty chunk of records") {
         val chunks = Chunk.fromIterable(List.empty)
@@ -92,312 +101,306 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         test("a simple transaction") {
           import Subscription._
 
-          for {
-            topic  <- randomTopic
-            group  <- randomGroup
-            client <- randomClient
-            initialAliceAccount = new ProducerRecord(topic, "alice", 20)
-            initialBobAccount   = new ProducerRecord(topic, "bob", 0)
+          val test: ZIO[TransactionalProducer & Scope & Consumer, Throwable, TestResult] =
+            for {
+              topic <- randomTopic
+              initialAliceAccount = new ProducerRecord(topic, "alice", 20)
+              initialBobAccount   = new ProducerRecord(topic, "bob", 0)
 
-            _ <- ZIO.scoped {
-                   TransactionalProducer.createTransaction.flatMap { t =>
-                     t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
-                       t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+              _ <- ZIO.scoped {
+                     TransactionalProducer.createTransaction.flatMap { t =>
+                       t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
+                         t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+                     }
                    }
-                 }
-            settings <- transactionalConsumerSettings(group, client)
-            recordChunk <- ZIO.scoped {
-                             withConsumerInt(Topics(Set(topic)), settings).flatMap { consumer =>
-                               for {
-                                 messages <- consumer.take
-                                               .flatMap(_.done)
-                                               .mapError(_.getOrElse(new NoSuchElementException))
-                                 record = messages.filter(rec => rec.record.key == "bob")
-                               } yield record
+              recordChunk <- ZIO.scoped {
+                               consumeInt(Topics(Set(topic))).flatMap { consumer =>
+                                 for {
+                                   messages <- consumer.take
+                                                 .flatMap(_.done)
+                                                 .mapError(_.getOrElse(new NoSuchElementException))
+                                   record = messages.filter(rec => rec.record.key == "bob")
+                                 } yield record
+                               }
                              }
-                           }
-          } yield assertTrue(recordChunk.map(_.value).last == 0)
+            } yield assertTrue(recordChunk.map(_.value).last == 0)
+
+          test.provideSome[Kafka & TransactionalProducer & Scope](consumerLayer)
         },
         test("an aborted transaction should not be read") {
           import Subscription._
 
-          for {
-            topic  <- randomTopic
-            group  <- randomGroup
-            client <- randomClient
-            initialAliceAccount = new ProducerRecord(topic, "alice", 20)
-            initialBobAccount   = new ProducerRecord(topic, "bob", 0)
-            aliceGives20        = new ProducerRecord(topic, "alice", 0)
-            bobReceives20       = new ProducerRecord(topic, "bob", 20)
+          val test: ZIO[Kafka & TransactionalProducer & Scope & Consumer, Object, TestResult] =
+            for {
+              topic <- randomTopic
+              initialAliceAccount = new ProducerRecord(topic, "alice", 20)
+              initialBobAccount   = new ProducerRecord(topic, "bob", 0)
+              aliceGives20        = new ProducerRecord(topic, "alice", 0)
+              bobReceives20       = new ProducerRecord(topic, "bob", 20)
 
-            _ <- ZIO.scoped {
-                   TransactionalProducer.createTransaction.flatMap { t =>
-                     t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
-                       t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+              _ <- ZIO.scoped {
+                     TransactionalProducer.createTransaction.flatMap { t =>
+                       t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
+                         t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+                     }
                    }
-                 }
-            _ <- ZIO.scoped {
-                   TransactionalProducer.createTransaction.flatMap { t =>
-                     t.produce(aliceGives20, Serde.string, Serde.int, None) *>
-                       t.produce(bobReceives20, Serde.string, Serde.int, None) *>
-                       t.abort
+              _ <- ZIO.scoped {
+                     TransactionalProducer.createTransaction.flatMap { t =>
+                       t.produce(aliceGives20, Serde.string, Serde.int, None) *>
+                         t.produce(bobReceives20, Serde.string, Serde.int, None) *>
+                         t.abort
+                     }
+                   }.catchSome { case UserInitiatedAbort =>
+                     ZIO.unit // silences the abort
                    }
-                 }.catchSome { case UserInitiatedAbort =>
-                   ZIO.unit // silences the abort
-                 }
-            settings <- transactionalConsumerSettings(group, client)
-            recordChunk <- ZIO.scoped {
-                             withConsumerInt(Topics(Set(topic)), settings).flatMap { consumer =>
-                               for {
-                                 messages <- consumer.take
-                                               .flatMap(_.done)
-                                               .mapError(_.getOrElse(new NoSuchElementException))
-                                 record = messages.filter(rec => rec.record.key == "bob")
-                               } yield record
+              recordChunk <- ZIO.scoped {
+                               consumeInt(Topics(Set(topic))).flatMap { consumer =>
+                                 for {
+                                   messages <- consumer.take
+                                                 .flatMap(_.done)
+                                                 .mapError(_.getOrElse(new NoSuchElementException))
+                                   record = messages.filter(rec => rec.record.key == "bob")
+                                 } yield record
+                               }
                              }
-                           }
-          } yield assertTrue(recordChunk.map(_.value).last == 0)
+            } yield assertTrue(recordChunk.map(_.value).last == 0)
+
+          test.provideSome[Kafka & TransactionalProducer & Scope](consumerLayer)
         },
         test("serialize concurrent transactions") {
           import Subscription._
 
-          for {
-            topic  <- randomTopic
-            group  <- randomGroup
-            client <- randomClient
-            initialAliceAccount = new ProducerRecord(topic, "alice", 20)
-            initialBobAccount   = new ProducerRecord(topic, "bob", 0)
+          val test: ZIO[Kafka & TransactionalProducer & Scope & Consumer, Throwable, TestResult] =
+            for {
+              topic <- randomTopic
+              initialAliceAccount = new ProducerRecord(topic, "alice", 20)
+              initialBobAccount   = new ProducerRecord(topic, "bob", 0)
 
-            transaction1 = ZIO.scoped {
-                             TransactionalProducer.createTransaction.flatMap { t =>
-                               t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+              transaction1 = ZIO.scoped {
+                               TransactionalProducer.createTransaction.flatMap { t =>
+                                 t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+                               }
                              }
-                           }
-            transaction2 = ZIO.scoped {
-                             TransactionalProducer.createTransaction.flatMap { t =>
-                               t.produce(initialBobAccount, Serde.string, Serde.int, None)
+              transaction2 = ZIO.scoped {
+                               TransactionalProducer.createTransaction.flatMap { t =>
+                                 t.produce(initialBobAccount, Serde.string, Serde.int, None)
+                               }
                              }
-                           }
 
-            _        <- transaction1 <&> transaction2
-            settings <- transactionalConsumerSettings(group, client)
-            recordChunk <- ZIO.scoped {
-                             withConsumerInt(Topics(Set(topic)), settings).flatMap { consumer =>
-                               for {
-                                 messages <- consumer.take
-                                               .flatMap(_.done)
-                                               .mapError(_.getOrElse(new NoSuchElementException))
-                               } yield messages
+              _ <- transaction1 <&> transaction2
+              recordChunk <- ZIO.scoped {
+                               consumeInt(Topics(Set(topic))).flatMap { consumer =>
+                                 for {
+                                   messages <- consumer.take
+                                                 .flatMap(_.done)
+                                                 .mapError(_.getOrElse(new NoSuchElementException))
+                                 } yield messages
+                               }
                              }
-                           }
-          } yield assert(recordChunk.map(_.value))(contains(0) && contains(20))
+            } yield assert(recordChunk.map(_.value))(contains(0) && contains(20))
+
+          test.provideSome[Kafka & TransactionalProducer & Scope](consumerLayer)
         },
         test("exception management") {
-          for {
-            topic <- randomTopic
-            initialBobAccount = new ProducerRecord(topic, "bob", 0)
+          (
+            for {
+              topic <- randomTopic
+              initialBobAccount = new ProducerRecord(topic, "bob", 0)
 
-            result <- ZIO.scoped {
-                        TransactionalProducer.createTransaction.flatMap { t =>
-                          t.produce(
-                            initialBobAccount,
-                            Serde.string,
-                            Serde.int.contramap((_: Int) => throw new RuntimeException("test")),
-                            None
-                          )
-                        }
-                      }.unit.exit
-          } yield assert(result)(dies(hasMessage(equalTo("test"))))
+              result <- ZIO.scoped {
+                          TransactionalProducer.createTransaction.flatMap { t =>
+                            t.produce(
+                              initialBobAccount,
+                              Serde.string,
+                              Serde.int.contramap((_: Int) => throw new RuntimeException("test")),
+                              None
+                            )
+                          }
+                        }.unit.exit
+            } yield assert(result)(dies(hasMessage(equalTo("test"))))
+          ).provideSome[Kafka & TransactionalProducer](consumerLayer)
         },
         test("interleaving transaction with non-transactional consumer") {
           import Subscription._
 
-          for {
-            topic  <- randomTopic
-            group  <- randomGroup
-            client <- randomClient
+          val test: ZIO[TransactionalProducer & Scope & Consumer & Producer, Throwable, TestResult] =
+            for {
+              topic <- randomTopic
 
-            initialAliceAccount = new ProducerRecord(topic, "alice", 20)
-            initialBobAccount   = new ProducerRecord(topic, "bob", 0)
-            nonTransactional    = new ProducerRecord(topic, "no one", -1)
-            aliceGives20        = new ProducerRecord(topic, "alice", 0)
+              initialAliceAccount = new ProducerRecord(topic, "alice", 20)
+              initialBobAccount   = new ProducerRecord(topic, "bob", 0)
+              nonTransactional    = new ProducerRecord(topic, "no one", -1)
+              aliceGives20        = new ProducerRecord(topic, "alice", 0)
 
-            _ <- ZIO.scoped {
-                   TransactionalProducer.createTransaction.flatMap { t =>
-                     t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
-                       t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+              _ <- ZIO.scoped {
+                     TransactionalProducer.createTransaction.flatMap { t =>
+                       t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
+                         t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+                     }
                    }
-                 }
-            assertion <- ZIO.scoped {
-                           TransactionalProducer.createTransaction.flatMap { t =>
-                             for {
-                               _        <- t.produce(aliceGives20, Serde.string, Serde.int, None)
-                               _        <- Producer.produce(nonTransactional, Serde.string, Serde.int)
-                               settings <- consumerSettings(client, Some(group))
-                               recordChunk <- ZIO.scoped {
-                                                withConsumerInt(Topics(Set(topic)), settings).flatMap { consumer =>
-                                                  for {
-                                                    messages <- consumer.take
-                                                                  .flatMap(_.done)
-                                                                  .mapError(_.getOrElse(new NoSuchElementException))
-                                                    record = messages.filter(rec => rec.record.key == "no one")
-                                                  } yield record
-
+              assertion <- ZIO.scoped {
+                             TransactionalProducer.createTransaction.flatMap { t =>
+                               for {
+                                 _ <- t.produce(aliceGives20, Serde.string, Serde.int, None)
+                                 _ <- Producer.produce(nonTransactional, Serde.string, Serde.int)
+                                 recordChunk <- ZIO.scoped {
+                                                  consumeInt(Topics(Set(topic))).flatMap { consumer =>
+                                                    for {
+                                                      messages <- consumer.take
+                                                                    .flatMap(_.done)
+                                                                    .mapError(_.getOrElse(new NoSuchElementException))
+                                                      record = messages.filter(rec => rec.record.key == "no one")
+                                                    } yield record
+                                                  }
                                                 }
-                                              }
-                             } yield assertTrue(recordChunk.nonEmpty)
+                               } yield assertTrue(recordChunk.nonEmpty)
+                             }
                            }
-                         }
-          } yield assertion
+            } yield assertion
+
+          test.provideSome[Kafka & TransactionalProducer & Scope & Producer](consumerLayer)
         },
         test("interleaving transaction with transactional consumer should not be read during transaction") {
           import Subscription._
 
-          for {
-            topic  <- randomTopic
-            group  <- randomGroup
-            client <- randomClient
+          val test: ZIO[TransactionalProducer & Scope & Consumer & Producer, Throwable, TestResult] =
+            for {
+              topic <- randomTopic
 
-            initialAliceAccount = new ProducerRecord(topic, "alice", 20)
-            initialBobAccount   = new ProducerRecord(topic, "bob", 0)
-            nonTransactional    = new ProducerRecord(topic, "no one", -1)
-            aliceGives20        = new ProducerRecord(topic, "alice", 0)
+              initialAliceAccount = new ProducerRecord(topic, "alice", 20)
+              initialBobAccount   = new ProducerRecord(topic, "bob", 0)
+              nonTransactional    = new ProducerRecord(topic, "no one", -1)
+              aliceGives20        = new ProducerRecord(topic, "alice", 0)
 
-            _ <- ZIO.scoped {
-                   TransactionalProducer.createTransaction.flatMap { t =>
-                     t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
-                       t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+              _ <- ZIO.scoped {
+                     TransactionalProducer.createTransaction.flatMap { t =>
+                       t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
+                         t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+                     }
                    }
-                 }
-            assertion <- ZIO.scoped {
-                           TransactionalProducer.createTransaction.flatMap { t =>
-                             for {
-                               _        <- t.produce(aliceGives20, Serde.string, Serde.int, None)
-                               _        <- Producer.produce(nonTransactional, Serde.string, Serde.int)
-                               settings <- transactionalConsumerSettings(group, client)
-                               recordChunk <- ZIO.scoped {
-                                                withConsumerInt(Topics(Set(topic)), settings).flatMap { consumer =>
-                                                  for {
-                                                    messages <- consumer.take
-                                                                  .flatMap(_.done)
-                                                                  .mapError(_.getOrElse(new NoSuchElementException))
-                                                    record = messages.filter(rec => rec.record.key == "no one")
-                                                  } yield record
+              assertion <- ZIO.scoped {
+                             TransactionalProducer.createTransaction.flatMap { t =>
+                               for {
+                                 _ <- t.produce(aliceGives20, Serde.string, Serde.int, None)
+                                 _ <- Producer.produce(nonTransactional, Serde.string, Serde.int)
+                                 recordChunk <- ZIO.scoped {
+                                                  consumeInt(Topics(Set(topic))).flatMap { consumer =>
+                                                    for {
+                                                      messages <- consumer.take
+                                                                    .flatMap(_.done)
+                                                                    .mapError(_.getOrElse(new NoSuchElementException))
+                                                      record = messages.filter(rec => rec.record.key == "no one")
+                                                    } yield record
+                                                  }
                                                 }
-                                              }
-                             } yield assertTrue(recordChunk.isEmpty)
+                               } yield assertTrue(recordChunk.isEmpty)
+                             }
                            }
-                         }
-          } yield assertion
+            } yield assertion
+
+          test.provideSome[Kafka & TransactionalProducer & Scope & Producer](consumerLayer)
         },
         test("interleaving transaction with transactional consumer when aborted") {
           import Subscription._
 
-          for {
-            topic  <- randomTopic
-            group  <- randomGroup
-            client <- randomClient
+          val test: ZIO[Kafka & TransactionalProducer & Scope & Consumer & Producer, Object, TestResult] =
+            for {
+              topic <- randomTopic
 
-            initialAliceAccount = new ProducerRecord(topic, "alice", 20)
-            initialBobAccount   = new ProducerRecord(topic, "bob", 0)
-            aliceGives20        = new ProducerRecord(topic, "alice", 0)
-            nonTransactional    = new ProducerRecord(topic, "no one", -1)
-            bobReceives20       = new ProducerRecord(topic, "bob", 20)
+              initialAliceAccount = new ProducerRecord(topic, "alice", 20)
+              initialBobAccount   = new ProducerRecord(topic, "bob", 0)
+              aliceGives20        = new ProducerRecord(topic, "alice", 0)
+              nonTransactional    = new ProducerRecord(topic, "no one", -1)
+              bobReceives20       = new ProducerRecord(topic, "bob", 20)
 
-            _ <- ZIO.scoped {
-                   TransactionalProducer.createTransaction.flatMap { t =>
-                     t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
-                       t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+              _ <- ZIO.scoped {
+                     TransactionalProducer.createTransaction.flatMap { t =>
+                       t.produce(initialBobAccount, Serde.string, Serde.int, None) *>
+                         t.produce(initialAliceAccount, Serde.string, Serde.int, None)
+                     }
                    }
-                 }
-            _ <- ZIO.scoped {
-                   TransactionalProducer.createTransaction.flatMap { t =>
-                     t.produce(aliceGives20, Serde.string, Serde.int, None) *>
-                       Producer.produce(nonTransactional, Serde.string, Serde.int) *>
-                       t.produce(bobReceives20, Serde.string, Serde.int, None) *>
-                       t.abort
+              _ <- ZIO.scoped {
+                     TransactionalProducer.createTransaction.flatMap { t =>
+                       t.produce(aliceGives20, Serde.string, Serde.int, None) *>
+                         Producer.produce(nonTransactional, Serde.string, Serde.int) *>
+                         t.produce(bobReceives20, Serde.string, Serde.int, None) *>
+                         t.abort
+                     }
+                   }.catchSome { case UserInitiatedAbort =>
+                     ZIO.unit // silences the abort
                    }
-                 }.catchSome { case UserInitiatedAbort =>
-                   ZIO.unit // silences the abort
-                 }
-            settings <- transactionalConsumerSettings(group, client)
-            recordChunk <- ZIO.scoped {
-                             withConsumerInt(Topics(Set(topic)), settings).flatMap { consumer =>
-                               for {
-                                 messages <- consumer.take
-                                               .flatMap(_.done)
-                                               .mapError(_.getOrElse(new NoSuchElementException))
-                                 record = messages.filter(rec => rec.record.key == "no one")
-                               } yield record
+              recordChunk <- ZIO.scoped {
+                               consumeInt(Topics(Set(topic))).flatMap { consumer =>
+                                 for {
+                                   messages <- consumer.take
+                                                 .flatMap(_.done)
+                                                 .mapError(_.getOrElse(new NoSuchElementException))
+                                   record = messages.filter(rec => rec.record.key == "no one")
+                                 } yield record
+                               }
                              }
-                           }
-          } yield assertTrue(recordChunk.nonEmpty)
+            } yield assertTrue(recordChunk.nonEmpty)
+
+          test.provideSome[Kafka & TransactionalProducer & Scope & Producer](consumerLayer)
         },
         test("committing offsets after a successful transaction") {
           import Subscription._
 
-          for {
-            topic  <- randomTopic
-            group  <- randomGroup
-            client <- randomClient
+          val test: ZIO[Consumer & Producer & TransactionalProducer, Throwable, TestResult] =
+            for {
+              topic <- randomTopic
 
-            initialAliceAccount  = new ProducerRecord(topic, "alice", 20)
-            aliceAccountFeesPaid = new ProducerRecord(topic, "alice", 0)
+              initialAliceAccount  = new ProducerRecord(topic, "alice", 20)
+              aliceAccountFeesPaid = new ProducerRecord(topic, "alice", 0)
 
-            _        <- Producer.produce(initialAliceAccount, Serde.string, Serde.int)
-            settings <- transactionalConsumerSettings(group, client)
-            committedOffset <-
-              ZIO.scoped {
-                Consumer.make(settings).flatMap { c =>
-                  ZIO.scoped {
-                    c
-                      .plainStream(Topics(Set(topic)), Serde.string, Serde.int)
-                      .toQueue()
-                      .flatMap { q =>
-                        val readAliceAccount = for {
-                          messages <- q.take
-                                        .flatMap(_.done)
-                                        .mapError(_.getOrElse(new NoSuchElementException))
-                        } yield messages.head
-                        for {
-                          aliceHadMoneyCommittableMessage <- readAliceAccount
-                          _ <- ZIO.scoped {
-                                 TransactionalProducer.createTransaction.flatMap { t =>
-                                   t.produce(
-                                     aliceAccountFeesPaid,
-                                     Serde.string,
-                                     Serde.int,
-                                     Some(aliceHadMoneyCommittableMessage.offset)
-                                   )
-                                 }
+              _ <- Producer.produce(initialAliceAccount, Serde.string, Serde.int)
+              committedOffset <-
+                ZIO.scoped {
+                  Consumer
+                    .plainStream(Topics(Set(topic)), Serde.string, Serde.int)
+                    .toQueue()
+                    .flatMap { q =>
+                      val readAliceAccount = for {
+                        messages <- q.take
+                                      .flatMap(_.done)
+                                      .mapError(_.getOrElse(new NoSuchElementException))
+                      } yield messages.head
+                      for {
+                        aliceHadMoneyCommittableMessage <- readAliceAccount
+                        _ <- ZIO.scoped {
+                               TransactionalProducer.createTransaction.flatMap { t =>
+                                 t.produce(
+                                   aliceAccountFeesPaid,
+                                   Serde.string,
+                                   Serde.int,
+                                   Some(OffsetBatch(aliceHadMoneyCommittableMessage))
+                                 )
                                }
-                          aliceTopicPartition =
-                            new TopicPartition(topic, aliceHadMoneyCommittableMessage.partition)
-                          committed <- c.committed(Set(aliceTopicPartition))
-                        } yield committed(aliceTopicPartition)
-                      }
-                  }
+                             }
+                        aliceTopicPartition =
+                          new TopicPartition(topic, aliceHadMoneyCommittableMessage.partition)
+                        committed <- Consumer.committed(Set(aliceTopicPartition))
+                      } yield committed(aliceTopicPartition)
+                    }
                 }
-              }
 
-          } yield assertTrue(committedOffset.get.offset() == 1L)
+            } yield assertTrue(committedOffset.get.offset() == 1L)
+
+          test.provideSome[Kafka & Producer & TransactionalProducer](consumerLayer)
         },
         test("not committing offsets after a failed transaction") {
           import Subscription._
 
-          for {
-            topic  <- randomTopic
-            group  <- randomGroup
-            client <- randomClient
+          val test: ZIO[Consumer & Producer & TransactionalProducer, Object, TestResult] =
+            for {
+              topic <- randomTopic
 
-            initialAliceAccount  = new ProducerRecord(topic, "alice", 20)
-            aliceAccountFeesPaid = new ProducerRecord(topic, "alice", 0)
+              initialAliceAccount  = new ProducerRecord(topic, "alice", 20)
+              aliceAccountFeesPaid = new ProducerRecord(topic, "alice", 0)
 
-            _        <- Producer.produce(initialAliceAccount, Serde.string, Serde.int)
-            settings <- transactionalConsumerSettings(group, client)
-            committedOffset <- ZIO.scoped {
-                                 Consumer.make(settings).flatMap { c =>
-                                   c
+              _ <- Producer.produce(initialAliceAccount, Serde.string, Serde.int)
+              committedOffset <- ZIO.scoped {
+                                   Consumer
                                      .plainStream(Topics(Set(topic)), Serde.string, Serde.int)
                                      .toQueue()
                                      .flatMap { q =>
@@ -414,7 +417,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                                     aliceAccountFeesPaid,
                                                     Serde.string,
                                                     Serde.int,
-                                                    Some(aliceHadMoneyCommittableMessage.offset)
+                                                    Some(OffsetBatch(aliceHadMoneyCommittableMessage))
                                                   ) *>
                                                     t.abort
                                                 }
@@ -423,48 +426,57 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                               }
                                          aliceTopicPartition =
                                            new TopicPartition(topic, aliceHadMoneyCommittableMessage.partition)
-                                         committed <- c.committed(Set(aliceTopicPartition))
+                                         committed <- Consumer.committed(Set(aliceTopicPartition))
                                        } yield committed(aliceTopicPartition)
                                      }
                                  }
-                               }
-          } yield assert(committedOffset)(isNone)
+            } yield assert(committedOffset)(isNone)
+
+          test.provideSome[Kafka & Producer & TransactionalProducer](consumerLayer)
         },
         test("fails if transaction leaks") {
-          val test = for {
-            topic            <- randomTopic
-            transactionThief <- Ref.make(Option.empty[Transaction])
-            _ <- ZIO.scoped {
-                   TransactionalProducer.createTransaction.flatMap { t =>
-                     transactionThief.set(Some(t))
-                   }
-                 }
-            t <- transactionThief.get
-            _ <- t.get.produce(topic, 0, 0, Serde.int, Serde.int, None)
-          } yield ()
+          val test: ZIO[Kafka & TransactionalProducer, Throwable, Unit] =
+            (
+              for {
+                topic            <- randomTopic
+                transactionThief <- Ref.make(Option.empty[Transaction])
+                _ <- ZIO.scoped {
+                       TransactionalProducer.createTransaction.flatMap { t =>
+                         transactionThief.set(Some(t))
+                       }
+                     }
+                t <- transactionThief.get
+                _ <- t.get.produce(topic, 0, 0, Serde.int, Serde.int, None)
+              } yield ()
+            ).provideSome[Kafka & TransactionalProducer](consumerLayer)
+
           assertZIO(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
         },
         test("fails if transaction leaks in an open transaction") {
-          val test = for {
-            topic            <- randomTopic
-            transactionThief <- Ref.make(Option.empty[Transaction])
-            _ <- ZIO.scoped {
-                   TransactionalProducer.createTransaction.flatMap { t =>
-                     transactionThief.set(Some(t))
-                   }
-                 }
-            t <- transactionThief.get
-            _ <- ZIO.scoped {
-                   TransactionalProducer.createTransaction.flatMap { _ =>
-                     t.get.produce(topic, 0, 0, Serde.int, Serde.int, None)
-                   }
-                 }
-          } yield ()
+          val test: ZIO[Kafka & TransactionalProducer, Throwable, Unit] =
+            (
+              for {
+                topic            <- randomTopic
+                transactionThief <- Ref.make(Option.empty[Transaction])
+                _ <- ZIO.scoped {
+                       TransactionalProducer.createTransaction.flatMap { t =>
+                         transactionThief.set(Some(t))
+                       }
+                     }
+                t <- transactionThief.get
+                _ <- ZIO.scoped {
+                       TransactionalProducer.createTransaction.flatMap { _ =>
+                         t.get.produce(topic, 0, 0, Serde.int, Serde.int, None)
+                       }
+                     }
+              } yield ()
+            ).provideSome[Kafka & TransactionalProducer](consumerLayer)
+
           assertZIO(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
         }
       )
     )
-      .provideSome[Kafka](
+      .provideSome[Kafka & Scope](
         (KafkaTestUtils.producer ++ transactionalProducer)
           .mapError(TestFailure.fail)
       )

@@ -1,6 +1,6 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp }
+import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
@@ -152,6 +152,16 @@ trait Consumer {
    * Expose internal consumer metrics
    */
   def metrics: Task[Map[MetricName, Metric]]
+
+  def commit(offsetBatch: OffsetBatch): Task[Unit]
+  def commit(record: CommittableRecord[_, _]): Task[Unit]
+  def commitAll(records: Chunk[CommittableRecord[_, _]]): Task[Unit]
+
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], offsetBatch: OffsetBatch): RIO[R, Unit]
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], record: CommittableRecord[_, _]): RIO[R, Unit]
+  def commitAllOrRetry[R](policy: Schedule[R, Throwable, Any], records: Chunk[CommittableRecord[_, _]]): RIO[R, Unit]
+
+  private[kafka] def consumerGroupMetadata: Task[Option[ConsumerGroupMetadata]]
 }
 
 object Consumer {
@@ -159,7 +169,8 @@ object Consumer {
 
   private final class Live private[Consumer] (
     consumer: ConsumerAccess,
-    runloopAccess: RunloopAccess
+    runloopAccess: RunloopAccess,
+    hasGroupId: Boolean
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
@@ -286,20 +297,48 @@ object Consumer {
         r <- ZIO.environment[R & R1]
         _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
                .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
-                 partitionStream.mapChunksZIO(_.mapZIO((c: CommittableRecord[K, V]) => f(c.record).as(c.offset)))
+                 partitionStream.mapChunksZIO(records => records.mapZIODiscard(c => f(c.record)).as(records))
                }
                .provideEnvironment(r)
-               .aggregateAsync(offsetBatches)
-               .mapZIO(_.commitOrRetry(commitRetryPolicy))
+               .aggregateAsync(OffsetBatchesSink)
+               .mapZIO(commitOrRetry(commitRetryPolicy, _))
                .runDrain
       } yield ()
 
     override def metrics: Task[Map[MetricName, Metric]] =
       consumer.withConsumer(_.metrics().asScala.toMap)
-  }
 
-  val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
-    ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
+    override def commit(offsetBatch: OffsetBatch): Task[Unit]                   = runloopAccess.commit(offsetBatch)
+    override def commit(record: CommittableRecord[_, _]): Task[Unit]            = commit(OffsetBatch(record))
+    override def commitAll(records: Chunk[CommittableRecord[_, _]]): Task[Unit] = commit(OffsetBatch(records))
+
+    override def commitOrRetry[R](
+      policy: Schedule[R, Throwable, Any],
+      offsetBatch: OffsetBatch
+    ): RIO[R, Unit] =
+      runloopAccess
+        .commit(offsetBatch)
+        .retry(
+          Schedule.recurWhile[Throwable] {
+            case _: RetriableCommitFailedException => true
+            case _                                 => false
+          } && policy
+        )
+
+    override def commitOrRetry[R](
+      policy: Schedule[R, Throwable, Any],
+      record: CommittableRecord[_, _]
+    ): RIO[R, Unit] = commitOrRetry(policy, OffsetBatch(record))
+
+    override def commitAllOrRetry[R](
+      policy: Schedule[R, Throwable, Any],
+      records: Chunk[CommittableRecord[_, _]]
+    ): RIO[R, Unit] = commitOrRetry(policy, OffsetBatch(records))
+
+    override private[kafka] val consumerGroupMetadata: Task[Option[ConsumerGroupMetadata]] =
+      if (hasGroupId) consumer.withConsumer(_.groupMetadata()).map(Some(_))
+      else ZIO.none
+  }
 
   def live: RLayer[ConsumerSettings & Diagnostics, Consumer] =
     ZLayer.scoped {
@@ -319,7 +358,10 @@ object Consumer {
       _              <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
       consumerAccess <- ConsumerAccess.make(settings)
       runloopAccess  <- RunloopAccess.make(settings, consumerAccess, diagnostics)
-    } yield new Live(consumerAccess, runloopAccess)
+    } yield new Live(consumerAccess, runloopAccess, settings.hasGroupId)
+
+  val OffsetBatchesSink: ZSink[Any, Nothing, CommittableRecord[_, _], Nothing, OffsetBatch] =
+    ZSink.foldLeft(OffsetBatch.empty) { case (offsetBatch, record) => offsetBatch add record }
 
   /**
    * Accessor method for [[Consumer.assignment]]
@@ -507,6 +549,18 @@ object Consumer {
    */
   def metrics: RIO[Consumer, Map[MetricName, Metric]] =
     ZIO.serviceWithZIO(_.metrics)
+
+  /**
+   * Accessor method for [[Consumer.commit]]
+   */
+  def commit(offsets: OffsetBatch): RIO[Consumer, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.commit(offsets))
+
+  /**
+   * Accessor method for [[Consumer.commitOrRetry]]
+   */
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], offsets: OffsetBatch): RIO[Consumer & R, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.commitOrRetry(policy, offsets))
 
   sealed trait OffsetRetrieval
   object OffsetRetrieval {

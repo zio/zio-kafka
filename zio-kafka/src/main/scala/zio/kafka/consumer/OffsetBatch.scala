@@ -1,65 +1,65 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata
 import org.apache.kafka.common.TopicPartition
-import zio.{ RIO, Schedule, Task, ZIO }
 
-sealed trait OffsetBatch {
-  def offsets: Map[TopicPartition, Long]
-  def commit: Task[Unit]
-  def add(offset: Offset): OffsetBatch
+import scala.collection.mutable
+
+final case class OffsetBatch(offsets: Map[TopicPartition, Long]) {
+
+  def nonEmpty: Boolean = offsets.nonEmpty
+
+  def add(record: CommittableRecord[_, _]): OffsetBatch = {
+    val tp = record.topicPartition
+    val newOffset =
+      offsets.get(tp) match {
+        case None                => record.offset
+        case Some(previousTuple) => math.max(previousTuple, record.offset)
+      }
+
+    copy(offsets = offsets + (tp -> newOffset))
+  }
+
   @deprecated("Use add(Offset) instead", "2.1.4")
-  def merge(offset: Offset): OffsetBatch
-  def merge(offsets: OffsetBatch): OffsetBatch
-  def consumerGroupMetadata: Option[ConsumerGroupMetadata]
+  def merge(record: CommittableRecord[_, _]): OffsetBatch = add(record)
 
-  /**
-   * Attempts to commit and retries according to the given policy when the commit fails with a
-   * RetriableCommitFailedException
-   */
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
-    Offset.commitOrRetry(commit, policy)
-}
-
-object OffsetBatch {
-  val empty: OffsetBatch = EmptyOffsetBatch
-
-  def apply(offsets: Iterable[Offset]): OffsetBatch = offsets.foldLeft(empty)(_ add _)
-}
-
-private final case class OffsetBatchImpl(
-  offsets: Map[TopicPartition, Long],
-  commitHandle: Map[TopicPartition, Long] => Task[Unit],
-  consumerGroupMetadata: Option[ConsumerGroupMetadata]
-) extends OffsetBatch {
-  override def commit: Task[Unit] = commitHandle(offsets)
-
-  override def add(offset: Offset): OffsetBatch =
-    copy(
-      offsets = offsets + (offset.topicPartition -> (offsets
-        .getOrElse(offset.topicPartition, -1L) max offset.offset))
-    )
-
-  override def merge(offset: Offset): OffsetBatch = add(offset)
-
-  override def merge(otherOffsets: OffsetBatch): OffsetBatch = {
+  def merge(otherOffsetBatch: OffsetBatch): OffsetBatch = {
     val newOffsets = Map.newBuilder[TopicPartition, Long]
     newOffsets ++= offsets
-    otherOffsets.offsets.foreach { case (tp, offset) =>
-      val existing = offsets.getOrElse(tp, -1L)
-      if (existing < offset)
-        newOffsets += tp -> offset
+    otherOffsetBatch.offsets.foreach { case tuple @ (tp, offset) =>
+      offsets.get(tp) match {
+        case None => newOffsets += tuple
+        case Some(existing) =>
+          if (existing < offset) {
+            newOffsets += tuple
+          }
+      }
     }
 
     copy(offsets = newOffsets.result())
   }
 }
 
-case object EmptyOffsetBatch extends OffsetBatch {
-  override val offsets: Map[TopicPartition, Long]                   = Map.empty
-  override val commit: Task[Unit]                                   = ZIO.unit
-  override def add(offset: Offset): OffsetBatch                     = offset.batch
-  override def merge(offset: Offset): OffsetBatch                   = add(offset)
-  override def merge(offsets: OffsetBatch): OffsetBatch             = offsets
-  override def consumerGroupMetadata: Option[ConsumerGroupMetadata] = None
+object OffsetBatch {
+  val empty: OffsetBatch = OffsetBatch(offsets = Map.empty)
+
+  def apply(record: CommittableRecord[_, _]): OffsetBatch =
+    OffsetBatch(offsets = Map(record.topicPartition -> record.offset))
+
+  def apply(records: Iterable[CommittableRecord[_, _]]): OffsetBatch = {
+    val offsets = new mutable.HashMap[TopicPartition, Long]
+    offsets.sizeHint(records.size)
+
+    records.foreach { r =>
+      val tp = r.topicPartition
+      val newOffset =
+        offsets.get(tp) match {
+          case None                 => r.offset
+          case Some(previousOffset) => math.max(previousOffset, r.offset)
+        }
+
+      offsets += tp -> newOffset
+    }
+
+    OffsetBatch(offsets = offsets.toMap)
+  }
 }

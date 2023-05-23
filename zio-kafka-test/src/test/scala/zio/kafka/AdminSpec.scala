@@ -231,9 +231,9 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
               .mapConcatZIO { committableRecords =>
                 val records     = committableRecords.map(_.record)
-                val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
+                val offsetBatch = OffsetBatch(committableRecords)
 
-                offsetBatch.commit.as(records)
+                Consumer.commit(offsetBatch).as(records)
               }
               .runCollect
               .provideSomeLayer[Kafka](consumer("adminspec-topic10", Some(consumerGroupID)))
@@ -301,7 +301,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           Consumer
             .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
             .take(count)
-            .foreach(_.offset.commit)
+            .runForeachChunk(records => Consumer.commit(OffsetBatch(records)))
             .provideSomeLayer[Kafka](consumer(topic, Some(groupId)))
 
         KafkaTestUtils.withAdmin { client =>
@@ -344,7 +344,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           Consumer
             .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
             .take(count)
-            .foreach(_.offset.commit)
+            .runForeachChunk(records => Consumer.commit(OffsetBatch(records)))
             .provideSomeLayer[Kafka](consumer(topic, Some(groupId)))
 
         KafkaTestUtils.withAdmin { client =>
@@ -645,7 +645,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     groupInstanceId: Option[String] = None
   ): ZIO[Kafka, Throwable, Unit] = Consumer
     .plainStream(Subscription.topics(topicName), Serde.string, Serde.string)
-    .foreach(_.offset.commit)
+    .runForeachChunk(records => Consumer.commit(OffsetBatch(records)))
     .provideSomeLayer(consumer(clientId, Some(groupId), groupInstanceId))
 
   private def getStableConsumerGroupDescription(

@@ -1,14 +1,12 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, ConsumerRecord }
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.{ TopicPartition => JTopicPartition }
+import zio.RIO
 import zio.kafka.serde.Deserializer
-import zio.{ RIO, Task }
 
 final case class CommittableRecord[K, V](
-  record: ConsumerRecord[K, V],
-  private val commitHandle: Map[TopicPartition, Long] => Task[Unit],
-  private val consumerGroupMetadata: Option[ConsumerGroupMetadata]
+  record: ConsumerRecord[K, V]
 ) {
   def deserializeWith[R, K1, V1](
     keyDeserializer: Deserializer[R, K1],
@@ -17,7 +15,7 @@ final case class CommittableRecord[K, V](
     for {
       key   <- keyDeserializer.deserialize(record.topic(), record.headers(), record.key())
       value <- valueDeserializer.deserialize(record.topic(), record.headers(), record.value())
-    } yield copy(
+    } yield new CommittableRecord[K1, V1](
       record = new ConsumerRecord[K1, V1](
         record.topic(),
         record.partition(),
@@ -33,30 +31,16 @@ final case class CommittableRecord[K, V](
       )
     )
 
-  def key: K          = record.key
+  def key: K          = record.key()
   def value: V        = record.value()
   def partition: Int  = record.partition()
   def timestamp: Long = record.timestamp()
 
-  def offset: Offset =
-    OffsetImpl(
-      topic = record.topic(),
-      partition = record.partition(),
-      offset = record.offset(),
-      commitHandle = commitHandle,
-      consumerGroupMetadata = consumerGroupMetadata
-    )
+  private[consumer] lazy val topicPartition: JTopicPartition = new JTopicPartition(record.topic(), record.partition())
+  private[consumer] def offset: Long                         = record.offset()
 }
 
 object CommittableRecord {
-  def apply[K, V](
-    record: ConsumerRecord[K, V],
-    commitHandle: Map[TopicPartition, Long] => Task[Unit],
-    consumerGroupMetadata: Option[ConsumerGroupMetadata]
-  ): CommittableRecord[K, V] =
-    new CommittableRecord(
-      record = record,
-      commitHandle = commitHandle,
-      consumerGroupMetadata = consumerGroupMetadata
-    )
+  def apply[K, V](record: ConsumerRecord[K, V]): CommittableRecord[K, V] =
+    new CommittableRecord(record = record)
 }

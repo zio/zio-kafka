@@ -5,9 +5,9 @@ import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription }
+import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, OffsetBatch, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
-import zio.{ Hub, IO, Ref, Scope, UIO, ZIO, ZLayer }
+import zio.{ Hub, IO, Ref, Scope, Task, UIO, ZIO, ZLayer }
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -64,6 +64,9 @@ private[consumer] final class RunloopAccess private (
            }
     } yield stream
 
+  def commit(offsets: OffsetBatch): Task[Unit] =
+    withRunloopZIO(shouldStartIfNot = false)(_.commit(offsets))
+
 }
 
 private[consumer] object RunloopAccess {
@@ -84,7 +87,6 @@ private[consumer] object RunloopAccess {
       runloopStateRef <- Ref.Synchronized.make[RunloopState](RunloopState.NotStarted)
       makeRunloop = Runloop
                       .make(
-                        hasGroupId = settings.hasGroupId,
                         consumer = consumerAccess,
                         pollTimeout = settings.pollTimeout,
                         diagnostics = diagnostics,
