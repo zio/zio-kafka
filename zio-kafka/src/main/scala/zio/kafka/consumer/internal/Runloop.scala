@@ -28,8 +28,7 @@ private[consumer] final class Runloop private (
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
-  currentState: Ref[State],
-  isShuttingDownRef: Ref[Boolean] // Do not use this Ref for anything else than its current usage.
+  currentState: Ref[State]
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
@@ -48,20 +47,14 @@ private[consumer] final class Runloop private (
   def changeSubscription(
     subscription: Option[Subscription]
   ): Task[Unit] =
-    isShuttingDownRef.get.flatMap { isDown =>
-      // noinspection SimplifyUnlessInspection
-      if (isDown)
-        ZIO.debug(s"Runloop::changeSubscription called with $subscription while the Runloop is already shutdown")
-      else
-        Promise
-          .make[Throwable, Unit]
-          .flatMap { cont =>
-            commandQueue.offer(Command.ChangeSubscription(subscription, cont)) *>
-              cont.await
-          }
-          .unit
-          .uninterruptible
-    }
+    Promise
+      .make[Throwable, Unit]
+      .flatMap { cont =>
+        commandQueue.offer(Command.ChangeSubscription(subscription, cont)) *>
+          cont.await
+      }
+      .unit
+      .uninterruptible
 
   val rebalanceListener: RebalanceListener = {
     val emitDiagnostics = RebalanceListener(
@@ -598,7 +591,6 @@ private[consumer] object Runloop {
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       currentStateRef    <- Ref.make(State.initial)
       runtime            <- ZIO.runtime[Any]
-      isShuttingDownRef  <- Ref.make(false)
       runloop = new Runloop(
                   runtime = runtime,
                   hasGroupId = hasGroupId,
@@ -612,8 +604,7 @@ private[consumer] object Runloop {
                   offsetRetrieval = offsetRetrieval,
                   userRebalanceListener = userRebalanceListener,
                   restartStreamsOnRebalancing = restartStreamsOnRebalancing,
-                  currentState = currentStateRef,
-                  isShuttingDownRef = isShuttingDownRef
+                  currentState = currentStateRef
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
@@ -623,7 +614,6 @@ private[consumer] object Runloop {
 
       _ <- ZIO.addFinalizer(
              ZIO.logDebug("Shutting down Runloop") *>
-               isShuttingDownRef.set(true) *>
                commandQueue.offer(StopAllStreams) *>
                commandQueue.offer(StopRunloop) *>
                fiber.join.orDie <*

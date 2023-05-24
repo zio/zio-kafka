@@ -32,16 +32,15 @@ private[consumer] object RunloopAccess {
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp,
-    wrapper: ConsumerAccess,
-    partitionsQueue: Queue[Take[Throwable, PartitionAssignment]]
-  ): ZIO[Scope, Throwable, RunloopAccess] =
+    consumerAccess: ConsumerAccess,
+    partitionsQueue: Queue[Take[Throwable, PartitionAssignment]],
+    scope: Scope
+  ): Task[RunloopAccess] =
     for {
-      scope      <- ZIO.scope
       runloopRef <- Ref.Synchronized.make[Runloop](null)
-      scopeLayer = ZLayer.succeed(scope)
       makeRunloop = Runloop(
                       hasGroupId = settings.hasGroupId,
-                      consumer = wrapper,
+                      consumer = consumerAccess,
                       pollTimeout = settings.pollTimeout,
                       diagnostics = diagnostics,
                       offsetRetrieval = settings.offsetRetrieval,
@@ -49,6 +48,6 @@ private[consumer] object RunloopAccess {
                       restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
                       runloopTimeout = settings.runloopTimeout,
                       partitionsQueue = partitionsQueue
-                    ).provide(scopeLayer)
+                    ).provide(ZLayer.succeed(scope))
     } yield new RunloopAccess(runloopRef, makeRunloop)
 }
