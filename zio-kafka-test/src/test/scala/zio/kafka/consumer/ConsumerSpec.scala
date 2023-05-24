@@ -1060,7 +1060,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _ <- recordsOut.take
         } yield assertCompletes
       },
-      suite("issue #846")(
+      suite("issue #856")(
         test(
           "Booting a Consumer to do something else than consuming should not fail with `RunloopTimeout` exception"
         ) {
@@ -1100,6 +1100,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             } yield testResult && assert(finalizationEvents)(hasSameElements(Chunk(ConsumerFinalized)))
           },
           test("When consuming, the Runloop is started. The finalization orders matters to avoid a deadlock") {
+            // This test ensures that we're not inadvertently introducing a deadlock by changing the order of finalizers.
+
             def test(diagnostics: Diagnostics): ZIO[Producer & Scope & Kafka, Throwable, TestResult] =
               for {
                 clientId <- randomClient
