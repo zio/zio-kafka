@@ -363,7 +363,6 @@ object Consumer {
       consumerAccess <- ConsumerAccess.make(settings)
       runloopAccess  <- RunloopAccess.make(settings, diagnostics, consumerAccess)
       subscriptions  <- Ref.Synchronized.make(Set.empty[Subscription])
-      _              <- ZIO.addFinalizer(ZIO.logDebug("Finalized Runloop"))
     } yield new Live(consumerAccess, runloopAccess, subscriptions, diagnostics)
 
   /**
