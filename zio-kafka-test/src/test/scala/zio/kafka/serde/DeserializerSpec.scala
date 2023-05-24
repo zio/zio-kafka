@@ -5,8 +5,9 @@ import zio._
 import zio.test.Assertion._
 import zio.test._
 import zio.ZAny
+import zio.kafka.ZIOSpecDefaultSlf4j
 
-object DeserializerSpec extends ZIOSpecDefault {
+object DeserializerSpec extends ZIOSpecDefaultSlf4j {
   override def spec: Spec[ZAny with Any, Throwable] = suite("Deserializer")(
     suite("asOption")(
       test("deserialize to None when value is null") {

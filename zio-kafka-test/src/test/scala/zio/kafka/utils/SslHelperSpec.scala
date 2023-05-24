@@ -3,6 +3,7 @@ package zio.kafka.utils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.KafkaException
 import zio.ZIO
+import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.{ Consumer, Subscription }
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
@@ -14,7 +15,7 @@ import zio.test._
 /**
  * This test checks the fix for the issue https://issues.apache.org/jira/browse/KAFKA-4090
  */
-object SslHelperSpec extends ZIOSpecDefault with KafkaRandom {
+object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
   override val kafkaPrefix: String = "oom-spec"
 

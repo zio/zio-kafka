@@ -5,6 +5,7 @@ import org.apache.kafka.clients.admin.{ ConfigEntry, RecordsToDelete }
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{ Node => JNode }
 import zio._
+import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.admin.AdminClient.{
   AlterConfigOp,
   AlterConfigOpType,
@@ -34,7 +35,7 @@ import zio.test._
 import java.util.UUID
 import java.util.concurrent.TimeoutException
 
-object AdminSpec extends ZIOSpecDefault with KafkaRandom {
+object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
   override val kafkaPrefix: String = "adminspec"
 

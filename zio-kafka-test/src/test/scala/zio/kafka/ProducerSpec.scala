@@ -14,7 +14,7 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
-object ProducerSpec extends ZIOSpecDefault with KafkaRandom {
+object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "producerspec"
 
   def withConsumerInt(
