@@ -1087,7 +1087,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             def test(diagnostics: Diagnostics): ZIO[Scope & Kafka, Throwable, TestResult] =
               for {
                 clientId <- randomClient
-                settings <- consumerSettings(clientId = clientId, runloopTimeout = 500.millis)
+                settings <- consumerSettings(clientId = clientId)
                 _        <- Consumer.make(settings, diagnostics = diagnostics)
               } yield assertCompletes
 
@@ -1104,23 +1104,29 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
             def test(diagnostics: Diagnostics): ZIO[Producer & Scope & Kafka, Throwable, TestResult] =
               for {
+                _        <- ZIO.addFinalizer(ZIO.logDebug("== Test Finalizer - 3 =="))
                 clientId <- randomClient
                 topic    <- randomTopic
-                settings <- consumerSettings(clientId = clientId, runloopTimeout = 500.millis)
+                settings <- consumerSettings(clientId = clientId)
+                _        <- ZIO.addFinalizer(ZIO.logDebug("== Test Finalizer - 2 =="))
                 consumer <- Consumer.make(settings, diagnostics = diagnostics)
                 _        <- produceOne(topic, "key1", "message1")
+                _        <- ZIO.addFinalizer(ZIO.logDebug("== Test Finalizer - 1 =="))
                 // Starting a consumption session to start the Runloop.
-                _ <- consumer
-                       .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
-                       .take(1)
-                       .runDrain
-              } yield assertCompletes
+                consumed <- consumer
+                              .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                              .take(1)
+                              .runCount
+                _ <- ZIO.addFinalizer(ZIO.logDebug("== Test Finalizer - 0 =="))
+              } yield assert(consumed)(equalTo(1L))
 
             for {
+              _           <- ZIO.logDebug("== Test Done - 0 ==")
               diagnostics <- Diagnostics.SlidingQueue.make(1000)
               testResult <- ZIO.scoped {
                               test(diagnostics)
                             }
+              _                  <- ZIO.logDebug("== Test Done - 1 ==")
               finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
             } yield testResult && assert(finalizationEvents)(
               // The order is very important.

@@ -2,7 +2,6 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.ConsumerSettings
-import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignmentsHub
@@ -63,15 +62,15 @@ private[consumer] object RunloopAccess {
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp,
-    consumerAccess: ConsumerAccess,
-    scope: Scope
-  ): Task[RunloopAccess] = {
-    val scopeLayer = ZLayer.succeed(scope)
-
+    consumerAccess: ConsumerAccess
+  ): ZIO[Scope, Throwable, RunloopAccess] =
     for {
+      scope <- ZIO.scope
+      _     <- ZIO.addFinalizer(ZIO.logDebug("Finalizing RunloopAccess - 1"))
+      _     <- scope.addFinalizerExit(exit => ZIO.logDebug(s"scope finalized with $exit"))
       partitionsQueue <- ZIO
                            .acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
-                           .provide(scopeLayer)
+                           .provide(ZLayer.succeed(scope))
       runloopRef <- Ref.Synchronized.make[Runloop](null)
       hubRef     <- Ref.Synchronized.make[PartitionAssignmentsHub](null)
       makeRunloop = Runloop
@@ -86,14 +85,17 @@ private[consumer] object RunloopAccess {
                         runloopTimeout = settings.runloopTimeout,
                         partitionsQueue = partitionsQueue
                       )
-                      .provide(scopeLayer)
+                      .withFinalizer(_ => ZIO.logDebug("Finalized Runloop.make"))
+                      .provide(ZLayer.succeed(scope))
       makeHub = ZStream
                   .fromQueue(partitionsQueue)
                   .map(_.exit)
                   .flattenExitOption
                   .toHub(hubCapacity)
-                  .withFinalizer(_ => diagnostics.emit(Finalization.PartitionAssignmentsHubFinalized))
-                  .provide(scopeLayer)
+                  .withFinalizer(_ =>
+                    ZIO.logDebug("Finalized Hub") // *> diagnostics.emit(Finalization.PartitionAssignmentsHubFinalized)
+                  )
+                  .provide(ZLayer.succeed(scope))
+      _ <- ZIO.addFinalizer(ZIO.logDebug("Finalized RunloopAccess - 0"))
     } yield new RunloopAccess(runloopRef, hubRef, makeRunloop, makeHub)
-  }
 }

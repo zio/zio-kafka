@@ -249,10 +249,13 @@ object Consumer {
 
       ZStream.unwrapScoped {
         for {
+          _      <- ZIO.addFinalizer(ZIO.logDebug("==== partitionedAssignmentStream finalized"))
           hub    <- runloopAccess.partitionAssignmentsHub
           stream <- ZStream.fromHubScoped(hub)
           _ <- extendSubscriptions.withFinalizer { _ =>
-                 reduceSubscriptions.orDie <* diagnostics.emit(Finalization.SubscriptionFinalized)
+                 reduceSubscriptions.orDie <*
+                   diagnostics.emit(Finalization.SubscriptionFinalized) <*
+                   ZIO.logDebug("==== Subscription finalized")
                }
         } yield stream
           .map(_.exit)
@@ -352,16 +355,12 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
-      _              <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
+      _ <- ZIO.addFinalizer(ZIO.logDebug("Finalized Consumer") *> diagnostics.emit(Finalization.ConsumerFinalized))
+      _ <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
       consumerAccess <- ConsumerAccess.make(settings)
-      // This scope is important.
-      // It ensures that the Runloop and the subscriptions are finalized in the correct order.
-      // If the Runloop is finalized before the subscriptions, it creates a deadlock.
-      // There are tests in `ConsumerSpec` ensuring that these are finalized in the correct order.
-      scope         <- ZIO.scope
-      runloopAccess <- RunloopAccess.make(settings, diagnostics, consumerAccess, scope)
-      subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
+      runloopAccess  <- RunloopAccess.make(settings, diagnostics, consumerAccess)
+      subscriptions  <- Ref.Synchronized.make(Set.empty[Subscription])
+      _              <- ZIO.addFinalizer(ZIO.logDebug("Finalized Runloop"))
     } yield new Live(consumerAccess, runloopAccess, subscriptions, diagnostics)
 
   /**
