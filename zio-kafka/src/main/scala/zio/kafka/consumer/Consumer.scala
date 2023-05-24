@@ -5,7 +5,6 @@ import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
@@ -163,8 +162,6 @@ object Consumer {
     consumer: ConsumerAccess,
     runloopAccess: RunloopAccess,
     subscriptions: Ref.Synchronized[Set[Subscription]],
-    partitionsQueue: Queue[Take[Throwable, PartitionAssignment]],
-    scope: Scope,
     diagnostics: Diagnostics
   ) extends Consumer {
 
@@ -250,26 +247,27 @@ object Consumer {
 
       val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
 
-      ZStream.unwrap {
-        extendSubscriptions
-          .withFinalizer(_ => reduceSubscriptions.orDie <* diagnostics.emit(Finalization.SubscriptionFinalized))
-          .provide(ZLayer.succeed(scope))
-          .as {
-            ZStream
-              .fromQueue(partitionsQueue)
-              .map(_.exit)
-              .flattenExitOption
-              .map {
-                _.collect {
-                  case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
-                    val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
-                      if (onlyByteArraySerdes)
-                        partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
-                      else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
+      ZStream.unwrapScoped {
+        for {
+          hub    <- runloopAccess.partitionAssignmentsHub
+          stream <- ZStream.fromHubScoped(hub)
+          _ <- extendSubscriptions.withFinalizer { _ =>
+                 reduceSubscriptions.orDie <* diagnostics.emit(Finalization.SubscriptionFinalized)
+               }
+        } yield stream
+          .map(_.exit)
+          .flattenExitOption
+          .flattenChunks
+          .map {
+            _.collect {
+              case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
+                val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
+                  if (onlyByteArraySerdes)
+                    partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
+                  else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
 
-                    tp -> stream
-                }
-              }
+                tp -> stream
+            }
           }
       }
     }
@@ -362,10 +360,9 @@ object Consumer {
       // If the Runloop is finalized before the subscriptions, it creates a deadlock.
       // There are tests in `ConsumerSpec` ensuring that these are finalized in the correct order.
       scope         <- ZIO.scope
-      partitions    <- ZIO.acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
-      runloopAccess <- RunloopAccess.make(settings, diagnostics, consumerAccess, partitions, scope)
+      runloopAccess <- RunloopAccess.make(settings, diagnostics, consumerAccess, scope)
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
-    } yield new Live(consumerAccess, runloopAccess, subscriptions, partitions, scope, diagnostics)
+    } yield new Live(consumerAccess, runloopAccess, subscriptions, diagnostics)
 
   /**
    * Accessor method for [[Consumer.assignment]]
