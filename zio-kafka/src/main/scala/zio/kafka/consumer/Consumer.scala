@@ -162,7 +162,7 @@ object Consumer {
     consumer: ConsumerAccess,
     runloop: Runloop,
     subscriptions: Ref.Synchronized[Set[Subscription]],
-    partitionsAssignmentQueue: Hub[Take[Throwable, Chunk[PartitionAssignment]]]
+    partitionAssignmentsQueue: Queue[Take[Throwable, PartitionAssignment]]
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
@@ -246,22 +246,24 @@ object Consumer {
       val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
 
       ZStream.unwrapScoped {
-        for {
-          stream <- ZStream.fromHubScoped(partitionsAssignmentQueue)
-          _      <- extendSubscriptions.withFinalizer(_ => reduceSubscriptions.orDie)
-        } yield stream
-          .map(_.exit)
-          .flattenExitOption
-          .flattenChunks
-          .map {
-            _.collect {
-              case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
-                val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
-                  if (onlyByteArraySerdes) partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
-                  else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
+        extendSubscriptions
+          .withFinalizer(_ => reduceSubscriptions.orDie)
+          .as {
+            ZStream
+              .fromQueue(partitionAssignmentsQueue)
+              .map(_.exit)
+              .flattenExitOption
+              .map {
+                _.collect {
+                  case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
+                    val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
+                      if (onlyByteArraySerdes)
+                        partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
+                      else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
 
-                tp -> stream
-            }
+                    tp -> stream
+                }
+              }
           }
       }
     }
@@ -344,17 +346,7 @@ object Consumer {
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZIO[Scope, Throwable, Consumer] = {
-    /*
-    We must supply a queue size for the partitionAssignments hub below. Under most circumstances,
-    a value of 1 should be sufficient, as runloop.partitions is already an unbounded queue. But if
-    there is a large skew in speed of consuming partition assignments (not the speed of consuming kafka messages)
-    between the subscriptions, there may arise a situation where the faster stream is 'blocked' from
-    getting new partition assignments by the faster stream. A value of 32 should be more than sufficient to cover
-    this situation.
-     */
-    val hubCapacity = 32
-
+  ): ZIO[Scope, Throwable, Consumer] =
     for {
       _                         <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
       wrapper                   <- ConsumerAccess.make(settings)
@@ -371,14 +363,7 @@ object Consumer {
                    partitionAssignmentsQueue = partitionAssignmentsQueue
                  )
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
-
-      partitionAssignments <- ZStream
-                                .fromQueue(partitionAssignmentsQueue)
-                                .map(_.exit)
-                                .flattenExitOption
-                                .toHub(hubCapacity)
-    } yield new Live(wrapper, runloop, subscriptions, partitionAssignments)
-  }
+    } yield new Live(wrapper, runloop, subscriptions, partitionAssignmentsQueue)
 
   /**
    * Accessor method for [[Consumer.assignment]]
