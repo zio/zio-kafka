@@ -58,9 +58,7 @@ private[consumer] final class Runloop private (
           .make[Throwable, Unit]
           .flatMap { cont =>
             commandQueue.offer(Command.ChangeSubscription(subscription, cont)) *>
-              ZIO.logDebug(s"Subscription $subscription waiting for change") *>
-              cont.await *>
-              ZIO.logDebug(s"Subscription $subscription changed")
+              cont.await
           }
           .unit
           .uninterruptible
@@ -395,29 +393,28 @@ private[consumer] final class Runloop private (
       case cmd @ Command.Commit(_, _) =>
         doCommit(cmd).as(state.addCommit(cmd))
       case cmd @ Command.ChangeSubscription(subscription, _) =>
-        ZIO.logDebug(s"Changing subscription to $subscription") *>
-          handleChangeSubscription(cmd).flatMap { newAssignedStreams =>
-            val newState = state.copy(
-              assignedStreams = state.assignedStreams ++ newAssignedStreams,
-              subscription = subscription
-            )
-            if (subscription.isDefined) ZIO.succeed(newState)
-            else {
-              // End all streams and pending requests
-              endRevokedPartitions(
-                newState.pendingRequests,
-                newState.assignedStreams,
-                isRevoked = _ => true
-              ).map { revokeResult =>
-                newState.copy(
-                  pendingRequests = revokeResult.pendingRequests,
-                  assignedStreams = revokeResult.assignedStreams
-                )
-              }
+        handleChangeSubscription(cmd).flatMap { newAssignedStreams =>
+          val newState = state.copy(
+            assignedStreams = state.assignedStreams ++ newAssignedStreams,
+            subscription = subscription
+          )
+          if (subscription.isDefined) ZIO.succeed(newState)
+          else {
+            // End all streams and pending requests
+            endRevokedPartitions(
+              newState.pendingRequests,
+              newState.assignedStreams,
+              isRevoked = _ => true
+            ).map { revokeResult =>
+              newState.copy(
+                pendingRequests = revokeResult.pendingRequests,
+                assignedStreams = revokeResult.assignedStreams
+              )
             }
           }
-            .tapBoth(e => cmd.fail(e), _ => cmd.succeed)
-            .uninterruptible
+        }
+          .tapBoth(e => cmd.fail(e), _ => cmd.succeed)
+          .uninterruptible
       case Command.StopAllStreams =>
         {
           for {
@@ -598,7 +595,7 @@ private[consumer] object Runloop {
     partitionsQueue: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]]
   ): ZIO[Scope, Throwable, Runloop] =
     for {
-      _                  <- diagnostics.emit(Finalization.RunloopFinalized)
+      _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
       commandQueue       <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](commandQueueSize))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       currentStateRef    <- Ref.make(State.initial)
