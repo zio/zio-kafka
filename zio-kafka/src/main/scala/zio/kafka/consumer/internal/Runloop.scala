@@ -39,12 +39,6 @@ private[consumer] final class Runloop private (
   def gracefulShutdown: UIO[Unit] =
     commandQueue.offer(Command.StopAllStreams).unit
 
-  /**
-   * You cannot change the subscription when the runloop is shutting down.
-   *
-   * That can lead to deadlock if the `Command.ChangeSubscription` if offered and we wait for its continuation while the
-   * runloop doesn't accept more commands. The continuation will never be terminated.
-   */
   def changeSubscription(
     subscription: Option[Subscription]
   ): Task[Unit] =
