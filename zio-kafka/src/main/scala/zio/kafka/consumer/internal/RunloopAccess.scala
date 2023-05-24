@@ -7,6 +7,18 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.{ Stream, Take }
 import zio.{ Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
 
+/**
+ * This [[RunloopAccess]] is here to make the [[Runloop]] boot lazy: we only starts it when the user is starting a
+ * consuming session.
+ *
+ * This is needed because of 2 things:
+ *
+ *   1. A Consumer can be used to do something else than consuming (e.g. fetching Kafka topics metadata)
+ *   1. The [[Runloop]] has a timeout throwing a [[zio.kafka.consumer.Consumer.RunloopTimeout]] when reached. If the
+ *      Runloop is started eagerly (when we instantiate a Consumer), then a user using a Consumer to do something else
+ *      than consuming will get this [[zio.kafka.consumer.Consumer.RunloopTimeout]] exception and will not be able to
+ *      use its Consumer.
+ */
 private[consumer] final class RunloopAccess private (
   runloopRef: Ref.Synchronized[Runloop],
   makeRunloop: Task[Runloop]
@@ -22,7 +34,6 @@ private[consumer] final class RunloopAccess private (
    */
   val gracefulShutdown: UIO[Unit] = ZIO.whenZIO(isMade)(runloop.flatMap(_.gracefulShutdown).orDie).unit
 
-  def withRunloop[A](f: Runloop => A): Task[A]                 = runloop.map(f)
   def withRunloopZIO[R, A](f: Runloop => RIO[R, A]): RIO[R, A] = runloop.flatMap(f)
 }
 

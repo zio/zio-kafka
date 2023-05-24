@@ -208,5 +208,5 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     .provideSome[Scope & Kafka](producer)
     .provideSomeShared[Scope](
       Kafka.embedded
-    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(5.minutes)
+    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(2.minutes)
 }
