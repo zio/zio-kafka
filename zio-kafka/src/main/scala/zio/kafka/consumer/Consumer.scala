@@ -355,12 +355,16 @@ object Consumer {
   ): ZIO[Scope, Throwable, Consumer] =
     for {
       _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
-      scope          <- ZIO.scope
       _              <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
       consumerAccess <- ConsumerAccess.make(settings)
-      partitions     <- ZIO.acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
-      runloopAccess  <- RunloopAccess.make(settings, diagnostics, consumerAccess, partitions, scope)
-      subscriptions  <- Ref.Synchronized.make(Set.empty[Subscription])
+      // This scope is important.
+      // It ensures that the Runloop and the subscriptions are finalized in the correct order.
+      // If the Runloop is finalized before the subscriptions, it creates a deadlock.
+      // There are tests in `ConsumerSpec` ensuring that these are finalized in the correct order.
+      scope         <- ZIO.scope
+      partitions    <- ZIO.acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
+      runloopAccess <- RunloopAccess.make(settings, diagnostics, consumerAccess, partitions, scope)
+      subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
     } yield new Live(consumerAccess, runloopAccess, subscriptions, partitions, scope, diagnostics)
 
   /**
