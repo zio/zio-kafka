@@ -80,7 +80,6 @@ private[internal] object PartitionStreamControl {
           _     <- commandQueue.offer(Request(tp))
           _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
           taken <- dataQueue.takeBetween(1, Int.MaxValue)
-          _     <- ZIO.logDebug(s"Partition stream '${tp.toString}' received ${taken.size} records")
         } yield taken
 
       stream = ZStream.logAnnotate(

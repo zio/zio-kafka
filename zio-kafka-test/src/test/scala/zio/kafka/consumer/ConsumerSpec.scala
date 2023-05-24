@@ -1104,34 +1104,32 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
             def test(diagnostics: Diagnostics): ZIO[Producer & Scope & Kafka, Throwable, TestResult] =
               for {
-                _        <- ZIO.addFinalizer(ZIO.logDebug("== Test Finalizer - 3 =="))
                 clientId <- randomClient
                 topic    <- randomTopic
                 settings <- consumerSettings(clientId = clientId)
-                _        <- ZIO.addFinalizer(ZIO.logDebug("== Test Finalizer - 2 =="))
                 consumer <- Consumer.make(settings, diagnostics = diagnostics)
                 _        <- produceOne(topic, "key1", "message1")
-                _        <- ZIO.addFinalizer(ZIO.logDebug("== Test Finalizer - 1 =="))
                 // Starting a consumption session to start the Runloop.
-                consumed <- consumer
-                              .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
-                              .take(1)
-                              .runCount
-                _ <- ZIO.addFinalizer(ZIO.logDebug("== Test Finalizer - 0 =="))
-              } yield assert(consumed)(equalTo(1L))
+                consumed_0 <- consumer
+                                .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                                .take(1)
+                                .runCount
+                consumed_1 <- consumer
+                                .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                                .take(1)
+                                .runCount
+              } yield assert(consumed_0)(equalTo(1L)) && assert(consumed_1)(equalTo(1L))
 
             for {
-              _           <- ZIO.logDebug("== Test Done - 0 ==")
               diagnostics <- Diagnostics.SlidingQueue.make(1000)
               testResult <- ZIO.scoped {
                               test(diagnostics)
                             }
-              _                  <- ZIO.logDebug("== Test Done - 1 ==")
               finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
             } yield testResult && assert(finalizationEvents)(
               // The order is very important.
               // The subscription must be finalized before the runloop, otherwise it creates a deadlock.
-              equalTo(Chunk(SubscriptionFinalized, RunloopFinalized, ConsumerFinalized))
+              equalTo(Chunk(SubscriptionFinalized, SubscriptionFinalized, RunloopFinalized, ConsumerFinalized))
             )
           }
         )

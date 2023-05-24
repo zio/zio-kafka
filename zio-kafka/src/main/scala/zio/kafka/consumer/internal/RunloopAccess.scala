@@ -66,8 +66,6 @@ private[consumer] object RunloopAccess {
   ): ZIO[Scope, Throwable, RunloopAccess] =
     for {
       scope <- ZIO.scope
-      _     <- ZIO.addFinalizer(ZIO.logDebug("Finalizing RunloopAccess - 1"))
-      _     <- scope.addFinalizerExit(exit => ZIO.logDebug(s"scope finalized with $exit"))
       partitionsQueue <- ZIO
                            .acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
                            .provide(ZLayer.succeed(scope))
@@ -85,17 +83,12 @@ private[consumer] object RunloopAccess {
                         runloopTimeout = settings.runloopTimeout,
                         partitionsQueue = partitionsQueue
                       )
-                      .withFinalizer(_ => ZIO.logDebug("Finalized Runloop.make"))
                       .provide(ZLayer.succeed(scope))
       makeHub = ZStream
                   .fromQueue(partitionsQueue)
                   .map(_.exit)
                   .flattenExitOption
                   .toHub(hubCapacity)
-                  .withFinalizer(_ =>
-                    ZIO.logDebug("Finalized Hub") // *> diagnostics.emit(Finalization.PartitionAssignmentsHubFinalized)
-                  )
                   .provide(ZLayer.succeed(scope))
-      _ <- ZIO.addFinalizer(ZIO.logDebug("Finalized RunloopAccess - 0"))
     } yield new RunloopAccess(runloopRef, hubRef, makeRunloop, makeHub)
 }

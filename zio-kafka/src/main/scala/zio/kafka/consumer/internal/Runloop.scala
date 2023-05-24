@@ -401,23 +401,22 @@ private[consumer] final class Runloop private (
               assignedStreams = state.assignedStreams ++ newAssignedStreams,
               subscription = subscription
             )
-            if (subscription.isDefined) ZIO.logDebug(s"TOTO") *> ZIO.succeed(newState)
+            if (subscription.isDefined) ZIO.succeed(newState)
             else {
-              ZIO.logDebug(s"TATA") *>
-                // End all streams and pending requests
-                endRevokedPartitions(
-                  newState.pendingRequests,
-                  newState.assignedStreams,
-                  isRevoked = _ => true
-                ).map { revokeResult =>
-                  newState.copy(
-                    pendingRequests = revokeResult.pendingRequests,
-                    assignedStreams = revokeResult.assignedStreams
-                  )
-                }
+              // End all streams and pending requests
+              endRevokedPartitions(
+                newState.pendingRequests,
+                newState.assignedStreams,
+                isRevoked = _ => true
+              ).map { revokeResult =>
+                newState.copy(
+                  pendingRequests = revokeResult.pendingRequests,
+                  assignedStreams = revokeResult.assignedStreams
+                )
+              }
             }
           }
-            .tapBoth(e => ZIO.logDebug("TUTU") *> cmd.fail(e), _ => ZIO.logDebug("TITI") *> cmd.succeed)
+            .tapBoth(e => cmd.fail(e), _ => cmd.succeed)
             .uninterruptible
       case Command.StopAllStreams =>
         {
@@ -599,7 +598,7 @@ private[consumer] object Runloop {
     partitionsQueue: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]]
   ): ZIO[Scope, Throwable, Runloop] =
     for {
-      _ <- ZIO.addFinalizer(ZIO.logDebug("Finalized Runloop") *> diagnostics.emit(Finalization.RunloopFinalized))
+      _                  <- diagnostics.emit(Finalization.RunloopFinalized)
       commandQueue       <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](commandQueueSize))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       currentStateRef    <- Ref.make(State.initial)

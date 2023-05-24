@@ -249,13 +249,10 @@ object Consumer {
 
       ZStream.unwrapScoped {
         for {
-          _      <- ZIO.addFinalizer(ZIO.logDebug("==== partitionedAssignmentStream finalized"))
           hub    <- runloopAccess.partitionAssignmentsHub
           stream <- ZStream.fromHubScoped(hub)
           _ <- extendSubscriptions.withFinalizer { _ =>
-                 reduceSubscriptions.orDie <*
-                   diagnostics.emit(Finalization.SubscriptionFinalized) <*
-                   ZIO.logDebug("==== Subscription finalized")
+                 reduceSubscriptions.orDie <* diagnostics.emit(Finalization.SubscriptionFinalized)
                }
         } yield stream
           .map(_.exit)
@@ -300,13 +297,10 @@ object Consumer {
       valueDeserializer: Deserializer[R, V],
       bufferSize: Int
     ): ZStream[R, Throwable, CommittableRecord[K, V]] =
-      for {
-        _ <- ZStream.finalizer(ZIO.logDebug("==== plainStream finalized"))
-        res <- partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
-                 n = Int.MaxValue,
-                 bufferSize = bufferSize
-               )(_._2)
-      } yield res
+      partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
+        n = Int.MaxValue,
+        bufferSize = bufferSize
+      )(_._2)
 
     override def subscription: Task[Set[String]] =
       consumer.withConsumer(_.subscription().asScala.toSet)
@@ -358,8 +352,8 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _ <- ZIO.addFinalizer(ZIO.logDebug("Finalized Consumer") *> diagnostics.emit(Finalization.ConsumerFinalized))
-      _ <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
+      _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
+      _              <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
       consumerAccess <- ConsumerAccess.make(settings)
       runloopAccess  <- RunloopAccess.make(settings, diagnostics, consumerAccess)
       subscriptions  <- Ref.Synchronized.make(Set.empty[Subscription])
