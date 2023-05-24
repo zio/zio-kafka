@@ -78,7 +78,7 @@ private[internal] object PartitionStreamControl {
       requestAndAwaitData =
         for {
           _     <- commandQueue.offer(Request(tp))
-          _     <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
+          _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
           taken <- dataQueue.takeBetween(1, Int.MaxValue)
         } yield taken
 
