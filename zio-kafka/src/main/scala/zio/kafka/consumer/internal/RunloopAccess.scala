@@ -4,8 +4,9 @@ import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.ConsumerSettings
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
-import zio.stream.{ Stream, Take }
-import zio.{ Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
+import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignmentsHub
+import zio.stream.{ Stream, Take, ZStream }
+import zio.{ Chunk, Hub, Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
 
 /**
  * This [[RunloopAccess]] is here to make the [[Runloop]] boot lazy: we only starts it when the user is starting a
@@ -21,7 +22,9 @@ import zio.{ Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
  */
 private[consumer] final class RunloopAccess private (
   runloopRef: Ref.Synchronized[Runloop],
-  makeRunloop: Task[Runloop]
+  hubRef: Ref.Synchronized[PartitionAssignmentsHub],
+  makeRunloop: Task[Runloop],
+  makeHub: UIO[PartitionAssignmentsHub]
 ) {
   private val runloop: Task[Runloop] = runloopRef.updateSomeAndGetZIO { case null => makeRunloop }
   private val isMade: UIO[Boolean]   = runloopRef.get.map(_ ne null)
@@ -34,21 +37,40 @@ private[consumer] final class RunloopAccess private (
    */
   val gracefulShutdown: UIO[Unit] = ZIO.whenZIO(isMade)(runloop.flatMap(_.gracefulShutdown).orDie).unit
 
+  /**
+   * The runloop needs to be started before to start the stream to the Hub
+   */
+  val partitionAssignmentsHub: Task[PartitionAssignmentsHub] =
+    runloop *> hubRef.updateSomeAndGetZIO { case null => makeHub }
+
   def withRunloopZIO[R, A](f: Runloop => RIO[R, A]): RIO[R, A] = runloop.flatMap(f)
 }
 
 private[consumer] object RunloopAccess {
-  type PartitionAssignment = (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])
+  type PartitionAssignment     = (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])
+  type PartitionAssignmentsHub = Hub[Take[Throwable, Chunk[PartitionAssignment]]]
+
+  /**
+   * We must supply a queue size for the partitionAssignments hub below. Under most circumstances, a value of 1 should
+   * be sufficient, as runloop.partitions is already an unbounded queue. But if there is a large skew in speed of
+   * consuming partition assignments (not the speed of consuming kafka messages) between the subscriptions, there may
+   * arise a situation where the faster stream is 'blocked' from getting new partition assignments by the faster stream.
+   * A value of 32 should be more than sufficient to cover this situation.
+   */
+  private final val hubCapacity: Int = 32
 
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp,
-    consumerAccess: ConsumerAccess,
-    partitionsQueue: Queue[Take[Throwable, PartitionAssignment]],
-    scope: Scope
-  ): Task[RunloopAccess] =
+    consumerAccess: ConsumerAccess
+  ): ZIO[Scope, Throwable, RunloopAccess] =
     for {
+      scope <- ZIO.scope
+      partitionsQueue <- ZIO
+                           .acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
+                           .provide(ZLayer.succeed(scope))
       runloopRef <- Ref.Synchronized.make[Runloop](null)
+      hubRef     <- Ref.Synchronized.make[PartitionAssignmentsHub](null)
       makeRunloop = Runloop
                       .make(
                         hasGroupId = settings.hasGroupId,
@@ -62,5 +84,11 @@ private[consumer] object RunloopAccess {
                         partitionsQueue = partitionsQueue
                       )
                       .provide(ZLayer.succeed(scope))
-    } yield new RunloopAccess(runloopRef, makeRunloop)
+      makeHub = ZStream
+                  .fromQueue(partitionsQueue)
+                  .map(_.exit)
+                  .flattenExitOption
+                  .toHub(hubCapacity)
+                  .provide(ZLayer.succeed(scope))
+    } yield new RunloopAccess(runloopRef, hubRef, makeRunloop, makeHub)
 }

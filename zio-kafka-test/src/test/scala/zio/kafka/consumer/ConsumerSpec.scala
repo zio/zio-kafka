@@ -1087,7 +1087,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             def test(diagnostics: Diagnostics): ZIO[Scope & Kafka, Throwable, TestResult] =
               for {
                 clientId <- randomClient
-                settings <- consumerSettings(clientId = clientId, runloopTimeout = 500.millis)
+                settings <- consumerSettings(clientId = clientId)
                 _        <- Consumer.make(settings, diagnostics = diagnostics)
               } yield assertCompletes
 
@@ -1106,15 +1106,19 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               for {
                 clientId <- randomClient
                 topic    <- randomTopic
-                settings <- consumerSettings(clientId = clientId, runloopTimeout = 500.millis)
+                settings <- consumerSettings(clientId = clientId)
                 consumer <- Consumer.make(settings, diagnostics = diagnostics)
                 _        <- produceOne(topic, "key1", "message1")
                 // Starting a consumption session to start the Runloop.
-                _ <- consumer
-                       .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
-                       .take(1)
-                       .runDrain
-              } yield assertCompletes
+                consumed_0 <- consumer
+                                .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                                .take(1)
+                                .runCount
+                consumed_1 <- consumer
+                                .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                                .take(1)
+                                .runCount
+              } yield assert(consumed_0)(equalTo(1L)) && assert(consumed_1)(equalTo(1L))
 
             for {
               diagnostics <- Diagnostics.SlidingQueue.make(1000)
@@ -1125,7 +1129,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             } yield testResult && assert(finalizationEvents)(
               // The order is very important.
               // The subscription must be finalized before the runloop, otherwise it creates a deadlock.
-              equalTo(Chunk(SubscriptionFinalized, RunloopFinalized, ConsumerFinalized))
+              equalTo(Chunk(SubscriptionFinalized, SubscriptionFinalized, RunloopFinalized, ConsumerFinalized))
             )
           }
         )
