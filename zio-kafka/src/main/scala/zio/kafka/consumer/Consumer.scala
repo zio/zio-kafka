@@ -4,7 +4,7 @@ import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, Of
 import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
+import zio.kafka.consumer.internal.Runloop.PartitionAssignment
 import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
@@ -158,14 +158,11 @@ object Consumer {
 
   case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
 
-  private final case class Live(
-    private val consumer: ConsumerAccess,
-    private val settings: ConsumerSettings,
-    private val runloop: Runloop,
-    private val subscriptions: Ref.Synchronized[Set[Subscription]],
-    private val partitionAssignments: Hub[
-      Take[Throwable, Chunk[(TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord])]]
-    ]
+  private final class Live private[Consumer] (
+    consumer: ConsumerAccess,
+    runloop: Runloop,
+    subscriptions: Ref.Synchronized[Set[Subscription]],
+    partitionsAssignmentQueue: Hub[Take[Throwable, Chunk[PartitionAssignment]]]
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
@@ -250,7 +247,7 @@ object Consumer {
 
       ZStream.unwrapScoped {
         for {
-          stream <- ZStream.fromHubScoped(partitionAssignments)
+          stream <- ZStream.fromHubScoped(partitionsAssignmentQueue)
           _      <- extendSubscriptions.withFinalizer(_ => reduceSubscriptions.orDie)
         } yield stream
           .map(_.exit)
@@ -359,9 +356,10 @@ object Consumer {
     val hubCapacity = 32
 
     for {
-      _       <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
-      wrapper <- ConsumerAccess.make(settings)
-      runloop <- Runloop(
+      _                         <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
+      wrapper                   <- ConsumerAccess.make(settings)
+      partitionAssignmentsQueue <- ZIO.acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
+      runloop <- Runloop.make(
                    hasGroupId = settings.hasGroupId,
                    consumer = wrapper,
                    pollTimeout = settings.pollTimeout,
@@ -369,16 +367,17 @@ object Consumer {
                    offsetRetrieval = settings.offsetRetrieval,
                    userRebalanceListener = settings.rebalanceListener,
                    restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
-                   runloopTimeout = settings.runloopTimeout
+                   runloopTimeout = settings.runloopTimeout,
+                   partitionAssignmentsQueue = partitionAssignmentsQueue
                  )
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 
       partitionAssignments <- ZStream
-                                .fromQueue(runloop.partitions)
+                                .fromQueue(partitionAssignmentsQueue)
                                 .map(_.exit)
                                 .flattenExitOption
                                 .toHub(hubCapacity)
-    } yield Live(wrapper, settings, runloop, subscriptions, partitionAssignments)
+    } yield new Live(wrapper, runloop, subscriptions, partitionAssignments)
   }
 
   /**
