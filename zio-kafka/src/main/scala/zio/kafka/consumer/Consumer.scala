@@ -300,10 +300,13 @@ object Consumer {
       valueDeserializer: Deserializer[R, V],
       bufferSize: Int
     ): ZStream[R, Throwable, CommittableRecord[K, V]] =
-      partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
-        n = Int.MaxValue,
-        bufferSize = bufferSize
-      )(_._2)
+      for {
+        _ <- ZStream.finalizer(ZIO.logDebug("==== plainStream finalized"))
+        res <- partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
+                 n = Int.MaxValue,
+                 bufferSize = bufferSize
+               )(_._2)
+      } yield res
 
     override def subscription: Task[Set[String]] =
       consumer.withConsumer(_.subscription().asScala.toSet)
