@@ -7,7 +7,6 @@ lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients" 
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.10.0"
 lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.15.1"
 lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.7"
-lazy val zioLogging            = "dev.zio"                   %% "zio-logging-slf4j2"      % "2.1.13"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
@@ -140,7 +139,7 @@ lazy val zioKafkaTest =
         kafkaClients,
         jacksonDatabind,
         logback    % Test,
-        zioLogging % Test,
+        "dev.zio" %% "zio-logging-slf4j" % "2.1.13" % Test,
         scalaCollectionCompat
       ) ++ `embedded-kafka`.value
     )
