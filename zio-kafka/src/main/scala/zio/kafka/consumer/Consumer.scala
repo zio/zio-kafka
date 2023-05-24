@@ -3,6 +3,7 @@ package zio.kafka.consumer
 import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp }
 import org.apache.kafka.common._
 import zio._
+import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
@@ -163,7 +164,8 @@ object Consumer {
     runloopAccess: RunloopAccess,
     subscriptions: Ref.Synchronized[Set[Subscription]],
     partitionsQueue: Queue[Take[Throwable, PartitionAssignment]],
-    scope: Scope
+    scope: Scope,
+    diagnostics: Diagnostics
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
@@ -250,7 +252,7 @@ object Consumer {
 
       ZStream.unwrap {
         extendSubscriptions
-          .withFinalizer(_ => reduceSubscriptions.orDie)
+          .withFinalizer(_ => reduceSubscriptions.orDie <* diagnostics.emit(Finalization.SubscriptionFinalized))
           .provide(ZLayer.succeed(scope))
           .as {
             ZStream
@@ -352,13 +354,14 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
+      _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
       scope          <- ZIO.scope
       _              <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
       consumerAccess <- ConsumerAccess.make(settings)
       partitions     <- ZIO.acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
       runloopAccess  <- RunloopAccess.make(settings, diagnostics, consumerAccess, partitions, scope)
       subscriptions  <- Ref.Synchronized.make(Set.empty[Subscription])
-    } yield new Live(consumerAccess, runloopAccess, subscriptions, partitions, scope)
+    } yield new Live(consumerAccess, runloopAccess, subscriptions, partitions, scope, diagnostics)
 
   /**
    * Accessor method for [[Consumer.assignment]]

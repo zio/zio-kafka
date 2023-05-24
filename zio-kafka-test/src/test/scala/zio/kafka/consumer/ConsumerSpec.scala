@@ -12,8 +12,14 @@ import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
+import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
+import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization.{
+  ConsumerFinalized,
+  RunloopFinalized,
+  SubscriptionFinalized
+}
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.producer.TransactionalProducer
+import zio.kafka.producer.{ Producer, TransactionalProducer }
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
 import zio.kafka.testkit.{ Kafka, KafkaRandom }
@@ -24,6 +30,7 @@ import zio.test._
 
 import scala.reflect.ClassTag
 
+//noinspection SimplifyAssertInspection
 object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "consumespec"
 
@@ -1053,16 +1060,74 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _ <- recordsOut.take
         } yield assertCompletes
       },
-      test(
-        "issue #846: Booting a Consumer to do something else than consuming should not throught `RunloopTimeout` exception"
-      ) {
-        for {
-          clientId <- randomClient
-          settings <- consumerSettings(clientId = clientId, runloopTimeout = 500.millis)
-          _        <- Consumer.make(settings)
-          _        <- ZIO.sleep(1.second)
-        } yield assertCompletes
-      }
+      suite("issue #846")(
+        test(
+          "Booting a Consumer to do something else than consuming should not fail with `RunloopTimeout` exception"
+        ) {
+          def test(diagnostics: Diagnostics) =
+            for {
+              clientId <- randomClient
+              settings <- consumerSettings(clientId = clientId, runloopTimeout = 500.millis)
+              _        <- Consumer.make(settings, diagnostics = diagnostics)
+              _        <- ZIO.sleep(1.second)
+            } yield assertCompletes
+
+          for {
+            diagnostics <- Diagnostics.SlidingQueue.make(1000)
+            testResult <- ZIO.scoped {
+                            test(diagnostics)
+                          }
+            finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
+          } yield testResult && assert(finalizationEvents)(hasSameElements(Chunk(ConsumerFinalized)))
+        },
+        suite(
+          "Ordering of finalizers matters. If subscriptions are finalized after the runloop, it creates a deadlock"
+        )(
+          test("When not consuming, the Runloop is not started so only the Consumer is finalized") {
+            def test(diagnostics: Diagnostics): ZIO[Scope & Kafka, Throwable, TestResult] =
+              for {
+                clientId <- randomClient
+                settings <- consumerSettings(clientId = clientId, runloopTimeout = 500.millis)
+                _        <- Consumer.make(settings, diagnostics = diagnostics)
+              } yield assertCompletes
+
+            for {
+              diagnostics <- Diagnostics.SlidingQueue.make(1000)
+              testResult <- ZIO.scoped {
+                              test(diagnostics)
+                            }
+              finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
+            } yield testResult && assert(finalizationEvents)(hasSameElements(Chunk(ConsumerFinalized)))
+          },
+          test("When consuming, the Runloop is started. The finalization orders matters to avoid a deadlock") {
+            def test(diagnostics: Diagnostics): ZIO[Producer & Scope & Kafka, Throwable, TestResult] =
+              for {
+                clientId <- randomClient
+                topic    <- randomTopic
+                settings <- consumerSettings(clientId = clientId, runloopTimeout = 500.millis)
+                consumer <- Consumer.make(settings, diagnostics = diagnostics)
+                _        <- produceOne(topic, "key1", "message1")
+                // Starting a consumption session to start the Runloop.
+                _ <- consumer
+                       .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                       .take(1)
+                       .runDrain
+              } yield assertCompletes
+
+            for {
+              diagnostics <- Diagnostics.SlidingQueue.make(1000)
+              testResult <- ZIO.scoped {
+                              test(diagnostics)
+                            }
+              finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
+            } yield testResult && assert(finalizationEvents)(
+              // The order is very important.
+              // The subscription must be finalized before the runloop, otherwise it creates a deadlock.
+              equalTo(Chunk(SubscriptionFinalized, RunloopFinalized, ConsumerFinalized))
+            )
+          }
+        )
+      )
     )
       .provideSome[Scope & Kafka](producer)
       .provideSomeShared[Scope](

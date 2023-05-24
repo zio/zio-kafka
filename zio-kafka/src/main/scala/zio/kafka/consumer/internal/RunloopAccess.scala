@@ -38,16 +38,18 @@ private[consumer] object RunloopAccess {
   ): Task[RunloopAccess] =
     for {
       runloopRef <- Ref.Synchronized.make[Runloop](null)
-      makeRunloop = Runloop(
-                      hasGroupId = settings.hasGroupId,
-                      consumer = consumerAccess,
-                      pollTimeout = settings.pollTimeout,
-                      diagnostics = diagnostics,
-                      offsetRetrieval = settings.offsetRetrieval,
-                      userRebalanceListener = settings.rebalanceListener,
-                      restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
-                      runloopTimeout = settings.runloopTimeout,
-                      partitionsQueue = partitionsQueue
-                    ).provide(ZLayer.succeed(scope))
+      makeRunloop = Runloop
+                      .make(
+                        hasGroupId = settings.hasGroupId,
+                        consumer = consumerAccess,
+                        pollTimeout = settings.pollTimeout,
+                        diagnostics = diagnostics,
+                        offsetRetrieval = settings.offsetRetrieval,
+                        userRebalanceListener = settings.rebalanceListener,
+                        restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
+                        runloopTimeout = settings.runloopTimeout,
+                        partitionsQueue = partitionsQueue
+                      )
+                      .provide(ZLayer.succeed(scope))
     } yield new RunloopAccess(runloopRef, makeRunloop)
 }

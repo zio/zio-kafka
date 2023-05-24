@@ -5,6 +5,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
 import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
+import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.Runloop.Command.{ Commit, Request, StopAllStreams, StopRunloop }
@@ -58,9 +59,9 @@ private[consumer] final class Runloop private (
 
   val rebalanceListener: RebalanceListener = {
     val emitDiagnostics = RebalanceListener(
-      (assigned, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Assigned(assigned)),
-      (revoked, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Revoked(revoked)),
-      (lost, _) => diagnostics.emitIfEnabled(DiagnosticEvent.Rebalance.Lost(lost))
+      (assigned, _) => diagnostics.emit(DiagnosticEvent.Rebalance.Assigned(assigned)),
+      (revoked, _) => diagnostics.emit(DiagnosticEvent.Rebalance.Revoked(revoked)),
+      (lost, _) => diagnostics.emit(DiagnosticEvent.Rebalance.Lost(lost))
     )
 
     def restartStreamsRebalancingListener = RebalanceListener(
@@ -109,20 +110,20 @@ private[consumer] final class Runloop private (
       for {
         p <- Promise.make[Throwable, Unit]
         _ <- commandQueue.offer(Commit(offsets, p)).unit
-        _ <- diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Started(offsets))
+        _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await
       } yield ()
 
   private def doCommit(cmd: Commit): UIO[Unit] = {
     val offsets   = cmd.offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
     val cont      = (e: Exit[Throwable, Unit]) => cmd.cont.done(e).asInstanceOf[UIO[Unit]]
-    val onSuccess = cont(Exit.unit) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Success(offsets))
+    val onSuccess = cont(Exit.unit) <* diagnostics.emit(DiagnosticEvent.Commit.Success(offsets))
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
         ZIO.logDebug(s"Rebalance in progress, retrying commit for offsets $offsets") *>
           commandQueue.offer(cmd).unit
       case err =>
-        cont(Exit.fail(err)) <* diagnostics.emitIfEnabled(DiagnosticEvent.Commit.Failure(offsets, err))
+        cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsets, err))
     }
     val callback =
       new OffsetCommitCallback {
@@ -333,7 +334,7 @@ private[consumer] final class Runloop private (
                                 newlyAssigned
                             }
 
-              _ <- diagnostics.emitIfEnabled {
+              _ <- diagnostics.emit {
                      val providedTps = records.partitions().asScala.toSet
                      DiagnosticEvent.Poll(
                        tpRequested = requestedPartitions,
@@ -575,7 +576,7 @@ private[consumer] object Runloop {
     }
   }
 
-  def apply(
+  def make(
     hasGroupId: Boolean,
     consumer: ConsumerAccess,
     pollTimeout: Duration,
@@ -587,6 +588,7 @@ private[consumer] object Runloop {
     partitionsQueue: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]]
   ): ZIO[Scope, Throwable, Runloop] =
     for {
+      _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
       commandQueue       <- ZIO.acquireRelease(Queue.bounded[Runloop.Command](commandQueueSize))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       currentStateRef    <- Ref.make(State.initial)
