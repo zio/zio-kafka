@@ -158,9 +158,8 @@ object Consumer {
 
   case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
 
-  private final case class Live private (
+  private final class Live private[Consumer] (
     consumer: ConsumerAccess,
-    settings: ConsumerSettings,
     runloopAccess: RunloopAccess,
     subscriptions: Ref.Synchronized[Set[Subscription]],
     partitionsQueue: Queue[Take[Throwable, PartitionAssignment]]
@@ -348,12 +347,12 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _             <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
-      wrapper       <- ConsumerAccess.make(settings)
-      partitions    <- ZIO.acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
-      runloopAccess <- RunloopAccess.make(settings, diagnostics, wrapper, partitions)
-      subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
-    } yield Live(wrapper, settings, runloopAccess, subscriptions, partitions)
+      _              <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
+      consumerAccess <- ConsumerAccess.make(settings)
+      partitions     <- ZIO.acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
+      runloopAccess  <- RunloopAccess.make(settings, diagnostics, consumerAccess, partitions)
+      subscriptions  <- Ref.Synchronized.make(Set.empty[Subscription])
+    } yield new Live(consumerAccess, runloopAccess, subscriptions, partitions)
 
   /**
    * Accessor method for [[Consumer.assignment]]
