@@ -41,5 +41,5 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
       )
         .provideSome[Kafka](producer)             // Here, we provide a new instance of Producer per test
         .provideSomeShared[Scope](Kafka.embedded) // Here, we provide an instance of Kafka for the entire suite
-    ) @@ timeout(5.minutes) @@ sequential
+    ) @@ timeout(2.minutes) @@ sequential
 }

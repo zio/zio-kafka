@@ -37,7 +37,7 @@ object ProducerSpec extends ZIOSpecDefault {
       )
         .provideSome[Kafka](producer)             // Here, we provide a new instance of Producer per test
         .provideSomeShared[Scope](Kafka.embedded) // Here, we provide an instance of Kafka for the entire suite
-    ) @@ timeout(5.minutes) @@ sequential
+    ) @@ timeout(2.minutes) @@ sequential
 }
 ```
 
@@ -76,7 +76,7 @@ object ProducerSpec extends ZIOSpecWithKafka { // Note the `ZIOSpecWithKafka` tr
         // ... tests ...
       )
         .provideSome[Kafka](producer)             // No need here to provide a Kafka instance, it is already provided by the `ZIOSpecWithKafka` trait
-    ) @@ timeout(5.minutes) @@ sequential
+    ) @@ timeout(2.minutes) @@ sequential
 }
 ```
 More details about this `ZIOSpecWithKafka` trait [below](#ziospecwithkafka-trait).
@@ -128,7 +128,7 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
       )
         .provideSome[Kafka](producer)             // Here, we provide a new instance of Producer per test
         .provideSomeShared[Scope](Kafka.embedded) // Here, we provide an instance of Kafka for the entire suite
-    ) @@ timeout(5.minutes) @@ sequential
+    ) @@ timeout(2.minutes) @@ sequential
 }
 ```
 
@@ -206,7 +206,7 @@ object ProducerSpec extends ZIOSpecWithKafka { // Note the `ZIOSpecWithKafka` tr
         // ... tests ...
       )
         .provideSome[Kafka](producer)             // No need here to provide a Kafka instance, it is already provided by the `ZIOSpecWithKafka` trait
-    ) @@ timeout(5.minutes) @@ sequential
+    ) @@ timeout(2.minutes) @@ sequential
 }
 
 // In `src/test/scala/io/example/consumer/ConsumerSpec.scala`
@@ -217,7 +217,7 @@ object ConsumerSpec extends ZIOSpecWithKafka { // Note the `ZIOSpecWithKafka` tr
         // ... tests ...
       )
         .provideSome[Kafka](producer)             // No need here to provide a Kafka instance, it is already provided by the `ZIOSpecWithKafka` trait
-    ) @@ timeout(5.minutes) @@ sequential
+    ) @@ timeout(2.minutes) @@ sequential
 }
 ```
 
