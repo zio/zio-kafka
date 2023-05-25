@@ -10,8 +10,6 @@ lazy val logback               = "ch.qos.logback"             % "logback-classic
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
-ThisBuild / resolvers ++= Resolver.sonatypeOssRepos("snapshots")
-
 inThisBuild(
   List(
     name       := "ZIO Kafka",

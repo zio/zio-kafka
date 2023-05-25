@@ -8,7 +8,7 @@ import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.stream.{ Stream, Take, ZStream }
 import zio.{ Chunk, Hub, Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
 
-sealed trait RunloopState {
+private[internal] sealed trait RunloopState {
   def withRunloop[R, E, A](f: Runloop => ZIO[R, E, A]): ZIO[R, E, A] =
     this match {
       case RunloopState.NotStarted       => ZIO.unit.asInstanceOf[ZIO[R, E, A]]
@@ -16,7 +16,7 @@ sealed trait RunloopState {
       case RunloopState.Stopped          => ZIO.unit.asInstanceOf[ZIO[R, E, A]]
     }
 }
-object RunloopState {
+private[internal] object RunloopState {
   case object NotStarted                     extends RunloopState
   final case class Started(runloop: Runloop) extends RunloopState
   case object Stopped                        extends RunloopState
@@ -40,13 +40,13 @@ object RunloopState {
  *      use its Consumer.
  */
 private[consumer] final class RunloopAccess private (
-  runloopRef: Ref.Synchronized[RunloopState],
+  runloopStateRef: Ref.Synchronized[RunloopState],
   hubRef: Ref.Synchronized[PartitionAssignmentsHub],
   makeRunloop: Task[RunloopState.Started],
   makeHub: UIO[PartitionAssignmentsHub]
 ) {
   private def runloop(shouldStartIfNot: Boolean): Task[RunloopState] =
-    runloopRef.updateSomeAndGetZIO { case RunloopState.NotStarted if shouldStartIfNot => makeRunloop }
+    runloopStateRef.updateSomeAndGetZIO { case RunloopState.NotStarted if shouldStartIfNot => makeRunloop }
   private def withRunloopZIO[R, A](shouldStartIfNot: Boolean)(f: Runloop => RIO[R, A]): RIO[R, A] =
     runloop(shouldStartIfNot).flatMap(_.withRunloop(f))
 
@@ -103,8 +103,8 @@ private[consumer] object RunloopAccess {
       partitionsQueue <- ZIO
                            .acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
                            .provide(ZLayer.succeed(scope))
-      runloopRef <- Ref.Synchronized.make[RunloopState](RunloopState.notStarted)
-      hubRef     <- Ref.Synchronized.make[PartitionAssignmentsHub](null)
+      runloopStateRef <- Ref.Synchronized.make[RunloopState](RunloopState.notStarted)
+      hubRef          <- Ref.Synchronized.make[PartitionAssignmentsHub](null)
       makeRunloop = Runloop
                       .make(
                         hasGroupId = settings.hasGroupId,
@@ -117,7 +117,7 @@ private[consumer] object RunloopAccess {
                         runloopTimeout = settings.runloopTimeout,
                         partitionsQueue = partitionsQueue
                       )
-                      .withFinalizer { case (_, finalizer) => runloopRef.set(RunloopState.stopped) *> finalizer }
+                      .withFinalizer { case (_, finalizer) => runloopStateRef.set(RunloopState.stopped) *> finalizer }
                       .map { case (runloop, _) => RunloopState.Started(runloop) }
                       .provide(ZLayer.succeed(scope))
       makeHub = ZStream
@@ -126,5 +126,5 @@ private[consumer] object RunloopAccess {
                   .flattenExitOption
                   .toHub(hubCapacity)
                   .provide(ZLayer.succeed(scope))
-    } yield new RunloopAccess(runloopRef, hubRef, makeRunloop, makeHub)
+    } yield new RunloopAccess(runloopStateRef, hubRef, makeRunloop, makeHub)
 }
