@@ -2,8 +2,7 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.consumer.internal.Runloop.Command.Request
-import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, Command }
+import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.{ Take, ZStream }
 import zio.{ Chunk, LogAnnotation, Promise, Queue, UIO, ZIO }
 
@@ -67,7 +66,7 @@ private[internal] object PartitionStreamControl {
 
   def newPartitionStream(
     tp: TopicPartition,
-    commandQueue: Queue[Command],
+    commandQueue: Queue[RunloopCommand],
     diagnostics: Diagnostics
   ): ZIO[Any, Nothing, PartitionStreamControl] =
     for {
@@ -77,7 +76,7 @@ private[internal] object PartitionStreamControl {
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
       requestAndAwaitData =
         for {
-          _     <- commandQueue.offer(Request(tp))
+          _     <- commandQueue.offer(RunloopCommand.Request(tp))
           _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
           taken <- dataQueue.takeBetween(1, Int.MaxValue)
         } yield taken
