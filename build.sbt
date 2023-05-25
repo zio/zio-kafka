@@ -15,7 +15,7 @@ ThisBuild / resolvers ++= Resolver.sonatypeOssRepos("snapshots")
 inThisBuild(
   List(
     name       := "ZIO Kafka",
-    zioVersion := "2.0.13+54-a9c50c2a-SNAPSHOT",
+    zioVersion := "2.0.13",
     crossScalaVersions -= scala211.value,
     ciEnabledBranches        := Seq("master", "series/0.x"),
     useCoursier              := false,

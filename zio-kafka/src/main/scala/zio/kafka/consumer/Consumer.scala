@@ -11,7 +11,6 @@ import zio.kafka.utils.SslHelper
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
-import scala.util.control.NoStackTrace
 
 trait Consumer {
 
@@ -156,12 +155,9 @@ trait Consumer {
 
 object Consumer {
 
-  case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
-
   private final class Live private[Consumer] (
     consumer: ConsumerAccess,
     runloopAccess: RunloopAccess,
-    subscriptions: Ref.Synchronized[Set[Subscription]],
     diagnostics: Diagnostics
   ) extends Consumer {
 
@@ -221,38 +217,14 @@ object Consumer {
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V]
     ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
-      def extendSubscriptions: Task[Unit] =
-        subscriptions.updateZIO { existingSubscriptions =>
-          val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
-          Subscription.unionAll(newSubscriptions) match {
-            case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
-            case Some(union) =>
-              ZIO.logDebug(s"Changing kafka subscription to $union") *>
-                subscribe(union).as(newSubscriptions.toSet)
-          }
-        }.uninterruptible
-
-      def reduceSubscriptions: Task[Unit] =
-        subscriptions.updateZIO { existingSubscriptions =>
-          val newSubscriptions = NonEmptyChunk.fromIterableOption(existingSubscriptions - subscription)
-          val newUnion         = newSubscriptions.flatMap(Subscription.unionAll)
-
-          (newUnion match {
-            case Some(union) =>
-              ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union)
-            case None =>
-              ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe
-          }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
-        }.uninterruptible
-
       val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
 
       ZStream.unwrapScoped {
         for {
-          hub    <- runloopAccess.partitionAssignmentsHub
-          stream <- ZStream.fromHubScoped(hub)
-          _ <- extendSubscriptions.withFinalizer { _ =>
-                 reduceSubscriptions.orDie <* diagnostics.emit(Finalization.SubscriptionFinalized)
+          stream <- runloopAccess.subscribe(subscription)
+          _ <- ZIO.addFinalizer {
+                 runloopAccess.unsubscribe(subscription).orDie <*
+                   diagnostics.emit(Finalization.SubscriptionFinalized)
                }
         } yield stream
           .map(_.exit)
@@ -325,12 +297,6 @@ object Consumer {
                .runDrain
       } yield ()
 
-    private def subscribe(subscription: Subscription): Task[Unit] =
-      runloopAccess.withRunloopZIO(_.changeSubscription(Some(subscription)))
-
-    private def unsubscribe: Task[Unit] =
-      runloopAccess.withRunloopZIO(_.changeSubscription(None))
-
     override def metrics: Task[Map[MetricName, Metric]] =
       consumer.withConsumer(_.metrics().asScala.toMap)
   }
@@ -356,8 +322,7 @@ object Consumer {
       _              <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
       consumerAccess <- ConsumerAccess.make(settings)
       runloopAccess  <- RunloopAccess.make(settings, diagnostics, consumerAccess)
-      subscriptions  <- Ref.Synchronized.make(Set.empty[Subscription])
-    } yield new Live(consumerAccess, runloopAccess, subscriptions, diagnostics)
+    } yield new Live(consumerAccess, runloopAccess, diagnostics)
 
   /**
    * Accessor method for [[Consumer.assignment]]

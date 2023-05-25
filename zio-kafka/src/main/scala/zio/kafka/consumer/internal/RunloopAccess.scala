@@ -1,16 +1,35 @@
 package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
-import zio.kafka.consumer.ConsumerSettings
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
-import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignmentsHub
+import zio.kafka.consumer.internal.RunloopAccess.{ PartitionAssignment, PartitionAssignmentsHub }
+import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.stream.{ Stream, Take, ZStream }
 import zio.{ Chunk, Hub, Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
+
+sealed trait RunloopState {
+  def withRunloop[R, E, A](f: Runloop => ZIO[R, E, A]): ZIO[R, E, A] =
+    this match {
+      case RunloopState.NotStarted       => ZIO.unit.asInstanceOf[ZIO[R, E, A]]
+      case RunloopState.Started(runloop) => f(runloop)
+      case RunloopState.Stopped          => ZIO.unit.asInstanceOf[ZIO[R, E, A]]
+    }
+}
+object RunloopState {
+  case object NotStarted                     extends RunloopState
+  final case class Started(runloop: Runloop) extends RunloopState
+  case object Stopped                        extends RunloopState
+
+  @inline def notStarted: RunloopState = NotStarted
+  @inline def stopped: RunloopState    = Stopped
+}
 
 /**
  * This [[RunloopAccess]] is here to make the [[Runloop]] boot lazy: we only starts it when the user is starting a
  * consuming session.
+ *
+ * // TODO Jules: DOC TO UPDATE
  *
  * This is needed because of 2 things:
  *
@@ -21,29 +40,44 @@ import zio.{ Chunk, Hub, Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
  *      use its Consumer.
  */
 private[consumer] final class RunloopAccess private (
-  runloopRef: Ref.Synchronized[Runloop],
+  runloopRef: Ref.Synchronized[RunloopState],
   hubRef: Ref.Synchronized[PartitionAssignmentsHub],
-  makeRunloop: Task[Runloop],
+  makeRunloop: Task[RunloopState.Started],
   makeHub: UIO[PartitionAssignmentsHub]
 ) {
-  private val runloop: Task[Runloop] = runloopRef.updateSomeAndGetZIO { case null => makeRunloop }
-  private val isMade: UIO[Boolean]   = runloopRef.get.map(_ ne null)
+  private def runloop(shouldStartIfNot: Boolean): Task[RunloopState] =
+    runloopRef.updateSomeAndGetZIO { case RunloopState.NotStarted if shouldStartIfNot => makeRunloop }
+  private def withRunloopZIO[R, A](shouldStartIfNot: Boolean)(f: Runloop => RIO[R, A]): RIO[R, A] =
+    runloop(shouldStartIfNot).flatMap(_.withRunloop(f))
 
   /**
    * No need to call `Runloop::gracefulShutdown` if the Runloop has not been instantiated
    *
-   * Note: the `.orDie` call is only here for compilation. It cannot happen because the
-   * `runloop.map(_.gracefulShutdown)` is only called if the `runloop` is already successfully instantiated.
+   * Note: the `.orDie` call is only here for compilation. It cannot happen because the `runloop.gracefulShutdown` is
+   * only called if the `runloop` is already successfully instantiated.
    */
-  val gracefulShutdown: UIO[Unit] = ZIO.whenZIO(isMade)(runloop.flatMap(_.gracefulShutdown).orDie).unit
+  val gracefulShutdown: UIO[Unit] = withRunloopZIO(shouldStartIfNot = false)(_.gracefulShutdown).orDie
 
   /**
    * The runloop needs to be started before to start the stream to the Hub
    */
-  val partitionAssignmentsHub: Task[PartitionAssignmentsHub] =
-    runloop *> hubRef.updateSomeAndGetZIO { case null => makeHub }
+  def subscribe(
+    subscription: Subscription
+  ): ZIO[Scope, Throwable, ZStream[Any, Nothing, Take[Throwable, Chunk[PartitionAssignment]]]] =
+    for {
+      _      <- runloop(shouldStartIfNot = true)
+      hub    <- hubRef.updateSomeAndGetZIO { case null => makeHub }
+      stream <- ZStream.fromHubScoped(hub)
+      _      <- withRunloopZIO(shouldStartIfNot = false)(_.addSubscription(subscription))
+      _      <- ZIO.logDebug("Added subscription to runloop")
+    } yield stream
 
-  def withRunloopZIO[R, A](f: Runloop => RIO[R, A]): RIO[R, A] = runloop.flatMap(f)
+  /**
+   * If the Runloop as not been started or has been stopped, there's no need to remove the subscription
+   */
+  def unsubscribe(subscription: Subscription): Task[Unit] =
+    withRunloopZIO(shouldStartIfNot = false)(_.removeSubscription(subscription))
+
 }
 
 private[consumer] object RunloopAccess {
@@ -69,7 +103,7 @@ private[consumer] object RunloopAccess {
       partitionsQueue <- ZIO
                            .acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
                            .provide(ZLayer.succeed(scope))
-      runloopRef <- Ref.Synchronized.make[Runloop](null)
+      runloopRef <- Ref.Synchronized.make[RunloopState](RunloopState.notStarted)
       hubRef     <- Ref.Synchronized.make[PartitionAssignmentsHub](null)
       makeRunloop = Runloop
                       .make(
@@ -83,6 +117,8 @@ private[consumer] object RunloopAccess {
                         runloopTimeout = settings.runloopTimeout,
                         partitionsQueue = partitionsQueue
                       )
+                      .withFinalizer { case (_, finalizer) => runloopRef.set(RunloopState.stopped) *> finalizer }
+                      .map { case (runloop, _) => RunloopState.Started(runloop) }
                       .provide(ZLayer.succeed(scope))
       makeHub = ZStream
                   .fromQueue(partitionsQueue)
