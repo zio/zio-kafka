@@ -34,8 +34,7 @@ private[consumer] final class Runloop private (
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics)
 
-  /** Initiate a graceful shutdown. */
-  def gracefulShutdown: UIO[Unit] =
+  def stopConsumption: UIO[Unit] =
     commandQueue.offer(Command.StopAllStreams).unit
 
   def changeSubscription(
