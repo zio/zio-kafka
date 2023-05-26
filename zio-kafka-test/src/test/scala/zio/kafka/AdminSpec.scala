@@ -636,7 +636,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
         }
       }
-    ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ sequential @@ timeout(5.minutes)
+    ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ sequential @@ timeout(2.minutes)
 
   private def consumeNoop(
     topicName: String,
