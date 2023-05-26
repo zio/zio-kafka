@@ -471,7 +471,7 @@ private[consumer] final class Runloop private (
     ZStream
       .fromQueue(commandQueue)
       .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
-      .takeWhile(_ ne RunloopCommand.StopRunloop)
+      .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
         for {
           _ <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
