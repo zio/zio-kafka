@@ -253,12 +253,6 @@ private[consumer] final class Runloop private (
     if (!pauseTps.isEmpty) c.pause(pauseTps)
   }
 
-  private def doPoll(c: ByteArrayKafkaConsumer): ConsumerRecords[Array[Byte], Array[Byte]] = {
-    val records = c.poll(pollTimeout)
-
-    if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
-  }
-
   private def handlePoll(state: State): Task[State] =
     for {
       _ <-
@@ -275,7 +269,10 @@ private[consumer] final class Runloop private (
 
             resumeAndPausePartitions(c, requestedPartitions, state.assignedStreams)
 
-            val records = doPoll(c)
+            val polledRecords = {
+              val records = c.poll(pollTimeout)
+              if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
+            }
 
             val currentAssigned = c.assignment().asScala.toSet
             val newlyAssigned   = currentAssigned -- prevAssigned
@@ -326,7 +323,7 @@ private[consumer] final class Runloop private (
                             }
 
               _ <- diagnostics.emit {
-                     val providedTps = records.partitions().asScala.toSet
+                     val providedTps = polledRecords.partitions().asScala.toSet
                      DiagnosticEvent.Poll(
                        tpRequested = requestedPartitions,
                        tpWithData = providedTps,
@@ -338,7 +335,7 @@ private[consumer] final class Runloop private (
               startingTps = startingTps,
               pendingRequests = revokeResult.pendingRequests,
               assignedStreams = revokeResult.assignedStreams,
-              records = records,
+              records = polledRecords,
               ignoreRecordsForTps = ignoreRecordsForTps
             )
           }
