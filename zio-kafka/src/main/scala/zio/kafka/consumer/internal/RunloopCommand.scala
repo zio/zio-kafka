@@ -14,9 +14,6 @@ object RunloopCommand {
   /** Used as a signal that another poll is needed. */
   case object Poll extends Control
 
-  /** Equivalent of `continue` in a loop */
-  case object Next extends Control
-
   case object StopRunloop    extends Control
   case object StopAllStreams extends StreamCommand
 

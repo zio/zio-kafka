@@ -20,9 +20,6 @@ private[internal] object RunloopState {
   case object NotStarted                     extends RunloopState
   final case class Started(runloop: Runloop) extends RunloopState
   case object Stopped                        extends RunloopState
-
-  @inline def notStarted: RunloopState = NotStarted
-  @inline def stopped: RunloopState    = Stopped
 }
 
 /**
@@ -103,9 +100,8 @@ private[consumer] object RunloopAccess {
       partitionsQueue <- ZIO
                            .acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
                            .provide(ZLayer.succeed(scope))
-      runloopStateRef <- Ref.Synchronized.make[RunloopState](RunloopState.notStarted)
+      runloopStateRef <- Ref.Synchronized.make[RunloopState](RunloopState.NotStarted)
       hubRef          <- Ref.Synchronized.make[PartitionAssignmentsHub](null)
-      executor        <- RunloopExecutor.newInstance
       makeRunloop = Runloop
                       .make(
                         hasGroupId = settings.hasGroupId,
@@ -118,11 +114,8 @@ private[consumer] object RunloopAccess {
                         runloopTimeout = settings.runloopTimeout,
                         partitionsQueue = partitionsQueue
                       )
-                      .withFinalizer { case (_, finalizer) =>
-                        (runloopStateRef.set(RunloopState.stopped) *> finalizer).onExecutor(executor)
-                      }
-                      .map { case (runloop, _) => RunloopState.Started(runloop) }
-                      .onExecutor(executor)
+                      .withFinalizer(_ => runloopStateRef.set(RunloopState.Stopped))
+                      .map(RunloopState.Started)
                       .provide(ZLayer.succeed(scope))
       makeHub = ZStream
                   .fromQueue(partitionsQueue)
