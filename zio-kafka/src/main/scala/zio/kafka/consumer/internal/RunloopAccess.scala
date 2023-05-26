@@ -56,7 +56,7 @@ private[consumer] final class RunloopAccess private (
    * Note: the `.orDie` call is only here for compilation. It cannot happen because the `runloop.gracefulShutdown` is
    * only called if the `runloop` is already successfully instantiated.
    */
-  val gracefulShutdown: UIO[Unit] = withRunloopZIO(shouldStartIfNot = false)(_.gracefulShutdown).orDie
+  val stopConsumption: UIO[Unit] = withRunloopZIO(shouldStartIfNot = false)(_.stopConsumption).orDie
 
   /**
    * The runloop needs to be started before to start the stream to the Hub
@@ -105,6 +105,7 @@ private[consumer] object RunloopAccess {
                            .provide(ZLayer.succeed(scope))
       runloopStateRef <- Ref.Synchronized.make[RunloopState](RunloopState.notStarted)
       hubRef          <- Ref.Synchronized.make[PartitionAssignmentsHub](null)
+      executor        <- RunloopExecutor.newInstance
       makeRunloop = Runloop
                       .make(
                         hasGroupId = settings.hasGroupId,
@@ -117,8 +118,11 @@ private[consumer] object RunloopAccess {
                         runloopTimeout = settings.runloopTimeout,
                         partitionsQueue = partitionsQueue
                       )
-                      .withFinalizer { case (_, finalizer) => runloopStateRef.set(RunloopState.stopped) *> finalizer }
+                      .withFinalizer { case (_, finalizer) =>
+                        (runloopStateRef.set(RunloopState.stopped) *> finalizer).onExecutor(executor)
+                      }
                       .map { case (runloop, _) => RunloopState.Started(runloop) }
+                      .onExecutor(executor)
                       .provide(ZLayer.succeed(scope))
       makeHub = ZStream
                   .fromQueue(partitionsQueue)

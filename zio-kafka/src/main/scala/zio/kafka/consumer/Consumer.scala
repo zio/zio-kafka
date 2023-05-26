@@ -196,7 +196,7 @@ object Consumer {
      * requests.
      */
     override def stopConsumption: UIO[Unit] =
-      runloopAccess.gracefulShutdown
+      runloopAccess.stopConsumption
 
     override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
       consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)

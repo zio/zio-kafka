@@ -14,6 +14,9 @@ object RunloopCommand {
   /** Used as a signal that another poll is needed. */
   case object Poll extends Control
 
+  /** Equivalent of `continue` in a loop */
+  case object Next extends Control
+
   case object StopRunloop    extends Control
   case object StopAllStreams extends StreamCommand
 
@@ -25,11 +28,7 @@ object RunloopCommand {
   /** Used by a stream to request more records. */
   final case class Request(tp: TopicPartition) extends StreamCommand
 
-  final case class ChangeSubscription(
-    subscription: Option[Subscription],
-    cont: Promise[Throwable, Unit]
-  ) extends StreamCommand {
-    @inline def succeed: UIO[Boolean]                    = cont.succeed(())
-    @inline def fail(throwable: Throwable): UIO[Boolean] = cont.fail(throwable)
-  }
+  final case class AddSubscription(subscription: Subscription)    extends StreamCommand
+  final case class RemoveSubscription(subscription: Subscription) extends StreamCommand
+  case object StopSubscription                                    extends StreamCommand
 }

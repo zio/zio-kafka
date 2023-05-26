@@ -16,15 +16,21 @@ import zio.stream._
 import java.util
 import scala.jdk.CollectionConverters._
 
-private[consumer] sealed trait SubscriptionState
-private[consumer] object SubscriptionState {
-  case object NotSubscribed                                     extends SubscriptionState
-  final case class Subscribed(subscriptions: Set[Subscription]) extends SubscriptionState
-  case object Stopped                                           extends SubscriptionState
+private[internal] sealed trait SubscriptionState {
+  def isSubscribed: Boolean =
+    this match {
+      case _: SubscriptionState.Subscribed => true
+      case SubscriptionState.NotSubscribed => false
+      case SubscriptionState.Stopped       => false
+    }
+}
+private[internal] object SubscriptionState {
+  case object NotSubscribed                                                          extends SubscriptionState
+  final case class Subscribed(subscriptions: Set[Subscription], union: Subscription) extends SubscriptionState
+  case object Stopped                                                                extends SubscriptionState
 
-  @inline def notSubscribed: SubscriptionState                                = NotSubscribed
-  @inline def subscribed(subscriptions: Set[Subscription]): SubscriptionState = Subscribed(subscriptions)
-  @inline def stopped: SubscriptionState                                      = Stopped
+  @inline def notSubscribed: SubscriptionState = NotSubscribed
+  @inline def stopped: SubscriptionState       = Stopped
 }
 
 private[consumer] final class Runloop private (
@@ -40,75 +46,35 @@ private[consumer] final class Runloop private (
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
-  currentStateRef: Ref[State],
-  subscriptionsStateRef: Ref.Synchronized[SubscriptionState]
+  currentStateRef: Ref[State]
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics)
 
   /** Initiate a graceful shutdown. */
-  def gracefulShutdown: UIO[Unit] =
+  def stopConsumption: UIO[Unit] =
     commandQueue.offer(RunloopCommand.StopAllStreams).unit
 
-  private[consumer] def addSubscription(subscription: Subscription): Task[Unit] = {
-    def newSub(newSubscriptions: NonEmptyChunk[Subscription]): Task[SubscriptionState.Subscribed] =
-      (
-        Subscription.unionAll(newSubscriptions) match {
-          case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
-          case Some(union) =>
-            ZIO.logDebug(s"Changing kafka subscription to $union") *>
-              subscribe(union).as(newSubscriptions.toSet)
-        }
-      ).map(SubscriptionState.Subscribed)
+  private[consumer] def shutdown(caller: String): UIO[Unit] =
+    ZIO.logDebug(s"Shutting down runloop initiated by $caller") *>
+      commandQueue
+        .offerAll(
+          Chunk(
+            RunloopCommand.StopSubscription,
+            RunloopCommand.StopAllStreams,
+            RunloopCommand.StopRunloop
+          )
+        )
+        .unit
 
-    subscriptionsStateRef.updateSomeZIO {
-      case SubscriptionState.NotSubscribed =>
-        newSub(NonEmptyChunk.single(subscription))
-      case SubscriptionState.Subscribed(existingSubscriptions) =>
-        newSub(NonEmptyChunk.fromIterable(subscription, existingSubscriptions))
-    }
-  }.uninterruptible
+  private[internal] def addSubscription(subscription: Subscription): UIO[Unit] =
+    commandQueue.offer(RunloopCommand.AddSubscription(subscription)).unit
 
-  private[consumer] def removeSubscription(subscription: Subscription): Task[Unit] =
-    subscriptionsStateRef.updateSomeZIO { case SubscriptionState.Subscribed(existingSubscriptions) =>
-      val newUnion: Option[(Subscription, NonEmptyChunk[Subscription])] =
-        NonEmptyChunk
-          .fromIterableOption(existingSubscriptions - subscription)
-          .flatMap(subs => Subscription.unionAll(subs).map(_ -> subs))
+  private[internal] def removeSubscription(subscription: Subscription): UIO[Unit] =
+    commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
 
-      newUnion match {
-        case Some(union -> newSubscriptions) =>
-          ZIO.logDebug(s"Reducing kafka subscription to $union") *>
-            subscribe(union).as(SubscriptionState.subscribed(newSubscriptions.toSet))
-        case None =>
-          ZIO.logDebug(s"Unsubscribing kafka consumer") *>
-            unsubscribe.as(SubscriptionState.notSubscribed)
-      }
-    }.uninterruptible
-
-  private[consumer] val stopSubscriptions: Task[Unit] =
-    subscriptionsStateRef.updateSomeZIO { case SubscriptionState.Subscribed(_) =>
-      ZIO.logDebug(s"Stopping all Kafka subscriptions") *>
-        unsubscribe.as(SubscriptionState.stopped)
-    }.uninterruptible
-
-  private def changeSubscription(
-    subscription: Option[Subscription]
-  ): Task[Unit] =
-    Promise
-      .make[Throwable, Unit]
-      .flatMap { cont =>
-        commandQueue.offer(RunloopCommand.ChangeSubscription(subscription, cont)) *>
-          cont.await
-      }
-      .unit
-      .uninterruptible
-
-  private def subscribe(subscription: Subscription): Task[Unit] = changeSubscription(Some(subscription))
-  private def unsubscribe: Task[Unit]                           = changeSubscription(None)
-
-  val rebalanceListener: RebalanceListener = {
+  private val rebalanceListener: RebalanceListener = {
     val emitDiagnostics = RebalanceListener(
       (assigned, _) => diagnostics.emit(DiagnosticEvent.Rebalance.Assigned(assigned)),
       (revoked, _) => diagnostics.emit(DiagnosticEvent.Rebalance.Revoked(revoked)),
@@ -313,16 +279,10 @@ private[consumer] final class Runloop private (
     if (!pauseTps.isEmpty) c.pause(pauseTps)
   }
 
-  private def doPoll(c: ByteArrayKafkaConsumer): ConsumerRecords[Array[Byte], Array[Byte]] = {
-    val records = c.poll(pollTimeout)
-
-    if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
-  }
-
   private def handlePoll(state: State): Task[State] =
     for {
       _ <-
-        ZIO.logTrace(
+        ZIO.logDebug(
           s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
         )
       _ <- currentStateRef.set(state)
@@ -335,7 +295,10 @@ private[consumer] final class Runloop private (
 
             resumeAndPausePartitions(c, requestedPartitions, state.assignedStreams)
 
-            val records = doPoll(c)
+            val polledRecords = {
+              val records = c.poll(pollTimeout)
+              if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
+            }
 
             val currentAssigned = c.assignment().asScala.toSet
             val newlyAssigned   = currentAssigned -- prevAssigned
@@ -386,7 +349,7 @@ private[consumer] final class Runloop private (
                             }
 
               _ <- diagnostics.emit {
-                     val providedTps = records.partitions().asScala.toSet
+                     val providedTps = polledRecords.partitions().asScala.toSet
                      DiagnosticEvent.Poll(
                        tpRequested = requestedPartitions,
                        tpWithData = providedTps,
@@ -398,7 +361,7 @@ private[consumer] final class Runloop private (
               startingTps = startingTps,
               pendingRequests = revokeResult.pendingRequests,
               assignedStreams = revokeResult.assignedStreams,
-              records = records,
+              records = polledRecords,
               ignoreRecordsForTps = ignoreRecordsForTps
             )
           }
@@ -423,93 +386,142 @@ private[consumer] final class Runloop private (
                          pollResult.records
                        )
       updatedPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
-    } yield State(
+    } yield state.copy(
       pendingRequests = fulfillResult.pendingRequests,
       pendingCommits = updatedPendingCommits,
-      assignedStreams = updatedStreams,
-      subscription = state.subscription
+      assignedStreams = updatedStreams
     )
 
-  private def handleCommand(state: State, cmd: RunloopCommand.StreamCommand): Task[State] =
+  private def handleCommand(state: State, cmd: RunloopCommand.StreamCommand): Task[State] = {
+    def doChangeSubscription(newSubscriptionState: SubscriptionState): Task[State] =
+      handleChangeSubscription(newSubscriptionState).flatMap { newAssignedStreams =>
+        val newState = state.copy(
+          assignedStreams = state.assignedStreams ++ newAssignedStreams,
+          subscriptionState = newSubscriptionState
+        )
+        if (newSubscriptionState.isSubscribed) ZIO.logDebug("TUTU") *> ZIO.succeed(newState)
+        else
+          {
+            ZIO.logDebug("TITI") *>
+              // End all streams and pending requests
+              endRevokedPartitions(
+                newState.pendingRequests,
+                newState.assignedStreams,
+                isRevoked = _ => true
+              ).map { revokeResult =>
+                newState.copy(
+                  pendingRequests = revokeResult.pendingRequests,
+                  assignedStreams = revokeResult.assignedStreams
+                )
+              }
+          } <* ZIO.logDebug("TETE")
+      }.uninterruptible
+
     cmd match {
       case req: RunloopCommand.Request =>
-        ZIO.succeed(state.addRequest(req))
-      case cmd @ RunloopCommand.Commit(_, _) =>
-        doCommit(cmd).as(state.addCommit(cmd))
-      case cmd @ RunloopCommand.ChangeSubscription(subscription, _) =>
-        handleChangeSubscription(cmd).flatMap { newAssignedStreams =>
-          val newState = state.copy(
-            assignedStreams = state.assignedStreams ++ newAssignedStreams,
-            subscription = subscription
-          )
-          if (subscription.isDefined) ZIO.succeed(newState)
-          else {
-            // End all streams and pending requests
-            endRevokedPartitions(
-              newState.pendingRequests,
-              newState.assignedStreams,
-              isRevoked = _ => true
-            ).map { revokeResult =>
-              newState.copy(
-                pendingRequests = revokeResult.pendingRequests,
-                assignedStreams = revokeResult.assignedStreams
-              )
+        ZIO.logDebug("RunloopCommand.Request") *> ZIO.succeed(state.addRequest(req))
+      case cmd: RunloopCommand.Commit =>
+        ZIO.logDebug("RunloopCommand.Commit") *> doCommit(cmd).as(state.addCommit(cmd))
+      case RunloopCommand.AddSubscription(newSubscription) =>
+        ZIO.logDebug("RunloopCommand.AddSubscription") *>
+          (
+            state.subscriptionState match {
+              case SubscriptionState.NotSubscribed =>
+                val newSubState =
+                  SubscriptionState.Subscribed(subscriptions = Set(newSubscription), union = newSubscription)
+                doChangeSubscription(newSubState)
+              case SubscriptionState.Subscribed(existingSubscriptions, _) =>
+                val subs = NonEmptyChunk.fromIterable(newSubscription, existingSubscriptions)
+
+                Subscription.unionAll(subs) match {
+                  case None => ZIO.fail(InvalidSubscriptionUnion(subs))
+                  case Some(union) =>
+                    val newSubState =
+                      SubscriptionState.Subscribed(
+                        subscriptions = existingSubscriptions + newSubscription,
+                        union = union
+                      )
+                    doChangeSubscription(newSubState)
+                }
+              case SubscriptionState.Stopped =>
+                ZIO.succeed(state)
             }
-          }
-        }
-          .tapBoth(e => cmd.fail(e), _ => cmd.succeed)
-          .uninterruptible
+          )
+      case RunloopCommand.RemoveSubscription(subscription) =>
+        ZIO.logDebug("RunloopCommand.RemoveSubscription") *>
+          (
+            state.subscriptionState match {
+              case SubscriptionState.NotSubscribed => ZIO.succeed(state)
+              case SubscriptionState.Stopped       => ZIO.succeed(state)
+              case SubscriptionState.Subscribed(existingSubscriptions, _) =>
+                val newUnion: Option[(Subscription, NonEmptyChunk[Subscription])] =
+                  NonEmptyChunk
+                    .fromIterableOption(existingSubscriptions - subscription)
+                    .flatMap(subs => Subscription.unionAll(subs).map(_ -> subs))
+
+                newUnion match {
+                  case Some(union -> newSubscriptions) =>
+                    val newSubState =
+                      SubscriptionState.Subscribed(subscriptions = newSubscriptions.toSet, union = union)
+                    doChangeSubscription(newSubState)
+                  case None =>
+                    ZIO.logDebug(s"Unsubscribing kafka consumer") *>
+                      doChangeSubscription(SubscriptionState.NotSubscribed)
+                }
+            }
+          )
+      case RunloopCommand.StopSubscription =>
+        ZIO.logDebug("RunloopCommand.StopSubscription") *> doChangeSubscription(SubscriptionState.Stopped)
       case RunloopCommand.StopAllStreams =>
-        {
+        ZIO.logDebug("RunloopCommand.StopAllStreams") *> {
           for {
-            _ <- ZIO.logDebug("Graceful shutdown")
+            _ <- ZIO.logDebug("Stop all streams initiated")
             _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end())
             _ <- partitionsQueue.offer(Take.end)
-            _ <- ZIO.logDebug("Graceful shutdown initiated")
+            _ <- ZIO.logDebug("Stop all streams done")
           } yield ()
         }.as(state.copy(pendingRequests = Chunk.empty))
     }
+  }
 
-  /**
-   * @return
-   *   any created streams
-   */
   private def handleChangeSubscription(
-    command: RunloopCommand.ChangeSubscription
+    newSubscriptionState: SubscriptionState
   ): Task[Chunk[PartitionStreamControl]] =
     consumer.runloopAccess { c =>
-      command.subscription match {
-        case None =>
-          ZIO
-            .attempt(c.unsubscribe())
-            .as(Chunk.empty)
-        case Some(subscription) =>
-          subscription match {
-            case Subscription.Pattern(pattern) =>
-              val rc = RebalanceConsumer.Live(c)
-              ZIO
-                .attempt(c.subscribe(pattern.pattern, rebalanceListener.toKafka(runtime, rc)))
-                .as(Chunk.empty)
-            case Subscription.Topics(topics) =>
-              val rc = RebalanceConsumer.Live(c)
-              ZIO
-                .attempt(c.subscribe(topics.asJava, rebalanceListener.toKafka(runtime, rc)))
-                .as(Chunk.empty)
-            case Subscription.Manual(topicPartitions) =>
-              // For manual subscriptions we have to do some manual work before starting the run loop
-              for {
-                _ <- ZIO.attempt(c.assign(topicPartitions.asJava))
-                _ <- offsetRetrieval match {
-                       case OffsetRetrieval.Manual(getOffsets) =>
-                         getOffsets(topicPartitions).flatMap { offsets =>
-                           ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) }
-                         }
-                       case OffsetRetrieval.Auto(_) => ZIO.unit
+      newSubscriptionState match {
+        case SubscriptionState.NotSubscribed | SubscriptionState.Stopped =>
+          ZIO.logDebug("TOTO") *>
+            ZIO
+              .attempt(c.unsubscribe())
+              .as(Chunk.empty) <*
+            ZIO.logDebug("TATA")
+        case SubscriptionState.Subscribed(_, Subscription.Pattern(pattern)) =>
+          val rc = RebalanceConsumer.Live(c)
+          ZIO.logDebug("Pattern") *>
+            ZIO
+              .attempt(c.subscribe(pattern.pattern, rebalanceListener.toKafka(runtime, rc)))
+              .as(Chunk.empty)
+        case SubscriptionState.Subscribed(_, Subscription.Topics(topics)) =>
+          val rc = RebalanceConsumer.Live(c)
+          ZIO.logDebug("Topics") *>
+            ZIO
+              .attempt(c.subscribe(topics.asJava, rebalanceListener.toKafka(runtime, rc)))
+              .as(Chunk.empty)
+        case SubscriptionState.Subscribed(_, Subscription.Manual(topicPartitions)) =>
+          // For manual subscriptions we have to do some manual work before starting the run loop
+          for {
+            _ <- ZIO.logDebug("Manual")
+            _ <- ZIO.attempt(c.assign(topicPartitions.asJava))
+            _ <- offsetRetrieval match {
+                   case OffsetRetrieval.Manual(getOffsets) =>
+                     getOffsets(topicPartitions).flatMap { offsets =>
+                       ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) }
                      }
-                partitionStreams <- ZIO.foreach(Chunk.fromIterable(topicPartitions))(newPartitionStream)
-                _                <- partitionsQueue.offer(Take.chunk(partitionStreams.map(_.tpStream)))
-              } yield partitionStreams
-          }
+                   case OffsetRetrieval.Auto(_) => ZIO.unit
+                 }
+            partitionStreams <- ZIO.foreach(Chunk.fromIterable(topicPartitions))(newPartitionStream)
+            _                <- partitionsQueue.offer(Take.chunk(partitionStreams.map(_.tpStream)))
+          } yield partitionStreams
       }
     }
 
@@ -530,10 +542,12 @@ private[consumer] final class Runloop private (
 
     ZStream
       .fromQueue(commandQueue)
-      // TODO JULES: Replace `gracefulShutdown`?
-      .timeoutTo(runloopTimeout)(ZStream.fromZIO(gracefulShutdown).as(RunloopCommand.Poll))
+      .timeoutTo(runloopTimeout)(ZStream.fromZIO(shutdown("run method")).as(RunloopCommand.Next))
       .takeWhile(_ ne RunloopCommand.StopRunloop)
-      .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
+      .runFoldChunksDiscardZIO(State.initial) { (state, _commands) =>
+        // The `Next` command should not have any existence in the algorithm
+        val commands = _commands.filter(_ ne RunloopCommand.Next)
+
         for {
           _                  <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
           stateAfterCommands <- ZIO.foldLeft(commands.collect { case cmd: StreamCommand => cmd })(state)(handleCommand)
@@ -614,12 +628,11 @@ private[consumer] object Runloop {
     partitionsQueue: Queue[Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]]
   ): ZIO[Scope, Throwable, (Runloop, RunloopFinalizer)] =
     for {
-      _                     <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
-      commandQueue          <- ZIO.acquireRelease(Queue.bounded[RunloopCommand](commandQueueSize))(_.shutdown)
-      lastRebalanceEvent    <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
-      currentStateRef       <- Ref.make(State.initial)
-      subscriptionsStateRef <- Ref.Synchronized.make(SubscriptionState.notSubscribed)
-      runtime               <- ZIO.runtime[Any]
+      _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
+      commandQueue       <- ZIO.acquireRelease(Queue.bounded[RunloopCommand](commandQueueSize))(_.shutdown)
+      lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
+      currentStateRef    <- Ref.make(State.initial)
+      runtime            <- ZIO.runtime[Any]
       runloop = new Runloop(
                   runtime = runtime,
                   hasGroupId = hasGroupId,
@@ -633,21 +646,17 @@ private[consumer] object Runloop {
                   offsetRetrieval = offsetRetrieval,
                   userRebalanceListener = userRebalanceListener,
                   restartStreamsOnRebalancing = restartStreamsOnRebalancing,
-                  currentStateRef = currentStateRef,
-                  subscriptionsStateRef = subscriptionsStateRef
+                  currentStateRef = currentStateRef
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
       // Run the entire loop on the a dedicated thread to avoid executor shifts
-      executor <- RunloopExecutor.newInstance
-      fiber    <- ZIO.onExecutor(executor)(runloop.run).forkScoped
+      fiber <- runloop.run.forkScoped
       waitForRunloopStop = fiber.join.orDie
 
       finalizer = (
                     ZIO.logDebug("Shutting down Runloop") *>
-                      runloop.stopSubscriptions.orDie *>
-                      commandQueue.offer(RunloopCommand.StopAllStreams) *>
-                      commandQueue.offer(RunloopCommand.StopRunloop) *>
+                      runloop.shutdown("finalizer") *>
                       waitForRunloopStop <*
                       ZIO.logDebug("Shut down Runloop")
                   ).unit
@@ -658,15 +667,13 @@ private[internal] final case class State(
   pendingRequests: Chunk[RunloopCommand.Request],
   pendingCommits: Chunk[RunloopCommand.Commit],
   assignedStreams: Chunk[PartitionStreamControl],
-  subscription: Option[Subscription]
+  subscriptionState: SubscriptionState
 ) {
   def addCommit(c: RunloopCommand.Commit): State   = copy(pendingCommits = pendingCommits :+ c)
   def addRequest(r: RunloopCommand.Request): State = copy(pendingRequests = pendingRequests :+ r)
 
-  def isSubscribed: Boolean = subscription.isDefined
-
   def shouldPoll: Boolean =
-    isSubscribed && (pendingRequests.nonEmpty || pendingCommits.nonEmpty || assignedStreams.isEmpty)
+    subscriptionState.isSubscribed && (pendingRequests.nonEmpty || pendingCommits.nonEmpty || assignedStreams.isEmpty)
 }
 
 object State {
@@ -674,6 +681,6 @@ object State {
     pendingRequests = Chunk.empty,
     pendingCommits = Chunk.empty,
     assignedStreams = Chunk.empty,
-    subscription = None
+    subscriptionState = SubscriptionState.notSubscribed
   )
 }
