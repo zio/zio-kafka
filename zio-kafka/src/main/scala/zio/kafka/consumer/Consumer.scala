@@ -226,7 +226,7 @@ object Consumer {
       def extendSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
         val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
         Subscription.unionAll(newSubscriptions) match {
-          case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
+          case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions))
           case Some(union) =>
             ZIO.logDebug(s"Changing kafka subscription to $union") *>
               subscribe(union).as(newSubscriptions.toSet)
@@ -360,7 +360,7 @@ object Consumer {
     for {
       _       <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
       wrapper <- ConsumerAccess.make(settings)
-      runloop <- Runloop(
+      runloop <- Runloop.make(
                    hasGroupId = settings.hasGroupId,
                    consumer = wrapper,
                    pollTimeout = settings.pollTimeout,
@@ -373,7 +373,7 @@ object Consumer {
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 
       partitionAssignments <- ZStream
-                                .fromQueue(runloop.partitions)
+                                .fromQueue(runloop.partitionsQueue)
                                 .map(_.exit)
                                 .flattenExitOption
                                 .toHub(hubCapacity)
