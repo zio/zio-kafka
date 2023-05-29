@@ -35,7 +35,6 @@ private[consumer] final class Runloop private (
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollTimeout: Duration,
-  runloopTimeout: Duration,
   commandQueue: Queue[RunloopCommand],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
   partitionsQueue: Queue[Take[Throwable, PartitionAssignment]],
@@ -54,7 +53,8 @@ private[consumer] final class Runloop private (
 
   private[consumer] def shutdown(caller: String): UIO[Unit] =
     ZIO.logDebug(s"Shutting down runloop initiated by $caller") *>
-      commandQueue.offerAll(runloopShutdownSequence).unit
+      commandQueue.offerAll(runloopShutdownSequence).unit <*
+      diagnostics.emit(Finalization.RunloopFinalizationTriggered(caller))
 
   private[internal] def addSubscription(subscription: Subscription): UIO[Unit] =
     commandQueue.offer(RunloopCommand.AddSubscription(subscription)).unit
@@ -452,6 +452,7 @@ private[consumer] final class Runloop private (
           _ <- ZIO.logDebug("Stop all streams initiated")
           _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end())
           _ <- partitionsQueue.offer(Take.end)
+          _ <- commandQueue.shutdown // We must not accept new commands from now on
           _ <- ZIO.logDebug("Stop all streams done")
         } yield state.copy(pendingRequests = Chunk.empty)
     }
@@ -505,12 +506,11 @@ private[consumer] final class Runloop private (
    *   - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *     initialization and rebalancing
    */
-  def run: ZIO[Scope, Throwable, Any] = {
+  val run: ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
 
     ZStream
       .fromQueue(commandQueue)
-      .timeoutTo(runloopTimeout)(ZStream.fromChunk(runloopShutdownSequence))
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
         for {
@@ -559,9 +559,6 @@ private[consumer] object Runloop {
       RunloopCommand.StopRunloop
     )
 
-  // Internal parameters, should not be necessary to tune
-  private val commandQueueSize = 1024
-
   private final case class PollResult(
     startingTps: Set[TopicPartition],
     pendingRequests: Chunk[RunloopCommand.Request],
@@ -595,12 +592,11 @@ private[consumer] object Runloop {
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
-    runloopTimeout: Duration,
-    partitionsQueue: Queue[Take[Throwable, PartitionAssignment]]
+    partitionsQueue: Queue[Take[Throwable, PartitionAssignment]],
+    commandQueue: Queue[RunloopCommand]
   ): ZIO[Scope, Throwable, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
-      commandQueue       <- ZIO.acquireRelease(Queue.bounded[RunloopCommand](commandQueueSize))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       currentStateRef    <- Ref.make(State.initial)
       runtime            <- ZIO.runtime[Any]
@@ -609,7 +605,6 @@ private[consumer] object Runloop {
                   hasGroupId = hasGroupId,
                   consumer = consumer,
                   pollTimeout = pollTimeout,
-                  runloopTimeout = runloopTimeout,
                   commandQueue = commandQueue,
                   lastRebalanceEvent = lastRebalanceEvent,
                   partitionsQueue = partitionsQueue,

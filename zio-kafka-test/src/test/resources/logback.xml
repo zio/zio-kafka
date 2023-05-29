@@ -14,7 +14,7 @@
     <logger name="com.yammer.metrics" level="ERROR"/>
     <logger name="kafka" level="ERROR" />
 
-    <root level="INFO">
+    <root level="DEBUG">
         <appender-ref ref="STDOUT" />
     </root>
 </configuration>
