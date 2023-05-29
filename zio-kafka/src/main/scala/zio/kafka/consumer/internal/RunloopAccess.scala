@@ -10,7 +10,7 @@ import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio.{ Chunk, Hub, Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
 
 private[internal] sealed trait RunloopState {
-  def withRunloop[R, E, A](f: Runloop => ZIO[R, E, A]): ZIO[R, E, A] =
+  final def withRunloop[R, E, A](f: Runloop => ZIO[R, E, A]): ZIO[R, E, A] =
     this match {
       case RunloopState.NotStarted       => ZIO.unit.asInstanceOf[ZIO[R, E, A]]
       case RunloopState.Started(runloop) => f(runloop)
