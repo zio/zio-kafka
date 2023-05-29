@@ -9,7 +9,6 @@ import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.stream._
 
@@ -49,12 +48,20 @@ private[consumer] final class Runloop private (
     PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics)
 
   def stopConsumption: UIO[Unit] =
-    commandQueue.offer(RunloopCommand.StopAllStreams).unit
+    ZIO.logDebug("stopConsumption called") *>
+      commandQueue.offer(RunloopCommand.StopAllStreams).unit
 
-  private[consumer] def shutdown(caller: String): UIO[Unit] =
-    ZIO.logDebug(s"Shutting down runloop initiated by $caller") *>
-      commandQueue.offerAll(runloopShutdownSequence).unit <*
-      diagnostics.emit(Finalization.RunloopFinalizationTriggered(caller))
+  private[consumer] def shutdown: UIO[Unit] =
+    ZIO.logDebug(s"Shutting down runloop initiated") *>
+      commandQueue
+        .offerAll(
+          Chunk(
+            RunloopCommand.StopSubscription,
+            RunloopCommand.StopAllStreams,
+            RunloopCommand.StopRunloop
+          )
+        )
+        .unit
 
   private[internal] def addSubscription(subscription: Subscription): UIO[Unit] =
     commandQueue.offer(RunloopCommand.AddSubscription(subscription)).unit
@@ -452,7 +459,6 @@ private[consumer] final class Runloop private (
           _ <- ZIO.logDebug("Stop all streams initiated")
           _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end())
           _ <- partitionsQueue.offer(Take.end)
-          _ <- commandQueue.shutdown // We must not accept new commands from now on
           _ <- ZIO.logDebug("Stop all streams done")
         } yield state.copy(pendingRequests = Chunk.empty)
     }
@@ -552,13 +558,6 @@ private[consumer] object Runloop {
 
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
 
-  private val runloopShutdownSequence: Chunk[RunloopCommand] =
-    Chunk(
-      RunloopCommand.StopSubscription,
-      RunloopCommand.StopAllStreams,
-      RunloopCommand.StopRunloop
-    )
-
   private final case class PollResult(
     startingTps: Set[TopicPartition],
     pendingRequests: Chunk[RunloopCommand.Request],
@@ -623,7 +622,7 @@ private[consumer] object Runloop {
 
       _ <- ZIO.addFinalizer(
              ZIO.logDebug("Shutting down Runloop") *>
-               runloop.shutdown("finalizer") *>
+               runloop.shutdown *>
                waitForRunloopStop <*
                ZIO.logDebug("Shut down Runloop")
            )

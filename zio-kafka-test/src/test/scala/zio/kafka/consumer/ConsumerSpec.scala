@@ -1129,46 +1129,14 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             } yield testResult && assert(finalizationEvents)(
               // The order is very important.
               // The subscription must be finalized before the runloop, otherwise it creates a deadlock.
-              equalTo(Chunk(SubscriptionFinalized, SubscriptionFinalized, RunloopFinalized, ConsumerFinalized))
-            )
-          },
-          test("toto - 0") {
-            val numberOfMessages: Int           = 100000
-            val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key-$i", s"msg-$i"))
-
-            def test(diagnostics: Diagnostics): ZIO[Producer & Scope & Kafka, Throwable, TestResult] =
-              for {
-                clientId <- randomClient
-                topic    <- randomTopic
-                settings <- consumerSettings(clientId = clientId)
-                consumer <- Consumer.make(settings, diagnostics = diagnostics)
-                _        <- ZIO.logDebug("Producing data: Start")
-                _        <- produceMany(topic, kvs)
-                _        <- ZIO.logDebug("Producing data: Done")
-                // Starting a consumption session to start the Runloop.
-                _ <- ZIO.logDebug("Consumption: Starting")
-                fiber <- consumer
-                           .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
-                           .take(numberOfMessages.toLong)
-                           .runCount
-                           .forkScoped <* ZIO.logDebug("Consumption: Started")
-                _          <- ZIO.logDebug("Consumption: Stopping")
-                _          <- consumer.stopConsumption
-                _          <- ZIO.logDebug("Consumption: Stopped")
-                consumed_0 <- fiber.join
-                _          <- ZIO.logDebug(s"Consumed $consumed_0 messages")
-              } yield assert(consumed_0)(equalTo(0L))
-
-            for {
-              diagnostics <- Diagnostics.SlidingQueue.make(1000)
-              testResult <- ZIO.scoped {
-                              test(diagnostics)
-                            }
-              finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
-            } yield testResult && assert(finalizationEvents)(
-              // The order is very important.
-              // The subscription must be finalized before the runloop, otherwise it creates a deadlock.
-              equalTo(Chunk(SubscriptionFinalized, RunloopFinalized, ConsumerFinalized))
+              equalTo(
+                Chunk(
+                  SubscriptionFinalized,
+                  SubscriptionFinalized,
+                  RunloopFinalized,
+                  ConsumerFinalized
+                )
+              )
             )
           },
           test("toto - 1") {
@@ -1191,7 +1159,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                            .take(numberOfMessages.toLong)
                            .runCount
                            .forkScoped <* ZIO.logDebug("Consumption: Started")
-                _          <- ZIO.logDebug("Sleep") *> ZIO.sleep(300.millis) <* ZIO.logDebug("Slept")
                 _          <- ZIO.logDebug("Consumption: Stopping")
                 _          <- consumer.stopConsumption
                 _          <- ZIO.logDebug("Consumption: Stopped")
@@ -1208,9 +1175,15 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             } yield testResult && assert(finalizationEvents)(
               // The order is very important.
               // The subscription must be finalized before the runloop, otherwise it creates a deadlock.
-              equalTo(Chunk(SubscriptionFinalized, RunloopFinalized, ConsumerFinalized))
+              equalTo(
+                Chunk(
+                  SubscriptionFinalized,
+                  RunloopFinalized,
+                  ConsumerFinalized
+                )
+              )
             )
-          }
+          } @@ nonFlaky(5)
         )
       )
     )

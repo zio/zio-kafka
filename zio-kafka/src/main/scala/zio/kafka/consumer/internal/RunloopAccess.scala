@@ -7,7 +7,7 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.{ PartitionAssignment, PartitionAssignmentsHub }
 import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
-import zio.{ Chunk, Hub, Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
+import zio.{ durationInt, Chunk, Hub, Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
 
 private[internal] sealed trait RunloopState {
   final def withRunloop[R, E, A](f: Runloop => ZIO[R, E, A]): ZIO[R, E, A] =
@@ -46,17 +46,32 @@ private[consumer] final class RunloopAccess private (
   hubRef: Ref.Synchronized[PartitionAssignmentsHub],
   makeRunloop: Task[RunloopState.Started],
   makeHub: UIO[PartitionAssignmentsHub],
-  diagnostics: Diagnostics,
-  commandQueue: Queue[RunloopCommand]
+  diagnostics: Diagnostics
 ) {
   private def runloop(shouldStartIfNot: Boolean): Task[RunloopState] =
     runloopStateRef.updateSomeAndGetZIO { case RunloopState.NotStarted if shouldStartIfNot => makeRunloop }
   private def withRunloopZIO[R, A](shouldStartIfNot: Boolean)(f: Runloop => RIO[R, A]): RIO[R, A] =
     runloop(shouldStartIfNot).flatMap(_.withRunloop(f))
 
-  val stopConsumption: UIO[Unit] =
-    ZIO.logDebug("stopConsumption called") *>
-      commandQueue.offer(RunloopCommand.StopAllStreams).unit
+  /**
+   * No need to call `Runloop::stopConsumption` if the Runloop has been stopped.
+   *
+   * Note:
+   *   1. The `.orDie` is just here for compilation. It cannot happen.
+   *   1. We do a 100 retries waiting 10ms between each to roughly take max 1s before to stop to retry. We want to avoid
+   *      an infinite loop. We need this recursion because if the user calls `stopConsumption` before the Runloop is
+   *      started, we need to wait for it to be started. Can happen if the user starts a consuming session in a forked
+   *      fiber and immediately after forking, stops it. The Runloop will potentially not be started yet.
+   */
+  def stopConsumption(retry: Int = 100, initialCall: Boolean = true): UIO[Unit] =
+    runloop(shouldStartIfNot = false).orDie.flatMap {
+      case RunloopState.Stopped          => ZIO.unit
+      case RunloopState.Started(runloop) => runloop.stopConsumption
+      case RunloopState.NotStarted =>
+        if (retry <= 0) ZIO.unit
+        else if (initialCall) stopConsumption(retry - 1, initialCall = false)
+        else ZIO.sleep(10.millis) *> stopConsumption(retry - 1, initialCall = false)
+    }
 
   /**
    * We're doing all of these things in this method so that the interface of this class is as simple as possible and
@@ -137,5 +152,5 @@ private[consumer] object RunloopAccess {
                   .flattenExitOption
                   .toHub(hubCapacity)
                   .provide(ZLayer.succeed(consumerScope))
-    } yield new RunloopAccess(runloopStateRef, hubRef, makeRunloop, makeHub, diagnostics, commandQueue)
+    } yield new RunloopAccess(runloopStateRef, hubRef, makeRunloop, makeHub, diagnostics)
 }

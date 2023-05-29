@@ -30,7 +30,6 @@ object DiagnosticEvent {
   sealed trait Finalization extends DiagnosticEvent
   object Finalization {
     case object SubscriptionFinalized                             extends Finalization
-    final case class RunloopFinalizationTriggered(caller: String) extends Finalization
     case object RunloopFinalized                                  extends Finalization
     case object ConsumerFinalized                                 extends Finalization
   }
