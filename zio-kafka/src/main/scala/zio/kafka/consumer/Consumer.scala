@@ -194,7 +194,9 @@ object Consumer {
      * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
      * requests.
      */
-    override def stopConsumption: UIO[Unit] = runloopAccess.stopConsumption
+    override def stopConsumption: UIO[Unit] =
+      ZIO.logDebug("stopConsumption called") *>
+        runloopAccess.stopConsumption
 
     override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
       consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)
