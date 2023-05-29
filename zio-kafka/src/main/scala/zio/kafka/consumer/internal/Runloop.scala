@@ -9,7 +9,6 @@ import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.stream._
 
@@ -35,7 +34,6 @@ private[consumer] final class Runloop private (
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollTimeout: Duration,
-  runloopTimeout: Duration,
   commandQueue: Queue[RunloopCommand],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
   partitionsQueue: Queue[Take[Throwable, PartitionAssignment]],
@@ -50,11 +48,20 @@ private[consumer] final class Runloop private (
     PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics)
 
   def stopConsumption: UIO[Unit] =
-    commandQueue.offer(RunloopCommand.StopAllStreams).unit
+    ZIO.logDebug("stopConsumption called") *>
+      commandQueue.offer(RunloopCommand.StopAllStreams).unit
 
-  private[consumer] def shutdown(caller: String): UIO[Unit] =
-    ZIO.logDebug(s"Shutting down runloop initiated by $caller") *>
-      commandQueue.offerAll(runloopShutdownSequence).unit
+  private[consumer] def shutdown: UIO[Unit] =
+    ZIO.logDebug(s"Shutting down runloop initiated") *>
+      commandQueue
+        .offerAll(
+          Chunk(
+            RunloopCommand.StopSubscription,
+            RunloopCommand.StopAllStreams,
+            RunloopCommand.StopRunloop
+          )
+        )
+        .unit
 
   private[internal] def addSubscription(subscription: Subscription): UIO[Unit] =
     commandQueue.offer(RunloopCommand.AddSubscription(subscription)).unit
@@ -505,12 +512,11 @@ private[consumer] final class Runloop private (
    *   - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *     initialization and rebalancing
    */
-  def run: ZIO[Scope, Throwable, Any] = {
+  val run: ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
 
     ZStream
       .fromQueue(commandQueue)
-      .timeoutTo(runloopTimeout)(ZStream.fromChunk(runloopShutdownSequence))
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
         for {
@@ -552,16 +558,6 @@ private[consumer] object Runloop {
 
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
 
-  private val runloopShutdownSequence: Chunk[RunloopCommand] =
-    Chunk(
-      RunloopCommand.StopSubscription,
-      RunloopCommand.StopAllStreams,
-      RunloopCommand.StopRunloop
-    )
-
-  // Internal parameters, should not be necessary to tune
-  private val commandQueueSize = 1024
-
   private final case class PollResult(
     startingTps: Set[TopicPartition],
     pendingRequests: Chunk[RunloopCommand.Request],
@@ -587,6 +583,9 @@ private[consumer] object Runloop {
     ) extends RebalanceEvent
   }
 
+  // Internal parameters, should not be necessary to tune
+  private final val commandQueueSize: Int = 1024
+
   def make(
     hasGroupId: Boolean,
     consumer: ConsumerAccess,
@@ -595,7 +594,6 @@ private[consumer] object Runloop {
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
-    runloopTimeout: Duration,
     partitionsQueue: Queue[Take[Throwable, PartitionAssignment]]
   ): ZIO[Scope, Throwable, Runloop] =
     for {
@@ -609,7 +607,6 @@ private[consumer] object Runloop {
                   hasGroupId = hasGroupId,
                   consumer = consumer,
                   pollTimeout = pollTimeout,
-                  runloopTimeout = runloopTimeout,
                   commandQueue = commandQueue,
                   lastRebalanceEvent = lastRebalanceEvent,
                   partitionsQueue = partitionsQueue,
@@ -628,7 +625,7 @@ private[consumer] object Runloop {
 
       _ <- ZIO.addFinalizer(
              ZIO.logDebug("Shutting down Runloop") *>
-               runloop.shutdown("finalizer") *>
+               runloop.shutdown *>
                waitForRunloopStop <*
                ZIO.logDebug("Shut down Runloop")
            )
