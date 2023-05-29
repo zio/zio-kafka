@@ -20,8 +20,8 @@ private[internal] object RunloopState {
  * This [[RunloopAccess]] is here to make the [[Runloop]] instantiation/boot lazy: we only starts it when the user is
  * starting a consuming session.
  *
- * <<<<<<< HEAD This is needed because a Consumer can be used to do something else than consuming (e.g. fetching Kafka
- * topics metadata)
+ * This is needed because a Consumer can be used to do something else than consuming (e.g. fetching Kafka topics
+ * metadata)
  */
 private[consumer] final class RunloopAccess private (
   runloopStateRef: Ref.Synchronized[RunloopState],
