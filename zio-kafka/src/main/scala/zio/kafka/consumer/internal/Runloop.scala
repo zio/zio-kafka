@@ -583,6 +583,9 @@ private[consumer] object Runloop {
     ) extends RebalanceEvent
   }
 
+  // Internal parameters, should not be necessary to tune
+  private final val commandQueueSize: Int = 1024
+
   def make(
     hasGroupId: Boolean,
     consumer: ConsumerAccess,
@@ -591,11 +594,11 @@ private[consumer] object Runloop {
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
-    partitionsQueue: Queue[Take[Throwable, PartitionAssignment]],
-    commandQueue: Queue[RunloopCommand]
+    partitionsQueue: Queue[Take[Throwable, PartitionAssignment]]
   ): ZIO[Scope, Throwable, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
+      commandQueue       <- ZIO.acquireRelease(Queue.bounded[RunloopCommand](commandQueueSize))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       currentStateRef    <- Ref.make(State.initial)
       runtime            <- ZIO.runtime[Any]

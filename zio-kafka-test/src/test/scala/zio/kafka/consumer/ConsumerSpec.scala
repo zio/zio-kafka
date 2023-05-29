@@ -1,29 +1,20 @@
 package zio.kafka.consumer
 
 import io.github.embeddedkafka.EmbeddedKafka
-import org.apache.kafka.clients.consumer.{
-  ConsumerConfig,
-  ConsumerPartitionAssignor,
-  CooperativeStickyAssignor,
-  RangeAssignor
-}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerPartitionAssignor, CooperativeStickyAssignor, RangeAssignor}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
+import zio.kafka.consumer.Consumer.{AutoOffsetStrategy, OffsetRetrieval}
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
-import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization.{
-  ConsumerFinalized,
-  RunloopFinalized,
-  SubscriptionFinalized
-}
-import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.producer.{ Producer, TransactionalProducer }
+import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization.{ConsumerFinalized, RunloopFinalized, SubscriptionFinalized}
+import zio.kafka.consumer.diagnostics.{DiagnosticEvent, Diagnostics}
+import zio.kafka.producer.{Producer, TransactionalProducer}
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
-import zio.kafka.testkit.{ Kafka, KafkaRandom }
-import zio.stream.{ ZSink, ZStream }
+import zio.kafka.testkit.{Kafka, KafkaRandom}
+import zio.stream.{ZSink, ZStream}
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
@@ -1139,7 +1130,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               )
             )
           },
-          test("toto - 1") {
+          test(
+            "Calling `Consumer::stopConsumption` just after starting a forked consumption session should stop the consumption"
+          ) {
             val numberOfMessages: Int           = 100000
             val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key-$i", s"msg-$i"))
 
@@ -1149,21 +1142,15 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 topic    <- randomTopic
                 settings <- consumerSettings(clientId = clientId)
                 consumer <- Consumer.make(settings, diagnostics = diagnostics)
-                _        <- ZIO.logDebug("Producing data: Start")
                 _        <- produceMany(topic, kvs)
-                _        <- ZIO.logDebug("Producing data: Done")
                 // Starting a consumption session to start the Runloop.
-                _ <- ZIO.logDebug("Consumption: Starting")
                 fiber <- consumer
                            .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
                            .take(numberOfMessages.toLong)
                            .runCount
-                           .forkScoped <* ZIO.logDebug("Consumption: Started")
-                _          <- ZIO.logDebug("Consumption: Stopping")
+                           .forkScoped
                 _          <- consumer.stopConsumption
-                _          <- ZIO.logDebug("Consumption: Stopped")
                 consumed_0 <- fiber.join
-                _          <- ZIO.logDebug(s"Consumed $consumed_0 messages")
               } yield assert(consumed_0)(isLessThan(numberOfMessages.toLong))
 
             for {

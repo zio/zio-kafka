@@ -29,9 +29,9 @@ object DiagnosticEvent {
 
   sealed trait Finalization extends DiagnosticEvent
   object Finalization {
-    case object SubscriptionFinalized                             extends Finalization
-    case object RunloopFinalized                                  extends Finalization
-    case object ConsumerFinalized                                 extends Finalization
+    case object SubscriptionFinalized extends Finalization
+    case object RunloopFinalized      extends Finalization
+    case object ConsumerFinalized     extends Finalization
   }
 
 }

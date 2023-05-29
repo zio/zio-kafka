@@ -108,9 +108,6 @@ private[consumer] object RunloopAccess {
    */
   private final val hubCapacity: Int = 32
 
-  // Internal parameters, should not be necessary to tune
-  private final val commandQueueSize: Int = 1024
-
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp,
@@ -123,9 +120,6 @@ private[consumer] object RunloopAccess {
       partitionsQueue <- ZIO
                            .acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
                            .provide(ZLayer.succeed(consumerScope))
-      commandQueue <- ZIO
-                        .acquireRelease(Queue.bounded[RunloopCommand](commandQueueSize))(_.shutdown)
-                        .provide(ZLayer.succeed(consumerScope))
       runloopStateRef <- Ref.Synchronized.make[RunloopState](RunloopState.NotStarted)
       hubRef          <- Ref.Synchronized.make[PartitionAssignmentsHub](null)
       makeRunloop = Runloop
@@ -138,12 +132,8 @@ private[consumer] object RunloopAccess {
                         userRebalanceListener = settings.rebalanceListener,
                         restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
                         partitionsQueue = partitionsQueue,
-                        commandQueue = commandQueue
                       )
-                      .withFinalizer(_ =>
-                        ZIO.logDebug("Finalize RunloopAccess::runloopStateRef") *>
-                          runloopStateRef.set(RunloopState.Stopped)
-                      )
+                      .withFinalizer(_ => runloopStateRef.set(RunloopState.Stopped))
                       .map(RunloopState.Started.apply)
                       .provide(ZLayer.succeed(consumerScope))
       makeHub = ZStream
