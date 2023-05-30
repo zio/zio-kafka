@@ -15,18 +15,7 @@ import zio.stream._
 import java.util
 import scala.jdk.CollectionConverters._
 
-private[internal] sealed trait SubscriptionState {
-  def isSubscribed: Boolean =
-    this match {
-      case _: SubscriptionState.Subscribed => true
-      case SubscriptionState.NotSubscribed => false
-    }
-}
-private[internal] object SubscriptionState {
-  case object NotSubscribed                                                          extends SubscriptionState
-  final case class Subscribed(subscriptions: Set[Subscription], union: Subscription) extends SubscriptionState
-}
-
+//noinspection SimplifyWhenInspection
 private[consumer] final class Runloop private (
   runtime: Runtime[Any],
   hasGroupId: Boolean,
@@ -241,12 +230,13 @@ private[consumer] final class Runloop private (
 
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
     offsetRetrieval match {
-      case OffsetRetrieval.Auto(_)                  => ZIO.succeed(Set.empty)
-      case OffsetRetrieval.Manual(_) if tps.isEmpty => ZIO.succeed(Set.empty)
+      case OffsetRetrieval.Auto(_) => ZIO.succeed(Set.empty)
       case OffsetRetrieval.Manual(getOffsets) =>
-        getOffsets(tps)
-          .tap(offsets => ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) })
-          .as(tps)
+        if (tps.isEmpty) ZIO.succeed(Set.empty)
+        else
+          getOffsets(tps)
+            .tap(offsets => ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) })
+            .as(tps)
     }
 
   /**
@@ -479,14 +469,8 @@ private[consumer] final class Runloop private (
         case SubscriptionState.Subscribed(_, Subscription.Manual(topicPartitions)) =>
           // For manual subscriptions we have to do some manual work before starting the run loop
           for {
-            _ <- ZIO.attempt(c.assign(topicPartitions.asJava))
-            _ <- offsetRetrieval match {
-                   case OffsetRetrieval.Manual(getOffsets) =>
-                     getOffsets(topicPartitions).flatMap { offsets =>
-                       ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) }
-                     }
-                   case OffsetRetrieval.Auto(_) => ZIO.unit
-                 }
+            _                <- ZIO.attempt(c.assign(topicPartitions.asJava))
+            _                <- doSeekForNewPartitions(c, topicPartitions)
             partitionStreams <- ZIO.foreach(Chunk.fromIterable(topicPartitions))(newPartitionStream)
             _                <- partitionsHub.publish(Take.chunk(partitionStreams.map(_.tpStream)))
           } yield partitionStreams
@@ -505,7 +489,7 @@ private[consumer] final class Runloop private (
    *   - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *     initialization and rebalancing
    */
-  val run: ZIO[Scope, Throwable, Any] = {
+  def run: ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
 
     ZStream

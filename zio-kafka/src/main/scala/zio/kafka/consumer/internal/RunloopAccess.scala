@@ -9,14 +9,7 @@ import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio.{ durationInt, Hub, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
 
-private[internal] sealed trait RunloopState {
-  final def withRunloop[R, E, A](f: Runloop => ZIO[R, E, A]): ZIO[R, E, A] =
-    this match {
-      case RunloopState.NotStarted       => ZIO.unit.asInstanceOf[ZIO[R, E, A]]
-      case RunloopState.Started(runloop) => f(runloop)
-      case RunloopState.Stopped          => ZIO.unit.asInstanceOf[ZIO[R, E, A]]
-    }
-}
+private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
   case object NotStarted                     extends RunloopState
   final case class Started(runloop: Runloop) extends RunloopState
@@ -50,7 +43,11 @@ private[consumer] final class RunloopAccess private (
   private def runloop(shouldStartIfNot: Boolean): Task[RunloopState] =
     runloopStateRef.updateSomeAndGetZIO { case RunloopState.NotStarted if shouldStartIfNot => makeRunloop }
   private def withRunloopZIO[R, A](shouldStartIfNot: Boolean)(f: Runloop => RIO[R, A]): RIO[R, A] =
-    runloop(shouldStartIfNot).flatMap(_.withRunloop(f))
+    runloop(shouldStartIfNot).flatMap {
+      case RunloopState.NotStarted       => ZIO.unit.asInstanceOf[RIO[R, A]]
+      case RunloopState.Started(runloop) => f(runloop)
+      case RunloopState.Stopped          => ZIO.unit.asInstanceOf[RIO[R, A]]
+    }
 
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has been stopped.
@@ -86,9 +83,9 @@ private[consumer] final class RunloopAccess private (
     subscription: Subscription
   ): ZIO[Scope, Throwable, UStream[Take[Throwable, PartitionAssignment]]] =
     for {
-      _      <- runloop(shouldStartIfNot = true) // starts the Runloop if not already started
       stream <- ZStream.fromHubScoped(partitionHub)
-      _      <- withRunloopZIO(shouldStartIfNot = false)(_.addSubscription(subscription))
+      // starts the Runloop if not already started
+      _ <- withRunloopZIO(shouldStartIfNot = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
              withRunloopZIO(shouldStartIfNot = false)(_.removeSubscription(subscription)).orDie <*
                diagnostics.emit(Finalization.SubscriptionFinalized)

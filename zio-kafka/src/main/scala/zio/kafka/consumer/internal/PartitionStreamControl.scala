@@ -70,7 +70,7 @@ private[internal] object PartitionStreamControl {
     diagnostics: Diagnostics
   ): UIO[PartitionStreamControl] =
     for {
-      _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}: Init")
+      _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
       interruptionPromise <- Promise.make[Throwable, Unit]
       completedPromise    <- Promise.make[Nothing, Unit]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
