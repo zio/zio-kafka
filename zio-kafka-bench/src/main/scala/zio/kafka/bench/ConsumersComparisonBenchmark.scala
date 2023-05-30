@@ -11,7 +11,7 @@ import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
 import zio.kafka.testkit.KafkaTestUtils.{ consumerSettings, minimalConsumer, produceMany, producer }
-import zio.{ durationInt, ULayer, ZIO, ZLayer }
+import zio.{ ULayer, ZIO, ZLayer }
 
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
@@ -55,9 +55,7 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
       consumerSettings(
         clientId = randomThing("client"),
         groupId = Some(randomThing("client")),
-        `max.poll.records` = 1000, // A more production worthy value
-        runloopTimeout =
-          1.hour // Absurdly high timeout to avoid the runloop from being interrupted while we're benchmarking other stuff
+        `max.poll.records` = 1000 // A more production worthy value
       )
     )
 

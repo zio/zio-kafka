@@ -1067,7 +1067,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           def test(diagnostics: Diagnostics) =
             for {
               clientId <- randomClient
-              settings <- consumerSettings(clientId = clientId, runloopTimeout = 500.millis)
+              settings <- consumerSettings(clientId = clientId)
               _        <- Consumer.make(settings, diagnostics = diagnostics)
               _        <- ZIO.sleep(1.second)
             } yield assertCompletes
