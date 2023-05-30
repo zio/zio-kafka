@@ -10,7 +10,7 @@ private[internal] final class PartitionStreamControl private (
   val tp: TopicPartition,
   stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
-  interruptPromise: Promise[Throwable, Unit],
+  interruptionPromise: Promise[Throwable, Unit],
   completedPromise: Promise[Nothing, Unit]
 ) {
 
@@ -27,12 +27,12 @@ private[internal] final class PartitionStreamControl private (
 
   /** To be invoked when the partition was lost. */
   def lost(): UIO[Boolean] =
-    interruptPromise.fail(new RuntimeException(s"Partition ${tp.toString} was lost"))
+    interruptionPromise.fail(new RuntimeException(s"Partition ${tp.toString} was lost"))
 
   /** To be invoked when the partition was revoked or otherwise needs to be ended. */
   def end(): ZIO[Any, Nothing, Unit] =
     logAnnotate {
-      ZIO.logTrace(s"Partition ${tp.toString} ending") *>
+      ZIO.logDebug(s"Partition ${tp.toString} ending") *>
         dataQueue.offer(Take.end).unit
     }
 
@@ -68,9 +68,9 @@ private[internal] object PartitionStreamControl {
     tp: TopicPartition,
     commandQueue: Queue[RunloopCommand],
     diagnostics: Diagnostics
-  ): ZIO[Any, Nothing, PartitionStreamControl] =
+  ): UIO[PartitionStreamControl] =
     for {
-      _                   <- ZIO.logTrace(s"Creating partition stream ${tp.toString}")
+      _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}: Init")
       interruptionPromise <- Promise.make[Throwable, Unit]
       completedPromise    <- Promise.make[Nothing, Unit]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
