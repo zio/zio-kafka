@@ -225,7 +225,6 @@ object Consumer {
         } yield stream
           .map(_.exit)
           .flattenExitOption
-          .flattenChunks
           .map {
             _.collect {
               case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>

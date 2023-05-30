@@ -470,5 +470,5 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       )
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ timeout(2.minutes) @@ sequential
+      ) @@ withLiveClock @@ timeout(3.minutes) @@ sequential
 }

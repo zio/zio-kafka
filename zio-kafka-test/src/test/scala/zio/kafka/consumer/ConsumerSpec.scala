@@ -1179,7 +1179,57 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 )
               )
             )
-          } @@ nonFlaky(5)
+          } @@ nonFlaky(5),
+          test("it's possible to start a new consumption session from a Consumer that had a consumption session stopped previously") {
+            val numberOfMessages: Int           = 100000
+            val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key-$i", s"msg-$i"))
+
+            def test(diagnostics: Diagnostics): ZIO[Producer & Scope & Kafka, Throwable, TestResult] =
+              for {
+                clientId <- randomClient
+                topic    <- randomTopic
+                settings <- consumerSettings(clientId = clientId)
+                consumer <- Consumer.make(settings, diagnostics = diagnostics)
+                _        <- produceMany(topic, kvs)
+                // Starting a consumption session to start the Runloop.
+                fiber <- consumer
+                           .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                           .take(numberOfMessages.toLong)
+                           .runCount
+                           .forkScoped
+                _          <- ZIO.sleep(200.millis)
+                _          <- consumer.stopConsumption
+                consumed_0 <- fiber.join
+                _          <- ZIO.logDebug(s"consumed_0: $consumed_0")
+
+                _ <- ZIO.logDebug("About to sleep 5 seconds")
+                _ <- ZIO.sleep(5.seconds)
+                _ <- ZIO.logDebug("Slept 5 seconds")
+                consumed_1 <- consumer
+                                .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                                .take(numberOfMessages.toLong)
+                                .runCount
+              } yield assert(consumed_0)(isGreaterThan(0L) && isLessThan(numberOfMessages.toLong)) &&
+                assert(consumed_1)(equalTo(numberOfMessages.toLong))
+
+            for {
+              diagnostics <- Diagnostics.SlidingQueue.make(1000)
+              testResult <- ZIO.scoped {
+                              test(diagnostics)
+                            }
+              finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
+            } yield testResult && assert(finalizationEvents)(
+              // The order is very important.
+              // The subscription must be finalized before the runloop, otherwise it creates a deadlock.
+              equalTo(
+                Chunk(
+                  SubscriptionFinalized,
+                  RunloopFinalized,
+                  ConsumerFinalized
+                )
+              )
+            )
+          }
         )
       )
     )

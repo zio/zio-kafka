@@ -4,10 +4,10 @@ import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
-import zio.kafka.consumer.internal.RunloopAccess.{ PartitionAssignment, PartitionAssignmentsHub }
+import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
-import zio.{ durationInt, Chunk, Hub, Queue, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
+import zio.{ durationInt, Hub, RIO, Ref, Scope, Task, UIO, ZIO, ZLayer }
 
 private[internal] sealed trait RunloopState {
   final def withRunloop[R, E, A](f: Runloop => ZIO[R, E, A]): ZIO[R, E, A] =
@@ -43,9 +43,8 @@ private[internal] object RunloopState {
  */
 private[consumer] final class RunloopAccess private (
   runloopStateRef: Ref.Synchronized[RunloopState],
-  hubRef: Ref.Synchronized[PartitionAssignmentsHub],
+  partitionHub: Hub[Take[Throwable, PartitionAssignment]],
   makeRunloop: Task[RunloopState.Started],
-  makeHub: UIO[PartitionAssignmentsHub],
   diagnostics: Diagnostics
 ) {
   private def runloop(shouldStartIfNot: Boolean): Task[RunloopState] =
@@ -63,15 +62,19 @@ private[consumer] final class RunloopAccess private (
    *      started, we need to wait for it to be started. Can happen if the user starts a consuming session in a forked
    *      fiber and immediately after forking, stops it. The Runloop will potentially not be started yet.
    */
-  def stopConsumption(retry: Int = 100, initialCall: Boolean = true): UIO[Unit] =
+  // noinspection SimplifyUnlessInspection
+  def stopConsumption(retry: Int = 100, initialCall: Boolean = true): UIO[Unit] = {
+    @inline def next: UIO[Unit] = stopConsumption(retry - 1, initialCall = false)
+
     runloop(shouldStartIfNot = false).orDie.flatMap {
       case RunloopState.Stopped          => ZIO.unit
       case RunloopState.Started(runloop) => runloop.stopConsumption
       case RunloopState.NotStarted =>
         if (retry <= 0) ZIO.unit
-        else if (initialCall) stopConsumption(retry - 1, initialCall = false)
-        else ZIO.sleep(10.millis) *> stopConsumption(retry - 1, initialCall = false)
+        else if (initialCall) next
+        else next.delay(10.millis)
     }
+  }
 
   /**
    * We're doing all of these things in this method so that the interface of this class is as simple as possible and
@@ -81,11 +84,10 @@ private[consumer] final class RunloopAccess private (
    */
   def subscribe(
     subscription: Subscription
-  ): ZIO[Scope, Throwable, UStream[Take[Throwable, Chunk[PartitionAssignment]]]] =
+  ): ZIO[Scope, Throwable, UStream[Take[Throwable, PartitionAssignment]]] =
     for {
-      _   <- runloop(shouldStartIfNot = true) // The runloop needs to be started before to start the stream to the Hub
-      hub <- hubRef.updateSomeAndGetZIO { case null => makeHub }
-      stream <- ZStream.fromHubScoped(hub)
+      _      <- runloop(shouldStartIfNot = true) // starts the Runloop if not already started
+      stream <- ZStream.fromHubScoped(partitionHub)
       _      <- withRunloopZIO(shouldStartIfNot = false)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
              withRunloopZIO(shouldStartIfNot = false)(_.removeSubscription(subscription)).orDie <*
@@ -96,17 +98,7 @@ private[consumer] final class RunloopAccess private (
 }
 
 private[consumer] object RunloopAccess {
-  type PartitionAssignment     = (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])
-  type PartitionAssignmentsHub = Hub[Take[Throwable, Chunk[PartitionAssignment]]]
-
-  /**
-   * We must supply a queue size for the partitionAssignments hub below. Under most circumstances, a value of 1 should
-   * be sufficient, as runloop.partitions is already an unbounded queue. But if there is a large skew in speed of
-   * consuming partition assignments (not the speed of consuming kafka messages) between the subscriptions, there may
-   * arise a situation where the faster stream is 'blocked' from getting new partition assignments by the faster stream.
-   * A value of 32 should be more than sufficient to cover this situation.
-   */
-  private final val hubCapacity: Int = 32
+  type PartitionAssignment = (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])
 
   def make(
     settings: ConsumerSettings,
@@ -117,11 +109,10 @@ private[consumer] object RunloopAccess {
       // This scope allows us to link the lifecycle of the Runloop and of the Hub to the lifecycle of the Consumer
       // When the Consumer is shutdown, the Runloop and the Hub will be shutdown too (before the consumer)
       consumerScope <- ZIO.scope
-      partitionsQueue <- ZIO
-                           .acquireRelease(Queue.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
-                           .provide(ZLayer.succeed(consumerScope))
+      partitionsHub <- ZIO
+                         .acquireRelease(Hub.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
+                         .provide(ZLayer.succeed(consumerScope))
       runloopStateRef <- Ref.Synchronized.make[RunloopState](RunloopState.NotStarted)
-      hubRef          <- Ref.Synchronized.make[PartitionAssignmentsHub](null)
       makeRunloop = Runloop
                       .make(
                         hasGroupId = settings.hasGroupId,
@@ -131,16 +122,10 @@ private[consumer] object RunloopAccess {
                         offsetRetrieval = settings.offsetRetrieval,
                         userRebalanceListener = settings.rebalanceListener,
                         restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
-                        partitionsQueue = partitionsQueue
+                        partitionsHub = partitionsHub
                       )
                       .withFinalizer(_ => runloopStateRef.set(RunloopState.Stopped))
                       .map(RunloopState.Started.apply)
                       .provide(ZLayer.succeed(consumerScope))
-      makeHub = ZStream
-                  .fromQueue(partitionsQueue)
-                  .map(_.exit)
-                  .flattenExitOption
-                  .toHub(hubCapacity)
-                  .provide(ZLayer.succeed(consumerScope))
-    } yield new RunloopAccess(runloopStateRef, hubRef, makeRunloop, makeHub, diagnostics)
+    } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
 }
