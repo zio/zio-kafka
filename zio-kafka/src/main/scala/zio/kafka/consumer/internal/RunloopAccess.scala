@@ -131,7 +131,7 @@ private[consumer] object RunloopAccess {
                         offsetRetrieval = settings.offsetRetrieval,
                         userRebalanceListener = settings.rebalanceListener,
                         restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
-                        partitionsQueue = partitionsQueue,
+                        partitionsQueue = partitionsQueue
                       )
                       .withFinalizer(_ => runloopStateRef.set(RunloopState.Stopped))
                       .map(RunloopState.Started.apply)

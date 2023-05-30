@@ -1,20 +1,29 @@
 package zio.kafka.consumer
 
 import io.github.embeddedkafka.EmbeddedKafka
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerPartitionAssignor, CooperativeStickyAssignor, RangeAssignor}
+import org.apache.kafka.clients.consumer.{
+  ConsumerConfig,
+  ConsumerPartitionAssignor,
+  CooperativeStickyAssignor,
+  RangeAssignor
+}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.Consumer.{AutoOffsetStrategy, OffsetRetrieval}
+import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
-import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization.{ConsumerFinalized, RunloopFinalized, SubscriptionFinalized}
-import zio.kafka.consumer.diagnostics.{DiagnosticEvent, Diagnostics}
-import zio.kafka.producer.{Producer, TransactionalProducer}
+import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization.{
+  ConsumerFinalized,
+  RunloopFinalized,
+  SubscriptionFinalized
+}
+import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.producer.{ Producer, TransactionalProducer }
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
-import zio.kafka.testkit.{Kafka, KafkaRandom}
-import zio.stream.{ZSink, ZStream}
+import zio.kafka.testkit.{ Kafka, KafkaRandom }
+import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
