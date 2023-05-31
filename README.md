@@ -122,6 +122,7 @@ Want to see your company here? [Submit a PR](https://github.com/zio/zio-kafka/ed
 
 * [Conduktor](https://www.conduktor.io)
 * [KelkooGroup](https://www.kelkoogroup.com)
+* [Rocker](https://rocker.com)
 
 ## Documentation
 
