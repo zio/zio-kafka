@@ -87,7 +87,11 @@ def stdSettings(prjName: String) = Seq(
       case Some((2, _)) => Seq(compilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"))
       case _            => List.empty
     }
-  }
+  },
+  libraryDependencies ++= Seq(
+    compilerPlugin("dev.zio" %% "zio-profiling-tagging-plugin" % "0.2.0"),
+    "dev.zio" %% "zio-profiling" % "0.2.0"
+  )
 ) ++ scalafixSettings
 
 lazy val zioKafka =
@@ -153,7 +157,12 @@ lazy val zioKafkaBench =
     .enablePlugins(JmhPlugin)
     .settings(stdSettings("zio-kafka-bench"))
     .settings(publish / skip := true)
-    .settings(libraryDependencies += logback)
+    .settings(
+      libraryDependencies ++= Seq(
+        logback,
+        "dev.zio" %% "zio-profiling-jmh" % "0.2.0"
+      )
+    )
     .dependsOn(zioKafka, zioKafkaTestkit)
 
 lazy val zioKafkaExample =

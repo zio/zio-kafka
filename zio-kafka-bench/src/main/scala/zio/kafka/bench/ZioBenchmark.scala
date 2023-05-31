@@ -1,6 +1,8 @@
 package zio.kafka.bench
+
 import org.openjdk.jmh.annotations.{ Setup, TearDown }
 import zio.kafka.bench.ZioBenchmark.logger
+import zio.profiling.sampling.{ SamplingProfiler, SamplingProfilerSupervisor }
 import zio.{ ZLayer, _ }
 
 import java.util.UUID
@@ -12,6 +14,15 @@ trait ZioBenchmark[Environment] {
 
   protected val timeout: Duration = 180.seconds
 
+  protected val samplingPeriod: Duration = 10.millis
+
+  /**
+   * Inspired by
+   * https://github.com/zio/zio-profiling/blob/v0.2.0/zio-profiling/src/main/scala/zio/profiling/sampling/SamplingProfiler.scala#L35-L37
+   */
+  private val supervisorLayer: ULayer[SamplingProfilerSupervisor] =
+    ZLayer.scoped[Any](SamplingProfiler(samplingPeriod).makeSupervisor).flatMap(env => Runtime.addSupervisor(env.get).map(_ => env))
+
   @Setup
   def setup(): Unit =
     runtime = Unsafe.unsafe(implicit unsafe =>
@@ -19,7 +30,8 @@ trait ZioBenchmark[Environment] {
         bootstrap >+>
           (Runtime.removeDefaultLoggers >+>
             (if (enableLogging) Runtime.addLogger(logger) else ZLayer.empty)) >+>
-          ZLayer.fromZIO(initialize)
+          ZLayer.fromZIO(initialize) >+>
+          supervisorLayer
       )
     )
 
