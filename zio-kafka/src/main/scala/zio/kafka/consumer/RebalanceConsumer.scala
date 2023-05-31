@@ -1,7 +1,8 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ Consumer => JConsumer, OffsetAndMetadata }
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
+import zio.kafka.consumer.internal.ConsumerAccess
 import zio.{ Task, ZIO }
 
 import scala.jdk.CollectionConverters._
@@ -14,8 +15,8 @@ trait RebalanceConsumer {
 }
 
 object RebalanceConsumer {
-  final case class Live(consumer: JConsumer[Array[Byte], Array[Byte]]) extends RebalanceConsumer {
+  final case class Live(consumerAccess: ConsumerAccess) extends RebalanceConsumer {
     def commit(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit] =
-      ZIO.attemptBlocking(consumer.commitSync(offsets.asJava))
+      consumerAccess.withConsumerZIO(c => ZIO.attemptBlocking(c.commitSync(offsets.asJava)))
   }
 }

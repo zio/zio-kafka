@@ -113,7 +113,7 @@ private[consumer] object RunloopAccess {
       makeRunloop = Runloop
                       .make(
                         hasGroupId = settings.hasGroupId,
-                        consumer = consumerAccess,
+                        consumerAccess = consumerAccess,
                         pollTimeout = settings.pollTimeout,
                         diagnostics = diagnostics,
                         offsetRetrieval = settings.offsetRetrieval,
