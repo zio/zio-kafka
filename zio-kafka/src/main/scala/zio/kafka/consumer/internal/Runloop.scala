@@ -249,7 +249,9 @@ private[consumer] final class Runloop private (
       val toResume =
         requestedPartitions.contains(tp) || (consumerSettings.enableOptimisticResume && stream.optimisticResume)
       if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
-      stream.addPollHistory(toResume)
+      if (consumerSettings.enableOptimisticResume) {
+        stream.addPollHistory(toResume)
+      }
     }
     if (!resumeTps.isEmpty) c.resume(resumeTps)
     if (!pauseTps.isEmpty) c.pause(pauseTps)
