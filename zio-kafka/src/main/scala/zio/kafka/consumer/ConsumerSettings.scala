@@ -21,7 +21,7 @@ import zio.kafka.security.KafkaCredentialStore
  *   subscribed for long periods during its lifetime, this timeout should take that into account as well. When the
  *   timeout expires, the plainStream/partitionedStream/etc will fail with a [[Consumer.RunloopTimeout]].
  */
-case class ConsumerSettings(
+final case class ConsumerSettings(
   bootstrapServers: List[String],
   properties: Map[String, AnyRef],
   closeTimeout: Duration,
@@ -29,7 +29,8 @@ case class ConsumerSettings(
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
-  runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout
+  runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
+  disableOptimisticResume: Boolean = false // By default, the "optimistic resume" optimisation is enabled
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)

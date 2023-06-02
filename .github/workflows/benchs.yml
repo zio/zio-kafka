@@ -39,7 +39,7 @@ jobs:
         run: sbt compile
 
       - name: run benchmarks
-        # To list all possible options and undestand these configurations, see run `sbt "zioKafkaBench/Jmh/run -h"`
+        # To list all possible options and understand these configurations, see run `sbt "zioKafkaBench/Jmh/run -h"`
         #
         # Used options meaning:
         #  - "-wi 5": 5 warmup iterations
