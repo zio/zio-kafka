@@ -244,10 +244,8 @@ private[consumer] final class Runloop private (
   ): Unit = {
     val resumeTps = new java.util.ArrayList[TopicPartition](streams.size)
     val pauseTps  = new java.util.ArrayList[TopicPartition](streams.size)
-    val iterator  = streams.iterator
-    while (iterator.hasNext) {
-      val stream = iterator.next()
-      val tp     = stream.tp
+    streams.foreach { stream =>
+      val tp = stream.tp
       val toResume =
         requestedPartitions.contains(tp) || (consumerSettings.enableOptimisticResume && stream.optimisticResume)
       if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
