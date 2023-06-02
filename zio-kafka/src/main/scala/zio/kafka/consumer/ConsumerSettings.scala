@@ -30,7 +30,7 @@ final case class ConsumerSettings(
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
   runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
-  disableOptimisticResume: Boolean = false // By default, the "optimistic resume" optimisation is enabled
+  enableOptimisticResume: Boolean = true
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)

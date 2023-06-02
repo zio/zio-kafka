@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 class ZioKafkaNoOptimisticResumeBenchmarks extends ComparisonBenchmark {
 
   override protected def settings: ZLayer[Kafka, Nothing, ConsumerSettings] =
-    super.settings.map(env => ZEnvironment(env.get.copy(disableOptimisticResume = true)))
+    super.settings.map(env => ZEnvironment(env.get.copy(enableOptimisticResume = false)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))

@@ -242,15 +242,14 @@ private[consumer] final class Runloop private (
     requestedPartitions: Set[TopicPartition],
     streams: Chunk[PartitionStreamControl]
   ): Unit = {
-    val resumeTps               = new java.util.ArrayList[TopicPartition](streams.size)
-    val pauseTps                = new java.util.ArrayList[TopicPartition](streams.size)
-    val optimisticResumeEnabled = !consumerSettings.disableOptimisticResume
-    val iterator                = streams.iterator
+    val resumeTps = new java.util.ArrayList[TopicPartition](streams.size)
+    val pauseTps  = new java.util.ArrayList[TopicPartition](streams.size)
+    val iterator  = streams.iterator
     while (iterator.hasNext) {
       val stream = iterator.next()
       val tp     = stream.tp
       val toResume =
-        requestedPartitions.contains(tp) || (optimisticResumeEnabled && stream.optimisticResume)
+        requestedPartitions.contains(tp) || (consumerSettings.enableOptimisticResume && stream.optimisticResume)
       if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
       stream.addPollHistory(toResume)
     }
