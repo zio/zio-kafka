@@ -92,10 +92,9 @@ object Kafka {
                               )
         kafka <- ZIO.acquireRelease(
                    ZIO
-                     .attempt(EmbeddedKafka.start()(embeddedKafkaConfig))
-                     .map(EmbeddedKafkaService)
-                     .catchSome { case NonFatal(e) =>
-                       throw EmbeddedKafkaStartException("Failed to start embedded Kafka", e)
+                     .attemptBlocking(EmbeddedKafkaService(EmbeddedKafka.start()(embeddedKafkaConfig)))
+                     .catchNonFatalOrDie { e =>
+                       ZIO.fail(EmbeddedKafkaStartException("Failed to start embedded Kafka", e))
                      }
                  )(_.stop())
       } yield kafka
@@ -111,7 +110,7 @@ object Kafka {
     override def stop(): UIO[Unit]              = ZIO.unit
   }
 
-  case class Ports(kafkaPort: Int, zookeeperPort: Int)
+  final case class Ports(kafkaPort: Int, zookeeperPort: Int)
 
   private val ref = Ref.unsafe.make(Ports(6001, 7001))(Unsafe.unsafe)
 
