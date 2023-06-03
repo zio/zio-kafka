@@ -5,10 +5,10 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
 import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
+import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.Runloop._
-import zio.kafka.consumer.{ CommittableRecord, RebalanceConsumer, RebalanceListener, Subscription }
 import zio.stream._
 
 import java.util
@@ -27,7 +27,8 @@ private[consumer] final class Runloop private (
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
-  currentStateRef: Ref[State]
+  currentStateRef: Ref[State],
+  consumerSettings: ConsumerSettings
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
@@ -244,10 +245,13 @@ private[consumer] final class Runloop private (
     val resumeTps = new java.util.ArrayList[TopicPartition](streams.size)
     val pauseTps  = new java.util.ArrayList[TopicPartition](streams.size)
     streams.foreach { stream =>
-      val tp       = stream.tp
-      val toResume = requestedPartitions.contains(tp) || stream.optimisticResume
+      val tp = stream.tp
+      val toResume =
+        requestedPartitions.contains(tp) || (consumerSettings.enableOptimisticResume && stream.optimisticResume)
       if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
-      stream.addPollHistory(toResume)
+      if (consumerSettings.enableOptimisticResume) {
+        stream.addPollHistory(toResume)
+      }
     }
     if (!resumeTps.isEmpty) c.resume(resumeTps)
     if (!pauseTps.isEmpty) c.pause(pauseTps)
@@ -537,7 +541,8 @@ private[consumer] object Runloop {
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
-    runloopTimeout: Duration
+    runloopTimeout: Duration,
+    consumerSettings: ConsumerSettings
   ): ZIO[Scope, Throwable, Runloop] =
     for {
       commandQueue       <- ZIO.acquireRelease(Queue.bounded[RunloopCommand](commandQueueSize))(_.shutdown)
@@ -563,7 +568,8 @@ private[consumer] object Runloop {
                   offsetRetrieval = offsetRetrieval,
                   userRebalanceListener = userRebalanceListener,
                   restartStreamsOnRebalancing = restartStreamsOnRebalancing,
-                  currentStateRef = currentStateRef
+                  currentStateRef = currentStateRef,
+                  consumerSettings = consumerSettings
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 

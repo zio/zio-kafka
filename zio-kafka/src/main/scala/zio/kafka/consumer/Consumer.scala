@@ -368,7 +368,8 @@ object Consumer {
                    offsetRetrieval = settings.offsetRetrieval,
                    userRebalanceListener = settings.rebalanceListener,
                    restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
-                   runloopTimeout = settings.runloopTimeout
+                   runloopTimeout = settings.runloopTimeout,
+                   consumerSettings = settings
                  )
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 
