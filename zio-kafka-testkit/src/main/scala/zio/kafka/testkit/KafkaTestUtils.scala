@@ -1,19 +1,17 @@
 package zio.kafka.testkit
 
-import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerRecord }
-import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import zio._
-import zio.kafka.admin.AdminClient.NewTopic
 import zio.kafka.admin._
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
+import zio.kafka.consumer.Consumer.{AutoOffsetStrategy, OffsetRetrieval}
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.producer._
-import zio.kafka.serde.{ Deserializer, Serde }
+import zio.kafka.serde.{Deserializer, Serde}
 
 import java.io.File
-import java.nio.file.{ Files, StandardCopyOption }
-import zio.Task
+import java.nio.file.{Files, StandardCopyOption}
 
 object KafkaTestUtils {
 
@@ -321,19 +319,6 @@ object KafkaTestUtils {
     ZIO.scoped[R] {
       AdminClient.make(settings).flatMap(f)
     }
-
-  /**
-   * To be used together with [[withAdmin]], [[withSaslAdmin]], [[withSslAdmin]] or [[withAdminClient()]]. Useful for
-   * when you set "auto.create.topics.enable" -> "false" in your Kafka brokers.
-   */
-  def createTopics(
-    adminClient: AdminClient,
-    topics: Iterable[String],
-    partitions: Int = 1,
-    replicationFactor: Short = 1,
-    configs: Map[String, String] = Map.empty
-  ): Task[Unit] =
-    adminClient.createTopics(topics.map(NewTopic(_, partitions, replicationFactor, configs)))
 
   private def readResourceFile(file: String, tmpFileName: String, tmpFileSuffix: String): File =
     try {
