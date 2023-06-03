@@ -78,7 +78,10 @@ object Kafka {
 
   final case class Sasl(value: Kafka) extends AnyVal
 
-  def withBrokerProps(brokerProps: Ports => Map[String, String]): ZLayer[Any, Throwable, EmbeddedKafkaService] =
+  /**
+   * Creates an in-memory Kafka instance with a random port and configured with the provided kafka broker properties.
+   */
+  def withBrokerProps(brokerProps: Ports => Map[String, String]): ZLayer[Any, Throwable, Kafka] =
     ZLayer.scoped {
       for {
         ports <- nextPorts
