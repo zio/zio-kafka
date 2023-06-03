@@ -65,7 +65,7 @@ object Kafka {
       "ssl.keystore.password"                 -> "123456",
       "ssl.key.password"                      -> "123456",
       KafkaConfig.InterBrokerListenerNameProp -> "SSL",
-      KafkaConfig.ListenersProp               -> s"SSL://localhost:${ports}",
+      KafkaConfig.ListenersProp               -> s"SSL://localhost:${ports.kafkaPort}",
       KafkaConfig.AdvertisedListenersProp     -> s"SSL://localhost:${ports.kafkaPort}",
       KafkaConfig.ZkConnectionTimeoutMsProp   -> s"${30.second.toMillis}"
     )

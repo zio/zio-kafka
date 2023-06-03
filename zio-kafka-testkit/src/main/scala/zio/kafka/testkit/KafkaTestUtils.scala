@@ -13,6 +13,7 @@ import zio.kafka.serde.{ Deserializer, Serde }
 
 import java.io.File
 import java.nio.file.{ Files, StandardCopyOption }
+import zio.Task
 
 object KafkaTestUtils {
 
@@ -331,7 +332,7 @@ object KafkaTestUtils {
     partitions: Int = 1,
     replicationFactor: Short = 1,
     configs: Map[String, String] = Map.empty
-  ) =
+  ): Task[Unit] =
     adminClient.createTopics(topics.map(NewTopic(_, partitions, replicationFactor, configs)))
 
   private def readResourceFile(file: String, tmpFileName: String, tmpFileSuffix: String): File =
