@@ -20,6 +20,8 @@ import zio.kafka.security.KafkaCredentialStore
  *   be much larger than the pollTimeout and the time it takes to process chunks of records. If your consumer is not
  *   subscribed for long periods during its lifetime, this timeout should take that into account as well. When the
  *   timeout expires, the plainStream/partitionedStream/etc will fail with a [[Consumer.RunloopTimeout]].
+ * @param enableOptimisticResume
+ *   Allow zio-kafka users to enable or disable a zio-kafka internal optimisation. Enabled by default.
  */
 final case class ConsumerSettings(
   bootstrapServers: List[String],
