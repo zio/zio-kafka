@@ -1,17 +1,17 @@
 package zio.kafka.testkit
 
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
-import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
+import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerRecord }
+import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio._
 import zio.kafka.admin._
-import zio.kafka.consumer.Consumer.{AutoOffsetStrategy, OffsetRetrieval}
+import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.producer._
-import zio.kafka.serde.{Deserializer, Serde}
+import zio.kafka.serde.{ Deserializer, Serde }
 
 import java.io.File
-import java.nio.file.{Files, StandardCopyOption}
+import java.nio.file.{ Files, StandardCopyOption }
 
 object KafkaTestUtils {
 
