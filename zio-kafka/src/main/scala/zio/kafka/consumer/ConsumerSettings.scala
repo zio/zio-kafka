@@ -21,7 +21,10 @@ import zio.kafka.security.KafkaCredentialStore
  *   subscribed for long periods during its lifetime, this timeout should take that into account as well. When the
  *   timeout expires, the plainStream/partitionedStream/etc will fail with a [[Consumer.RunloopTimeout]].
  * @param enableOptimisticResume
- *   Allow zio-kafka users to enable or disable a zio-kafka internal optimisation. Enabled by default.
+ *   When `true` (the default) zio-kafka predicts whether a stream needs more data, slightly ahead of time. Zio-kafka
+ *   pauses partitions for which the associated stream is processing previously fetched data. When the stream needs more
+ *   data, the partition is resumed. With this feature enabled, partitions are also resumed when it is likely that the
+ *   stream needs more data in the next poll.
  */
 final case class ConsumerSettings(
   bootstrapServers: List[String],
