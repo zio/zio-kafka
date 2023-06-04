@@ -26,14 +26,14 @@ object Kafka {
    */
   def embeddedWith(customBrokerProps: Ports => Map[String, String]): ZLayer[Any, Throwable, Kafka] =
     embeddedWithBrokerProps(
-      customBrokerProps,
       _ =>
         Map(
           "group.min.session.timeout.ms"     -> "500",
           "group.initial.rebalance.delay.ms" -> "0",
           "authorizer.class.name"            -> "kafka.security.authorizer.AclAuthorizer",
           "super.users"                      -> "User:ANONYMOUS"
-        )
+        ),
+      customBrokerProps
     )
 
   /**
@@ -48,7 +48,6 @@ object Kafka {
    */
   def saslEmbeddedWith(customBrokerProps: Ports => Map[String, String]): ZLayer[Any, Throwable, Kafka.Sasl] =
     embeddedWithBrokerProps(
-      customBrokerProps,
       ports =>
         Map(
           "group.min.session.timeout.ms"         -> "500",
@@ -61,7 +60,8 @@ object Kafka {
           "advertised.listeners"                 -> s"SASL_PLAINTEXT://localhost:${ports.kafkaPort}",
           "super.users"                          -> "User:admin",
           "listener.name.sasl_plaintext.plain.sasl.jaas.config" -> """org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_kafkabroker1="kafkabroker1-secret";"""
-        )
+        ),
+      customBrokerProps
     ).project(Sasl(_))
 
   /**
@@ -76,7 +76,6 @@ object Kafka {
    */
   def sslEmbeddedWith(customBrokerProps: Ports => Map[String, String]): ZLayer[Any, Throwable, Kafka] =
     embeddedWithBrokerProps(
-      customBrokerProps,
       ports =>
         Map(
           "group.min.session.timeout.ms"          -> "500",
@@ -96,7 +95,8 @@ object Kafka {
           KafkaConfig.ListenersProp               -> s"SSL://localhost:${ports.kafkaPort}",
           KafkaConfig.AdvertisedListenersProp     -> s"SSL://localhost:${ports.kafkaPort}",
           KafkaConfig.ZkConnectionTimeoutMsProp   -> s"${30.second.toMillis}"
-        )
+        ),
+      customBrokerProps
     )
 
   /**
@@ -107,8 +107,8 @@ object Kafka {
   final case class Sasl(value: Kafka) extends AnyVal
 
   private def embeddedWithBrokerProps(
-    customProps: Ports => Map[String, String],
-    presetProps: Ports => Map[String, String]
+    presetProps: Ports => Map[String, String],
+    customProps: Ports => Map[String, String]
   ): ZLayer[Any, Throwable, Kafka] =
     ZLayer.scoped {
       for {
