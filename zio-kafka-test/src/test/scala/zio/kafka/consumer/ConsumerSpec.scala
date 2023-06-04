@@ -287,8 +287,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                  .tap(_ => ZIO.logDebug("Stream completed"))
                  .provideSomeLayer[Kafka](
                    consumer(client, Some(group))
-                 ) *> keepProducing
-                 .set(false)
+                 )
+          _ <- keepProducing.set(false)
         } yield assertCompletes
       },
       test("process outstanding commits after a graceful shutdown") {

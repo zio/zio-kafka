@@ -14,6 +14,7 @@ import zio.stream._
 import java.util
 import scala.jdk.CollectionConverters._
 
+//noinspection SimplifyWhenInspection
 private[consumer] final class Runloop private (
   runtime: Runtime[Any],
   hasGroupId: Boolean,
@@ -223,14 +224,13 @@ private[consumer] final class Runloop private (
 
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
     offsetRetrieval match {
+      case OffsetRetrieval.Auto(_) => ZIO.succeed(Set.empty)
       case OffsetRetrieval.Manual(getOffsets) =>
-        getOffsets(tps)
-          .tap(offsets => ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) })
-          .when(tps.nonEmpty)
-          .as(tps)
-
-      case OffsetRetrieval.Auto(_) =>
-        ZIO.succeed(Set.empty)
+        if (tps.isEmpty) ZIO.succeed(Set.empty)
+        else
+          getOffsets(tps)
+            .tap(offsets => ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) })
+            .as(tps)
     }
 
   /**
@@ -260,7 +260,7 @@ private[consumer] final class Runloop private (
   private def handlePoll(state: State): Task[State] =
     for {
       _ <-
-        ZIO.logTrace(
+        ZIO.logDebug(
           s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
         )
       _ <- currentStateRef.set(state)
@@ -345,13 +345,12 @@ private[consumer] final class Runloop private (
           }
         }
       startingStreams <-
-        if (pollResult.startingTps.isEmpty) {
-          ZIO.succeed(Chunk.empty[PartitionStreamControl])
-        } else {
+        if (pollResult.startingTps.isEmpty) ZIO.succeed(Chunk.empty[PartitionStreamControl])
+        else {
           ZIO
             .foreach(Chunk.fromIterable(pollResult.startingTps))(newPartitionStream)
             .tap { newStreams =>
-              ZIO.logTrace(s"Offering partition assignment ${pollResult.startingTps}") *>
+              ZIO.logDebug(s"Offering partition assignment ${pollResult.startingTps}") *>
                 partitionsQueue.offer(Take.chunk(Chunk.fromIterable(newStreams.map(_.tpStream))))
             }
         }
@@ -370,7 +369,7 @@ private[consumer] final class Runloop private (
       assignedStreams = updatedStreams
     )
 
-  private def handleCommand(state: State, cmd: RunloopCommand.StreamControl): Task[State] =
+  private def handleCommand(state: State, cmd: RunloopCommand.StreamCommand): Task[State] =
     cmd match {
       case req: RunloopCommand.Request => ZIO.succeed(state.addRequest(req))
       case cmd: RunloopCommand.Commit  => doCommit(cmd).as(state.addCommit(cmd))
@@ -399,17 +398,13 @@ private[consumer] final class Runloop private (
           .uninterruptible
       case RunloopCommand.StopAllStreams =>
         for {
-          _ <- ZIO.logDebug("Graceful shutdown initiated")
+          _ <- ZIO.logDebug("Stop all streams initiated")
           _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end())
           _ <- partitionsQueue.offer(Take.end)
-          _ <- ZIO.logTrace("Graceful shutdown done")
+          _ <- ZIO.logDebug("Stop all streams done")
         } yield state.copy(pendingRequests = Chunk.empty)
     }
 
-  /**
-   * @return
-   *   any created streams
-   */
   private def handleChangeSubscription(
     newSubscription: Option[Subscription]
   ): Task[Chunk[PartitionStreamControl]] =
@@ -432,14 +427,8 @@ private[consumer] final class Runloop private (
         case Some(Subscription.Manual(topicPartitions)) =>
           // For manual subscriptions we have to do some manual work before starting the run loop
           for {
-            _ <- ZIO.attempt(c.assign(topicPartitions.asJava))
-            _ <- offsetRetrieval match {
-                   case OffsetRetrieval.Manual(getOffsets) =>
-                     getOffsets(topicPartitions).flatMap { offsets =>
-                       ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) }
-                     }
-                   case OffsetRetrieval.Auto(_) => ZIO.unit
-                 }
+            _                <- ZIO.attempt(c.assign(topicPartitions.asJava))
+            _                <- doSeekForNewPartitions(c, topicPartitions)
             partitionStreams <- ZIO.foreach(Chunk.fromIterable(topicPartitions))(newPartitionStream)
             _                <- partitionsQueue.offer(Take.chunk(partitionStreams.map(_.tpStream)))
           } yield partitionStreams
@@ -467,14 +456,14 @@ private[consumer] final class Runloop private (
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
         for {
-          _ <- ZIO.logTrace(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
-          streamCommands = commands.collect { case cmd: RunloopCommand.StreamControl => cmd }
+          _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
+          streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
           stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
 
           updatedStateAfterPoll <- if (stateAfterCommands.shouldPoll) handlePoll(stateAfterCommands)
                                    else ZIO.succeed(stateAfterCommands)
           // Immediately poll again, after processing all new queued commands
-          _ <- commandQueue.offer(RunloopCommand.Poll).when(updatedStateAfterPoll.shouldPoll)
+          _ <- if (updatedStateAfterPoll.shouldPoll) commandQueue.offer(RunloopCommand.Poll) else ZIO.unit
         } yield updatedStateAfterPoll
       }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
@@ -575,13 +564,14 @@ private[consumer] object Runloop {
 
       // Run the entire loop on the a dedicated thread to avoid executor shifts
       executor <- RunloopExecutor.newInstance
-      fib      <- ZIO.onExecutor(executor)(runloop.run).forkScoped
+      fiber    <- ZIO.onExecutor(executor)(runloop.run).forkScoped
+      waitForRunloopStop = fiber.join.orDie
 
       _ <- ZIO.addFinalizer(
              ZIO.logTrace("Shutting down Runloop") *>
                commandQueue.offer(RunloopCommand.StopAllStreams) *>
                commandQueue.offer(RunloopCommand.StopRunloop) *>
-               fib.join.orDie <*
+               waitForRunloopStop <*
                ZIO.logDebug("Shut down Runloop")
            )
     } yield runloop

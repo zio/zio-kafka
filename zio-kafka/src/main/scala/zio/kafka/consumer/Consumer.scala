@@ -158,9 +158,8 @@ object Consumer {
 
   case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
 
-  private final case class Live(
+  private final class Live private[Consumer] (
     private val consumer: ConsumerAccess,
-    private val settings: ConsumerSettings,
     private val runloop: Runloop,
     private val subscriptions: Ref.Synchronized[Set[Subscription]],
     private val partitionAssignments: Hub[
@@ -378,7 +377,7 @@ object Consumer {
                                 .map(_.exit)
                                 .flattenExitOption
                                 .toHub(hubCapacity)
-    } yield Live(wrapper, settings, runloop, subscriptions, partitionAssignments)
+    } yield new Live(wrapper, runloop, subscriptions, partitionAssignments)
   }
 
   /**
