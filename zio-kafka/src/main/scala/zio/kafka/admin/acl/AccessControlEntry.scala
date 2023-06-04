@@ -1,12 +1,12 @@
 package zio.kafka.admin.acl
 
-import org.apache.kafka.common.acl.{ AccessControlEntry => JAccessControlEntry }
+import org.apache.kafka.common.acl.{AccessControlEntry => JAccessControlEntry}
 
 final case class AccessControlEntry(
   principal: String,
   host: String,
   operation: AclOperation,
-  permissionType: AclPermissionType
+  permissionType: AclPermissionType,
 ) {
   def asJava: JAccessControlEntry = new JAccessControlEntry(principal, host, operation.asJava, permissionType.asJava)
 }
@@ -16,6 +16,6 @@ object AccessControlEntry {
     principal = jAccessControlEntry.principal(),
     host = jAccessControlEntry.host(),
     operation = AclOperation(jAccessControlEntry.operation()),
-    permissionType = AclPermissionType(jAccessControlEntry.permissionType())
+    permissionType = AclPermissionType(jAccessControlEntry.permissionType()),
   )
 }

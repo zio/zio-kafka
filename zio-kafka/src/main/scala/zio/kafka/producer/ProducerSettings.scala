@@ -8,7 +8,7 @@ final case class ProducerSettings(
   bootstrapServers: List[String],
   closeTimeout: Duration,
   sendBufferSize: Int,
-  properties: Map[String, AnyRef]
+  properties: Map[String, AnyRef],
 ) {
   def driverSettings: Map[String, AnyRef] =
     Map(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers.mkString(",")) ++

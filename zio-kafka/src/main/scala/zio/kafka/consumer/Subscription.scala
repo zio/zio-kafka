@@ -1,9 +1,9 @@
 package zio.kafka.consumer
 
-import zio.{ NonEmptyChunk, Task, ZIO }
+import zio.{NonEmptyChunk, Task, ZIO}
 
 import scala.util.matching.Regex
-import java.util.regex.{ Pattern => JPattern }
+import java.util.regex.{Pattern => JPattern}
 import org.apache.kafka.common.TopicPartition
 
 sealed trait Subscription
@@ -79,7 +79,7 @@ object Subscription {
     case (Pattern(p1), Pattern(p2)) => Some(Pattern(s"$p1|$p2".r))
     case (Topics(t1), Topics(t2))   => Some(Topics(t1 ++ t2))
     case (Manual(tp1), Manual(tp2)) => Some(Manual(tp1 ++ tp2))
-    case _ =>
+    case _                          =>
       None // Although we could combine Pattern and Topics, the Kafka consumer will throw exceptions when changing the subscription type
   }
 

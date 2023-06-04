@@ -1,55 +1,55 @@
 package zio.kafka.admin.acl
 
-import org.apache.kafka.common.acl.{ AclOperation => JAclOperation }
+import org.apache.kafka.common.acl.{AclOperation => JAclOperation}
 
 sealed trait AclOperation {
   def asJava: JAclOperation
 }
 
 object AclOperation {
-  case object Unknown extends AclOperation {
+  case object Unknown         extends AclOperation {
     def asJava: JAclOperation = JAclOperation.UNKNOWN
   }
-  case object Any extends AclOperation {
+  case object Any             extends AclOperation {
     def asJava: JAclOperation = JAclOperation.ANY
   }
-  case object All extends AclOperation {
+  case object All             extends AclOperation {
     def asJava: JAclOperation = JAclOperation.ALL
   }
-  case object Read extends AclOperation {
+  case object Read            extends AclOperation {
     def asJava: JAclOperation = JAclOperation.READ
   }
-  case object Write extends AclOperation {
+  case object Write           extends AclOperation {
     def asJava: JAclOperation = JAclOperation.WRITE
   }
-  case object Create extends AclOperation {
+  case object Create          extends AclOperation {
     def asJava: JAclOperation = JAclOperation.CREATE
   }
-  case object Delete extends AclOperation {
+  case object Delete          extends AclOperation {
     def asJava: JAclOperation = JAclOperation.DELETE
   }
-  case object Alter extends AclOperation {
+  case object Alter           extends AclOperation {
     def asJava: JAclOperation = JAclOperation.ALTER
   }
-  case object Describe extends AclOperation {
+  case object Describe        extends AclOperation {
     def asJava: JAclOperation = JAclOperation.DESCRIBE
   }
-  case object ClusterAction extends AclOperation {
+  case object ClusterAction   extends AclOperation {
     def asJava: JAclOperation = JAclOperation.CLUSTER_ACTION
   }
   case object DescribeConfigs extends AclOperation {
     def asJava: JAclOperation = JAclOperation.DESCRIBE_CONFIGS
   }
-  case object AlterConfigs extends AclOperation {
+  case object AlterConfigs    extends AclOperation {
     def asJava: JAclOperation = JAclOperation.ALTER_CONFIGS
   }
   case object IdempotentWrite extends AclOperation {
     def asJava: JAclOperation = JAclOperation.IDEMPOTENT_WRITE
   }
-  case object CreateTokens extends AclOperation {
+  case object CreateTokens    extends AclOperation {
     def asJava: JAclOperation = JAclOperation.CREATE_TOKENS
   }
-  case object DescribeTokens extends AclOperation {
+  case object DescribeTokens  extends AclOperation {
     def asJava: JAclOperation = JAclOperation.DESCRIBE_TOKENS
   }
 

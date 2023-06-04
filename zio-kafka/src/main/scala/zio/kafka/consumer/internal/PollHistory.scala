@@ -91,13 +91,13 @@ private[internal] object PollHistory {
       "110100",
       "1001100",
       "1010100",
-      "1100100"
+      "1100100",
     ).map { pattern =>
       val bitPattern = Integer.parseUnsignedInt(pattern, 2)
       val mask       = (1 << pattern.length) - 1
       assert(
         mask != bitPattern,
-        "A pattern of all 1s causes a runaway feedback loop, effectively disabling partition pausing"
+        "A pattern of all 1s causes a runaway feedback loop, effectively disabling partition pausing",
       )
       (mask, bitPattern)
     }

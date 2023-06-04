@@ -1,6 +1,6 @@
 package zio.kafka.admin
 
-import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
+import org.apache.kafka.clients.admin.ListOffsetsResult.{ListOffsetsResultInfo => JListOffsetsResultInfo}
 import org.apache.kafka.clients.admin.{
   Admin => JAdmin,
   AlterConfigOp => JAlterConfigOp,
@@ -32,10 +32,10 @@ import org.apache.kafka.clients.admin.{
   ReplicaInfo => JReplicaInfo,
   TopicDescription => JTopicDescription,
   TopicListing => JTopicListing,
-  _
+  _,
 }
-import org.apache.kafka.clients.consumer.{ OffsetAndMetadata => JOffsetAndMetadata }
-import org.apache.kafka.common.config.{ ConfigResource => JConfigResource }
+import org.apache.kafka.clients.consumer.{OffsetAndMetadata => JOffsetAndMetadata}
+import org.apache.kafka.common.config.{ConfigResource => JConfigResource}
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.{
   ConsumerGroupState => JConsumerGroupState,
@@ -46,18 +46,18 @@ import org.apache.kafka.common.{
   Node => JNode,
   TopicPartition => JTopicPartition,
   TopicPartitionInfo => JTopicPartitionInfo,
-  Uuid
+  Uuid,
 }
 import zio._
 import zio.kafka.admin.acl._
 import zio.kafka.utils.SslHelper
 
 import java.util.Optional
-import scala.annotation.{ nowarn, tailrec }
+import scala.annotation.{nowarn, tailrec}
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
-import scala.util.{ Failure, Success, Try }
+import scala.util.{Failure, Success, Try}
 
 trait AdminClient {
 
@@ -68,7 +68,7 @@ trait AdminClient {
    */
   def createTopics(
     newTopics: Iterable[NewTopic],
-    options: Option[CreateTopicsOptions] = None
+    options: Option[CreateTopicsOptions] = None,
   ): Task[Unit]
 
   /**
@@ -81,7 +81,7 @@ trait AdminClient {
    */
   def deleteConsumerGroups(
     groupIds: Iterable[String],
-    options: Option[DeleteConsumerGroupOptions] = None
+    options: Option[DeleteConsumerGroupOptions] = None,
   ): Task[Unit]
 
   /**
@@ -89,7 +89,7 @@ trait AdminClient {
    */
   def deleteTopics(
     topics: Iterable[String],
-    options: Option[DeleteTopicsOptions] = None
+    options: Option[DeleteTopicsOptions] = None,
   ): Task[Unit]
 
   /**
@@ -102,7 +102,7 @@ trait AdminClient {
    */
   def deleteRecords(
     recordsToDelete: Map[TopicPartition, RecordsToDelete],
-    deleteRecordsOptions: Option[DeleteRecordsOptions] = None
+    deleteRecordsOptions: Option[DeleteRecordsOptions] = None,
   ): Task[Unit]
 
   /**
@@ -115,7 +115,7 @@ trait AdminClient {
    */
   def describeTopics(
     topicNames: Iterable[String],
-    options: Option[DescribeTopicsOptions] = None
+    options: Option[DescribeTopicsOptions] = None,
   ): Task[Map[String, TopicDescription]]
 
   /**
@@ -123,7 +123,7 @@ trait AdminClient {
    */
   def describeConfigs(
     configResources: Iterable[ConfigResource],
-    options: Option[DescribeConfigsOptions] = None
+    options: Option[DescribeConfigsOptions] = None,
   ): Task[Map[ConfigResource, KafkaConfig]]
 
   /**
@@ -131,7 +131,7 @@ trait AdminClient {
    */
   def describeConfigsAsync(
     configResources: Iterable[ConfigResource],
-    options: Option[DescribeConfigsOptions] = None
+    options: Option[DescribeConfigsOptions] = None,
   ): Task[Map[ConfigResource, Task[KafkaConfig]]]
 
   /**
@@ -161,7 +161,7 @@ trait AdminClient {
    */
   def createPartitions(
     newPartitions: Map[String, NewPartitions],
-    options: Option[CreatePartitionsOptions] = None
+    options: Option[CreatePartitionsOptions] = None,
   ): Task[Unit]
 
   /**
@@ -169,7 +169,7 @@ trait AdminClient {
    */
   def listOffsets(
     topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
-    options: Option[ListOffsetsOptions] = None
+    options: Option[ListOffsetsOptions] = None,
   ): Task[Map[TopicPartition, ListOffsetsResultInfo]]
 
   /**
@@ -177,7 +177,7 @@ trait AdminClient {
    */
   def listOffsetsAsync(
     topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
-    options: Option[ListOffsetsOptions] = None
+    options: Option[ListOffsetsOptions] = None,
   ): Task[Map[TopicPartition, Task[ListOffsetsResultInfo]]]
 
   /**
@@ -185,7 +185,7 @@ trait AdminClient {
    */
   def listConsumerGroupOffsets(
     groupId: String,
-    options: Option[ListConsumerGroupOffsetsOptions] = None
+    options: Option[ListConsumerGroupOffsetsOptions] = None,
   ): Task[Map[TopicPartition, OffsetAndMetadata]]
 
   /**
@@ -202,7 +202,7 @@ trait AdminClient {
    */
   def listConsumerGroupOffsets(
     groupSpecs: Map[String, ListConsumerGroupOffsetsSpec],
-    options: ListConsumerGroupOffsetsOptions
+    options: ListConsumerGroupOffsetsOptions,
   ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]]
 
   /**
@@ -211,7 +211,7 @@ trait AdminClient {
   def alterConsumerGroupOffsets(
     groupId: String,
     offsets: Map[TopicPartition, OffsetAndMetadata],
-    options: Option[AlterConsumerGroupOffsetsOptions] = None
+    options: Option[AlterConsumerGroupOffsetsOptions] = None,
   ): Task[Unit]
 
   /**
@@ -234,7 +234,7 @@ trait AdminClient {
    */
   def describeConsumerGroups(
     groupIds: List[String],
-    options: Option[DescribeConsumerGroupsOptions]
+    options: Option[DescribeConsumerGroupsOptions],
   ): Task[Map[String, ConsumerGroupDescription]]
 
   /**
@@ -262,7 +262,7 @@ trait AdminClient {
    */
   def incrementalAlterConfigs(
     configs: Map[ConfigResource, Iterable[AlterConfigOp]],
-    options: AlterConfigsOptions
+    options: AlterConfigsOptions,
   ): Task[Unit]
 
   /**
@@ -271,7 +271,7 @@ trait AdminClient {
    */
   def incrementalAlterConfigsAsync(
     configs: Map[ConfigResource, Iterable[AlterConfigOp]],
-    options: AlterConfigsOptions
+    options: AlterConfigsOptions,
   ): Task[Map[ConfigResource, Task[Unit]]]
 
   /**
@@ -288,7 +288,7 @@ trait AdminClient {
    */
   def alterConfigsAsync(
     configs: Map[ConfigResource, KafkaConfig],
-    options: AlterConfigsOptions
+    options: AlterConfigsOptions,
   ): Task[Map[ConfigResource, Task[Unit]]]
 
   /*
@@ -309,7 +309,7 @@ trait AdminClient {
    */
   def createAclsAsync(
     acls: Set[AclBinding],
-    options: Option[CreateAclOptions] = None
+    options: Option[CreateAclOptions] = None,
   ): Task[Map[AclBinding, Task[Unit]]]
 
   /**
@@ -322,7 +322,7 @@ trait AdminClient {
    */
   def deleteAclsAsync(
     filters: Set[AclBindingFilter],
-    options: Option[DeleteAclsOptions] = None
+    options: Option[DeleteAclsOptions] = None,
   ): Task[Map[AclBindingFilter, Task[Map[AclBinding, Option[Throwable]]]]]
 
 }
@@ -343,7 +343,7 @@ object AdminClient {
      */
     override def createTopics(
       newTopics: Iterable[NewTopic],
-      options: Option[CreateTopicsOptions] = None
+      options: Option[CreateTopicsOptions] = None,
     ): Task[Unit] = {
       val asJava = newTopics.map(_.asJava).asJavaCollection
 
@@ -367,15 +367,13 @@ object AdminClient {
      */
     override def deleteConsumerGroups(
       groupIds: Iterable[String],
-      options: Option[DeleteConsumerGroupOptions]
+      options: Option[DeleteConsumerGroupOptions],
     ): Task[Unit] = {
       val asJava = groupIds.asJavaCollection
       fromKafkaFutureVoid {
         ZIO.attemptBlocking(
           options
-            .fold(adminClient.deleteConsumerGroups(asJava))(opts =>
-              adminClient.deleteConsumerGroups(asJava, opts.asJava)
-            )
+            .fold(adminClient.deleteConsumerGroups(asJava))(opts => adminClient.deleteConsumerGroups(asJava, opts.asJava))
             .all()
         )
       }
@@ -386,7 +384,7 @@ object AdminClient {
      */
     override def deleteTopics(
       topics: Iterable[String],
-      options: Option[DeleteTopicsOptions] = None
+      options: Option[DeleteTopicsOptions] = None,
     ): Task[Unit] = {
       val asJava = topics.asJavaCollection
       fromKafkaFutureVoid {
@@ -409,7 +407,7 @@ object AdminClient {
      */
     override def deleteRecords(
       recordsToDelete: Map[TopicPartition, RecordsToDelete],
-      deleteRecordsOptions: Option[DeleteRecordsOptions] = None
+      deleteRecordsOptions: Option[DeleteRecordsOptions] = None,
     ): Task[Unit] = {
       val records = recordsToDelete.map { case (k, v) => k.asJava -> v }.asJava
       fromKafkaFutureVoid {
@@ -438,7 +436,7 @@ object AdminClient {
      */
     override def describeTopics(
       topicNames: Iterable[String],
-      options: Option[DescribeTopicsOptions] = None
+      options: Option[DescribeTopicsOptions] = None,
     ): Task[Map[String, TopicDescription]] = {
       val asJava = topicNames.asJavaCollection
       fromKafkaFuture {
@@ -449,7 +447,8 @@ object AdminClient {
         )
       }.flatMap { jTopicDescriptions =>
         ZIO.fromTry {
-          jTopicDescriptions.asScala.toList.forEach { case (k, v) => AdminClient.TopicDescription(v).map(k -> _) }
+          jTopicDescriptions.asScala.toList
+            .forEach { case (k, v) => AdminClient.TopicDescription(v).map(k -> _) }
             .map(_.toMap)
         }
       }
@@ -460,7 +459,7 @@ object AdminClient {
      */
     override def describeConfigs(
       configResources: Iterable[ConfigResource],
-      options: Option[DescribeConfigsOptions] = None
+      options: Option[DescribeConfigsOptions] = None,
     ): Task[Map[ConfigResource, KafkaConfig]] = {
       val asJava = configResources.map(_.asJava).asJavaCollection
       fromKafkaFuture {
@@ -470,9 +469,11 @@ object AdminClient {
             .all()
         )
       }.map {
-        _.asScala.view.map { case (configResource, config) =>
-          (ConfigResource(configResource), KafkaConfig(config))
-        }.toMap
+        _.asScala.view
+          .map { case (configResource, config) =>
+            (ConfigResource(configResource), KafkaConfig(config))
+          }
+          .toMap
       }
     }
 
@@ -481,7 +482,7 @@ object AdminClient {
      */
     override def describeConfigsAsync(
       configResources: Iterable[ConfigResource],
-      options: Option[DescribeConfigsOptions] = None
+      options: Option[DescribeConfigsOptions] = None,
     ): Task[Map[ConfigResource, Task[KafkaConfig]]] = {
       val asJava = configResources.map(_.asJava).asJavaCollection
       ZIO
@@ -491,15 +492,17 @@ object AdminClient {
             .values()
         )
         .map {
-          _.asScala.view.map { case (configResource, configFuture) =>
-            (
-              ConfigResource(configResource),
-              ZIO
-                .fromCompletionStage(configFuture.toCompletionStage)
-                .map(config => KafkaConfig(config))
-            )
+          _.asScala.view
+            .map { case (configResource, configFuture) =>
+              (
+                ConfigResource(configResource),
+                ZIO
+                  .fromCompletionStage(configFuture.toCompletionStage)
+                  .map(config => KafkaConfig(config)),
+              )
 
-          }.toMap
+            }
+            .toMap
         }
     }
 
@@ -548,9 +551,9 @@ object AdminClient {
       options: Option[DescribeClusterOptions] = None
     ): Task[Set[AclOperation]] =
       for {
-        res <- describeCluster(options)
-        opt <- fromKafkaFuture(ZIO.attempt(res.authorizedOperations())).map(Option(_))
-        lst <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
+        res          <- describeCluster(options)
+        opt          <- fromKafkaFuture(ZIO.attempt(res.authorizedOperations())).map(Option(_))
+        lst          <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
         aclOperations = lst.map(AclOperation.apply)
       } yield aclOperations
 
@@ -559,7 +562,7 @@ object AdminClient {
      */
     override def createPartitions(
       newPartitions: Map[String, NewPartitions],
-      options: Option[CreatePartitionsOptions] = None
+      options: Option[CreatePartitionsOptions] = None,
     ): Task[Unit] = {
       val asJava = newPartitions.map { case (k, v) => k -> v.asJava }.asJava
       fromKafkaFutureVoid {
@@ -576,7 +579,7 @@ object AdminClient {
      */
     override def listOffsets(
       topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
-      options: Option[ListOffsetsOptions] = None
+      options: Option[ListOffsetsOptions] = None,
     ): Task[Map[TopicPartition, ListOffsetsResultInfo]] = {
       val asJava = topicPartitionOffsets.bimap(_.asJava, _.asJava).asJava
       fromKafkaFuture {
@@ -593,7 +596,7 @@ object AdminClient {
      */
     override def listOffsetsAsync(
       topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
-      options: Option[ListOffsetsOptions]
+      options: Option[ListOffsetsOptions],
     ): Task[Map[TopicPartition, Task[ListOffsetsResultInfo]]] = {
       val topicPartitionOffsetsAsJava = topicPartitionOffsets.bimap(_.asJava, _.asJava)
       val topicPartitionsAsJava       = topicPartitionOffsetsAsJava.keySet
@@ -604,12 +607,14 @@ object AdminClient {
         topicPartitionsAsJava.map(tp => tp -> listOffsetsResult.partitionResult(tp))
       }
     }.map {
-      _.view.map { case (topicPartition, listOffsetResultInfoFuture) =>
-        (
-          TopicPartition(topicPartition),
-          ZIO.fromCompletionStage(listOffsetResultInfoFuture.toCompletionStage).map(ListOffsetsResultInfo(_))
-        )
-      }.toMap
+      _.view
+        .map { case (topicPartition, listOffsetResultInfoFuture) =>
+          (
+            TopicPartition(topicPartition),
+            ZIO.fromCompletionStage(listOffsetResultInfoFuture.toCompletionStage).map(ListOffsetsResultInfo(_)),
+          )
+        }
+        .toMap
     }
 
     /**
@@ -617,14 +622,12 @@ object AdminClient {
      */
     override def listConsumerGroupOffsets(
       groupId: String,
-      options: Option[ListConsumerGroupOffsetsOptions] = None
+      options: Option[ListConsumerGroupOffsetsOptions] = None,
     ): Task[Map[TopicPartition, OffsetAndMetadata]] =
       fromKafkaFuture {
         ZIO.attemptBlocking(
           options
-            .fold(adminClient.listConsumerGroupOffsets(groupId))(opts =>
-              adminClient.listConsumerGroupOffsets(groupId, opts.asJava)
-            )
+            .fold(adminClient.listConsumerGroupOffsets(groupId))(opts => adminClient.listConsumerGroupOffsets(groupId, opts.asJava))
             .partitionsToOffsetAndMetadata()
         )
       }
@@ -645,34 +648,40 @@ object AdminClient {
             .all()
         )
       }.map {
-        _.asScala.map { case (groupId, offsets) =>
-          groupId ->
-            offsets.asScala.filter { case (_, om) => om ne null }
-              .bimap(TopicPartition(_), OffsetAndMetadata(_))
-              .toMap
-        }.toMap
+        _.asScala
+          .map { case (groupId, offsets) =>
+            groupId ->
+              offsets.asScala
+                .filter { case (_, om) => om ne null }
+                .bimap(TopicPartition(_), OffsetAndMetadata(_))
+                .toMap
+          }
+          .toMap
       }
 
     override def listConsumerGroupOffsets(
       groupSpecs: Map[String, ListConsumerGroupOffsetsSpec],
-      options: ListConsumerGroupOffsetsOptions
+      options: ListConsumerGroupOffsetsOptions,
     ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]] =
       fromKafkaFuture {
         ZIO.attemptBlocking(
           adminClient
             .listConsumerGroupOffsets(
               groupSpecs.map { case (groupId, offsetsSpec) => (groupId, offsetsSpec.asJava) }.asJava,
-              options.asJava
+              options.asJava,
             )
             .all()
         )
       }.map {
-        _.asScala.map { case (groupId, offsets) =>
-          groupId ->
-            offsets.asScala.filter { case (_, om) => om ne null }
-              .bimap(TopicPartition(_), OffsetAndMetadata(_))
-              .toMap
-        }.toMap
+        _.asScala
+          .map { case (groupId, offsets) =>
+            groupId ->
+              offsets.asScala
+                .filter { case (_, om) => om ne null }
+                .bimap(TopicPartition(_), OffsetAndMetadata(_))
+                .toMap
+          }
+          .toMap
       }
 
     /**
@@ -681,7 +690,7 @@ object AdminClient {
     override def alterConsumerGroupOffsets(
       groupId: String,
       offsets: Map[TopicPartition, OffsetAndMetadata],
-      options: Option[AlterConsumerGroupOffsetsOptions] = None
+      options: Option[AlterConsumerGroupOffsetsOptions] = None,
     ): Task[Unit] = {
       val asJava = offsets.bimap(_.asJava, _.asJava).asJava
       fromKafkaFutureVoid {
@@ -730,7 +739,7 @@ object AdminClient {
      */
     override def describeConsumerGroups(
       groupIds: List[String],
-      options: Option[DescribeConsumerGroupsOptions]
+      options: Option[DescribeConsumerGroupsOptions],
     ): Task[Map[String, ConsumerGroupDescription]] =
       fromKafkaFuture(
         ZIO.attemptBlocking(
@@ -778,19 +787,21 @@ object AdminClient {
           adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).descriptions()
         )
         .map {
-          _.asScala.view.map { case (brokerId, descriptionsFuture) =>
-            (
-              brokerId.intValue(),
-              ZIO
-                .fromCompletionStage(descriptionsFuture.toCompletionStage)
-                .map(_.asScala.toMap.map { case (k, v) => (k, LogDirDescription(v)) })
-            )
-          }.toMap
+          _.asScala.view
+            .map { case (brokerId, descriptionsFuture) =>
+              (
+                brokerId.intValue(),
+                ZIO
+                  .fromCompletionStage(descriptionsFuture.toCompletionStage)
+                  .map(_.asScala.toMap.map { case (k, v) => (k, LogDirDescription(v)) }),
+              )
+            }
+            .toMap
         }
 
     override def incrementalAlterConfigs(
       configs: Map[ConfigResource, Iterable[AlterConfigOp]],
-      options: AlterConfigsOptions
+      options: AlterConfigsOptions,
     ): Task[Unit] =
       fromKafkaFutureVoid(
         ZIO
@@ -800,7 +811,7 @@ object AdminClient {
                 configs.map { case (configResource, alterConfigOps) =>
                   (configResource.asJava, alterConfigOps.map(_.asJava).asJavaCollection)
                 }.asJava,
-                options.asJava
+                options.asJava,
               )
               .all()
           )
@@ -808,7 +819,7 @@ object AdminClient {
 
     override def incrementalAlterConfigsAsync(
       configs: Map[ConfigResource, Iterable[AlterConfigOp]],
-      options: AlterConfigsOptions
+      options: AlterConfigsOptions,
     ): Task[Map[ConfigResource, Task[Unit]]] =
       ZIO
         .attemptBlocking(
@@ -817,13 +828,17 @@ object AdminClient {
               configs.map { case (configResource, alterConfigOps) =>
                 (configResource.asJava, alterConfigOps.map(_.asJava).asJavaCollection)
               }.asJava,
-              options.asJava
+              options.asJava,
             )
             .values()
         )
-        .map(_.asScala.map { case (configResource, kf) =>
-          (ConfigResource(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
-        }.toMap)
+        .map(
+          _.asScala
+            .map { case (configResource, kf) =>
+              (ConfigResource(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
+            }
+            .toMap
+        )
 
     @nowarn("msg=deprecated")
     override def alterConfigs(configs: Map[ConfigResource, KafkaConfig], options: AlterConfigsOptions): Task[Unit] =
@@ -835,7 +850,7 @@ object AdminClient {
                 configs.map { case (configResource, kafkaConfig) =>
                   (configResource.asJava, kafkaConfig.asJava)
                 }.asJava,
-                options.asJava
+                options.asJava,
               )
               .all()
           )
@@ -844,7 +859,7 @@ object AdminClient {
     @nowarn("msg=deprecated")
     override def alterConfigsAsync(
       configs: Map[ConfigResource, KafkaConfig],
-      options: AlterConfigsOptions
+      options: AlterConfigsOptions,
     ): Task[Map[ConfigResource, Task[Unit]]] =
       ZIO
         .attemptBlocking(
@@ -853,17 +868,21 @@ object AdminClient {
               configs.map { case (configResource, kafkaConfig) =>
                 (configResource.asJava, kafkaConfig.asJava)
               }.asJava,
-              options.asJava
+              options.asJava,
             )
             .values()
         )
-        .map(_.asScala.map { case (configResource, kf) =>
-          (ConfigResource(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
-        }.toMap)
+        .map(
+          _.asScala
+            .map { case (configResource, kf) =>
+              (ConfigResource(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
+            }
+            .toMap
+        )
 
     override def describeAcls(
       filter: AclBindingFilter,
-      options: Option[DescribeAclOptions]
+      options: Option[DescribeAclOptions],
     ): Task[Set[AclBinding]] =
       fromKafkaFuture(
         ZIO
@@ -879,28 +898,28 @@ object AdminClient {
         ZIO
           .attemptBlocking(
             options
-              .fold(adminClient.createAcls(acls.map(_.asJava).asJava))(opt =>
-                adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava)
-              )
+              .fold(adminClient.createAcls(acls.map(_.asJava).asJava))(opt => adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava))
               .all()
           )
       )
 
     override def createAclsAsync(
       acls: Set[AclBinding],
-      options: Option[CreateAclOptions]
+      options: Option[CreateAclOptions],
     ): Task[Map[AclBinding, Task[Unit]]] =
       ZIO
         .attemptBlocking(
           options
-            .fold(adminClient.createAcls(acls.map(_.asJava).asJava))(opt =>
-              adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava)
-            )
+            .fold(adminClient.createAcls(acls.map(_.asJava).asJava))(opt => adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava))
             .values()
         )
-        .map(_.asScala.view.map { case (k, v) =>
-          (AclBinding(k), ZIO.fromCompletionStage(v.toCompletionStage).unit)
-        }.toMap)
+        .map(
+          _.asScala.view
+            .map { case (k, v) =>
+              (AclBinding(k), ZIO.fromCompletionStage(v.toCompletionStage).unit)
+            }
+            .toMap
+        )
 
     override def deleteAcls(filters: Set[AclBindingFilter], options: Option[DeleteAclsOptions]): Task[Set[AclBinding]] =
       fromKafkaFuture(
@@ -916,7 +935,7 @@ object AdminClient {
 
     override def deleteAclsAsync(
       filters: Set[AclBindingFilter],
-      options: Option[DeleteAclsOptions]
+      options: Option[DeleteAclsOptions],
     ): Task[Map[AclBindingFilter, Task[Map[AclBinding, Option[Throwable]]]]] =
       ZIO
         .attemptBlocking(
@@ -926,19 +945,25 @@ object AdminClient {
             )
             .values()
         )
-        .map(_.asScala.view.map { case (k, v) =>
-          (
-            AclBindingFilter(k),
-            ZIO
-              .fromCompletionStage(v.toCompletionStage)
-              .map(
-                _.values().asScala.view.map { filterRes =>
-                  // FilterResult.binding() is claimed to be nullable but in fact it is not: see DeleteAclsResponse.aclBinding
-                  AclBinding(filterRes.binding()) -> Option(filterRes.exception())
-                }.toMap
+        .map(
+          _.asScala.view
+            .map { case (k, v) =>
+              (
+                AclBindingFilter(k),
+                ZIO
+                  .fromCompletionStage(v.toCompletionStage)
+                  .map(
+                    _.values().asScala.view
+                      .map { filterRes =>
+                        // FilterResult.binding() is claimed to be nullable but in fact it is not: see DeleteAclsResponse.aclBinding
+                        AclBinding(filterRes.binding()) -> Option(filterRes.exception())
+                      }
+                      .toMap
+                  ),
               )
-          )
-        }.toMap)
+            }
+            .toMap
+        )
 
   }
 
@@ -1040,7 +1065,7 @@ object AdminClient {
     groupInstanceId: Option[String],
     clientId: String,
     host: String,
-    assignment: Set[TopicPartition]
+    assignment: Set[TopicPartition],
   )
 
   object MemberDescription {
@@ -1050,7 +1075,7 @@ object AdminClient {
         groupInstanceId = desc.groupInstanceId.toScala,
         clientId = desc.clientId(),
         host = desc.host(),
-        assignment = desc.assignment.topicPartitions().asScala.map(TopicPartition.apply).toSet
+        assignment = desc.assignment.topicPartitions().asScala.map(TopicPartition.apply).toSet,
       )
   }
 
@@ -1061,7 +1086,7 @@ object AdminClient {
     partitionAssignor: String,
     state: ConsumerGroupState,
     coordinator: Option[Node],
-    authorizedOperations: Set[AclOperation]
+    authorizedOperations: Set[AclOperation],
   )
 
   object ConsumerGroupDescription {
@@ -1075,14 +1100,14 @@ object AdminClient {
         state = ConsumerGroupState(description.state),
         coordinator = Node(description.coordinator()),
         authorizedOperations = Option(description.authorizedOperations())
-          .fold(Set.empty[AclOperation])(_.asScala.map(AclOperation.apply).toSet)
+          .fold(Set.empty[AclOperation])(_.asScala.map(AclOperation.apply).toSet),
       )
   }
 
   final case class CreatePartitionsOptions(
     validateOnly: Boolean = false,
     retryOnQuotaViolation: Boolean = true,
-    timeout: Option[Duration]
+    timeout: Option[Duration],
   ) {
     def asJava: JCreatePartitionsOptions = {
       val opts = new JCreatePartitionsOptions()
@@ -1131,7 +1156,7 @@ object AdminClient {
   final case class DescribeConfigsOptions(
     includeSynonyms: Boolean = false,
     includeDocumentation: Boolean = false,
-    timeout: Option[Duration]
+    timeout: Option[Duration],
   ) {
     def asJava: JDescribeConfigsOptions = {
       val opts = new JDescribeConfigsOptions()
@@ -1197,7 +1222,7 @@ object AdminClient {
         name = jmn.name(),
         group = jmn.group(),
         description = jmn.description(),
-        tags = jmn.tags().asScala.toMap
+        tags = jmn.tags().asScala.toMap,
       )
   }
 
@@ -1210,7 +1235,7 @@ object AdminClient {
     name: String,
     numPartitions: Int,
     replicationFactor: Short,
-    configs: Map[String, String] = Map.empty
+    configs: Map[String, String] = Map.empty,
   ) {
     def asJava: JNewTopic = {
       val jn = new JNewTopic(name, numPartitions, replicationFactor)
@@ -1225,7 +1250,7 @@ object AdminClient {
 
   final case class NewPartitions(
     totalCount: Int,
-    newAssignments: List[List[Int]] = Nil
+    newAssignments: List[List[Int]] = Nil,
   ) {
     def asJava: JNewPartitions =
       if (newAssignments.nonEmpty)
@@ -1244,7 +1269,7 @@ object AdminClient {
   final case class Node(id: Int, host: Option[String], port: Option[Int], rack: Option[String] = None) {
     lazy val asJava: JNode = new JNode(id, host.getOrElse(""), port.getOrElse(-1), rack.orNull)
   }
-  object Node {
+  object Node                                                                                          {
     def apply(jNode: JNode): Option[Node] =
       Option(jNode)
         .filter(_.id() >= 0)
@@ -1253,7 +1278,7 @@ object AdminClient {
             id = jNode.id(),
             host = Option(jNode.host()).filterNot(_.isEmpty),
             port = Option(jNode.port()).filter(_ >= 0),
-            rack = Option(jNode.rack())
+            rack = Option(jNode.rack()),
           )
         }
   }
@@ -1262,7 +1287,7 @@ object AdminClient {
     name: String,
     internal: Boolean,
     partitions: List[TopicPartitionInfo],
-    authorizedOperations: Option[Set[AclOperation]]
+    authorizedOperations: Option[Set[AclOperation]],
   )
 
   object TopicDescription {
@@ -1274,7 +1299,7 @@ object AdminClient {
           name = jt.name,
           internal = jt.isInternal,
           partitions = partitions,
-          authorizedOperations = authorizedOperations
+          authorizedOperations = authorizedOperations,
         )
       }
     }
@@ -1286,7 +1311,7 @@ object AdminClient {
         partition,
         leader.map(_.asJava).getOrElse(JNode.noNode()),
         replicas.map(_.asJava).asJava,
-        isr.map(_.asJava).asJava
+        isr.map(_.asJava).asJava,
       )
   }
 
@@ -1323,7 +1348,7 @@ object AdminClient {
         partition = jtpi.partition(),
         leader = Node(jtpi.leader()),
         replicas = replicas,
-        isr = inSyncReplicas
+        isr = inSyncReplicas,
       )
     }
   }
@@ -1338,7 +1363,7 @@ object AdminClient {
 
   final case class TopicPartition(
     name: String,
-    partition: Int
+    partition: Int,
   ) {
     def asJava: JTopicPartition = new JTopicPartition(name, partition)
   }
@@ -1388,7 +1413,7 @@ object AdminClient {
 
   final case class ListOffsetsOptions(
     isolationLevel: IsolationLevel = IsolationLevel.ReadUncommitted,
-    timeout: Option[Duration]
+    timeout: Option[Duration],
   ) {
     def asJava: JListOffsetsOptions = {
       val offsetOpt = new JListOffsetsOptions(isolationLevel.asJava)
@@ -1399,9 +1424,9 @@ object AdminClient {
   final case class ListOffsetsResultInfo(
     offset: Long,
     timestamp: Long,
-    leaderEpoch: Option[Int]
+    leaderEpoch: Option[Int],
   )
-  object ListOffsetsResultInfo {
+  object ListOffsetsResultInfo                                     {
     def apply(lo: JListOffsetsResultInfo): ListOffsetsResultInfo =
       ListOffsetsResultInfo(lo.offset(), lo.timestamp(), lo.leaderEpoch().toScala.map(_.toInt))
   }
@@ -1439,16 +1464,16 @@ object AdminClient {
   final case class OffsetAndMetadata(
     offset: Long,
     leaderEpoch: Option[Int] = None,
-    metadata: Option[String] = None
+    metadata: Option[String] = None,
   ) {
     def asJava: JOffsetAndMetadata = new JOffsetAndMetadata(offset, leaderEpoch.map(Int.box).toJava, metadata.orNull)
   }
-  object OffsetAndMetadata {
+  object OffsetAndMetadata                                                         {
     def apply(om: JOffsetAndMetadata): OffsetAndMetadata =
       OffsetAndMetadata(
         offset = om.offset(),
         leaderEpoch = om.leaderEpoch().toScala.map(_.toInt),
-        metadata = Some(om.metadata())
+        metadata = Some(om.metadata()),
       )
   }
 
@@ -1470,14 +1495,14 @@ object AdminClient {
       ConsumerGroupListing(
         groupId = cg.groupId(),
         isSimple = cg.isSimpleConsumerGroup,
-        state = cg.state().toScala.map(ConsumerGroupState(_))
+        state = cg.state().toScala.map(ConsumerGroupState(_)),
       )
   }
 
   final case class KafkaConfig(entries: Map[String, ConfigEntry]) {
     def asJava: JConfig = new JConfig(entries.values.asJavaCollection)
   }
-  object KafkaConfig {
+  object KafkaConfig                                              {
     def apply(jConfig: JConfig): KafkaConfig =
       KafkaConfig(entries = jConfig.entries().asScala.map(e => e.name() -> e).toMap)
   }
@@ -1487,7 +1512,7 @@ object AdminClient {
     def apply(ld: JLogDirDescription): LogDirDescription =
       LogDirDescription(
         error = ld.error(),
-        replicaInfos = ld.replicaInfos().asScala.bimap(TopicPartition(_), ReplicaInfo(_)).toMap
+        replicaInfos = ld.replicaInfos().asScala.bimap(TopicPartition(_), ReplicaInfo(_)).toMap,
       )
   }
 
@@ -1539,7 +1564,7 @@ object AdminClient {
       @tailrec
       def loop(acc: ListBuffer[B], rest: List[A]): Try[List[B]] =
         rest match {
-          case Nil => Success(acc.toList)
+          case Nil    => Success(acc.toList)
           case h :: t =>
             f(h) match {
               case Success(b)        => loop(acc += b, t)

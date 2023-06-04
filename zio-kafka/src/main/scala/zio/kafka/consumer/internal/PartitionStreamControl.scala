@@ -1,24 +1,24 @@
 package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
-import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.diagnostics.{DiagnosticEvent, Diagnostics}
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
-import zio.stream.{ Take, ZStream }
-import zio.{ Chunk, LogAnnotation, Promise, Queue, UIO, ZIO }
+import zio.stream.{Take, ZStream}
+import zio.{Chunk, LogAnnotation, Promise, Queue, UIO, ZIO}
 
 private[internal] final class PartitionStreamControl private (
   val tp: TopicPartition,
   stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
   interruptPromise: Promise[Throwable, Unit],
-  completedPromise: Promise[Nothing, Unit]
+  completedPromise: Promise[Nothing, Unit],
 ) {
 
   private var pollResumedHistory: PollHistory = PollHistory.Empty
 
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),
-    LogAnnotation("partition", tp.partition().toString)
+    LogAnnotation("partition", tp.partition().toString),
   )
 
   /** Offer new data for the stream to process. */
@@ -67,14 +67,14 @@ private[internal] object PartitionStreamControl {
   def newPartitionStream(
     tp: TopicPartition,
     commandQueue: Queue[RunloopCommand],
-    diagnostics: Diagnostics
+    diagnostics: Diagnostics,
   ): ZIO[Any, Nothing, PartitionStreamControl] =
     for {
       _                   <- ZIO.logTrace(s"Creating partition stream ${tp.toString}")
       interruptionPromise <- Promise.make[Throwable, Unit]
       completedPromise    <- Promise.make[Nothing, Unit]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
-      requestAndAwaitData =
+      requestAndAwaitData  =
         for {
           _     <- commandQueue.offer(RunloopCommand.Request(tp))
           _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
@@ -83,17 +83,19 @@ private[internal] object PartitionStreamControl {
 
       stream = ZStream.logAnnotate(
                  LogAnnotation("topic", tp.topic()),
-                 LogAnnotation("partition", tp.partition().toString)
+                 LogAnnotation("partition", tp.partition().toString),
                ) *>
                  ZStream.finalizer(
                    completedPromise.succeed(()) <*
                      ZIO.logDebug(s"Partition stream ${tp.toString} has ended")
                  ) *>
-                 ZStream.repeatZIOChunk {
-                   // First try to take all records that are available right now.
-                   // When no data is available, request more data and await its arrival.
-                   dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
-                 }.flattenTake
+                 ZStream
+                   .repeatZIOChunk {
+                     // First try to take all records that are available right now.
+                     // When no data is available, request more data and await its arrival.
+                     dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
+                   }
+                   .flattenTake
                    .interruptWhen(interruptionPromise)
     } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise)
 

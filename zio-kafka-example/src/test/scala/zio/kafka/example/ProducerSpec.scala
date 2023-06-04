@@ -6,7 +6,7 @@ import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
 import zio.kafka.testkit.KafkaTestUtils._
-import zio.test.TestAspect.{ sequential, timeout }
+import zio.test.TestAspect.{sequential, timeout}
 import zio.test._
 
 /**
@@ -23,7 +23,7 @@ object ProducerSpec extends ZIOSpecDefault {
         }
         // ... more tests ...
       )
-        .provideSome[Kafka](producer)             // Here, we provide a new instance of Producer per test
+        .provideSome[Kafka](producer) // Here, we provide a new instance of Producer per test
         .provideSomeShared[Scope](Kafka.embedded) // Here, we provide an instance of Kafka for the entire suite
     ) @@ timeout(2.minutes) @@ sequential
 }

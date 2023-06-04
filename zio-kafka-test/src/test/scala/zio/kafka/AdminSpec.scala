@@ -1,9 +1,9 @@
 package zio.kafka.admin
 
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
-import org.apache.kafka.clients.admin.{ ConfigEntry, RecordsToDelete }
+import org.apache.kafka.clients.admin.{ConfigEntry, RecordsToDelete}
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.{ Node => JNode }
+import org.apache.kafka.common.{Node => JNode}
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.admin.AdminClient.{
@@ -19,11 +19,11 @@ import zio.kafka.admin.AdminClient.{
   ListConsumerGroupsOptions,
   OffsetAndMetadata,
   OffsetSpec,
-  TopicPartition
+  TopicPartition,
 }
 import zio.kafka.admin.acl._
-import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
-import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
+import zio.kafka.admin.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
+import zio.kafka.consumer.{CommittableRecord, Consumer, OffsetBatch, Subscription}
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
 import zio.kafka.testkit._
@@ -62,9 +62,9 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         KafkaTestUtils.withAdmin { client =>
           for {
             list1 <- listTopicsFiltered(client)
-            _ <- client.createTopics(
-                   List(AdminClient.NewTopic("adminspec-topic2", 1, 1), AdminClient.NewTopic("adminspec-topic3", 4, 1))
-                 )
+            _     <- client.createTopics(
+                       List(AdminClient.NewTopic("adminspec-topic2", 1, 1), AdminClient.NewTopic("adminspec-topic3", 4, 1))
+                     )
             list2 <- listTopicsFiltered(client)
             _     <- client.deleteTopic("adminspec-topic2")
             list3 <- listTopicsFiltered(client)
@@ -88,10 +88,10 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       test("create, describe, delete multiple topic") {
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1 <- listTopicsFiltered(client)
-            _ <- client.createTopics(
-                   List(AdminClient.NewTopic("adminspec-topic4", 1, 1), AdminClient.NewTopic("adminspec-topic5", 4, 1))
-                 )
+            list1        <- listTopicsFiltered(client)
+            _            <- client.createTopics(
+                              List(AdminClient.NewTopic("adminspec-topic4", 1, 1), AdminClient.NewTopic("adminspec-topic5", 4, 1))
+                            )
             descriptions <- client.describeTopics(List("adminspec-topic4", "adminspec-topic5"))
             _            <- client.deleteTopics(List("adminspec-topic4", "adminspec-topic5"))
             list3        <- listTopicsFiltered(client)
@@ -104,22 +104,22 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       test("create, describe topic config, delete multiple topic") {
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1 <- listTopicsFiltered(client)
-            _ <- client.createTopics(
-                   List(AdminClient.NewTopic("adminspec-topic6", 1, 1), AdminClient.NewTopic("adminspec-topic7", 4, 1))
-                 )
+            list1          <- listTopicsFiltered(client)
+            _              <- client.createTopics(
+                                List(AdminClient.NewTopic("adminspec-topic6", 1, 1), AdminClient.NewTopic("adminspec-topic7", 4, 1))
+                              )
             configResources = List(
                                 ConfigResource(ConfigResourceType.Topic, "adminspec-topic6"),
-                                ConfigResource(ConfigResourceType.Topic, "adminspec-topic7")
+                                ConfigResource(ConfigResourceType.Topic, "adminspec-topic7"),
                               )
-            configs <- client.describeConfigs(configResources) <&>
-                         client.describeConfigsAsync(configResources).flatMap { configs =>
-                           ZIO.foreachPar(configs) { case (resource, configTask) =>
-                             configTask.map(config => (resource, config))
-                           }
-                         }
-            _     <- client.deleteTopics(List("adminspec-topic6", "adminspec-topic7"))
-            list3 <- listTopicsFiltered(client)
+            configs        <- client.describeConfigs(configResources) <&>
+                                client.describeConfigsAsync(configResources).flatMap { configs =>
+                                  ZIO.foreachPar(configs) { case (resource, configTask) =>
+                                    configTask.map(config => (resource, config))
+                                  }
+                                }
+            _              <- client.deleteTopics(List("adminspec-topic6", "adminspec-topic7"))
+            list3          <- listTopicsFiltered(client)
           } yield assert(list1.size)(equalTo(0)) &&
             assert(configs._1.size)(equalTo(2)) &&
             assert(configs._2.size)(equalTo(2)) &&
@@ -173,9 +173,9 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                ConfigResource(ConfigResourceType.Broker, "0")
                              )
                            )
-            configs <- ZIO.foreachPar(configTasks) { case (resource, configTask) =>
-                         configTask.map(config => (resource, config))
-                       }
+            configs     <- ZIO.foreachPar(configTasks) { case (resource, configTask) =>
+                             configTask.map(config => (resource, config))
+                           }
           } yield assertTrue(configs.size == 1)
         }
       },
@@ -186,8 +186,8 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           val kvs      = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
 
           for {
-            _ <- client.createTopics(List(AdminClient.NewTopic("adminspec-topic8", 3, 1)))
-            _ <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
+            _       <- client.createTopics(List(AdminClient.NewTopic("adminspec-topic8", 3, 1)))
+            _       <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
             offsets <- client.listOffsets(
                          (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
                        )
@@ -201,14 +201,14 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           val kvs      = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
 
           for {
-            _ <- client.createTopics(List(AdminClient.NewTopic("adminspec-topic9", 3, 1)))
-            _ <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
+            _           <- client.createTopics(List(AdminClient.NewTopic("adminspec-topic9", 3, 1)))
+            _           <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
             offsetTasks <- client.listOffsetsAsync(
                              (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
                            )
-            offsets <- ZIO.foreachPar(offsetTasks) { case (topicPartition, offsetTask) =>
-                         offsetTask.map((topicPartition, _))
-                       }
+            offsets     <- ZIO.foreachPar(offsetTasks) { case (topicPartition, offsetTask) =>
+                             offsetTask.map((topicPartition, _))
+                           }
           } yield assert(offsets.values.map(_.offset).sum)(equalTo(msgCount.toLong))
         }
       },
@@ -245,17 +245,17 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               .map { case (k, vs) => (k, vs.map(_._2).sortBy(_._1)) }
 
           for {
-            _          <- client.createTopics(List(AdminClient.NewTopic(topic, partitionCount, 1)))
-            _          <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
-            records    <- consumeAndCommit(msgCount.toLong).map(toMap)
-            endOffsets <- client.listOffsets((0 until partitionCount).map(i => p(i) -> OffsetSpec.LatestSpec).toMap)
-            _ <- client.alterConsumerGroupOffsets(
-                   consumerGroupID,
-                   Map(
-                     p(0) -> OffsetAndMetadata(0),                                         // from the beginning
-                     p(1) -> OffsetAndMetadata(endOffsets(p(1)).offset - partitionResetBy) // re-read two messages
-                   )
-                 )
+            _                    <- client.createTopics(List(AdminClient.NewTopic(topic, partitionCount, 1)))
+            _                    <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
+            records              <- consumeAndCommit(msgCount.toLong).map(toMap)
+            endOffsets           <- client.listOffsets((0 until partitionCount).map(i => p(i) -> OffsetSpec.LatestSpec).toMap)
+            _                    <- client.alterConsumerGroupOffsets(
+                                      consumerGroupID,
+                                      Map(
+                                        p(0) -> OffsetAndMetadata(0),                                         // from the beginning
+                                        p(1) -> OffsetAndMetadata(endOffsets(p(1)).offset - partitionResetBy),// re-read two messages
+                                      ),
+                                    )
             expectedMsgsToConsume = endOffsets(p(0)).offset + partitionResetBy
             recordsAfterAltering <- consumeAndCommit(expectedMsgsToConsume).map(toMap)
           } yield assert(recordsAfterAltering(0))(equalTo(records(0))) &&
@@ -306,26 +306,26 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
         KafkaTestUtils.withAdmin { client =>
           for {
-            topic          <- randomTopic
-            groupId        <- randomGroup
-            invalidTopic   <- randomTopic
-            invalidGroupId <- randomGroup
-            msgCount   = 20
-            msgConsume = 15
-            kvs        = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
-            _ <- client.createTopics(List(AdminClient.NewTopic(topic, 1, 1)))
-            _ <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
-            _ <- consumeAndCommit(msgConsume.toLong, topic, groupId)
-            offsets <- client.listConsumerGroupOffsets(
-                         Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
-                       )
-            invalidTopicOffsets <-
+            topic                 <- randomTopic
+            groupId               <- randomGroup
+            invalidTopic          <- randomTopic
+            invalidGroupId        <- randomGroup
+            msgCount               = 20
+            msgConsume             = 15
+            kvs                    = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
+            _                     <- client.createTopics(List(AdminClient.NewTopic(topic, 1, 1)))
+            _                     <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
+            _                     <- consumeAndCommit(msgConsume.toLong, topic, groupId)
+            offsets               <- client.listConsumerGroupOffsets(
+                                       Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
+                                     )
+            invalidTopicOffsets   <-
               client.listConsumerGroupOffsets(
                 Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(invalidTopic, 0))))
               )
-            invalidTpOffsets <- client.listConsumerGroupOffsets(
-                                  Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 1))))
-                                )
+            invalidTpOffsets      <- client.listConsumerGroupOffsets(
+                                       Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 1))))
+                                     )
             invalidGroupIdOffsets <-
               client.listConsumerGroupOffsets(
                 Map(invalidGroupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
@@ -349,18 +349,18 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
         KafkaTestUtils.withAdmin { client =>
           for {
-            topic   <- randomTopic
-            groupId <- randomGroup
+            topic     <- randomTopic
+            groupId   <- randomGroup
             msgCount   = 20
             msgConsume = 15
             kvs        = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
-            _ <- client.createTopics(List(AdminClient.NewTopic(topic, 1, 1)))
-            _ <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
-            _ <- consumeAndCommit(msgConsume.toLong, topic, groupId)
-            _ <- client.deleteConsumerGroups(Chunk.single(groupId))
-            offsets <- client.listConsumerGroupOffsets(
-                         Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
-                       )
+            _         <- client.createTopics(List(AdminClient.NewTopic(topic, 1, 1)))
+            _         <- produceMany(topic, kvs).provideSomeLayer[Kafka](KafkaTestUtils.producer)
+            _         <- consumeAndCommit(msgConsume.toLong, topic, groupId)
+            _         <- client.deleteConsumerGroups(Chunk.single(groupId))
+            offsets   <- client.listConsumerGroupOffsets(
+                           Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
+                         )
           } yield assert(offsets.get(groupId).flatMap(_.get(TopicPartition(topic, 0))).map(_.offset))(isNone)
         }
       },
@@ -401,7 +401,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           } yield assert(logDirs)(
             hasKey(
               node.id,
-              hasValues(exists(hasField("replicaInfos", _.replicaInfos, hasKey(TopicPartition(topicName, 0)))))
+              hasValues(exists(hasField("replicaInfos", _.replicaInfos, hasKey(TopicPartition(topicName, 0))))),
             )
           )
         }
@@ -412,7 +412,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             topicName <- randomTopic
             _         <- admin.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
             node      <- admin.describeClusterNodes().head.orElseFail(new NoSuchElementException())
-            logDirs <-
+            logDirs   <-
               admin.describeLogDirsAsync(List(node.id)).flatMap { descriptions =>
                 ZIO.foreachPar(descriptions) { case (brokerId, descriptionAsync) =>
                   descriptionAsync.map(description => (brokerId, description))
@@ -421,7 +421,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           } yield assert(logDirs)(
             hasKey(
               node.id,
-              hasValues(exists(hasField("replicaInfos", _.replicaInfos, hasKey(TopicPartition(topicName, 0)))))
+              hasValues(exists(hasField("replicaInfos", _.replicaInfos, hasKey(TopicPartition(topicName, 0))))),
             )
           )
         }
@@ -465,17 +465,17 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             configEntry    = new ConfigEntry("retention.ms", "1")
             configResource = ConfigResource(ConfigResourceType.Topic, topicName)
 
-            setAlterConfigOp = AlterConfigOp(configEntry, AlterConfigOpType.Set)
-            _ <- admin.incrementalAlterConfigs(Map(configResource -> Seq(setAlterConfigOp)), AlterConfigsOptions())
+            setAlterConfigOp          = AlterConfigOp(configEntry, AlterConfigOpType.Set)
+            _                        <- admin.incrementalAlterConfigs(Map(configResource -> Seq(setAlterConfigOp)), AlterConfigsOptions())
             updatedConfigsWithUpdate <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
 
-            deleteAlterConfigOp = AlterConfigOp(configEntry, AlterConfigOpType.Delete)
-            _ <- admin.incrementalAlterConfigs(Map(configResource -> Seq(deleteAlterConfigOp)), AlterConfigsOptions())
+            deleteAlterConfigOp       = AlterConfigOp(configEntry, AlterConfigOpType.Delete)
+            _                        <- admin.incrementalAlterConfigs(Map(configResource -> Seq(deleteAlterConfigOp)), AlterConfigsOptions())
             updatedConfigsWithDelete <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
           } yield {
             val updatedRetentionMsConfig =
               updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
-            val deleteRetentionMsConfig =
+            val deleteRetentionMsConfig  =
               updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
             assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
             assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
@@ -493,8 +493,8 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             configEntry    = new ConfigEntry("retention.ms", "1")
             configResource = ConfigResource(ConfigResourceType.Topic, topicName)
 
-            setAlterConfigOp = AlterConfigOp(configEntry, AlterConfigOpType.Set)
-            setResult <-
+            setAlterConfigOp          = AlterConfigOp(configEntry, AlterConfigOpType.Set)
+            setResult                <-
               admin
                 .incrementalAlterConfigsAsync(Map(configResource -> Seq(setAlterConfigOp)), AlterConfigsOptions())
                 .flatMap { configsAsync =>
@@ -504,8 +504,8 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 }
             updatedConfigsWithUpdate <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
 
-            deleteAlterConfigOp = AlterConfigOp(configEntry, AlterConfigOpType.Delete)
-            deleteResult <-
+            deleteAlterConfigOp       = AlterConfigOp(configEntry, AlterConfigOpType.Delete)
+            deleteResult             <-
               admin
                 .incrementalAlterConfigsAsync(Map(configResource -> Seq(deleteAlterConfigOp)), AlterConfigsOptions())
                 .flatMap { configsAsync =>
@@ -517,7 +517,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           } yield {
             val updatedRetentionMsConfig =
               updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
-            val deleteRetentionMsConfig =
+            val deleteRetentionMsConfig  =
               updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
             assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
             assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
@@ -537,17 +537,17 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             configEntry    = new ConfigEntry("retention.ms", "1")
             configResource = ConfigResource(ConfigResourceType.Topic, topicName)
 
-            kafkaConfig = KafkaConfig(Map(topicName -> configEntry))
+            kafkaConfig               = KafkaConfig(Map(topicName -> configEntry))
             _                        <- admin.alterConfigs(Map(configResource -> kafkaConfig), AlterConfigsOptions())
             updatedConfigsWithUpdate <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
 
-            emptyKafkaConfig = KafkaConfig(Map.empty[String, ConfigEntry])
-            _ <- admin.alterConfigs(Map(configResource -> emptyKafkaConfig), AlterConfigsOptions())
+            emptyKafkaConfig          = KafkaConfig(Map.empty[String, ConfigEntry])
+            _                        <- admin.alterConfigs(Map(configResource -> emptyKafkaConfig), AlterConfigsOptions())
             updatedConfigsWithDelete <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
           } yield {
             val updatedRetentionMsConfig =
               updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
-            val deleteRetentionMsConfig =
+            val deleteRetentionMsConfig  =
               updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
             assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
             assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
@@ -565,8 +565,8 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             configEntry    = new ConfigEntry("retention.ms", "1")
             configResource = ConfigResource(ConfigResourceType.Topic, topicName)
 
-            kafkaConfig = KafkaConfig(Map(topicName -> configEntry))
-            setResult <-
+            kafkaConfig               = KafkaConfig(Map(topicName -> configEntry))
+            setResult                <-
               admin
                 .alterConfigsAsync(Map(configResource -> kafkaConfig), AlterConfigsOptions())
                 .flatMap { configsAsync =>
@@ -576,8 +576,8 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 }
             updatedConfigsWithUpdate <- admin.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
 
-            emptyKafkaConfig = KafkaConfig(Map.empty[String, ConfigEntry])
-            deleteResult <-
+            emptyKafkaConfig          = KafkaConfig(Map.empty[String, ConfigEntry])
+            deleteResult             <-
               admin
                 .alterConfigsAsync(Map(configResource -> emptyKafkaConfig), AlterConfigsOptions())
                 .flatMap { configsAsync =>
@@ -589,7 +589,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           } yield {
             val updatedRetentionMsConfig =
               updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
-            val deleteRetentionMsConfig =
+            val deleteRetentionMsConfig  =
               updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
             assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
             assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
@@ -603,8 +603,8 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       test("ACLs") {
         KafkaTestUtils.withAdmin { client =>
           for {
-            topic <- randomTopic
-            bindings =
+            topic         <- randomTopic
+            bindings       =
               Set(
                 AclBinding(
                   ResourcePattern(ResourceType.Topic, name = topic, patternType = PatternType.Literal),
@@ -612,17 +612,17 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     principal = "User:*",
                     host = "*",
                     operation = AclOperation.Write,
-                    permissionType = AclPermissionType.Allow
-                  )
+                    permissionType = AclPermissionType.Allow,
+                  ),
                 )
               )
-            _ <- client.createAcls(bindings)
-            createdAcls <-
+            _             <- client.createAcls(bindings)
+            createdAcls   <-
               client
                 .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
                 .repeatWhile(_.isEmpty) // because the createAcls is executed async by the broker
                 .timeoutFail(new TimeoutException())(100.millis)
-            deletedAcls <-
+            deletedAcls   <-
               client
                 .deleteAcls(Set(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any)))
             remainingAcls <-
@@ -635,14 +635,14 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             assert(deletedAcls)(equalTo(bindings)) &&
             assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
         }
-      }
+      },
     ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ sequential @@ timeout(2.minutes)
 
   private def consumeNoop(
     topicName: String,
     groupId: String,
     clientId: String,
-    groupInstanceId: Option[String] = None
+    groupInstanceId: Option[String] = None,
   ): ZIO[Kafka, Throwable, Unit] = Consumer
     .plainStream(Subscription.topics(topicName), Serde.string, Serde.string)
     .foreach(_.offset.commit)

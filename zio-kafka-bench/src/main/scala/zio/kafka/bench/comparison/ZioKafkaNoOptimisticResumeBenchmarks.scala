@@ -2,10 +2,10 @@ package zio.kafka.bench.comparison
 
 import org.openjdk.jmh.annotations._
 import zio.kafka.bench.comparison.ComparisonBenchmark.zAssert
-import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
+import zio.kafka.consumer.{Consumer, ConsumerSettings, Subscription}
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
-import zio.{ ZEnvironment, ZLayer }
+import zio.{ZEnvironment, ZLayer}
 
 import java.util.concurrent.TimeUnit
 
@@ -35,7 +35,7 @@ class ZioKafkaNoOptimisticResumeBenchmarks extends ComparisonBenchmark {
         .plainStream(
           Subscription.manual(topicPartitions.map(tp => tp.name -> tp.partition): _*),
           Serde.byteArray,
-          Serde.byteArray
+          Serde.byteArray,
         )
         .take(numberOfMessages.toLong)
         .runCount

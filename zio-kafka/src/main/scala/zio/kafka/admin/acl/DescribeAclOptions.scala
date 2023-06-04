@@ -1,6 +1,6 @@
 package zio.kafka.admin.acl
 
-import org.apache.kafka.clients.admin.{ DescribeAclsOptions => JDescribeAclsOptions }
+import org.apache.kafka.clients.admin.{DescribeAclsOptions => JDescribeAclsOptions}
 import zio._
 
 final case class DescribeAclOptions(timeout: Option[Duration]) {

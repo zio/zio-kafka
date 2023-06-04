@@ -7,7 +7,7 @@ import zio.ZAny
 import zio.kafka.ZIOSpecDefaultSlf4j
 
 object SerializerSpec extends ZIOSpecDefaultSlf4j {
-  override def spec: Spec[ZAny with Any, Throwable] = suite("Serializer")(
+  override def spec: Spec[ZAny with Any, Throwable]          = suite("Serializer")(
     suite("asOption")(
       test("serialize None values to null") {
         assertZIO(stringSerializer.asOption.serialize("topic1", new RecordHeaders, None))(isNull)
@@ -20,7 +20,7 @@ object SerializerSpec extends ZIOSpecDefaultSlf4j {
             equalTo(string)
           )
         }
-      }
+      },
     )
   )
   private lazy val stringSerializer: Serializer[Any, String] = Serde.string

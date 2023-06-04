@@ -1,7 +1,7 @@
 package zio.kafka.bench
-import org.openjdk.jmh.annotations.{ Setup, TearDown }
+import org.openjdk.jmh.annotations.{Setup, TearDown}
 import zio.kafka.bench.ZioBenchmark.logger
-import zio.{ ZLayer, _ }
+import zio.{ZLayer, _}
 
 import java.util.UUID
 
@@ -36,9 +36,15 @@ trait ZioBenchmark[Environment] {
       runtime.unsafe
         .run(
           program
-            .tapErrorCause(e => ZIO.debug("Error in benchmark run: " + e.prettyPrint))
+            .tapError(e =>
+              // logs an error
+              ZIO.debug(s"Exception in benchmark run: ${Cause.fail(e).prettyPrint}")
+            )
+            .tapDefect(e =>
+              // logs a defect (aka `.die`) and dump the fibers
+              ZIO.debug(s"Error in benchmark run: ${e.prettyPrint}") *> Fiber.dumpAll
+            )
             .timeoutFail(new RuntimeException("Benchmark run timed out"))(timeout)
-            .tapError(_ => Fiber.dumpAll)
         )
         .getOrThrow()
     )
@@ -57,11 +63,12 @@ object ZioBenchmark {
         cause: Cause[Any],
         context: FiberRefs,
         spans: List[LogSpan],
-        annotations: Map[String, String]
+        annotations: Map[String, String],
       ): Unit =
         println(
           s"${java.time.Instant
-              .now()} ${logLevel.label} [fiber=${fiberId.threadName},${annotations.map { case (k, v) => s"$k=$v" }
+              .now()} ${logLevel.label} [fiber=${fiberId.threadName},${annotations
+              .map { case (k, v) => s"$k=$v" }
               .mkString(",")}] ${message()} ${if (cause.isEmpty) "" else cause.prettyPrint}"
         )
     }.filterLogLevel(_ >= LogLevel.Info).map(_ => ())

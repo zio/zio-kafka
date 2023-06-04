@@ -1,11 +1,11 @@
 package zio.kafka.serde
 
 import org.apache.kafka.common.header.Headers
-import org.apache.kafka.common.serialization.{ Deserializer => KafkaDeserializer }
-import zio.{ RIO, Task, ZIO }
+import org.apache.kafka.common.serialization.{Deserializer => KafkaDeserializer}
+import zio.{RIO, Task, ZIO}
 
 import scala.jdk.CollectionConverters._
-import scala.util.{ Failure, Success, Try }
+import scala.util.{Failure, Success, Try}
 
 /**
  * Deserializer from byte array to a value of some type T
@@ -73,7 +73,7 @@ object Deserializer extends Serdes {
   def fromKafkaDeserializer[T](
     deserializer: KafkaDeserializer[T],
     props: Map[String, AnyRef],
-    isKey: Boolean
+    isKey: Boolean,
   ): Task[Deserializer[Any, T]] =
     ZIO
       .attempt(deserializer.configure(props.asJava, isKey))

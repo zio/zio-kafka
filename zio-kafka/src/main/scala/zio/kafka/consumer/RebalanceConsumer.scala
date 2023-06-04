@@ -1,8 +1,8 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ Consumer => JConsumer, OffsetAndMetadata }
+import org.apache.kafka.clients.consumer.{Consumer => JConsumer, OffsetAndMetadata}
 import org.apache.kafka.common.TopicPartition
-import zio.{ Task, ZIO }
+import zio.{Task, ZIO}
 
 import scala.jdk.CollectionConverters._
 

@@ -32,12 +32,12 @@ object KafkaCredentialStoreSpec extends ZIOSpecDefaultSlf4j {
         assert(store.properties)(
           equalTo(
             Map(
-              "security.protocol"   -> "SSL",
-              "ssl.truststore.type" -> "PEM",
-              "ssl.truststore.certificates" -> "-----BEGIN CERTIFICATE----- RmFrZSBDQSBjZXJ0aWZpY2F0ZSBGYWtlIENBIGNlcnRpZmljYXRlIEZha2UgQ0EgY2VydGlmaWNh dGUgRmFrZSBDQSBjZXJ0aWZpY2F0ZQ== -----END CERTIFICATE-----",
-              "ssl.keystore.type" -> "PEM",
-              "ssl.keystore.key" -> "-----BEGIN PRIVATE KEY----- RmFrZSBwcml2YXRlIGtleSBGYWtlIHByaXZhdGUga2V5IEZha2UgcHJpdmF0ZSBrZXkgRmFrZSBw cml2YXRlIGtleSBGYWtlIHByaXZhdGUga2V5IA== -----END PRIVATE KEY-----",
-              "ssl.keystore.certificate.chain" -> "-----BEGIN CERTIFICATE----- RmFrZSBjbGllbnQgY2VydCBGYWtlIGNsaWVudCBjZXJ0IEZha2UgY2xpZW50IGNlcnQgRmFrZSBj bGllbnQgY2VydCBGYWtlIGNsaWVudCBjZXJ0IA== -----END CERTIFICATE-----"
+              "security.protocol"              -> "SSL",
+              "ssl.truststore.type"            -> "PEM",
+              "ssl.truststore.certificates"    -> "-----BEGIN CERTIFICATE----- RmFrZSBDQSBjZXJ0aWZpY2F0ZSBGYWtlIENBIGNlcnRpZmljYXRlIEZha2UgQ0EgY2VydGlmaWNh dGUgRmFrZSBDQSBjZXJ0aWZpY2F0ZQ== -----END CERTIFICATE-----",
+              "ssl.keystore.type"              -> "PEM",
+              "ssl.keystore.key"               -> "-----BEGIN PRIVATE KEY----- RmFrZSBwcml2YXRlIGtleSBGYWtlIHByaXZhdGUga2V5IEZha2UgcHJpdmF0ZSBrZXkgRmFrZSBw cml2YXRlIGtleSBGYWtlIHByaXZhdGUga2V5IA== -----END PRIVATE KEY-----",
+              "ssl.keystore.certificate.chain" -> "-----BEGIN CERTIFICATE----- RmFrZSBjbGllbnQgY2VydCBGYWtlIGNsaWVudCBjZXJ0IEZha2UgY2xpZW50IGNlcnQgRmFrZSBj bGllbnQgY2VydCBGYWtlIGNsaWVudCBjZXJ0IA== -----END CERTIFICATE-----",
             )
           )
         )

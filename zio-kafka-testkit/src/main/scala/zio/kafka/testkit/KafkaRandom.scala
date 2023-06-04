@@ -1,6 +1,6 @@
 package zio.kafka.testkit
 
-import zio.{ Task, ZIO }
+import zio.{Task, ZIO}
 
 import java.util.UUID
 

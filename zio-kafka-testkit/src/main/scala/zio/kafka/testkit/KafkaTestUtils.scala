@@ -1,17 +1,17 @@
 package zio.kafka.testkit
 
-import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerRecord }
-import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import zio._
 import zio.kafka.admin._
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
+import zio.kafka.consumer.Consumer.{AutoOffsetStrategy, OffsetRetrieval}
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.producer._
-import zio.kafka.serde.{ Deserializer, Serde }
+import zio.kafka.serde.{Deserializer, Serde}
 
 import java.io.File
-import java.nio.file.{ Files, StandardCopyOption }
+import java.nio.file.{Files, StandardCopyOption}
 
 object KafkaTestUtils {
 
@@ -29,7 +29,7 @@ object KafkaTestUtils {
   val producer: ZLayer[Kafka, Throwable, Producer] =
     ZLayer.makeSome[Kafka, Producer](
       ZLayer(producerSettings),
-      Producer.live
+      Producer.live,
     )
 
   /**
@@ -46,7 +46,7 @@ object KafkaTestUtils {
   val transactionalProducer: ZLayer[Kafka, Throwable, TransactionalProducer] =
     ZLayer.makeSome[Kafka, TransactionalProducer](
       ZLayer(transactionalProducerSettings),
-      TransactionalProducer.live
+      TransactionalProducer.live,
     )
 
   /**
@@ -55,7 +55,7 @@ object KafkaTestUtils {
   def produceOne(
     topic: String,
     key: String,
-    message: String
+    message: String,
   ): ZIO[Producer, Throwable, RecordMetadata] =
     Producer.produce[Any, String, String](new ProducerRecord(topic, key, message), Serde.string, Serde.string)
 
@@ -65,7 +65,7 @@ object KafkaTestUtils {
   def produceMany(
     topic: String,
     partition: Int,
-    kvs: Iterable[(String, String)]
+    kvs: Iterable[(String, String)],
   ): ZIO[Producer, Throwable, Chunk[RecordMetadata]] =
     Producer
       .produceChunk[Any, String, String](
@@ -73,7 +73,7 @@ object KafkaTestUtils {
           new ProducerRecord(topic, partition, null, k, v)
         }),
         Serde.string,
-        Serde.string
+        Serde.string,
       )
 
   /**
@@ -81,7 +81,7 @@ object KafkaTestUtils {
    */
   def produceMany(
     topic: String,
-    kvs: Iterable[(String, String)]
+    kvs: Iterable[(String, String)],
   ): ZIO[Producer, Throwable, Chunk[RecordMetadata]] =
     Producer
       .produceChunk[Any, String, String](
@@ -89,7 +89,23 @@ object KafkaTestUtils {
           new ProducerRecord(topic, k, v)
         }),
         Serde.string,
-        Serde.string
+        Serde.string,
+      )
+
+  /**
+   * Utility function to produce many messages in a Topic.
+   */
+  def produceMany[K, V](
+    topic: String,
+    kvs: Iterable[(K, V)],
+    keySerde: Serde[Any, K],
+    valueSerde: Serde[Any, V],
+  ): ZIO[Producer, Throwable, Chunk[RecordMetadata]] =
+    Producer
+      .produceChunk[Any, K, V](
+        Chunk.fromIterable(kvs.map { case (k, v) => new ProducerRecord(topic, k, v) }),
+        keySerde,
+        valueSerde,
       )
 
   /**
@@ -104,7 +120,7 @@ object KafkaTestUtils {
     restartStreamOnRebalancing: Boolean = false,
     `max.poll.records`: Int = 100, // settings this higher can cause concurrency bugs to go unnoticed
     runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
-    properties: Map[String, String] = Map.empty
+    properties: Map[String, String] = Map.empty,
   ): URIO[Kafka, ConsumerSettings] =
     ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
       val settings = ConsumerSettings(kafka.bootstrapServers)
@@ -119,7 +135,7 @@ object KafkaTestUtils {
           ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG     -> "10000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "1000",
           ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> s"${`max.poll.records`}",
-          ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
+          ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString,
         )
         .withOffsetRetrieval(offsetRetrieval)
         .withRestartStreamOnRebalancing(restartStreamOnRebalancing)
@@ -139,7 +155,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
-    properties: Map[String, String] = Map.empty
+    properties: Map[String, String] = Map.empty,
   ): URIO[Kafka, ConsumerSettings] =
     consumerSettings(
       clientId = clientId,
@@ -148,7 +164,7 @@ object KafkaTestUtils {
       allowAutoCreateTopics = allowAutoCreateTopics,
       offsetRetrieval = offsetRetrieval,
       restartStreamOnRebalancing = restartStreamOnRebalancing,
-      properties = properties
+      properties = properties,
     )
       .map(
         _.withProperties(
@@ -187,7 +203,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
-    properties: Map[String, String] = Map.empty
+    properties: Map[String, String] = Map.empty,
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
       consumerSettings(
@@ -197,7 +213,7 @@ object KafkaTestUtils {
         allowAutoCreateTopics = allowAutoCreateTopics,
         offsetRetrieval = offsetRetrieval,
         restartStreamOnRebalancing = restartStreamOnRebalancing,
-        properties = properties
+        properties = properties,
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
@@ -213,7 +229,7 @@ object KafkaTestUtils {
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
     properties: Map[String, String] = Map.empty,
-    rebalanceListener: RebalanceListener = RebalanceListener.noop
+    rebalanceListener: RebalanceListener = RebalanceListener.noop,
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
       transactionalConsumerSettings(
@@ -223,7 +239,7 @@ object KafkaTestUtils {
         allowAutoCreateTopics = allowAutoCreateTopics,
         offsetRetrieval = offsetRetrieval,
         restartStreamOnRebalancing = restartStreamOnRebalancing,
-        properties = properties
+        properties = properties,
       ).map(_.withRebalanceListener(rebalanceListener))
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
@@ -240,7 +256,7 @@ object KafkaTestUtils {
         settings,
         subscription,
         Deserializer.string,
-        Deserializer.string
+        Deserializer.string,
       )(r)
     }
 
@@ -260,7 +276,7 @@ object KafkaTestUtils {
         AdminClientSettings(_).withProperties(
           "sasl.mechanism"    -> "PLAIN",
           "security.protocol" -> "SASL_PLAINTEXT",
-          "sasl.jaas.config" -> s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="$username" password="$password";"""
+          "sasl.jaas.config"  -> s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="$username" password="$password";""",
         )
       )
 
@@ -280,7 +296,7 @@ object KafkaTestUtils {
           "ssl.key.password"        -> "123456",
           "ssl.enabled.protocols"   -> "TLSv1.2",
           "ssl.truststore.type"     -> "JKS",
-          "ssl.keystore.type"       -> "JKS"
+          "ssl.keystore.type"       -> "JKS",
         )
       )
 
@@ -299,7 +315,7 @@ object KafkaTestUtils {
    */
   def withSaslAdmin[T](
     username: String = "admin",
-    password: String = "admin-secret"
+    password: String = "admin-secret",
   )(f: AdminClient => RIO[Kafka.Sasl, T]): ZIO[Kafka.Sasl, Throwable, T] =
     for {
       settings <- saslAdminSettings(username, password)
@@ -324,7 +340,7 @@ object KafkaTestUtils {
     try {
       val tmpFile = Files.createTempFile(tmpFileName, tmpFileSuffix)
       Files.copy(getClass.getClassLoader.getResourceAsStream(file), tmpFile, StandardCopyOption.REPLACE_EXISTING)
-      val result = tmpFile.toFile
+      val result  = tmpFile.toFile
       result.deleteOnExit()
       result
     } catch {

@@ -4,13 +4,13 @@ import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.openjdk.jmh.annotations._
 import zio.kafka.bench.ZioBenchmark.randomThing
-import zio.kafka.consumer.{ Consumer, Offset, OffsetBatch, Subscription }
+import zio.kafka.consumer.{Consumer, Offset, OffsetBatch, Subscription}
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
-import zio.kafka.testkit.KafkaTestUtils.{ consumer, produceMany, producer }
+import zio.kafka.testkit.KafkaTestUtils.{consumer, produceMany, producer}
 import zio.stream.ZSink
-import zio.{ durationInt, Ref, Schedule, ZIO, ZLayer }
+import zio.{durationInt, Ref, Schedule, ZIO, ZLayer}
 
 import java.util.concurrent.TimeUnit
 
@@ -36,19 +36,19 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   def throughput(): Any = runZIO {
     for {
       counter <- Ref.make(0)
-      _ <- Consumer
-             .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
-             .tap { _ =>
-               counter.updateAndGet(_ + 1).flatMap(count => Consumer.stopConsumption.when(count == nrMessages))
-             }
-             .runDrain
-             .provideSome[Kafka](
-               consumer(
-                 randomThing("client"),
-                 Some(randomThing("group")),
-                 properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
-               )
-             )
+      _       <- Consumer
+                   .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
+                   .tap { _ =>
+                     counter.updateAndGet(_ + 1).flatMap(count => Consumer.stopConsumption.when(count == nrMessages))
+                   }
+                   .runDrain
+                   .provideSome[Kafka](
+                     consumer(
+                       randomThing("client"),
+                       Some(randomThing("group")),
+                       properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"),
+                     )
+                   )
     } yield ()
   }
 
@@ -57,24 +57,24 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   def throughputWithCommits(): Any = runZIO {
     for {
       counter <- Ref.make(0)
-      _ <- ZIO.logAnnotate("consumer", "1") {
-             Consumer
-               .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
-               .map(_.offset)
-               .aggregateAsyncWithin(ZSink.collectAll[Offset], Schedule.fixed(100.millis))
-               .tap(batch => counter.update(_ + batch.size))
-               .map(OffsetBatch.apply)
-               .mapZIO(_.commit)
-               .takeUntilZIO(_ => counter.get.map(_ >= nrMessages))
-               .runDrain
-               .provideSome[Kafka](
-                 consumer(
-                   randomThing("client"),
-                   Some(randomThing("group")),
-                   properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
-                 )
-               )
-           }
+      _       <- ZIO.logAnnotate("consumer", "1") {
+                   Consumer
+                     .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
+                     .map(_.offset)
+                     .aggregateAsyncWithin(ZSink.collectAll[Offset], Schedule.fixed(100.millis))
+                     .tap(batch => counter.update(_ + batch.size))
+                     .map(OffsetBatch.apply)
+                     .mapZIO(_.commit)
+                     .takeUntilZIO(_ => counter.get.map(_ >= nrMessages))
+                     .runDrain
+                     .provideSome[Kafka](
+                       consumer(
+                         randomThing("client"),
+                         Some(randomThing("group")),
+                         properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000"),
+                       )
+                     )
+                 }
     } yield ()
   }
 }

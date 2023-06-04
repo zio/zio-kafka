@@ -2,7 +2,7 @@ package zio.kafka.bench.comparison
 
 import org.openjdk.jmh.annotations._
 import zio.kafka.bench.comparison.ComparisonBenchmark.zAssert
-import zio.kafka.consumer.{ Consumer, Subscription }
+import zio.kafka.consumer.{Consumer, Subscription}
 import zio.kafka.serde.Serde
 
 import java.util.concurrent.TimeUnit
@@ -30,7 +30,7 @@ class ZioKafkaBenchmarks extends ComparisonBenchmark {
         .plainStream(
           Subscription.manual(topicPartitions.map(tp => tp.name -> tp.partition): _*),
           Serde.byteArray,
-          Serde.byteArray
+          Serde.byteArray,
         )
         .take(numberOfMessages.toLong)
         .runCount

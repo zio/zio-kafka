@@ -1,6 +1,6 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.{ Consumer => JConsumer, KafkaConsumer }
+import org.apache.kafka.clients.consumer.{Consumer => JConsumer, KafkaConsumer}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio._
@@ -11,7 +11,7 @@ import scala.jdk.CollectionConverters._
 
 private[consumer] final class ConsumerAccess(
   private[consumer] val consumer: ByteArrayKafkaConsumer,
-  access: Semaphore
+  access: Semaphore,
 ) {
   def withConsumer[A](f: ByteArrayKafkaConsumer => A): Task[A] =
     withConsumerZIO[Any, A](c => ZIO.attempt(f(c)))
@@ -42,13 +42,13 @@ private[consumer] object ConsumerAccess {
 
   def make(settings: ConsumerSettings): ZIO[Scope, Throwable, ConsumerAccess] =
     for {
-      access <- Semaphore.make(1)
+      access   <- Semaphore.make(1)
       consumer <- ZIO.acquireRelease {
                     ZIO.attemptBlocking {
                       new KafkaConsumer[Array[Byte], Array[Byte]](
                         settings.driverSettings.asJava,
                         new ByteArrayDeserializer(),
-                        new ByteArrayDeserializer()
+                        new ByteArrayDeserializer(),
                       )
                     }
                   } { consumer =>

@@ -1,7 +1,7 @@
 package zio.kafka.producer
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
-import org.apache.kafka.clients.producer.{ KafkaProducer, RecordMetadata }
+import org.apache.kafka.clients.producer.{KafkaProducer, RecordMetadata}
 import org.apache.kafka.common.errors.InvalidGroupIdException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
@@ -20,9 +20,9 @@ object TransactionalProducer {
 
   private final case class LiveTransactionalProducer(
     live: Producer.Live,
-    semaphore: Semaphore
+    semaphore: Semaphore,
   ) extends TransactionalProducer {
-    val abortTransaction: Task[Unit] = ZIO.attemptBlocking(live.p.abortTransaction())
+    val abortTransaction: Task[Unit]                                       = ZIO.attemptBlocking(live.p.abortTransaction())
     def commitTransactionWithOffsets(offsetBatch: OffsetBatch): Task[Unit] =
       ZIO
         .attemptBlocking(
@@ -35,14 +35,14 @@ object TransactionalProducer {
                 throw new InvalidGroupIdException(
                   "To use the group management or offset commit APIs, you must provide a valid group.id in the consumer configuration."
                 )
-              )
+              ),
           )
         )
         .unless(offsetBatch.offsets.isEmpty) *>
         ZIO.attemptBlocking(live.p.commitTransaction())
 
     def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): UIO[Unit] = exit match {
-      case Exit.Success(_) =>
+      case Exit.Success(_)                           =>
         transaction.offsetBatchRef.get
           .flatMap(offsetBatch => commitTransactionWithOffsets(offsetBatch).retryN(5).orDie)
       case Exit.Failure(Fail(UserInitiatedAbort, _)) => abortTransaction.retryN(5).orDie
@@ -74,24 +74,24 @@ object TransactionalProducer {
 
   def make(settings: TransactionalProducerSettings): ZIO[Scope, Throwable, TransactionalProducer] =
     for {
-      props <- ZIO.attempt(settings.producerSettings.driverSettings)
+      props       <- ZIO.attempt(settings.producerSettings.driverSettings)
       rawProducer <- ZIO.attempt(
                        new KafkaProducer[Array[Byte], Array[Byte]](
                          props.asJava,
                          new ByteArraySerializer(),
-                         new ByteArraySerializer()
+                         new ByteArraySerializer(),
                        )
                      )
-      _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
-      semaphore <- Semaphore.make(1)
-      runtime   <- ZIO.runtime[Any]
-      sendQueue <-
+      _           <- ZIO.attemptBlocking(rawProducer.initTransactions())
+      semaphore   <- Semaphore.make(1)
+      runtime     <- ZIO.runtime[Any]
+      sendQueue   <-
         Queue.bounded[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])](
           settings.producerSettings.sendBufferSize
         )
-      live <- ZIO.acquireRelease(
-                ZIO.succeed(Producer.Live(rawProducer, settings.producerSettings, runtime, sendQueue))
-              )(_.close)
-      _ <- ZIO.blocking(live.sendFromQueue).forkScoped
+      live        <- ZIO.acquireRelease(
+                       ZIO.succeed(Producer.Live(rawProducer, settings.producerSettings, runtime, sendQueue))
+                     )(_.close)
+      _           <- ZIO.blocking(live.sendFromQueue).forkScoped
     } yield LiveTransactionalProducer(live, semaphore)
 }

@@ -32,7 +32,7 @@ final case class ConsumerSettings(
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
   runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
-  enableOptimisticResume: Boolean = true
+  enableOptimisticResume: Boolean = true,
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
@@ -42,7 +42,7 @@ final case class ConsumerSettings(
   def driverSettings: Map[String, AnyRef] =
     Map(
       ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG  -> bootstrapServers.mkString(","),
-      ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false"
+      ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false",
     ) ++ autoOffsetResetConfig ++ properties
 
   def withBootstrapServers(servers: List[String]): ConsumerSettings =
@@ -101,6 +101,6 @@ object ConsumerSettings {
       closeTimeout = 30.seconds,
       pollTimeout = 50.millis,
       offsetRetrieval = OffsetRetrieval.Auto(),
-      runloopTimeout = defaultRunloopTimeout
+      runloopTimeout = defaultRunloopTimeout,
     )
 }

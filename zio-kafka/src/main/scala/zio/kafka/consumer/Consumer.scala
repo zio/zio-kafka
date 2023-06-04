@@ -1,12 +1,12 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp }
+import org.apache.kafka.clients.consumer.{ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp}
 import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
-import zio.kafka.consumer.internal.{ ConsumerAccess, Runloop }
-import zio.kafka.serde.{ Deserializer, Serde }
+import zio.kafka.consumer.internal.{ConsumerAccess, Runloop}
+import zio.kafka.serde.{Deserializer, Serde}
 import zio.kafka.utils.SslHelper
 import zio.stream._
 
@@ -24,7 +24,7 @@ trait Consumer {
 
   def beginningOffsets(
     partitions: Set[TopicPartition],
-    timeout: Duration = Duration.Infinity
+    timeout: Duration = Duration.Infinity,
   ): Task[Map[TopicPartition, Long]]
 
   /**
@@ -32,12 +32,12 @@ trait Consumer {
    */
   def committed(
     partitions: Set[TopicPartition],
-    timeout: Duration = Duration.Infinity
+    timeout: Duration = Duration.Infinity,
   ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]]
 
   def endOffsets(
     partitions: Set[TopicPartition],
-    timeout: Duration = Duration.Infinity
+    timeout: Duration = Duration.Infinity,
   ): Task[Map[TopicPartition, Long]]
 
   def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]]
@@ -61,7 +61,7 @@ trait Consumer {
   def partitionedAssignmentStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
+    valueDeserializer: Deserializer[R, V],
   ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
 
   /**
@@ -84,7 +84,7 @@ trait Consumer {
   def partitionedStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
+    valueDeserializer: Deserializer[R, V],
   ): Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
 
   /**
@@ -109,7 +109,7 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    bufferSize: Int = 4
+    bufferSize: Int = 4,
   ): ZStream[R, Throwable, CommittableRecord[K, V]]
 
   /**
@@ -125,7 +125,7 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+    commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3),
   )(
     f: ConsumerRecord[K, V] => URIO[R1, Unit]
   ): ZIO[R & R1, Throwable, Unit]
@@ -139,7 +139,7 @@ trait Consumer {
    */
   def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
-    timeout: Duration = Duration.Infinity
+    timeout: Duration = Duration.Infinity,
   ): Task[Map[TopicPartition, OffsetAndTimestamp]]
 
   def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): Task[List[PartitionInfo]]
@@ -165,7 +165,7 @@ object Consumer {
     private val subscriptions: Ref.Synchronized[Set[Subscription]],
     private val partitionAssignments: Hub[
       Take[Throwable, Chunk[(TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord])]]
-    ]
+    ],
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
@@ -173,17 +173,19 @@ object Consumer {
 
     override def beginningOffsets(
       partitions: Set[TopicPartition],
-      timeout: Duration = Duration.Infinity
+      timeout: Duration = Duration.Infinity,
     ): Task[Map[TopicPartition, Long]] =
       consumer.withConsumer(
-        _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.map { case (tp, l) =>
-          tp -> l.longValue()
-        }.toMap
+        _.beginningOffsets(partitions.asJava, timeout.asJava).asScala
+          .map { case (tp, l) =>
+            tp -> l.longValue()
+          }
+          .toMap
       )
 
     override def committed(
       partitions: Set[TopicPartition],
-      timeout: Duration = Duration.Infinity
+      timeout: Duration = Duration.Infinity,
     ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]] =
       consumer.withConsumer(
         _.committed(partitions.asJava, timeout.asJava).asScala.map { case (k, v) => k -> Option(v) }.toMap
@@ -191,7 +193,7 @@ object Consumer {
 
     override def endOffsets(
       partitions: Set[TopicPartition],
-      timeout: Duration = Duration.Infinity
+      timeout: Duration = Duration.Infinity,
     ): Task[Map[TopicPartition, Long]] =
       consumer.withConsumer { eo =>
         val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
@@ -209,7 +211,7 @@ object Consumer {
 
     override def offsetsForTimes(
       timestamps: Map[TopicPartition, Long],
-      timeout: Duration = Duration.Infinity
+      timeout: Duration = Duration.Infinity,
     ): Task[Map[TopicPartition, OffsetAndTimestamp]] =
       consumer.withConsumer(
         _.offsetsForTimes(timestamps.map { case (k, v) => k -> Long.box(v) }.asJava, timeout.asJava).asScala.toMap
@@ -221,12 +223,12 @@ object Consumer {
     override def partitionedAssignmentStream[R, K, V](
       subscription: Subscription,
       keyDeserializer: Deserializer[R, K],
-      valueDeserializer: Deserializer[R, V]
+      valueDeserializer: Deserializer[R, V],
     ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
       def extendSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
         val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
         Subscription.unionAll(newSubscriptions) match {
-          case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions))
+          case None        => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions))
           case Some(union) =>
             ZIO.logDebug(s"Changing kafka subscription to $union") *>
               subscribe(union).as(newSubscriptions.toSet)
@@ -240,7 +242,7 @@ object Consumer {
         (newUnion match {
           case Some(union) =>
             ZIO.logDebug(s"Reducing kafka subscription to $union") *> subscribe(union)
-          case None =>
+          case None        =>
             ZIO.logDebug(s"Unsubscribing kafka consumer") *> unsubscribe
         }).as(newSubscriptions.fold(Set.empty[Subscription])(_.toSet))
       }.uninterruptible
@@ -271,13 +273,13 @@ object Consumer {
     override def partitionedStream[R, K, V](
       subscription: Subscription,
       keyDeserializer: Deserializer[R, K],
-      valueDeserializer: Deserializer[R, V]
+      valueDeserializer: Deserializer[R, V],
     ): ZStream[Any, Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] =
       partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer).flattenChunks
 
     override def partitionsFor(
       topic: String,
-      timeout: Duration = Duration.Infinity
+      timeout: Duration = Duration.Infinity,
     ): Task[List[PartitionInfo]] =
       consumer.withConsumer { c =>
         val partitions = c.partitionsFor(topic, timeout.asJava)
@@ -291,11 +293,11 @@ object Consumer {
       subscription: Subscription,
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V],
-      bufferSize: Int
+      bufferSize: Int,
     ): ZStream[R, Throwable, CommittableRecord[K, V]] =
       partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
         n = Int.MaxValue,
-        bufferSize = bufferSize
+        bufferSize = bufferSize,
       )(_._2)
 
     override def subscription: Task[Set[String]] =
@@ -305,7 +307,7 @@ object Consumer {
       subscription: Subscription,
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V],
-      commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+      commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3),
     )(
       f: ConsumerRecord[K, V] => URIO[R1, Unit]
     ): ZIO[R & R1, Throwable, Unit] =
@@ -345,7 +347,7 @@ object Consumer {
 
   def make(
     settings: ConsumerSettings,
-    diagnostics: Diagnostics = Diagnostics.NoOp
+    diagnostics: Diagnostics = Diagnostics.NoOp,
   ): ZIO[Scope, Throwable, Consumer] = {
     /*
     We must supply a queue size for the partitionAssignments hub below. Under most circumstances,
@@ -358,19 +360,19 @@ object Consumer {
     val hubCapacity = 32
 
     for {
-      _       <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
-      wrapper <- ConsumerAccess.make(settings)
-      runloop <- Runloop.make(
-                   hasGroupId = settings.hasGroupId,
-                   consumer = wrapper,
-                   pollTimeout = settings.pollTimeout,
-                   diagnostics = diagnostics,
-                   offsetRetrieval = settings.offsetRetrieval,
-                   userRebalanceListener = settings.rebalanceListener,
-                   restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
-                   runloopTimeout = settings.runloopTimeout,
-                   consumerSettings = settings
-                 )
+      _             <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
+      wrapper       <- ConsumerAccess.make(settings)
+      runloop       <- Runloop.make(
+                         hasGroupId = settings.hasGroupId,
+                         consumer = wrapper,
+                         pollTimeout = settings.pollTimeout,
+                         diagnostics = diagnostics,
+                         offsetRetrieval = settings.offsetRetrieval,
+                         userRebalanceListener = settings.rebalanceListener,
+                         restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
+                         runloopTimeout = settings.runloopTimeout,
+                         consumerSettings = settings,
+                       )
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 
       partitionAssignments <- ZStream
@@ -392,7 +394,7 @@ object Consumer {
    */
   def beginningOffsets(
     partitions: Set[TopicPartition],
-    timeout: Duration = Duration.Infinity
+    timeout: Duration = Duration.Infinity,
   ): RIO[Consumer, Map[TopicPartition, Long]] =
     ZIO.serviceWithZIO(_.beginningOffsets(partitions, timeout))
 
@@ -401,7 +403,7 @@ object Consumer {
    */
   def committed(
     partitions: Set[TopicPartition],
-    timeout: Duration = Duration.Infinity
+    timeout: Duration = Duration.Infinity,
   ): RIO[Consumer, Map[TopicPartition, Option[OffsetAndMetadata]]] =
     ZIO.serviceWithZIO(_.committed(partitions, timeout))
 
@@ -410,7 +412,7 @@ object Consumer {
    */
   def endOffsets(
     partitions: Set[TopicPartition],
-    timeout: Duration = Duration.Infinity
+    timeout: Duration = Duration.Infinity,
   ): RIO[Consumer, Map[TopicPartition, Long]] =
     ZIO.serviceWithZIO(_.endOffsets(partitions, timeout))
 
@@ -425,7 +427,7 @@ object Consumer {
   def partitionedAssignmentStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
+    valueDeserializer: Deserializer[R, V],
   ): ZStream[Consumer, Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] =
     ZStream.serviceWithStream[Consumer](_.partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer))
 
@@ -435,11 +437,11 @@ object Consumer {
   def partitionedStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
+    valueDeserializer: Deserializer[R, V],
   ): ZStream[
     Consumer,
     Throwable,
-    (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
+    (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]]),
   ] =
     ZStream.serviceWithStream[Consumer](_.partitionedStream(subscription, keyDeserializer, valueDeserializer))
 
@@ -450,7 +452,7 @@ object Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    bufferSize: Int = 4
+    bufferSize: Int = 4,
   ): ZStream[R & Consumer, Throwable, CommittableRecord[K, V]] =
     ZStream.serviceWithStream[Consumer](
       _.plainStream(subscription, keyDeserializer, valueDeserializer, bufferSize)
@@ -521,7 +523,7 @@ object Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+    commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3),
   )(f: ConsumerRecord[K, V] => URIO[R1, Unit]): RIO[R & R1, Unit] =
     ZIO.scoped[R & R1] {
       Consumer
@@ -534,7 +536,7 @@ object Consumer {
    */
   def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
-    timeout: Duration = Duration.Infinity
+    timeout: Duration = Duration.Infinity,
   ): RIO[Consumer, Map[TopicPartition, OffsetAndTimestamp]] =
     ZIO.serviceWithZIO(_.offsetsForTimes(timestamps, timeout))
 
@@ -543,7 +545,7 @@ object Consumer {
    */
   def partitionsFor(
     topic: String,
-    timeout: Duration = Duration.Infinity
+    timeout: Duration = Duration.Infinity,
   ): RIO[Consumer, List[PartitionInfo]] =
     ZIO.serviceWithZIO(_.partitionsFor(topic, timeout))
 
@@ -552,7 +554,7 @@ object Consumer {
    */
   def position(
     partition: TopicPartition,
-    timeout: Duration = Duration.Infinity
+    timeout: Duration = Duration.Infinity,
   ): RIO[Consumer, Long] =
     ZIO.serviceWithZIO(_.position(partition, timeout))
 

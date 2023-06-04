@@ -7,8 +7,8 @@ import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
-import zio.kafka.testkit.{ Kafka, KafkaRandom }
-import zio.stream.{ ZSink, ZStream }
+import zio.kafka.testkit.{Kafka, KafkaRandom}
+import zio.stream.{ZSink, ZStream}
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
@@ -28,7 +28,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         _ <- produceMany(topic1, kvs)
         _ <- produceMany(topic2, kvs)
 
-        records <-
+        records             <-
           (Consumer
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .take(5)
@@ -57,7 +57,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         _ <- produceMany(topic1, kvs)
         _ <- produceMany(topic2, kvs)
 
-        records <-
+        records             <-
           (Consumer
             .plainStream(Subscription.Pattern(s"$topic1".r), Serde.string, Serde.string)
             .take(5)
@@ -96,7 +96,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               .plainStream(
                 Subscription.manual(topic2, 1),
                 Serde.string,
-                Serde.string
+                Serde.string,
               )
               .runCollect)
             .provideSomeLayer[Kafka & Scope](consumer(client, Some(group)))
@@ -115,7 +115,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
         consumer1GotMessage <- Promise.make[Nothing, Unit]
         consumer2GotMessage <- Promise.make[Nothing, Unit]
-        _ <-
+        _                   <-
           (Consumer
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .tap(_ => consumer1GotMessage.succeed(()))
@@ -165,7 +165,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         _ <- produceMany(topic1, kvs)
 
         errored <- Ref.make(false)
-        _ <-
+        _       <-
           Consumer
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .take(5)
@@ -187,7 +187,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         _ <- produceMany(topic1, kvs)
 
         recordsConsumed <- Ref.make(Chunk.empty[CommittableRecord[String, String]])
-        _ <-
+        _               <-
           Consumer
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .take(40)
@@ -201,9 +201,9 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             .tap(records => recordsConsumed.update(_ ++ records))
             .repeatN(24)
             .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
-        consumed <- recordsConsumed.get
+        consumed        <- recordsConsumed.get
       } yield assert(consumed.map(r => r.value))(hasSameElements(Chunk.fromIterable(kvs.map(_._2))))
-    } @@ TestAspect.nonFlaky(3)
+    } @@ TestAspect.nonFlaky(3),
   )
     .provideSome[Scope & Kafka](producer)
     .provideSomeShared[Scope](

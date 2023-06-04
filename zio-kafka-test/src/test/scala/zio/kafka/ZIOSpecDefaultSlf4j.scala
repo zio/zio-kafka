@@ -2,7 +2,7 @@ package zio.kafka
 
 import zio.Chunk
 import zio.logging.backend.SLF4J
-import zio.test.{ TestAspect, TestAspectAtLeastR, TestEnvironment, ZIOSpecDefault }
+import zio.test.{TestAspect, TestAspectAtLeastR, TestEnvironment, ZIOSpecDefault}
 
 /**
  * Use this class instead of `ZIOSpecDefault` if you want your tests to use SLF4J to log.

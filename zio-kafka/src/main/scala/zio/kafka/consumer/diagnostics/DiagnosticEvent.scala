@@ -9,7 +9,7 @@ object DiagnosticEvent {
   final case class Poll(
     tpRequested: Set[TopicPartition],
     tpWithData: Set[TopicPartition],
-    tpWithoutData: Set[TopicPartition]
+    tpWithoutData: Set[TopicPartition],
   ) extends DiagnosticEvent
   final case class Request(partition: TopicPartition) extends DiagnosticEvent
 

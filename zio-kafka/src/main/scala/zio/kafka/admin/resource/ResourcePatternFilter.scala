@@ -1,6 +1,6 @@
 package zio.kafka.admin.resource
 
-import org.apache.kafka.common.resource.{ ResourcePatternFilter => JResourcePatternFilter }
+import org.apache.kafka.common.resource.{ResourcePatternFilter => JResourcePatternFilter}
 
 final case class ResourcePatternFilter(resourceType: ResourceType, name: String, patternType: PatternType) {
   def asJava: JResourcePatternFilter = new JResourcePatternFilter(resourceType.asJava, name, patternType.asJava)
@@ -13,6 +13,6 @@ object ResourcePatternFilter {
     ResourcePatternFilter(
       ResourceType(jResourcePatternFilter.resourceType()),
       jResourcePatternFilter.name(),
-      PatternType(jResourcePatternFilter.patternType())
+      PatternType(jResourcePatternFilter.patternType()),
     )
 }

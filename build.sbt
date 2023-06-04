@@ -12,8 +12,8 @@ enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
 inThisBuild(
   List(
-    name       := "ZIO Kafka",
-    zioVersion := "2.0.14",
+    name                     := "ZIO Kafka",
+    zioVersion               := "2.0.14",
     crossScalaVersions -= scala211.value,
     ciEnabledBranches        := Seq("master", "series/0.x"),
     useCoursier              := false,
@@ -21,32 +21,32 @@ inThisBuild(
     Test / fork              := true,
     run / fork               := true,
     ciJvmOptions ++= Seq("-Xms6G", "-Xmx6G", "-Xss4M", "-XX:+UseG1GC"),
-    developers := List(
+    developers               := List(
       Developer(
         "iravid",
         "Itamar Ravid",
         "iravid@iravid.com",
-        url("https://github.com/iravid")
+        url("https://github.com/iravid"),
       ),
       Developer(
         "svroonland",
         "svroonland",
         "",
-        url("https://github.com/svroonland")
+        url("https://github.com/svroonland"),
       ),
       Developer(
         "guizmaii",
         "Jules Ivanic",
         "",
-        url("https://github.com/guizmaii")
+        url("https://github.com/guizmaii"),
       ),
       Developer(
         "erikvanoosten",
         "Erik van Oosten",
         "",
-        url("https://github.com/erikvanoosten")
-      )
-    )
+        url("https://github.com/erikvanoosten"),
+      ),
+    ),
   )
 )
 
@@ -57,7 +57,7 @@ lazy val root = project
   .settings(
     name               := "zio-kafka",
     publish / skip     := true,
-    crossScalaVersions := Nil // https://www.scala-sbt.org/1.x/docs/Cross-Build.html#Cross+building+a+project+statefully
+    crossScalaVersions := Nil,// https://www.scala-sbt.org/1.x/docs/Cross-Build.html#Cross+building+a+project+statefully
   )
   .aggregate(
     zioKafka,
@@ -65,7 +65,7 @@ lazy val root = project
     zioKafkaTest,
     zioKafkaBench,
     zioKafkaExample,
-    docs
+    docs,
   )
 
 def stdSettings(prjName: String) = Seq(
@@ -75,7 +75,7 @@ def stdSettings(prjName: String) = Seq(
     optionsOn("2.13")("-Wconf:cat=unused-nowarn:s").value,
   scalacOptions -= "-Xlint:infer-any",
   // workaround for bad constant pool issue
-  (Compile / doc) := Def.taskDyn {
+  (Compile / doc)   := Def.taskDyn {
     val default = (Compile / doc).taskValue
     Def.task(default.value)
   }.value,
@@ -84,7 +84,7 @@ def stdSettings(prjName: String) = Seq(
       case Some((2, _)) => Seq(compilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"))
       case _            => List.empty
     }
-  }
+  },
 ) ++ scalafixSettings
 
 lazy val zioKafka =
@@ -98,7 +98,7 @@ lazy val zioKafka =
       libraryDependencies ++= Seq(
         kafkaClients,
         jacksonDatabind,
-        scalaCollectionCompat
+        scalaCollectionCompat,
       )
     )
 
@@ -121,7 +121,7 @@ lazy val zioKafkaTestkit =
         "dev.zio" %% "zio"      % zioVersion.value,
         "dev.zio" %% "zio-test" % zioVersion.value,
         kafkaClients,
-        scalaCollectionCompat
+        scalaCollectionCompat,
       ) ++ `embedded-kafka`.value
     )
 
@@ -140,7 +140,7 @@ lazy val zioKafkaTest =
         jacksonDatabind,
         logback    % Test,
         "dev.zio" %% "zio-logging-slf4j" % "2.1.13" % Test,
-        scalaCollectionCompat
+        scalaCollectionCompat,
       ) ++ `embedded-kafka`.value
     )
 
@@ -168,12 +168,12 @@ lazy val zioKafkaExample =
         "dev.zio"                 %% "zio-test"           % "2.0.14" % Test,
         "ch.qos.logback"           % "logback-classic"    % "1.4.6",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.13",
-        "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion
+        "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
       ),
       // Scala 3 compiling fails with:
       // [error] Modules were resolved with conflicting cross-version suffixes in ProjectRef(uri("file:/home/runner/work/zio-kafka/zio-kafka/"), "zioKafkaExample"):
       // [error]    org.scala-lang.modules:scala-collection-compat _3, _2.13
-      crossScalaVersions -= scala3.value
+      crossScalaVersions -= scala3.value,
     )
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
@@ -182,18 +182,18 @@ addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck"
 lazy val docs = project
   .in(file("zio-kafka-docs"))
   .settings(
-    moduleName := "zio-kafka-docs",
+    moduleName                                 := "zio-kafka-docs",
     scalacOptions -= "-Yno-imports",
     scalacOptions -= "-Xfatal-warnings",
     projectName                                := "ZIO Kafka",
     mainModuleName                             := (zioKafka / moduleName).value,
     projectStage                               := ProjectStage.ProductionReady,
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioKafka),
-    readmeCredits :=
+    readmeCredits                              :=
       "This library is heavily inspired and made possible by the research and implementation done in " +
         "[Alpakka Kafka](https://github.com/akka/alpakka-kafka), a library maintained by the Akka team and originally " +
         "written as Reactive Kafka by SoftwareMill.",
-    readmeLicense += s"\n\nCopyright 2021-${java.time.Year.now()} Itamar Ravid and the zio-kafka contributors."
+    readmeLicense += s"\n\nCopyright 2021-${java.time.Year.now()} Itamar Ravid and the zio-kafka contributors.",
   )
   .enablePlugins(WebsitePlugin)
   .dependsOn(zioKafka, zioKafkaTestkit)

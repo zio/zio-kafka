@@ -20,9 +20,9 @@ object PollHistorySpec extends ZIOSpecDefaultSlf4j {
         "101010".toPollHistory.addPollHistory(true).asBitString == "1010101",
         PollHistory.Empty.addPollHistory(false).asBitString == "0",
         "1".toPollHistory.addPollHistory(false).asBitString == "10",
-        "101010".toPollHistory.addPollHistory(false).asBitString == "1010100"
+        "101010".toPollHistory.addPollHistory(false).asBitString == "1010100",
       )
-    }
+    },
   )
 
   private implicit class RichPollHistory(private val ph: PollHistory) extends AnyVal {

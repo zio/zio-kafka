@@ -1,8 +1,8 @@
 package zio.kafka.serde
 
 import org.apache.kafka.common.header.Headers
-import org.apache.kafka.common.serialization.{ Serde => KafkaSerde }
-import zio.{ RIO, Task, ZIO }
+import org.apache.kafka.common.serialization.{Serde => KafkaSerde}
+import zio.{RIO, Task, ZIO}
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try
@@ -53,7 +53,7 @@ object Serde extends Serdes {
     deser: (String, Headers, Array[Byte]) => RIO[R, T]
   )(ser: (String, Headers, T) => RIO[R, Array[Byte]]): Serde[R, T] =
     new Serde[R, T] {
-      override final def serialize(topic: String, headers: Headers, value: T): RIO[R, Array[Byte]] =
+      override final def serialize(topic: String, headers: Headers, value: T): RIO[R, Array[Byte]]  =
         ser(topic, headers, value)
       override final def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T] =
         deser(topic, headers, data)
@@ -64,7 +64,7 @@ object Serde extends Serdes {
    */
   def apply[R, T](deser: Deserializer[R, T])(ser: Serializer[R, T]): Serde[R, T] =
     new Serde[R, T] {
-      override final def serialize(topic: String, headers: Headers, value: T): RIO[R, Array[Byte]] =
+      override final def serialize(topic: String, headers: Headers, value: T): RIO[R, Array[Byte]]  =
         ser.serialize(topic, headers, value)
       override final def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T] =
         deser.deserialize(topic, headers, data)

@@ -2,7 +2,7 @@ package zio.kafka
 
 import zio._
 import zio.kafka.admin.acl._
-import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
+import zio.kafka.admin.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import zio.kafka.testkit._
 import zio.test.Assertion._
 import zio.test.TestAspect._
@@ -19,8 +19,8 @@ object AdminSaslSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       test("ACLs") {
         KafkaTestUtils.withSaslAdmin() { client =>
           for {
-            topic <- randomTopic
-            bindings =
+            topic         <- randomTopic
+            bindings       =
               Set(
                 AclBinding(
                   ResourcePattern(ResourceType.Topic, name = topic, patternType = PatternType.Literal),
@@ -28,17 +28,17 @@ object AdminSaslSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     principal = "User:*",
                     host = "*",
                     operation = AclOperation.Write,
-                    permissionType = AclPermissionType.Allow
-                  )
+                    permissionType = AclPermissionType.Allow,
+                  ),
                 )
               )
-            _ <- client.createAcls(bindings)
-            createdAcls <-
+            _             <- client.createAcls(bindings)
+            createdAcls   <-
               client
                 .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
                 .repeatWhile(_.isEmpty) // because the createAcls is executed async by the broker
                 .timeoutFail(new TimeoutException())(100.millis)
-            deletedAcls <-
+            deletedAcls   <-
               client
                 .deleteAcls(Set(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any)))
             remainingAcls <-

@@ -1,7 +1,7 @@
 package zio.kafka.testkit
 
 import _root_.kafka.server.KafkaConfig
-import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
+import io.github.embeddedkafka.{EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig}
 import zio._
 
 import java.util.concurrent.atomic.AtomicReference
@@ -28,8 +28,8 @@ object Kafka {
           "group.min.session.timeout.ms"     -> "500",
           "group.initial.rebalance.delay.ms" -> "0",
           "authorizer.class.name"            -> "kafka.security.authorizer.AclAuthorizer",
-          "super.users"                      -> "User:ANONYMOUS"
-        )
+          "super.users"                      -> "User:ANONYMOUS",
+        ),
       )
 
     ZIO.acquireRelease(
@@ -46,17 +46,17 @@ object Kafka {
         kafkaPort = kafkaPort,
         zooKeeperPort = zooKeeperPort,
         customBrokerProperties = Map(
-          "group.min.session.timeout.ms"         -> "500",
-          "group.initial.rebalance.delay.ms"     -> "0",
-          "authorizer.class.name"                -> "kafka.security.authorizer.AclAuthorizer",
-          "sasl.enabled.mechanisms"              -> "PLAIN",
-          "sasl.mechanism.inter.broker.protocol" -> "PLAIN",
-          "inter.broker.listener.name"           -> "SASL_PLAINTEXT",
-          "listeners"                            -> s"SASL_PLAINTEXT://localhost:$kafkaPort",
-          "advertised.listeners"                 -> s"SASL_PLAINTEXT://localhost:$kafkaPort",
-          "super.users"                          -> "User:admin",
-          "listener.name.sasl_plaintext.plain.sasl.jaas.config" -> """org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_kafkabroker1="kafkabroker1-secret";"""
-        )
+          "group.min.session.timeout.ms"                        -> "500",
+          "group.initial.rebalance.delay.ms"                    -> "0",
+          "authorizer.class.name"                               -> "kafka.security.authorizer.AclAuthorizer",
+          "sasl.enabled.mechanisms"                             -> "PLAIN",
+          "sasl.mechanism.inter.broker.protocol"                -> "PLAIN",
+          "inter.broker.listener.name"                          -> "SASL_PLAINTEXT",
+          "listeners"                                           -> s"SASL_PLAINTEXT://localhost:$kafkaPort",
+          "advertised.listeners"                                -> s"SASL_PLAINTEXT://localhost:$kafkaPort",
+          "super.users"                                         -> "User:admin",
+          "listener.name.sasl_plaintext.plain.sasl.jaas.config" -> """org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_kafkabroker1="kafkabroker1-secret";""",
+        ),
       )
 
     ZIO.acquireRelease(
@@ -89,8 +89,8 @@ object Kafka {
           KafkaConfig.InterBrokerListenerNameProp -> "SSL",
           KafkaConfig.ListenersProp               -> s"SSL://localhost:$kafkaPort",
           KafkaConfig.AdvertisedListenersProp     -> s"SSL://localhost:$kafkaPort",
-          KafkaConfig.ZkConnectionTimeoutMsProp   -> s"${30.second.toMillis}"
-        )
+          KafkaConfig.ZkConnectionTimeoutMsProp   -> s"${30.second.toMillis}",
+        ),
       )
 
     ZIO.acquireRelease(

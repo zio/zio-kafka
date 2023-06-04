@@ -4,10 +4,10 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.KafkaException
 import zio.ZIO
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.{ Consumer, Subscription }
+import zio.kafka.consumer.{Consumer, Subscription}
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.kafka.testkit.{ Kafka, KafkaRandom, KafkaTestUtils }
+import zio.kafka.testkit.{Kafka, KafkaRandom, KafkaTestUtils}
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
@@ -37,14 +37,14 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 _.getMessage,
                 equalTo(
                   "Failed to create new KafkaAdminClient"
-                )
+                ),
               ) &&
                 hasField(
                   ".getCause.getMessage",
                   _.getCause.getMessage,
                   equalTo(
                     "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
-                  )
+                  ),
                 )
             )
           )
@@ -55,13 +55,13 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           result <- (
                       for {
                         topic <- randomTopic
-                        _ <- ZIO.serviceWithZIO[Consumer](
-                               _.consumeWith(
-                                 Subscription.Topics(Set(topic)),
-                                 Serde.byteArray,
-                                 Serde.byteArray
-                               )(_ => ZIO.unit)
-                             )
+                        _     <- ZIO.serviceWithZIO[Consumer](
+                                   _.consumeWith(
+                                     Subscription.Topics(Set(topic)),
+                                     Serde.byteArray,
+                                     Serde.byteArray,
+                                   )(_ => ZIO.unit)
+                                 )
                       } yield ()
                     ).provideSomeLayer(KafkaTestUtils.consumer(clientId = "test", groupId = Some("test"))).exit
         } yield assert(result)(
@@ -72,14 +72,14 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 _.getMessage,
                 equalTo(
                   "Failed to create new KafkaAdminClient"
-                )
+                ),
               ) &&
                 hasField(
                   ".getCause.getMessage",
                   _.getCause.getMessage,
                   equalTo(
                     "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
-                  )
+                  ),
                 )
             )
           )
@@ -94,18 +94,18 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 _.getMessage,
                 equalTo(
                   "Failed to create new KafkaAdminClient"
-                )
+                ),
               ) &&
                 hasField(
                   ".getCause.getMessage",
                   _.getCause.getMessage,
                   equalTo(
                     "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
-                  )
+                  ),
                 )
             )
           )
         )
-      }
+      },
     ).provideLayerShared(Kafka.sslEmbedded) @@ withLiveClock @@ sequential
 }

@@ -1,12 +1,12 @@
 package zio.kafka.producer
 
-import org.apache.kafka.clients.producer.{ KafkaProducer, Producer => JProducer, ProducerRecord, RecordMetadata }
+import org.apache.kafka.clients.producer.{KafkaProducer, Producer => JProducer, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.serialization.ByteArraySerializer
-import org.apache.kafka.common.{ Metric, MetricName }
+import org.apache.kafka.common.{Metric, MetricName}
 import zio._
 import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
-import zio.stream.{ ZPipeline, ZStream }
+import zio.stream.{ZPipeline, ZStream}
 
 import java.util.concurrent.atomic.AtomicLong
 import scala.jdk.CollectionConverters._
@@ -20,7 +20,7 @@ trait Producer {
   def produce[R, K, V](
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): RIO[R, RecordMetadata]
 
   /**
@@ -32,7 +32,7 @@ trait Producer {
     key: K,
     value: V,
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): RIO[R, RecordMetadata]
 
   /**
@@ -40,7 +40,7 @@ trait Producer {
    */
   def produceAll[R, K, V](
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): ZPipeline[R & Producer, Throwable, ProducerRecord[K, V], RecordMetadata] =
     ZPipeline.mapChunksZIO(records => produceChunk(records, keySerializer, valueSerializer))
 
@@ -57,7 +57,7 @@ trait Producer {
   def produceAsync[R, K, V](
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): RIO[R, Task[RecordMetadata]]
 
   /**
@@ -75,7 +75,7 @@ trait Producer {
     key: K,
     value: V,
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): RIO[R, Task[RecordMetadata]]
 
   /**
@@ -91,7 +91,7 @@ trait Producer {
   def produceChunkAsync[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): RIO[R, Task[Chunk[RecordMetadata]]]
 
   /**
@@ -101,7 +101,7 @@ trait Producer {
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): RIO[R, Chunk[RecordMetadata]]
 
   /**
@@ -122,13 +122,13 @@ object Producer {
     p: JProducer[Array[Byte], Array[Byte]],
     producerSettings: ProducerSettings,
     runtime: Runtime[Any],
-    sendQueue: Queue[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])]
+    sendQueue: Queue[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])],
   ) extends Producer {
 
     override def produceAsync[R, K, V](
       record: ProducerRecord[K, V],
       keySerializer: Serializer[R, K],
-      valueSerializer: Serializer[R, V]
+      valueSerializer: Serializer[R, V],
     ): RIO[R, Task[RecordMetadata]] =
       for {
         done             <- Promise.make[Throwable, Chunk[RecordMetadata]]
@@ -139,7 +139,7 @@ object Producer {
     override def produceChunkAsync[R, K, V](
       records: Chunk[ProducerRecord[K, V]],
       keySerializer: Serializer[R, K],
-      valueSerializer: Serializer[R, V]
+      valueSerializer: Serializer[R, V],
     ): RIO[R, Task[Chunk[RecordMetadata]]] =
       if (records.isEmpty) ZIO.succeed(ZIO.succeed(Chunk.empty))
       else {
@@ -158,37 +158,38 @@ object Producer {
       ZStream
         .fromQueueWithShutdown(sendQueue)
         .mapZIO { case (serializedRecords, done) =>
-          ZIO.attempt {
-            val it: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
-            val res: Array[RecordMetadata]      = new Array[RecordMetadata](serializedRecords.length)
-            val count: AtomicLong               = new AtomicLong
-            val length                          = serializedRecords.length
+          ZIO
+            .attempt {
+              val it: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
+              val res: Array[RecordMetadata]      = new Array[RecordMetadata](serializedRecords.length)
+              val count: AtomicLong               = new AtomicLong
+              val length                          = serializedRecords.length
 
-            while (it.hasNext) {
-              val (rec, idx): (ByteRecord, Int) = it.next()
+              while (it.hasNext) {
+                val (rec, idx): (ByteRecord, Int) = it.next()
 
-              p.send(
-                rec,
-                (metadata: RecordMetadata, err: Exception) =>
-                  Unsafe.unsafe { implicit u =>
-                    exec {
-                      if (err != null) {
-                        exec {
-                          runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
-                        }
-                      } else {
-                        res(idx) = metadata
-                        if (count.incrementAndGet == length) {
+                p.send(
+                  rec,
+                  (metadata: RecordMetadata, err: Exception) =>
+                    Unsafe.unsafe { implicit u =>
+                      exec {
+                        if (err != null) {
                           exec {
-                            runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure()
+                            runtime.unsafe.run(done.fail(err)).getOrThrowFiberFailure()
+                          }
+                        } else {
+                          res(idx) = metadata
+                          if (count.incrementAndGet == length) {
+                            exec {
+                              runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure()
+                            }
                           }
                         }
                       }
-                    }
-                  }
-              )
+                    },
+                )
+              }
             }
-          }
             .foldCauseZIO(done.failCause, _ => ZIO.unit)
         }
         .runDrain
@@ -196,7 +197,7 @@ object Producer {
     override def produce[R, K, V](
       record: ProducerRecord[K, V],
       keySerializer: Serializer[R, K],
-      valueSerializer: Serializer[R, V]
+      valueSerializer: Serializer[R, V],
     ): RIO[R, RecordMetadata] =
       produceAsync(record, keySerializer, valueSerializer).flatten
 
@@ -205,7 +206,7 @@ object Producer {
       key: K,
       value: V,
       keySerializer: Serializer[R, K],
-      valueSerializer: Serializer[R, V]
+      valueSerializer: Serializer[R, V],
     ): RIO[R, RecordMetadata] =
       produce(new ProducerRecord(topic, key, value), keySerializer, valueSerializer)
 
@@ -214,14 +215,14 @@ object Producer {
       key: K,
       value: V,
       keySerializer: Serializer[R, K],
-      valueSerializer: Serializer[R, V]
+      valueSerializer: Serializer[R, V],
     ): RIO[R, Task[RecordMetadata]] =
       produceAsync(new ProducerRecord(topic, key, value), keySerializer, valueSerializer)
 
     override def produceChunk[R, K, V](
       records: Chunk[ProducerRecord[K, V]],
       keySerializer: Serializer[R, K],
-      valueSerializer: Serializer[R, V]
+      valueSerializer: Serializer[R, V],
     ): RIO[R, Chunk[RecordMetadata]] =
       produceChunkAsync(records, keySerializer, valueSerializer).flatten
 
@@ -232,7 +233,7 @@ object Producer {
     private def serialize[R, K, V](
       r: ProducerRecord[K, V],
       keySerializer: Serializer[R, K],
-      valueSerializer: Serializer[R, V]
+      valueSerializer: Serializer[R, V],
     ): RIO[R, ByteRecord] =
       for {
         key   <- keySerializer.serialize(r.topic, r.headers, r.key())
@@ -252,20 +253,20 @@ object Producer {
 
   def make(settings: ProducerSettings): ZIO[Scope, Throwable, Producer] =
     for {
-      props <- ZIO.attempt(settings.driverSettings)
-      _     <- SslHelper.validateEndpoint(settings.bootstrapServers, props)
+      props       <- ZIO.attempt(settings.driverSettings)
+      _           <- SslHelper.validateEndpoint(settings.bootstrapServers, props)
       rawProducer <- ZIO.attempt(
                        new KafkaProducer[Array[Byte], Array[Byte]](
                          props.asJava,
                          new ByteArraySerializer(),
-                         new ByteArraySerializer()
+                         new ByteArraySerializer(),
                        )
                      )
-      runtime <- ZIO.runtime[Any]
-      sendQueue <-
+      runtime     <- ZIO.runtime[Any]
+      sendQueue   <-
         Queue.bounded[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])](settings.sendBufferSize)
-      producer <- ZIO.acquireRelease(ZIO.succeed(Live(rawProducer, settings, runtime, sendQueue)))(_.close)
-      _        <- ZIO.blocking(producer.sendFromQueue).forkScoped
+      producer    <- ZIO.acquireRelease(ZIO.succeed(Live(rawProducer, settings, runtime, sendQueue)))(_.close)
+      _           <- ZIO.blocking(producer.sendFromQueue).forkScoped
     } yield producer
 
   def withProducerService[R, A](
@@ -279,7 +280,7 @@ object Producer {
   def produce[R, K, V](
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): RIO[R & Producer, RecordMetadata] =
     withProducerService(_.produce(record, keySerializer, valueSerializer))
 
@@ -291,7 +292,7 @@ object Producer {
     key: K,
     value: V,
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): RIO[R & Producer, RecordMetadata] =
     withProducerService(_.produce(topic, key, value, keySerializer, valueSerializer))
 
@@ -300,7 +301,7 @@ object Producer {
    */
   def produceAll[R, K, V](
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): ZPipeline[R & Producer, Throwable, ProducerRecord[K, V], RecordMetadata] =
     ZPipeline.mapChunksZIO(records => produceChunk(records, keySerializer, valueSerializer))
 
@@ -310,7 +311,7 @@ object Producer {
   def produceAsync[R, K, V](
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): RIO[R & Producer, Task[RecordMetadata]] =
     withProducerService(_.produceAsync(record, keySerializer, valueSerializer))
 
@@ -322,7 +323,7 @@ object Producer {
     key: K,
     value: V,
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): RIO[R & Producer, Task[RecordMetadata]] =
     withProducerService(_.produceAsync(topic, key, value, keySerializer, valueSerializer))
 
@@ -332,7 +333,7 @@ object Producer {
   def produceChunkAsync[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): RIO[R & Producer, Task[Chunk[RecordMetadata]]] =
     withProducerService(_.produceChunkAsync(records, keySerializer, valueSerializer))
 
@@ -342,7 +343,7 @@ object Producer {
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
-    valueSerializer: Serializer[R, V]
+    valueSerializer: Serializer[R, V],
   ): RIO[R & Producer, Chunk[RecordMetadata]] =
     withProducerService(_.produceChunk(records, keySerializer, valueSerializer))
 

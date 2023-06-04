@@ -30,7 +30,7 @@ object RunloopCommand {
 
   final case class ChangeSubscription(
     subscription: Option[Subscription],
-    cont: Promise[Throwable, Unit]
+    cont: Promise[Throwable, Unit],
   ) extends StreamControl {
     @inline def succeed: UIO[Boolean] = cont.succeed(())
 

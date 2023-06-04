@@ -1,8 +1,8 @@
 package zio.kafka.serde
 
 import org.apache.kafka.common.header.Headers
-import org.apache.kafka.common.serialization.{ Serializer => KafkaSerializer }
-import zio.{ RIO, Task, ZIO }
+import org.apache.kafka.common.serialization.{Serializer => KafkaSerializer}
+import zio.{RIO, Task, ZIO}
 
 import scala.jdk.CollectionConverters._
 
@@ -60,7 +60,7 @@ object Serializer extends Serdes {
   def fromKafkaSerializer[T](
     serializer: KafkaSerializer[T],
     props: Map[String, AnyRef],
-    isKey: Boolean
+    isKey: Boolean,
   ): Task[Serializer[Any, T]] =
     ZIO
       .attempt(serializer.configure(props.asJava, isKey))

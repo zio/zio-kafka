@@ -1,14 +1,14 @@
 package zio.kafka.utils
 
-import org.apache.kafka.clients.{ ClientDnsLookup, ClientUtils }
+import org.apache.kafka.clients.{ClientDnsLookup, ClientUtils}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.TransferableChannel
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{ ApiVersionsRequest, RequestHeader }
-import zio.{ Task, ZIO }
+import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestHeader}
+import zio.{Task, ZIO}
 
 import java.nio.ByteBuffer
-import java.nio.channels.{ FileChannel, SocketChannel }
+import java.nio.channels.{FileChannel, SocketChannel}
 import scala.jdk.CollectionConverters._
 
 /**
@@ -40,29 +40,29 @@ object SslHelper {
                            .asScala
                            .toList
                        }
-            _ <- ZIO.foreachParDiscard(address) { addr =>
-                   ZIO.scoped {
-                     for {
-                       channel <- ZIO.acquireRelease(
-                                    ZIO.attempt(SocketChannel.open(addr))
-                                  )(channel => ZIO.attempt(channel.close()).orDie)
-                       tls <- ZIO.attempt {
-                                // Send a simple request to check if the cluster accepts the connection
-                                sendTestRequest(channel)
-                                val buffer = readAnswerFromTestRequest(channel)
-                                isTls(buffer)
-                              }
-                       _ <-
-                         ZIO.when(tls) {
-                           ZIO.fail(
-                             new IllegalArgumentException(
-                               s"Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
-                             )
-                           )
+            _       <- ZIO.foreachParDiscard(address) { addr =>
+                         ZIO.scoped {
+                           for {
+                             channel <- ZIO.acquireRelease(
+                                          ZIO.attempt(SocketChannel.open(addr))
+                                        )(channel => ZIO.attempt(channel.close()).orDie)
+                             tls     <- ZIO.attempt {
+                                          // Send a simple request to check if the cluster accepts the connection
+                                          sendTestRequest(channel)
+                                          val buffer = readAnswerFromTestRequest(channel)
+                                          isTls(buffer)
+                                        }
+                             _       <-
+                               ZIO.when(tls) {
+                                 ZIO.fail(
+                                   new IllegalArgumentException(
+                                     s"Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
+                                   )
+                                 )
+                               }
+                           } yield ()
                          }
-                     } yield ()
-                   }
-                 }
+                       }
           } yield ()
         }
       }
@@ -119,7 +119,7 @@ object SslHelper {
     tlsMessageType match {
       case 20 | 21 | 22 | 23 | 255 =>
         true
-      case _ => tlsMessageType >= 128
+      case _                       => tlsMessageType >= 128
     }
   }
 }

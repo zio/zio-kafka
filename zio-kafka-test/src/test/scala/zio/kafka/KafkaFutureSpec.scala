@@ -61,7 +61,7 @@ object KafkaFutureSpec extends ZIOSpecDefaultSlf4j {
               assert(f.isDone)(equalTo(true) ?? "Kafka future is done")
           }
         }
-      } @@ flaky
+      } @@ flaky,
     ) @@ TestAspect.timeout(2.minutes)
 
   def withKafkaFuture: ZIO[Scope, Nothing, KafkaFutureImpl[Boolean]] =

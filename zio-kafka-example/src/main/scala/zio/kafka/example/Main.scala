@@ -1,9 +1,9 @@
 package zio.kafka.example
 
-import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
+import io.github.embeddedkafka.{EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig}
 import zio._
 import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
+import zio.kafka.consumer.{Consumer, ConsumerSettings, Subscription}
 import zio.kafka.serde.Serde
 import zio.logging.backend.SLF4J
 
@@ -24,7 +24,7 @@ object MyKafka {
         "group.min.session.timeout.ms"     -> "500",
         "group.initial.rebalance.delay.ms" -> "0",
         "authorizer.class.name"            -> "kafka.security.authorizer.AclAuthorizer",
-        "super.users"                      -> "User:ANONYMOUS"
+        "super.users"                      -> "User:ANONYMOUS",
       )
     )
     ZIO.acquireRelease(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
@@ -50,7 +50,7 @@ object Main extends ZIOAppDefault {
     ZLayer.make[Consumer](
       ZLayer.succeed(consumerSettings),
       ZLayer.succeed(Diagnostics.NoOp),
-      Consumer.live
+      Consumer.live,
     )
   }
 
@@ -58,11 +58,11 @@ object Main extends ZIOAppDefault {
     ZIO.addFinalizer(ZIO.logInfo("Stopping app")) *>
       (
         for {
-          _     <- ZIO.logInfo(s"Starting app")
-          kafka <- ZIO.service[MyKafka]
-          stream = Consumer
-                     .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
-                     .provideLayer(consumerLayer(kafka))
+          _        <- ZIO.logInfo(s"Starting app")
+          kafka    <- ZIO.service[MyKafka]
+          stream    = Consumer
+                        .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
+                        .provideLayer(consumerLayer(kafka))
           _        <- ZIO.logInfo(s"Consuming messages...")
           consumed <- stream.take(1000).tap(r => ZIO.logInfo(s"Consumed record $r")).runCount
           _        <- ZIO.logInfo(s"Consumed $consumed records")

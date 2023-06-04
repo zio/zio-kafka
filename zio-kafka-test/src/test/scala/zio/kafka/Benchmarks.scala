@@ -1,11 +1,11 @@
 package zio.kafka
 
 import org.apache.kafka.clients.producer.ProducerRecord
-import zio.{ System => _, _ }, zio.stream._
+import zio.{System => _, _}, zio.stream._
 import zio.kafka.producer._
 import zio.kafka.serde._
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.clients.consumer.{ ConsumerConfig, KafkaConsumer }
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import scala.jdk.CollectionConverters._
 import java.time.Duration
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -19,9 +19,11 @@ object PopulateTopic extends ZIOAppDefault {
       .rechunk(500)
 
   override def run: ZIO[Any, Throwable, Unit] =
-    dataStream(872000).map { case (k, v) =>
-      new ProducerRecord("inputs-topic", null, null, k, v)
-    }.mapChunksZIO(Producer.produceChunkAsync[Any, String, String](_, Serde.string, Serde.string).map(Chunk(_)))
+    dataStream(872000)
+      .map { case (k, v) =>
+        new ProducerRecord("inputs-topic", null, null, k, v)
+      }
+      .mapChunksZIO(Producer.produceChunkAsync[Any, String, String](_, Serde.string, Serde.string).map(Chunk(_)))
       .mapZIOPar(5)(_.flatMap(chunk => Console.printLine(s"Wrote chunk of ${chunk.size}")))
       .runDrain
       .provide(
@@ -77,7 +79,7 @@ object ZIOKafka extends ZIOAppDefault {
 
   override def run = {
     val expectedCount = 1000000
-    val settings = ConsumerSettings(List("localhost:9092"))
+    val settings      = ConsumerSettings(List("localhost:9092"))
       .withGroupId(s"zio-kafka-${scala.util.Random.nextInt()}")
       .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       .withProperty("fetch.min.bytes", "128000")
@@ -93,7 +95,7 @@ object ZIOKafka extends ZIOAppDefault {
             .mapChunks { recordChunk =>
               val messageCount = recordChunk.size
               println(s"Got chunk of $messageCount")
-              val lengthCount = recordChunk.foldLeft(0)(_ + _.value.length)
+              val lengthCount  = recordChunk.foldLeft(0)(_ + _.value.length)
 
               Chunk(messageCount -> lengthCount)
             }

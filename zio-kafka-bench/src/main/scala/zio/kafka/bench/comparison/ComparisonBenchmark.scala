@@ -7,22 +7,22 @@ import zio.kafka.admin.AdminClient.TopicPartition
 import zio.kafka.bench.ZioBenchmark
 import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.bench.comparison.ComparisonBenchmark._
-import zio.kafka.consumer.{ Consumer, ConsumerSettings }
+import zio.kafka.consumer.{Consumer, ConsumerSettings}
 import zio.kafka.producer.Producer
 import zio.kafka.testkit.Kafka
-import zio.kafka.testkit.KafkaTestUtils.{ consumerSettings, minimalConsumer, produceMany, producer }
-import zio.{ durationInt, ULayer, ZIO, ZLayer }
+import zio.kafka.testkit.KafkaTestUtils.{consumerSettings, minimalConsumer, produceMany, producer}
+import zio.{durationInt, ULayer, ZIO, ZLayer}
 
 import scala.jdk.CollectionConverters._
 
 trait ComparisonBenchmark extends ZioBenchmark[Env] {
 
-  protected final val topic1: String    = "topic1"
-  protected final val nrPartitions: Int = 6
+  protected final val topic1: String                        = "topic1"
+  protected final val nrPartitions: Int                     = 6
   protected final val topicPartitions: List[TopicPartition] =
     (0 until nrPartitions).map(TopicPartition(topic1, _)).toList
-  protected final val numberOfMessages: Int           = 1000000
-  protected final val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key$i", s"msg$i"))
+  protected final val numberOfMessages: Int                 = 1000000
+  protected final val kvs: Iterable[(String, String)]       = Iterable.tabulate(numberOfMessages)(i => (s"key-$i", s"msg-$i"))
 
   private val javaKafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
     ZLayer.scoped {
@@ -32,7 +32,7 @@ trait ComparisonBenchmark extends ZioBenchmark[Env] {
             new KafkaConsumer[Array[Byte], Array[Byte]](
               settings.driverSettings.asJava,
               new ByteArrayDeserializer(),
-              new ByteArrayDeserializer()
+              new ByteArrayDeserializer(),
             )
           }
         }
@@ -45,8 +45,7 @@ trait ComparisonBenchmark extends ZioBenchmark[Env] {
         clientId = randomThing("client"),
         groupId = Some(randomThing("client")),
         `max.poll.records` = 1000, // A more production worthy value
-        runloopTimeout =
-          1.hour // Absurdly high timeout to avoid the runloop from being interrupted while we're benchmarking other stuff
+        runloopTimeout = 1.hour,   // Absurdly high timeout to avoid the runloop from being interrupted while we're benchmarking other stuff
       )
     )
 
@@ -57,7 +56,7 @@ trait ComparisonBenchmark extends ZioBenchmark[Env] {
         producer,
         settings,
         javaKafkaConsumer,
-        minimalConsumer()
+        minimalConsumer(),
       )
       .orDie
 
@@ -75,6 +74,6 @@ object ComparisonBenchmark {
 
   type Env = Kafka with Consumer with Producer with LowLevelKafka with ConsumerSettings
 
-  def zAssert(p: => Boolean, message: => String): ZIO[Any, AssertionError, Unit] =
-    ZIO.when(!p)(ZIO.fail(new AssertionError(s"Assertion failed: $message"))).unit
+  def zAssert(p: => Boolean, message: => String): ZIO[Any, AssertionError, Boolean] =
+    ZIO.when(!p)(ZIO.fail(new AssertionError(s"Assertion failed: $message"))).as(p)
 }

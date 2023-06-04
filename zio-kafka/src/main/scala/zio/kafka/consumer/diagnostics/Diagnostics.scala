@@ -1,8 +1,8 @@
 package zio.kafka.consumer.diagnostics
 
-import zio.{ Queue, Scope, UIO, ZIO }
+import zio.{Queue, Scope, UIO, ZIO}
 
-trait Diagnostics {
+trait Diagnostics  {
   def emit(event: => DiagnosticEvent): UIO[Unit]
 }
 object Diagnostics {

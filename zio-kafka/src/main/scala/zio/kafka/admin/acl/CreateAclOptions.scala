@@ -1,7 +1,7 @@
 package zio.kafka.admin.acl
 
 import zio._
-import org.apache.kafka.clients.admin.{ CreateAclsOptions => JCreateAclOptions }
+import org.apache.kafka.clients.admin.{CreateAclsOptions => JCreateAclOptions}
 
 final case class CreateAclOptions(timeout: Option[Duration]) {
   def asJava: JCreateAclOptions = {

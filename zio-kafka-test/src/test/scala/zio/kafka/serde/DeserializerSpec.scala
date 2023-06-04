@@ -23,7 +23,7 @@ object DeserializerSpec extends ZIOSpecDefaultSlf4j {
             isSome(equalTo(string))
           )
         }
-      }
+      },
     )
   )
 

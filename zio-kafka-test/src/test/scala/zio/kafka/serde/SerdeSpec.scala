@@ -33,7 +33,7 @@ object SerdeSpec extends ZIOSpecDefaultSlf4j {
           deserialized <- serde.deserialize("topic1", new RecordHeaders, serialized)
         } yield assert(serialized)(isNull) && assert(deserialized)(isNone)
       }
-    )
+    ),
   )
 
   private def testSerde[R, A](serde: Serde[Any, A], gen: Gen[R, A])(implicit clsTag: ClassTag[A]) =

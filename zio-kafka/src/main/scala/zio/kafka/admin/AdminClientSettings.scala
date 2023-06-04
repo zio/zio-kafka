@@ -7,7 +7,7 @@ import zio.kafka.security.KafkaCredentialStore
 final case class AdminClientSettings(
   bootstrapServers: List[String],
   closeTimeout: Duration,
-  properties: Map[String, AnyRef]
+  properties: Map[String, AnyRef],
 ) {
   def driverSettings: Map[String, AnyRef] =
     Map(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers.mkString(",")) ++

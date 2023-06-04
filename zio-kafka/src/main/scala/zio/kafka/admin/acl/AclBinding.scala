@@ -1,6 +1,6 @@
 package zio.kafka.admin.acl
 
-import org.apache.kafka.common.acl.{ AclBinding => JAclBinding }
+import org.apache.kafka.common.acl.{AclBinding => JAclBinding}
 import zio.kafka.admin.resource.ResourcePattern
 
 final case class AclBinding(pattern: ResourcePattern, entry: AccessControlEntry) {
