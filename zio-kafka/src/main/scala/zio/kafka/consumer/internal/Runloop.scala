@@ -577,7 +577,7 @@ private[consumer] object Runloop {
     restartStreamsOnRebalancing: Boolean,
     partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
     consumerSettings: ConsumerSettings
-  ): ZIO[Scope, Throwable, Runloop] =
+  ): URIO[Scope, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
       commandQueue       <- ZIO.acquireRelease(Queue.bounded[RunloopCommand](commandQueueSize))(_.shutdown)
