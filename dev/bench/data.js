@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1686209746657,
+  "lastUpdate": 1686212759960,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -28056,6 +28056,78 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
             "value": 2017.12949984,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "guizmaii@users.noreply.github.com",
+            "name": "Jules Ivanic",
+            "username": "guizmaii"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d38c190bd18a8d178e97658420ad79b227bda92b",
+          "message": "Fix: Runloop thread name is always `zio-kafka-runloop-thread-0` (#909)",
+          "timestamp": "2023-06-08T12:05:21+04:00",
+          "tree_id": "13504caf01ecd77c5cb354b6a19cd13c365ad5e5",
+          "url": "https://github.com/zio/zio-kafka/commit/d38c190bd18a8d178e97658420ad79b227bda92b"
+        },
+        "date": 1686212752337,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 254.08345479599996,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 318.2523186533333,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 664.0823819999999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 660.47563718,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1653.33070534,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 1055.1188953800001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
+            "value": 1612.2152071599996,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
+            "value": 1645.98214474,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
