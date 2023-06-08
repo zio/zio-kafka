@@ -9,16 +9,18 @@ private[consumer] object RunloopExecutor {
 
   private val counter: AtomicLong = new AtomicLong(0)
 
-  private def newSingleThreadedExecutor(i: Long): ZIO[Scope, Throwable, Executor] =
+  private val newSingleThreadedExecutor: ZIO[Scope, Throwable, Executor] =
     ZIO.acquireRelease {
       ZIO.attempt {
         val javaExecutor =
-          Executors.newSingleThreadExecutor(runnable => new Thread(runnable, s"zio-kafka-runloop-thread-$i"))
+          Executors.newSingleThreadExecutor { runnable =>
+            new Thread(runnable, s"zio-kafka-runloop-thread-${counter.getAndIncrement()}")
+          }
 
         Executor.fromJavaExecutor(javaExecutor) -> javaExecutor
       }
     } { case (_, executor) => ZIO.attempt(executor.shutdown()).orDie }.map(_._1)
 
-  val newInstance: ZIO[Scope, Throwable, Executor] = newSingleThreadedExecutor(counter.getAndIncrement())
+  val newInstance: ZIO[Scope, Throwable, Executor] = newSingleThreadedExecutor
 
 }
