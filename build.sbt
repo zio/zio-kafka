@@ -15,7 +15,7 @@ inThisBuild(
     name       := "ZIO Kafka",
     zioVersion := "2.0.15",
     scala212   := "2.12.18",
-    scala213   := "2.13.10",
+    scala213   := "2.13.11",
     scala3     := "3.3.0",
     crossScalaVersions -= scala211.value,
     ciEnabledBranches        := Seq("master", "series/0.x"),
@@ -166,8 +166,8 @@ lazy val zioKafkaExample =
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                 %% "zio"                % "2.0.15",
-        "dev.zio"                 %% "zio-kafka"          % "2.3.1",
-        "dev.zio"                 %% "zio-kafka-testkit"  % "2.3.1"  % Test,
+        "dev.zio"                 %% "zio-kafka"          % "2.3.2",
+        "dev.zio"                 %% "zio-kafka-testkit"  % "2.3.2"  % Test,
         "dev.zio"                 %% "zio-test"           % "2.0.15" % Test,
         "ch.qos.logback"           % "logback-classic"    % "1.4.6",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.13",
