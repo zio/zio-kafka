@@ -19,8 +19,8 @@ Kafka has a mature Java client for producing and consuming events, but it has a 
 In order to use this library, we need to add the following line in our `build.sbt` file:
 
 ```scala
-libraryDependencies += "dev.zio" %% "zio-kafka"         % "2.3.1"
-libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "2.3.1" % Test
+libraryDependencies += "dev.zio" %% "zio-kafka"         % "2.3.2"
+libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "2.3.2" % Test
 ```
 
 ## Example
