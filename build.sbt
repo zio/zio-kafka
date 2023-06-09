@@ -14,7 +14,7 @@ inThisBuild(
   List(
     name       := "ZIO Kafka",
     zioVersion := "2.0.15",
-    scala212   := "2.12.17",
+    scala212   := "2.12.18",
     scala213   := "2.13.11",
     scala3     := "3.3.0",
     crossScalaVersions -= scala211.value,
