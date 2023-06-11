@@ -12,6 +12,7 @@ import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.stream._
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 //noinspection SimplifyWhenInspection
@@ -117,16 +118,39 @@ private[consumer] final class Runloop private (
   private def doCommit(cmd: RunloopCommand.Commit): UIO[Unit] = {
     val offsets = cmd.offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
 
+    //noinspection ConvertExpressionToSAM
+    def callback(cb: UIO[Unit] => Unit): OffsetCommitCallback =
+      new OffsetCommitCallback {
+        override def onComplete(map: util.Map[TopicPartition, OffsetAndMetadata], e: Exception): Unit =
+          if (e == null)
+            cb(
+              ZIO.logDebug(s"Done for: $offsets") *> cmd.succeed <*
+                diagnostics.emit(DiagnosticEvent.Commit.Success(offsets))
+            )
+          else
+            cb(
+              ZIO.logDebugCause(s"Failed for: $offsets", Cause.fail(e)) *>
+                (e match {
+                  case _: RebalanceInProgressException =>
+                    ZIO.logDebug(s"Rebalance in progress, retrying commit for offsets $offsets") *>
+                      commandQueue.offer(cmd).unit
+                  case err =>
+                    ZIO.logDebug(s"TATA") *> cmd.fail(err) <*
+                      diagnostics.emit(DiagnosticEvent.Commit.Failure(offsets, err))
+                })
+            )
+      }
+
     consumer
-      .runloopAccess(c => ZIO.attempt(c.commitSync(offsets.asJava)))
-      .foldZIO(
-        {
-          case _: RebalanceInProgressException =>
-            ZIO.logDebug(s"Rebalance in progress, retrying commit for offsets $offsets") *>
-              commandQueue.offer(cmd).unit
-          case err => cmd.fail(err) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsets, err))
-        },
-        _ => cmd.succeed <* diagnostics.emit(DiagnosticEvent.Commit.Success(offsets))
+      .runloopAccess(c =>
+        for {
+          fiberId <- ZIO.fiberId
+          _       <- ZIO.logDebug(s"fiberId: $fiberId")
+          _ <- ZIO.async(
+                 register = (cb: UIO[Unit] => Unit) => c.commitAsync(offsets.asJava, callback(cb)),
+                 blockingOn = fiberId
+               )
+        } yield ()
       )
   }
 
