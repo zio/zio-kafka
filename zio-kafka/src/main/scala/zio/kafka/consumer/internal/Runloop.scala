@@ -12,7 +12,6 @@ import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.stream._
 
-import java.util
 import scala.jdk.CollectionConverters._
 
 //noinspection SimplifyWhenInspection
@@ -108,6 +107,7 @@ private[consumer] final class Runloop private (
   private val commit: Map[TopicPartition, Long] => Task[Unit] =
     offsets =>
       for {
+        _ <- ZIO.debug(s"Committing offsets: $offsets")
         p <- Promise.make[Throwable, Unit]
         _ <- commandQueue.offer(RunloopCommand.Commit(offsets, p)).unit
         _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
@@ -115,31 +115,19 @@ private[consumer] final class Runloop private (
       } yield ()
 
   private def doCommit(cmd: RunloopCommand.Commit): UIO[Unit] = {
-    val offsets   = cmd.offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
-    val cont      = (e: Exit[Throwable, Unit]) => cmd.cont.done(e).asInstanceOf[UIO[Unit]]
-    val onSuccess = cont(Exit.unit) <* diagnostics.emit(DiagnosticEvent.Commit.Success(offsets))
-    val onFailure: Throwable => UIO[Unit] = {
-      case _: RebalanceInProgressException =>
-        ZIO.logDebug(s"Rebalance in progress, retrying commit for offsets $offsets") *>
-          commandQueue.offer(cmd).unit
-      case err =>
-        cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsets, err))
-    }
-    val callback =
-      new OffsetCommitCallback {
-        override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
-          Unsafe.unsafe { implicit u =>
-            runtime.unsafe.run(if (exception eq null) onSuccess else onFailure(exception)).getOrThrowFiberFailure()
-          }
-      }
+    val offsets = cmd.offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
 
-    // We don't wait for the completion of the commit here, because it
-    // will only complete once we poll again.
-    consumer.runloopAccess { c =>
-      ZIO
-        .attempt(c.commitAsync(offsets.asJava, callback))
-        .catchAll(onFailure)
-    }
+    consumer
+      .runloopAccess(c => ZIO.attempt(c.commitSync(offsets.asJava)))
+      .foldZIO(
+        {
+          case _: RebalanceInProgressException =>
+            ZIO.logDebug(s"Rebalance in progress, retrying commit for offsets $offsets") *>
+              commandQueue.offer(cmd).unit
+          case err => cmd.fail(err) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsets, err))
+        },
+        _ => cmd.succeed <* diagnostics.emit(DiagnosticEvent.Commit.Success(offsets))
+      )
   }
 
   /**

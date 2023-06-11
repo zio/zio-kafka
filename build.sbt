@@ -166,8 +166,6 @@ lazy val zioKafkaExample =
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                 %% "zio"                % "2.0.15",
-        "dev.zio"                 %% "zio-kafka"          % "2.3.2",
-        "dev.zio"                 %% "zio-kafka-testkit"  % "2.3.2"  % Test,
         "dev.zio"                 %% "zio-test"           % "2.0.15" % Test,
         "ch.qos.logback"           % "logback-classic"    % "1.4.6",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.13",
@@ -178,6 +176,7 @@ lazy val zioKafkaExample =
       // [error]    org.scala-lang.modules:scala-collection-compat _3, _2.13
       crossScalaVersions -= scala3.value
     )
+    .dependsOn(zioKafka, zioKafkaTestkit)
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
 addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
