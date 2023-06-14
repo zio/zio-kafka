@@ -20,19 +20,8 @@ private[internal] object RunloopState {
  * This [[RunloopAccess]] is here to make the [[Runloop]] instantiation/boot lazy: we only starts it when the user is
  * starting a consuming session.
  *
- * This is needed because of 2 things:
- *
- *   1. A Consumer can be used to do something else than consuming (e.g. fetching Kafka topics metadata)
- *   1. The [[Runloop]] has a timeout which is reached if no commands are processed for a certain amount of time. If the
- *      Runloop is started eagerly (when we instantiate a Consumer), then the timeout will be reached even if the user
- *      is still using the Consumer.
- *
- * Additional note for the future:
- *
- * This is less an issue now that we have removed the `RunloopTimeout` exception. It might be possible to remove this
- * `RunloopAccess` and start the `Runloop` eagerly. Reaching the timeout if the user does not consumer. Rebooting a new
- * `Runloop` if the user decides to finally consume with its `Consumer`. Tho, I don't know the
- * implication/complexity/feasibility of this change and it's not what I'm trying to achieve/fix here.
+ * This is needed because a Consumer can be used to do something else than consuming (e.g. fetching Kafka topics
+ * metadata)
  */
 private[consumer] final class RunloopAccess private (
   runloopStateRef: Ref.Synchronized[RunloopState],
