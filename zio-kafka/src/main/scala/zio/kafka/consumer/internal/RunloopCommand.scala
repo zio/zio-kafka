@@ -29,5 +29,5 @@ object RunloopCommand {
 
   final case class AddSubscription(subscription: Subscription)    extends StreamCommand
   final case class RemoveSubscription(subscription: Subscription) extends StreamCommand
-  case object StopSubscription                                    extends StreamCommand
+  case object RemoveAllSubscriptions                              extends StreamCommand
 }

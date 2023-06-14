@@ -44,7 +44,7 @@ private[consumer] final class Runloop private (
       commandQueue
         .offerAll(
           Chunk(
-            RunloopCommand.StopSubscription,
+            RunloopCommand.RemoveAllSubscriptions,
             RunloopCommand.StopAllStreams,
             RunloopCommand.StopRunloop
           )
@@ -440,7 +440,7 @@ private[consumer] final class Runloop private (
                   doChangeSubscription(SubscriptionState.NotSubscribed)
             }
         }
-      case RunloopCommand.StopSubscription => doChangeSubscription(SubscriptionState.NotSubscribed)
+      case RunloopCommand.RemoveAllSubscriptions => doChangeSubscription(SubscriptionState.NotSubscribed)
       case RunloopCommand.StopAllStreams =>
         for {
           _ <- ZIO.logDebug("Stop all streams initiated")
