@@ -37,11 +37,13 @@ private[internal] object RunloopState {
 private[consumer] final class RunloopAccess private (
   runloopStateRef: Ref.Synchronized[RunloopState],
   partitionHub: Hub[Take[Throwable, PartitionAssignment]],
-  makeRunloop: UIO[RunloopState.Started],
+  makeRunloop: UIO[Runloop],
   diagnostics: Diagnostics
 ) {
   private def runloop(shouldStartIfNot: Boolean): UIO[RunloopState] =
-    runloopStateRef.updateSomeAndGetZIO { case RunloopState.NotStarted if shouldStartIfNot => makeRunloop }
+    runloopStateRef.updateSomeAndGetZIO {
+      case RunloopState.NotStarted if shouldStartIfNot => makeRunloop.map(RunloopState.Started.apply)
+    }
   private def withRunloopZIO[A](shouldStartIfNot: Boolean)(f: Runloop => UIO[A]): UIO[A] =
     runloop(shouldStartIfNot).flatMap {
       case RunloopState.Stopped          => ZIO.unit.asInstanceOf[UIO[A]]
@@ -123,7 +125,6 @@ private[consumer] object RunloopAccess {
                         consumerSettings = consumerSettings
                       )
                       .withFinalizer(_ => runloopStateRef.set(RunloopState.Stopped))
-                      .map(RunloopState.Started.apply)
                       .provide(ZLayer.succeed(consumerScope))
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
 }
