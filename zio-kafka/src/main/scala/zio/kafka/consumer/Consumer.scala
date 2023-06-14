@@ -115,7 +115,7 @@ trait Consumer {
    * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
    * requests.
    */
-  def stopConsumption: UIO[Unit]
+  def stopConsumption: UIO[Boolean]
 
   /**
    * See [[Consumer.consumeWith]].
@@ -194,7 +194,7 @@ object Consumer {
      * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
      * requests.
      */
-    override def stopConsumption: UIO[Unit] =
+    override def stopConsumption: UIO[Boolean] =
       ZIO.logDebug("stopConsumption called") *>
         runloopAccess.stopConsumption
 
@@ -397,7 +397,7 @@ object Consumer {
   /**
    * Accessor method for [[Consumer.stopConsumption]]
    */
-  def stopConsumption: RIO[Consumer, Unit] =
+  def stopConsumption: RIO[Consumer, Boolean] =
     ZIO.serviceWithZIO(_.stopConsumption)
 
   /**

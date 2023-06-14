@@ -28,6 +28,7 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
+import java.util.concurrent.atomic.AtomicInteger
 import scala.reflect.ClassTag
 
 //noinspection SimplifyAssertInspection
@@ -1153,12 +1154,15 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 consumer <- Consumer.make(settings, diagnostics = diagnostics)
                 _        <- produceMany(topic, kvs)
                 // Starting a consumption session to start the Runloop.
-                fiber <- consumer
-                           .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
-                           .take(numberOfMessages.toLong)
-                           .runCount
-                           .forkScoped
-                _          <- consumer.stopConsumption
+                ref = new AtomicInteger(0)
+                fiber <-
+                  consumer
+                    .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                    .mapChunksZIO(chunks => ZIO.logDebug(s"Consumed ${ref.getAndAdd(chunks.size)} messages").as(chunks))
+                    .take(numberOfMessages.toLong)
+                    .runCount
+                    .fork
+                _          <- consumer.stopConsumption.repeatUntil(scala.Predef.identity)
                 consumed_0 <- fiber.join
               } yield assert(consumed_0)(isLessThan(numberOfMessages.toLong))
 

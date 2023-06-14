@@ -59,19 +59,26 @@ private[consumer] final class RunloopAccess private (
           _       <- makeRunloop.flatMap(promise.succeed).forkScoped
         } yield RunloopState.Started(promise)
     }
+
+  private def withRunloopStateZIO[A](shouldStartIfNot: Boolean)(f: RunloopState => UIO[A]): UIO[A] =
+    ZIO.scoped(runloop(shouldStartIfNot).flatMap(f))
+
   private def withRunloopZIO[A](shouldStartIfNot: Boolean)(f: Runloop => UIO[A]): UIO[A] =
-    ZIO.scoped {
-      runloop(shouldStartIfNot).flatMap {
-        case RunloopState.NotStarted => ZIO.unit.asInstanceOf[UIO[A]]
-        case RunloopState.Stopped    => ZIO.unit.asInstanceOf[UIO[A]]
-        case s: RunloopState.Started => s.runloop.flatMap(f)
-      }
+    withRunloopStateZIO(shouldStartIfNot) {
+      case RunloopState.NotStarted => ZIO.unit.asInstanceOf[UIO[A]]
+      case RunloopState.Stopped    => ZIO.unit.asInstanceOf[UIO[A]]
+      case s: RunloopState.Started => s.runloop.flatMap(f)
     }
 
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has not been started or has been stopped.
    */
-  def stopConsumption: UIO[Unit] = withRunloopZIO(shouldStartIfNot = false)(_.stopConsumption)
+  def stopConsumption: UIO[Boolean] =
+    withRunloopStateZIO(shouldStartIfNot = false) {
+      case RunloopState.NotStarted => ZIO.succeed(false)
+      case RunloopState.Stopped    => ZIO.succeed(false)
+      case s: RunloopState.Started => s.runloop.flatMap(_.stopConsumption).as(true)
+    }
 
   /**
    * We're doing all of these things in this method so that the interface of this class is as simple as possible and
