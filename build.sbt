@@ -1,7 +1,7 @@
 import sbt.Def
 
 lazy val kafkaVersion         = "3.5.0"
-lazy val embeddedKafkaVersion = "3.4.0.1" // Should be the same as kafkaVersion, except for the patch part
+lazy val embeddedKafkaVersion = "3.4.1" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.10.0"
