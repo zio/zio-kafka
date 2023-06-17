@@ -1,6 +1,6 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, RetriableCommitFailedException }
+import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, ConsumerRecord, RetriableCommitFailedException }
 import org.apache.kafka.common.TopicPartition
 import zio.{ RIO, Schedule, Task }
 
@@ -36,12 +36,14 @@ object Offset {
 }
 
 private final case class OffsetImpl(
-  topic: String,
-  partition: Int,
-  offset: Long,
-  commitHandle: Map[TopicPartition, Long] => Task[Unit],
+  private val record: ConsumerRecord[_, _],
+  private val commitHandle: Map[TopicPartition, Long] => Task[Unit],
   consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) extends Offset {
-  def commit: Task[Unit] = commitHandle(Map(topicPartition -> offset))
-  def batch: OffsetBatch = OffsetBatchImpl(Map(topicPartition -> offset), commitHandle, consumerGroupMetadata)
+  override def topic: String  = record.topic()
+  override def partition: Int = record.partition()
+  override def offset: Long   = record.offset()
+
+  override def commit: Task[Unit] = commitHandle(Map(topicPartition -> offset))
+  override def batch: OffsetBatch = OffsetBatchImpl(Map(topicPartition -> offset), commitHandle, consumerGroupMetadata)
 }
