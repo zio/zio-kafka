@@ -218,7 +218,7 @@ private[consumer] final class Runloop private (
     }
   }
 
-  private def getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
+  private val getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
     if (hasGroupId) consumer.runloopAccess(c => ZIO.attempt(c.groupMetadata())).fold(_ => None, Some(_))
     else ZIO.none
 
