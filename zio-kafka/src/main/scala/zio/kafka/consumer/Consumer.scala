@@ -164,7 +164,8 @@ object Consumer {
     private val subscriptions: Ref.Synchronized[Set[Subscription]],
     private val partitionAssignments: Hub[
       Take[Throwable, Chunk[(TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord])]]
-    ]
+    ],
+    settings: ConsumerSettings
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
@@ -256,7 +257,11 @@ object Consumer {
           .flattenChunks
           .map {
             _.collect {
-              case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
+              case (tp, partition) if Subscription.subscriptionMatches(subscription, tp) =>
+                val partitionStream =
+                  if (settings.perPartitionChunkPrefetch <= 0) partition
+                  else partition.bufferChunks(settings.perPartitionChunkPrefetch)
+
                 val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
                   if (onlyByteArraySerdes) partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
                   else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
@@ -311,7 +316,7 @@ object Consumer {
       for {
         r <- ZIO.environment[R & R1]
         _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
-               .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
+               .flatMapPar(Int.MaxValue, bufferSize = settings.perPartitionChunkPrefetch) { case (_, partitionStream) =>
                  partitionStream.mapChunksZIO(_.mapZIO((c: CommittableRecord[K, V]) => f(c.record).as(c.offset)))
                }
                .provideEnvironment(r)
@@ -367,8 +372,7 @@ object Consumer {
                    offsetRetrieval = settings.offsetRetrieval,
                    userRebalanceListener = settings.rebalanceListener,
                    restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
-                   runloopTimeout = settings.runloopTimeout,
-                   consumerSettings = settings
+                   runloopTimeout = settings.runloopTimeout
                  )
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 
@@ -377,7 +381,7 @@ object Consumer {
                                 .map(_.exit)
                                 .flattenExitOption
                                 .toHub(hubCapacity)
-    } yield new Live(wrapper, runloop, subscriptions, partitionAssignments)
+    } yield new Live(wrapper, runloop, subscriptions, partitionAssignments, settings)
   }
 
   /**
