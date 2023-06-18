@@ -1,6 +1,6 @@
 package zio.kafka.consumer.internal
 
-import java.lang.{Long => JavaLong}
+import java.lang.{ Long => JavaLong }
 
 /**
  * Keep track of a partition status ('resumed' or 'paused') history as it is just before a poll.
@@ -11,9 +11,8 @@ private[internal] sealed trait PollHistory {
 
   /**
    * @return
-   *   the estimated number of polls before the partition is resumed (a positive number).
-   *   The result should not be interpreted as an absolute number of polls, but rather as an estimate
-   *   relative to other estimates.
+   *   the estimated number of polls before the partition is resumed (a positive number). When no estimate can be made,
+   *   this returns a high positive number.
    */
   def estimatedPollCountToResume: Int
 
@@ -39,29 +38,30 @@ private[internal] object PollHistory {
     /* exposed only for tests */ private[internal] val resumeBits: Long
   ) extends PollHistory {
     override def estimatedPollCountToResume: Int = {
-      // Let's assume 8 bit history.
+      // This class works with 64 bits, but let's assume an 8 bit history for this example.
       // Full history is "00100100"
       // We are currently paused for 2 polls (last "00")
-      // The 'before history' contains 2 polls (in "001001", 6 bits long)
-      // So the average resume cycle is 6 / 2 = 3 polls.
-      // Wait time before next resume is 3 - 2 = 1 poll.
+      // The 'before history' contains 2 polls (in "001001", 6 bits long),
+      // so the average resume cycle is 6 / 2 = 3 polls,
+      // and the estimated wait time before next resume is
+      // average resume cycle (3) - currently pause (2) = 1 poll.
 
       // Now consider the pattern "0100010001000100" (16 bit history).
       // It is very regular but the estimate will be off because the oldest cycle
       // (at beginning of the bitstring) is not complete.
-      // We compensate by removing the first cycle from the 'before' history.
+      // We compensate by removing the first cycle from the 'before history'.
       // This also helps predicting when the stream only just started.
 
-      // When no resumes have been observed yet in 'before history', we return the maximum estimate (32).
+      // When no resumes are observed in 'before history', we cannot estimate and we return the maximum estimate (64).
 
-      // When the 'before history' is too short, we can not make a prediction.
+      // Also when 'before history' is too short, we can not make a prediction and we return 64.
       // We require that 'before history' is at least 16 polls long.
 
-      val currentPausedCount = JavaLong.numberOfTrailingZeros(resumeBits)
+      val currentPausedCount   = JavaLong.numberOfTrailingZeros(resumeBits)
       val firstPollCycleLength = JavaLong.numberOfLeadingZeros(resumeBits) + 1
-      val beforeHistory = resumeBits >>> currentPausedCount
-      val resumeCount = JavaLong.bitCount(beforeHistory) - 1
-      val beforeHistoryLength = JavaLong.SIZE - firstPollCycleLength - currentPausedCount
+      val beforeHistory        = resumeBits >>> currentPausedCount
+      val resumeCount          = JavaLong.bitCount(beforeHistory) - 1
+      val beforeHistoryLength  = JavaLong.SIZE - firstPollCycleLength - currentPausedCount
       if (resumeCount == 0 || beforeHistoryLength < 16) {
         JavaLong.SIZE
       } else {

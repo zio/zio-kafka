@@ -47,7 +47,7 @@ private[internal] final class PartitionStreamControl private (
   val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
     (tp, stream)
 
-  def optimisticResume: Boolean = pollResumedHistory.estimatedPollCountToResume < 2
+  def estimatedPollCountToResume: Int = pollResumedHistory.estimatedPollCountToResume
 
   /**
    * Add a poll event to the poll history.

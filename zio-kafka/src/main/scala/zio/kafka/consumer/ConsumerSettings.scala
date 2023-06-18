@@ -20,11 +20,11 @@ import zio.kafka.security.KafkaCredentialStore
  *   be much larger than the pollTimeout and the time it takes to process chunks of records. If your consumer is not
  *   subscribed for long periods during its lifetime, this timeout should take that into account as well. When the
  *   timeout expires, the plainStream/partitionedStream/etc will fail with a [[Consumer.RunloopTimeout]].
- * @param enableOptimisticResume
- *   When `true` (the default) zio-kafka predicts whether a stream needs more data, slightly ahead of time. Zio-kafka
- *   pauses partitions for which the associated stream is processing previously fetched data. When the stream needs more
- *   data, the partition is resumed. With this feature enabled, partitions are also resumed when it is likely that the
- *   stream needs more data in the next poll.
+ * @param maxPrefetchPolls
+ *   The consumer continually polls the broker as long as there is demand. There is some room to poll more data even
+ *   when there isn't demand. This allow prefetching of records. This prefetching is controlled by the
+ *   `maxPrefetchPolls` setting. Polls will only be done as long as processing is fast enough, so that less than
+ *   `maxPrefetchPolls` polls are prefetched. Defaults to `2`.
  */
 final case class ConsumerSettings(
   bootstrapServers: List[String],
@@ -35,7 +35,7 @@ final case class ConsumerSettings(
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
   runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
-  enableOptimisticResume: Boolean = true
+  maxPrefetchPolls: Int = 2
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)

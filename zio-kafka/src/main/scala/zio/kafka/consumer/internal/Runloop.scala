@@ -234,27 +234,54 @@ private[consumer] final class Runloop private (
     }
 
   /**
-   * Pause partitions for which there is no demand and resume those for which there is now demand. Optimistically resume
-   * partitions that are likely to need more data in the next poll.
+   * Pause partitions for which there is no demand and resume those for which there is now demand.
+   *
+   * When no partitions have demand, and `prefetchCount` is below setting `maxPrefetchBatches`: resume a few partitions
+   * that are likely to need more data soon.
+   *
+   * @return
+   *   the updated prefetchCount
    */
   private def resumeAndPausePartitions(
     c: ByteArrayKafkaConsumer,
     requestedPartitions: Set[TopicPartition],
-    streams: Chunk[PartitionStreamControl]
-  ): Unit = {
+    streams: Chunk[PartitionStreamControl],
+    prefetchCount: Int
+  ): Int = {
     val resumeTps = new java.util.ArrayList[TopicPartition](streams.size)
     val pauseTps  = new java.util.ArrayList[TopicPartition](streams.size)
-    streams.foreach { stream =>
-      val tp = stream.tp
-      val toResume =
-        requestedPartitions.contains(tp) || (consumerSettings.enableOptimisticResume && stream.optimisticResume)
-      if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
-      if (consumerSettings.enableOptimisticResume) {
+    val updatedPrefetchCount = if (requestedPartitions.nonEmpty) {
+      streams.foreach { stream =>
+        val tp       = stream.tp
+        val toResume = requestedPartitions.contains(tp)
+        if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
         stream.addPollHistory(toResume)
       }
+      (prefetchCount - 1).max(0)
+    } else if (prefetchCount < consumerSettings.maxPrefetchPolls) {
+      // TODO: move the 2 values to a constant
+      // Find the first 2 streams that are estimated to resume within 2 polls:
+      val prefetchingTps = streams.foldWhile(Set.empty[TopicPartition])(_.size < 2) { case (acc, stream) =>
+        if (stream.estimatedPollCountToResume <= 2) acc + stream.tp else acc
+      }
+      if (prefetchingTps.nonEmpty) {
+        // Resume the partitions for the selected lucky streams, pause the others
+        streams.foreach { stream =>
+          val tp = stream.tp
+          if (prefetchingTps.contains(tp)) resumeTps.add(tp) else pauseTps.add(tp)
+        }
+        prefetchCount + 1
+      } else {
+        // All partitions are paused
+        streams.foreach(stream => pauseTps.add(stream.tp))
+        prefetchCount
+      }
+    } else {
+      prefetchCount
     }
     if (!resumeTps.isEmpty) c.resume(resumeTps)
     if (!pauseTps.isEmpty) c.pause(pauseTps)
+    updatedPrefetchCount
   }
 
   private def handlePoll(state: State): Task[State] =
@@ -271,7 +298,8 @@ private[consumer] final class Runloop private (
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-            resumeAndPausePartitions(c, requestedPartitions, state.assignedStreams)
+            val updatedPrefetchCount =
+              resumeAndPausePartitions(c, requestedPartitions, state.assignedStreams, state.prefetchCount)
 
             val polledRecords = {
               val records = c.poll(pollTimeout)
@@ -340,7 +368,8 @@ private[consumer] final class Runloop private (
               pendingRequests = revokeResult.pendingRequests,
               assignedStreams = revokeResult.assignedStreams,
               records = polledRecords,
-              ignoreRecordsForTps = ignoreRecordsForTps
+              ignoreRecordsForTps = ignoreRecordsForTps,
+              prefetchCount = updatedPrefetchCount
             )
           }
         }
@@ -366,7 +395,8 @@ private[consumer] final class Runloop private (
     } yield state.copy(
       pendingRequests = fulfillResult.pendingRequests,
       pendingCommits = updatedPendingCommits,
-      assignedStreams = updatedStreams
+      assignedStreams = updatedStreams,
+      prefetchCount = pollResult.prefetchCount
     )
 
   private def handleCommand(state: State, cmd: RunloopCommand.StreamCommand): Task[State] =
@@ -502,7 +532,8 @@ private[consumer] object Runloop {
     pendingRequests: Chunk[RunloopCommand.Request],
     assignedStreams: Chunk[PartitionStreamControl],
     records: ConsumerRecords[Array[Byte], Array[Byte]],
-    ignoreRecordsForTps: Set[TopicPartition]
+    ignoreRecordsForTps: Set[TopicPartition],
+    prefetchCount: Int
   )
   private final case class RevokeResult(
     pendingRequests: Chunk[RunloopCommand.Request],
@@ -581,7 +612,8 @@ private[internal] final case class State(
   pendingRequests: Chunk[RunloopCommand.Request],
   pendingCommits: Chunk[RunloopCommand.Commit],
   assignedStreams: Chunk[PartitionStreamControl],
-  subscription: Option[Subscription]
+  subscription: Option[Subscription],
+  prefetchCount: Int
 ) {
   def addCommit(c: RunloopCommand.Commit): State   = copy(pendingCommits = pendingCommits :+ c)
   def addRequest(r: RunloopCommand.Request): State = copy(pendingRequests = pendingRequests :+ r)
@@ -597,6 +629,7 @@ object State {
     pendingRequests = Chunk.empty,
     pendingCommits = Chunk.empty,
     assignedStreams = Chunk.empty,
-    subscription = None
+    subscription = None,
+    prefetchCount = 0
   )
 }

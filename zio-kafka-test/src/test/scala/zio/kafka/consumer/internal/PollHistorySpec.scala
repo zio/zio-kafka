@@ -12,12 +12,12 @@ object PollHistorySpec extends ZIOSpecDefaultSlf4j {
         (("001" * 22) + "").toPollHistory.estimatedPollCountToResume == 3,
         (("001" * 22) + "0").toPollHistory.estimatedPollCountToResume == 2,
         (("001" * 22) + "00").toPollHistory.estimatedPollCountToResume == 1,
-        (("00001" * 13) + "").toPollHistory.estimatedPollCountToResume == 5,
+        (("00001" * 13) + "").toPollHistory.estimatedPollCountToResume == 5
       )
     },
     test("estimates poll count for somewhat irregular pattern") {
       assertTrue(
-        "000101001001100001000011001001001".toPollHistory.estimatedPollCountToResume == 3,
+        "000101001001100001000011001001001".toPollHistory.estimatedPollCountToResume == 3
       )
     },
     test("estimates poll count only when paused for less than 16 polls") {
@@ -25,7 +25,7 @@ object PollHistorySpec extends ZIOSpecDefaultSlf4j {
         "0".toPollHistory.estimatedPollCountToResume == 64,
         "10000000000000000000000000000000".toPollHistory.estimatedPollCountToResume == 64,
         ("11" * 8 + "00" * 8).toPollHistory.estimatedPollCountToResume == 64,
-        ("11" * 9 + "00" * 7).toPollHistory.estimatedPollCountToResume == 0,
+        ("11" * 9 + "00" * 7).toPollHistory.estimatedPollCountToResume == 0
       )
     },
     test("estimates poll count for edge cases") {
@@ -34,7 +34,7 @@ object PollHistorySpec extends ZIOSpecDefaultSlf4j {
         "10000000000000001000000000000000".toPollHistory.estimatedPollCountToResume == 1,
         "01000000000000000100000000000000".toPollHistory.estimatedPollCountToResume == 2,
         "00100000000000000010000000000000".toPollHistory.estimatedPollCountToResume == 3,
-        "00010000000000000001000000000000".toPollHistory.estimatedPollCountToResume == 4,
+        "00010000000000000001000000000000".toPollHistory.estimatedPollCountToResume == 4
       )
     },
     test("add to history") {
