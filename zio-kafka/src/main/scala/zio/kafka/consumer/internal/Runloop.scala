@@ -259,23 +259,11 @@ private[consumer] final class Runloop private (
       }
       (prefetchCount - 1).max(0)
     } else if (prefetchCount < consumerSettings.maxPrefetchPolls) {
-      // TODO: move the 2 values to a constant
-      // Find the first 2 streams that are estimated to resume within 2 polls:
-      val prefetchingTps = streams.foldWhile(Set.empty[TopicPartition])(_.size < 2) { case (acc, stream) =>
-        if (stream.estimatedPollCountToResume <= 2) acc + stream.tp else acc
+      streams.foreach { stream =>
+        val tp = stream.tp
+        if (stream.estimatedPollCountToResume <= prefetchCount) resumeTps.add(tp) else pauseTps.add(tp)
       }
-      if (prefetchingTps.nonEmpty) {
-        // Resume the partitions for the selected lucky streams, pause the others
-        streams.foreach { stream =>
-          val tp = stream.tp
-          if (prefetchingTps.contains(tp)) resumeTps.add(tp) else pauseTps.add(tp)
-        }
-        prefetchCount + 1
-      } else {
-        // All partitions are paused
-        streams.foreach(stream => pauseTps.add(stream.tp))
-        prefetchCount
-      }
+      if (resumeTps.isEmpty) prefetchCount else prefetchCount + 1
     } else {
       prefetchCount
     }
