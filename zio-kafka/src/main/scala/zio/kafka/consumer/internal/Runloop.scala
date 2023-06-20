@@ -185,7 +185,7 @@ private[consumer] final class Runloop private (
     else {
       for {
         consumerGroupMetadata <- getConsumerGroupMetadataIfAny
-        _ <- ZIO.foreachDiscard(streams) { streamControl =>
+        _ <- ZIO.foreachParDiscard(streams) { streamControl =>
                val tp      = streamControl.tp
                val records = polledRecords.records(tp)
                if (records.isEmpty) ZIO.unit
