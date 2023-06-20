@@ -15,6 +15,7 @@ import java.util
 import scala.jdk.CollectionConverters._
 
 //noinspection SimplifyWhenInspection
+//noinspection SimplifyUnlessInspection
 private[consumer] final class Runloop private (
   runtime: Runtime[Any],
   hasGroupId: Boolean,
@@ -184,34 +185,25 @@ private[consumer] final class Runloop private (
     else {
       for {
         consumerGroupMetadata <- getConsumerGroupMetadataIfAny
-        committableRecords = {
-          val acc             = ChunkBuilder.make[(PartitionStreamControl, Chunk[Record])](streams.size)
-          val streamsIterator = streams.iterator
-          while (streamsIterator.hasNext) {
-            val streamControl = streamsIterator.next()
-            val tp            = streamControl.tp
-            val records       = polledRecords.records(tp)
-            if (!records.isEmpty) {
-              val builder  = ChunkBuilder.make[Record](records.size())
-              val iterator = records.iterator()
-              while (iterator.hasNext) {
-                val consumerRecord = iterator.next()
-                builder +=
-                  CommittableRecord[Array[Byte], Array[Byte]](
-                    record = consumerRecord,
-                    commitHandle = commit,
-                    consumerGroupMetadata = consumerGroupMetadata
-                  )
-              }
-              acc += (streamControl -> builder.result())
-            }
-          }
-          acc.result()
-        }
-        _ <- ZIO
-               .foreachDiscard(committableRecords) { case (streamControl, records) =>
-                 streamControl.offerRecords(records)
+        _ <- ZIO.foreachParDiscard(streams) { streamControl =>
+               val tp      = streamControl.tp
+               val records = polledRecords.records(tp)
+               if (records.isEmpty) ZIO.unit
+               else {
+                 val builder  = ChunkBuilder.make[Record](records.size())
+                 val iterator = records.iterator()
+                 while (iterator.hasNext) {
+                   val consumerRecord = iterator.next()
+                   builder +=
+                     CommittableRecord[Array[Byte], Array[Byte]](
+                       record = consumerRecord,
+                       commitHandle = commit,
+                       consumerGroupMetadata = consumerGroupMetadata
+                     )
+                 }
+                 streamControl.offerRecords(builder.result())
                }
+             }
       } yield fulfillResult
     }
   }
