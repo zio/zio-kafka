@@ -113,12 +113,6 @@ trait Consumer {
   ): ZStream[R, Throwable, CommittableRecord[K, V]]
 
   /**
-   * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
-   * requests.
-   */
-  def stopConsumption: UIO[Unit]
-
-  /**
    * See [[Consumer.consumeWith]].
    */
   def consumeWith[R: Tag, R1: Tag, K, V](
@@ -197,12 +191,6 @@ object Consumer {
         val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
         offs.asScala.map { case (k, v) => k -> v.longValue() }.toMap
       }
-
-    /**
-     * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
-     * requests.
-     */
-    override def stopConsumption: UIO[Unit] = runloop.stopConsumption
 
     override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
       consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)
@@ -458,12 +446,6 @@ object Consumer {
     ZStream.serviceWithStream[Consumer](
       _.plainStream(subscription, keyDeserializer, valueDeserializer, bufferSize)
     )
-
-  /**
-   * Accessor method for [[Consumer.stopConsumption]]
-   */
-  def stopConsumption: RIO[Consumer, Unit] =
-    ZIO.serviceWithZIO(_.stopConsumption)
 
   /**
    * Execute an effect for each record and commit the offset after processing

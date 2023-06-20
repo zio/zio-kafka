@@ -10,7 +10,7 @@ import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
 import zio.kafka.testkit.KafkaTestUtils.{ consumer, produceMany, producer }
 import zio.stream.ZSink
-import zio.{ durationInt, Ref, Schedule, ZIO, ZLayer }
+import zio.{ durationInt, Promise, Ref, Schedule, ZIO, ZLayer }
 
 import java.util.concurrent.TimeUnit
 
@@ -36,11 +36,15 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   def throughput(): Any = runZIO {
     for {
       counter <- Ref.make(0)
+      promise <- Promise.make[Throwable, Any]
       _ <- Consumer
              .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
              .tap { _ =>
-               counter.updateAndGet(_ + 1).flatMap(count => Consumer.stopConsumption.when(count == nrMessages))
+               counter
+                 .updateAndGet(_ + 1)
+                 .flatMap(count => promise.fail(new RuntimeException("Stop the Stream")).when(count == nrMessages))
              }
+             .interruptWhen(promise)
              .runDrain
              .provideSome[Kafka](
                consumer(

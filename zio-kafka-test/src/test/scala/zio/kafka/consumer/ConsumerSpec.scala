@@ -274,15 +274,20 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           client <- randomClient
 
           keepProducing <- Ref.make(true)
+          promise       <- Promise.make[Throwable, Unit]
           _             <- produceOne(topic, "key", "value").repeatWhileZIO(_ => keepProducing.get).fork
           _ <- Consumer
                  .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                  .zipWithIndex
                  .tap { case (record, idx) =>
-                   (Consumer.stopConsumption <* ZIO.logDebug("Stopped consumption")).when(idx == 3) *>
+                   (
+                     promise.fail(new RuntimeException("Stop the stream")) <*
+                       ZIO.logDebug("Stopped consumption")
+                   ).when(idx == 3) *>
                      record.offset.commit <* ZIO.logDebug(s"Committed $idx")
                  }
                  .tap { case (_, idx) => ZIO.logDebug(s"Consumed $idx") }
+                 .interruptWhen(promise)
                  .runDrain
                  .tap(_ => ZIO.logDebug("Stream completed"))
                  .provideSomeLayer[Kafka](
@@ -299,16 +304,18 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           client           <- randomClient
           _                <- produceMany(topic, kvs)
           messagesReceived <- Ref.make[Int](0)
+          promise          <- Promise.make[Throwable, Unit]
           offset <- (Consumer
                       .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                       .mapConcatZIO { record =>
                         for {
                           nr <- messagesReceived.updateAndGet(_ + 1)
-                          _  <- Consumer.stopConsumption.when(nr == 10)
+                          _  <- promise.fail(new RuntimeException("Stop the stream")).when(nr == 10)
                         } yield if (nr < 10) Seq(record.offset) else Seq.empty
                       }
                       .transduce(Consumer.offsetBatches)
                       .mapZIO(_.commit)
+                      .interruptWhen(promise)
                       .runDrain *>
                       Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head))
                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
@@ -656,6 +663,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
           drainCount <- Ref.make(0)
           subscription = Subscription.topics(topic)
+          promise <- Promise.make[Throwable, Unit]
           fib <- ZIO
                    .logAnnotate("consumer", "1") {
                      Consumer
@@ -677,12 +685,16 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                        }
                        .mapZIO(_ =>
                          drainCount.updateAndGet(_ + 1).flatMap {
-                           case 2 => ZIO.logDebug("Stopping consumption") *> Consumer.stopConsumption
+                           case 2 =>
+                             ZIO.logDebug("Stopping consumption") *> promise.fail(
+                               new RuntimeException("Stopping consumption")
+                             )
                            // 1: when consumer on fib2 starts
                            // 2: when consumer on fib2 stops, end of test
                            case _ => ZIO.unit
                          }
                        )
+                       .interruptWhen(promise)
                        .runDrain
                        .provideSomeLayer[Kafka](
                          consumer(

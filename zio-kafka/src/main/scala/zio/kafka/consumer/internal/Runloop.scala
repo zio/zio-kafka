@@ -34,9 +34,6 @@ private[consumer] final class Runloop private (
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics)
 
-  def stopConsumption: UIO[Unit] =
-    commandQueue.offer(RunloopCommand.StopAllStreams).unit
-
   def changeSubscription(
     subscription: Option[Subscription]
   ): Task[Unit] =
