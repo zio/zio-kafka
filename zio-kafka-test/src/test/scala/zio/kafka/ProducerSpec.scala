@@ -3,18 +3,18 @@ package zio.kafka
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
-import zio.kafka.KafkaTestUtils._
-import zio.kafka.consumer.{ CommittableRecord, Consumer, ConsumerSettings, OffsetBatch, Subscription }
-import zio.kafka.embedded.Kafka
-import zio.kafka.producer.{ Producer, Transaction, TransactionalProducer }
+import zio.kafka.consumer._
 import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
+import zio.kafka.producer.{ Producer, Transaction, TransactionalProducer }
 import zio.kafka.serde.Serde
+import zio.kafka.testkit.KafkaTestUtils._
+import zio.kafka.testkit._
 import zio.stream.Take
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
-object ProducerSpec extends ZIOSpecDefault with KafkaRandom {
+object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "producerspec"
 
   def withConsumerInt(
@@ -470,5 +470,5 @@ object ProducerSpec extends ZIOSpecDefault with KafkaRandom {
       )
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ timeout(5.minutes) @@ sequential
+      ) @@ withLiveClock @@ timeout(3.minutes) @@ sequential
 }

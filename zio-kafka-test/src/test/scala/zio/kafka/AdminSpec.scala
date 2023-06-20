@@ -5,7 +5,7 @@ import org.apache.kafka.clients.admin.{ ConfigEntry, RecordsToDelete }
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{ Node => JNode }
 import zio._
-import zio.kafka.KafkaTestUtils._
+import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.admin.AdminClient.{
   AlterConfigOp,
   AlterConfigOpType,
@@ -24,9 +24,9 @@ import zio.kafka.admin.AdminClient.{
 import zio.kafka.admin.acl._
 import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
-import zio.kafka.embedded.Kafka
 import zio.kafka.serde.Serde
-import zio.kafka.{ KafkaRandom, KafkaTestUtils }
+import zio.kafka.testkit.KafkaTestUtils._
+import zio.kafka.testkit._
 import zio.stream.ZSink
 import zio.test.Assertion._
 import zio.test.TestAspect._
@@ -35,7 +35,7 @@ import zio.test._
 import java.util.UUID
 import java.util.concurrent.TimeoutException
 
-object AdminSpec extends ZIOSpecDefault with KafkaRandom {
+object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
   override val kafkaPrefix: String = "adminspec"
 
@@ -636,7 +636,7 @@ object AdminSpec extends ZIOSpecDefault with KafkaRandom {
             assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
         }
       }
-    ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ sequential @@ timeout(5.minutes)
+    ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ sequential @@ timeout(2.minutes)
 
   private def consumeNoop(
     topicName: String,

@@ -3,13 +3,13 @@ package zio.kafka.bench
 import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.openjdk.jmh.annotations._
-import zio.kafka.KafkaTestUtils.{ consumerSettings, produceMany, producer }
 import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.{ Consumer, Offset, OffsetBatch, Subscription }
-import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
+import zio.kafka.testkit.Kafka
+import zio.kafka.testkit.KafkaTestUtils.{ consumerSettings, produceMany, producer }
 import zio.stream.ZSink
 import zio.{ durationInt, Ref, Schedule, ZIO, ZLayer }
 

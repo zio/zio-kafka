@@ -4,12 +4,12 @@ import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.openjdk.jmh.annotations._
-import zio.kafka.KafkaTestUtils.{ consumerSettings, produceMany, producer, simpleConsumer }
+import zio.kafka.testkit.KafkaTestUtils.{ consumerSettings, minimalConsumer, produceMany, producer }
 import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
-import zio.kafka.embedded.Kafka
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
+import zio.kafka.testkit.Kafka
 import zio.{ durationInt, ULayer, ZIO, ZLayer }
 
 import java.util.concurrent.TimeUnit
@@ -63,7 +63,7 @@ class ConsumersComparisonBenchmark extends ZioBenchmark[Env] {
         producer,
         settings,
         kafkaConsumer,
-        simpleConsumer()
+        minimalConsumer()
       )
       .orDie
 

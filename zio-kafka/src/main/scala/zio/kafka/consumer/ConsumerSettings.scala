@@ -24,11 +24,11 @@ import zio.kafka.security.KafkaCredentialStore
  *   Maximum number of records that can be enqueued in a partition stream's buffer before pausing the partition. This
  *   facilitates backpressure and throughput.
  */
-case class ConsumerSettings(
+final case class ConsumerSettings(
   bootstrapServers: List[String],
-  properties: Map[String, AnyRef],
-  closeTimeout: Duration,
-  pollTimeout: Duration,
+  properties: Map[String, AnyRef] = Map.empty,
+  closeTimeout: Duration = 30.seconds,
+  pollTimeout: Duration = 50.millis,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
@@ -97,14 +97,4 @@ case class ConsumerSettings(
 
 object ConsumerSettings {
   val defaultRunloopTimeout: Duration = 4.minutes
-
-  def apply(bootstrapServers: List[String]): ConsumerSettings =
-    new ConsumerSettings(
-      bootstrapServers = bootstrapServers,
-      properties = Map.empty,
-      closeTimeout = 30.seconds,
-      pollTimeout = 50.millis,
-      offsetRetrieval = OffsetRetrieval.Auto(),
-      runloopTimeout = defaultRunloopTimeout
-    )
 }

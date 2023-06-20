@@ -1,12 +1,13 @@
 package zio.kafka.serde
 
 import org.apache.kafka.common.header.internals.RecordHeaders
+import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.test.Assertion._
 import zio.test._
 
 import scala.reflect.ClassTag
 
-object SerdeSpec extends ZIOSpecDefault {
+object SerdeSpec extends ZIOSpecDefaultSlf4j {
   case class TestDataStructure(value: String)
 
   val testDataStructureSerde: Serde[Any, TestDataStructure] =

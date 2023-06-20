@@ -1,19 +1,19 @@
 package zio.kafka.consumer
+
 import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio._
-import zio.kafka.KafkaRandom
-import zio.kafka.KafkaTestUtils._
-import zio.kafka.TestLogger.logger
-import zio.kafka.embedded.Kafka
+import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
+import zio.kafka.testkit.KafkaTestUtils._
+import zio.kafka.testkit.{ Kafka, KafkaRandom }
 import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
-object SubscriptionsSpec extends ZIOSpecDefault with KafkaRandom {
+object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "subscriptionsspec"
 
   override def spec: Spec[TestEnvironment with Scope, Throwable] = suite("Consumer subscriptions")(
@@ -207,8 +207,6 @@ object SubscriptionsSpec extends ZIOSpecDefault with KafkaRandom {
   )
     .provideSome[Scope & Kafka](producer)
     .provideSomeShared[Scope](
-      Kafka.embedded,
-      Runtime.removeDefaultLoggers,
-      Runtime.addLogger(logger())
-    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(5.minutes)
+      Kafka.embedded
+    ) @@ withLiveClock @@ TestAspect.sequential @@ timeout(2.minutes)
 }

@@ -158,9 +158,8 @@ object Consumer {
 
   case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
 
-  private final case class Live(
+  private final class Live private[Consumer] (
     private val consumer: ConsumerAccess,
-    private val settings: ConsumerSettings,
     private val runloop: Runloop,
     private val subscriptions: Ref.Synchronized[Set[Subscription]],
     private val partitionAssignments: Hub[
@@ -202,8 +201,7 @@ object Consumer {
      * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
      * requests.
      */
-    override def stopConsumption: UIO[Unit] =
-      runloop.gracefulShutdown
+    override def stopConsumption: UIO[Unit] = runloop.stopConsumption
 
     override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
       consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)
@@ -227,7 +225,7 @@ object Consumer {
       def extendSubscriptions = subscriptions.updateZIO { existingSubscriptions =>
         val newSubscriptions = NonEmptyChunk.fromIterable(subscription, existingSubscriptions)
         Subscription.unionAll(newSubscriptions) match {
-          case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions.toSeq))
+          case None => ZIO.fail(InvalidSubscriptionUnion(newSubscriptions))
           case Some(union) =>
             ZIO.logDebug(s"Changing kafka subscription to $union") *>
               subscribe(union).as(newSubscriptions.toSet)
@@ -361,7 +359,7 @@ object Consumer {
     for {
       _       <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
       wrapper <- ConsumerAccess.make(settings)
-      runloop <- Runloop(
+      runloop <- Runloop.make(
                    hasGroupId = settings.hasGroupId,
                    consumer = wrapper,
                    pollTimeout = settings.pollTimeout,
@@ -375,11 +373,11 @@ object Consumer {
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 
       partitionAssignments <- ZStream
-                                .fromQueue(runloop.partitions)
+                                .fromQueue(runloop.partitionsQueue)
                                 .map(_.exit)
                                 .flattenExitOption
                                 .toHub(hubCapacity)
-    } yield Live(wrapper, settings, runloop, subscriptions, partitionAssignments)
+    } yield new Live(wrapper, runloop, subscriptions, partitionAssignments)
   }
 
   /**

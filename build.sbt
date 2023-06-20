@@ -1,19 +1,22 @@
 import sbt.Def
 
-lazy val kafkaVersion         = "3.4.0"
-lazy val embeddedKafkaVersion = "3.4.0.1" // Should be the same as kafkaVersion, except for the patch part
+lazy val kafkaVersion         = "3.4.1"
+lazy val embeddedKafkaVersion = "3.4.1" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
-lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.10.0"
-lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.15.0"
-lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.7"
+lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.11.0"
+lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.15.2"
+lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.8"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
 inThisBuild(
   List(
     name       := "ZIO Kafka",
-    zioVersion := "2.0.13",
+    zioVersion := "2.0.15",
+    scala212   := "2.12.18",
+    scala213   := "2.13.11",
+    scala3     := "3.3.0",
     crossScalaVersions -= scala211.value,
     ciEnabledBranches        := Seq("master", "series/0.x"),
     useCoursier              := false,
@@ -61,7 +64,7 @@ lazy val root = project
   )
   .aggregate(
     zioKafka,
-    zioKafkaTestUtils,
+    zioKafkaTestkit,
     zioKafkaTest,
     zioKafkaBench,
     zioKafkaExample,
@@ -110,13 +113,12 @@ lazy val `embedded-kafka`: Def.Initialize[Seq[sbt.ModuleID]] = {
   )(embeddedKafka)
 }
 
-lazy val zioKafkaTestUtils =
+lazy val zioKafkaTestkit =
   project
-    .in(file("zio-kafka-test-utils"))
+    .in(file("zio-kafka-testkit"))
     .dependsOn(zioKafka)
     .enablePlugins(BuildInfoPlugin)
-    .settings(stdSettings("zio-kafka-test-utils"))
-    .settings(buildInfoSettings("zio.kafka"))
+    .settings(stdSettings("zio-kafka-testkit"))
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio" %% "zio"      % zioVersion.value,
@@ -129,7 +131,7 @@ lazy val zioKafkaTestUtils =
 lazy val zioKafkaTest =
   project
     .in(file("zio-kafka-test"))
-    .dependsOn(zioKafka, zioKafkaTestUtils)
+    .dependsOn(zioKafka, zioKafkaTestkit)
     .enablePlugins(BuildInfoPlugin)
     .settings(stdSettings("zio-kafka-test"))
     .settings(buildInfoSettings("zio.kafka"))
@@ -139,7 +141,8 @@ lazy val zioKafkaTest =
       libraryDependencies ++= Seq(
         kafkaClients,
         jacksonDatabind,
-        logback % Test,
+        logback    % Test,
+        "dev.zio" %% "zio-logging-slf4j" % "2.1.13" % Test,
         scalaCollectionCompat
       ) ++ `embedded-kafka`.value
     )
@@ -151,7 +154,7 @@ lazy val zioKafkaBench =
     .settings(stdSettings("zio-kafka-bench"))
     .settings(publish / skip := true)
     .settings(libraryDependencies += logback)
-    .dependsOn(zioKafka, zioKafkaTestUtils)
+    .dependsOn(zioKafka, zioKafkaTestkit)
 
 lazy val zioKafkaExample =
   project
@@ -162,10 +165,12 @@ lazy val zioKafkaExample =
     .settings(run / fork := false)
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                 %% "zio"                % "2.0.13",
-        "dev.zio"                 %% "zio-kafka"          % "2.2",
+        "dev.zio"                 %% "zio"                % "2.0.15",
+        "dev.zio"                 %% "zio-kafka"          % "2.3.2",
+        "dev.zio"                 %% "zio-kafka-testkit"  % "2.3.2"  % Test,
+        "dev.zio"                 %% "zio-test"           % "2.0.15" % Test,
         "ch.qos.logback"           % "logback-classic"    % "1.4.6",
-        "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.12",
+        "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.13",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion
       ),
       // Scala 3 compiling fails with:
@@ -191,8 +196,7 @@ lazy val docs = project
       "This library is heavily inspired and made possible by the research and implementation done in " +
         "[Alpakka Kafka](https://github.com/akka/alpakka-kafka), a library maintained by the Akka team and originally " +
         "written as Reactive Kafka by SoftwareMill.",
-    readmeLicense +=
-      "\n\n" + """|Copyright 2021 Itamar Ravid and the zio-kafka contributors. All rights reserved.
-                  |<!-- TODO: not all rights reserved, rather Apache 2... -->""".stripMargin
+    readmeLicense += s"\n\nCopyright 2021-${java.time.Year.now()} Itamar Ravid and the zio-kafka contributors."
   )
   .enablePlugins(WebsitePlugin)
+  .dependsOn(zioKafka, zioKafkaTestkit)

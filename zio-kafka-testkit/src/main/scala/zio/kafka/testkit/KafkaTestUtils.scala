@@ -1,4 +1,4 @@
-package zio.kafka
+package zio.kafka.testkit
 
 import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerRecord }
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
@@ -7,49 +7,51 @@ import zio.kafka.admin._
 import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.embedded.Kafka
 import zio.kafka.producer._
-import zio.kafka.serde.{ Deserializer, Serde, Serializer }
+import zio.kafka.serde.{ Deserializer, Serde }
 
 import java.io.File
 import java.nio.file.{ Files, StandardCopyOption }
 
 object KafkaTestUtils {
 
-  private def readResourceFile(file: String, tmpFileName: String, tmpFileSuffix: String): File =
-    try {
-      val tmpFile = Files.createTempFile(tmpFileName, tmpFileSuffix)
-      Files.copy(getClass.getClassLoader.getResourceAsStream(file), tmpFile, StandardCopyOption.REPLACE_EXISTING)
-      val result = tmpFile.toFile
-      result.deleteOnExit()
-      result
-    } catch {
-      case e: Throwable =>
-        val _ = Unsafe.unsafe { implicit u =>
-          zio.Runtime.default.unsafe.run(ZIO.logErrorCause("Failed to read resource file", Cause.fail(e)))
-        }
-        throw e
-    }
-
-  val trustStoreFile: File = readResourceFile("truststore/kafka.truststore.jks", "truststore", ".jks")
-  val keyStoreFile: File   = readResourceFile("keystore/kafka.keystore.jks", "keystore", ".jks")
-
+  /**
+   * Default Producer settings you can use in your tests
+   */
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
-    ZIO.serviceWith[Kafka](_.bootstrapServers).map(ProducerSettings(_))
+    ZIO
+      .serviceWith[Kafka](_.bootstrapServers)
+      .map(ProducerSettings(_))
 
+  /**
+   * Producer instance you can use in your tests. It uses the default Producer settings.
+   */
   val producer: ZLayer[Kafka, Throwable, Producer] =
-    (ZLayer.fromZIO(producerSettings) ++ ZLayer.succeed(Serde.string: Serializer[Any, String])) >>>
+    ZLayer.makeSome[Kafka, Producer](
+      ZLayer(producerSettings),
       Producer.live
+    )
 
+  /**
+   * Default transactional Producer settings you can use in your tests.
+   */
   val transactionalProducerSettings: ZIO[Kafka, Nothing, TransactionalProducerSettings] =
-    ZIO.serviceWith[Kafka](_.bootstrapServers).map(TransactionalProducerSettings(_, "test-transaction"))
+    ZIO
+      .serviceWith[Kafka](_.bootstrapServers)
+      .map(TransactionalProducerSettings(_, "test-transaction"))
 
+  /**
+   * Transactional Producer instance you can use in your tests. It uses the default transactional Producer settings.
+   */
   val transactionalProducer: ZLayer[Kafka, Throwable, TransactionalProducer] =
-    (ZLayer.fromZIO(transactionalProducerSettings) ++ ZLayer.succeed(
-      Serde.string: Serializer[Any, String]
-    )) >>>
+    ZLayer.makeSome[Kafka, TransactionalProducer](
+      ZLayer(transactionalProducerSettings),
       TransactionalProducer.live
+    )
 
+  /**
+   * Utility function to produce a single message in a Topic.
+   */
   def produceOne(
     topic: String,
     key: String,
@@ -57,6 +59,9 @@ object KafkaTestUtils {
   ): ZIO[Producer, Throwable, RecordMetadata] =
     Producer.produce[Any, String, String](new ProducerRecord(topic, key, message), Serde.string, Serde.string)
 
+  /**
+   * Utility function to produce many messages in give Partition of a Topic.
+   */
   def produceMany(
     topic: String,
     partition: Int,
@@ -71,6 +76,9 @@ object KafkaTestUtils {
         Serde.string
       )
 
+  /**
+   * Utility function to produce many messages in a Topic.
+   */
   def produceMany(
     topic: String,
     kvs: Iterable[(String, String)]
@@ -84,6 +92,9 @@ object KafkaTestUtils {
         Serde.string
       )
 
+  /**
+   * Utility function to make a Consumer settings set.
+   */
   def consumerSettings(
     clientId: String,
     groupId: Option[String] = None,
@@ -118,6 +129,9 @@ object KafkaTestUtils {
       groupId.fold(withClientInstanceId)(withClientInstanceId.withGroupId)
     }
 
+  /**
+   * Utility function to make a transactional Consumer settings set.
+   */
   def transactionalConsumerSettings(
     groupId: String,
     clientId: String,
@@ -142,11 +156,29 @@ object KafkaTestUtils {
         )
       )
 
+  /**
+   * Utility function to make a Consumer. It requires a ConsumerSettings layer.
+   */
+  @deprecated("Use [[KafkaTestUtils.minimalConsumer]] instead", "2.3.1")
   def simpleConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
     ZLayer.makeSome[ConsumerSettings, Consumer](
       ZLayer.succeed(diagnostics) >>> Consumer.live
     )
 
+  /**
+   * Utility function to make a Consumer. It requires a ConsumerSettings layer.
+   *
+   * "minimal" because, unlike the other functions returning a `ZLayer[..., ..., Consumer]` of this file, you need to
+   * provide the `ConsumerSettings` layer yourself.
+   */
+  def minimalConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
+    ZLayer.makeSome[ConsumerSettings, Consumer](
+      ZLayer.succeed(diagnostics) >>> Consumer.live
+    )
+
+  /**
+   * Utility function to make a Consumer.
+   */
   def consumer(
     clientId: String,
     groupId: Option[String] = None,
@@ -169,6 +201,9 @@ object KafkaTestUtils {
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
+  /**
+   * Utility function to make a transactional Consumer.
+   */
   def transactionalConsumer(
     clientId: String,
     groupId: String,
@@ -192,7 +227,12 @@ object KafkaTestUtils {
       ).map(_.withRebalanceListener(rebalanceListener))
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
-  def consumeWithStrings[RC](clientId: String, groupId: Option[String] = None, subscription: Subscription)(
+  /**
+   * Utility function consume a stream of ConsumerRecords.
+   *
+   * For each consumed record, the provided `r` function will be called.
+   */
+  def consumeWithStrings(clientId: String, groupId: Option[String] = None, subscription: Subscription)(
     r: ConsumerRecord[String, String] => URIO[Any, Unit]
   ): RIO[Kafka, Unit] =
     consumerSettings(clientId, groupId, None).flatMap { settings =>
@@ -204,9 +244,15 @@ object KafkaTestUtils {
       )(r)
     }
 
-  def adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
+  /**
+   * Default AdminClient settings.
+   */
+  val adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(AdminClientSettings(_))
 
+  /**
+   * Utility function to make an AdminClient settings set using SASL_PLAINTEXT security protocol.
+   */
   def saslAdminSettings(username: String, password: String): ZIO[Kafka.Sasl, Nothing, AdminClientSettings] =
     ZIO
       .serviceWith[Kafka.Sasl](_.value.bootstrapServers)
@@ -218,7 +264,10 @@ object KafkaTestUtils {
         )
       )
 
-  def sslAdminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
+  /**
+   * Default AdminClient settings using SSL security protocol.
+   */
+  val sslAdminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO
       .serviceWith[Kafka](_.bootstrapServers)
       .map(bootstrap =>
@@ -235,26 +284,32 @@ object KafkaTestUtils {
         )
       )
 
+  /**
+   * Utility function to execute something with an `AdminClient` instance configure with the default settings.
+   */
   def withAdmin[T](f: AdminClient => RIO[Kafka, T]): ZIO[Kafka, Throwable, T] =
     for {
       settings <- adminSettings
       fRes     <- withAdminClient(settings)(f)
     } yield fRes
 
+  /**
+   * Utility function to execute something with an `AdminClient` instance configured to use the SASL_PLAINTEXT security
+   * protocol.
+   */
   def withSaslAdmin[T](
     username: String = "admin",
     password: String = "admin-secret"
-  )(
-    f: AdminClient => RIO[Kafka.Sasl, T]
-  ): ZIO[Kafka.Sasl, Throwable, T] =
+  )(f: AdminClient => RIO[Kafka.Sasl, T]): ZIO[Kafka.Sasl, Throwable, T] =
     for {
       settings <- saslAdminSettings(username, password)
       fRes     <- withAdminClient(settings)(f)
     } yield fRes
 
-  def withSslAdmin[T](
-    f: AdminClient => RIO[Kafka, T]
-  ): ZIO[Kafka, Throwable, T] =
+  /**
+   * Utility function to execute something with an `AdminClient` instance configured to use the SSL security protocol.
+   */
+  def withSslAdmin[T](f: AdminClient => RIO[Kafka, T]): ZIO[Kafka, Throwable, T] =
     for {
       settings <- sslAdminSettings
       fRes     <- withAdminClient(settings)(f)
@@ -264,4 +319,23 @@ object KafkaTestUtils {
     ZIO.scoped[R] {
       AdminClient.make(settings).flatMap(f)
     }
+
+  private def readResourceFile(file: String, tmpFileName: String, tmpFileSuffix: String): File =
+    try {
+      val tmpFile = Files.createTempFile(tmpFileName, tmpFileSuffix)
+      Files.copy(getClass.getClassLoader.getResourceAsStream(file), tmpFile, StandardCopyOption.REPLACE_EXISTING)
+      val result = tmpFile.toFile
+      result.deleteOnExit()
+      result
+    } catch {
+      case e: Throwable =>
+        val _ = Unsafe.unsafe { implicit u =>
+          zio.Runtime.default.unsafe.run(ZIO.logErrorCause("Failed to read resource file", Cause.fail(e)))
+        }
+        throw e
+    }
+
+  private[zio] lazy val trustStoreFile: File = readResourceFile("truststore/kafka.truststore.jks", "truststore", ".jks")
+  private[zio] lazy val keyStoreFile: File   = readResourceFile("keystore/kafka.keystore.jks", "keystore", ".jks")
+
 }

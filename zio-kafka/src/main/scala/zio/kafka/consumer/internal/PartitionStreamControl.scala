@@ -2,8 +2,7 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.consumer.internal.Runloop.Command.Request
-import zio.kafka.consumer.internal.Runloop.{ ByteArrayCommittableRecord, Command }
+import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.{ Take, ZStream }
 import zio.{ Chunk, LogAnnotation, Promise, Queue, Ref, UIO, ZIO }
 
@@ -11,7 +10,7 @@ private[internal] final class PartitionStreamControl private (
   val tp: TopicPartition,
   stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
-  interruptPromise: Promise[Throwable, Unit],
+  interruptionPromise: Promise[Throwable, Unit],
   completedPromise: Promise[Nothing, Unit],
   queueSize: Ref[Int]
 ) {
@@ -29,12 +28,12 @@ private[internal] final class PartitionStreamControl private (
 
   /** To be invoked when the partition was lost. */
   def lost(): UIO[Boolean] =
-    interruptPromise.fail(new RuntimeException(s"Partition ${tp.toString} was lost"))
+    interruptionPromise.fail(new RuntimeException(s"Partition ${tp.toString} was lost"))
 
   /** To be invoked when the partition was revoked or otherwise needs to be ended. */
   def end(): ZIO[Any, Nothing, Unit] =
     logAnnotate {
-      ZIO.logTrace(s"Partition ${tp.toString} ending") *>
+      ZIO.logDebug(s"Partition ${tp.toString} ending") *>
         dataQueue.offer(Take.end).unit
     }
 
@@ -54,19 +53,19 @@ private[internal] object PartitionStreamControl {
 
   def newPartitionStream(
     tp: TopicPartition,
-    commandQueue: Queue[Command],
+    commandQueue: Queue[RunloopCommand],
     diagnostics: Diagnostics
-  ): ZIO[Any, Nothing, PartitionStreamControl] =
+  ): UIO[PartitionStreamControl] =
     for {
-      _                   <- ZIO.logTrace(s"Creating partition stream ${tp.toString}")
+      _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
       interruptionPromise <- Promise.make[Throwable, Unit]
       completedPromise    <- Promise.make[Nothing, Unit]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
       queueSize           <- Ref.make(0)
       requestAndAwaitData =
         for {
-          _     <- commandQueue.offer(Request(tp))
-          _     <- diagnostics.emitIfEnabled(DiagnosticEvent.Request(tp))
+          _     <- commandQueue.offer(RunloopCommand.Request(tp))
+          _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
           taken <- dataQueue.takeBetween(1, Int.MaxValue)
         } yield taken
 

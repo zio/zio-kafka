@@ -19,7 +19,8 @@ Kafka has a mature Java client for producing and consuming events, but it has a 
 In order to use this library, we need to add the following line in our `build.sbt` file:
 
 ```scala
-libraryDependencies += "dev.zio" %% "zio-kafka" % "@VERSION@" 
+libraryDependencies += "dev.zio" %% "zio-kafka"         % "@VERSION@"
+libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "@VERSION@" % Test
 ```
 
 ## Example
@@ -112,3 +113,14 @@ object MainApp extends ZIOAppDefault {
 - [An Introduction to ZIO Kafka](https://ziverge.com/blog/introduction-to-zio-kafka/)
 - [Streaming microservices with ZIO and Kafka](https://scalac.io/streaming-microservices-with-zio-and-kafka/) by Aleksandar Skrbic (February 2021)
 - [ZIO WORLD - ZIO Kafka](https://www.youtube.com/watch?v=GECv1ONieLw) by Aleksandar Skrbic (March 2020) — Aleksandar Skrbic presented ZIO Kafka, a critical library for the modern Scala developer, which hides some of the complexities of Kafka.
+
+## Adopters
+
+Here is a partial list of companies using zio-kafka in production.
+
+Want to see your company here? [Submit a PR](https://github.com/zio/zio-kafka/edit/master/docs/index.md)!
+
+* [Conduktor](https://www.conduktor.io)
+* [KelkooGroup](https://www.kelkoogroup.com)
+* [Rocker](https://rocker.com)
+
