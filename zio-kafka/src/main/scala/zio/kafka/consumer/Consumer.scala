@@ -121,7 +121,7 @@ trait Consumer {
   /**
    * See [[Consumer.consumeWith]].
    */
-  def consumeWith[R: Tag, R1: Tag, K, V](
+  def consumeWith[R: EnvironmentTag, R1: EnvironmentTag, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
@@ -305,7 +305,7 @@ object Consumer {
     override def subscription: Task[Set[String]] =
       consumer.withConsumer(_.subscription().asScala.toSet)
 
-    override def consumeWith[R: Tag, R1: Tag, K, V](
+    override def consumeWith[R: EnvironmentTag, R1: EnvironmentTag, K, V](
       subscription: Subscription,
       keyDeserializer: Deserializer[R, K],
       valueDeserializer: Deserializer[R, V],
@@ -519,7 +519,7 @@ object Consumer {
    * @return
    *   Effect that completes with a unit value only when interrupted. May fail when the [[Consumer]] fails.
    */
-  def consumeWith[R: Tag, R1: Tag, K, V](
+  def consumeWith[R: EnvironmentTag, R1: EnvironmentTag, K, V](
     settings: ConsumerSettings,
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
