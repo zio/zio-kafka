@@ -28,8 +28,7 @@ private[consumer] final class Runloop private (
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
-  currentStateRef: Ref[State],
-  consumerSettings: ConsumerSettings
+  currentStateRef: Ref[State]
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
@@ -138,7 +137,6 @@ private[consumer] final class Runloop private (
   /**
    * Does all needed to end revoked partitions:
    *   1. Complete the revoked assigned streams 2. Remove from the list of pending requests
-   *
    * @return
    *   New pending requests, new active assigned streams
    */
@@ -233,28 +231,17 @@ private[consumer] final class Runloop private (
             .as(tps)
     }
 
-  /**
-   * Pause partitions for which there is no demand and resume those for which there is now demand. Optimistically resume
-   * partitions that are likely to need more data in the next poll.
-   */
+  // Pause partitions for which there is no demand and resume those for which there is now demand
   private def resumeAndPausePartitions(
     c: ByteArrayKafkaConsumer,
-    requestedPartitions: Set[TopicPartition],
-    streams: Chunk[PartitionStreamControl]
+    assignment: Set[TopicPartition],
+    requestedPartitions: Set[TopicPartition]
   ): Unit = {
-    val resumeTps = new java.util.ArrayList[TopicPartition](streams.size)
-    val pauseTps  = new java.util.ArrayList[TopicPartition](streams.size)
-    streams.foreach { stream =>
-      val tp = stream.tp
-      val toResume =
-        requestedPartitions.contains(tp) || (consumerSettings.enableOptimisticResume && stream.optimisticResume)
-      if (toResume) resumeTps.add(tp) else pauseTps.add(tp)
-      if (consumerSettings.enableOptimisticResume) {
-        stream.addPollHistory(toResume)
-      }
-    }
-    if (!resumeTps.isEmpty) c.resume(resumeTps)
-    if (!pauseTps.isEmpty) c.pause(pauseTps)
+    val toResume = assignment intersect requestedPartitions
+    val toPause  = assignment -- requestedPartitions
+
+    if (toResume.nonEmpty) c.resume(toResume.asJava)
+    if (toPause.nonEmpty) c.pause(toPause.asJava)
   }
 
   private def handlePoll(state: State): Task[State] =
@@ -271,7 +258,7 @@ private[consumer] final class Runloop private (
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-            resumeAndPausePartitions(c, requestedPartitions, state.assignedStreams)
+            resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
 
             val polledRecords = {
               val records = c.poll(pollTimeout)
@@ -530,8 +517,7 @@ private[consumer] object Runloop {
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
-    runloopTimeout: Duration,
-    consumerSettings: ConsumerSettings
+    runloopTimeout: Duration
   ): ZIO[Scope, Throwable, Runloop] =
     for {
       commandQueue       <- ZIO.acquireRelease(Queue.bounded[RunloopCommand](commandQueueSize))(_.shutdown)
@@ -557,8 +543,7 @@ private[consumer] object Runloop {
                   offsetRetrieval = offsetRetrieval,
                   userRebalanceListener = userRebalanceListener,
                   restartStreamsOnRebalancing = restartStreamsOnRebalancing,
-                  currentStateRef = currentStateRef,
-                  consumerSettings = consumerSettings
+                  currentStateRef = currentStateRef
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
