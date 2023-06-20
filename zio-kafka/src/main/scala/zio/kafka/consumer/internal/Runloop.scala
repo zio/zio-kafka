@@ -188,9 +188,8 @@ private[consumer] final class Runloop private (
         _ <- ZIO.foreachDiscard(streams) { streamControl =>
                val tp      = streamControl.tp
                val records = polledRecords.records(tp)
-               if (records.isEmpty) {
-                 ZIO.unit
-               } else {
+               if (records.isEmpty) ZIO.unit
+               else {
                  val builder  = ChunkBuilder.make[Record](records.size())
                  val iterator = records.iterator()
                  while (iterator.hasNext) {
