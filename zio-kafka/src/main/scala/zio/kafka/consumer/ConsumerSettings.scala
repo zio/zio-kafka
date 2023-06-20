@@ -10,7 +10,6 @@ import zio.kafka.security.KafkaCredentialStore
  * @param properties
  * @param closeTimeout
  * @param pollTimeout
- * @param perPartitionChunkPrefetch
  * @param offsetRetrieval
  * @param rebalanceListener
  * @param restartStreamOnRebalancing
@@ -21,17 +20,20 @@ import zio.kafka.security.KafkaCredentialStore
  *   be much larger than the pollTimeout and the time it takes to process chunks of records. If your consumer is not
  *   subscribed for long periods during its lifetime, this timeout should take that into account as well. When the
  *   timeout expires, the plainStream/partitionedStream/etc will fail with a [[Consumer.RunloopTimeout]].
+ * @param maxPartitionQueueSize
+ *   Maximum number of records that can be enqueued in a partition stream's buffer before pausing the partition. This
+ *   facilitates backpressure and throughput.
  */
 final case class ConsumerSettings(
   bootstrapServers: List[String],
   properties: Map[String, AnyRef] = Map.empty,
   closeTimeout: Duration = 30.seconds,
   pollTimeout: Duration = 50.millis,
-  perPartitionChunkPrefetch: Int = 2,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
-  runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout
+  runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
+  maxPartitionQueueSize: Int = 1024
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
@@ -65,9 +67,6 @@ final case class ConsumerSettings(
   def withOffsetRetrieval(retrieval: OffsetRetrieval): ConsumerSettings =
     copy(offsetRetrieval = retrieval)
 
-  def withPerPartitionChunkPrefetch(prefetch: Int): ConsumerSettings =
-    copy(perPartitionChunkPrefetch = prefetch)
-
   def withPollTimeout(timeout: Duration): ConsumerSettings =
     copy(pollTimeout = timeout)
 
@@ -91,6 +90,9 @@ final case class ConsumerSettings(
 
   def withRunloopTimeout(timeout: Duration): ConsumerSettings =
     copy(runloopTimeout = timeout)
+
+  def withMaxPartitionQueueSize(maxPartitionQueueSize: Int): ConsumerSettings =
+    copy(maxPartitionQueueSize = maxPartitionQueueSize)
 }
 
 object ConsumerSettings {

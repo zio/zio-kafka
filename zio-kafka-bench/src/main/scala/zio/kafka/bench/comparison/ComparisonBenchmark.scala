@@ -47,7 +47,7 @@ trait ComparisonBenchmark extends ZioBenchmark[Env] {
         `max.poll.records` = 1000, // A more production worthy value
         runloopTimeout =
           1.hour // Absurdly high timeout to avoid the runloop from being interrupted while we're benchmarking other stuff
-      )
+      ).map(_.withMaxPartitionQueueSize(8192))
     )
 
   override final def bootstrap: ULayer[Env] =

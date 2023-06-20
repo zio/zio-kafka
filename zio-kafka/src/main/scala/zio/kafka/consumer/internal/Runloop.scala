@@ -29,7 +29,8 @@ private[consumer] final class Runloop private (
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
-  currentStateRef: Ref[State]
+  currentStateRef: Ref[State],
+  maxPartitionQueueSize: Int
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
@@ -242,7 +243,8 @@ private[consumer] final class Runloop private (
         ZIO.logDebug(
           s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
         )
-      _ <- currentStateRef.set(state)
+      _          <- currentStateRef.set(state)
+      queueSizes <- ZIO.foreach(state.assignedStreams)(stream => stream.getQueueSize.map(stream.tp -> _))
       pollResult <-
         consumer.runloopAccess { c =>
           ZIO.suspend {
@@ -250,7 +252,11 @@ private[consumer] final class Runloop private (
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-            resumeAndPausePartitions(c, prevAssigned, requestedPartitions)
+            val partitionsToFetch = queueSizes.collect {
+              case (tp, queueSize) if queueSize < maxPartitionQueueSize => tp
+            }
+
+            resumeAndPausePartitions(c, prevAssigned, partitionsToFetch.toSet)
 
             val polledRecords = {
               val records = c.poll(pollTimeout)
@@ -509,7 +515,8 @@ private[consumer] object Runloop {
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
-    runloopTimeout: Duration
+    runloopTimeout: Duration,
+    maxPartitionQueueSize: Int
   ): ZIO[Scope, Throwable, Runloop] =
     for {
       commandQueue       <- ZIO.acquireRelease(Queue.bounded[RunloopCommand](commandQueueSize))(_.shutdown)
@@ -535,7 +542,8 @@ private[consumer] object Runloop {
                   offsetRetrieval = offsetRetrieval,
                   userRebalanceListener = userRebalanceListener,
                   restartStreamsOnRebalancing = restartStreamsOnRebalancing,
-                  currentStateRef = currentStateRef
+                  currentStateRef = currentStateRef,
+                  maxPartitionQueueSize = maxPartitionQueueSize
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
