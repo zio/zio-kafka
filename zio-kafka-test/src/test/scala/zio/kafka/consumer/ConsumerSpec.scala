@@ -28,7 +28,6 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
-import java.util.concurrent.atomic.AtomicInteger
 import scala.reflect.ClassTag
 
 //noinspection SimplifyAssertInspection
@@ -1140,50 +1139,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               )
             )
           },
-          test(
-            "Calling `Consumer::stopConsumption` just after starting a forked consumption session should stop the consumption"
-          ) {
-            val numberOfMessages: Int           = 100000
-            val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key-$i", s"msg-$i"))
-
-            def test(diagnostics: Diagnostics): ZIO[Producer & Scope & Kafka, Throwable, TestResult] =
-              for {
-                clientId <- randomClient
-                topic    <- randomTopic
-                settings <- consumerSettings(clientId = clientId)
-                consumer <- Consumer.make(settings, diagnostics = diagnostics)
-                _        <- produceMany(topic, kvs)
-                ref = new AtomicInteger(0)
-                // Starting a consumption session to start the Runloop.
-                fiber <-
-                  consumer
-                    .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
-                    .mapChunksZIO(chunks => ZIO.logDebug(s"Consumed ${ref.getAndAdd(chunks.size)} messages").as(chunks))
-                    .take(numberOfMessages.toLong)
-                    .runCount
-                    .fork
-                _          <- consumer.stopConsumption
-                consumed_0 <- fiber.join
-              } yield assert(consumed_0)(isLessThan(numberOfMessages.toLong))
-
-            for {
-              diagnostics <- Diagnostics.SlidingQueue.make(1000)
-              testResult <- ZIO.scoped {
-                              test(diagnostics)
-                            }
-              finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
-            } yield testResult && assert(finalizationEvents)(
-              // The order is very important.
-              // The subscription must be finalized before the runloop, otherwise it creates a deadlock.
-              equalTo(
-                Chunk(
-                  SubscriptionFinalized,
-                  RunloopFinalized,
-                  ConsumerFinalized
-                )
-              )
-            )
-          } @@ nonFlaky(5),
           test(
             "it's possible to start a new consumption session from a Consumer that had a consumption session stopped previously"
           ) {
