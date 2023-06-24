@@ -369,7 +369,7 @@ object Consumer {
                    restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
                    runloopTimeout = settings.runloopTimeout,
                    maxPartitionQueueSize = settings.maxPartitionQueueSize,
-                   maxTotalQueueSize = settings.maxTotalQueueSize,
+                   maxTotalQueueSize = settings.maxTotalQueueSize
                  )
       subscriptions <- Ref.Synchronized.make(Set.empty[Subscription])
 

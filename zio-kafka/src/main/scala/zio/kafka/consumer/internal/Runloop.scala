@@ -248,14 +248,16 @@ private[consumer] final class Runloop private (
       _ <- currentStateRef.set(state)
       partitionsToFetch <- {
         // By shuffling the streams we prevent read-starvation for streams at the end of the list.
-        val streams = if (maxTotalQueueSize == Int.MaxValue) state.assignedStreams
-                      else scala.util.Random.shuffle(state.assignedStreams)
+        val streams =
+          if (maxTotalQueueSize == Int.MaxValue) state.assignedStreams
+          else scala.util.Random.shuffle(state.assignedStreams)
         ZIO
           .foldLeft(streams)((ArrayBuffer.empty[TopicPartition], maxTotalQueueSize)) {
             case (acc @ (partitions, queueBudget), stream) =>
               stream.queueSize.map { queueSize =>
                 if (queueSize < maxPartitionQueueSize && queueSize < queueBudget) {
-                  (partitions.append(stream.tp), queueBudget - queueSize)
+                  partitions.append(stream.tp)
+                  (partitions, queueBudget - queueSize)
                 } else acc
               }
           }
