@@ -13,7 +13,7 @@ private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
   case object NotStarted                     extends RunloopState
   final case class Started(runloop: Runloop) extends RunloopState
-  case object Stopped                        extends RunloopState
+  case object Finalized                      extends RunloopState
 }
 
 /**
@@ -35,7 +35,7 @@ private[consumer] final class RunloopAccess private (
     }
   private def withRunloopZIO[E, A](shouldStartIfNot: Boolean)(f: Runloop => IO[E, A]): IO[E, A] =
     runloop(shouldStartIfNot).flatMap {
-      case RunloopState.Stopped          => ZIO.unit.asInstanceOf[IO[E, A]]
+      case RunloopState.Finalized        => ZIO.unit.asInstanceOf[IO[E, A]]
       case RunloopState.NotStarted       => ZIO.unit.asInstanceOf[IO[E, A]]
       case RunloopState.Started(runloop) => f(runloop)
     }
@@ -95,7 +95,7 @@ private[consumer] object RunloopAccess {
                         runloopTimeout = settings.runloopTimeout,
                         maxPartitionQueueSize = settings.maxPartitionQueueSize
                       )
-                      .withFinalizer(_ => runloopStateRef.set(RunloopState.Stopped))
+                      .withFinalizer(_ => runloopStateRef.set(RunloopState.Finalized))
                       .provide(ZLayer.succeed(consumerScope))
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
 }
