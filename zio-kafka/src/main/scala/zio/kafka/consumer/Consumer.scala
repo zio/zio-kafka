@@ -318,7 +318,7 @@ object Consumer {
       _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
       _              <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
       consumerAccess <- ConsumerAccess.make(settings)
-      runloopAccess  <- RunloopAccess.make(settings, diagnostics, consumerAccess, settings)
+      runloopAccess  <- RunloopAccess.make(settings, consumerAccess, diagnostics)
     } yield new Live(consumerAccess, runloopAccess)
 
   /**
