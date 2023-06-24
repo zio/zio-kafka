@@ -23,6 +23,10 @@ import zio.kafka.security.KafkaCredentialStore
  * @param maxPartitionQueueSize
  *   Maximum number of records that can be enqueued in a partition stream's buffer before pausing the partition. This
  *   facilitates backpressure and throughput.
+ * @param maxTotalQueueSize
+ *   Maximum number of records that can be enqueued in all partition streams' buffers together. This can be used to
+ *   limit memory usage when consuming a large number of partitions. Defaults to [[Int.MaxValue]] which disabled this
+ *   feature.
  */
 final case class ConsumerSettings(
   bootstrapServers: List[String],
@@ -33,7 +37,8 @@ final case class ConsumerSettings(
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
   runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
-  maxPartitionQueueSize: Int = 1024
+  maxPartitionQueueSize: Int = 1024,
+  maxTotalQueueSize: Int = Int.MaxValue
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
@@ -93,6 +98,9 @@ final case class ConsumerSettings(
 
   def withMaxPartitionQueueSize(maxPartitionQueueSize: Int): ConsumerSettings =
     copy(maxPartitionQueueSize = maxPartitionQueueSize)
+
+  def withMaxTotalQueueSize(maxTotalQueueSize: Int): ConsumerSettings =
+    copy(maxTotalQueueSize = maxTotalQueueSize)
 }
 
 object ConsumerSettings {

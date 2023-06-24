@@ -12,7 +12,7 @@ import zio.kafka.consumer.internal.Runloop._
 import zio.stream._
 
 import java.util
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
 //noinspection SimplifyWhenInspection
@@ -31,7 +31,8 @@ private[consumer] final class Runloop private (
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
   currentStateRef: Ref[State],
-  maxPartitionQueueSize: Int
+  maxPartitionQueueSize: Int,
+  maxTotalQueueSize: Int
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
@@ -245,17 +246,21 @@ private[consumer] final class Runloop private (
           s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
         )
       _ <- currentStateRef.set(state)
-      partitionsToFetch <-
+      partitionsToFetch <- {
+        // By shuffling the streams we prevent read-starvation for streams at the end of the list.
+        val streams = if (maxTotalQueueSize == Int.MaxValue) state.assignedStreams
+                      else scala.util.Random.shuffle(state.assignedStreams)
         ZIO
-          .foldLeft(state.assignedStreams)(ListBuffer.empty[TopicPartition]) { case (acc, stream) =>
-            stream.queueSize.map { queueSize =>
-              if (queueSize < maxPartitionQueueSize) {
-                acc.append(stream.tp)
+          .foldLeft(streams)((ArrayBuffer.empty[TopicPartition], maxTotalQueueSize)) {
+            case (acc @ (partitions, queueBudget), stream) =>
+              stream.queueSize.map { queueSize =>
+                if (queueSize < maxPartitionQueueSize && queueSize < queueBudget) {
+                  (partitions.append(stream.tp), queueBudget - queueSize)
+                } else acc
               }
-              acc
-            }
           }
-          .map(_.toSet)
+          .map(_._1.toSet)
+      }
       pollResult <-
         consumer.runloopAccess { c =>
           ZIO.suspend {
@@ -522,7 +527,8 @@ private[consumer] object Runloop {
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
     runloopTimeout: Duration,
-    maxPartitionQueueSize: Int
+    maxPartitionQueueSize: Int,
+    maxTotalQueueSize: Int
   ): ZIO[Scope, Throwable, Runloop] =
     for {
       commandQueue       <- ZIO.acquireRelease(Queue.bounded[RunloopCommand](commandQueueSize))(_.shutdown)
@@ -549,7 +555,8 @@ private[consumer] object Runloop {
                   userRebalanceListener = userRebalanceListener,
                   restartStreamsOnRebalancing = restartStreamsOnRebalancing,
                   currentStateRef = currentStateRef,
-                  maxPartitionQueueSize = maxPartitionQueueSize
+                  maxPartitionQueueSize = maxPartitionQueueSize,
+                  maxTotalQueueSize = maxTotalQueueSize
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
