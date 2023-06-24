@@ -12,6 +12,7 @@ import zio.kafka.consumer.internal.Runloop._
 import zio.stream._
 
 import java.util
+import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 
 //noinspection SimplifyWhenInspection
@@ -243,20 +244,25 @@ private[consumer] final class Runloop private (
         ZIO.logDebug(
           s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
         )
-      _          <- currentStateRef.set(state)
-      queueSizes <- ZIO.foreach(state.assignedStreams)(stream => stream.getQueueSize.map(stream.tp -> _))
+      _ <- currentStateRef.set(state)
+      partitionsToFetch <-
+        ZIO
+          .foldLeft(state.assignedStreams)(ListBuffer.empty[TopicPartition]) { case (acc, stream) =>
+            stream.queueSize.map { queueSize =>
+              if (queueSize < maxPartitionQueueSize) {
+                acc.append(stream.tp)
+              }
+              acc
+            }
+          }
+          .map(_.toSet)
       pollResult <-
         consumer.runloopAccess { c =>
           ZIO.suspend {
-
             val prevAssigned        = c.assignment().asScala.toSet
             val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-            val partitionsToFetch = queueSizes.collect {
-              case (tp, queueSize) if queueSize < maxPartitionQueueSize => tp
-            }
-
-            resumeAndPausePartitions(c, prevAssigned, partitionsToFetch.toSet)
+            resumeAndPausePartitions(c, prevAssigned, partitionsToFetch)
 
             val polledRecords = {
               val records = c.poll(pollTimeout)
