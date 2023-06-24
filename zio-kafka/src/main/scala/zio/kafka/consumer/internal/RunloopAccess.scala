@@ -7,7 +7,7 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
-import zio.{ durationInt, Hub, IO, Ref, Scope, UIO, ZIO, ZLayer }
+import zio.{ Hub, IO, Ref, Scope, UIO, ZIO, ZLayer }
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -42,26 +42,8 @@ private[consumer] final class RunloopAccess private (
 
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has not been started or has been stopped.
-   *
-   * Note:
-   *   1. We do a 100 retries waiting 10ms between each to roughly take max 1s before to stop to retry. We want to avoid
-   *      an infinite loop. We need this recursion because if the user calls `stopConsumption` before the Runloop is
-   *      started, we need to wait for it to be started. Can happen if the user starts a consuming session in a forked
-   *      fiber and immediately after forking, stops it. The Runloop will potentially not be started yet.
    */
-  // noinspection SimplifyUnlessInspection
-  def stopConsumption(retry: Int = 100, initialCall: Boolean = true): UIO[Unit] = {
-    @inline def next: UIO[Unit] = stopConsumption(retry - 1, initialCall = false)
-
-    runloop(shouldStartIfNot = false).flatMap {
-      case RunloopState.Stopped          => ZIO.unit
-      case RunloopState.Started(runloop) => runloop.stopConsumption
-      case RunloopState.NotStarted =>
-        if (retry <= 0) ZIO.unit
-        else if (initialCall) next
-        else next.delay(10.millis)
-    }
-  }
+  def stopConsumption: UIO[Unit] = withRunloopZIO(shouldStartIfNot = false)(_.stopConsumption)
 
   /**
    * We're doing all of these things in this method so that the interface of this class is as simple as possible and
