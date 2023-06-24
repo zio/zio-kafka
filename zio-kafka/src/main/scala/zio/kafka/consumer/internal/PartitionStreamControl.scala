@@ -12,7 +12,7 @@ private[internal] final class PartitionStreamControl private (
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
   interruptionPromise: Promise[Throwable, Unit],
   completedPromise: Promise[Nothing, Unit],
-  queueSize: Ref[Int]
+  queueSizeRef: Ref[Int]
 ) {
 
   private val logAnnotate = ZIO.logAnnotate(
@@ -22,9 +22,9 @@ private[internal] final class PartitionStreamControl private (
 
   /** Offer new data for the stream to process. */
   def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
-    queueSize.update(_ + data.size) *> dataQueue.offer(Take.chunk(data)).unit
+    queueSizeRef.update(_ + data.size) *> dataQueue.offer(Take.chunk(data)).unit
 
-  def getQueueSize: UIO[Int] = queueSize.get
+  def queueSize: UIO[Int] = queueSizeRef.get
 
   /** To be invoked when the partition was lost. */
   def lost(): UIO[Boolean] =
