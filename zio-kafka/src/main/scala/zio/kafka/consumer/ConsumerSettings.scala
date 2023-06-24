@@ -25,7 +25,7 @@ import zio.kafka.security.KafkaCredentialStore
  *   facilitates backpressure and throughput.
  * @param maxTotalQueueSize
  *   Maximum number of records that can be enqueued in all partition streams' buffers together. This can be used to
- *   limit memory usage when consuming a large number of partitions. Defaults to `Int.MaxValue`` which disabled this
+ *   limit memory usage when consuming a large number of partitions. Defaults to `Int.MaxValue` which disabled this
  *   feature.
  */
 final case class ConsumerSettings(
