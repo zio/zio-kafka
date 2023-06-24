@@ -71,9 +71,8 @@ private[consumer] object RunloopAccess {
 
   def make(
     settings: ConsumerSettings,
-    diagnostics: Diagnostics = Diagnostics.NoOp,
     consumerAccess: ConsumerAccess,
-    consumerSettings: ConsumerSettings
+    diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, RunloopAccess] =
     for {
       // This scope allows us to link the lifecycle of the Runloop and of the Hub to the lifecycle of the Consumer
@@ -93,7 +92,8 @@ private[consumer] object RunloopAccess {
                         userRebalanceListener = settings.rebalanceListener,
                         restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
                         partitionsHub = partitionsHub,
-                        consumerSettings = consumerSettings
+                        runloopTimeout = settings.runloopTimeout,
+                        maxPartitionQueueSize = settings.maxPartitionQueueSize
                       )
                       .withFinalizer(_ => runloopStateRef.set(RunloopState.Stopped))
                       .provide(ZLayer.succeed(consumerScope))

@@ -22,6 +22,7 @@ private[consumer] final class Runloop private (
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollTimeout: Duration,
+  runloopTimeout: Duration,
   commandQueue: Queue[RunloopCommand],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
@@ -30,7 +31,7 @@ private[consumer] final class Runloop private (
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
   currentStateRef: Ref[State],
-  consumerSettings: ConsumerSettings
+  maxPartitionQueueSize: Int
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
@@ -262,7 +263,7 @@ private[consumer] final class Runloop private (
         ZIO
           .foldLeft(state.assignedStreams)(ListBuffer.empty[TopicPartition]) { case (acc, stream) =>
             stream.queueSize.map { queueSize =>
-              if (queueSize < consumerSettings.maxPartitionQueueSize) {
+              if (queueSize < maxPartitionQueueSize) {
                 acc.append(stream.tp)
               }
               acc
@@ -495,7 +496,7 @@ private[consumer] final class Runloop private (
 
     ZStream
       .fromQueue(commandQueue)
-      .timeoutFail[Throwable](RunloopTimeout)(consumerSettings.runloopTimeout)
+      .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
         for {
@@ -574,7 +575,8 @@ private[consumer] object Runloop {
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
     partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
-    consumerSettings: ConsumerSettings
+    runloopTimeout: Duration,
+    maxPartitionQueueSize: Int
   ): URIO[Scope, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
@@ -587,6 +589,7 @@ private[consumer] object Runloop {
                   hasGroupId = hasGroupId,
                   consumer = consumer,
                   pollTimeout = pollTimeout,
+                  runloopTimeout = runloopTimeout,
                   commandQueue = commandQueue,
                   lastRebalanceEvent = lastRebalanceEvent,
                   partitionsHub = partitionsHub,
@@ -595,7 +598,7 @@ private[consumer] object Runloop {
                   userRebalanceListener = userRebalanceListener,
                   restartStreamsOnRebalancing = restartStreamsOnRebalancing,
                   currentStateRef = currentStateRef,
-                  consumerSettings = consumerSettings
+                  maxPartitionQueueSize = maxPartitionQueueSize
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
