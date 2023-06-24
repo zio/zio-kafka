@@ -21,8 +21,13 @@ import zio.kafka.security.KafkaCredentialStore
  *   subscribed for long periods during its lifetime, this timeout should take that into account as well. When the
  *   timeout expires, the plainStream/partitionedStream/etc will fail with a [[Consumer.RunloopTimeout]].
  * @param maxPartitionQueueSize
- *   Maximum number of records that can be enqueued in a partition stream's buffer before pausing the partition. This
- *   facilitates backpressure and throughput.
+ *   Maximum number of records to be buffered per partition. This buffer improves throughput and supports varying
+ *   downstream message processing time, while maintaining some backpressure. Large values effectively disable
+ *   backpressure at the cost of high memory usage, low values will effectively disable prefetching in favour of low
+ *   memory consumption. The number of records that is fetched on every poll is controlled by the `max.poll.records`
+ *   setting, the number of records fetched for every partition is somewhere between 0 and `max.poll.records`. A value
+ *   that is a power of 2 offers somewhat better queueing performance. The default value for this parameter is 2 * the
+ *   default `max.poll.records` of 500, rounded to the nearest power of 2.
  */
 final case class ConsumerSettings(
   bootstrapServers: List[String],
