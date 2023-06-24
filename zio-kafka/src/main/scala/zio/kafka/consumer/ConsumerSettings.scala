@@ -26,8 +26,8 @@ import zio.kafka.security.KafkaCredentialStore
  *   backpressure at the cost of high memory usage, low values will effectively disable prefetching in favour of 
  *   low memory consumption. The number of records that is fetched on every poll is controlled by the 
  *   `max.poll.records` setting, the number of records fetched for every partition is somewhere between 0 and 
- *   `max.poll.records`. A value that is a multiple of 2 offers somewhat better queueing performance. The default 
- *   value for this parameter is 2 * the default `max.poll.records` of 500, rounded to the nearest multiple of 2.
+ *   `max.poll.records`. A value that is a power of 2 offers somewhat better queueing performance. The default 
+ *   value for this parameter is 2 * the default `max.poll.records` of 500, rounded to the nearest power of 2.
  */
 final case class ConsumerSettings(
   bootstrapServers: List[String],
