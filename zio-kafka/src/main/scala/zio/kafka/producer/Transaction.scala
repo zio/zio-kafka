@@ -41,9 +41,9 @@ trait Transaction {
 }
 
 final private[producer] class TransactionImpl(
-  private val producer: Producer,
+  producer: Producer,
   private[producer] val offsetBatchRef: Ref[OffsetBatch],
-  private val closed: Ref[Boolean]
+  closed: Ref[Boolean]
 ) extends Transaction {
   def produce[R, K, V](
     topic: String,
