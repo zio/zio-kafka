@@ -860,8 +860,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             onRevoked = (_, _) =>
               streamCompleteOnRebalanceRef.get.flatMap {
                 case Some(p) =>
-                  ZIO.logDebug("onRevoked, awaiting stream completion") *>
-                    p.await.timeoutFail(new InterruptedException("Timed out waiting stream to complete"))(1.minute)
+                  ZIO.logDebug("onRevoked - stream completion: Waiting") *>
+                    p.await.timeoutFail(new InterruptedException("Timed out waiting stream to complete"))(1.minute) <*
+                    ZIO.logDebug("onRevoked - stream completion: Done")
                 case None => ZIO.unit
               },
             onLost = (_, _) => ZIO.logDebug("Lost some partitions")
@@ -886,10 +887,10 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 .partitionedAssignmentStream(Subscription.topics(fromTopic), Serde.string, Serde.string)
                 .mapZIO { assignedPartitions =>
                   for {
-                    p <- Promise.make[Nothing, Unit]
-                    _ <- streamCompleteOnRebalanceRef.set(Some(p))
-                    _ <- ZIO.logDebug(s"${assignedPartitions.size} partitions assigned")
-                    _ <- consumerCreated.succeed(())
+                    promise <- Promise.make[Nothing, Unit]
+                    _       <- streamCompleteOnRebalanceRef.set(Some(promise))
+                    _       <- ZIO.logDebug(s"${assignedPartitions.size} partitions assigned")
+                    _       <- consumerCreated.succeed(())
                     partitionStreams = assignedPartitions.map(_._2)
                     s <-
                       ZStream
@@ -918,8 +919,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .runDrain
                         .ensuring {
                           for {
+                            _ <- ZIO.logDebug("=== Stream completed ===")
                             _ <- streamCompleteOnRebalanceRef.set(None)
-                            _ <- p.succeed(())
+                            _ <- promise.succeed(())
                             c <- consumedMessagesCounter.get
                             _ <- ZIO.logDebug(s"Consumed $c messages")
                           } yield ()
@@ -929,8 +931,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 .runDrain
                 .provideSome[Kafka](
                   transactionalConsumer(
-                    clientId,
-                    consumerGroupId,
+                    clientId = clientId,
+                    groupId = consumerGroupId,
                     offsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
                     restartStreamOnRebalancing = true,
                     properties = Map(
@@ -977,7 +979,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
               copyingGroup <- randomGroup
 
-              _ <- ZIO.logDebug("Starting copier 1")
+              _ <- ZIO.logDebug("Copier 1: Starting")
               copier1ClientId = copyingGroup + "-1"
               copier1Created <- Promise.make[Nothing, Unit]
               copier1 <-
@@ -991,9 +993,11 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     copier1Created
                   ).fork
                 }
+              _ <- ZIO.logDebug("Copier 1: Waiting to start")
               _ <- copier1Created.await
+              _ <- ZIO.logDebug("Copier 1: Started")
 
-              _ <- ZIO.logDebug("Starting copier 2")
+              _ <- ZIO.logDebug("Copier 2: Starting")
               copier2ClientId = copyingGroup + "-2"
               copier2Created <- Promise.make[Nothing, Unit]
               copier2 <-
@@ -1007,8 +1011,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     copier2Created
                   ).fork
                 }
-              _ <- ZIO.logDebug("Waiting for copier 2 to start")
+              _ <- ZIO.logDebug("Copier 2: Waiting to start")
               _ <- copier2Created.await
+              _ <- ZIO.logDebug("Copier 2: Started")
 
               _ <- ZIO.logDebug("Producing some more messages")
               _ <- produceMany(topicA, messagesAfterRebalance)
@@ -1044,7 +1049,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           testForPartitionAssignmentStrategy[RangeAssignor]
 //          testForPartitionAssignmentStrategy[CooperativeStickyAssignor] // TODO not yet supported
         )
-      }: _*) @@ TestAspect.nonFlaky(3),
+      }: _*), // @@ TestAspect.nonFlaky(3),
       test("running streams don't stall after a poll timeout") {
         for {
           topic      <- randomTopic
@@ -1202,6 +1207,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       .provideSome[Scope & Kafka](producer)
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ sequential @@ timeout(2.minutes)
+      ) @@ withLiveClock @@ sequential @@ timeout(1.minutes)
 
 }

@@ -168,19 +168,19 @@ object Consumer {
   case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
 
   private final class Live private[Consumer] (
-    consumer: ConsumerAccess,
+    consumerAccess: ConsumerAccess,
     runloopAccess: RunloopAccess,
     hasGroupId: Boolean
   ) extends Consumer {
 
     override def assignment: Task[Set[TopicPartition]] =
-      consumer.withConsumer(_.assignment().asScala.toSet)
+      consumerAccess.withConsumer(_.assignment().asScala.toSet)
 
     override def beginningOffsets(
       partitions: Set[TopicPartition],
       timeout: Duration = Duration.Infinity
     ): Task[Map[TopicPartition, Long]] =
-      consumer.withConsumer(
+      consumerAccess.withConsumer(
         _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.map { case (tp, l) =>
           tp -> l.longValue()
         }.toMap
@@ -190,7 +190,7 @@ object Consumer {
       partitions: Set[TopicPartition],
       timeout: Duration = Duration.Infinity
     ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]] =
-      consumer.withConsumer(
+      consumerAccess.withConsumer(
         _.committed(partitions.asJava, timeout.asJava).asScala.map { case (k, v) => k -> Option(v) }.toMap
       )
 
@@ -198,7 +198,7 @@ object Consumer {
       partitions: Set[TopicPartition],
       timeout: Duration = Duration.Infinity
     ): Task[Map[TopicPartition, Long]] =
-      consumer.withConsumer { eo =>
+      consumerAccess.withConsumer { eo =>
         val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
         offs.asScala.map { case (k, v) => k -> v.longValue() }.toMap
       }
@@ -212,13 +212,15 @@ object Consumer {
         runloopAccess.stopConsumption
 
     override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
-      consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)
+      consumerAccess.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) =>
+        k -> v.asScala.toList
+      }.toMap)
 
     override def offsetsForTimes(
       timestamps: Map[TopicPartition, Long],
       timeout: Duration = Duration.Infinity
     ): Task[Map[TopicPartition, OffsetAndTimestamp]] =
-      consumer.withConsumer(
+      consumerAccess.withConsumer(
         _.offsetsForTimes(timestamps.map { case (k, v) => k -> Long.box(v) }.asJava, timeout.asJava).asScala.toMap
           // If a partition doesn't exist yet, the map will have 'null' as entry.
           // It's more idiomatic scala to then simply not have that map entry.
@@ -263,13 +265,13 @@ object Consumer {
       topic: String,
       timeout: Duration = Duration.Infinity
     ): Task[List[PartitionInfo]] =
-      consumer.withConsumer { c =>
+      consumerAccess.withConsumer { c =>
         val partitions = c.partitionsFor(topic, timeout.asJava)
         if (partitions eq null) List.empty else partitions.asScala.toList
       }
 
     override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): Task[Long] =
-      consumer.withConsumer(_.position(partition, timeout.asJava))
+      consumerAccess.withConsumer(_.position(partition, timeout.asJava))
 
     override def plainStream[R, K, V](
       subscription: Subscription,
@@ -283,7 +285,7 @@ object Consumer {
       )(_._2)
 
     override def subscription: Task[Set[String]] =
-      consumer.withConsumer(_.subscription().asScala.toSet)
+      consumerAccess.withConsumer(_.subscription().asScala.toSet)
 
     override def consumeWith[R: EnvironmentTag, R1: EnvironmentTag, K, V](
       subscription: Subscription,
@@ -306,7 +308,7 @@ object Consumer {
       } yield ()
 
     override def metrics: Task[Map[MetricName, Metric]] =
-      consumer.withConsumer(_.metrics().asScala.toMap)
+      consumerAccess.withConsumer(_.metrics().asScala.toMap)
 
     override def commit(offsetBatch: OffsetBatch): Task[Unit]                   = runloopAccess.commit(offsetBatch)
     override def commit(record: CommittableRecord[_, _]): Task[Unit]            = commit(OffsetBatch(record))
@@ -336,7 +338,10 @@ object Consumer {
     ): RIO[R, Unit] = commitOrRetry(policy, OffsetBatch(records))
 
     override private[kafka] val consumerGroupMetadata: Task[Option[ConsumerGroupMetadata]] =
-      if (hasGroupId) consumer.withConsumer(_.groupMetadata()).map(Some(_))
+      if (hasGroupId)
+        consumerAccess
+          .withConsumer(_.groupMetadata())
+          .flatMap(m => ZIO.logDebug(s"___ groupMetadata: $m ___").as(Some(m)))
       else ZIO.none
   }
 
