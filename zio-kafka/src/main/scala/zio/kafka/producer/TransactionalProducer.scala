@@ -27,27 +27,27 @@ object TransactionalProducer {
     private val abortTransaction: Task[Unit] = ZIO.attemptBlocking(live.p.abortTransaction())
 
     private def commitTransactionWithOffsets(offsetBatch: OffsetBatch): ZIO[Consumer, Throwable, Unit] = {
-      def sendOffsetsToTransaction: ZIO[Consumer, Throwable, Unit] =
-        for {
-          consumerGroupMetadata <-
-            ZIO.serviceWithZIO[Consumer](
-              _.consumerGroupMetadata.flatMap {
-                case Some(metadata) => ZIO.succeed(metadata)
-                case None =>
-                  ZIO.fail(
-                    new InvalidGroupIdException(
-                      "To use the group management or offset commit APIs, you must provide a valid group.id in the consumer configuration."
-                    )
-                  )
-              }
+      val sendOffsetsToTransaction: ZIO[Consumer, Throwable, Unit] = {
+        @inline def invalidGroupIdException: IO[InvalidGroupIdException, Nothing] =
+          ZIO.fail(
+            new InvalidGroupIdException(
+              "To use the group management or offset commit APIs, you must provide a valid group.id in the consumer configuration."
             )
+          )
 
-          offsets = offsetBatch.offsets.map { case (topicPartition, offset) =>
-                      topicPartition -> new OffsetAndMetadata(offset + 1)
-                    }.asJava
+        ZIO.serviceWithZIO[Consumer](
+          _.consumerGroupMetadata.flatMap {
+            case None => invalidGroupIdException
+            case Some(metadata) =>
+              val offsets: util.Map[TopicPartition, OffsetAndMetadata] =
+                offsetBatch.offsets.map { case (topicPartition, offset) =>
+                  topicPartition -> new OffsetAndMetadata(offset + 1)
+                }.asJava
 
-          _ <- ZIO.attemptBlocking(live.p.sendOffsetsToTransaction(offsets, consumerGroupMetadata))
-        } yield ()
+              ZIO.attemptBlocking(live.p.sendOffsetsToTransaction(offsets, metadata))
+          }
+        )
+      }
 
       sendOffsetsToTransaction.when(offsetBatch.nonEmpty) *> ZIO.attemptBlocking(live.p.commitTransaction())
     }

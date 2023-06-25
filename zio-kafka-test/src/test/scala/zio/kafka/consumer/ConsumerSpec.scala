@@ -877,11 +877,10 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         ): ZIO[Scope & Kafka, Throwable, Unit] =
           for {
             consumedMessagesCounter <- Ref.make(0)
-            _ <- consumedMessagesCounter.get
-                   .flatMap(consumed => ZIO.logDebug(s"Consumed so far: $consumed"))
-                   .repeat(Schedule.fixed(1.second))
-                   .forkScoped
+            logProducedMessageCount =
+              consumedMessagesCounter.get.flatMap(consumed => ZIO.logDebug(s"Consumed so far: $consumed"))
             streamCompleteOnRebalanceRef <- Ref.make[Option[Promise[Nothing, Unit]]](None)
+            batchCounter                 <- Ref.make(0)
             transactionalConsumer <-
               Consumer
                 .partitionedAssignmentStream(Subscription.topics(fromTopic), Serde.string, Serde.string)
@@ -892,33 +891,39 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     _ <- ZIO.logDebug(s"${assignedPartitions.size} partitions assigned")
                     _ <- consumerCreated.succeed(())
                     partitionStreams = assignedPartitions.map(_._2)
-                    s <- ZStream
-                           .mergeAllUnbounded(64)(partitionStreams: _*)
-                           .mapChunksZIO { records =>
-                             ZIO.scoped {
-                               for {
-                                 transaction <- transactionalProducer.createTransaction
-                                 _           <- ZIO.logDebug("==== Producing chunk batch ====")
-                                 _ <- transaction.produceChunkBatch(
-                                        records.map(r => new ProducerRecord(toTopic, r.key, r.value)),
-                                        Serde.string,
-                                        Serde.string,
-                                        OffsetBatch(records)
-                                      )
-                                 _ <- ZIO.logDebug("==== Done producing chunk batch ====")
-                                 _ <- consumedMessagesCounter.update(_ + records.size)
-                               } yield Chunk.empty
-                             }.uninterruptible
-                           }
-                           .runDrain
-                           .ensuring {
-                             for {
-                               _ <- streamCompleteOnRebalanceRef.set(None)
-                               _ <- p.succeed(())
-                               c <- consumedMessagesCounter.get
-                               _ <- ZIO.logDebug(s"Consumed $c messages")
-                             } yield ()
-                           }
+                    s <-
+                      ZStream
+                        .mergeAllUnbounded(64)(partitionStreams: _*)
+                        .mapChunksZIO { records =>
+                          ZIO.scoped {
+                            for {
+                              batchCount  <- batchCounter.getAndUpdate(_ + 1)
+                              transaction <- transactionalProducer.createTransaction
+                              _ <-
+                                ZIO.logDebug(s"==== Producing chunk batch $batchCount - ${records.size} records ====")
+                              _ <- transaction.produceChunkBatch(
+                                     records.map(r => new ProducerRecord(toTopic, r.key, r.value)),
+                                     Serde.string,
+                                     Serde.string,
+                                     OffsetBatch(records)
+                                   )
+                              _ <- ZIO.logDebug(
+                                     s"==== Done producing chunk batch $batchCount - ${records.size} records ===="
+                                   )
+                              _ <- consumedMessagesCounter.update(_ + records.size)
+                              _ <- logProducedMessageCount
+                            } yield Chunk.empty
+                          }.uninterruptible
+                        }
+                        .runDrain
+                        .ensuring {
+                          for {
+                            _ <- streamCompleteOnRebalanceRef.set(None)
+                            _ <- p.succeed(())
+                            c <- consumedMessagesCounter.get
+                            _ <- ZIO.logDebug(s"Consumed $c messages")
+                          } yield ()
+                        }
                   } yield s
                 }
                 .runDrain
