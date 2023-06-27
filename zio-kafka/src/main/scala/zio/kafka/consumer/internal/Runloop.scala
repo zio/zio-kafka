@@ -66,6 +66,12 @@ private[consumer] final class Runloop private (
     commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
 
   private val rebalanceListener: RebalanceListener = {
+    val logger = RebalanceListener(
+      (assigned, _) => ZIO.logDebug(s"Rebalancing call: assigned $assigned"),
+      (revoked, _) => ZIO.logDebug(s"Rebalancing call: revoked $revoked"),
+      (lost, _) => ZIO.logDebug(s"Rebalancing call: lost $lost")
+    )
+
     val emitDiagnostics = RebalanceListener(
       (assigned, _) => diagnostics.emit(DiagnosticEvent.Rebalance.Assigned(assigned)),
       (revoked, _) => diagnostics.emit(DiagnosticEvent.Rebalance.Revoked(revoked)),
@@ -107,9 +113,9 @@ private[consumer] final class Runloop private (
     )
 
     if (restartStreamsOnRebalancing) {
-      emitDiagnostics ++ restartStreamsRebalancingListener ++ userRebalanceListener
+      logger ++ emitDiagnostics ++ restartStreamsRebalancingListener ++ userRebalanceListener
     } else {
-      emitDiagnostics ++ userRebalanceListener
+      logger ++ emitDiagnostics ++ userRebalanceListener
     }
   }
 

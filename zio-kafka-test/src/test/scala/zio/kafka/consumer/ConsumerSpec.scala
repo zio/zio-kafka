@@ -914,7 +914,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                               _ <- consumedMessagesCounter.update(_ + records.size)
                               _ <- logProducedMessageCount
                             } yield Chunk.empty
-                          }.uninterruptible
+                          } // .uninterruptible
                         }
                         .runDrain
                         .ensuring {
@@ -929,6 +929,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                   } yield s
                 }
                 .runDrain
+                .tap(_ => ZIO.logDebug(s"Stream completed: $clientId"))
+                .onInterrupt(ZIO.logDebug(s"Stream interrupted: $clientId"))
                 .provideSome[Kafka](
                   transactionalConsumer(
                     clientId = clientId,
@@ -1037,8 +1039,11 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                       )
                                       .tapError(e => ZIO.logError(s"Error: $e")) <* ZIO.logDebug("Done")
                                   }
+              _ <- ZIO.logDebug("Interrupting copiers")
               _ <- copier1.interrupt
+              _ <- ZIO.logDebug("Interrupting copiers: Copier 1 interrupted")
               _ <- copier2.interrupt
+              _ <- ZIO.logDebug("Interrupting copiers: Copier 2 interrupted")
               messagesOnTopicBCount         = messagesOnTopicB.size
               messagesOnTopicBDistinctCount = messagesOnTopicB.distinct.size
             } yield assertTrue(messageCount == messagesOnTopicBCount && messageCount == messagesOnTopicBDistinctCount)
