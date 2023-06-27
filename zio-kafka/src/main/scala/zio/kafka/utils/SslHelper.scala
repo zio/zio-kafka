@@ -5,11 +5,13 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.TransferableChannel
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ ApiVersionsRequest, RequestHeader }
-import zio.{ Task, ZIO }
+import zio.{ BuildFrom, IO, Task, Trace, URIO, ZIO }
 
+import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{ FileChannel, SocketChannel }
 import scala.jdk.CollectionConverters._
+import scala.util.control.NoStackTrace
 
 /**
  * This function validates that your Kafka client (Admin, Consumer, or Producer) configurations are valid for the Kafka
@@ -21,56 +23,94 @@ import scala.jdk.CollectionConverters._
  * Credits for this work go to Nick Pavlov (https://github.com/gurinderu), Guillaume Bécan (https://github.com/gbecan)
  * and the Conduktor (https://www.conduktor.io/) devs team.
  */
+//noinspection SimplifyUnlessInspection,SimplifyWhenInspection
 object SslHelper {
-  def validateEndpoint(bootstrapServers: List[String], props: Map[String, AnyRef]): Task[Unit] =
-    ZIO
-      .unless(
-        props
-          .get("security.protocol")
-          .exists {
-            case x: String if x.toUpperCase().contains("SSL") => true
-            case _                                            => false
-          }
-      ) {
-        ZIO.blocking {
-          for {
-            address <- ZIO.attempt {
-                         ClientUtils
-                           .parseAndValidateAddresses(bootstrapServers.asJava, ClientDnsLookup.USE_ALL_DNS_IPS)
-                           .asScala
-                           .toList
+  private final case class ConnectExceptionWrapper(cause: Throwable) extends NoStackTrace
+
+  // ⚠️ Must not do anything else than calling `_validateEndpoint`.
+  def validateEndpoint(bootstrapServers: List[String], props: Map[String, AnyRef]): IO[KafkaException, Unit] =
+    _validateEndpoint(SocketChannel.open)(bootstrapServers, props)
+
+  /**
+   * We use this private function so that we can easily manipulate the `openSocket` function in unit-tests.
+   */
+  private[utils] def _validateEndpoint(
+    openSocket: InetSocketAddress => SocketChannel // Handy for unit-tests
+  )(bootstrapServers: List[String], props: Map[String, AnyRef]): IO[KafkaException, Unit] =
+    if (bootstrapServers.isEmpty) ZIO.fail(kafkaException(new IllegalArgumentException("Empty bootstrapServers list")))
+    else
+      ZIO
+        .unless(
+          props
+            .get("security.protocol")
+            .exists {
+              case x: String if x.toUpperCase().contains("SSL") => true
+              case _                                            => false
+            }
+        ) {
+          ZIO.blocking {
+            for {
+              addresses <- ZIO.attempt {
+                             ClientUtils
+                               .parseAndValidateAddresses(bootstrapServers.asJava, ClientDnsLookup.USE_ALL_DNS_IPS)
+                               .asScala
+                               .toList
+                           }
+              errors <- ZIO.collectAllFailuresPar(addresses.map(validateSslConfigOf(openSocket)))
+              allCallsFailed = errors.size == addresses.size
+              _ <- errors match {
+                     case Nil => ZIO.unit // No calls failed
+                     case head :: _ if allCallsFailed => // All calls failed
+                       head match {
+                         // We don't propagate the internal wrapper
+                         case error: ConnectExceptionWrapper => ZIO.fail(error.cause)
+                         case e                              => ZIO.fail(e)
                        }
-            _ <- ZIO.foreachParDiscard(address) { addr =>
-                   ZIO.scoped {
-                     for {
-                       channel <- ZIO.acquireRelease(
-                                    ZIO.attempt(SocketChannel.open(addr))
-                                  )(channel => ZIO.attempt(channel.close()).orDie)
-                       tls <- ZIO.attempt {
-                                // Send a simple request to check if the cluster accepts the connection
-                                sendTestRequest(channel)
-                                val buffer = readAnswerFromTestRequest(channel)
-                                isTls(buffer)
-                              }
-                       _ <-
-                         ZIO.when(tls) {
-                           ZIO.fail(
-                             new IllegalArgumentException(
-                               s"Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
-                             )
-                           )
-                         }
-                     } yield ()
+                     case _ => // Some calls failed
+                       errors.collect { case e if !e.isInstanceOf[ConnectExceptionWrapper] => e } match {
+                         // No "real errors", we ignore the internally wrapped errors
+                         case Nil => ZIO.unit
+                         // Some "real errors", we propagate the first one
+                         case realError :: _ => ZIO.fail(realError)
+                       }
                    }
-                 }
-          } yield ()
+            } yield ()
+          }
         }
-      }
-      .unit
-      .mapError { e =>
-        // Mimic behaviour of KafkaAdminClient.createInternal
-        new KafkaException("Failed to create new KafkaAdminClient", e)
-      }
+        .unit
+        .mapError(kafkaException)
+
+  /**
+   * Mimic behaviour of KafkaAdminClient.createInternal
+   */
+  private def kafkaException(e: Throwable): KafkaException =
+    new KafkaException("Failed to create new KafkaAdminClient", e)
+
+  private def validateSslConfigOf(
+    openSocket: InetSocketAddress => SocketChannel
+  )(address: InetSocketAddress): Task[Unit] = {
+    @inline def error: IO[IllegalArgumentException, Nothing] =
+      ZIO.fail(
+        new IllegalArgumentException(
+          s"Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
+        )
+      )
+
+    ZIO.scoped {
+      for {
+        channel <- ZIO.acquireRelease(
+                     ZIO.attempt(openSocket(address)).mapError(ConnectExceptionWrapper)
+                   )(channel => ZIO.attempt(channel.close()).orDie)
+        tls <- ZIO.attempt {
+                 // Send a simple request to check if the cluster accepts the connection
+                 sendTestRequest(channel)
+                 val buffer = readAnswerFromTestRequest(channel)
+                 isTls(buffer)
+               }
+        _ <- if (tls) error else ZIO.unit
+      } yield ()
+    }
+  }
 
   /**
    * Send a simple request to check if connection can be established with current configuration
@@ -121,5 +161,16 @@ object SslHelper {
         true
       case _ => tlsMessageType >= 128
     }
+  }
+
+  private implicit final class ZIOTypeOps(private val dummy: ZIO.type) extends AnyVal {
+
+    /**
+     * Adapted from [[ZIO.collectAllSuccessesPar]]
+     */
+    def collectAllFailuresPar[R, E, A, Collection[+Element] <: Iterable[Element]](
+      in: Collection[ZIO[R, E, A]]
+    )(implicit bf: BuildFrom[Collection[ZIO[R, E, A]], E, Collection[E]], trace: Trace): URIO[R, Collection[E]] =
+      ZIO.collectAllWithPar(in.map(_.either)) { case Left(a) => a }.map(bf.fromSpecific(in))
   }
 }
