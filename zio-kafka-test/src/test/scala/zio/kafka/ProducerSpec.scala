@@ -46,10 +46,11 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           topic2 <- randomTopic
           group  <- randomGroup
           client <- randomClient
-          key1   = "boo"
-          value1 = "baa"
-          key2   = "baa"
-          value2 = "boo"
+          key1              = "boo"
+          value1            = "baa"
+          key2              = "baa"
+          value2            = "boo"
+          key3: Array[Byte] = null
           chunks = Chunk.fromIterable(
                      List(new ProducerRecord(topic1, key1, value1), new ProducerRecord(topic2, key2, value2))
                    )
