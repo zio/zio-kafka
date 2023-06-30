@@ -6,7 +6,7 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.{ Take, ZStream }
 import zio.{ Chunk, LogAnnotation, Promise, Queue, Ref, UIO, ZIO }
 
-private[internal] final class PartitionStreamControl private (
+final class PartitionStreamControl private (
   val tp: TopicPartition,
   stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
@@ -21,37 +21,37 @@ private[internal] final class PartitionStreamControl private (
   )
 
   /** Offer new data for the stream to process. */
-  def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
+  private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
     queueSizeRef.update(_ + data.size) *> dataQueue.offer(Take.chunk(data)).unit
 
   def queueSize: UIO[Int] = queueSizeRef.get
 
   /** To be invoked when the partition was lost. */
-  def lost(): UIO[Boolean] =
+  private[internal] def lost(): UIO[Boolean] =
     interruptionPromise.fail(new RuntimeException(s"Partition ${tp.toString} was lost"))
 
   /** To be invoked when the partition was revoked or otherwise needs to be ended. */
-  def end(): ZIO[Any, Nothing, Unit] =
+  private[internal] def end(): ZIO[Any, Nothing, Unit] =
     logAnnotate {
       ZIO.logDebug(s"Partition ${tp.toString} ending") *>
         dataQueue.offer(Take.end).unit
     }
 
   /** Returns true when the stream is done. */
-  def isCompleted: ZIO[Any, Nothing, Boolean] =
+  private[internal] def isCompleted: ZIO[Any, Nothing, Boolean] =
     completedPromise.isDone
 
   /** Returns true when the stream is running. */
-  def isRunning: ZIO[Any, Nothing, Boolean] =
+  private[internal] def isRunning: ZIO[Any, Nothing, Boolean] =
     isCompleted.negate
 
   val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
     (tp, stream)
 }
 
-private[internal] object PartitionStreamControl {
+object PartitionStreamControl {
 
-  def newPartitionStream(
+  private[internal] def newPartitionStream(
     tp: TopicPartition,
     commandQueue: Queue[RunloopCommand],
     diagnostics: Diagnostics

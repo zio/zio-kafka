@@ -3,6 +3,7 @@ package zio.kafka.consumer
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.consumer.fetch.{ FetchStrategy, QueueSizeBasedFetchStrategy }
 import zio.kafka.security.KafkaCredentialStore
 
 /**
@@ -28,7 +29,7 @@ final case class ConsumerSettings(
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
   runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
-  maxPartitionQueueSize: Int = 1024
+  fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy()
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
     case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
@@ -109,7 +110,19 @@ final case class ConsumerSettings(
    *   calculated by taking 2 * the default `max.poll.records` of 500, rounded to the nearest power of 2.
    */
   def withMaxPartitionQueueSize(maxPartitionQueueSize: Int): ConsumerSettings =
-    copy(maxPartitionQueueSize = maxPartitionQueueSize)
+    copy(fetchStrategy = QueueSizeBasedFetchStrategy(maxPartitionQueueSize))
+
+  /**
+   * WARNING: [[FetchStrategy]] is an EXPERIMENTAL API and may change in an incompatible way without notice in any
+   * zio-kafka version.
+   *
+   * @param fetchStrategy
+   *   The fetch strategy which selects which partitions can fetch data in the next poll. The default is to use the
+   *   [[QueueSizeBasedFetchStrategy]] with a `maxPartitionQueueSize` parameter of 1024, which is calculated by taking 2
+   *   * the default `max.poll.records` of 500, rounded to the nearest power of 2.
+   */
+  def withFetchStrategy(fetchStrategy: FetchStrategy): ConsumerSettings =
+    copy(fetchStrategy = fetchStrategy)
 }
 
 object ConsumerSettings {
