@@ -13,7 +13,7 @@ import zio.kafka.testkit.{ Kafka, KafkaRandom, KafkaTestUtils }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio.{ durationInt, Scope, Task, ZIO }
+import zio.{ durationInt, Exit, Scope, Task, ZIO }
 
 import java.nio.channels.SocketChannel
 
@@ -221,7 +221,15 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           // We simulate that the Node takes to much time to answer
           val result =
-            SslHelper.doValidateEndpoint { _ => Thread.sleep(2.second.toMillis); ??? }(
+            SslHelper.doValidateEndpoint { _ =>
+              var interrupted = false
+              while (!interrupted) {
+                Thread.sleep(1.second.toMillis)
+                interrupted = Thread.currentThread.isInterrupted
+                println(s"interrupted: $interrupted")
+              }
+              ???
+            }(
               settings.bootstrapServers,
               settings.properties
             )
@@ -236,6 +244,28 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 )
             )
           )
+        },
+        test("TODO JULES") {
+          val port = "9999"
+          val settings = AdminClientSettings(List(s"localhost:$port"))
+            .withProperty("request.timeout.ms", 30.second.toMillis.toString)
+
+          // We simulate that the Node takes to much time to answer
+          val result =
+            SslHelper.doValidateEndpoint { _ =>
+              var interrupted = false
+              while (!interrupted) {
+                Thread.sleep(1.second.toMillis)
+                interrupted = Thread.currentThread.isInterrupted
+                println(s"interrupted: $interrupted")
+              }
+              ???
+            }(
+              settings.bootstrapServers,
+              settings.properties
+            ).fork.flatMap(fiber => ZIO.debug("INTERRUPT NOW").delay(5.seconds) *> fiber.interrupt)
+
+          assertZIO(result.exit)(succeeds(equalTo(Exit.unit)))
         }
       )
     )
