@@ -91,12 +91,12 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         _ <- produceMany(topic1, kvs)
         _ <- produceMany(topic2, kvs)
 
-        consumer_0 =
+        consumer0 =
           Consumer
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .runCollect
 
-        consumer_1 =
+        consumer1 =
           Consumer
             .plainStream(
               Subscription.manual(topic2, 1), // invalid with the previous subscription
@@ -105,7 +105,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             )
             .runCollect
 
-        result <- (consumer_0 zipPar consumer_1)
+        result <- (consumer0 zipPar consumer1)
                     .provideSomeLayer[Kafka & Scope](consumer(client, Some(group)))
                     .unit
                     .exit
@@ -128,13 +128,13 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         firstMessagesRef <- Ref.make(("", ""))
         finalizersRef    <- Ref.make(Chunk.empty[String])
 
-        consumer_0 =
+        consumer0 =
           Consumer
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
-            // Here we delay each message to be sure that `consumer_1` will fail while `consumer_0` is still running
+            // Here we delay each message to be sure that `consumer1` will fail while `consumer0` is still running
             .mapZIO { r =>
               firstMessagesRef.updateSome { case ("", v) =>
-                ("First consumer_0 message", v)
+                ("First consumer0 message", v)
               } *>
                 ZIO
                   .logDebug(s"Consumed ${counter.getAndIncrement()} records")
@@ -144,9 +144,9 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             .take(numberOfMessages.toLong)
             .runCollect
             .exit
-            .zipLeft(finalizersRef.update(_ :+ "consumer_0 finalized"))
+            .zipLeft(finalizersRef.update(_ :+ "consumer0 finalized"))
 
-        consumer_1 =
+        consumer1 =
           Consumer
             .plainStream(
               Subscription.manual(topic1, 1), // invalid with the previous subscription
@@ -155,29 +155,29 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             )
             .tapError { _ =>
               firstMessagesRef.updateSome { case (v, "") =>
-                (v, "consumer_1 error")
+                (v, "consumer1 error")
               }
             }
             .runCollect
             .exit
-            .zipLeft(finalizersRef.update(_ :+ "consumer_1 finalized"))
+            .zipLeft(finalizersRef.update(_ :+ "consumer1 finalized"))
 
         consumerInstance <- consumer(client, Some(group)).build
 
-        fiber_0 <- consumer_0.provideEnvironment(consumerInstance).fork
-        _       <- ZIO.unit.delay(100.millis) // Wait to be sure that `consumer_0` is running
-        fiber_1 <- consumer_1.provideEnvironment(consumerInstance).fork
+        fiber0 <- consumer0.provideEnvironment(consumerInstance).fork
+        _      <- ZIO.unit.delay(100.millis) // Wait to be sure that `consumer0` is running
+        fiber1 <- consumer1.provideEnvironment(consumerInstance).fork
 
-        result_0 <- fiber_0.join
-        result_1 <- fiber_1.join
+        result0 <- fiber0.join
+        result1 <- fiber1.join
 
         finalizingOrder <- finalizersRef.get
         firstMessages   <- firstMessagesRef.get
-      } yield assert(result_0)(succeeds(hasSize(equalTo(numberOfMessages)))) &&
-        assert(result_1)(fails(isSubtype[InvalidSubscriptionUnion](anything))) &&
-        // Here we check that `consumer_0` was running when `consumer_1` failed
-        assert(firstMessages)(equalTo(("First consumer_0 message", "consumer_1 error"))) &&
-        assert(finalizingOrder)(equalTo(Chunk("consumer_1 finalized", "consumer_0 finalized")))
+      } yield assert(result0)(succeeds(hasSize(equalTo(numberOfMessages)))) &&
+        assert(result1)(fails(isSubtype[InvalidSubscriptionUnion](anything))) &&
+        // Here we check that `consumer0` was running when `consumer1` failed
+        assert(firstMessages)(equalTo(("First consumer0 message", "consumer1 error"))) &&
+        assert(finalizingOrder)(equalTo(Chunk("consumer1 finalized", "consumer0 finalized")))
     } @@ nonFlaky(5),
     test("distributes records (randomly) from overlapping subscriptions over all subscribers") {
       val kvs = (1 to 500).toList.map(i => (s"key$i", s"msg$i"))
