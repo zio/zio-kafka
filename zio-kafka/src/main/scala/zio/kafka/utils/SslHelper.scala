@@ -5,13 +5,13 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.TransferableChannel
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ ApiVersionsRequest, RequestHeader }
-import zio.{ BuildFrom, IO, Task, Trace, URIO, ZIO }
+import zio.{ durationInt, durationLong, BuildFrom, Duration, IO, Ref, Task, Trace, URIO, ZIO }
 
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{ FileChannel, SocketChannel }
 import scala.jdk.CollectionConverters._
-import scala.util.control.NoStackTrace
+import scala.util.control.{ NoStackTrace, NonFatal }
 
 /**
  * This function validates that your Kafka client (Admin, Consumer, or Producer) configurations are valid for the Kafka
@@ -40,7 +40,22 @@ object SslHelper {
    */
   private[utils] def doValidateEndpoint(
     openSocket: InetSocketAddress => SocketChannel // Handy for unit-tests
-  )(bootstrapServers: List[String], props: Map[String, AnyRef]): IO[KafkaException, Unit] =
+  )(bootstrapServers: List[String], props: Map[String, AnyRef]): IO[KafkaException, Unit] = {
+    @inline def `request.timeout.ms`: Duration = {
+      val defaultValue = 30.seconds
+
+      props.get("request.timeout.ms") match {
+        case None => defaultValue
+        case Some(raw) =>
+          try {
+            val v = raw.toString.toLong
+            if (v <= 0) defaultValue else v.millis
+          } catch {
+            case NonFatal(_) => defaultValue
+          }
+      }
+    }
+
     if (bootstrapServers.isEmpty) ZIO.fail(kafkaException(new IllegalArgumentException("Empty bootstrapServers list")))
     else
       ZIO
@@ -60,7 +75,9 @@ object SslHelper {
                                .asScala
                                .toList
                            }
-              errors <- ZIO.collectAllFailuresPar(addresses.map(validateSslConfigOf(openSocket)))
+              errors <- ZIO.collectAllFailuresPar(
+                          addresses.map(validateSslConfigOf(openSocket, socketTimeout = `request.timeout.ms`))
+                        )
               atLeastOneBootstrapServerIsUp = errors.size < addresses.size
               _ <- errors.partition(_.isInstanceOf[ConnectionError]) match {
                      // If we have at least one "real error" (not a "connection error"), we fail with the first one
@@ -77,6 +94,7 @@ object SslHelper {
         }
         .unit
         .mapError(kafkaException)
+  }
 
   /**
    * Mimic behaviour of KafkaAdminClient.createInternal
@@ -85,7 +103,8 @@ object SslHelper {
     new KafkaException("Failed to create new KafkaAdminClient", e)
 
   private def validateSslConfigOf(
-    openSocket: InetSocketAddress => SocketChannel
+    openSocket: InetSocketAddress => SocketChannel,
+    socketTimeout: Duration
   )(address: InetSocketAddress): Task[Unit] = {
     @inline def error: IO[IllegalArgumentException, Nothing] =
       ZIO.fail(
@@ -96,9 +115,22 @@ object SslHelper {
 
     ZIO.scoped {
       for {
-        channel <- ZIO.acquireRelease(
-                     ZIO.attempt(openSocket(address)).mapError(ConnectionError.apply)
-                   )(channel => ZIO.attempt(channel.close()).orDie)
+        ref <- Ref.make[SocketChannel](null)
+        channel <-
+          ZIO.acquireReleaseInterruptible(
+            ZIO.uninterruptible {
+              // It's imperative that this algorithm is not interruptible because of the timeout mechanism.
+              // Otherwise, we might leak a socket channel.
+              // If the timeout interruption happens between the `openSocket` and the `ref.set`, we would leak the socket channel.
+              ZIO.attempt(openSocket(address)).tap(ref.set)
+            }.timeoutFail(new java.util.concurrent.TimeoutException(s"Failed to contact $address"))(socketTimeout)
+              .mapError(ConnectionError.apply)
+          )(
+            ref.get.flatMap { socket =>
+              if (socket == null) ZIO.die(new IllegalStateException("Should never happen: Socket channel is null"))
+              else ZIO.attempt(socket.close()).orDie
+            }
+          )
         tls <- ZIO.attempt {
                  // Send a simple request to check if the cluster accepts the connection
                  sendTestRequest(channel)
