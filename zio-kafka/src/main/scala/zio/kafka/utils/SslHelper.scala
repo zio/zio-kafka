@@ -5,7 +5,7 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.TransferableChannel
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ ApiVersionsRequest, RequestHeader }
-import zio.{ durationInt, durationLong, BuildFrom, Duration, IO, Ref, Task, Trace, URIO, ZIO }
+import zio.{ durationInt, durationLong, BuildFrom, Duration, IO, Task, Trace, URIO, ZIO }
 
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
@@ -115,22 +115,13 @@ object SslHelper {
 
     ZIO.scoped {
       for {
-        ref <- Ref.make[SocketChannel](null)
         channel <-
-          ZIO.acquireReleaseInterruptible(
-            ZIO.uninterruptible {
-              // It's imperative that this algorithm is not interruptible because of the timeout mechanism.
-              // Otherwise, we might leak a socket channel.
-              // If the timeout interruption happens between the `openSocket` and the `ref.set`, we would leak the socket channel.
-              ZIO.attempt(openSocket(address)).tap(ref.set)
-            }.timeoutFail(new java.util.concurrent.TimeoutException(s"Failed to contact $address"))(socketTimeout)
+          ZIO.acquireRelease(
+            ZIO
+              .attemptBlockingInterrupt(openSocket(address))
+              .timeoutFail(new java.util.concurrent.TimeoutException(s"Failed to contact $address"))(socketTimeout)
               .mapError(ConnectionError.apply)
-          )(
-            ref.get.flatMap { socket =>
-              if (socket == null) ZIO.die(new IllegalStateException("Should never happen: Socket channel is null"))
-              else ZIO.attempt(socket.close()).orDie
-            }
-          )
+          )(socket => if (socket == null) ZIO.unit else ZIO.attempt(socket.close()).orDie)
         tls <- ZIO.attempt {
                  // Send a simple request to check if the cluster accepts the connection
                  sendTestRequest(channel)
