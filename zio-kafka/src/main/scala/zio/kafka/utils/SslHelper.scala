@@ -5,7 +5,7 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.TransferableChannel
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ ApiVersionsRequest, RequestHeader }
-import zio.{ durationInt, durationLong, BuildFrom, Duration, IO, Task, Trace, URIO, ZIO }
+import zio.{ durationInt, durationLong, BuildFrom, Duration, IO, Ref, Task, Trace, URIO, ZIO }
 
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
@@ -115,16 +115,18 @@ object SslHelper {
 
     ZIO.scoped {
       for {
+        ref <- Ref.make[Option[SocketChannel]](None)
         channel <-
-          ZIO.acquireRelease(
+          ZIO.acquireReleaseInterruptible(
             ZIO
               .attemptBlockingInterrupt(openSocket(address))
               .timeout(socketTimeout)
+              .tap(ref.set)
               .mapError(ConnectionError.apply)
-          ) {
+          )(ref.get.map {
             case Some(channel) => ZIO.attempt(channel.close()).orDie
             case None          => ZIO.unit
-          }
+          })
         tls <-
           channel match {
             case None => ZIO.fail(new java.util.concurrent.TimeoutException(s"Failed to contact $address"))
