@@ -119,15 +119,23 @@ object SslHelper {
           ZIO.acquireRelease(
             ZIO
               .attemptBlockingInterrupt(openSocket(address))
-              .timeoutFail(new java.util.concurrent.TimeoutException(s"Failed to contact $address"))(socketTimeout)
+              .timeout(socketTimeout)
               .mapError(ConnectionError.apply)
-          )(socket => if (socket == null) ZIO.unit else ZIO.attempt(socket.close()).orDie)
-        tls <- ZIO.attempt {
-                 // Send a simple request to check if the cluster accepts the connection
-                 sendTestRequest(channel)
-                 val buffer = readAnswerFromTestRequest(channel)
-                 isTls(buffer)
-               }
+          ) {
+            case Some(channel) => ZIO.attempt(channel.close()).orDie
+            case None          => ZIO.unit
+          }
+        tls <-
+          channel match {
+            case None => ZIO.fail(new java.util.concurrent.TimeoutException(s"Failed to contact $address"))
+            case Some(channel) =>
+              ZIO.attempt {
+                // Send a simple request to check if the cluster accepts the connection
+                sendTestRequest(channel)
+                val buffer = readAnswerFromTestRequest(channel)
+                isTls(buffer)
+              }
+          }
         _ <- if (tls) error else ZIO.unit
       } yield ()
     }
