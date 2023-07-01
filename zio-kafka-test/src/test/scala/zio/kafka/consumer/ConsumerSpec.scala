@@ -1111,13 +1111,13 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 _        <- produceOne(topic, "key1", "message1")
                 // Starting a consumption session to start the Runloop.
                 consumed0 <- consumer
-                                .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
-                                .take(1)
-                                .runCount
+                               .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                               .take(1)
+                               .runCount
                 consumed1 <- consumer
-                                .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
-                                .take(1)
-                                .runCount
+                               .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                               .take(1)
+                               .runCount
               } yield assert(consumed0)(equalTo(1L)) && assert(consumed1)(equalTo(1L))
 
             for {
@@ -1158,18 +1158,18 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                            .take(numberOfMessages.toLong)
                            .runCount
                            .forkScoped
-                _          <- ZIO.sleep(200.millis)
-                _          <- consumer.stopConsumption
+                _         <- ZIO.sleep(200.millis)
+                _         <- consumer.stopConsumption
                 consumed0 <- fiber.join
-                _          <- ZIO.logDebug(s"consumed0: $consumed0")
+                _         <- ZIO.logDebug(s"consumed0: $consumed0")
 
                 _ <- ZIO.logDebug("About to sleep 5 seconds")
                 _ <- ZIO.sleep(5.seconds)
                 _ <- ZIO.logDebug("Slept 5 seconds")
                 consumed1 <- consumer
-                                .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
-                                .take(numberOfMessages.toLong)
-                                .runCount
+                               .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                               .take(numberOfMessages.toLong)
+                               .runCount
               } yield assert(consumed0)(isGreaterThan(0L) && isLessThan(numberOfMessages.toLong)) &&
                 assert(consumed1)(equalTo(numberOfMessages.toLong))
 
