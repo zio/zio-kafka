@@ -4,15 +4,15 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.{Consumer, Subscription}
+import zio.kafka.consumer.{ Consumer, Subscription }
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils.adminSettings
-import zio.kafka.testkit.{Kafka, KafkaRandom, KafkaTestUtils}
+import zio.kafka.testkit.{ Kafka, KafkaRandom, KafkaTestUtils }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio.{Scope, ZIO}
+import zio.{ Scope, ZIO }
 
 import java.nio.channels.SocketChannel
 
@@ -28,11 +28,11 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       test("Producer should fail due to ssl check") {
         for {
           result <- (
-            for {
-              topic <- randomTopic
-              _ <- Producer.produce(new ProducerRecord(topic, "boo", "baa"), Serde.string, Serde.string)
-            } yield ()
-            ).provideSomeLayer(KafkaTestUtils.producer).exit
+                      for {
+                        topic <- randomTopic
+                        _     <- Producer.produce(new ProducerRecord(topic, "boo", "baa"), Serde.string, Serde.string)
+                      } yield ()
+                    ).provideSomeLayer(KafkaTestUtils.producer).exit
         } yield assert(result)(
           fails(
             isSubtype[KafkaException](
@@ -57,17 +57,17 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       test("Consumer should fail due to ssl check") {
         for {
           result <- (
-            for {
-              topic <- randomTopic
-              _ <- ZIO.serviceWithZIO[Consumer](
-                _.consumeWith(
-                  Subscription.Topics(Set(topic)),
-                  Serde.byteArray,
-                  Serde.byteArray
-                )(_ => ZIO.unit)
-              )
-            } yield ()
-            ).provideSomeLayer(KafkaTestUtils.consumer(clientId = "test", groupId = Some("test"))).exit
+                      for {
+                        topic <- randomTopic
+                        _ <- ZIO.serviceWithZIO[Consumer](
+                               _.consumeWith(
+                                 Subscription.Topics(Set(topic)),
+                                 Serde.byteArray,
+                                 Serde.byteArray
+                               )(_ => ZIO.unit)
+                             )
+                      } yield ()
+                    ).provideSomeLayer(KafkaTestUtils.consumer(clientId = "test", groupId = Some("test"))).exit
         } yield assert(result)(
           fails(
             isSubtype[KafkaException](
@@ -112,7 +112,6 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         )
       }
     ).provideLayerShared(Kafka.sslEmbedded)
-  ,
 
   private val unitTests =
     suite("unit tests")(
@@ -134,18 +133,18 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         val result =
           for {
             settings <- adminSettings
-            server0 = settings.bootstrapServers.head
-            address0 = Utils.getHost(server0)
-            port0 = Utils.getPort(server0)
-            server1 = s"$address0:${port0 + 6000}"
+            server0              = settings.bootstrapServers.head
+            address0             = Utils.getHost(server0)
+            port0                = Utils.getPort(server0)
+            server1              = s"$address0:${port0 + 6000}"
             settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
             // We simulate that the Socket opening fails for some addresses but not all
             result <- SslHelper.doValidateEndpoint { address =>
-              val isValidAddress = address.getPort == port0
+                        val isValidAddress = address.getPort == port0
 
-              if (isValidAddress) SocketChannel.open(address)
-              else throw new java.net.ConnectException("Connection refused")
-            }(settingsWithDownNode.bootstrapServers, settingsWithDownNode.properties)
+                        if (isValidAddress) SocketChannel.open(address)
+                        else throw new java.net.ConnectException("Connection refused")
+                      }(settingsWithDownNode.bootstrapServers, settingsWithDownNode.properties)
           } yield result
 
         assertZIO(result.exit)(succeeds(anything))
@@ -154,18 +153,18 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         val result =
           for {
             settings <- adminSettings
-            server0 = settings.bootstrapServers.head
-            address0 = Utils.getHost(server0)
-            port0 = Utils.getPort(server0)
-            server1 = s"$address0:${port0 + 6000}"
+            server0              = settings.bootstrapServers.head
+            address0             = Utils.getHost(server0)
+            port0                = Utils.getPort(server0)
+            server1              = s"$address0:${port0 + 6000}"
             settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
             // We simulate that the Socket opening fails for some addresses but not all
             result <- SslHelper.doValidateEndpoint { address =>
-              val isValidAddress = address.getPort == port0
+                        val isValidAddress = address.getPort == port0
 
-              if (isValidAddress) SocketChannel.open(address)
-              else throw new java.net.ConnectException("Connection refused")
-            }(settingsWithDownNode.bootstrapServers, settingsWithDownNode.properties)
+                        if (isValidAddress) SocketChannel.open(address)
+                        else throw new java.net.ConnectException("Connection refused")
+                      }(settingsWithDownNode.bootstrapServers, settingsWithDownNode.properties)
           } yield result
 
         assertZIO(result.exit)(
@@ -187,10 +186,10 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         val result =
           for {
             settings <- adminSettings
-            server0 = settings.bootstrapServers.head
-            address0 = Utils.getHost(server0)
-            port0 = Utils.getPort(server0)
-            server1 = s"$address0:${port0 + 6000}"
+            server0              = settings.bootstrapServers.head
+            address0             = Utils.getHost(server0)
+            port0                = Utils.getPort(server0)
+            server1              = s"$address0:${port0 + 6000}"
             settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
             // We simulate that the Socket opening always fails
             result <-
