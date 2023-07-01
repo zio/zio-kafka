@@ -61,25 +61,16 @@ object SslHelper {
                                .toList
                            }
               errors <- ZIO.collectAllFailuresPar(addresses.map(validateSslConfigOf(openSocket)))
-              allCallsFailed = errors.size == addresses.size
-              _ <- errors match {
-                     // All bootstrap servers are okay
-                     case Nil => ZIO.unit
-                     // All bootstrap servers failed, return the first error
-                     case head :: _ if allCallsFailed =>
-                       head match {
-                         // We don't propagate the internal wrapper
-                         case error: ConnectionError => ZIO.fail(error.cause)
-                         case e                      => ZIO.fail(e)
-                       }
-                     // Some bootstrap servers are okay; ignore connection errors (if any) but keep other errors (if any)
-                     case _ =>
-                       errors.collect { case e if !e.isInstanceOf[ConnectionError] => e } match {
-                         // No "real errors", we ignore the connection errors
-                         case Nil => ZIO.unit
-                         // Some "real errors", we propagate the first one
-                         case realError :: _ => ZIO.fail(realError)
-                       }
+              atLeastOneBootstrapServerIsUp = errors.size < addresses.size
+              _ <- errors.partition(_.isInstanceOf[ConnectionError]) match {
+                     // If we have at least one "real error" (not a "connection error"), we fail with the first one
+                     case (_, head :: _) => ZIO.fail(head)
+                     // If we have no errors or if we have some "connection errors" but at least one bootstrap server is up, we succeed
+                     case (Nil, Nil)                         => ZIO.unit
+                     case _ if atLeastOneBootstrapServerIsUp => ZIO.unit
+                     // If we have only "connection errors" and no bootstrap server is up, we fail with the first one
+                     // Note that we don't propagate the internal `ConnectionError` wrapper
+                     case (head :: _, _) => ZIO.fail(head.asInstanceOf[ConnectionError].cause)
                    }
             } yield ()
           }
