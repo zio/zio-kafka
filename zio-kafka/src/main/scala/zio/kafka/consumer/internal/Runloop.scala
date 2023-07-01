@@ -235,7 +235,7 @@ private[consumer] final class Runloop private (
         if (tps.isEmpty) ZIO.succeed(Set.empty)
         else
           getOffsets(tps)
-            .tap(offsets => ZIO.foreachDiscard(offsets) { case (tp, offset) => ZIO.attempt(c.seek(tp, offset)) })
+            .flatMap(offsets => ZIO.attempt(offsets.foreach { case (tp, offset) => c.seek(tp, offset) }))
             .as(tps)
     }
 
