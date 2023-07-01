@@ -25,7 +25,11 @@ import scala.util.control.NoStackTrace
  */
 //noinspection SimplifyUnlessInspection,SimplifyWhenInspection
 object SslHelper {
-  private final case class ConnectExceptionWrapper(cause: Throwable) extends NoStackTrace
+
+  /**
+   * A private exception that we use to "tag" some exceptions that we potentially want to ignore.
+   */
+  private final case class ConnectionError(cause: Throwable) extends NoStackTrace
 
   // ⚠️ Must not do anything else than calling `doValidateEndpoint`.
   def validateEndpoint(bootstrapServers: List[String], props: Map[String, AnyRef]): IO[KafkaException, Unit] =
@@ -59,16 +63,19 @@ object SslHelper {
               errors <- ZIO.collectAllFailuresPar(addresses.map(validateSslConfigOf(openSocket)))
               allCallsFailed = errors.size == addresses.size
               _ <- errors match {
-                     case Nil => ZIO.unit // No calls failed
-                     case head :: _ if allCallsFailed => // All calls failed
+                     // All bootstrap servers are okay
+                     case Nil => ZIO.unit
+                     // All bootstrap servers failed, return the first error
+                     case head :: _ if allCallsFailed =>
                        head match {
                          // We don't propagate the internal wrapper
-                         case error: ConnectExceptionWrapper => ZIO.fail(error.cause)
-                         case e                              => ZIO.fail(e)
+                         case error: ConnectionError => ZIO.fail(error.cause)
+                         case e                      => ZIO.fail(e)
                        }
-                     case _ => // Some calls failed
-                       errors.collect { case e if !e.isInstanceOf[ConnectExceptionWrapper] => e } match {
-                         // No "real errors", we ignore the internally wrapped errors
+                     // Some bootstrap servers are okay; ignore connection errors (if any) but keep other errors (if any)
+                     case _ =>
+                       errors.collect { case e if !e.isInstanceOf[ConnectionError] => e } match {
+                         // No "real errors", we ignore the connection errors
                          case Nil => ZIO.unit
                          // Some "real errors", we propagate the first one
                          case realError :: _ => ZIO.fail(realError)
@@ -99,7 +106,7 @@ object SslHelper {
     ZIO.scoped {
       for {
         channel <- ZIO.acquireRelease(
-                     ZIO.attempt(openSocket(address)).mapError(ConnectExceptionWrapper.apply)
+                     ZIO.attempt(openSocket(address)).mapError(ConnectionError.apply)
                    )(channel => ZIO.attempt(channel.close()).orDie)
         tls <- ZIO.attempt {
                  // Send a simple request to check if the cluster accepts the connection
