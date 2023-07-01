@@ -1110,15 +1110,15 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 consumer <- Consumer.make(settings, diagnostics = diagnostics)
                 _        <- produceOne(topic, "key1", "message1")
                 // Starting a consumption session to start the Runloop.
-                consumed_0 <- consumer
+                consumed0 <- consumer
                                 .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
                                 .take(1)
                                 .runCount
-                consumed_1 <- consumer
+                consumed1 <- consumer
                                 .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
                                 .take(1)
                                 .runCount
-              } yield assert(consumed_0)(equalTo(1L)) && assert(consumed_1)(equalTo(1L))
+              } yield assert(consumed0)(equalTo(1L)) && assert(consumed1)(equalTo(1L))
 
             for {
               diagnostics <- Diagnostics.SlidingQueue.make(1000)
@@ -1160,18 +1160,18 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                            .forkScoped
                 _          <- ZIO.sleep(200.millis)
                 _          <- consumer.stopConsumption
-                consumed_0 <- fiber.join
-                _          <- ZIO.logDebug(s"consumed_0: $consumed_0")
+                consumed0 <- fiber.join
+                _          <- ZIO.logDebug(s"consumed0: $consumed0")
 
                 _ <- ZIO.logDebug("About to sleep 5 seconds")
                 _ <- ZIO.sleep(5.seconds)
                 _ <- ZIO.logDebug("Slept 5 seconds")
-                consumed_1 <- consumer
+                consumed1 <- consumer
                                 .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
                                 .take(numberOfMessages.toLong)
                                 .runCount
-              } yield assert(consumed_0)(isGreaterThan(0L) && isLessThan(numberOfMessages.toLong)) &&
-                assert(consumed_1)(equalTo(numberOfMessages.toLong))
+              } yield assert(consumed0)(isGreaterThan(0L) && isLessThan(numberOfMessages.toLong)) &&
+                assert(consumed1)(equalTo(numberOfMessages.toLong))
 
             for {
               diagnostics <- Diagnostics.SlidingQueue.make(1000)
