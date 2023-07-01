@@ -13,6 +13,9 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
+import java.util.concurrent.atomic.AtomicInteger
+
+//noinspection SimplifyAssertInspection
 object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "subscriptionsspec"
 
@@ -88,22 +91,94 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         _ <- produceMany(topic1, kvs)
         _ <- produceMany(topic2, kvs)
 
-        result <-
-          (Consumer
+        consumer0 =
+          Consumer
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
-            .runCollect zipPar
-            Consumer
-              .plainStream(
-                Subscription.manual(topic2, 1),
-                Serde.string,
-                Serde.string
-              )
-              .runCollect)
-            .provideSomeLayer[Kafka & Scope](consumer(client, Some(group)))
-            .unit
-            .exit
+            .runCollect
+
+        consumer1 =
+          Consumer
+            .plainStream(
+              Subscription.manual(topic2, 1), // invalid with the previous subscription
+              Serde.string,
+              Serde.string
+            )
+            .runCollect
+
+        result <- (consumer0 zipPar consumer1)
+                    .provideSomeLayer[Kafka & Scope](consumer(client, Some(group)))
+                    .unit
+                    .exit
       } yield assert(result)(fails(isSubtype[InvalidSubscriptionUnion](anything)))
     },
+    test(
+      "gives an error when attempting to subscribe using a manual subscription when there is already a topic subscription and doesn't fail the already running consuming session"
+    ) {
+      val numberOfMessages = 20
+      val kvs              = (0 to numberOfMessages).toList.map(i => (s"key$i", s"msg$i"))
+      for {
+        topic1 <- randomTopic
+        client <- randomClient
+        group  <- randomGroup
+
+        _ <- produceMany(topic1, kvs)
+
+        counter = new AtomicInteger(1)
+
+        firstMessagesRef <- Ref.make(("", ""))
+        finalizersRef    <- Ref.make(Chunk.empty[String])
+
+        consumer0 =
+          Consumer
+            .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
+            // Here we delay each message to be sure that `consumer1` will fail while `consumer0` is still running
+            .mapZIO { r =>
+              firstMessagesRef.updateSome { case ("", v) =>
+                ("First consumer0 message", v)
+              } *>
+                ZIO
+                  .logDebug(s"Consumed ${counter.getAndIncrement()} records")
+                  .delay(10.millis)
+                  .as(r)
+            }
+            .take(numberOfMessages.toLong)
+            .runCollect
+            .exit
+            .zipLeft(finalizersRef.update(_ :+ "consumer0 finalized"))
+
+        consumer1 =
+          Consumer
+            .plainStream(
+              Subscription.manual(topic1, 1), // invalid with the previous subscription
+              Serde.string,
+              Serde.string
+            )
+            .tapError { _ =>
+              firstMessagesRef.updateSome { case (v, "") =>
+                (v, "consumer1 error")
+              }
+            }
+            .runCollect
+            .exit
+            .zipLeft(finalizersRef.update(_ :+ "consumer1 finalized"))
+
+        consumerInstance <- consumer(client, Some(group)).build
+
+        fiber0 <- consumer0.provideEnvironment(consumerInstance).fork
+        _      <- ZIO.unit.delay(100.millis) // Wait to be sure that `consumer0` is running
+        fiber1 <- consumer1.provideEnvironment(consumerInstance).fork
+
+        result0 <- fiber0.join
+        result1 <- fiber1.join
+
+        finalizingOrder <- finalizersRef.get
+        firstMessages   <- firstMessagesRef.get
+      } yield assert(result0)(succeeds(hasSize(equalTo(numberOfMessages)))) &&
+        assert(result1)(fails(isSubtype[InvalidSubscriptionUnion](anything))) &&
+        // Here we check that `consumer0` was running when `consumer1` failed
+        assert(firstMessages)(equalTo(("First consumer0 message", "consumer1 error"))) &&
+        assert(finalizingOrder)(equalTo(Chunk("consumer1 finalized", "consumer0 finalized")))
+    } @@ nonFlaky(5),
     test("distributes records (randomly) from overlapping subscriptions over all subscribers") {
       val kvs = (1 to 500).toList.map(i => (s"key$i", s"msg$i"))
       for {

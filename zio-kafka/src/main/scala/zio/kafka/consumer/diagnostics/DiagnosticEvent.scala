@@ -27,4 +27,11 @@ object DiagnosticEvent {
     final case class Lost(partitions: Set[TopicPartition])     extends Rebalance
   }
 
+  sealed trait Finalization extends DiagnosticEvent
+  object Finalization {
+    case object SubscriptionFinalized extends Finalization
+    case object RunloopFinalized      extends Finalization
+    case object ConsumerFinalized     extends Finalization
+  }
+
 }
