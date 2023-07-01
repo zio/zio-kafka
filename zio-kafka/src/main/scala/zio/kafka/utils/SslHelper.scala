@@ -31,7 +31,7 @@ object SslHelper {
    */
   private final case class ConnectionError(cause: Throwable) extends NoStackTrace
 
-  // ⚠️ Must not do anything else than calling `doValidateEndpoint`.
+  // ⚠️ Must not do anything else than calling `doValidateEndpoint`. The algorithm of this function must be completely contained in `doValidateEndpoint`.
   def validateEndpoint(bootstrapServers: List[String], props: Map[String, AnyRef]): IO[KafkaException, Unit] =
     doValidateEndpoint(SocketChannel.open)(bootstrapServers, props)
 
