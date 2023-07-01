@@ -12,7 +12,7 @@ import zio.kafka.testkit.{ Kafka, KafkaRandom, KafkaTestUtils }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio.{ &, Scope, ZIO }
+import zio.{ Scope, ZIO }
 
 import java.nio.channels.SocketChannel
 
@@ -23,7 +23,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
   override val kafkaPrefix: String = "oom-spec"
 
-  override def spec: Spec[TestEnvironment & Scope, Any] =
+  override def spec: Spec[TestEnvironment with Scope, Any] =
     suite(".validateEndpoint")(
       suite("Integration tests")(
         test("Producer should fail due to ssl check") {
