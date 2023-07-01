@@ -99,7 +99,7 @@ object SslHelper {
     ZIO.scoped {
       for {
         channel <- ZIO.acquireRelease(
-                     ZIO.attempt(openSocket(address)).mapError(ConnectExceptionWrapper)
+                     ZIO.attempt(openSocket(address)).mapError(ConnectExceptionWrapper.apply)
                    )(channel => ZIO.attempt(channel.close()).orDie)
         tls <- ZIO.attempt {
                  // Send a simple request to check if the cluster accepts the connection
