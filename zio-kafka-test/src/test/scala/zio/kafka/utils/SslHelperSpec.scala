@@ -140,7 +140,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             server1 = s"$address0:${port0 + 6000}"
             settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
             // We simulate that the Socket opening fails for some addresses but not all
-            result <- SslHelper._validateEndpoint { address =>
+            result <- SslHelper.doValidateEndpoint { address =>
               val isValidAddress = address.getPort == port0
 
               if (isValidAddress) SocketChannel.open(address)
@@ -160,7 +160,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             server1 = s"$address0:${port0 + 6000}"
             settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
             // We simulate that the Socket opening fails for some addresses but not all
-            result <- SslHelper._validateEndpoint { address =>
+            result <- SslHelper.doValidateEndpoint { address =>
               val isValidAddress = address.getPort == port0
 
               if (isValidAddress) SocketChannel.open(address)
@@ -194,7 +194,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
             // We simulate that the Socket opening always fails
             result <-
-              SslHelper._validateEndpoint(_ => throw new java.net.ConnectException("Connection refused. 💥!"))(
+              SslHelper.doValidateEndpoint(_ => throw new java.net.ConnectException("Connection refused. 💥!"))(
                 settingsWithDownNode.bootstrapServers,
                 settingsWithDownNode.properties
               )

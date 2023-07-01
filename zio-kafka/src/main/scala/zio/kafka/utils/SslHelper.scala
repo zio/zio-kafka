@@ -27,14 +27,14 @@ import scala.util.control.NoStackTrace
 object SslHelper {
   private final case class ConnectExceptionWrapper(cause: Throwable) extends NoStackTrace
 
-  // ⚠️ Must not do anything else than calling `_validateEndpoint`.
+  // ⚠️ Must not do anything else than calling `doValidateEndpoint`.
   def validateEndpoint(bootstrapServers: List[String], props: Map[String, AnyRef]): IO[KafkaException, Unit] =
-    _validateEndpoint(SocketChannel.open)(bootstrapServers, props)
+    doValidateEndpoint(SocketChannel.open)(bootstrapServers, props)
 
   /**
    * We use this private function so that we can easily manipulate the `openSocket` function in unit-tests.
    */
-  private[utils] def _validateEndpoint(
+  private[utils] def doValidateEndpoint(
     openSocket: InetSocketAddress => SocketChannel // Handy for unit-tests
   )(bootstrapServers: List[String], props: Map[String, AnyRef]): IO[KafkaException, Unit] =
     if (bootstrapServers.isEmpty) ZIO.fail(kafkaException(new IllegalArgumentException("Empty bootstrapServers list")))
