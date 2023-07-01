@@ -28,5 +28,9 @@ final case class AdminClientSettings(
 
 object AdminClientSettings {
   def apply(bootstrapServers: List[String]): AdminClientSettings =
-    AdminClientSettings(bootstrapServers, 30.seconds, Map.empty)
+    AdminClientSettings(
+      bootstrapServers = bootstrapServers,
+      closeTimeout = 30.seconds,
+      properties = Map.empty
+    )
 }

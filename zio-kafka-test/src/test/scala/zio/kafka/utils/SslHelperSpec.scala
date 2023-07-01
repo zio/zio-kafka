@@ -4,6 +4,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 import zio.kafka.ZIOSpecDefaultSlf4j
+import zio.kafka.admin.AdminClientSettings
 import zio.kafka.consumer.{ Consumer, Subscription }
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
@@ -12,7 +13,7 @@ import zio.kafka.testkit.{ Kafka, KafkaRandom, KafkaTestUtils }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio.{ Scope, ZIO }
+import zio.{ durationInt, Scope, Task, ZIO }
 
 import java.nio.channels.SocketChannel
 
@@ -114,7 +115,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     ).provideLayerShared(Kafka.sslEmbedded)
 
   private val unitTests =
-    suite("unit tests")(
+    suite("Unit tests")(
       test("fails if the passed list of servers is empty") {
         val result = SslHelper.validateEndpoint(List.empty, Map.empty)
 
@@ -129,83 +130,114 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           )
         )
       },
-      test("succeeds if some of the nodes are down and the configuration is correct") {
-        val result =
-          for {
-            settings <- adminSettings
-            server0              = settings.bootstrapServers.head
-            address0             = Utils.getHost(server0)
-            port0                = Utils.getPort(server0)
-            server1              = s"$address0:${port0 + 6000}"
-            settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
-            // We simulate that the Socket opening fails for some addresses but not all
-            result <- SslHelper.doValidateEndpoint { address =>
-                        val isValidAddress = address.getPort == port0
+      suite("is resilient: if some Nodes, not all, are down that doesn't affect the result of the function")(
+        test("succeeds if some of the nodes are down and the SSL configuration is correct") {
+          val result: Task[Unit] =
+            (
+              for {
+                settings <- adminSettings // Non-SSL settings used with a non-SSL cluster
+                server0              = settings.bootstrapServers.head
+                address0             = Utils.getHost(server0)
+                port0                = Utils.getPort(server0)
+                server1              = s"$address0:${port0 + 6000}"
+                settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
+                // We simulate that the Socket opening fails for some Nodes but not all
+                result <- SslHelper.doValidateEndpoint { address =>
+                            val isValidAddress = address.getPort == port0
 
-                        if (isValidAddress) SocketChannel.open(address)
-                        else throw new java.net.ConnectException("Connection refused")
-                      }(settingsWithDownNode.bootstrapServers, settingsWithDownNode.properties)
-          } yield result
+                            if (isValidAddress) SocketChannel.open(address)
+                            else throw new java.net.ConnectException("Connection refused")
+                          }(settingsWithDownNode.bootstrapServers, settingsWithDownNode.properties)
+              } yield result
+            ).provide(Kafka.embedded)
 
-        assertZIO(result.exit)(succeeds(anything))
-      }.provideSomeLayer[Scope](Kafka.embedded),
-      test("fails if one of the nodes is down and the configuration is incorrect") {
-        val result =
-          for {
-            settings <- adminSettings
-            server0              = settings.bootstrapServers.head
-            address0             = Utils.getHost(server0)
-            port0                = Utils.getPort(server0)
-            server1              = s"$address0:${port0 + 6000}"
-            settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
-            // We simulate that the Socket opening fails for some addresses but not all
-            result <- SslHelper.doValidateEndpoint { address =>
-                        val isValidAddress = address.getPort == port0
+          assertZIO(result.exit)(succeeds(anything))
+        },
+        test("fails if some of the nodes are down and the SSL configuration is incorrect") {
+          val result: Task[Unit] =
+            (
+              for {
+                settings <- adminSettings // Non-SSL settings used with an SSL-configured cluster
+                server0              = settings.bootstrapServers.head
+                address0             = Utils.getHost(server0)
+                port0                = Utils.getPort(server0)
+                server1              = s"$address0:${port0 + 6000}"
+                settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
+                // We simulate that the Socket opening fails for some Nodes but not all
+                result <- SslHelper.doValidateEndpoint { address =>
+                            val isValidAddress = address.getPort == port0
 
-                        if (isValidAddress) SocketChannel.open(address)
-                        else throw new java.net.ConnectException("Connection refused")
-                      }(settingsWithDownNode.bootstrapServers, settingsWithDownNode.properties)
-          } yield result
+                            if (isValidAddress) SocketChannel.open(address)
+                            else throw new java.net.ConnectException("Connection refused")
+                          }(settingsWithDownNode.bootstrapServers, settingsWithDownNode.properties)
+              } yield result
+            ).provide(Kafka.sslEmbedded)
 
-        assertZIO(result.exit)(
-          fails(
-            isSubtype[KafkaException](hasMessage(equalTo("Failed to create new KafkaAdminClient"))) &&
-              hasThrowableCause(
-                isSubtype[IllegalArgumentException](
-                  hasMessage(
-                    equalTo(
-                      "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
+          assertZIO(result.exit)(
+            fails(
+              isSubtype[KafkaException](hasMessage(equalTo("Failed to create new KafkaAdminClient"))) &&
+                hasThrowableCause(
+                  isSubtype[IllegalArgumentException](
+                    hasMessage(
+                      equalTo(
+                        "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
+                      )
                     )
                   )
                 )
-              )
+            )
           )
-        )
-      }.provideSomeLayer[Scope](Kafka.sslEmbedded),
-      test("fails if all the nodes are down") {
-        val result =
-          for {
-            settings <- adminSettings
-            server0              = settings.bootstrapServers.head
-            address0             = Utils.getHost(server0)
-            port0                = Utils.getPort(server0)
-            server1              = s"$address0:${port0 + 6000}"
-            settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
-            // We simulate that the Socket opening always fails
-            result <-
-              SslHelper.doValidateEndpoint(_ => throw new java.net.ConnectException("Connection refused. 💥!"))(
-                settingsWithDownNode.bootstrapServers,
-                settingsWithDownNode.properties
-              )
-          } yield result
+        },
+        test("fails if all the nodes are down") {
+          val result: Task[Unit] =
+            for {
+              _ <- ZIO.unit
+              // We don't care about the bootstraps servers here as we'll simulate that all Nodes are down
+              settings             = AdminClientSettings(List("localhost:9999"))
+              server0              = settings.bootstrapServers.head
+              address0             = Utils.getHost(server0)
+              port0                = Utils.getPort(server0)
+              server1              = s"$address0:${port0 + 6000}"
+              settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
+              // We simulate that the Socket opening always fails (ie. that all Nodes are down)
+              result <-
+                SslHelper.doValidateEndpoint(_ => throw new java.net.ConnectException("Connection refused. 💥!"))(
+                  settingsWithDownNode.bootstrapServers,
+                  settingsWithDownNode.properties
+                )
+            } yield result
 
-        assertZIO(result.exit)(
-          fails(
-            isSubtype[KafkaException](hasMessage(equalTo("Failed to create new KafkaAdminClient"))) &&
-              hasThrowableCause(isSubtype[java.net.ConnectException](hasMessage(equalTo("Connection refused. 💥!"))))
+          assertZIO(result.exit)(
+            fails(
+              isSubtype[KafkaException](hasMessage(equalTo("Failed to create new KafkaAdminClient"))) &&
+                hasThrowableCause(isSubtype[java.net.ConnectException](hasMessage(equalTo("Connection refused. 💥!"))))
+            )
           )
-        )
-      }.provideSomeLayer[Scope](Kafka.embedded)
+        },
+        test("A Node not answering fast enough is considered as down") {
+          val port = "9999"
+          val settings = AdminClientSettings(List(s"localhost:$port"))
+            .withProperty("request.timeout.ms", 1.second.toMillis.toString)
+
+          // We simulate that the Node takes to much time to answer
+          val result =
+            SslHelper.doValidateEndpoint { _ => Thread.sleep(2.second.toMillis); ??? }(
+              settings.bootstrapServers,
+              settings.properties
+            )
+
+          assertZIO(result.exit)(
+            fails(
+              isSubtype[KafkaException](hasMessage(equalTo("Failed to create new KafkaAdminClient"))) &&
+                hasThrowableCause(
+                  isSubtype[java.util.concurrent.TimeoutException](
+                    hasMessage(equalTo(s"Failed to contact localhost/127.0.0.1:$port"))
+                  )
+                )
+            )
+          )
+        }
+      )
     )
 
   override def spec: Spec[TestEnvironment with Scope, Any] =
