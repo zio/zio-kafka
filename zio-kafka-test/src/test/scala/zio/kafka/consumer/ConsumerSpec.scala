@@ -1062,14 +1062,17 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       },
       suite("issue #856")(
         test(
-          "Booting a Consumer to do something else than consuming should not fail with `RunloopTimeout` exception"
+          "Booting a Consumer to do something else than consuming should not fail with a timeout exception"
         ) {
           def test(diagnostics: Diagnostics) =
             for {
               clientId <- randomClient
-              settings <- consumerSettings(clientId = clientId, runloopTimeout = 500.millis)
-              _        <- Consumer.make(settings, diagnostics = diagnostics)
-              _        <- ZIO.sleep(1.second)
+              settings <- consumerSettings(
+                            clientId = clientId,
+                            properties = Map(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG -> "500")
+                          )
+              _ <- Consumer.make(settings, diagnostics = diagnostics)
+              _ <- ZIO.sleep(1.second)
             } yield assertCompletes
 
           for {

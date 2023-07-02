@@ -4,7 +4,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
-import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
+import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
@@ -23,7 +23,6 @@ private[consumer] final class Runloop private (
   consumer: ConsumerAccess,
   pollTimeout: Duration,
   maxPollInterval: Duration,
-  runloopTimeout: Duration,
   commandQueue: Queue[RunloopCommand],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
@@ -487,7 +486,6 @@ private[consumer] final class Runloop private (
 
     ZStream
       .fromQueue(commandQueue)
-      .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
@@ -567,7 +565,6 @@ private[consumer] object Runloop {
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
     partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
-    runloopTimeout: Duration,
     fetchStrategy: FetchStrategy
   ): URIO[Scope, Runloop] =
     for {
@@ -583,7 +580,6 @@ private[consumer] object Runloop {
                   consumer = consumer,
                   pollTimeout = pollTimeout,
                   maxPollInterval = maxPollInterval,
-                  runloopTimeout = runloopTimeout,
                   commandQueue = commandQueue,
                   lastRebalanceEvent = lastRebalanceEvent,
                   partitionsHub = partitionsHub,

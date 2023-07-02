@@ -28,7 +28,6 @@ final case class ConsumerSettings(
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
-  runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy()
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
@@ -90,16 +89,6 @@ final case class ConsumerSettings(
     withProperties(credentialsStore.properties)
 
   /**
-   * @param timeout
-   *   Internal timeout for each iteration of the command processing and polling loop, use to detect stalling. This
-   *   should be much larger than the pollTimeout and the time it takes to process chunks of records. If your consumer
-   *   is not subscribed for long periods during its lifetime, this timeout should take that into account as well. When
-   *   the timeout expires, the plainStream/partitionedStream/etc will fail with a [[Consumer.RunloopTimeout]].
-   */
-  def withRunloopTimeout(timeout: Duration): ConsumerSettings =
-    copy(runloopTimeout = timeout)
-
-  /**
    * @param maxPartitionQueueSize
    *   Maximum number of records to be buffered per partition. This buffer improves throughput and supports varying
    *   downstream message processing time, while maintaining some backpressure. Large values effectively disable
@@ -123,8 +112,4 @@ final case class ConsumerSettings(
    */
   def withFetchStrategy(fetchStrategy: FetchStrategy): ConsumerSettings =
     copy(fetchStrategy = fetchStrategy)
-}
-
-object ConsumerSettings {
-  val defaultRunloopTimeout: Duration = 4.minutes
 }

@@ -94,7 +94,6 @@ private[consumer] object RunloopAccess {
                         userRebalanceListener = settings.rebalanceListener,
                         restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
                         partitionsHub = partitionsHub,
-                        runloopTimeout = settings.runloopTimeout,
                         fetchStrategy = settings.fetchStrategy
                       )
                       .withFinalizer(_ => runloopStateRef.set(RunloopState.Finalized))
