@@ -1,17 +1,17 @@
 package zio.kafka.utils
 
-import org.apache.kafka.clients.{ ClientDnsLookup, ClientUtils }
+import org.apache.kafka.clients.{ClientDnsLookup, ClientUtils}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.TransferableChannel
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{ ApiVersionsRequest, RequestHeader }
-import zio.{ durationInt, durationLong, BuildFrom, Duration, IO, Ref, Task, Trace, URIO, ZIO }
+import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestHeader}
+import zio.{BuildFrom, Duration, Exit, IO, Ref, Task, Trace, URIO, ZIO, durationInt, durationLong}
 
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
-import java.nio.channels.{ FileChannel, SocketChannel }
+import java.nio.channels.{FileChannel, SocketChannel}
 import scala.jdk.CollectionConverters._
-import scala.util.control.{ NoStackTrace, NonFatal }
+import scala.util.control.{NoStackTrace, NonFatal}
 
 /**
  * This function validates that your Kafka client (Admin, Consumer, or Producer) configurations are valid for the Kafka
@@ -121,7 +121,13 @@ object SslHelper {
             ZIO
               .attemptBlockingInterrupt(openSocket(address))
               .timeout(socketTimeout)
-              .tap(ref.set)
+              // In order to avoid any leak of the `SocketChannel`, we need to be sure that the `Ref` is set, even in interruption cases.
+              // That's why `.tap(ref.set)` wouldn't be not enough and we have to use `.onExit`.
+              // More info, see discussion starting here: https://discord.com/channels/629491597070827530/1122924033827164282/1124995521774358578
+              .onExit {
+                case Exit.Success(x) => ref.set(x)
+                case Exit.Failure(_) => ZIO.unit
+              }
               .mapError(ConnectionError.apply)
           )(ref.get.map {
             case Some(channel) => ZIO.attempt(channel.close()).orDie
