@@ -45,7 +45,7 @@ final class PartitionStreamControl private (
   private[internal] def isRunning: ZIO[Any, Nothing, Boolean] =
     isCompleted.negate
 
-  val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
+  private[internal] val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
     (tp, stream)
 }
 
