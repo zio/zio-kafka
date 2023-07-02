@@ -22,6 +22,7 @@ private[consumer] final class Runloop private (
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollTimeout: Duration,
+  maxPollInterval: Duration,
   commitTimeout: Duration,
   runloopTimeout: Duration,
   commandQueue: Queue[RunloopCommand],
@@ -36,7 +37,7 @@ private[consumer] final class Runloop private (
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
-    PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics)
+    PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, maxPollInterval)
 
   def stopConsumption: UIO[Unit] =
     ZIO.logDebug("stopConsumption called") *>
@@ -558,6 +559,7 @@ private[consumer] object Runloop {
     hasGroupId: Boolean,
     consumer: ConsumerAccess,
     pollTimeout: Duration,
+    maxPollInterval: Duration,
     commitTimeout: Duration,
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval,
@@ -579,6 +581,7 @@ private[consumer] object Runloop {
                   hasGroupId = hasGroupId,
                   consumer = consumer,
                   pollTimeout = pollTimeout,
+                  maxPollInterval = maxPollInterval,
                   commitTimeout = commitTimeout,
                   runloopTimeout = runloopTimeout,
                   commandQueue = commandQueue,
