@@ -29,21 +29,34 @@ private[consumer] final class RunloopAccess private (
   makeRunloop: UIO[Runloop],
   diagnostics: Diagnostics
 ) {
-  private def runloop(shouldStartIfNot: Boolean): UIO[RunloopState] =
+
+  private def runloop[E, A](
+    requireRunning: Boolean,
+    whenRunning: Runloop => IO[E, A],
+    whenNotRunning: IO[E, A]
+  ): IO[E, A] =
     runloopStateRef.updateSomeAndGetZIO {
-      case RunloopState.NotStarted if shouldStartIfNot => makeRunloop.map(RunloopState.Started.apply)
+      case RunloopState.NotStarted if requireRunning => makeRunloop.map(RunloopState.Started.apply)
+    }.flatMap {
+      case RunloopState.NotStarted       => whenNotRunning
+      case RunloopState.Started(runloop) => whenRunning(runloop)
+      case RunloopState.Finalized        => whenNotRunning
     }
-  private def withRunloopZIO[E, A](shouldStartIfNot: Boolean)(f: Runloop => IO[E, A]): IO[E, A] =
-    runloop(shouldStartIfNot).flatMap {
-      case RunloopState.Finalized        => ZIO.unit.asInstanceOf[IO[E, A]]
-      case RunloopState.NotStarted       => ZIO.unit.asInstanceOf[IO[E, A]]
-      case RunloopState.Started(runloop) => f(runloop)
-    }
+
+  private def withRunloopZIO[E, A](whenRunning: Runloop => IO[E, A]): IO[E, A] =
+    runloop(
+      requireRunning = true,
+      whenRunning,
+      ZIO.die(new IllegalStateException("Trying to use a consumer that is already finalized"))
+    )
+
+  private def whenRunloopZIO[E](whenRunning: Runloop => IO[E, Unit]): IO[E, Unit] =
+    runloop(requireRunning = false, whenRunning, ZIO.unit)
 
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has not been started or has been stopped.
    */
-  def stopConsumption: UIO[Unit] = withRunloopZIO(shouldStartIfNot = false)(_.stopConsumption)
+  def stopConsumption: UIO[Unit] = whenRunloopZIO(_.stopConsumption)
 
   /**
    * We're doing all of these things in this method so that the interface of this class is as simple as possible and
@@ -57,9 +70,9 @@ private[consumer] final class RunloopAccess private (
     for {
       stream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
-      _ <- withRunloopZIO(shouldStartIfNot = true)(_.addSubscription(subscription))
+      _ <- withRunloopZIO(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             withRunloopZIO(shouldStartIfNot = false)(_.removeSubscription(subscription)) <*
+             whenRunloopZIO(_.removeSubscription(subscription)) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
     } yield stream
