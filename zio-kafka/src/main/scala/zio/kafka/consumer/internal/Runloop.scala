@@ -24,7 +24,6 @@ private[consumer] final class Runloop private (
   pollTimeout: Duration,
   maxPollInterval: Duration,
   commitTimeout: Duration,
-  runloopTimeout: Duration,
   commandQueue: Queue[RunloopCommand],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
@@ -488,7 +487,6 @@ private[consumer] final class Runloop private (
 
     ZStream
       .fromQueue(commandQueue)
-      .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
@@ -566,7 +564,6 @@ private[consumer] object Runloop {
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
     partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
-    runloopTimeout: Duration,
     fetchStrategy: FetchStrategy
   ): URIO[Scope, Runloop] =
     for {
@@ -583,7 +580,6 @@ private[consumer] object Runloop {
                   pollTimeout = pollTimeout,
                   maxPollInterval = maxPollInterval,
                   commitTimeout = commitTimeout,
-                  runloopTimeout = runloopTimeout,
                   commandQueue = commandQueue,
                   lastRebalanceEvent = lastRebalanceEvent,
                   partitionsHub = partitionsHub,

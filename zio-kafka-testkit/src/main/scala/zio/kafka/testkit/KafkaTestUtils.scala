@@ -103,7 +103,6 @@ object KafkaTestUtils {
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
     `max.poll.records`: Int = 100, // settings this higher can cause concurrency bugs to go unnoticed
-    runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
@@ -113,7 +112,6 @@ object KafkaTestUtils {
         .withCloseTimeout(5.seconds)
         .withPollTimeout(100.millis)
         .withCommitTimeout(commitTimeout)
-        .withRunloopTimeout(runloopTimeout)
         .withProperties(
           ConsumerConfig.AUTO_OFFSET_RESET_CONFIG        -> "earliest",
           ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",
