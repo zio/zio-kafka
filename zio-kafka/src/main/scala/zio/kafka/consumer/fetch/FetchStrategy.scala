@@ -40,7 +40,7 @@ final case class QueueSizeBasedFetchStrategy(maxPartitionQueueSize: Int = 1024) 
     ZIO
       .foldLeft(streams)(Chunk.empty[TopicPartition]) { case (acc, stream) =>
         stream.queueSize.map { queueSize =>
-          if (queueSize < maxPartitionQueueSize) acc.appended(stream.tp) else acc
+          if (queueSize < maxPartitionQueueSize) acc ++ Chunk.single(stream.tp) else acc
         }
       }
       .map(_.toSet)
@@ -81,7 +81,7 @@ final case class ManyPartitionsQueueSizeBasedFetchStrategy(
         case (acc @ (partitions, queueBudget), stream) =>
           stream.queueSize.map { queueSize =>
             if (queueSize < maxPartitionQueueSize && queueSize < queueBudget) {
-              (partitions.appended(stream.tp), queueBudget - queueSize)
+              (partitions ++ Chunk.single(stream.tp), queueBudget - queueSize)
             } else acc
           }
       }
