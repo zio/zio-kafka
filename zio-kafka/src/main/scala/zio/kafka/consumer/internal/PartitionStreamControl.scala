@@ -95,6 +95,11 @@ object PartitionStreamControl {
     } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise, queueSize)
 
   implicit private class ZStreamOps[R, E, A](val stream: ZStream[R, E, A]) {
+    /**
+     * Fails the stream with given error if it is not polled for a value after d duration.
+     *
+     * See [[zio.stream.ZStream#timeoutFail]] for failing the stream doesn't produce a value.
+     */
     def pollTimeoutFail[E1 >: E](e: E1)(timeout: Duration): ZStream[R, E1, A] =
       ZStream.unwrap(
         for {
