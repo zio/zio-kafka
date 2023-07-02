@@ -4,7 +4,9 @@ import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.{ Take, ZStream }
-import zio.{ Chunk, LogAnnotation, Promise, Queue, Ref, UIO, ZIO }
+import zio.{ Chunk, Duration, LogAnnotation, Promise, Queue, Ref, UIO, ZIO }
+
+import scala.concurrent.TimeoutException
 
 final class PartitionStreamControl private (
   val tp: TopicPartition,
@@ -54,7 +56,8 @@ object PartitionStreamControl {
   private[internal] def newPartitionStream(
     tp: TopicPartition,
     commandQueue: Queue[RunloopCommand],
-    diagnostics: Diagnostics
+    diagnostics: Diagnostics,
+    maxPollInterval: Duration
   ): UIO[PartitionStreamControl] =
     for {
       _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
@@ -84,6 +87,31 @@ object PartitionStreamControl {
                  }.flattenTake
                    .chunksWith(_.tap(records => queueSize.update(_ - records.size)))
                    .interruptWhen(interruptionPromise)
+                   .pollTimeoutFail(
+                     new TimeoutException(
+                       s"No records were polled for more than $maxPollInterval, aborting the stream. Set kafka configuration 'max.poll.interval.ms' to a higher value if processing a batch of records needs more time."
+                     )
+                   )(maxPollInterval)
     } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise, queueSize)
+
+  implicit private class ZStreamOps[R, E, A](val stream: ZStream[R, E, A]) {
+    def pollTimeoutFail[E1 >: E](e: E1)(timeout: Duration): ZStream[R, E1, A] =
+      ZStream.unwrap(
+        for {
+          timeoutReached <- Promise.make[E1, A]
+          queue          <- Queue.bounded[Unit](1)
+        } yield {
+          val timeoutStream = ZStream
+            .fromQueue(queue)
+            .timeoutFail(e)(timeout)
+            .tapError(timeoutReached.fail)
+          val pollStream = stream.chunks
+            .tap(_ => queue.offer(()).unit)
+            .flattenChunks
+            .interruptWhen(timeoutReached)
+          timeoutStream *> pollStream
+        }
+      )
+  }
 
 }

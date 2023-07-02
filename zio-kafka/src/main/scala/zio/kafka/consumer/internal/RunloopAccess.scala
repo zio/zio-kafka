@@ -1,5 +1,6 @@
 package zio.kafka.consumer.internal
 
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
@@ -7,7 +8,7 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
-import zio.{ Hub, IO, Ref, Scope, UIO, ZIO, ZLayer }
+import zio.{ durationInt, Duration, Hub, IO, Ref, Scope, UIO, ZIO, ZLayer }
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -87,6 +88,7 @@ private[consumer] object RunloopAccess {
                         hasGroupId = settings.hasGroupId,
                         consumer = consumerAccess,
                         pollTimeout = settings.pollTimeout,
+                        maxPollInterval = maxPollIntervalConfig(settings),
                         diagnostics = diagnostics,
                         offsetRetrieval = settings.offsetRetrieval,
                         userRebalanceListener = settings.rebalanceListener,
@@ -98,4 +100,14 @@ private[consumer] object RunloopAccess {
                       .withFinalizer(_ => runloopStateRef.set(RunloopState.Finalized))
                       .provide(ZLayer.succeed(consumerScope))
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
+
+  private def maxPollIntervalConfig(settings: ConsumerSettings): Duration = {
+    def defaultMaxPollInterval: AnyRef = ConsumerConfig
+      .configDef()
+      .defaultValues()
+      .getOrDefault(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "300000")
+    val maxPollIntervalStr = settings.properties
+      .getOrElse(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, defaultMaxPollInterval)
+    maxPollIntervalStr.toString.toInt.millis
+  }
 }
