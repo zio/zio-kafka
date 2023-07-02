@@ -13,13 +13,14 @@ import zio.kafka.testkit.{ Kafka, KafkaRandom, KafkaTestUtils }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio.{ durationInt, Exit, Scope, Task, ZIO }
+import zio.{ durationInt, Scope, Task, ZIO }
 
 import java.nio.channels.SocketChannel
 
 /**
  * This test checks the fix for the issue https://issues.apache.org/jira/browse/KAFKA-4090
  */
+//noinspection SimplifyAssertInspection
 object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
   override val kafkaPrefix: String = "oom-spec"
@@ -214,59 +215,87 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             )
           )
         },
-        test("A Node not answering fast enough is considered as down") {
-          val port = "9999"
-          val settings = AdminClientSettings(List(s"localhost:$port"))
-            .withProperty("request.timeout.ms", 1.second.toMillis.toString)
+        suite("timeout mechanism")(
+          test("The `SocketChannel` is closed when we timeout the `SocketChannel.open` call") {
+            // Using a private IP address allows us to simulate a Node that is not reachable
+            // See:
+            //   - https://stackoverflow.com/questions/44929981/how-to-simulate-network-delay-on-a-local-port#comment76837344_44929981
+            //   - https://stackoverflow.com/a/904609/2431728
+            val host = "10.255.255.1"
+            val port = "9999"
+            val settings = AdminClientSettings(List(s"$host:$port"))
+              .withProperty("request.timeout.ms", 1.second.toMillis.toString)
 
-          // We simulate that the Node takes to much time to answer
-          val result =
-            SslHelper.doValidateEndpoint { _ =>
-              var interrupted = false
-              while (!interrupted) {
-                Thread.sleep(1.second.toMillis)
-                interrupted = Thread.currentThread.isInterrupted
-                println(s"interrupted: $interrupted")
-              }
-              ???
-            }(
-              settings.bootstrapServers,
-              settings.properties
-            )
+            val array = Array.fill[Any](3)(null)
 
-          assertZIO(result.exit)(
-            fails(
-              isSubtype[KafkaException](hasMessage(equalTo("Failed to create new KafkaAdminClient"))) &&
-                hasThrowableCause(
-                  isSubtype[java.util.concurrent.TimeoutException](
-                    hasMessage(equalTo(s"Failed to contact localhost/127.0.0.1:$port"))
+            val result =
+              SslHelper.doValidateEndpoint { address =>
+                array(0) = s"Starting creating SocketChannel for address: $address"
+                try {
+                  val socket = SocketChannel.open(address) // blocking call
+                  // This will never be called as the ZIO will be interrupted before
+                  array(1) = s"Done creating SocketChannel for address: $address"
+                  socket
+                } catch {
+                  case e: Throwable =>
+                    array(2) = e
+                    throw e
+                }
+              }(settings.bootstrapServers, settings.properties)
+
+            // custom assertion. More readable with a proper name.
+            val hasNoMessage = not(hasMessage(anything))
+
+            assertZIO(result.exit)(
+              fails(
+                isSubtype[KafkaException](hasMessage(equalTo("Failed to create new KafkaAdminClient"))) &&
+                  hasThrowableCause(
+                    isSubtype[java.util.concurrent.TimeoutException](
+                      hasMessage(equalTo(s"Failed to contact /10.255.255.1:$port"))
+                    )
                   )
-                )
-            )
-          )
-        },
-        test("An external interrution does interrupt the SocketChannel") {
-          val port = "9999"
-          val settings = AdminClientSettings(List(s"localhost:$port"))
-            .withProperty("request.timeout.ms", 30.second.toMillis.toString)
+              )
+            ) &&
+            assert(array(0))(equalTo("Starting creating SocketChannel for address: /10.255.255.1:9999")) &&
+            assert(array(1))(isNull) &&
+            assert(array(2))(isSubtype[java.nio.channels.ClosedByInterruptException](hasNoMessage))
+          } @@ nonFlaky(5),
+          test("The `SocketChannel` is closed when an exterior interruption is triggered") {
+            // Using a private IP address allows us to simulate a Node that is not reachable
+            // See:
+            //   - https://stackoverflow.com/questions/44929981/how-to-simulate-network-delay-on-a-local-port#comment76837344_44929981
+            //   - https://stackoverflow.com/a/904609/2431728
+            val host = "10.255.255.1"
+            val port = "9999"
+            val settings = AdminClientSettings(List(s"$host:$port"))
+              .withProperty("request.timeout.ms", 30.second.toMillis.toString)
 
-          // We simulate that the Node takes to much time to answer
-          val result =
-            SslHelper.doValidateEndpoint { _ =>
-              var interrupted = false
-              while (!interrupted) {
-                Thread.sleep(1.second.toMillis)
-                interrupted = Thread.currentThread.isInterrupted
-                println(s"interrupted: $interrupted")
-              }
-              ???
-            }(
-              settings.bootstrapServers,
-              settings.properties
-            ).fork.flatMap(fiber => ZIO.debug("INTERRUPT NOW").delay(5.seconds) *> fiber.interrupt)
+            val array = Array.fill[Any](3)(null)
 
-          assertZIO(result.exit)(succeeds(equalTo(Exit.unit)))
-        }
+            val result =
+              SslHelper.doValidateEndpoint { address =>
+                array(0) = s"Starting creating SocketChannel for address: $address"
+                try {
+                  val socket = SocketChannel.open(address) // blocking call
+                  // This will never be called as the ZIO will be interrupted before
+                  array(1) = s"Done creating SocketChannel for address: $address"
+                  socket
+                } catch {
+                  case e: Throwable =>
+                    array(2) = e
+                    throw e
+                }
+              }(settings.bootstrapServers, settings.properties).fork.flatMap(fiber => fiber.interrupt.delay(1.seconds))
+
+            // custom assertion. More readable with a proper name.
+            val hasNoMessage = not(hasMessage(anything))
+
+            assertZIO(result)(isInterrupted) &&
+            assert(array(0))(equalTo("Starting creating SocketChannel for address: /10.255.255.1:9999")) &&
+            assert(array(1))(isNull) &&
+            assert(array(2))(isSubtype[java.nio.channels.ClosedByInterruptException](hasNoMessage))
+          } @@ nonFlaky(5)
+        )
       )
     )
 
