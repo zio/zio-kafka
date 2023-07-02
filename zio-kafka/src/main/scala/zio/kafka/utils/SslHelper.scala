@@ -5,7 +5,7 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.{ Send, TransferableChannel }
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ ApiVersionsRequest, RequestHeader }
-import zio.{ durationInt, durationLong, BuildFrom, Duration, Exit, IO, Ref, Scope, Task, Trace, URIO, ZIO }
+import zio.{ durationInt, durationLong, BuildFrom, Duration, Exit, IO, Ref, Task, Trace, URIO, ZIO }
 
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
@@ -113,37 +113,37 @@ object SslHelper {
         )
       )
 
-    val makeNetworkExchange: ZIO[Scope, Throwable, Boolean] =
-      (
-        for {
-          ref <- Ref.make[Option[SocketChannel]](None)
-          channel <-
-            ZIO.acquireReleaseInterruptible(
-              ZIO
-                .attemptBlockingInterrupt(openSocket(address))
-                // In order to avoid any leak of the `SocketChannel`, we need to be sure that the `Ref` is set, even in interruption cases.
-                // That's why `.tap(ref.set)` wouldn't be not enough and we have to use `.onExit`.
-                // More info, see discussion starting here: https://discord.com/channels/629491597070827530/1122924033827164282/1124995521774358578
-                .onExit {
-                  case Exit.Success(x) => ref.set(Some(x))
-                  case Exit.Failure(_) => ZIO.unit
-                }
-                .mapError(ConnectionError.apply)
-            )(ref.get.map {
-              case Some(channel) => ZIO.attempt(channel.close()).orDie
-              case None          => ZIO.unit
-            })
-          tls <- ZIO.attempt {
-                   // Send a simple request to check if the cluster accepts the connection
-                   sendTestRequest(channel)
-                   val buffer = readAnswerFromTestRequest(channel)
-                   isTls(buffer)
-                 }
-        } yield tls
-      ).timeoutFail(new java.util.concurrent.TimeoutException(s"Failed to contact $address"))(socketTimeout)
-
     ZIO.scoped {
-      makeNetworkExchange.flatMap(isTLS => if (isTLS) error else ZIO.unit)
+      for {
+        ref <- Ref.make[Option[(SocketChannel, Boolean)]](None)
+        result <-
+          ZIO.acquireReleaseInterruptible(
+            ZIO.attemptBlockingInterrupt {
+              val channel = openSocket(address)
+              // Send a simple request to check if the cluster accepts the connection
+              sendTestRequest(channel)
+              val buffer = readAnswerFromTestRequest(channel)
+              channel -> isTls(buffer)
+            }
+              .timeout(socketTimeout)
+              // In order to avoid any leak of the `SocketChannel`, we need to be sure that the `Ref` is set, even in interruption cases.
+              // That's why `.tap(ref.set)` wouldn't be not enough and we have to use `.onExit`.
+              // More info, see discussion starting here: https://discord.com/channels/629491597070827530/1122924033827164282/1124995521774358578
+              .onExit {
+                case Exit.Success(x) => ref.set(x)
+                case Exit.Failure(_) => ZIO.unit
+              }
+              .mapError(ConnectionError.apply)
+          )(ref.get.map {
+            case Some((channel, _)) => ZIO.attempt(channel.close()).orDie
+            case None               => ZIO.unit
+          })
+        _ <-
+          result match {
+            case None             => ZIO.fail(new java.util.concurrent.TimeoutException(s"Failed to contact $address"))
+            case Some((_, isTLS)) => if (isTLS) error else ZIO.unit
+          }
+      } yield ()
     }
   }
 
