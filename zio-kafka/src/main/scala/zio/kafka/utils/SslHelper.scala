@@ -1,17 +1,17 @@
 package zio.kafka.utils
 
-import org.apache.kafka.clients.{ClientDnsLookup, ClientUtils}
+import org.apache.kafka.clients.{ ClientDnsLookup, ClientUtils }
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.network.TransferableChannel
+import org.apache.kafka.common.network.{ Send, TransferableChannel }
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestHeader}
-import zio.{BuildFrom, Duration, Exit, IO, Ref, Task, Trace, URIO, ZIO, durationInt, durationLong}
+import org.apache.kafka.common.requests.{ ApiVersionsRequest, RequestHeader }
+import zio.{ durationInt, durationLong, BuildFrom, Duration, Exit, IO, Ref, Scope, Task, Trace, URIO, ZIO }
 
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
-import java.nio.channels.{FileChannel, SocketChannel}
+import java.nio.channels.{ FileChannel, SocketChannel }
 import scala.jdk.CollectionConverters._
-import scala.util.control.{NoStackTrace, NonFatal}
+import scala.util.control.{ NoStackTrace, NonFatal }
 
 /**
  * This function validates that your Kafka client (Admin, Consumer, or Producer) configurations are valid for the Kafka
@@ -113,39 +113,37 @@ object SslHelper {
         )
       )
 
+    val makeNetworkExchange: ZIO[Scope, Throwable, Boolean] =
+      (
+        for {
+          ref <- Ref.make[Option[SocketChannel]](None)
+          channel <-
+            ZIO.acquireReleaseInterruptible(
+              ZIO
+                .attemptBlockingInterrupt(openSocket(address))
+                // In order to avoid any leak of the `SocketChannel`, we need to be sure that the `Ref` is set, even in interruption cases.
+                // That's why `.tap(ref.set)` wouldn't be not enough and we have to use `.onExit`.
+                // More info, see discussion starting here: https://discord.com/channels/629491597070827530/1122924033827164282/1124995521774358578
+                .onExit {
+                  case Exit.Success(x) => ref.set(Some(x))
+                  case Exit.Failure(_) => ZIO.unit
+                }
+                .mapError(ConnectionError.apply)
+            )(ref.get.map {
+              case Some(channel) => ZIO.attempt(channel.close()).orDie
+              case None          => ZIO.unit
+            })
+          tls <- ZIO.attempt {
+                   // Send a simple request to check if the cluster accepts the connection
+                   sendTestRequest(channel)
+                   val buffer = readAnswerFromTestRequest(channel)
+                   isTls(buffer)
+                 }
+        } yield tls
+      ).timeoutFail(new java.util.concurrent.TimeoutException(s"Failed to contact $address"))(socketTimeout)
+
     ZIO.scoped {
-      for {
-        ref <- Ref.make[Option[SocketChannel]](None)
-        channel <-
-          ZIO.acquireReleaseInterruptible(
-            ZIO
-              .attemptBlockingInterrupt(openSocket(address))
-              .timeout(socketTimeout)
-              // In order to avoid any leak of the `SocketChannel`, we need to be sure that the `Ref` is set, even in interruption cases.
-              // That's why `.tap(ref.set)` wouldn't be not enough and we have to use `.onExit`.
-              // More info, see discussion starting here: https://discord.com/channels/629491597070827530/1122924033827164282/1124995521774358578
-              .onExit {
-                case Exit.Success(x) => ref.set(x)
-                case Exit.Failure(_) => ZIO.unit
-              }
-              .mapError(ConnectionError.apply)
-          )(ref.get.map {
-            case Some(channel) => ZIO.attempt(channel.close()).orDie
-            case None          => ZIO.unit
-          })
-        tls <-
-          channel match {
-            case None => ZIO.fail(new java.util.concurrent.TimeoutException(s"Failed to contact $address"))
-            case Some(channel) =>
-              ZIO.attempt {
-                // Send a simple request to check if the cluster accepts the connection
-                sendTestRequest(channel)
-                val buffer = readAnswerFromTestRequest(channel)
-                isTls(buffer)
-              }
-          }
-        _ <- if (tls) error else ZIO.unit
-      } yield ()
+      makeNetworkExchange.flatMap(isTLS => if (isTLS) error else ZIO.unit)
     }
   }
 
@@ -171,7 +169,7 @@ object SslHelper {
     }
 
     // We send an API version request as a minimal, valid and fast request
-    val send = new ApiVersionsRequest.Builder()
+    val send: Send = new ApiVersionsRequest.Builder()
       .build(ApiKeys.API_VERSIONS.latestVersion())
       .toSend(new RequestHeader(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), null, 0))
     send.writeTo(transferableChannel)
