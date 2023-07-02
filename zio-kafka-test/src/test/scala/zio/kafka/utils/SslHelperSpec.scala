@@ -245,7 +245,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             )
           )
         },
-        test("TODO JULES") {
+        test("An external interrution does interrupt the SocketChannel") {
           val port = "9999"
           val settings = AdminClientSettings(List(s"localhost:$port"))
             .withProperty("request.timeout.ms", 30.second.toMillis.toString)
