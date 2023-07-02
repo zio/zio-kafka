@@ -2,7 +2,7 @@ package zio.kafka.utils
 
 import org.apache.kafka.clients.{ ClientDnsLookup, ClientUtils }
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.network.{ Send, TransferableChannel }
+import org.apache.kafka.common.network.TransferableChannel
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ ApiVersionsRequest, RequestHeader }
 import zio.{ durationInt, durationLong, BuildFrom, Duration, Exit, IO, Ref, Task, Trace, URIO, ZIO }
@@ -235,7 +235,7 @@ object SslHelper {
     }
 
     // We send an API version request as a minimal, valid and fast request
-    val send: Send = new ApiVersionsRequest.Builder()
+    val send = new ApiVersionsRequest.Builder()
       .build(ApiKeys.API_VERSIONS.latestVersion())
       .toSend(new RequestHeader(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), null, 0))
     send.writeTo(transferableChannel)
