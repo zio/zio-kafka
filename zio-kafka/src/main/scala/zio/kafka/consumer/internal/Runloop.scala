@@ -491,14 +491,14 @@ private[consumer] final class Runloop private (
    *   - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *     initialization and rebalancing
    */
-  def run: ZIO[Scope, Throwable, Any] = {
+  def run(initialState: State): ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
 
     ZStream
       .fromQueue(commandQueue)
       .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
       .takeWhile(_ != RunloopCommand.StopRunloop)
-      .runFoldChunksDiscardZIO(State.initial) { (state, commands) =>
+      .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
           _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
@@ -582,8 +582,9 @@ private[consumer] object Runloop {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
       commandQueue       <- ZIO.acquireRelease(Queue.bounded[RunloopCommand](commandQueueSize))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
-      currentStateRef    <- Ref.make(State.initial)
-      runtime            <- ZIO.runtime[Any]
+      initialState = State.initial
+      currentStateRef <- Ref.make(initialState)
+      runtime         <- ZIO.runtime[Any]
       runloop = new Runloop(
                   runtime = runtime,
                   hasGroupId = hasGroupId,
@@ -604,7 +605,7 @@ private[consumer] object Runloop {
 
       // Run the entire loop on the a dedicated thread to avoid executor shifts
       executor <- RunloopExecutor.newInstance
-      fiber    <- ZIO.onExecutor(executor)(runloop.run).forkScoped
+      fiber    <- ZIO.onExecutor(executor)(runloop.run(initialState)).forkScoped
       waitForRunloopStop = fiber.join.orDie
 
       _ <- ZIO.addFinalizer(
