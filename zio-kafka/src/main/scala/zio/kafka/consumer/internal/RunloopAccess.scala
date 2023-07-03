@@ -31,10 +31,8 @@ private[consumer] final class RunloopAccess private (
 ) {
 
   private def runloop[E, A](
-    requireRunning: Boolean,
-    whenRunning: Runloop => IO[E, A],
-    whenNotRunning: IO[E, A]
-  ): IO[E, A] =
+    requireRunning: Boolean
+  )(whenRunning: Runloop => IO[E, A], whenNotRunning: IO[E, A]): IO[E, A] =
     runloopStateRef.updateSomeAndGetZIO {
       case RunloopState.NotStarted if requireRunning => makeRunloop.map(RunloopState.Started.apply)
     }.flatMap {
@@ -43,20 +41,19 @@ private[consumer] final class RunloopAccess private (
       case RunloopState.Finalized        => whenNotRunning
     }
 
-  private def withRunloopZIO[E, A](whenRunning: Runloop => IO[E, A]): IO[E, A] =
-    runloop(
-      requireRunning = true,
-      whenRunning,
-      ZIO.die(new IllegalStateException("Trying to use a consumer that is already finalized"))
+  private def withRunloop[E, A](whenRunning: Runloop => IO[E, A]): IO[E, A] =
+    runloop(requireRunning = true)(
+      whenRunning = whenRunning,
+      whenNotRunning = ZIO.die(new IllegalStateException("Trying to use a consumer that is already finalized"))
     )
 
-  private def whenRunloopZIO[E](whenRunning: Runloop => IO[E, Unit]): IO[E, Unit] =
-    runloop(requireRunning = false, whenRunning, ZIO.unit)
+  private def whenRunloop[E](whenRunning: Runloop => IO[E, Unit]): IO[E, Unit] =
+    runloop(requireRunning = false)(whenRunning, whenNotRunning = ZIO.unit)
 
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has not been started or has been stopped.
    */
-  def stopConsumption: UIO[Unit] = whenRunloopZIO(_.stopConsumption)
+  def stopConsumption: UIO[Unit] = whenRunloop(_.stopConsumption)
 
   /**
    * We're doing all of these things in this method so that the interface of this class is as simple as possible and
@@ -70,9 +67,9 @@ private[consumer] final class RunloopAccess private (
     for {
       stream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
-      _ <- withRunloopZIO(_.addSubscription(subscription))
+      _ <- withRunloop(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             whenRunloopZIO(_.removeSubscription(subscription)) <*
+             whenRunloop(_.removeSubscription(subscription)) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
     } yield stream
