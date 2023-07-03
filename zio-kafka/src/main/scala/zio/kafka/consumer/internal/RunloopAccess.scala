@@ -30,30 +30,21 @@ private[consumer] final class RunloopAccess private (
   diagnostics: Diagnostics
 ) {
 
-  private def runloop[E, A](
+  private def runloop[E](
     requireRunning: Boolean
-  )(whenRunning: Runloop => IO[E, A], whenNotRunning: IO[E, A]): IO[E, A] =
+  )(whenRunning: Runloop => IO[E, Unit]): IO[E, Unit] =
     runloopStateRef.updateSomeAndGetZIO {
       case RunloopState.NotStarted if requireRunning => makeRunloop.map(RunloopState.Started.apply)
     }.flatMap {
-      case RunloopState.NotStarted       => whenNotRunning
+      case RunloopState.NotStarted       => ZIO.unit
       case RunloopState.Started(runloop) => whenRunning(runloop)
-      case RunloopState.Finalized        => whenNotRunning
+      case RunloopState.Finalized        => ZIO.unit
     }
-
-  private def withRunloop[E, A](whenRunning: Runloop => IO[E, A]): IO[E, A] =
-    runloop(requireRunning = true)(
-      whenRunning = whenRunning,
-      whenNotRunning = ZIO.die(new IllegalStateException("Trying to use a consumer that is already finalized"))
-    )
-
-  private def whenRunloop[E](whenRunning: Runloop => IO[E, Unit]): IO[E, Unit] =
-    runloop(requireRunning = false)(whenRunning, whenNotRunning = ZIO.unit)
 
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has not been started or has been stopped.
    */
-  def stopConsumption: UIO[Unit] = whenRunloop(_.stopConsumption)
+  def stopConsumption: UIO[Unit] = runloop(requireRunning = false)(_.stopConsumption)
 
   /**
    * We're doing all of these things in this method so that the interface of this class is as simple as possible and
@@ -67,9 +58,9 @@ private[consumer] final class RunloopAccess private (
     for {
       stream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
-      _ <- withRunloop(_.addSubscription(subscription))
+      _ <- runloop(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             whenRunloop(_.removeSubscription(subscription)) <*
+             runloop(requireRunning = false)(_.removeSubscription(subscription)) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
     } yield stream
