@@ -30,7 +30,7 @@ private[consumer] final class RunloopAccess private (
   diagnostics: Diagnostics
 ) {
 
-  private def runloopZIO[E](
+  private def withRunloopZIO[E](
     requireRunning: Boolean
   )(whenRunning: Runloop => IO[E, Unit]): IO[E, Unit] =
     runloopStateRef.updateSomeAndGetZIO {
@@ -44,7 +44,7 @@ private[consumer] final class RunloopAccess private (
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has not been started or has been stopped.
    */
-  def stopConsumption: UIO[Unit] = runloopZIO(requireRunning = false)(_.stopConsumption)
+  def stopConsumption: UIO[Unit] = withRunloopZIO(requireRunning = false)(_.stopConsumption)
 
   /**
    * We're doing all of these things in this method so that the interface of this class is as simple as possible and
@@ -58,9 +58,9 @@ private[consumer] final class RunloopAccess private (
     for {
       stream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
-      _ <- runloopZIO(requireRunning = true)(_.addSubscription(subscription))
+      _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             runloopZIO(requireRunning = false)(_.removeSubscription(subscription)) <*
+             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription)) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
     } yield stream
