@@ -113,13 +113,13 @@ final case class ConsumerSettings(
     copy(fetchStrategy = QueueSizeBasedFetchStrategy(maxPartitionQueueSize))
 
   /**
-   * WARNING: 'FetchStrategy' is an EXPERIMENTAL API and may change in an incompatible way without notice in any
-   * zio-kafka version.
+   * WARNING: [[zio.kafka.consumer.fetch.FetchStrategy]] is an EXPERIMENTAL API and may change in an incompatible way
+   * without notice in any zio-kafka version.
    *
    * @param fetchStrategy
    *   The fetch strategy which selects which partitions can fetch data in the next poll. The default is to use the
-   *   [[QueueSizeBasedFetchStrategy]] with a `maxPartitionQueueSize` parameter of 1024, which is calculated by taking 2
-   *   * the default `max.poll.records` of 500, rounded to the nearest power of 2.
+   *   [[zio.kafka.consumer.fetch.QueueSizeBasedFetchStrategy]] with a `maxPartitionQueueSize` parameter of 1024, which
+   *   is calculated by taking 2 * the default `max.poll.records` of 500, rounded to the nearest power of 2.
    */
   def withFetchStrategy(fetchStrategy: FetchStrategy): ConsumerSettings =
     copy(fetchStrategy = fetchStrategy)
