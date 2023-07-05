@@ -8,12 +8,12 @@ import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.fetch.FetchStrategy
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.stream._
 
 import java.util
-import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 
 //noinspection SimplifyWhenInspection,SimplifyUnlessInspection
@@ -31,7 +31,7 @@ private[consumer] final class Runloop private (
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
   currentStateRef: Ref[State],
-  maxPartitionQueueSize: Int
+  fetchStrategy: FetchStrategy
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
@@ -258,18 +258,8 @@ private[consumer] final class Runloop private (
         ZIO.logDebug(
           s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
         )
-      _ <- currentStateRef.set(state)
-      partitionsToFetch <-
-        ZIO
-          .foldLeft(state.assignedStreams)(ListBuffer.empty[TopicPartition]) { case (acc, stream) =>
-            stream.queueSize.map { queueSize =>
-              if (queueSize < maxPartitionQueueSize) {
-                acc.append(stream.tp)
-              }
-              acc
-            }
-          }
-          .map(_.toSet)
+      _                 <- currentStateRef.set(state)
+      partitionsToFetch <- fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
       pollResult <-
         consumer.runloopAccess { c =>
           ZIO.suspend {
@@ -576,7 +566,7 @@ private[consumer] object Runloop {
     restartStreamsOnRebalancing: Boolean,
     partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
     runloopTimeout: Duration,
-    maxPartitionQueueSize: Int
+    fetchStrategy: FetchStrategy
   ): URIO[Scope, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
@@ -599,7 +589,7 @@ private[consumer] object Runloop {
                   userRebalanceListener = userRebalanceListener,
                   restartStreamsOnRebalancing = restartStreamsOnRebalancing,
                   currentStateRef = currentStateRef,
-                  maxPartitionQueueSize = maxPartitionQueueSize
+                  fetchStrategy = fetchStrategy
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 

@@ -93,7 +93,7 @@ private[consumer] object RunloopAccess {
                         restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
                         partitionsHub = partitionsHub,
                         runloopTimeout = settings.runloopTimeout,
-                        maxPartitionQueueSize = settings.maxPartitionQueueSize
+                        fetchStrategy = settings.fetchStrategy
                       )
                       .withFinalizer(_ => runloopStateRef.set(RunloopState.Finalized))
                       .provide(ZLayer.succeed(consumerScope))
