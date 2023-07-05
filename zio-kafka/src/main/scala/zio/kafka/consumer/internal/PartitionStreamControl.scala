@@ -3,9 +3,25 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
-import zio.stream.{ Take, ZStream }
-import zio.{ Chunk, Duration, LogAnnotation, Promise, Queue, Ref, UIO, ZIO }
+import zio.stream.{ Take, ZChannel, ZPipeline, ZStream }
+import zio.{
+  Cause,
+  Chunk,
+  Clock,
+  Duration,
+  Fiber,
+  LogAnnotation,
+  Promise,
+  Queue,
+  Ref,
+  Scope,
+  UIO,
+  ZEnvironment,
+  ZIO,
+  ZNothing
+}
 
+import java.time.Instant
 import scala.concurrent.TimeoutException
 
 final class PartitionStreamControl private (
@@ -95,12 +111,13 @@ object PartitionStreamControl {
     } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise, queueSize)
 
   implicit private class ZStreamOps[R, E, A](val stream: ZStream[R, E, A]) {
+
     /**
      * Fails the stream with given error if it is not polled for a value after d duration.
      *
      * See [[zio.stream.ZStream#timeoutFail]] for failing the stream doesn't produce a value.
      */
-    def pollTimeoutFail[E1 >: E](e: E1)(timeout: Duration): ZStream[R, E1, A] =
+    def pullTimeoutFail[E1 >: E](e: E1)(timeout: Duration): ZStream[R, E1, A] =
       ZStream.unwrap(
         for {
           timeoutReached <- Promise.make[E1, A]
@@ -117,6 +134,81 @@ object PartitionStreamControl {
           timeoutStream *> pollStream
         }
       )
+
+    /**
+     * Fails the stream with given error if it is not consumed (pulled) from for a value after d duration.
+     *
+     * See [[zio.stream.ZStream#timeoutFail]] for failing the stream doesn't produce a value.
+     */
+    def consumeTimeoutFail[E1 >: E](e: => E1)(timeout: Duration): ZStream[R, E1, A] = {
+      def notifyQueue(queue: Queue[Unit]): ZPipeline[R, E, A, A] = {
+        val read: ZChannel[R, E, Chunk[A], Any, E, Chunk[A], Any] = ZChannel.readWith(
+          (in: Chunk[A]) => ZChannel.fromZIO(queue.offer(())) *> ZChannel.write(in) *> read,
+          (error: E) => ZChannel.fail(error),
+          (done: Any) => ZChannel.succeed(done)
+        )
+        ZPipeline.fromChannel(read)
+      }
+
+      ZStream.unwrap(
+        for {
+          timeoutReached <- Promise.make[E1, A]
+          queue          <- Queue.bounded[Unit](1)
+        } yield {
+          val timeoutStream = ZStream
+            .fromQueue(queue)
+            .timeoutFail(e)(timeout)
+            .tapError(timeoutReached.fail)
+          timeoutStream *> stream.via(notifyQueue(queue)).interruptWhen(timeoutReached)
+        }
+      )
+    }
+
+    def consumeTimeoutFail[E1 >: E](e: => E1)(after: Duration): ZStream[R, E1, A] =
+      stream.via(
+        ZPipeline.unwrapScoped {
+          for {
+            p <- Promise.make[E1, Unit]
+            timer = (p.fail(e).delay(after) <* ZIO.debug("timing out")).forkScoped
+            initialTimer <- timer
+          } yield {
+            def loop(
+              runningTimer: Fiber[Nothing, Boolean]
+            ): ZChannel[Scope, ZNothing, Chunk[A], Any, E, Chunk[A], Unit] = {
+              val interrupter = ZChannel.fromZIO(ZIO.debug("pulling") *> runningTimer.interrupt)
+              ZChannel.readWithCause(
+                (in: Chunk[A]) => interrupter *> ZChannel.write(in) *> ZChannel.unwrap(timer.map(loop)),
+                (cause: Cause[ZNothing]) => ZChannel.refailCause(cause),
+                (_: Any) => ZChannel.unit
+              )
+            }
+            ZPipeline.fromChannel(loop(initialTimer).interruptWhen(p))
+          }
+        }
+      )
+
+//    def timeoutPull[E, In](after: Duration)(e: => E): ZPipeline[Any, E, In, In] =
+//      ZPipeline.unwrapScoped(for {
+//        scope <- ZIO.scope
+//        p <- Promise.make[E, Unit]
+//        timer =
+//          (p.fail(e).delay(after) <* ZIO.debug(
+//            "timing out"
+//          )).forkScoped.provideEnvironment(ZEnvironment[Scope](scope))
+//        initial <- timer
+//      } yield {
+//        def loop(in: Fiber[Nothing, Boolean]): ZChannel[Any, ZNothing, Chunk[In], Any, E, Chunk[In], Unit] = {
+//          val interrupter = ZChannel.fromZIO(ZIO.debug("pulling") *> in.interrupt)
+//          ZChannel.readWithCause(
+//            (in: Chunk[In]) => interrupter *> ZChannel.write(in) *> ZChannel.unwrap(timer.map(loop)),
+//            (cause: Cause[ZNothing]) => ZChannel.refailCause(cause),
+//            (_: Any) => ZChannel.unit
+//          )
+//        }
+//
+//        ZPipeline.fromChannel(loop(initial).interruptWhen(p))
+//      })
+
   }
 
 }
