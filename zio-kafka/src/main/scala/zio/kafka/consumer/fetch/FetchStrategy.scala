@@ -4,6 +4,8 @@ import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.internal.PartitionStreamControl
 import zio.{ Chunk, ZIO }
 
+import scala.collection.mutable
+
 /**
  * A fetch strategy determined which stream are allowed to fetch data in the next poll.
  *
@@ -38,12 +40,12 @@ trait FetchStrategy {
 final case class QueueSizeBasedFetchStrategy(maxPartitionQueueSize: Int = 1024) extends FetchStrategy {
   override def selectPartitionsToFetch(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Set[TopicPartition]] =
     ZIO
-      .foldLeft(streams)(Chunk.empty[TopicPartition]) { case (acc, stream) =>
+      .foldLeft(streams)(mutable.ArrayBuilder.make[TopicPartition]) { case (acc, stream) =>
         stream.queueSize.map { queueSize =>
-          if (queueSize < maxPartitionQueueSize) acc ++ Chunk.single(stream.tp) else acc
+          if (queueSize < maxPartitionQueueSize) acc += stream.tp else acc
         }
       }
-      .map(_.toSet)
+      .map(_.result().toSet)
 }
 
 /**
@@ -77,14 +79,14 @@ final case class ManyPartitionsQueueSizeBasedFetchStrategy(
     // By shuffling the streams we prevent read-starvation for streams at the end of the list.
     val shuffledStreams = scala.util.Random.shuffle(streams)
     ZIO
-      .foldLeft(shuffledStreams)((Chunk.empty[TopicPartition], maxTotalQueueSize)) {
+      .foldLeft(shuffledStreams)((mutable.ArrayBuilder.make[TopicPartition], maxTotalQueueSize)) {
         case (acc @ (partitions, queueBudget), stream) =>
           stream.queueSize.map { queueSize =>
             if (queueSize < maxPartitionQueueSize && queueSize < queueBudget) {
-              (partitions ++ Chunk.single(stream.tp), queueBudget - queueSize)
+              (partitions += stream.tp, queueBudget - queueSize)
             } else acc
           }
       }
-      .map { case (tps, _) => tps.toSet }
+      .map { case (tps, _) => tps.result().toSet }
   }
 }
