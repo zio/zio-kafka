@@ -113,7 +113,7 @@ final case class ConsumerSettings(
     copy(fetchStrategy = QueueSizeBasedFetchStrategy(maxPartitionQueueSize))
 
   /**
-   * WARNING: [[FetchStrategy]] is an EXPERIMENTAL API and may change in an incompatible way without notice in any
+   * WARNING: 'FetchStrategy' is an EXPERIMENTAL API and may change in an incompatible way without notice in any
    * zio-kafka version.
    *
    * @param fetchStrategy
