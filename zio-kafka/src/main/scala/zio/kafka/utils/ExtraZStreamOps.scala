@@ -23,14 +23,13 @@ object ExtraZStreamOps {
           } yield {
             def loop(
               runningTimer: Fiber[Nothing, Boolean]
-            ): ZChannel[Any, ZNothing, Chunk[A], Any, E, Chunk[A], Unit] = {
-              val interrupter = ZChannel.fromZIO(runningTimer.interrupt)
+            ): ZChannel[Any, ZNothing, Chunk[A], Any, E, Chunk[A], Unit] =
               ZChannel.readWithCause(
-                (in: Chunk[A]) => interrupter *> ZChannel.write(in) *> ZChannel.unwrap(timer.map(loop)),
+                (in: Chunk[A]) =>
+                  ZChannel.write(in) *> ZChannel.fromZIO(runningTimer.interrupt) *> ZChannel.unwrap(timer.map(loop)),
                 (cause: Cause[ZNothing]) => ZChannel.refailCause(cause),
                 (_: Any) => ZChannel.unit
               )
-            }
 
             ZPipeline.fromChannel(loop(initialTimer).interruptWhen(p))
           }
