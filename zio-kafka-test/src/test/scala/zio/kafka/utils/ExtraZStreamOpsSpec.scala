@@ -31,32 +31,44 @@ object ExtraZStreamOpsSpec extends ZIOSpecDefaultSlf4j {
       },
       test("consumeTimeoutFail fails stream for slow consumer") {
         for {
-          consumed <- Ref.make(Seq.empty[Int])
+          consumedRef <- Ref.make(Seq.empty[Int])
           f <- ZStream
                  .fromIterator(Iterator.from(1), 1)
                  .consumeTimeoutFail(ConsumeTimeout)(100.millis)
                  .tap(elem => ZIO.sleep(200.millis).when(elem == 4))
                  .take(10)
-                 .tap(elem => consumed.update(_ :+ elem))
+                 .tap(elem => consumedRef.update(_ :+ elem))
                  .runDrain
                  .exit
                  .fork
-          _       <- TestClock.adjust(100.millis).repeatN(2)
-          fResult <- f.join
-          result  <- consumed.get
-        } yield assert(fResult)(fails(equalTo(ConsumeTimeout))) && assertTrue(result == Seq(1, 2, 3))
+          _        <- TestClock.adjust(100.millis).repeatN(2)
+          fResult  <- f.join
+          consumed <- consumedRef.get
+        } yield assert(fResult)(fails(equalTo(ConsumeTimeout))) && assertTrue(consumed == Seq(1, 2, 3, 4))
       },
-      test("consumeTimeoutFail fails stream for slow consumer - oud") {
+      test("consumeTimeoutFail fails stream for slow consumer - live clock") {
         for {
+          consumedRef <- Ref.make(Seq.empty[Int])
           result <- ZStream
                       .fromIterator(Iterator.from(1), 1)
-                      .consumeTimeoutFail(ConsumeTimeout)(10.millis)
-                      .tap(elem => ZIO.sleep(200.millis).when(elem == 40))
-                      .take(1000)
-                      .runDrain // todo: test that we get items up till the slow consumer
+                      .consumeTimeoutFail(ConsumeTimeout)(100.millis)
+                      .tap(elem => ZIO.sleep(200.millis).when(elem == 4))
+                      .take(10)
+                      .tap(elem => consumedRef.update(_ :+ elem))
+                      .runDrain
                       .exit
-        } yield assert(result)(fails(equalTo(ConsumeTimeout)))
-      } @@ withLiveClock
+          consumed <- consumedRef.get
+        } yield assert(result)(fails(equalTo(ConsumeTimeout))) && assertTrue(consumed == Seq(1, 2, 3, 4))
+      } @@ withLiveClock,
+      test("consumeTimeoutFail retain chunking structure") {
+        for {
+          result <- ZStream
+                      .fromChunks(Chunk(1, 2, 3, 4, 5), Chunk(1, 2, 3, 4, 5))
+                      .consumeTimeoutFail(ConsumeTimeout)(100.millis)
+                      .chunks
+                      .runHead
+        } yield assertTrue(result.map(_.size).getOrElse(0) == 5)
+      }
     )
 
 }
