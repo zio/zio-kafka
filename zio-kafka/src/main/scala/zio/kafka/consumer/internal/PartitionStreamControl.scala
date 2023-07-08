@@ -61,11 +61,11 @@ object PartitionStreamControl {
     diagnostics: Diagnostics,
     maxPollInterval: Duration
   ): UIO[PartitionStreamControl] = {
-    val consumeTimeout = new TimeoutException(
+    def consumeTimeout = new TimeoutException(
       s"No records were polled for more than $maxPollInterval, aborting the stream. " +
         "Set kafka configuration 'max.poll.interval.ms' to a higher value " +
         "if processing a batch of records needs more time."
-    ) with NoStackTrace
+    )
 
     for {
       _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
