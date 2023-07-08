@@ -8,6 +8,7 @@ import zio.stream.{ Take, ZStream }
 import zio._
 
 import scala.concurrent.TimeoutException
+import scala.util.control.NoStackTrace
 
 final class PartitionStreamControl private (
   val tp: TopicPartition,
@@ -59,7 +60,13 @@ object PartitionStreamControl {
     commandQueue: Queue[RunloopCommand],
     diagnostics: Diagnostics,
     maxPollInterval: Duration
-  ): UIO[PartitionStreamControl] =
+  ): UIO[PartitionStreamControl] = {
+    val consumeTimeout = new TimeoutException(
+      s"No records were polled for more than $maxPollInterval, aborting the stream. " +
+        "Set kafka configuration 'max.poll.interval.ms' to a higher value " +
+        "if processing a batch of records needs more time."
+    ) with NoStackTrace
+
     for {
       _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
       interruptionPromise <- Promise.make[Throwable, Unit]
@@ -88,11 +95,8 @@ object PartitionStreamControl {
                  }.flattenTake
                    .chunksWith(_.tap(records => queueSize.update(_ - records.size)))
                    .interruptWhen(interruptionPromise)
-                   .consumeTimeoutFail(
-                     new TimeoutException(
-                       s"No records were polled for more than $maxPollInterval, aborting the stream. Set kafka configuration 'max.poll.interval.ms' to a higher value if processing a batch of records needs more time."
-                     )
-                   )(maxPollInterval)
+                   .consumeTimeoutFail(consumeTimeout)(maxPollInterval)
     } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise, queueSize)
+  }
 
 }
