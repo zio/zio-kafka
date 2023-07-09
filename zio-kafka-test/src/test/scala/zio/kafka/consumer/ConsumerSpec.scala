@@ -341,11 +341,12 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             // The slow consumer:
             c1 <- consumer
                     .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
-                    .tap(r => ZIO.sleep(100.millis).when(r.key == "key3"))
+                    .tap(r => ZIO.sleep(200.millis).when(r.key == "key3"))
+                    .take(100)
                     .runDrain
                     .exit
                     .fork
-            // Fast consumer:
+            // Another consumer:
             _ <- consumer
                    .plainStream(Subscription.topics(topic2), Serde.string, Serde.string)
                    .runDrain
@@ -356,6 +357,28 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             c1Exit.isFailure,
             subscriptions.isEmpty
           )
+        }
+      },
+      test("a slow producer doesnot interrupt the stream") {
+        ZIO.scoped {
+          for {
+            topic    <- randomTopic
+            group    <- randomGroup
+            clientId <- randomClient
+            _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic))
+            settings <- consumerSettings(
+                          clientId = clientId,
+                          groupId = Some(group),
+                          properties = Map(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG -> "300")
+                        )
+            consumer <- Consumer.make(settings.withPollTimeout(50.millis))
+            // A slow producer
+            _ <- scheduledProducer(topic, Schedule.fixed(1.second)).runDrain.forkScoped
+            consumed <- consumer
+                          .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
+                          .take(2)
+                          .runCollect
+          } yield assertTrue(consumed.size == 2)
         }
       },
       test("offset batching collects the latest offset for all partitions") {
