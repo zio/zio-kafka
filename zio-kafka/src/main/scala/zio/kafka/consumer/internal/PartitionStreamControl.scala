@@ -8,7 +8,6 @@ import zio.stream.{ Take, ZStream }
 import zio._
 
 import scala.concurrent.TimeoutException
-import scala.util.control.NoStackTrace
 
 final class PartitionStreamControl private (
   val tp: TopicPartition,
