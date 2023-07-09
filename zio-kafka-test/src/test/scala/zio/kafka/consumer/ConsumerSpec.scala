@@ -321,6 +321,43 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
       },
+      test("a consumer timeout interrupts the stream and shuts down the consumer") {
+        ZIO.scoped {
+          for {
+            topic1   <- randomTopic
+            topic2   <- randomTopic
+            group    <- randomGroup
+            clientId <- randomClient
+            _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic1))
+            _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic2))
+            settings <- consumerSettings(
+                          clientId = clientId,
+                          groupId = Some(group),
+                          properties = Map(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG -> "100")
+                        )
+            consumer <- Consumer.make(settings.withPollTimeout(50.millis))
+            _        <- scheduledProducer(topic1, Schedule.fixed(10.millis).jittered).runDrain.forkScoped
+            _        <- scheduledProducer(topic2, Schedule.fixed(10.millis).jittered).runDrain.forkScoped
+            // The slow consumer:
+            c1 <- consumer
+                    .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
+                    .tap(r => ZIO.sleep(100.millis).when(r.key == "key3"))
+                    .runDrain
+                    .exit
+                    .fork
+            // Fast consumer:
+            _ <- consumer
+                   .plainStream(Subscription.topics(topic2), Serde.string, Serde.string)
+                   .runDrain
+                   .forkScoped
+            c1Exit        <- c1.join
+            subscriptions <- consumer.subscription
+          } yield assertTrue(
+            c1Exit.isFailure,
+            subscriptions.isEmpty
+          )
+        }
+      },
       test("offset batching collects the latest offset for all partitions") {
         val nrMessages   = 50
         val nrPartitions = 5

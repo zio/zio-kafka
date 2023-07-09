@@ -36,7 +36,7 @@ private[consumer] final class Runloop private (
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
-    PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, maxPollInterval)
+    PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, maxPollInterval, shutdown)
 
   def stopConsumption: UIO[Unit] =
     ZIO.logDebug("stopConsumption called") *>
