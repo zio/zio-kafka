@@ -1213,13 +1213,8 @@ object AdminClient {
     configs: Map[String, String] = Map.empty
   ) {
     def asJava: JNewTopic = {
-      val jn = new JNewTopic(name, numPartitions, replicationFactor)
-
-      if (configs.nonEmpty) {
-        jn.configs(configs.asJava): Unit
-      }
-
-      jn
+      new JNewTopic(name, numPartitions, replicationFactor)
+        .configs(if (configs.nonEmpty) configs.asJava else null)
     }
   }
 
