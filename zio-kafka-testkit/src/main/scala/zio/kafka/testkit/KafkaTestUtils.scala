@@ -9,6 +9,7 @@ import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.producer._
 import zio.kafka.serde.{ Deserializer, Serde }
+import zio.stream.ZStream
 
 import java.io.File
 import java.nio.file.{ Files, StandardCopyOption }
@@ -91,6 +92,19 @@ object KafkaTestUtils {
         Serde.string,
         Serde.string
       )
+
+  /**
+   * A stream that produces messages to a Topic on a schedule for as long as it is running.
+   */
+  def scheduledProducer[R](
+    topic: String,
+    schedule: Schedule[R, Any, Long]
+  ): ZStream[R with Producer, Throwable, RecordMetadata] =
+    ZStream
+      .fromSchedule(schedule)
+      .mapZIO { i =>
+        produceOne(topic, s"key$i", s"msg$i")
+      }
 
   /**
    * Utility function to make a Consumer settings set.

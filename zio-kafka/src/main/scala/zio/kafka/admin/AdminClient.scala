@@ -1212,10 +1212,9 @@ object AdminClient {
     replicationFactor: Short,
     configs: Map[String, String] = Map.empty
   ) {
-    def asJava: JNewTopic = {
+    def asJava: JNewTopic =
       new JNewTopic(name, numPartitions, replicationFactor)
         .configs(if (configs.nonEmpty) configs.asJava else null)
-    }
   }
 
   final case class NewPartitions(
