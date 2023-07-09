@@ -18,16 +18,18 @@ object ExtraZStreamOps {
           for {
             scope <- ZIO.scope
             p     <- Promise.make[E1, Unit]
-            timer = p.fail(e).delay(after).forkScoped.provideEnvironment(ZEnvironment[Scope](scope))
-            initialTimer <- timer
           } yield {
-            def loop(timerFiber: Fiber[Nothing, Boolean]): ZChannel[Any, ZNothing, Chunk[A], Any, E, Chunk[A], Unit] =
+            val timer = p.fail(e).delay(after).forkScoped.provideEnvironment(ZEnvironment[Scope](scope))
+            def loop: ZChannel[Any, ZNothing, Chunk[A], Any, E, Chunk[A], Unit] =
               ZChannel.readWithCause(
-                (in: Chunk[A]) => ZChannel.write(in) *> ZChannel.unwrap(timerFiber.interrupt *> timer.map(loop)),
+                (in: Chunk[A]) =>
+                  ZChannel.fromZIO(timer).flatMap { t =>
+                    ZChannel.write(in) *> ZChannel.fromZIO(t.interrupt) *> loop
+                  },
                 (cause: Cause[ZNothing]) => ZChannel.refailCause(cause),
                 (_: Any) => ZChannel.unit
               )
-            ZPipeline.fromChannel(loop(initialTimer).interruptWhen(p))
+            ZPipeline.fromChannel(loop.interruptWhen(p))
           }
         )
       )
