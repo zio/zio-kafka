@@ -8,11 +8,13 @@ object ExtraZStreamOps {
   implicit class ZStreamOps[R, E, A](val stream: ZStream[R, E, A]) {
 
     /**
-     * Fails the stream with given error if it is not consumed (pulled) from for a value after d duration.
+     * Fails the stream with given error if it is not consumed (pulled) from, for some duration.
      *
      * Also see [[zio.stream.ZStream#timeoutFail]] for failing the stream doesn't _produce_ a value.
      */
-    def consumeTimeoutFail[E1 >: E](e: => E1)(after: Duration): ZStream[R, E1, A] =
+    def consumeTimeoutFail[E1 >: E](e: => E1)(after: Duration): ZStream[R, E1, A] = {
+      // For every incoming chunk a timer is started. When the chunk is consumed, the timer is stopped by interrupting
+      // it. When the timer completes, the stream gets interrupted.
       stream.via(
         ZPipeline.unwrapScoped(
           for {
@@ -33,6 +35,7 @@ object ExtraZStreamOps {
           }
         )
       )
+    }
   }
 
 }
