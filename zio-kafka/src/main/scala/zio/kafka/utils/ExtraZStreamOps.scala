@@ -12,7 +12,7 @@ object ExtraZStreamOps {
      *
      * Also see [[zio.stream.ZStream#timeoutFail]] for failing the stream doesn't _produce_ a value.
      */
-    def consumeTimeoutFail[E1 >: E](e: => E1)(after: Duration): ZStream[R, E1, A] = {
+    def consumeTimeoutFail[E1 >: E](e: => E1)(after: Duration): ZStream[R, E1, A] =
       // For every incoming chunk a timer is started. When the chunk is consumed, the timer is stopped by interrupting
       // it. When the timer completes, the stream gets interrupted.
       stream.via(
@@ -35,7 +35,6 @@ object ExtraZStreamOps {
           }
         )
       )
-    }
   }
 
 }
