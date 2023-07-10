@@ -151,22 +151,18 @@ object Producer {
       }
 
     /**
-     * Calls to send may block when updating metadata or when communication with the broker is (temporarily) lost,
-     * therefore this stream is run on a the blocking thread pool
+     * Calls to send may block when updating metadata or when communication with the broker is (temporarily) lost.
      */
     val sendFromQueue: ZIO[Any, Nothing, Any] =
       ZStream
         .fromQueueWithShutdown(sendQueue)
         .mapZIO { case (serializedRecords, done) =>
           ZIO.attempt {
-            val it: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
-            val res: Array[RecordMetadata]      = new Array[RecordMetadata](serializedRecords.length)
-            val count: AtomicLong               = new AtomicLong
-            val length                          = serializedRecords.length
+            val res: Array[RecordMetadata] = new Array[RecordMetadata](serializedRecords.length)
+            val count: AtomicLong          = new AtomicLong
+            val length                     = serializedRecords.length
 
-            while (it.hasNext) {
-              val (rec, idx): (ByteRecord, Int) = it.next()
-
+            serializedRecords.iterator.zipWithIndex.foreach { case (rec, idx) =>
               p.send(
                 rec,
                 (metadata: RecordMetadata, err: Exception) =>
