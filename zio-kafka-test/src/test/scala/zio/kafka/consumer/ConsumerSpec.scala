@@ -352,7 +352,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                    .runDrain
                    .forkScoped
             c1Exit        <- c1.join
-            subscriptions <- consumer.subscription
+            subscriptions <- consumer.subscription.delay(10.millis)
           } yield assertTrue(
             c1Exit.isFailure,
             subscriptions.isEmpty
