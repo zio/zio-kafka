@@ -5,7 +5,7 @@ import zio.stream._
 
 object ExtraZStreamOps {
 
-  implicit class ZStreamOps[R, E, A](val stream: ZStream[R, E, A]) {
+  implicit class ZStreamOps[R, E, A](val stream: ZStream[R, E, A]) extends AnyVal {
 
     /**
      * Fails the stream with given error if it is not consumed (pulled) from, for some duration.
