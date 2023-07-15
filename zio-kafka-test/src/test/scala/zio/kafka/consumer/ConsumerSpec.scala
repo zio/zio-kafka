@@ -336,8 +336,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                           properties = Map(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG -> "100")
                         )
             consumer <- Consumer.make(settings.withPollTimeout(50.millis))
-            _        <- scheduledProducer(topic1, Schedule.fixed(10.millis).jittered).runDrain.forkScoped
-            _        <- scheduledProducer(topic2, Schedule.fixed(10.millis).jittered).runDrain.forkScoped
+            _        <- scheduledProduce(topic1, Schedule.fixed(10.millis).jittered).runDrain.forkScoped
+            _        <- scheduledProduce(topic2, Schedule.fixed(10.millis).jittered).runDrain.forkScoped
             // The slow consumer:
             c1 <- consumer
                     .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
@@ -373,7 +373,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         )
             consumer <- Consumer.make(settings.withPollTimeout(50.millis))
             // A slow producer
-            _ <- scheduledProducer(topic, Schedule.fixed(1.second)).runDrain.forkScoped
+            _ <- scheduledProduce(topic, Schedule.fixed(1.second)).runDrain.forkScoped
             consumed <- consumer
                           .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                           .take(2)

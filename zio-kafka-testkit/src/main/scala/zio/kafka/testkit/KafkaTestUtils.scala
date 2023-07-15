@@ -96,7 +96,7 @@ object KafkaTestUtils {
   /**
    * A stream that produces messages to a Topic on a schedule for as long as it is running.
    */
-  def scheduledProducer[R](
+  def scheduledProduce[R](
     topic: String,
     schedule: Schedule[R, Any, Long]
   ): ZStream[R with Producer, Throwable, RecordMetadata] =
