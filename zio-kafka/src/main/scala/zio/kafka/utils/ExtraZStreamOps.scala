@@ -69,7 +69,9 @@ object ExtraZStreamOps {
           (p, startTimer, resetTimer) <- timer(e)(after)
         } yield stream
           .interruptWhen(p)
-          .mapChunksZIO(data => ZIO.debug("Data received") *> startTimer *> resetTimer.as(data))
+          .mapChunksZIO(data =>
+            p.isDone.flatMap(done => ZIO.debug(s"Data received: $done")) *> startTimer *> resetTimer.as(data)
+          )
       }
   }
 
