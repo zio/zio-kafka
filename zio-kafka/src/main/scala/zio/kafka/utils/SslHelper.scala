@@ -116,7 +116,7 @@ object SslHelper {
    *   1. We read the answer from the Kafka node
    *   1. If the node is configured with SSL, we fail with an error
    *
-   * This algorithm and its implementation, per se, are relatively simple. It's the ~4 lines of code inside the
+   * This algorithm and its implementation, per se, are relatively simple. It's the few lines of code inside the
    * `ZIO.attemptBlockingInterrupt` call.
    *
    * The tricky part is that we want to be able to timeout the whole process if it takes too long but timeouting a
@@ -126,9 +126,8 @@ object SslHelper {
    * or timeout/interruption).
    *
    * The socket might be closed in two possible cases:
-   *   1. The socket is successfully opened and we send the request to the Kafka cluster. In this case, it's closed in
-   *      the `release` part of `ZIO.acquireReleaseInterruptible`.
-   *   1. The networking exchange takes too long and we timeout/interrupt the whole process. In this case, and that the
+   *   1. The socket is successfully opened and we successfully sent the request to the Kafka cluster. In this case, the `finally` block will close the socket.
+   *   1. The networking exchange takes too long and we timeout/interrupt the whole process. In this case, and that's the
    *      most tricky/weird part, to close the socket, we interrupt the thread running it.
    *
    * Why does interrupting the thread running the networking exchange closes the socket? Because the `SocketChannel`
@@ -145,7 +144,7 @@ object SslHelper {
    *
    * Let's recap.
    *
-   * We use a `SocketChannel` to test the SSL configuration of the Kafka node. This `SocketChannel` is a resource and
+   * We use a `SocketChannel` to test the SSL configuration of the Kafka nodes. This `SocketChannel` is a resource and
    * needs to be closed to avoid leaking memory. We want to be able to timeout the whole process if it takes too long
    * but a `SocketChannel` is not timeoutable. So we implement a timeout mechanism that will interrupt the thread on
    * which the `SocketChannel` is running to close it as it's one of the properties of the `SocketChannel` class.
