@@ -5,14 +5,13 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.TransferableChannel
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ ApiVersionsRequest, RequestHeader }
-import zio.{ durationInt, durationLong, BuildFrom, Duration, Exit, IO, Ref, Task, Trace, URIO, ZIO }
+import zio.{ durationInt, durationLong, BuildFrom, Duration, IO, Task, Trace, URIO, ZIO }
 
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{ FileChannel, SocketChannel }
 import scala.jdk.CollectionConverters._
 import scala.util.control.{ NoStackTrace, NonFatal }
-import scala.util.{ Failure, Success, Try }
 
 /**
  * This function validates that your Kafka client (Admin, Consumer, or Producer) configurations are valid for the Kafka
@@ -170,47 +169,23 @@ object SslHelper {
         )
       )
 
-    ZIO.scoped {
-      for {
-        ref <- Ref.make[Option[(SocketChannel, Try[Boolean])]](None)
-        result <-
-          ZIO.acquireReleaseInterruptible(
-            ZIO.attemptBlockingInterrupt {
-              // Note about this algorithm:
-              // We make all the networking exchanges (ie. `unsafeOpenSocket`, `unsafeSendTestRequest` and `unsafeReadAnswerFromTestRequest`) in this
-              // interruptible blocking section so that we can easily timeout/interrupt the whole process if it takes too long.
+    @inline def timeoutException: ConnectionError =
+      ConnectionError(new java.util.concurrent.TimeoutException(s"Failed to contact $address"))
 
-              val channel = unsafeOpenSocket(address)
-              // We need to wrap these calls in a Try to be sure to close the socket even if one these calls fail
-              val safeIsTLS =
-                Try {
-                  unsafeSendTestRequest(channel)
-                  val buffer = unsafeReadAnswerFromTestRequest(channel)
-                  isTls(buffer)
-                }
-              channel -> safeIsTLS
-            }
-              .timeout(socketTimeout)
-              // In order to avoid any leak of the `SocketChannel`, we need to be sure that the `Ref` is set, even in interruption cases.
-              // That's why `.tap(ref.set)` wouldn't be not enough and we have to use `.onExit`.
-              // More info, see discussion starting here: https://discord.com/channels/629491597070827530/1122924033827164282/1124995521774358578
-              .onExit {
-                case Exit.Success(x) => ref.set(x)
-                case Exit.Failure(_) => ZIO.unit
-              }
-              .mapError(ConnectionError.apply)
-          )(ref.get.map {
-            case Some((channel, _)) => ZIO.attempt(channel.close()).orDie
-            case None               => ZIO.unit
-          })
-        _ <-
-          result match {
-            case None => ZIO.fail(new java.util.concurrent.TimeoutException(s"Failed to contact $address"))
-            case Some((_, Success(isTLS))) => if (isTLS) error else ZIO.unit
-            case Some((_, Failure(e)))     => ZIO.fail(e)
-          }
-      } yield ()
+    ZIO.attemptBlockingInterrupt {
+      // Note about this algorithm:
+      // We make all the networking exchanges (ie. `unsafeOpenSocket`, `unsafeSendTestRequest` and `unsafeReadAnswerFromTestRequest`) in this
+      // interruptible blocking section so that we can easily timeout/interrupt the whole process if it takes too long.
+
+      val channel = unsafeOpenSocket(address)
+      try {
+        unsafeSendTestRequest(channel)
+        val buffer = unsafeReadAnswerFromTestRequest(channel)
+        isTls(buffer)
+      } finally channel.close()
     }
+      .timeoutFail(timeoutException)(socketTimeout)
+      .flatMap(isTLS => if (isTLS) error else ZIO.unit)
   }
 
   /**
