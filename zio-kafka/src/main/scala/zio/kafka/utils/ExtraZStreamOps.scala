@@ -18,10 +18,10 @@ object ExtraZStreamOps {
       stream.via(
         ZPipeline.unwrapScoped(
           for {
-            scope <- ZIO.scope
+            scope <- ZIO.environment[Scope]
             p     <- Promise.make[E1, Unit]
           } yield {
-            val timer = p.fail(e).delay(after).forkScoped.provideEnvironment(ZEnvironment[Scope](scope))
+            val timer = p.fail(e).delay(after).forkScoped.provideEnvironment(scope)
             def loop: ZChannel[Any, ZNothing, Chunk[A], Any, E, Chunk[A], Unit] =
               ZChannel.readWithCause(
                 (in: Chunk[A]) =>
