@@ -15,24 +15,20 @@ object ExtraZStreamOps {
 
     private def timer[E1 >: E](
       e: => E1
-    )(after: Duration): URIO[Scope, (Interruptor[E1], ResetTimer)] = {
+    )(after: Duration): UIO[(Interruptor[E1], ResetTimer)] = {
       def getNow: UIO[Long] = Clock.currentTime(ChronoUnit.MILLIS)
 
       for {
-        scope                  <- ZIO.environment[Scope]
         now                    <- getNow
         lastChunkReceivedAtRef <- Ref.make(now)
-        started                <- Ref.Synchronized.make(false)
         p                      <- Promise.make[E1, Unit]
         afterAsMillis = after.toMillis
-        tick =
-          (getNow zip lastChunkReceivedAtRef.get).flatMap { case (now, lastExecution) =>
-            val deadline = lastExecution + afterAsMillis
-            if (deadline < now) p.fail(e) else ZIO.unit
-          }
-            .repeat(Schedule.fixed(1.second))
-        startTimer = started.updateSomeZIO { case false => tick.forkScoped.provideEnvironment(scope).as(true) }
-        resetTimer = startTimer *> getNow.flatMap(lastChunkReceivedAtRef.set(_))
+        failIfNeeded = (now: Long) =>
+                         lastChunkReceivedAtRef.get.flatMap { lastExecution =>
+                           val deadline = lastExecution + afterAsMillis
+                           if (deadline < now) p.fail(e) else lastChunkReceivedAtRef.set(now)
+                         }
+        resetTimer = getNow.flatMap(now => failIfNeeded(now)).unit
       } yield (p, resetTimer)
     }
 
@@ -48,7 +44,7 @@ object ExtraZStreamOps {
         for {
           (p, resetTimer) <- timer(e)(after)
         } yield stream
-          .viaFunction(_.interruptWhen(p))
+          .interruptWhen(p)
           .mapChunksZIO(data => resetTimer *> ZIO.succeed(data))
       }
   }
