@@ -11,7 +11,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
+import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, CommitTimeout, OffsetRetrieval }
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization.{
   ConsumerFinalized,
@@ -1192,7 +1192,27 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             )
           }
         )
-      )
+      ),
+      test("commit timeout") {
+        val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          topic  <- randomTopic
+          client <- randomClient
+          group  <- randomGroup
+
+          _ <- produceMany(topic, kvs)
+
+          result <- Consumer
+                      .plainStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
+                      .take(11)
+                      .map(_.offset)
+                      .aggregateAsync(Consumer.offsetBatches)
+                      .mapZIO(_.commit) // Hangs without timeout
+                      .runDrain
+                      .exit
+                      .provideSomeLayer[Kafka](consumer(client, Some(group), commitTimeout = 2.seconds))
+        } yield assert(result)(equalTo(Exit.fail(CommitTimeout)))
+      } @@ TestAspect.flaky(10) @@ TestAspect.timeout(20.seconds)
     )
       .provideSome[Scope & Kafka](producer)
       .provideSomeShared[Scope](

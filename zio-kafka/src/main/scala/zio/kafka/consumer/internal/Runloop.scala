@@ -4,7 +4,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
-import zio.kafka.consumer.Consumer.{ OffsetRetrieval, RunloopTimeout }
+import zio.kafka.consumer.Consumer.{ CommitTimeout, OffsetRetrieval, RunloopTimeout }
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
@@ -22,6 +22,7 @@ private[consumer] final class Runloop private (
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollTimeout: Duration,
+  commitTimeout: Duration,
   runloopTimeout: Duration,
   commandQueue: Queue[RunloopCommand],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
@@ -120,7 +121,7 @@ private[consumer] final class Runloop private (
         p <- Promise.make[Throwable, Unit]
         _ <- commandQueue.offer(RunloopCommand.Commit(offsets, p)).unit
         _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
-        _ <- p.await
+        _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
       } yield ()
 
   private def doCommit(cmd: RunloopCommand.Commit): UIO[Unit] = {
@@ -560,6 +561,7 @@ private[consumer] object Runloop {
     hasGroupId: Boolean,
     consumer: ConsumerAccess,
     pollTimeout: Duration,
+    commitTimeout: Duration,
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
@@ -580,6 +582,7 @@ private[consumer] object Runloop {
                   hasGroupId = hasGroupId,
                   consumer = consumer,
                   pollTimeout = pollTimeout,
+                  commitTimeout = commitTimeout,
                   runloopTimeout = runloopTimeout,
                   commandQueue = commandQueue,
                   lastRebalanceEvent = lastRebalanceEvent,

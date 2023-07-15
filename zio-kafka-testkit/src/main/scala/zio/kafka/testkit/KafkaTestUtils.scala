@@ -104,6 +104,7 @@ object KafkaTestUtils {
     restartStreamOnRebalancing: Boolean = false,
     `max.poll.records`: Int = 100, // settings this higher can cause concurrency bugs to go unnoticed
     runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
+    commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
@@ -111,6 +112,7 @@ object KafkaTestUtils {
         .withClientId(clientId)
         .withCloseTimeout(5.seconds)
         .withPollTimeout(100.millis)
+        .withCommitTimeout(commitTimeout)
         .withRunloopTimeout(runloopTimeout)
         .withProperties(
           ConsumerConfig.AUTO_OFFSET_RESET_CONFIG        -> "earliest",
@@ -187,6 +189,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
+    commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
     properties: Map[String, String] = Map.empty
   ): ZLayer[Kafka, Throwable, Consumer] =
     (ZLayer(
@@ -197,7 +200,8 @@ object KafkaTestUtils {
         allowAutoCreateTopics = allowAutoCreateTopics,
         offsetRetrieval = offsetRetrieval,
         restartStreamOnRebalancing = restartStreamOnRebalancing,
-        properties = properties
+        properties = properties,
+        commitTimeout = commitTimeout
       )
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
 
