@@ -79,14 +79,9 @@ def stdSettings(prjName: String) = Seq(
   name              := s"$prjName",
   scalafmtOnCompile := !insideCI.value,
   Compile / compile / scalacOptions ++=
-    optionsOn("2.13")("-Wconf:cat=unused-nowarn:s").value,
+    optionsOn("2.12")("-Yimports", "java.lang,scala,scala.Predef,scala.collection.compat").value ++
+      optionsOn("2.13")("-Wconf:cat=unused-nowarn:s").value,
   scalacOptions -= "-Xlint:infer-any",
-  scalacOptions ++= {
-    CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, 12)) => List("-Yimports:java.lang,scala,scala.Predef,scala.collection.compat")
-      case _             => List.empty
-    }
-  },
   // workaround for bad constant pool issue
   (Compile / doc) := Def.taskDyn {
     val default = (Compile / doc).taskValue
