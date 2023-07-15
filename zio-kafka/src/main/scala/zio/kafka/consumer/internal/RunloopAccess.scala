@@ -10,6 +10,8 @@ import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscrip
 import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio.{ durationInt, Duration, Hub, IO, Ref, Scope, UIO, ZIO, ZLayer }
 
+import scala.collection.compat._
+
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
   case object NotStarted                     extends RunloopState
