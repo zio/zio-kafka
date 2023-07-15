@@ -20,13 +20,16 @@ object ExtraZStreamOps {
 
       for {
         now                    <- getNow
-        lastChunkReceivedAtRef <- Ref.make(now)
+        lastChunkReceivedAtRef <- Ref.Synchronized.make(now)
         p                      <- Promise.make[E1, Unit]
         afterAsMillis = after.toMillis
         failIfNeeded = (now: Long) =>
-                         lastChunkReceivedAtRef.get.flatMap { lastExecution =>
-                           val deadline = lastExecution + afterAsMillis
-                           if (deadline < now) p.fail(e) else lastChunkReceivedAtRef.set(now)
+                         lastChunkReceivedAtRef.updateZIO { lastChunkReceivedAt =>
+                           val deadline         = lastChunkReceivedAt + afterAsMillis
+                           val deadlineIsPassed = deadline < now
+
+                           if (deadlineIsPassed) p.fail(e).as(lastChunkReceivedAt)
+                           else ZIO.succeed(now)
                          }
         resetTimer = getNow.flatMap(now => failIfNeeded(now)).unit
       } yield (p, resetTimer)
@@ -40,12 +43,12 @@ object ExtraZStreamOps {
     def consumeTimeoutFail[E1 >: E](e: => E1)(after: Duration): ZStream[R, E1, A] =
       // For every incoming chunk a timer is started. When the chunk is consumed, the timer is stopped by interrupting
       // it. When the timer completes, the stream gets interrupted.
-      ZStream.unwrapScoped {
+      ZStream.unwrap {
         for {
           (p, resetTimer) <- timer(e)(after)
         } yield stream
           .interruptWhen(p)
-          .mapChunksZIO(data => resetTimer *> ZIO.succeed(data))
+          .mapChunksZIO(resetTimer.as(_))
       }
   }
 
