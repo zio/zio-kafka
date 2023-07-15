@@ -3,6 +3,8 @@ package zio.kafka.utils
 import zio._
 import zio.stream._
 
+import java.time.Instant
+
 object ExtraZStreamOps {
 
   // noinspection SimplifyWhenInspection
@@ -18,29 +20,29 @@ object ExtraZStreamOps {
       for {
         scope                  <- ZIO.scope
         now                    <- Clock.instant
-        lastChunkReceivedAtRef <- Ref.Synchronized.make(now)
+        lastChunkReceivedAtRef <- Ref.Synchronized.make[Option[Instant]](Some(now))
         tickRef                <- Ref.Synchronized.make[Option[Fiber[Nothing, Any]]](Option.empty)
         started                <- Ref.Synchronized.make(false)
         p                      <- Promise.make[E1, Unit]
         afterAsMillis = after.toMillis
         failPromiseIfNeeded = (reason: String) =>
-                                lastChunkReceivedAtRef.updateZIO { lastChunkReceivedAt =>
+                                lastChunkReceivedAtRef.updateSomeZIO { case Some(lastChunkReceivedAt) =>
                                   Clock.instant.flatMap { now =>
                                     val deadline         = lastChunkReceivedAt.plusMillis(afterAsMillis)
                                     val deadlineIsPassed = deadline.isBefore(now)
 
-                                    if (deadlineIsPassed)
+                                    if (deadlineIsPassed) {
                                       ZIO.debug(s"Interrupted at $now from $reason") *>
-                                        (
-                                          p.fail(e) *>
-                                            tickRef.updateSomeZIO { case Some(fiber) =>
-                                              ZIO.debug(s"Interrupt TICK at $now from $reason") *>
-                                                fiber.interrupt.as(None)
-                                            }
-                                        ).as(lastChunkReceivedAt)
-                                    else
+                                        p.fail(e) *>
+                                        tickRef.updateSomeZIO { case Some(fiber) =>
+                                          ZIO.debug(s"Interrupt TICK at $now from $reason") *>
+                                            fiber.interrupt.as(None)
+                                        } *>
+                                        ZIO.none
+                                    } else {
                                       ZIO.debug(s"Not interrupted at $now from $reason") *>
-                                        ZIO.succeed(now)
+                                        ZIO.some(now)
+                                    }
                                   }
                                 }
         startBackgroundInterruptorIfNot = started.updateSomeZIO { case false =>
