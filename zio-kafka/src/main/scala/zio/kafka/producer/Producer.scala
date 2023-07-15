@@ -167,7 +167,7 @@ object Producer {
             while (it.hasNext) {
               val (rec, idx): (ByteRecord, Int) = it.next()
 
-              p.send(
+              val _ = p.send(
                 rec,
                 (metadata: RecordMetadata, err: Exception) =>
                   Unsafe.unsafe { implicit u =>

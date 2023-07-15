@@ -1216,7 +1216,7 @@ object AdminClient {
       val jn = new JNewTopic(name, numPartitions, replicationFactor)
 
       if (configs.nonEmpty) {
-        jn.configs(configs.asJava)
+        val _ = jn.configs(configs.asJava)
       }
 
       jn
