@@ -19,23 +19,36 @@ object ExtraZStreamOps {
         scope                  <- ZIO.scope
         now                    <- Clock.instant
         lastChunkReceivedAtRef <- Ref.Synchronized.make(now)
+        tickRef                <- Ref.Synchronized.make[Option[Fiber[Nothing, Any]]](Option.empty)
         p                      <- Promise.make[E1, Unit]
         afterAsMillis = after.toMillis
-        failPromiseIfNeeded = Clock.instant.flatMap { now =>
-                                lastChunkReceivedAtRef.updateZIO { lastChunkReceivedAt =>
-                                  val deadline         = lastChunkReceivedAt.plusMillis(afterAsMillis)
-                                  val deadlineIsPassed = deadline.isBefore(now)
+        failPromiseIfNeeded = (reason: String) =>
+                                Clock.instant.flatMap { now =>
+                                  lastChunkReceivedAtRef.updateZIO { lastChunkReceivedAt =>
+                                    val deadline         = lastChunkReceivedAt.plusMillis(afterAsMillis)
+                                    val deadlineIsPassed = deadline.isBefore(now)
 
-                                  if (deadlineIsPassed) p.fail(e).as(lastChunkReceivedAt)
-                                  else ZIO.succeed(now)
+                                    if (deadlineIsPassed)
+                                      ZIO.debug(s"Interrupted at $now from $reason") *>
+                                        (
+                                          p.fail(e) *>
+                                            tickRef.updateSomeZIO { case Some(fiber) =>
+                                              ZIO.debug(s"Interrupt TICK at $now from $reason") *>
+                                                fiber.interrupt.as(null)
+                                            }
+                                        ).as(lastChunkReceivedAt)
+                                    else
+                                      ZIO.debug(s"Not interrupted at $now from $reason") *>
+                                        ZIO.succeed(now)
+                                  }
                                 }
-                              }
         startBackgroundInterruptorIfNot <-
-          failPromiseIfNeeded
-            .repeat(Schedule.fixed(1.second))
+          failPromiseIfNeeded("tick")
+            .repeat(Schedule.fixed(after))
             .forkIn(scope)
+            .flatMap(fiber => tickRef.set(Some(fiber)))
             .once
-        resetTimer = failPromiseIfNeeded
+        resetTimer = failPromiseIfNeeded("reset")
       } yield (p, startBackgroundInterruptorIfNot, resetTimer)
 
     /**
@@ -44,8 +57,6 @@ object ExtraZStreamOps {
      * Also see [[zio.stream.ZStream#timeoutFail]] for failing the stream doesn't _produce_ a value.
      */
     def consumeTimeoutFail[E1 >: E](e: => E1)(after: Duration): ZStream[R, E1, A] =
-      // For every incoming chunk a timer is started. When the chunk is consumed, the timer is stopped by interrupting
-      // it. When the timer completes, the stream gets interrupted.
       ZStream.unwrapScoped {
         for {
           (p, startTimer, resetTimer) <- timer(e)(after)
