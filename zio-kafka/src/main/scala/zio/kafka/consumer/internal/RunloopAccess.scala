@@ -102,12 +102,18 @@ private[consumer] object RunloopAccess {
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
 
   private def maxPollIntervalConfig(settings: ConsumerSettings): Duration = {
-    def defaultMaxPollInterval: AnyRef = ConsumerConfig
+    // Fallback default taken from
+    // https://docs.confluent.io/platform/current/installation/configuration/consumer-configs.html#max-poll-interval-ms
+    def fallbackDefault: Int = 5.minutes.toMillis.toInt
+    def defaultMaxPollInterval: Int = ConsumerConfig
       .configDef()
       .defaultValues()
-      .getOrDefault(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "300000")
-    val maxPollIntervalStr = settings.properties
-      .getOrElse(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, defaultMaxPollInterval)
-    maxPollIntervalStr.toString.toInt.millis
+      .getOrDefault(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Int.box(fallbackDefault))
+      .asInstanceOf[Integer]
+    settings.properties
+      .get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)
+      .flatMap(_.toString.toIntOption) // Ignore invalid
+      .getOrElse(defaultMaxPollInterval)
+      .millis
   }
 }
