@@ -20,11 +20,12 @@ object ExtraZStreamOps {
         now                    <- Clock.instant
         lastChunkReceivedAtRef <- Ref.Synchronized.make(now)
         tickRef                <- Ref.Synchronized.make[Option[Fiber[Nothing, Any]]](Option.empty)
+        started                <- Ref.Synchronized.make(false)
         p                      <- Promise.make[E1, Unit]
         afterAsMillis = after.toMillis
         failPromiseIfNeeded = (reason: String) =>
-                                Clock.instant.flatMap { now =>
-                                  lastChunkReceivedAtRef.updateZIO { lastChunkReceivedAt =>
+                                lastChunkReceivedAtRef.updateZIO { lastChunkReceivedAt =>
+                                  Clock.instant.flatMap { now =>
                                     val deadline         = lastChunkReceivedAt.plusMillis(afterAsMillis)
                                     val deadlineIsPassed = deadline.isBefore(now)
 
@@ -34,7 +35,7 @@ object ExtraZStreamOps {
                                           p.fail(e) *>
                                             tickRef.updateSomeZIO { case Some(fiber) =>
                                               ZIO.debug(s"Interrupt TICK at $now from $reason") *>
-                                                fiber.interrupt.as(null)
+                                                fiber.interrupt.as(None)
                                             }
                                         ).as(lastChunkReceivedAt)
                                     else
@@ -42,12 +43,16 @@ object ExtraZStreamOps {
                                         ZIO.succeed(now)
                                   }
                                 }
-        startBackgroundInterruptorIfNot <-
-          failPromiseIfNeeded("tick")
-            .repeat(Schedule.fixed(after))
-            .forkIn(scope)
-            .flatMap(fiber => tickRef.set(Some(fiber)))
-            .once
+        startBackgroundInterruptorIfNot = started.updateSomeZIO { case false =>
+                                            Clock.instant.flatMap(now =>
+                                              ZIO.debug(s"Starting background interruptor $now")
+                                            ) *>
+                                              failPromiseIfNeeded("tick")
+                                                .repeat(Schedule.fixed(after))
+                                                .forkIn(scope)
+                                                .flatMap(fiber => tickRef.set(Some(fiber)))
+                                                .as(true)
+                                          }
         resetTimer = failPromiseIfNeeded("reset")
       } yield (p, startBackgroundInterruptorIfNot, resetTimer)
 
@@ -62,7 +67,7 @@ object ExtraZStreamOps {
           (p, startTimer, resetTimer) <- timer(e)(after)
         } yield stream
           .interruptWhen(p)
-          .mapChunksZIO(data => startTimer *> resetTimer.as(data))
+          .mapChunksZIO(data => ZIO.debug("Data received") *> startTimer *> resetTimer.as(data))
       }
   }
 
