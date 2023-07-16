@@ -162,7 +162,7 @@ object SslHelper {
     unsafeOpenSocket: InetSocketAddress => SocketChannel,
     socketTimeout: Duration
   )(address: InetSocketAddress): Task[Unit] = {
-    @inline def error: IO[IllegalArgumentException, Nothing] =
+    @inline def unexpectedSslPacketError: IO[IllegalArgumentException, Nothing] =
       ZIO.fail(
         new IllegalArgumentException(
           "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
@@ -190,7 +190,7 @@ object SslHelper {
       } finally channel.close()
     }
       .timeoutFail(timeoutException)(socketTimeout)
-      .flatMap(isTLS => if (isTLS) error else ZIO.unit)
+      .flatMap(isTLS => if (isTLS) unexpectedSslPacketError else ZIO.unit)
   }
 
   /**
