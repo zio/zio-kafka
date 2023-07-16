@@ -164,7 +164,7 @@ object SslHelper {
     @inline def error: IO[IllegalArgumentException, Nothing] =
       ZIO.fail(
         new IllegalArgumentException(
-          s"Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
+          "Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled"
         )
       )
 
