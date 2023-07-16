@@ -126,9 +126,10 @@ object SslHelper {
    * or timeout/interruption).
    *
    * The socket might be closed in two possible cases:
-   *   1. The socket is successfully opened and we successfully sent the request to the Kafka cluster. In this case, the `finally` block will close the socket.
-   *   1. The networking exchange takes too long and we timeout/interrupt the whole process. In this case, and that's the
-   *      most tricky/weird part, to close the socket, we interrupt the thread running it.
+   *   1. The socket is successfully opened and we successfully sent the request to the Kafka cluster. In this case, the
+   *      `finally` block will close the socket.
+   *   1. The networking exchange takes too long and we timeout/interrupt the whole process. In this case, and that's
+   *      the most tricky/weird part, to close the socket, we interrupt the thread running it.
    *
    * Why does interrupting the thread running the networking exchange closes the socket? Because the `SocketChannel`
    * class implements the `InterruptibleChannel` interface, and that's a property of this interface.
