@@ -119,5 +119,5 @@ final case class ConsumerSettings(
 }
 
 object ConsumerSettings {
-  val defaultCommitTimeout: Duration  = 15.seconds
+  val defaultCommitTimeout: Duration = 15.seconds
 }
