@@ -8,7 +8,9 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
-import zio.{ durationInt, Duration, Hub, IO, Ref, Scope, UIO, ZIO, ZLayer }
+import zio._
+
+import scala.jdk.CollectionConverters._
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -77,6 +79,7 @@ private[consumer] object RunloopAccess {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, RunloopAccess] =
     for {
+      maxPollInterval <- maxPollIntervalConfig(settings)
       // This scope allows us to link the lifecycle of the Runloop and of the Hub to the lifecycle of the Consumer
       // When the Consumer is shutdown, the Runloop and the Hub will be shutdown too (before the consumer)
       consumerScope <- ZIO.scope
