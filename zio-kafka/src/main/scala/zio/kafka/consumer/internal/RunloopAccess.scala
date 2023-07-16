@@ -88,6 +88,7 @@ private[consumer] object RunloopAccess {
                         hasGroupId = settings.hasGroupId,
                         consumer = consumerAccess,
                         pollTimeout = settings.pollTimeout,
+                        commitTimeout = settings.commitTimeout,
                         diagnostics = diagnostics,
                         offsetRetrieval = settings.offsetRetrieval,
                         userRebalanceListener = settings.rebalanceListener,

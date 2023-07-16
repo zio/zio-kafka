@@ -25,6 +25,7 @@ final case class ConsumerSettings(
   properties: Map[String, AnyRef] = Map.empty,
   closeTimeout: Duration = 30.seconds,
   pollTimeout: Duration = 50.millis,
+  commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
@@ -47,6 +48,9 @@ final case class ConsumerSettings(
 
   def withCloseTimeout(timeout: Duration): ConsumerSettings =
     copy(closeTimeout = timeout)
+
+  def withCommitTimeout(timeout: Duration): ConsumerSettings =
+    copy(commitTimeout = timeout)
 
   def withClientId(clientId: String): ConsumerSettings =
     withProperty(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
@@ -127,4 +131,5 @@ final case class ConsumerSettings(
 
 object ConsumerSettings {
   val defaultRunloopTimeout: Duration = 4.minutes
+  val defaultCommitTimeout: Duration  = 15.seconds
 }

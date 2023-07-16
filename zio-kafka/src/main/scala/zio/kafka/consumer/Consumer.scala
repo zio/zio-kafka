@@ -157,6 +157,8 @@ trait Consumer {
 object Consumer {
   case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
 
+  case object CommitTimeout extends RuntimeException("Commit timeout") with NoStackTrace
+
   private final class Live private[Consumer] (
     consumer: ConsumerAccess,
     runloopAccess: RunloopAccess
