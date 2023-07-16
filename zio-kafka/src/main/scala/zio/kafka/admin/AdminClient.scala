@@ -1225,7 +1225,7 @@ object AdminClient {
 
   final case class NewPartitions(
     totalCount: Int,
-    newAssignments: List[List[Int]] = Nil
+    newAssignments: List[List[Int]] = List.empty
   ) {
     def asJava: JNewPartitions =
       if (newAssignments.nonEmpty)

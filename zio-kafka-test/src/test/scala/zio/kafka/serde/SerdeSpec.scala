@@ -8,7 +8,7 @@ import zio.test._
 import scala.reflect.ClassTag
 
 object SerdeSpec extends ZIOSpecDefaultSlf4j {
-  case class TestDataStructure(value: String)
+  final case class TestDataStructure(value: String)
 
   val testDataStructureSerde: Serde[Any, TestDataStructure] =
     Serde.string.inmap[TestDataStructure](TestDataStructure.apply)(_.value)
