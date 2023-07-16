@@ -5,12 +5,12 @@ import zio.stream._
 
 object ExtraZStreamOps {
 
-  implicit class ZStreamOps[R, E, A](val stream: ZStream[R, E, A]) extends AnyVal {
+  implicit final class ZStreamOps[R, E, A](private val stream: ZStream[R, E, A]) extends AnyVal {
 
     /**
      * Fails the stream with given error if it is not consumed (pulled) from, for some duration.
      *
-     * Also see [[zio.stream.ZStream#timeoutFail]] for failing the stream doesn't _produce_ a value.
+     * Also see [[zio.stream.ZStream.timeoutFail]] for failing the stream doesn't _produce_ a value.
      */
     def consumeTimeoutFail[E1 >: E](e: => E1)(after: Duration): ZStream[R, E1, A] =
       // For every incoming chunk a timer is started. When the chunk is consumed, the timer is stopped by interrupting
