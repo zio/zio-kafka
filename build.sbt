@@ -24,6 +24,10 @@ inThisBuild(
     Test / fork              := true,
     run / fork               := true,
     ciJvmOptions ++= Seq("-Xms6G", "-Xmx6G", "-Xss4M", "-XX:+UseG1GC"),
+    scalafixDependencies ++= List(
+      "com.github.vovapolu" %% "scaluzzi" % "0.1.23",
+      "io.github.ghostbuster91.scalafix-unified" %% "unified" % "0.0.9",
+    ),
     developers := List(
       Developer(
         "iravid",
