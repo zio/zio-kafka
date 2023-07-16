@@ -5,6 +5,7 @@ import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.stream.ZStream
 import zio.test._
 import zio.test.Assertion._
+import zio.test.TestAspect.timeout
 
 import scala.util.control.NoStackTrace
 
@@ -96,6 +97,6 @@ object ExtraZStreamOpsSpec extends ZIOSpecDefaultSlf4j {
                       .runHead
         } yield assertTrue(result.map(_.size).getOrElse(0) == 5)
       }
-    )
+    ) @@ timeout(5.seconds)
 
 }
