@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1689703560720,
+  "lastUpdate": 1689756621827,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -42428,6 +42428,66 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1473.30138876,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "81900202+yaarix@users.noreply.github.com",
+            "name": "yaarix",
+            "username": "yaarix"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4a89a7af4dfc881e69c44f02054f8ace4e0c136e",
+          "message": "Make runloop command queue unbounded (#986)\n\nRunloop can get dead-locked when it is subscribed to a large amount of partitions.\r\n\r\n- The Runloop command queue is a bounded queue, with a fixed size of 1024.\r\n- The Runloop stream takes commands from the queue, process them and offer a new `Poll` command into the stream (when applicable).\r\n- The `.offer` can suspend the fiber when the command queue is already full. this, in turn, makes the entire stream freeze. the underlying kafka consumer will eventually (after `max.poll.interval.ms`) be dropped from the group without any notification to the zstream.\r\n- To fix this, we change the command queue from bounded to unbounded which will not suspend the fiber that adds the `Poll` command",
+          "timestamp": "2023-07-19T10:35:32+02:00",
+          "tree_id": "7521d3a559039197b71bebb9e8517a055158ef00",
+          "url": "https://github.com/zio/zio-kafka/commit/4a89a7af4dfc881e69c44f02054f8ace4e0c136e"
+        },
+        "date": 1689756609820,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 553.89626036,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 554.42992994,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 667.25424548,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 673.0665970399999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1405.6772255200003,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 1217.5063381,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
