@@ -554,9 +554,6 @@ private[consumer] object Runloop {
     ) extends RebalanceEvent
   }
 
-  // Internal parameters, should not be necessary to tune
-  private final val commandQueueSize: Int = 1024
-
   def make(
     hasGroupId: Boolean,
     consumer: ConsumerAccess,
@@ -572,7 +569,7 @@ private[consumer] object Runloop {
   ): URIO[Scope, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
-      commandQueue       <- ZIO.acquireRelease(Queue.bounded[RunloopCommand](commandQueueSize))(_.shutdown)
+      commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       initialState = State.initial
       currentStateRef <- Ref.make(initialState)
