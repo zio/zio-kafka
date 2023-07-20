@@ -3,35 +3,91 @@ package zio.kafka.utils
 import zio._
 import zio.stream._
 
+import java.time.Instant
+import scala.math.Ordered.orderingToOrdered
+
 object ExtraZStreamOps {
+  private sealed trait State
+  private case class WaitingForProducer(producerDone: Promise[Nothing, Unit]) extends State
+  private case class WaitingForConsumer(deadline: Instant)                    extends State
 
   implicit final class ZStreamOps[R, E, A](private val stream: ZStream[R, E, A]) extends AnyVal {
 
     /**
      * Fails the stream with given error if it is not consumed (pulled) from, for some duration.
      *
+     * Will also run workflow `release` when the timeout occurs.
+     *
      * Note: since the wrapped stream only starts when pulling starts, we never time out waiting for the first pull
      *
      * Also see [[zio.stream.ZStream.timeoutFail]] for failing the stream doesn't _produce_ a value.
      */
-    def consumeTimeoutFail[E1 >: E](e: => E1)(after: Duration): ZStream[R, E1, A] =
-      ZStream.unwrap(
-        for {
-          streamStart <- Clock.nanoTime
-          pullEndRef  <- Ref.make(streamStart)
-        } yield {
-          val pull: ZIO[Scope with R, Nothing, ZIO[R, Option[E1], Chunk[A]]] =
-            stream.toPull.map { pull =>
-              for {
-                pullEnd    <- pullEndRef.get
-                now        <- Clock.nanoTime
-                pullResult <- if ((now - pullEnd).nanos < after) pull else ZIO.fail(Some(e))
-                _          <- Clock.nanoTime.flatMap(now => pullEndRef.set(now).unit)
-              } yield pullResult
+    // noinspection SimplifySleepInspection
+    def consumeTimeoutFail[E1 >: E](
+      e: => E1
+    )(after: Duration)(release: ZIO[R, Nothing, Any])(implicit trace: Trace): ZStream[R, E1, A] =
+      ZStream.unwrapScoped[R] {
+        ZIO.acquireRelease {
+          def deadlineChecker(
+            stateRef: Ref[State],
+            release: ZIO[R, Nothing, Any]
+          ): ZIO[R, Nothing, Any] =
+            stateRef.get.flatMap {
+              case WaitingForProducer(producerDone) =>
+                producerDone.await *> deadlineChecker(stateRef, release)
+              case WaitingForConsumer(deadline) =>
+                Clock.instant.flatMap { now =>
+                  if (now >= deadline) release.uninterruptible
+                  else ZIO.sleep(Duration.fromInterval(now, deadline)) *> deadlineChecker(stateRef, release)
+                }
             }
-          ZStream.fromPull[R, E1, A](pull)
+
+          for {
+            producerDone  <- Promise.make[Nothing, Unit]
+            stateRef      <- Ref.make[State](WaitingForProducer(producerDone))
+            p             <- Promise.make[E1, Nothing]
+            releaseStream <- (p.fail(e) *> release).once
+            fiber         <- deadlineChecker(stateRef, releaseStream).interruptible.forkScoped
+          } yield (stateRef, p, releaseStream, fiber)
+        } { case (_, _, releaseStream, fiber) =>
+          fiber.interrupt *> releaseStream
+        }.map { case (stateRef, p, _, _) =>
+          val producerDone: ZIO[Any, Nothing, Unit] =
+            Clock.instant.flatMap { now =>
+              stateRef.modify {
+                case WaitingForProducer(producerDone) =>
+                  (producerDone.succeed(()), WaitingForConsumer(now.plus(after)))
+                case WaitingForConsumer(_) =>
+                  (ZIO.die(new IllegalStateException()), WaitingForConsumer(now.plus(after)))
+              }.flatten.unit
+            }
+
+          val consumerDone: ZIO[Any, Nothing, Unit] =
+            Promise.make[Nothing, Unit].flatMap { producerDone =>
+              stateRef.modify {
+                case WaitingForConsumer(_) =>
+                  (ZIO.unit, WaitingForProducer(producerDone))
+                case WaitingForProducer(_) =>
+                  (ZIO.die(new IllegalStateException()), WaitingForProducer(producerDone))
+              }.flatten.unit
+            }
+
+          lazy val channel: ZChannel[Any, E, Chunk[A], Any, E1, Chunk[A], Any] =
+            ZChannel.readWithCause(
+              in =>
+                ZChannel.fromZIO(producerDone) *>
+                  ZChannel.write(in) *>
+                  ZChannel.fromZIO(ZIO.whenZIO(p.isDone)(ZIO.fail(e))) *>
+                  ZChannel.fromZIO(consumerDone) *>
+                  channel,
+              err => ZChannel.refailCause(err),
+              done => ZChannel.succeedNow(done)
+            )
+
+          ZStream.fromChannel(stream.channel.pipeTo(channel)).interruptWhen(p)
         }
-      )
+      }
+
   }
 
 }

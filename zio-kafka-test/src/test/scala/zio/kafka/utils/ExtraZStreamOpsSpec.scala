@@ -21,7 +21,7 @@ object ExtraZStreamOpsSpec extends ZIOSpecDefaultSlf4j {
       test("consumeTimeoutFail does not fail stream for fast producer") {
         for {
           consumed <- stream10
-                        .consumeTimeoutFail(ConsumeTimeout)(1.second)
+                        .consumeTimeoutFail(ConsumeTimeout)(1.second)(ZIO.unit)
                         .take(5)
                         .runCollect
         } yield assertTrue(consumed == Chunk(1, 2, 3, 4, 5))
@@ -30,7 +30,7 @@ object ExtraZStreamOpsSpec extends ZIOSpecDefaultSlf4j {
         for {
           f <- ZStream
                  .fromSchedule(Schedule.fixed(5.seconds))
-                 .consumeTimeoutFail(ConsumeTimeout)(1.second)
+                 .consumeTimeoutFail(ConsumeTimeout)(1.second)(ZIO.unit)
                  .take(5)
                  .runCollect
                  .fork
@@ -42,7 +42,7 @@ object ExtraZStreamOpsSpec extends ZIOSpecDefaultSlf4j {
         for {
           result <- ZStream(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
                       .rechunk(5)
-                      .consumeTimeoutFail(ConsumeTimeout)(100.seconds)
+                      .consumeTimeoutFail(ConsumeTimeout)(100.seconds)(ZIO.unit)
                       .chunks
                       .runHead
         } yield assertTrue(result.map(_.size).getOrElse(0) == 5)
@@ -51,7 +51,7 @@ object ExtraZStreamOpsSpec extends ZIOSpecDefaultSlf4j {
         for {
           consumedRef <- Ref.make(Seq.empty[Int])
           pull <- stream10
-                    .consumeTimeoutFail(ConsumeTimeout)(3.seconds)
+                    .consumeTimeoutFail(ConsumeTimeout)(3.seconds)(ZIO.unit)
                     .toPull
           f <- pull
                  .tap(chunk => consumedRef.update(_ ++ chunk))
@@ -65,7 +65,7 @@ object ExtraZStreamOpsSpec extends ZIOSpecDefaultSlf4j {
       test("consumeTimeoutFail fail stream for slow consumer") {
         for {
           pull <- stream10
-                    .consumeTimeoutFail(ConsumeTimeout)(100.seconds)
+                    .consumeTimeoutFail(ConsumeTimeout)(100.seconds)(ZIO.unit)
                     .toPull
           pullExit <- (for {
                         _ <- pull.delay(50.seconds)
@@ -76,37 +76,34 @@ object ExtraZStreamOpsSpec extends ZIOSpecDefaultSlf4j {
           result <- pullExit.join
         } yield assert(result)(fails(isSome(equalTo(ConsumeTimeout))))
       },
-// A stream that is not read from is just a description, it cannot fail.
-// Therefore, the following test doesn't make sense:
-//      test("consumeTimeoutFail fail stream when pull doesn't come") {
-//        for {
-//          endP <- Promise.make[Nothing, ConsumeTimeout.type]
-//          timeoutStream = stream10
-//            .consumeTimeoutFail(ConsumeTimeout)(100.seconds)
-//            .tapError(e => endP.succeed(e))
-//          pull <- timeoutStream.toPull
-//          endF <- (for {
-//                        _ <- pull.delay(50.seconds)
-//                        _ <- pull.delay(50.seconds)
-//                        _ <- ZIO.sleep(100.seconds)
-//                        e <- endP.await
-//                      } yield e).fork
-//          _      <- TestClock.adjust(50.second).schedule(Schedule.recurs(4))
-//          result <- endF.join
-//        } yield assertTrue(result == ConsumeTimeout)
-//      },
-// Since the wrapped stream only starts when pulling starts, we never time out waiting for the first pull.
-// Therefore, the following test doesn't make sense.
-//      test("consumeTimeoutFail fails stream when first pull is slow") {
-//        for {
-//          pull <- stream10
-//                    .consumeTimeoutFail(ConsumeTimeout)(100.seconds)
-//                    .toPull
-//          pullExit <- pull.delay(200.second).exit.fork
-//          _        <- TestClock.adjust(50.second).schedule(Schedule.recurs(6))
-//          result   <- pullExit.join
-//        } yield assert(result)(fails(isSome(equalTo(ConsumeTimeout))))
-//      }
+      test("consumeTimeoutFail releases when pulling is stopped") {
+        for {
+          released <- Promise.make[Nothing, Unit]
+          end      <- released.await.fork
+          timeoutStream = stream10
+                            .consumeTimeoutFail(ConsumeTimeout)(100.seconds)(released.succeed(()))
+          pull <- timeoutStream.toPull
+          consume <- (for {
+                       _ <- pull.delay(50.seconds)
+                       _ <- pull.delay(50.seconds)
+                       _ <- ZIO.sleep(100.seconds)
+                     } yield ()).fork
+          _ <- TestClock.adjust(50.second).schedule(Schedule.recurs(10))
+          _ <- ZIO.raceFirst(consume.join, Seq(end.join))
+        } yield assertCompletes
+      },
+      test("consumeTimeoutFail releases when never pulled") {
+        for {
+          released <- Promise.make[Nothing, Unit]
+          end      <- released.await.fork
+          pull <- stream10
+                    .consumeTimeoutFail(ConsumeTimeout)(100.seconds)(released.succeed(()))
+                    .toPull
+          _ <- pull.delay(200.second).fork
+          _ <- TestClock.adjust(50.second).schedule(Schedule.recurs(10))
+          _ <- end.join
+        } yield assertCompletes
+      }
     ) @@ timeout(5.seconds)
 
 }

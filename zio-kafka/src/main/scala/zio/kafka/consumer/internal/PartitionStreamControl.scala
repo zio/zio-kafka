@@ -96,8 +96,7 @@ object PartitionStreamControl {
                  }.flattenTake
                    .chunksWith(_.tap(records => queueSize.update(_ - records.size)))
                    .interruptWhen(interruptionPromise)
-                   .consumeTimeoutFail(consumeTimeout)(maxPollInterval)
-                   .tapError(error => onConsumeTimeout.when(error eq consumeTimeout))
+                   .consumeTimeoutFail(consumeTimeout)(maxPollInterval)(onConsumeTimeout)
     } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise, queueSize)
   }
 
