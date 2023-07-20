@@ -80,6 +80,7 @@ def stdSettings(prjName: String) = Seq(
   scalafmtOnCompile := !insideCI.value,
   Compile / compile / scalacOptions ++=
     optionsOn("2.13")("-Wconf:cat=unused-nowarn:s").value,
+  Compile / compile / scalacOptions += "-Wconf:origin=scala.collection.compat.*:s",
   scalacOptions -= "-Xlint:infer-any",
   // workaround for bad constant pool issue
   (Compile / doc) := Def.taskDyn {

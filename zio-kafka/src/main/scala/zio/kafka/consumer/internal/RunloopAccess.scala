@@ -10,7 +10,7 @@ import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscrip
 import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio._
 
-import scala.jdk.CollectionConverters._
+import scala.collection.compat._
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -92,7 +92,7 @@ private[consumer] object RunloopAccess {
                         hasGroupId = settings.hasGroupId,
                         consumer = consumerAccess,
                         pollTimeout = settings.pollTimeout,
-                        maxPollInterval = maxPollIntervalConfig(settings),
+                        maxPollInterval = maxPollInterval,
                         commitTimeout = settings.commitTimeout,
                         diagnostics = diagnostics,
                         offsetRetrieval = settings.offsetRetrieval,
@@ -105,15 +105,13 @@ private[consumer] object RunloopAccess {
                       .provide(ZLayer.succeed(consumerScope))
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
 
-  private def maxPollIntervalConfig(settings: ConsumerSettings): Duration = {
-    // Fallback default taken from
-    // https://docs.confluent.io/platform/current/installation/configuration/consumer-configs.html#max-poll-interval-ms
-    def fallbackDefault: Int = 5.minutes.toMillis.toInt
+  private def maxPollIntervalConfig(settings: ConsumerSettings): Task[Duration] = ZIO.attempt {
     def defaultMaxPollInterval: Int = ConsumerConfig
       .configDef()
       .defaultValues()
-      .getOrDefault(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Int.box(fallbackDefault))
+      .get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)
       .asInstanceOf[Integer]
+
     settings.properties
       .get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)
       .flatMap(_.toString.toIntOption) // Ignore invalid
