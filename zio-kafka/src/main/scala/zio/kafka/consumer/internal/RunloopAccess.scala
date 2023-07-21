@@ -10,7 +10,7 @@ import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscrip
 import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio._
 
-import scala.collection.compat._
+import scala.util.Try
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -114,7 +114,7 @@ private[consumer] object RunloopAccess {
 
     settings.properties
       .get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)
-      .flatMap(_.toString.toIntOption) // Ignore invalid
+      .flatMap(v => Try(v.toString.toInt).toOption) // Ignore invalid
       .getOrElse(defaultMaxPollInterval)
       .millis
   }

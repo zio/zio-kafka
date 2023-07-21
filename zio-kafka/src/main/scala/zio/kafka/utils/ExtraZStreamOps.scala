@@ -8,15 +8,16 @@ import scala.math.Ordered.orderingToOrdered
 
 object ExtraZStreamOps {
   private sealed trait State
-  private case class WaitingForProducer(producerDone: Promise[Nothing, Unit]) extends State
-  private case class WaitingForConsumer(deadline: Instant)                    extends State
+  private final case class WaitingForProducer(producerDone: Promise[Nothing, Unit]) extends State
+  private final case class WaitingForConsumer(deadline: Instant)                    extends State
+  private case object Released                                                      extends State
 
   implicit final class ZStreamOps[R, E, A](private val stream: ZStream[R, E, A]) extends AnyVal {
 
     /**
      * Fails the stream with given error if it is not consumed (pulled) from, for some duration.
      *
-     * Will also run workflow `release` when the timeout occurs.
+     * Will also run workflow `timeOutRelease` when the timeout occurs.
      *
      * Note: since the wrapped stream only starts when pulling starts, we never time out waiting for the first pull
      *
@@ -25,50 +26,48 @@ object ExtraZStreamOps {
     // noinspection SimplifySleepInspection
     def consumeTimeoutFail[E1 >: E](
       e: => E1
-    )(after: Duration)(release: ZIO[R, Nothing, Any])(implicit trace: Trace): ZStream[R, E1, A] =
+    )(after: Duration)(timeOutRelease: ZIO[R, Nothing, Any])(implicit trace: Trace): ZStream[R, E1, A] =
       ZStream.unwrapScoped[R] {
-        ZIO.acquireRelease {
-          def deadlineChecker(
-            stateRef: Ref[State],
-            release: ZIO[R, Nothing, Any]
-          ): ZIO[R, Nothing, Any] =
-            stateRef.get.flatMap {
-              case WaitingForProducer(producerDone) =>
-                producerDone.await *> deadlineChecker(stateRef, release)
-              case WaitingForConsumer(deadline) =>
-                Clock.instant.flatMap { now =>
-                  if (now >= deadline) release.uninterruptible
-                  else ZIO.sleep(Duration.fromInterval(now, deadline)) *> deadlineChecker(stateRef, release)
-                }
-            }
+        def deadlineChecker(
+          stateRef: Ref[State],
+          release: ZIO[R, Nothing, Any]
+        ): ZIO[R, Nothing, Any] =
+          stateRef.get.flatMap {
+            case WaitingForProducer(producerDone) =>
+              producerDone.await *> deadlineChecker(stateRef, release)
+            case WaitingForConsumer(deadline) =>
+              Clock.instant.flatMap { now =>
+                if (now >= deadline) stateRef.set(Released) *> release.uninterruptible
+                else ZIO.sleep(Duration.fromInterval(now, deadline)) *> deadlineChecker(stateRef, release)
+              }
+            case Released => ZIO.unit
+          }
 
-          for {
-            producerDone  <- Promise.make[Nothing, Unit]
-            stateRef      <- Ref.make[State](WaitingForProducer(producerDone))
-            p             <- Promise.make[E1, Nothing]
-            releaseStream <- (p.fail(e) *> release).once
-            fiber         <- deadlineChecker(stateRef, releaseStream).interruptible.forkScoped
-          } yield (stateRef, p, releaseStream, fiber)
-        } { case (_, _, releaseStream, fiber) =>
-          fiber.interrupt *> releaseStream
-        }.map { case (stateRef, p, _, _) =>
-          val producerDone: ZIO[Any, Nothing, Unit] =
+        for {
+          producerDone <- Promise.make[Nothing, Unit]
+          stateRef     <- Ref.make[State](WaitingForProducer(producerDone))
+          p            <- Promise.make[E1, Nothing]
+          _            <- deadlineChecker(stateRef, p.fail(e) *> timeOutRelease).interruptible.forkScoped
+        } yield {
+          val releasedState = (ZIO.fail(e), Released)
+          val illegalState  = (ZIO.die(new IllegalStateException()), Released)
+
+          val producerDone: ZIO[Any, E1, Unit] =
             Clock.instant.flatMap { now =>
               stateRef.modify {
                 case WaitingForProducer(producerDone) =>
                   (producerDone.succeed(()), WaitingForConsumer(now.plus(after)))
-                case WaitingForConsumer(_) =>
-                  (ZIO.die(new IllegalStateException()), WaitingForConsumer(now.plus(after)))
+                case Released              => releasedState
+                case WaitingForConsumer(_) => illegalState
               }.flatten.unit
             }
 
-          val consumerDone: ZIO[Any, Nothing, Unit] =
+          val consumerDone: ZIO[Any, E1, Unit] =
             Promise.make[Nothing, Unit].flatMap { producerDone =>
               stateRef.modify {
-                case WaitingForConsumer(_) =>
-                  (ZIO.unit, WaitingForProducer(producerDone))
-                case WaitingForProducer(_) =>
-                  (ZIO.die(new IllegalStateException()), WaitingForProducer(producerDone))
+                case WaitingForConsumer(_) => (ZIO.unit, WaitingForProducer(producerDone))
+                case Released              => releasedState
+                case WaitingForProducer(_) => illegalState
               }.flatten.unit
             }
 
@@ -77,7 +76,6 @@ object ExtraZStreamOps {
               in =>
                 ZChannel.fromZIO(producerDone) *>
                   ZChannel.write(in) *>
-                  ZChannel.fromZIO(ZIO.whenZIO(p.isDone)(ZIO.fail(e))) *>
                   ZChannel.fromZIO(consumerDone) *>
                   channel,
               err => ZChannel.refailCause(err),
@@ -87,7 +85,5 @@ object ExtraZStreamOps {
           ZStream.fromChannel(stream.channel.pipeTo(channel)).interruptWhen(p)
         }
       }
-
   }
-
 }
