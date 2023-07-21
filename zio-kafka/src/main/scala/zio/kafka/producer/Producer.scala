@@ -41,7 +41,7 @@ trait Producer {
   def produceAll[R, K, V](
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): ZPipeline[R & Producer, Throwable, ProducerRecord[K, V], RecordMetadata] =
+  ): ZPipeline[R, Throwable, ProducerRecord[K, V], RecordMetadata] =
     ZPipeline.mapChunksZIO(records => produceChunk(records, keySerializer, valueSerializer))
 
   /**
