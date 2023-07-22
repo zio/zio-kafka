@@ -26,7 +26,7 @@ object ExtraZStreamOps {
     // noinspection SimplifySleepInspection
     def consumeTimeoutFail[E1 >: E](
       e: => E1
-    )(after: Duration)(onTimeout: ZIO[R, Nothing, Any])(implicit trace: Trace): ZStream[R, E1, A] =
+    )(after: Duration)(onTimeout: => ZIO[R, Nothing, Any])(implicit trace: Trace): ZStream[R, E1, A] =
       ZStream.unwrapScoped[R] {
         def deadlineChecker(
           stateRef: Ref[State],
