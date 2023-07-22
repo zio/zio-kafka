@@ -116,6 +116,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
+    maxPollInterval: Duration = 10.seconds,
     `max.poll.records`: Int = 100, // settings this higher can cause concurrency bugs to go unnoticed
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
     properties: Map[String, String] = Map.empty
@@ -125,14 +126,14 @@ object KafkaTestUtils {
         .withClientId(clientId)
         .withCloseTimeout(5.seconds)
         .withPollTimeout(100.millis)
+        .withMaxPollInterval(maxPollInterval)
         .withCommitTimeout(commitTimeout)
         .withProperties(
           ConsumerConfig.AUTO_OFFSET_RESET_CONFIG        -> "earliest",
           ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",
           ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "3000",
-          ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG     -> "10000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "1000",
-          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> s"${`max.poll.records`}",
+          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> `max.poll.records`.toString,
           ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
         .withOffsetRetrieval(offsetRetrieval)

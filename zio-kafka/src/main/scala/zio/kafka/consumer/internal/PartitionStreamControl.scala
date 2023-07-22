@@ -63,8 +63,8 @@ object PartitionStreamControl {
     onConsumeTimeout: UIO[Unit]
   ): UIO[PartitionStreamControl] = {
     val timeOutMessage = s"No records were polled for more than $maxPollInterval for topic partition $tp. " +
-      "Set kafka configuration 'max.poll.interval.ms' to a higher value " +
-      "if processing a batch of records needs more time."
+      "Use ConsumerSettings.withMaxPollInterval to set a longer interval if processing a batch of records " +
+      "needs more time."
     val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
     val onTimeout      = ZIO.logError(timeOutMessage) *> onConsumeTimeout
 

@@ -333,7 +333,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             settings <- consumerSettings(
                           clientId = clientId,
                           groupId = Some(group),
-                          properties = Map(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG -> "100")
+                          maxPollInterval = 100.millis
                         )
             consumer <- Consumer.make(settings.withPollTimeout(50.millis))
             _        <- scheduledProduce(topic1, Schedule.fixed(10.millis).jittered).runDrain.forkScoped
@@ -341,8 +341,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             // The slow consumer:
             c1 <- consumer
                     .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
+                    .rechunk(5) // Time out detection is at the chunk level. We need at least 2 chunks.
                     .tap(r => ZIO.sleep(200.millis).when(r.key == "key3"))
-                    .take(100)
+                    .take(100) // Because of chunking, we need to pull a bit more before the interrupt.
                     .runDrain
                     .exit
                     .fork
@@ -369,7 +370,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             settings <- consumerSettings(
                           clientId = clientId,
                           groupId = Some(group),
-                          properties = Map(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG -> "300")
+                          maxPollInterval = 300.millis
                         )
             consumer <- Consumer.make(settings.withPollTimeout(50.millis))
             // A slow producer
@@ -1129,7 +1130,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               clientId <- randomClient
               settings <- consumerSettings(
                             clientId = clientId,
-                            properties = Map(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG -> "500")
+                            maxPollInterval = 500.millis
                           )
               _ <- Consumer.make(settings, diagnostics = diagnostics)
               _ <- ZIO.sleep(1.second)

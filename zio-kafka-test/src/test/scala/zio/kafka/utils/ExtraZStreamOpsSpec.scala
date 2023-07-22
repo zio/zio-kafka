@@ -76,6 +76,21 @@ object ExtraZStreamOpsSpec extends ZIOSpecDefaultSlf4j {
           result <- pullExit.join
         } yield assert(result)(fails(isSome(equalTo(ConsumeTimeout))))
       },
+      test("consumeTimeoutFail fail chunked stream for slow consumer") {
+        for {
+          pull <- ZStream(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+                    .rechunk(5) // stream needs at least 2 chunks
+                    .consumeTimeoutFail(ConsumeTimeout)(100.seconds)(ZIO.unit)
+                    .toPull
+          pullExit <- (for {
+                        _ <- pull.delay(50.seconds)
+                        _ <- pull.delay(50.seconds)
+                        e <- pull.delay(200.second).exit
+                      } yield e).fork
+          _      <- TestClock.adjust(50.second).schedule(Schedule.recurs(16))
+          result <- pullExit.join
+        } yield assert(result)(fails(isSome(equalTo(ConsumeTimeout))))
+      },
       test("consumeTimeoutFail releases when pulling is stopped") {
         for {
           released <- Promise.make[Nothing, Unit]
