@@ -66,7 +66,7 @@ object PartitionStreamControl {
       "Set kafka configuration 'max.poll.interval.ms' to a higher value " +
       "if processing a batch of records needs more time."
     val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
-    val onTimeout = ZIO.logError(timeOutMessage) *> onConsumeTimeout
+    val onTimeout      = ZIO.logError(timeOutMessage) *> onConsumeTimeout
 
     for {
       _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")

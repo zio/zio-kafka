@@ -25,6 +25,7 @@ final case class ConsumerSettings(
   properties: Map[String, AnyRef] = Map.empty,
   closeTimeout: Duration = 30.seconds,
   pollTimeout: Duration = 50.millis,
+  maxPollInterval: Duration = 5.minutes,
   commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
@@ -38,8 +39,9 @@ final case class ConsumerSettings(
 
   def driverSettings: Map[String, AnyRef] =
     Map(
-      ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG  -> bootstrapServers.mkString(","),
-      ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false"
+      ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG    -> bootstrapServers.mkString(","),
+      ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG   -> "false",
+      ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG -> maxPollInterval.toMillis.toString
     ) ++ autoOffsetResetConfig ++ properties
 
   def withBootstrapServers(servers: List[String]): ConsumerSettings =
@@ -68,6 +70,21 @@ final case class ConsumerSettings(
 
   def withPollTimeout(timeout: Duration): ConsumerSettings =
     copy(pollTimeout = timeout)
+
+  /**
+   * The maximum delay between pulling chunks from a partition stream. This places an upper bound on the amount of time
+   * that a stream can be processing records. If no chunks are pulled before this timeout, then the entire consumer is
+   * considered failed and it will shutdown. When a group is in use the group will then rebalance in order to reassign
+   * the partitions to other members of the group.
+   *
+   * This configuration is copied into Kafka's `max.poll.interval.ms` configuration. For more information see
+   * https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms.
+   *
+   * The default is 5 minutes. Make sure that all records from a single poll (see
+   * https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records) can be processed in this interval.
+   */
+  def withMaxPollInterval(interval: Duration): ConsumerSettings =
+    copy(maxPollInterval = interval)
 
   def withProperty(key: String, value: AnyRef): ConsumerSettings =
     copy(properties = properties + (key -> value))
