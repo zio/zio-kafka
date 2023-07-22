@@ -62,11 +62,11 @@ object PartitionStreamControl {
     maxPollInterval: Duration,
     onConsumeTimeout: UIO[Unit]
   ): UIO[PartitionStreamControl] = {
-    val consumeTimeout = new TimeoutException(
-      s"No records were polled for more than $maxPollInterval for topic partition $tp. " +
-        "Set kafka configuration 'max.poll.interval.ms' to a higher value " +
-        "if processing a batch of records needs more time."
-    ) with NoStackTrace
+    val timeOutMessage = s"No records were polled for more than $maxPollInterval for topic partition $tp. " +
+      "Set kafka configuration 'max.poll.interval.ms' to a higher value " +
+      "if processing a batch of records needs more time."
+    val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
+    val onTimeout = ZIO.logError(timeOutMessage) *> onConsumeTimeout
 
     for {
       _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
@@ -96,7 +96,7 @@ object PartitionStreamControl {
                  }.flattenTake
                    .chunksWith(_.tap(records => queueSize.update(_ - records.size)))
                    .interruptWhen(interruptionPromise)
-                   .consumeTimeoutFail(consumeTimeout)(maxPollInterval)(onConsumeTimeout)
+                   .consumeTimeoutFail(consumeTimeout)(maxPollInterval)(onTimeout)
     } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise, queueSize)
   }
 
