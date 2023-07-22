@@ -11,7 +11,9 @@ import zio.test.{ TestAspect, TestAspectAtLeastR, TestEnvironment, ZIOSpecDefaul
  */
 abstract class ZIOSpecDefaultSlf4j extends ZIOSpecDefault {
 
+  private val loggerLayer = SLF4J.slf4j
+
   override def aspects: Chunk[TestAspectAtLeastR[TestEnvironment]] =
-    super.aspects :+ TestAspect.fromLayer(zio.Runtime.removeDefaultLoggers >>> SLF4J.slf4j)
+    super.aspects :+ TestAspect.fromLayer(zio.Runtime.removeDefaultLoggers >>> loggerLayer)
 
 }

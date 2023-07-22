@@ -274,6 +274,8 @@ private[consumer] final class Runloop private (
               if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
             }
 
+            println(s"pulled ${polledRecords.count()} records for topics: ${polledRecords.partitions().asScala}")
+
             val currentAssigned = c.assignment().asScala.toSet
             val newlyAssigned   = currentAssigned -- prevAssigned
 
@@ -456,7 +458,8 @@ private[consumer] final class Runloop private (
             .as(Chunk.empty)
         case SubscriptionState.Subscribed(_, Subscription.Topics(topics)) =>
           val rc = RebalanceConsumer.Live(c)
-          ZIO
+          ZIO.attempt(println(s"Subscribing to topics $topics")) *>
+            ZIO
             .attempt(c.subscribe(topics.asJava, rebalanceListener.toKafka(runtime, rc)))
             .as(Chunk.empty)
         case SubscriptionState.Subscribed(_, Subscription.Manual(topicPartitions)) =>
