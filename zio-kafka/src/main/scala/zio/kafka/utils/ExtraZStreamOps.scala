@@ -50,7 +50,7 @@ object ExtraZStreamOps {
           _            <- deadlineChecker(stateRef, p.fail(e) *> onTimeout).interruptible.forkScoped
         } yield {
           val timedOutState = (ZIO.fail(e), ConsumerTimedOut)
-          val illegalState  = (ZIO.die(new IllegalStateException()), ConsumerTimedOut)
+          val illegalState  = (ZIO.die(new AssertionError("not possible")), ConsumerTimedOut)
 
           val producerDone: ZIO[Any, E1, Unit] =
             Clock.instant.flatMap { now =>
