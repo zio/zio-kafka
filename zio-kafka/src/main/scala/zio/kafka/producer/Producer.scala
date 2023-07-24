@@ -329,6 +329,14 @@ object Producer {
     } yield producer
 
   /**
+   * Accessor method
+   */
+  def produce(
+    record: ProducerRecord[Array[Byte], Array[Byte]]
+  ): RIO[Producer, RecordMetadata] =
+    ZIO.serviceWithZIO[Producer](_.produce(record))
+
+  /**
    * Accessor method for [[Producer!.produce[R,K,V](record*]]
    */
   def produce[R, K, V](
@@ -360,6 +368,14 @@ object Producer {
     ZPipeline.mapChunksZIO(records => produceChunk(records, keySerializer, valueSerializer))
 
   /**
+   * Accessor method
+   */
+  def produceAsync(
+    record: ProducerRecord[Array[Byte], Array[Byte]]
+  ): RIO[Producer, Task[RecordMetadata]] =
+    ZIO.serviceWithZIO[Producer](_.produceAsync(record))
+
+  /**
    * Accessor method for [[Producer!.produceAsync[R,K,V](record*]]
    */
   def produceAsync[R, K, V](
@@ -382,6 +398,14 @@ object Producer {
     ZIO.serviceWithZIO[Producer](_.produceAsync(topic, key, value, keySerializer, valueSerializer))
 
   /**
+   * Accessor method
+   */
+  def produceChunkAsync(
+    records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
+  ): RIO[Producer, Task[Chunk[RecordMetadata]]] =
+    ZIO.serviceWithZIO[Producer](_.produceChunkAsync(records))
+
+  /**
    * Accessor method for [[Producer.produceChunkAsync]]
    */
   def produceChunkAsync[R, K, V](
@@ -390,6 +414,14 @@ object Producer {
     valueSerializer: Serializer[R, V]
   ): RIO[R & Producer, Task[Chunk[RecordMetadata]]] =
     ZIO.serviceWithZIO[Producer](_.produceChunkAsync(records, keySerializer, valueSerializer))
+
+  /**
+   * Accessor method
+   */
+  def produceChunk(
+    records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
+  ): RIO[Producer, Chunk[RecordMetadata]] =
+    ZIO.serviceWithZIO[Producer](_.produceChunk(records))
 
   /**
    * Accessor method for [[Producer.produceChunk]]
