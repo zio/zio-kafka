@@ -376,7 +376,7 @@ object Producer {
     ZIO.serviceWithZIO[Producer](_.produceAsync(record))
 
   /**
-   * Accessor method for [[Producer!.produceAsync[R,K,V](record*]]
+   * Accessor method
    */
   def produceAsync[R, K, V](
     record: ProducerRecord[K, V],
@@ -386,7 +386,7 @@ object Producer {
     ZIO.serviceWithZIO[Producer](_.produceAsync(record, keySerializer, valueSerializer))
 
   /**
-   * Accessor method for [[Producer.produceAsync[R,K,V](topic*]]
+   * Accessor method
    */
   def produceAsync[R, K, V](
     topic: String,
@@ -406,7 +406,7 @@ object Producer {
     ZIO.serviceWithZIO[Producer](_.produceChunkAsync(records))
 
   /**
-   * Accessor method for [[Producer.produceChunkAsync]]
+   * Accessor method
    */
   def produceChunkAsync[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -424,7 +424,7 @@ object Producer {
     ZIO.serviceWithZIO[Producer](_.produceChunk(records))
 
   /**
-   * Accessor method for [[Producer.produceChunk]]
+   * Accessor method
    */
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -434,12 +434,12 @@ object Producer {
     ZIO.serviceWithZIO[Producer](_.produceChunk(records, keySerializer, valueSerializer))
 
   /**
-   * Accessor method for [[Producer.flush]]
+   * Accessor method
    */
   val flush: RIO[Producer, Unit] = ZIO.serviceWithZIO(_.flush)
 
   /**
-   * Accessor method for [[Producer.metrics]]
+   * Accessor method
    */
   val metrics: RIO[Producer, Map[MetricName, Metric]] = ZIO.serviceWithZIO(_.metrics)
 
