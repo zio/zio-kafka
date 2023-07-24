@@ -21,7 +21,7 @@ object TransactionalProducer {
   final case class TransactionLeaked(offsetBatch: OffsetBatch) extends RuntimeException
 
   private final class LiveTransactionalProducer(
-    live: Producer.Live,
+    live: ProducerLive,
     semaphore: Semaphore
   ) extends TransactionalProducer {
     private val abortTransaction: Task[Unit] = ZIO.attemptBlocking(live.p.abortTransaction())
@@ -101,7 +101,7 @@ object TransactionalProducer {
           settings.producerSettings.sendBufferSize
         )
       live <- ZIO.acquireRelease(
-                ZIO.succeed(new Producer.Live(rawProducer, settings.producerSettings, runtime, sendQueue))
+                ZIO.succeed(new ProducerLive(rawProducer, settings.producerSettings, runtime, sendQueue))
               )(_.close)
       _ <- ZIO.blocking(live.sendFromQueue).forkScoped
     } yield new LiveTransactionalProducer(live, semaphore)
