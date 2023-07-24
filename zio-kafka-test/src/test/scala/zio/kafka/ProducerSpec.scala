@@ -5,7 +5,7 @@ import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.consumer._
 import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
-import zio.kafka.producer.{ Producer, Transaction, TransactionalProducer }
+import zio.kafka.producer.{ ByteRecord, Producer, Transaction, TransactionalProducer }
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
 import zio.kafka.testkit._
@@ -14,8 +14,12 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
+import java.nio.charset.StandardCharsets
+
 object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "producerspec"
+
+  private def asString(v: Array[Byte]) = new String(v, StandardCharsets.UTF_8)
 
   def withConsumerInt(
     subscription: Subscription,
@@ -24,6 +28,132 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     Consumer.make(settings).flatMap { c =>
       c.plainStream(subscription, Serde.string, Serde.int).toQueue()
     }
+
+  private val produceSpec =
+    suite("::produce(record: ProducerRecord[Array[Byte], Array[Byte]])")(
+      test("produces messages") {
+        for {
+          topic <- randomTopic
+          firstMessage  = "toto"
+          secondMessage = "tata"
+          consume = (n: Int) =>
+                      Consumer
+                        .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
+                        .take(n.toLong)
+                        .runCollect
+          _ <- Producer.produce(new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8)): ByteRecord)
+          first <- consume(1)
+          _ <- Producer.produce(new ProducerRecord(topic, secondMessage.getBytes(StandardCharsets.UTF_8)): ByteRecord)
+          second <- consume(2)
+        } yield assertTrue(
+          first.size == 1,
+          asString(first.head.value) == firstMessage,
+          second.size == 2,
+          asString(second(0).value) == firstMessage,
+          asString(second(1).value) == secondMessage
+        )
+      }
+    )
+
+  private val produceAsyncSpec =
+    suite("::produceAsync(record: ProducerRecord[Array[Byte], Array[Byte]])")(
+      test("produces messages") {
+        for {
+          topic <- randomTopic
+          firstMessage  = "toto"
+          secondMessage = "tata"
+          consume = (n: Int) =>
+                      Consumer
+                        .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
+                        .take(n.toLong)
+                        .runCollect
+          _ <- Producer
+                 .produceAsync(new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8)): ByteRecord)
+                 .flatten
+          first <- consume(1)
+          _ <- Producer
+                 .produceAsync(new ProducerRecord(topic, secondMessage.getBytes(StandardCharsets.UTF_8)): ByteRecord)
+                 .flatten
+          second <- consume(2)
+        } yield assertTrue(
+          first.size == 1,
+          asString(first.head.value) == firstMessage,
+          second.size == 2,
+          asString(second(0).value) == firstMessage,
+          asString(second(1).value) == secondMessage
+        )
+      }
+    )
+
+  private val produceChunkAsyncSpec =
+    suite("::produceChunkAsync(records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]])")(
+      test("produces messages") {
+        for {
+          topic <- randomTopic
+          firstMessage  = "toto"
+          secondMessage = "tata"
+          consume = (n: Int) =>
+                      Consumer
+                        .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
+                        .take(n.toLong)
+                        .runCollect
+          _ <- Producer
+                 .produceChunkAsync(Chunk(new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8))))
+                 .flatten
+          first <- consume(1)
+          _ <- Producer
+                 .produceChunkAsync(
+                   Chunk(
+                     new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8)),
+                     new ProducerRecord(topic, secondMessage.getBytes(StandardCharsets.UTF_8))
+                   )
+                 )
+                 .flatten
+          second <- consume(3)
+        } yield assertTrue(
+          first.size == 1,
+          asString(first.head.value) == firstMessage,
+          second.size == 3,
+          asString(second(0).value) == firstMessage,
+          asString(second(1).value) == firstMessage,
+          asString(second(2).value) == secondMessage
+        )
+      }
+    )
+
+  private val produceChunkSpec =
+    suite("::produceChunk(records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]])")(
+      test("produces messages") {
+        for {
+          topic <- randomTopic
+          firstMessage  = "toto"
+          secondMessage = "tata"
+          consume = (n: Int) =>
+                      Consumer
+                        .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
+                        .take(n.toLong)
+                        .runCollect
+          _ <- Producer
+                 .produceChunk(Chunk(new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8))))
+          first <- consume(1)
+          _ <- Producer
+                 .produceChunk(
+                   Chunk(
+                     new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8)),
+                     new ProducerRecord(topic, secondMessage.getBytes(StandardCharsets.UTF_8))
+                   )
+                 )
+          second <- consume(3)
+        } yield assertTrue(
+          first.size == 1,
+          asString(first.head.value) == firstMessage,
+          second.size == 3,
+          asString(second(0).value) == firstMessage,
+          asString(second(1).value) == firstMessage,
+          asString(second(2).value) == secondMessage
+        )
+      }
+    )
 
   override def spec: Spec[TestEnvironment with Scope, Object] =
     suite("producer test suite")(
@@ -462,11 +592,16 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           } yield ()
           assertZIO(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
         }
-      )
+      ),
+      produceSpec,
+      produceAsyncSpec,
+      produceChunkAsyncSpec,
+      produceChunkSpec
     )
       .provideSome[Kafka](
         (KafkaTestUtils.producer ++ transactionalProducer)
-          .mapError(TestFailure.fail)
+          .mapError(TestFailure.fail),
+        KafkaTestUtils.consumer(clientId = "producer-spec-consumer", groupId = Some("group-0"))
       )
       .provideSomeShared[Scope](
         Kafka.embedded

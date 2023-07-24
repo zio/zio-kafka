@@ -14,8 +14,16 @@ import scala.jdk.CollectionConverters._
 trait Producer {
 
   /**
-   * Produces a single record and await broker acknowledgement. See [[produceAsync[R,K,V](record*]] for version that
-   * allows to avoid round-trip-time penalty for each record.
+   * Produces a single record and await broker acknowledgement. See [[produceAsync[R,K,V](topic:String*]] for version
+   * that allows to avoid round-trip-time penalty for each record.
+   */
+  def produce(
+    record: ProducerRecord[Array[Byte], Array[Byte]]
+  ): Task[RecordMetadata]
+
+  /**
+   * Produces a single record and await broker acknowledgement. See [[produceAsync[R,K,V](topic:String*]] for version
+   * that allows to avoid round-trip-time penalty for each record.
    */
   def produce[R, K, V](
     record: ProducerRecord[K, V],
@@ -47,8 +55,22 @@ trait Producer {
   /**
    * Produces a single record. The effect returned from this method has two layers and describes the completion of two
    * actions:
-   *   1. The outer layer describes the enqueueing of the record to the Producer's internal buffer. 2. The inner layer
-   *      describes receiving an acknowledgement from the broker for the transmission of the record.
+   *   1. The outer layer describes the enqueueing of the record to the Producer's internal buffer.
+   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the record.
+   *
+   * It is usually recommended to not await the inner layer of every individual record, but enqueue a batch of records
+   * and await all of their acknowledgements at once. That amortizes the cost of sending requests to Kafka and increases
+   * throughput. See [[produce[R,K,V](record*]] for version that awaits broker acknowledgement.
+   */
+  def produceAsync(
+    record: ProducerRecord[Array[Byte], Array[Byte]]
+  ): Task[Task[RecordMetadata]]
+
+  /**
+   * Produces a single record. The effect returned from this method has two layers and describes the completion of two
+   * actions:
+   *   1. The outer layer describes the enqueueing of the record to the Producer's internal buffer.
+   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the record.
    *
    * It is usually recommended to not await the inner layer of every individual record, but enqueue a batch of records
    * and await all of their acknowledgements at once. That amortizes the cost of sending requests to Kafka and increases
@@ -63,8 +85,8 @@ trait Producer {
   /**
    * Produces a single record. The effect returned from this method has two layers and describes the completion of two
    * actions:
-   *   1. The outer layer describes the enqueueing of the record to the Producer's internal buffer. 2. The inner layer
-   *      describes receiving an acknowledgement from the broker for the transmission of the record.
+   *   1. The outer layer describes the enqueueing of the record to the Producer's internal buffer.
+   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the record.
    *
    * It is usually recommended to not await the inner layer of every individual record, but enqueue a batch of records
    * and await all of their acknowledgements at once. That amortizes the cost of sending requests to Kafka and increases
@@ -81,8 +103,22 @@ trait Producer {
   /**
    * Produces a chunk of records. The effect returned from this method has two layers and describes the completion of
    * two actions:
-   *   1. The outer layer describes the enqueueing of all the records to the Producer's internal buffer. 2. The inner
-   *      layer describes receiving an acknowledgement from the broker for the transmission of the records.
+   *   1. The outer layer describes the enqueueing of all the records to the Producer's internal buffer.
+   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
+   *
+   * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
+   * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
+   * entire chunk.
+   */
+  def produceChunkAsync(
+    records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
+  ): Task[Task[Chunk[RecordMetadata]]]
+
+  /**
+   * Produces a chunk of records. The effect returned from this method has two layers and describes the completion of
+   * two actions:
+   *   1. The outer layer describes the enqueueing of all the records to the Producer's internal buffer.
+   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
    *
    * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
    * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
@@ -95,8 +131,16 @@ trait Producer {
   ): RIO[R, Task[Chunk[RecordMetadata]]]
 
   /**
-   * Produces a chunk of records. See [[produceChunkAsync]] for version that allows to avoid round-trip-time penalty for
-   * each chunk.
+   * Produces a chunk of records. See [[produceChunkAsync(records*]] for version that allows to avoid round-trip-time
+   * penalty for each chunk.
+   */
+  def produceChunk(
+    records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
+  ): Task[Chunk[RecordMetadata]]
+
+  /**
+   * Produces a chunk of records. See [[produceChunkAsync(records*]] for version that allows to avoid round-trip-time
+   * penalty for each chunk.
    */
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -125,30 +169,40 @@ object Producer {
     sendQueue: Queue[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])]
   ) extends Producer {
 
+    // noinspection YieldingZIOEffectInspection
+    override def produceAsync(record: ProducerRecord[Array[Byte], Array[Byte]]): Task[Task[RecordMetadata]] =
+      for {
+        done <- Promise.make[Throwable, Chunk[RecordMetadata]]
+        _    <- sendQueue.offer((Chunk.single(record), done))
+      } yield done.await.map(_.head)
+
     override def produceAsync[R, K, V](
       record: ProducerRecord[K, V],
       keySerializer: Serializer[R, K],
       valueSerializer: Serializer[R, V]
     ): RIO[R, Task[RecordMetadata]] =
-      for {
-        done             <- Promise.make[Throwable, Chunk[RecordMetadata]]
-        serializedRecord <- serialize(record, keySerializer, valueSerializer)
-        _                <- sendQueue.offer((Chunk.single(serializedRecord), done))
-      } yield done.await.map(_.head)
+      serialize(record, keySerializer, valueSerializer).flatMap(produceAsync)
+
+    // noinspection YieldingZIOEffectInspection
+    override def produceChunkAsync(
+      records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
+    ): Task[Task[Chunk[RecordMetadata]]] =
+      if (records.isEmpty) ZIO.succeed(ZIO.succeed(Chunk.empty))
+      else {
+        for {
+          done <- Promise.make[Throwable, Chunk[RecordMetadata]]
+          _    <- sendQueue.offer((records, done))
+        } yield done.await
+      }
 
     override def produceChunkAsync[R, K, V](
       records: Chunk[ProducerRecord[K, V]],
       keySerializer: Serializer[R, K],
       valueSerializer: Serializer[R, V]
     ): RIO[R, Task[Chunk[RecordMetadata]]] =
-      if (records.isEmpty) ZIO.succeed(ZIO.succeed(Chunk.empty))
-      else {
-        for {
-          done              <- Promise.make[Throwable, Chunk[RecordMetadata]]
-          serializedRecords <- ZIO.foreach(records)(serialize(_, keySerializer, valueSerializer))
-          _                 <- sendQueue.offer((serializedRecords, done))
-        } yield done.await
-      }
+      ZIO
+        .foreach(records)(serialize(_, keySerializer, valueSerializer))
+        .flatMap(produceChunkAsync)
 
     /**
      * Calls to send may block when updating metadata or when communication with the broker is (temporarily) lost,
@@ -193,6 +247,9 @@ object Producer {
         }
         .runDrain
 
+    override def produce(record: ProducerRecord[Array[Byte], Array[Byte]]): Task[RecordMetadata] =
+      produceAsync(record).flatten
+
     override def produce[R, K, V](
       record: ProducerRecord[K, V],
       keySerializer: Serializer[R, K],
@@ -217,6 +274,9 @@ object Producer {
       valueSerializer: Serializer[R, V]
     ): RIO[R, Task[RecordMetadata]] =
       produceAsync(new ProducerRecord(topic, key, value), keySerializer, valueSerializer)
+
+    override def produceChunk(records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]): Task[Chunk[RecordMetadata]] =
+      produceChunkAsync(records).flatten
 
     override def produceChunk[R, K, V](
       records: Chunk[ProducerRecord[K, V]],
@@ -269,6 +329,14 @@ object Producer {
     } yield producer
 
   /**
+   * Accessor method
+   */
+  def produce(
+    record: ProducerRecord[Array[Byte], Array[Byte]]
+  ): RIO[Producer, RecordMetadata] =
+    ZIO.serviceWithZIO[Producer](_.produce(record))
+
+  /**
    * Accessor method for [[Producer!.produce[R,K,V](record*]]
    */
   def produce[R, K, V](
@@ -300,7 +368,15 @@ object Producer {
     ZPipeline.mapChunksZIO(records => produceChunk(records, keySerializer, valueSerializer))
 
   /**
-   * Accessor method for [[Producer!.produceAsync[R,K,V](record*]]
+   * Accessor method
+   */
+  def produceAsync(
+    record: ProducerRecord[Array[Byte], Array[Byte]]
+  ): RIO[Producer, Task[RecordMetadata]] =
+    ZIO.serviceWithZIO[Producer](_.produceAsync(record))
+
+  /**
+   * Accessor method
    */
   def produceAsync[R, K, V](
     record: ProducerRecord[K, V],
@@ -310,7 +386,7 @@ object Producer {
     ZIO.serviceWithZIO[Producer](_.produceAsync(record, keySerializer, valueSerializer))
 
   /**
-   * Accessor method for [[Producer.produceAsync[R,K,V](topic*]]
+   * Accessor method
    */
   def produceAsync[R, K, V](
     topic: String,
@@ -322,7 +398,15 @@ object Producer {
     ZIO.serviceWithZIO[Producer](_.produceAsync(topic, key, value, keySerializer, valueSerializer))
 
   /**
-   * Accessor method for [[Producer.produceChunkAsync]]
+   * Accessor method
+   */
+  def produceChunkAsync(
+    records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
+  ): RIO[Producer, Task[Chunk[RecordMetadata]]] =
+    ZIO.serviceWithZIO[Producer](_.produceChunkAsync(records))
+
+  /**
+   * Accessor method
    */
   def produceChunkAsync[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -332,7 +416,15 @@ object Producer {
     ZIO.serviceWithZIO[Producer](_.produceChunkAsync(records, keySerializer, valueSerializer))
 
   /**
-   * Accessor method for [[Producer.produceChunk]]
+   * Accessor method
+   */
+  def produceChunk(
+    records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
+  ): RIO[Producer, Chunk[RecordMetadata]] =
+    ZIO.serviceWithZIO[Producer](_.produceChunk(records))
+
+  /**
+   * Accessor method
    */
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -342,12 +434,12 @@ object Producer {
     ZIO.serviceWithZIO[Producer](_.produceChunk(records, keySerializer, valueSerializer))
 
   /**
-   * Accessor method for [[Producer.flush]]
+   * Accessor method
    */
   val flush: RIO[Producer, Unit] = ZIO.serviceWithZIO(_.flush)
 
   /**
-   * Accessor method for [[Producer.metrics]]
+   * Accessor method
    */
   val metrics: RIO[Producer, Map[MetricName, Metric]] = ZIO.serviceWithZIO(_.metrics)
 
