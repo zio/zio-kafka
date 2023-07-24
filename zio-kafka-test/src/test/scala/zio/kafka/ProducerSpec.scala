@@ -19,6 +19,8 @@ import java.nio.charset.StandardCharsets
 object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "producerspec"
 
+  private def asString(v: Array[Byte]) = new String(v, StandardCharsets.UTF_8)
+
   def withConsumerInt(
     subscription: Subscription,
     settings: ConsumerSettings
@@ -45,10 +47,10 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           second <- consume(2)
         } yield assertTrue(
           first.size == 1,
-          new String(first.head.value, StandardCharsets.UTF_8) == firstMessage,
+          asString(first.head.value) == firstMessage,
           second.size == 2,
-          new String(second(0).value, StandardCharsets.UTF_8) == firstMessage,
-          new String(second(1).value, StandardCharsets.UTF_8) == secondMessage
+          asString(second(0).value) == firstMessage,
+          asString(second(1).value) == secondMessage
         )
       }
     )
@@ -75,10 +77,10 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           second <- consume(2)
         } yield assertTrue(
           first.size == 1,
-          new String(first.head.value, StandardCharsets.UTF_8) == firstMessage,
+          asString(first.head.value) == firstMessage,
           second.size == 2,
-          new String(second(0).value, StandardCharsets.UTF_8) == firstMessage,
-          new String(second(1).value, StandardCharsets.UTF_8) == secondMessage
+          asString(second(0).value) == firstMessage,
+          asString(second(1).value) == secondMessage
         )
       }
     )
@@ -110,11 +112,11 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           second <- consume(3)
         } yield assertTrue(
           first.size == 1,
-          new String(first.head.value, StandardCharsets.UTF_8) == firstMessage,
+          asString(first.head.value) == firstMessage,
           second.size == 3,
-          new String(second(0).value, StandardCharsets.UTF_8) == firstMessage,
-          new String(second(1).value, StandardCharsets.UTF_8) == firstMessage,
-          new String(second(2).value, StandardCharsets.UTF_8) == secondMessage
+          asString(second(0).value) == firstMessage,
+          asString(second(1).value) == firstMessage,
+          asString(second(2).value) == secondMessage
         )
       }
     )
@@ -144,11 +146,11 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           second <- consume(3)
         } yield assertTrue(
           first.size == 1,
-          new String(first.head.value, StandardCharsets.UTF_8) == firstMessage,
+          asString(first.head.value) == firstMessage,
           second.size == 3,
-          new String(second(0).value, StandardCharsets.UTF_8) == firstMessage,
-          new String(second(1).value, StandardCharsets.UTF_8) == firstMessage,
-          new String(second(2).value, StandardCharsets.UTF_8) == secondMessage
+          asString(second(0).value) == firstMessage,
+          asString(second(1).value) == firstMessage,
+          asString(second(2).value) == secondMessage
         )
       }
     )
