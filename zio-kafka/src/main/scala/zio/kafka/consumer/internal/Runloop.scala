@@ -250,7 +250,10 @@ private[consumer] final class Runloop private (
     val toPause  = assignment -- requestedPartitions
 
     if (toResume.nonEmpty) c.resume(toResume.asJava)
-    if (toPause.nonEmpty) c.pause(toPause.asJava)
+    if (toPause.nonEmpty) {
+      println(s"Pausing ${toPause.mkString(",")}")
+      c.pause(toPause.asJava)
+    }
   }
 
   private def handlePoll(state: State): Task[State] =
@@ -261,6 +264,7 @@ private[consumer] final class Runloop private (
         )
       _                 <- currentStateRef.set(state)
       partitionsToFetch <- fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
+      _                 <- ZIO.logDebug(s"Partitions to fetch: ${partitionsToFetch.mkString(",")}")
       pollResult <-
         consumer.runloopAccess { c =>
           ZIO.suspend {
@@ -278,6 +282,7 @@ private[consumer] final class Runloop private (
             val newlyAssigned   = currentAssigned -- prevAssigned
 
             for {
+              _                   <- ZIO.logDebug(s"Got ${polledRecords.count()} records")
               ignoreRecordsForTps <- doSeekForNewPartitions(c, newlyAssigned)
 
               rebalanceEvent <- lastRebalanceEvent.getAndSet(None)

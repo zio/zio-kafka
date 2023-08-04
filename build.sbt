@@ -105,7 +105,10 @@ lazy val zioKafka =
       libraryDependencies ++= Seq(
         kafkaClients,
         jacksonDatabind,
-        scalaCollectionCompat
+        scalaCollectionCompat,
+        "ch.qos.logback" % "logback-classic"    % "1.4.6",
+        "dev.zio"       %% "zio-logging-slf4j2" % "2.1.13",
+        "dev.zio"       %% "zio-logging-slf4j"  % "2.1.13" % Test
       )
     )
 
