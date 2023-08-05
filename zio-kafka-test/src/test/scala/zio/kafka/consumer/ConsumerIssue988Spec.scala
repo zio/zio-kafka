@@ -2,10 +2,11 @@ package zio.kafka.consumer
 
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
+import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
-import zio.kafka.testkit.{Kafka, KafkaRandom}
+import zio.kafka.testkit.{ Kafka, KafkaRandom }
 import zio.test.TestAspect._
 import zio.test._
 
@@ -21,7 +22,9 @@ object ConsumerIssue988Spec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
         // .delay imitates long processing
         def readCount(topic: String)(counter: Ref[Int]) =
-          plainStream(topic).debug("readCount msg").runForeach(_.offset.commit.delay(500.millis) *> counter.update(_ + 1))
+          plainStream(topic)
+            .debug("readCount msg")
+            .runForeach(_.offset.commit.delay(500.millis) *> counter.update(_ + 1))
 
         def readOne(topic: String) =
           plainStream(topic).take(1).runDrain *> ZIO.logInfo("readOne ready")
@@ -29,28 +32,34 @@ object ConsumerIssue988Spec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         def writeSingleTo(topics: String*) =
           ZIO.foreachParDiscard(topics) { topic =>
             ZIO.logInfo(s"Producing 1 message to $topic") *>
-            produceOne(topic, s"key-$topic", s"value-$topic")
+              produceOne(topic, s"key-$topic", s"value-$topic")
           }
 
         for {
-          topic1 <- randomTopic
-          topic2 <- randomTopic
+          topic1 <- ZIO.succeed("topic1")
+          topic2 <- ZIO.succeed("topic2")
           client <- randomClient
           group  <- randomGroup
 
-          c = consumer(client, Some(group))
+          c = consumer(
+                client,
+                Some(group),
+                diagnostics = new Diagnostics {
+                  override def emit(event: => DiagnosticEvent): UIO[Unit] = ZIO.debug(event)
+                }
+              )
 
           counter <- Ref.make[Int](0)
           _ <- (
-            readCount(topic1)(counter).fork *>
-              (readOne(topic2) <&> writeSingleTo(topic1, topic2))
-            )
-            .zipPar(ZIO.sleep(3.seconds)) // give consumer some time to poll events
-            .provideSome[Producer with Kafka](c)
+                 readCount(topic1)(counter).fork *>
+                   (readOne(topic2) <&> writeSingleTo(topic1, topic2))
+               )
+                 .zipPar(ZIO.sleep(3.seconds)) // give consumer some time to poll events
+                 .provideSome[Producer with Kafka](c)
 
           count <- counter.get
         } yield assertTrue(count == 1)
-      } @@ withLiveClock,
+      } @@ withLiveClock
     )
       .provideSome[Kafka](producer)
       .provideSomeShared[Scope](
