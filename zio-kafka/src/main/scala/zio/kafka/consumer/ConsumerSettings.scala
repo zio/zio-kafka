@@ -29,7 +29,6 @@ final case class ConsumerSettings(
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
-  runloopTimeout: Duration = ConsumerSettings.defaultRunloopTimeout,
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy()
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
@@ -69,14 +68,31 @@ final case class ConsumerSettings(
 
   /**
    * The maximum time to block while polling the Kafka consumer. The Kafka consumer will return earlier when the maximum
-   * number of record to poll (see https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records) is
-   * collected.
+   * number of record to poll (see https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records or
+   * [[org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_DOC]]) is collected.
    *
    * The default is `50ms` which to good for low latency applications. Set this higher, e.g. `500ms` for better
    * throughput.
    */
   def withPollTimeout(timeout: Duration): ConsumerSettings =
     copy(pollTimeout = timeout)
+
+  /**
+   * Set Kafka's `max.poll.interval.ms` configuration. See
+   * https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms or
+   * [[org.apache.kafka.clients.CommonClientConfigs.MAX_POLL_INTERVAL_MS_DOC]] for more information.
+   *
+   * Zio-kafka uses this value also to determine whether a stream stopped processing. If no chunks are pulled from a
+   * stream for this interval (while data is available) we consider the stream to be halted. When this happens we
+   * interrupt the stream with a failure. In addition the entire consumer is shutdown. In future versions of zio-kafka
+   * we may (instead of a shutdown) stop only the affected subscription.
+   *
+   * The default is 5 minutes. Make sure that all records from a single poll (see
+   * https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records or
+   * [[org.apache.kafka.clients.consumer.KafkaConsumer#poll(java.lang.Duration)]]) can be processed in this interval.
+   */
+  def withMaxPollInterval(maxPollInterval: Duration): ConsumerSettings =
+    withProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, maxPollInterval.toMillis.toString)
 
   def withProperty(key: String, value: AnyRef): ConsumerSettings =
     copy(properties = properties + (key -> value))
@@ -100,16 +116,6 @@ final case class ConsumerSettings(
 
   def withCredentials(credentialsStore: KafkaCredentialStore): ConsumerSettings =
     withProperties(credentialsStore.properties)
-
-  /**
-   * @param timeout
-   *   Internal timeout for each iteration of the command processing and polling loop, use to detect stalling. This
-   *   should be much larger than the pollTimeout and the time it takes to process chunks of records. If your consumer
-   *   is not subscribed for long periods during its lifetime, this timeout should take that into account as well. When
-   *   the timeout expires, the plainStream/partitionedStream/etc will fail with a [[Consumer.RunloopTimeout]].
-   */
-  def withRunloopTimeout(timeout: Duration): ConsumerSettings =
-    copy(runloopTimeout = timeout)
 
   /**
    * @param maxPartitionQueueSize
@@ -138,6 +144,5 @@ final case class ConsumerSettings(
 }
 
 object ConsumerSettings {
-  val defaultRunloopTimeout: Duration = 4.minutes
-  val defaultCommitTimeout: Duration  = 15.seconds
+  val defaultCommitTimeout: Duration = 15.seconds
 }

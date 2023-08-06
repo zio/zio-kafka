@@ -18,7 +18,8 @@ final class PartitionStreamControl private (
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
   interruptionPromise: Promise[Throwable, Unit],
   completedPromise: Promise[Nothing, Unit],
-  queueInfoRef: Ref[QueueInfo]
+  queueInfoRef: Ref[QueueInfo],
+  maxPollInterval: Duration
 ) {
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),
@@ -28,30 +29,31 @@ final class PartitionStreamControl private (
   /** Offer new data for the stream to process. */
   private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
     for {
-      _ <- queueInfoRef.update(_.withOffer(data.size))
-      _ <- dataQueue.offer(Take.chunk(data))
+      now <- Clock.instant
+      _   <- queueInfoRef.update(_.withOffer(now, data.size))
+      _   <- dataQueue.offer(Take.chunk(data))
     } yield ()
 
   def queueSize: UIO[Int] = queueInfoRef.get.map(_.size)
 
   /**
    * @return
-   *   `true` when the stream has data available, but none has been pulled for more than `maxPollInterval`, `false`
-   *   otherwise
+   *   `true` when the stream has data available, but none has been pulled for more than `maxPollInterval` (since data
+   *   became available), `false` otherwise
    */
-  private[internal] def maxPollIntervalExceeded(maxPollInterval: Duration): UIO[Boolean] =
+  private[internal] def maxPollIntervalExceeded(): UIO[Boolean] =
     for {
       now       <- Clock.instant
       queueInfo <- queueInfoRef.get
     } yield queueInfo.size > 0 &&
-      queueInfo.lastPull.plus(maxPollInterval) <= now
+      queueInfo.lastUpdatedAt.plus(maxPollInterval) <= now
 
   /** To be invoked when the partition was lost. */
   private[internal] def lost(): UIO[Boolean] =
     interruptionPromise.fail(new RuntimeException(s"Partition ${tp.toString} was lost"))
 
   /** To be invoked when the stream is no longer processing. */
-  private[internal] def halted(maxPollInterval: Duration): UIO[Boolean] = {
+  private[internal] def halted(): UIO[Boolean] = {
     val timeOutMessage = s"No records were polled for more than $maxPollInterval for topic partition $tp. " +
       "Use ConsumerSettings.withMaxPollInterval to set a longer interval if processing a batch of records " +
       "needs more time."
@@ -83,7 +85,8 @@ object PartitionStreamControl {
   private[internal] def newPartitionStream(
     tp: TopicPartition,
     commandQueue: Queue[RunloopCommand],
-    diagnostics: Diagnostics
+    diagnostics: Diagnostics,
+    maxPollInterval: Duration
   ): UIO[PartitionStreamControl] =
     for {
       _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
@@ -114,11 +117,23 @@ object PartitionStreamControl {
                  }.flattenTake
                    .chunksWith(_.tap(records => registerPull(queueInfo, records.size)))
                    .interruptWhen(interruptionPromise)
-    } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise, queueInfo)
+    } yield new PartitionStreamControl(
+      tp,
+      stream,
+      dataQueue,
+      interruptionPromise,
+      completedPromise,
+      queueInfo,
+      maxPollInterval
+    )
 
-  private final case class QueueInfo(lastPull: Instant, size: Int) {
-    def withOffer(recordCount: Int): QueueInfo              = copy(size = size + recordCount)
-    def withPull(now: Instant, recordCount: Int): QueueInfo = QueueInfo(now, size - recordCount)
+  private final case class QueueInfo(lastUpdatedAt: Instant, size: Int) {
+    // When the queue is currently empty, we need to give the stream a bit of time to pull the new records. We do this by updating the timestamp.
+    def withOffer(now: Instant, recordCount: Int): QueueInfo =
+      QueueInfo(if (size == 0) now else lastUpdatedAt, size + recordCount)
+
+    def withPull(now: Instant, recordCount: Int): QueueInfo =
+      QueueInfo(now, size - recordCount)
   }
 
   private def registerPull(queueInfo: Ref[QueueInfo], recordCount: Int): UIO[Unit] =

@@ -4,7 +4,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
-import zio.kafka.consumer.Consumer.{ CommitTimeout, OffsetRetrieval, RunloopTimeout }
+import zio.kafka.consumer.Consumer.{ CommitTimeout, OffsetRetrieval }
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
@@ -22,8 +22,8 @@ private[consumer] final class Runloop private (
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollTimeout: Duration,
+  maxPollInterval: Duration,
   commitTimeout: Duration,
-  runloopTimeout: Duration,
   commandQueue: Queue[RunloopCommand],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
@@ -36,7 +36,7 @@ private[consumer] final class Runloop private (
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
-    PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics)
+    PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, maxPollInterval)
 
   def stopConsumption: UIO[Unit] =
     ZIO.logDebug("stopConsumption called") *>
@@ -359,6 +359,9 @@ private[consumer] final class Runloop private (
                          pollResult.records
                        )
       updatedPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
+      _ <- ZIO.whenZIO(ZIO.exists(updatedStreams) { stream =>
+             ZIO.ifZIO(stream.maxPollIntervalExceeded())(stream.halted().as(true), ZIO.succeed(false))
+           })(shutdown)
     } yield state.copy(
       pendingRequests = fulfillResult.pendingRequests,
       pendingCommits = updatedPendingCommits,
@@ -487,7 +490,6 @@ private[consumer] final class Runloop private (
 
     ZStream
       .fromQueue(commandQueue)
-      .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
@@ -558,13 +560,13 @@ private[consumer] object Runloop {
     hasGroupId: Boolean,
     consumer: ConsumerAccess,
     pollTimeout: Duration,
+    maxPollInterval: Duration,
     commitTimeout: Duration,
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
     partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
-    runloopTimeout: Duration,
     fetchStrategy: FetchStrategy
   ): URIO[Scope, Runloop] =
     for {
@@ -579,8 +581,8 @@ private[consumer] object Runloop {
                   hasGroupId = hasGroupId,
                   consumer = consumer,
                   pollTimeout = pollTimeout,
+                  maxPollInterval = maxPollInterval,
                   commitTimeout = commitTimeout,
-                  runloopTimeout = runloopTimeout,
                   commandQueue = commandQueue,
                   lastRebalanceEvent = lastRebalanceEvent,
                   partitionsHub = partitionsHub,
