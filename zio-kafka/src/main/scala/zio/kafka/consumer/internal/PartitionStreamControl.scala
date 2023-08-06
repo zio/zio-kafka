@@ -10,7 +10,6 @@ import zio.{ Chunk, Clock, Duration, LogAnnotation, Promise, Queue, Ref, UIO, ZI
 import java.time.Instant
 import java.util.concurrent.TimeoutException
 import scala.math.Ordered.orderingToOrdered
-import scala.math.Ordering.Implicits.infixOrderingOps
 import scala.util.control.NoStackTrace
 
 final class PartitionStreamControl private (
@@ -21,8 +20,6 @@ final class PartitionStreamControl private (
   completedPromise: Promise[Nothing, Unit],
   queueInfoRef: Ref[QueueInfo]
 ) {
-  import PartitionStreamControl._
-
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),
     LogAnnotation("partition", tp.partition().toString)
@@ -31,7 +28,7 @@ final class PartitionStreamControl private (
   /** Offer new data for the stream to process. */
   private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
     for {
-      _ <- updateQueueInfo(queueInfoRef, _ + data.size)
+      _ <- queueInfoRef.update(_.withOffer(data.size))
       _ <- dataQueue.offer(Take.chunk(data))
     } yield ()
 
@@ -47,7 +44,7 @@ final class PartitionStreamControl private (
       now       <- Clock.instant
       queueInfo <- queueInfoRef.get
     } yield queueInfo.size > 0 &&
-      queueInfo.lastUpdate.plus(maxPollInterval) <= now
+      queueInfo.lastPull.plus(maxPollInterval) <= now
 
   /** To be invoked when the partition was lost. */
   private[internal] def lost(): UIO[Boolean] =
@@ -115,19 +112,19 @@ object PartitionStreamControl {
                    // When no data is available, request more data and await its arrival.
                    dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
                  }.flattenTake
-                   .chunksWith(_.tap(records => updateQueueInfo(queueInfo, _ - records.size)))
+                   .chunksWith(_.tap(records => registerPull(queueInfo, records.size)))
                    .interruptWhen(interruptionPromise)
     } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise, queueInfo)
 
-  private final case class QueueInfo(lastUpdate: Instant, size: Int) {
-    def withSizeUpdate(now: Instant, sizeUpdate: Int => Int): QueueInfo =
-      QueueInfo(lastUpdate max now, sizeUpdate(size))
+  private final case class QueueInfo(lastPull: Instant, size: Int) {
+    def withOffer(recordCount: Int): QueueInfo              = copy(size = size + recordCount)
+    def withPull(now: Instant, recordCount: Int): QueueInfo = QueueInfo(now, size - recordCount)
   }
 
-  private def updateQueueInfo(queueInfo: Ref[QueueInfo], sizeUpdate: Int => Int): UIO[Unit] =
+  private def registerPull(queueInfo: Ref[QueueInfo], recordCount: Int): UIO[Unit] =
     for {
       now <- Clock.instant
-      _   <- queueInfo.update(_.withSizeUpdate(now, sizeUpdate))
+      _   <- queueInfo.update(_.withPull(now, recordCount))
     } yield ()
 
 }
