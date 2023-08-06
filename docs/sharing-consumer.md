@@ -41,4 +41,4 @@ Consumer sharing is only possible when using the same type of `Subscription`: `T
 
 If your subscriptions overlap, eg `Subscription.topics("topic1", "topic2")` and `Subscription.topics("topic2", "topic3")`, which stream will get the partitions of `topic2` is not deterministic.
 
-Note that upon starting or ending subscriptions, Kafka will also reassign all partitions of the other subscriptions. Record fetching will resume from the last committed offset, so records may be processed duplicately. This is however no different than   is the case for regular rebalancing. To minimize this issue, commit frequently.
+Note that upon starting or ending subscriptions, Kafka will also reassign all partitions of the _other_ subscriptions. Record fetching will resume from the last committed offset, so records may be processed twice when not all offsets are committed yet. This works the same as for for regular rebalancing. To minimize this issue, commit frequently.
