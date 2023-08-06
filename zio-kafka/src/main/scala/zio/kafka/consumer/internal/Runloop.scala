@@ -360,7 +360,7 @@ private[consumer] final class Runloop private (
                        )
       updatedPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
       _ <- ZIO.whenZIO(ZIO.exists(updatedStreams) { stream =>
-             ZIO.ifZIO(stream.maxPollIntervalExceeded())(stream.halted().as(true), ZIO.succeed(false))
+             ZIO.ifZIO(stream.maxPollIntervalExceeded)(stream.halted().as(true), ZIO.succeed(false))
            })(shutdown)
     } yield state.copy(
       pendingRequests = fulfillResult.pendingRequests,

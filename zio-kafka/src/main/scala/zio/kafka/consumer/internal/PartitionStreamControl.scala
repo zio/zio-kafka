@@ -41,7 +41,7 @@ final class PartitionStreamControl private (
    *   `true` when the stream has data available, but none has been pulled for more than `maxPollInterval` (since data
    *   became available), `false` otherwise
    */
-  private[internal] def maxPollIntervalExceeded(): UIO[Boolean] =
+  private[internal] def maxPollIntervalExceeded: UIO[Boolean] =
     for {
       now       <- Clock.instant
       queueInfo <- queueInfoRef.get
