@@ -167,7 +167,7 @@ private[consumer] final class Runloop private (
       assignedStreams.partition(control => isRevoked(control.tp))
 
     ZIO
-      .foreachDiscard(revokedStreams)(_.end())
+      .foreachDiscard(revokedStreams)(_.end)
       .as(
         Runloop.RevokeResult(
           pendingRequests = pendingRequests.filter(req => !isRevoked(req.tp)),
@@ -360,7 +360,7 @@ private[consumer] final class Runloop private (
                        )
       updatedPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
       _ <- ZIO.whenZIO(ZIO.exists(updatedStreams) { stream =>
-             ZIO.ifZIO(stream.maxPollIntervalExceeded)(stream.halted().as(true), ZIO.succeed(false))
+             ZIO.ifZIO(stream.maxPollIntervalExceeded)(stream.halted.as(true), ZIO.succeed(false))
            })(shutdown)
     } yield state.copy(
       pendingRequests = fulfillResult.pendingRequests,
@@ -436,7 +436,7 @@ private[consumer] final class Runloop private (
       case RunloopCommand.StopAllStreams =>
         for {
           _ <- ZIO.logDebug("Stop all streams initiated")
-          _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end())
+          _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end)
           _ <- partitionsHub.publish(Take.end)
           _ <- ZIO.logDebug("Stop all streams done")
         } yield state.copy(pendingRequests = Chunk.empty)
