@@ -174,18 +174,33 @@ object Producer {
     for {
       props <- ZIO.attempt(settings.driverSettings)
       _     <- SslHelper.validateEndpoint(settings.bootstrapServers, props)
-      rawProducer <- ZIO.attempt(
-                       new KafkaProducer[Array[Byte], Array[Byte]](
-                         props.asJava,
-                         new ByteArraySerializer(),
-                         new ByteArraySerializer()
+      rawProducer <- ZIO.acquireRelease(
+                       ZIO.attempt(
+                         new KafkaProducer[Array[Byte], Array[Byte]](
+                           props.asJava,
+                           new ByteArraySerializer(),
+                           new ByteArraySerializer()
+                         )
                        )
-                     )
+                     )(p => ZIO.attemptBlocking(p.close(settings.closeTimeout)).orDie)
+      producer <- fromJavaProducer(rawProducer, settings)
+    } yield producer
+
+  /**
+   * Create a zio-kafka Producer from an existing org.apache.kafka KafkaProducer
+   *
+   * You are responsible for creating and closing the KafkaProducer
+   */
+  def fromJavaProducer(
+    javaProducer: KafkaProducer[Array[Byte], Array[Byte]],
+    settings: ProducerSettings
+  ): ZIO[Scope, Throwable, Producer] =
+    for {
       runtime <- ZIO.runtime[Any]
       sendQueue <-
         Queue.bounded[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])](settings.sendBufferSize)
-      producer <- ZIO.acquireRelease(ZIO.succeed(new ProducerLive(rawProducer, settings, runtime, sendQueue)))(_.close)
-      _        <- ZIO.blocking(producer.sendFromQueue).forkScoped
+      producer = new ProducerLive(javaProducer, runtime, sendQueue)
+      _ <- ZIO.blocking(producer.sendFromQueue).forkScoped
     } yield producer
 
   /**
@@ -307,7 +322,6 @@ object Producer {
 
 private[producer] final class ProducerLive(
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
-  producerSettings: ProducerSettings,
   runtime: Runtime[Any],
   sendQueue: Queue[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])]
 ) extends Producer {
@@ -441,8 +455,6 @@ private[producer] final class ProducerLive(
       key   <- keySerializer.serialize(r.topic, r.headers, r.key())
       value <- valueSerializer.serialize(r.topic, r.headers, r.value())
     } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
-
-  private[producer] def close: UIO[Unit] = ZIO.attemptBlocking(p.close(producerSettings.closeTimeout)).orDie
 
   /** Used to prevent warnings about not using the result of an expression. */
   @inline private def exec[A](f: => A): Unit = { val _ = f }
