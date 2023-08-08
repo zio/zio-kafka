@@ -15,6 +15,7 @@ jobs:
   benchmark:
     name: Profile benchmarks
     runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.head.repo.fork }} # comes from https://github.com/orgs/community/discussions/25217#discussioncomment-3246904
     steps:
       - uses: actions/checkout@v3.0.2
         with:

@@ -17,6 +17,7 @@ jobs:
   benchmark: # See https://github.com/marketplace/actions/continuous-benchmark
     name: Run benchmark
     runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.head.repo.fork }} # comes from https://github.com/orgs/community/discussions/25217#discussioncomment-3246904
     steps:
       - name: Checkout current branch
         uses: actions/checkout@v3
