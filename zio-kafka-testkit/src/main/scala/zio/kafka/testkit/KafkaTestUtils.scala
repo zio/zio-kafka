@@ -127,13 +127,13 @@ object KafkaTestUtils {
         .withCloseTimeout(5.seconds)
         .withPollTimeout(100.millis)
         .withMaxPollInterval(maxPollInterval)
+        .withMaxPollRecords(`max.poll.records`)
         .withCommitTimeout(commitTimeout)
         .withProperties(
           ConsumerConfig.AUTO_OFFSET_RESET_CONFIG        -> "earliest",
           ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",
           ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "3000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "1000",
-          ConsumerConfig.MAX_POLL_RECORDS_CONFIG         -> `max.poll.records`.toString,
           ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG -> allowAutoCreateTopics.toString
         )
         .withOffsetRetrieval(offsetRetrieval)

@@ -68,7 +68,7 @@ final case class ConsumerSettings(
 
   /**
    * The maximum time to block while polling the Kafka consumer. The Kafka consumer will return earlier when the maximum
-   * number of record to poll (see https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records is
+   * number of record to poll (see https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records) is
    * collected.
    *
    * The default is `50ms` which to good for low latency applications. Set this higher, e.g. `500ms` for better
@@ -87,8 +87,8 @@ final case class ConsumerSettings(
    * we may (instead of a shutdown) stop only the affected subscription.
    *
    * The default is 5 minutes. Make sure that all records from a single poll can be processed in this interval. The
-   * maximum number of records in a single poll is configured with the `max.poll.records` configuration
-   * (see https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records and [[withMaxPollRecords]]).
+   * maximum number of records in a single poll is configured with the `max.poll.records` configuration (see
+   * https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records and [[withMaxPollRecords]]).
    */
   def withMaxPollInterval(maxPollInterval: Duration): ConsumerSettings =
     withProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, maxPollInterval.toMillis.toString)
