@@ -342,8 +342,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             c1 <- consumer
                     .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
                     .rechunk(5) // Time out detection is at the chunk level. We need at least 2 chunks.
-                    .tap(r => ZIO.sleep(200.millis).when(r.key == "key3"))
-                    .take(100) // Because of chunking, we need to pull a bit more before the interrupt.
+                    .tap(r => ZIO.sleep(500.millis).when(r.key == "key3"))
+                    .take(100) // Because of chunking, we need to pull a bit more before the interrupt kicks in.
                     .runDrain
                     .exit
                     .fork
