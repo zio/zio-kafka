@@ -333,16 +333,16 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             settings <- consumerSettings(
                           clientId = clientId,
                           groupId = Some(group),
-                          maxPollInterval = 100.millis
+                          maxPollInterval = 1.second
                         )
-            consumer <- Consumer.make(settings.withPollTimeout(50.millis))
-            _        <- scheduledProduce(topic1, Schedule.fixed(10.millis).jittered).runDrain.forkScoped
-            _        <- scheduledProduce(topic2, Schedule.fixed(10.millis).jittered).runDrain.forkScoped
+            consumer <- Consumer.make(settings.withPollTimeout(500.millis))
+            _        <- scheduledProduce(topic1, Schedule.fixed(100.millis).jittered).runDrain.forkScoped
+            _        <- scheduledProduce(topic2, Schedule.fixed(100.millis).jittered).runDrain.forkScoped
             // The slow consumer:
             c1 <- consumer
                     .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
                     .rechunk(5) // Time out detection is at the chunk level. We need at least 2 chunks.
-                    .tap(r => ZIO.sleep(500.millis).when(r.key == "key3"))
+                    .tap(r => ZIO.sleep(5.seconds).when(r.key == "key3"))
                     .take(100) // Because of chunking, we need to pull a bit more before the interrupt kicks in.
                     .runDrain
                     .exit
@@ -353,7 +353,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                    .runDrain
                    .forkScoped
             c1Exit        <- c1.join
-            subscriptions <- consumer.subscription.delay(10.millis)
+            subscriptions <- consumer.subscription.delay(100.millis)
           } yield assertTrue(
             c1Exit.isFailure,
             subscriptions.isEmpty
