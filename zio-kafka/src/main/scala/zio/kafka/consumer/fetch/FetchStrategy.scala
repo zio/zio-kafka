@@ -1,7 +1,7 @@
 package zio.kafka.consumer.fetch
 
 import org.apache.kafka.common.TopicPartition
-import zio.kafka.consumer.internal.PartitionStreamControl
+import zio.kafka.consumer.internal.PartitionStream
 import zio.{ Chunk, ZIO }
 
 import scala.collection.mutable
@@ -21,7 +21,7 @@ trait FetchStrategy {
    * @return
    *   the partitions that may fetch in the next poll
    */
-  def selectPartitionsToFetch(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Set[TopicPartition]]
+  def selectPartitionsToFetch(streams: Chunk[PartitionStream]): ZIO[Any, Nothing, Set[TopicPartition]]
 }
 
 /**
