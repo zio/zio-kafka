@@ -47,6 +47,8 @@ trait Consumer {
     timeout: Duration = Duration.Infinity
   ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]]
 
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(record: CommittableRecord[_, _]): RIO[R, Unit]
+
   def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]]
 
   /**
@@ -453,6 +455,9 @@ private[consumer] final class ConsumerLive private[consumer] (
     consumer.withConsumer(
       _.committed(partitions.asJava, timeout.asJava).asScala.map { case (k, v) => k -> Option(v) }.toMap
     )
+
+  override def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(record: CommittableRecord[_, _]): RIO[R, Unit] =
+    runloopAccess.commitOrRetry(policy)(record)
 
   override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
     consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)

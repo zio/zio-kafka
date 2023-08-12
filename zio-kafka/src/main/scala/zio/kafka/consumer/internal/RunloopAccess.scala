@@ -30,9 +30,9 @@ private[consumer] final class RunloopAccess private (
   diagnostics: Diagnostics
 ) {
 
-  private def withRunloopZIO[E](
+  private def withRunloopZIO[R, E](
     shouldStartIfNot: Boolean
-  )(whenRunning: Runloop => IO[E, Unit]): IO[E, Unit] =
+  )(whenRunning: Runloop => ZIO[R, E, Unit]): ZIO[R, E, Unit] =
     runloopStateRef.updateSomeAndGetZIO {
       case RunloopState.NotStarted if shouldStartIfNot => makeRunloop.map(RunloopState.Started.apply)
     }.flatMap {
@@ -67,6 +67,9 @@ private[consumer] final class RunloopAccess private (
 
   def commit(record: CommittableRecord[_, _]): Task[Unit] =
     withRunloopZIO(shouldStartIfNot = false)(_.commit(record))
+
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(record: CommittableRecord[_, _]): RIO[R, Unit] =
+    withRunloopZIO(shouldStartIfNot = false)(_.commitOrRetry(policy)(record))
 
 }
 

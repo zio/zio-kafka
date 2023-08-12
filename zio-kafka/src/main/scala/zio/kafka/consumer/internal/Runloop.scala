@@ -118,6 +118,16 @@ private[consumer] final class Runloop private (
   private[internal] def commit(record: CommittableRecord[_, _]): Task[Unit] =
     commit.apply(Map(record.topicPartition -> record.record.offset()))
 
+  private[internal] def commitOrRetry[R](
+    policy: Schedule[R, Throwable, Any]
+  )(record: CommittableRecord[_, _]): RIO[R, Unit] =
+    commit(record).retry(
+      Schedule.recurWhile[Throwable] {
+        case _: RetriableCommitFailedException => true
+        case _                                 => false
+      } && policy
+    )
+
   private val commit: Map[TopicPartition, Long] => Task[Unit] =
     offsets =>
       for {
