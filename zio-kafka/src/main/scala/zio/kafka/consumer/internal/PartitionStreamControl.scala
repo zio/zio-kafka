@@ -53,7 +53,7 @@ final class PartitionStreamControl private (
     interruptionPromise.fail(new RuntimeException(s"Partition ${tp.toString} was lost"))
 
   /** To be invoked when the stream is no longer processing. */
-  private[internal] def halted: UIO[Boolean] = {
+  private[internal] def halt: UIO[Boolean] = {
     val timeOutMessage = s"No records were polled for more than $maxPollInterval for topic partition $tp. " +
       "Use ConsumerSettings.withMaxPollInterval to set a longer interval if processing a batch of records " +
       "needs more time."
