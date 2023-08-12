@@ -5,9 +5,9 @@ import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription }
+import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings, InvalidSubscriptionUnion, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
-import zio.{ Hub, IO, Ref, Scope, UIO, ZIO, ZLayer }
+import zio._
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -31,10 +31,10 @@ private[consumer] final class RunloopAccess private (
 ) {
 
   private def withRunloopZIO[E](
-    requireRunning: Boolean
+    shouldStartIfNot: Boolean
   )(whenRunning: Runloop => IO[E, Unit]): IO[E, Unit] =
     runloopStateRef.updateSomeAndGetZIO {
-      case RunloopState.NotStarted if requireRunning => makeRunloop.map(RunloopState.Started.apply)
+      case RunloopState.NotStarted if shouldStartIfNot => makeRunloop.map(RunloopState.Started.apply)
     }.flatMap {
       case RunloopState.NotStarted       => ZIO.unit
       case RunloopState.Started(runloop) => whenRunning(runloop)
@@ -44,7 +44,7 @@ private[consumer] final class RunloopAccess private (
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has not been started or has been stopped.
    */
-  def stopConsumption: UIO[Unit] = withRunloopZIO(requireRunning = false)(_.stopConsumption)
+  def stopConsumption: UIO[Unit] = withRunloopZIO(shouldStartIfNot = false)(_.stopConsumption)
 
   /**
    * We're doing all of these things in this method so that the interface of this class is as simple as possible and
@@ -58,12 +58,15 @@ private[consumer] final class RunloopAccess private (
     for {
       stream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
-      _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
+      _ <- withRunloopZIO(shouldStartIfNot = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription)) <*
+             withRunloopZIO(shouldStartIfNot = false)(_.removeSubscription(subscription)) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
     } yield stream
+
+  def commit(record: CommittableRecord[_, _]): Task[Unit] =
+    withRunloopZIO(shouldStartIfNot = false)(_.commit(record))
 
 }
 

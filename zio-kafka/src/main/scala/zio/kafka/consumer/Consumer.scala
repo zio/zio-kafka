@@ -37,6 +37,8 @@ trait Consumer {
     timeout: Duration = Duration.Infinity
   ): Task[Map[TopicPartition, Long]]
 
+  def commit(record: CommittableRecord[_, _]): Task[Unit]
+
   /**
    * Retrieve the last committed offset for the given topic-partitions
    */
@@ -440,6 +442,9 @@ private[consumer] final class ConsumerLive private[consumer] (
       val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
       offs.asScala.map { case (k, v) => k -> v.longValue() }.toMap
     }
+
+  override def commit(record: CommittableRecord[_, _]): Task[Unit] =
+    runloopAccess.commit(record)
 
   override def committed(
     partitions: Set[TopicPartition],

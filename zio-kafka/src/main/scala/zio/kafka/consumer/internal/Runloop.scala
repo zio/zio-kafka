@@ -115,6 +115,9 @@ private[consumer] final class Runloop private (
     }
   }
 
+  private[internal] def commit(record: CommittableRecord[_, _]): Task[Unit] =
+    commit.apply(Map(record.topicPartition -> record.record.offset()))
+
   private val commit: Map[TopicPartition, Long] => Task[Unit] =
     offsets =>
       for {

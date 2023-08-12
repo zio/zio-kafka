@@ -38,6 +38,8 @@ final case class CommittableRecord[K, V](
   def partition: Int  = record.partition()
   def timestamp: Long = record.timestamp()
 
+  lazy val topicPartition: TopicPartition = new TopicPartition(record.topic(), record.partition())
+
   def offset: Offset =
     OffsetImpl(
       topic = record.topic(),
