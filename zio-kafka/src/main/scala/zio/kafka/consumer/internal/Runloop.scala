@@ -323,7 +323,7 @@ private[consumer] final class Runloop private (
                             }
 
               _ <- diagnostics.emit {
-                     val providedTps = polledRecords.partitions().asScala.toSet
+                     val providedTps            = polledRecords.partitions().asScala.toSet
                      val requestedPartitionsSet = requestedPartitions.toSet
                      DiagnosticEvent.Poll(
                        tpRequested = requestedPartitionsSet,
