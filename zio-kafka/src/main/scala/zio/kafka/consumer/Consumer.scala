@@ -1,6 +1,12 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ ConsumerRecord, KafkaConsumer, OffsetAndMetadata, OffsetAndTimestamp }
+import org.apache.kafka.clients.consumer.{
+  Consumer => JConsumer,
+  ConsumerRecord,
+  KafkaConsumer,
+  OffsetAndMetadata,
+  OffsetAndTimestamp
+}
 import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
@@ -188,6 +194,22 @@ object Consumer {
    */
   def fromJavaConsumer(
     javaConsumer: KafkaConsumer[Array[Byte], Array[Byte]],
+    settings: ConsumerSettings,
+    diagnostics: Diagnostics = Diagnostics.NoOp
+  ): ZIO[Scope, Throwable, Consumer] =
+    for {
+      _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
+      consumerAccess <- ConsumerAccess.make(javaConsumer)
+      runloopAccess  <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+    } yield new ConsumerLive(consumerAccess, runloopAccess)
+
+  /**
+   * Create a zio-kafka Consumer from an org.apache.kafka Consumer
+   *
+   * You are responsible for creating and closing the Consumer
+   */
+  def fromJavaConsumer(
+    javaConsumer: JConsumer[Array[Byte], Array[Byte]],
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
