@@ -212,7 +212,7 @@ object Producer {
    * You are responsible for creating and closing the KafkaProducer
    */
   def fromJavaProducer(
-    javaProducer: KafkaProducer[Array[Byte], Array[Byte]],
+    javaProducer: JProducer[Array[Byte], Array[Byte]],
     settings: ProducerSettings
   ): ZIO[Scope, Throwable, Producer] =
     for {
