@@ -212,25 +212,6 @@ object Producer {
    * You are responsible for creating and closing the KafkaProducer
    */
   def fromJavaProducer(
-    javaProducer: KafkaProducer[Array[Byte], Array[Byte]],
-    settings: ProducerSettings
-  ): ZIO[Scope, Throwable, Producer] =
-    for {
-      runtime <- ZIO.runtime[Any]
-      sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
-          settings.sendBufferSize
-        )
-      producer = new ProducerLive(javaProducer, runtime, sendQueue)
-      _ <- ZIO.blocking(producer.sendFromQueue).forkScoped
-    } yield producer
-
-  /**
-   * Create a zio-kafka Producer from an existing org.apache.kafka Producer
-   *
-   * You are responsible for creating and closing the Producer
-   */
-  def fromJavaProducer(
     javaProducer: JProducer[Array[Byte], Array[Byte]],
     settings: ProducerSettings
   ): ZIO[Scope, Throwable, Producer] =
