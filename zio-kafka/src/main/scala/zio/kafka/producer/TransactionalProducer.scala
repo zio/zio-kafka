@@ -85,11 +85,10 @@ object TransactionalProducer {
 
   def make(settings: TransactionalProducerSettings): ZIO[Scope, Throwable, TransactionalProducer] =
     for {
-      props <- ZIO.attempt(settings.producerSettings.driverSettings)
       rawProducer <- ZIO.acquireRelease(
                        ZIO.attempt(
                          new KafkaProducer[Array[Byte], Array[Byte]](
-                           props.asJava,
+                           settings.producerSettings.properties.asJava,
                            new ByteArraySerializer(),
                            new ByteArraySerializer()
                          )
