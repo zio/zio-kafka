@@ -5,13 +5,11 @@ import zio._
 import zio.kafka.security.KafkaCredentialStore
 
 final case class AdminClientSettings(
-  bootstrapServers: List[String],
   closeTimeout: Duration,
   properties: Map[String, AnyRef]
 ) {
-  def driverSettings: Map[String, AnyRef] =
-    Map(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers.mkString(",")) ++
-      properties
+  def withBootstrapServers(servers: List[String]): AdminClientSettings =
+    withProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, servers.mkString(","))
 
   def withProperty(key: String, value: AnyRef): AdminClientSettings =
     copy(properties = properties + (key -> value))
@@ -29,8 +27,7 @@ final case class AdminClientSettings(
 object AdminClientSettings {
   def apply(bootstrapServers: List[String]): AdminClientSettings =
     AdminClientSettings(
-      bootstrapServers = bootstrapServers,
       closeTimeout = 30.seconds,
       properties = Map.empty
-    )
+    ).withBootstrapServers(bootstrapServers)
 }

@@ -1,5 +1,6 @@
 package zio.kafka.utils
 
+import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
@@ -118,7 +119,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   private val unitTests =
     suite("Unit tests")(
       test("fails if the passed list of servers is empty") {
-        val result = SslHelper.validateEndpoint(List.empty, Map.empty)
+        val result = SslHelper.validateEndpoint(Map.empty)
 
         assertZIO(result.exit)(
           fails(
@@ -141,14 +142,14 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 address0             = Utils.getHost(server0)
                 port0                = Utils.getPort(server0)
                 server1              = s"$address0:${port0 + 6000}"
-                settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
+                settingsWithDownNode = settings.withBootstrapServers(settings.bootstrapServers :+ server1)
                 // We simulate that the Socket opening fails for some Nodes but not all
                 result <- SslHelper.doValidateEndpoint { address =>
                             val isValidAddress = address.getPort == port0
 
                             if (isValidAddress) SocketChannel.open(address)
                             else throw new java.net.ConnectException("Connection refused")
-                          }(settingsWithDownNode.bootstrapServers, settingsWithDownNode.properties)
+                          }(settingsWithDownNode.properties)
               } yield result
             ).provide(Kafka.embedded)
 
@@ -163,14 +164,14 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 address0             = Utils.getHost(server0)
                 port0                = Utils.getPort(server0)
                 server1              = s"$address0:${port0 + 6000}"
-                settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
+                settingsWithDownNode = settings.withBootstrapServers(settings.bootstrapServers :+ server1)
                 // We simulate that the Socket opening fails for some Nodes but not all
                 result <- SslHelper.doValidateEndpoint { address =>
                             val isValidAddress = address.getPort == port0
 
                             if (isValidAddress) SocketChannel.open(address)
                             else throw new java.net.ConnectException("Connection refused")
-                          }(settingsWithDownNode.bootstrapServers, settingsWithDownNode.properties)
+                          }(settingsWithDownNode.properties)
               } yield result
             ).provide(Kafka.sslEmbedded)
 
@@ -199,11 +200,10 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               address0             = Utils.getHost(server0)
               port0                = Utils.getPort(server0)
               server1              = s"$address0:${port0 + 6000}"
-              settingsWithDownNode = settings.copy(bootstrapServers = settings.bootstrapServers :+ server1)
+              settingsWithDownNode = settings.withBootstrapServers(settings.bootstrapServers :+ server1)
               // We simulate that the Socket opening always fails (ie. that all Nodes are down)
               result <-
                 SslHelper.doValidateEndpoint(_ => throw new java.net.ConnectException("Connection refused. 💥!"))(
-                  settingsWithDownNode.bootstrapServers,
                   settingsWithDownNode.properties
                 )
             } yield result
@@ -241,7 +241,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     array(2) = e
                     throw e
                 }
-              }(settings.bootstrapServers, settings.properties)
+              }(settings.properties)
 
             // custom assertion. More readable with a proper name.
             val hasNoMessage = not(hasMessage(anything))
@@ -285,7 +285,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     array(2) = e
                     throw e
                 }
-              }(settings.bootstrapServers, settings.properties).fork.flatMap(fiber => fiber.interrupt.delay(1.seconds))
+              }(settings.properties).fork.flatMap(fiber => fiber.interrupt.delay(1.seconds))
 
             // custom assertion. More readable with a proper name.
             val hasNoMessage = not(hasMessage(anything))
@@ -304,4 +304,12 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       integrationTests,
       unitTests
     ) @@ withLiveClock @@ sequential
+
+  implicit class SettingsHelper(adminClientSettings: AdminClientSettings) {
+    def bootstrapServers: List[String] = adminClientSettings.properties
+      .getOrElse(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "")
+      .toString
+      .split(",")
+      .toList
+  }
 }

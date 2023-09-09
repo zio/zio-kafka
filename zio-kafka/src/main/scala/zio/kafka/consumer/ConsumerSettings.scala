@@ -21,7 +21,6 @@ import zio.kafka.security.KafkaCredentialStore
  *   the Kafka bootstrap servers
  */
 final case class ConsumerSettings(
-  bootstrapServers: List[String],
   properties: Map[String, AnyRef] = Map.empty,
   closeTimeout: Duration = 30.seconds,
   pollTimeout: Duration = 50.millis,
@@ -39,12 +38,11 @@ final case class ConsumerSettings(
 
   def driverSettings: Map[String, AnyRef] =
     Map(
-      ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG  -> bootstrapServers.mkString(","),
       ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false"
     ) ++ autoOffsetResetConfig ++ properties
 
   def withBootstrapServers(servers: List[String]): ConsumerSettings =
-    copy(bootstrapServers = servers)
+    withProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, servers.mkString(","))
 
   def withCloseTimeout(timeout: Duration): ConsumerSettings =
     copy(closeTimeout = timeout)
@@ -140,4 +138,7 @@ final case class ConsumerSettings(
 object ConsumerSettings {
   val defaultRunloopTimeout: Duration = 4.minutes
   val defaultCommitTimeout: Duration  = 15.seconds
+
+  def apply(bootstrapServers: List[String]) =
+    new ConsumerSettings().withBootstrapServers(bootstrapServers)
 }

@@ -32,24 +32,15 @@ object SslHelper {
   private final case class ConnectionError(cause: Throwable) extends NoStackTrace
 
   // ⚠️ Must not do anything else than calling `doValidateEndpoint`. The algorithm of this function must be completely contained in `doValidateEndpoint`.
-  def validateEndpoint(props: Map[String, AnyRef]): IO[KafkaException, Unit] = {
-    val bootstrapServers = props.get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG) match {
-      case Some(config) => config.toString.split(",").toList
-      case None         => List.empty
-    }
-    validateEndpoint(bootstrapServers, props)
-  }
-
-  // ⚠️ Must not do anything else than calling `doValidateEndpoint`. The algorithm of this function must be completely contained in `doValidateEndpoint`.
-  def validateEndpoint(bootstrapServers: List[String], props: Map[String, AnyRef]): IO[KafkaException, Unit] =
-    doValidateEndpoint(SocketChannel.open)(bootstrapServers, props)
+  def validateEndpoint(props: Map[String, AnyRef]): IO[KafkaException, Unit] =
+    doValidateEndpoint(SocketChannel.open)(props)
 
   /**
    * We use this private function so that we can easily manipulate the `openSocket` function in unit-tests.
    */
   private[utils] def doValidateEndpoint(
     unsafeOpenSocket: InetSocketAddress => SocketChannel // Handy for unit-tests
-  )(bootstrapServers: List[String], props: Map[String, AnyRef]): IO[KafkaException, Unit] = {
+  )(props: Map[String, AnyRef]): IO[KafkaException, Unit] = {
     @inline def `request.timeout.ms`: Duration = {
       val defaultValue = 30.seconds
 
@@ -63,6 +54,11 @@ object SslHelper {
             case NonFatal(_) => defaultValue
           }
       }
+    }
+
+    val bootstrapServers = props.get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG) match {
+      case Some(config) => config.toString.split(",").toList
+      case None         => List.empty
     }
 
     if (bootstrapServers.isEmpty) ZIO.fail(kafkaException(new IllegalArgumentException("Empty bootstrapServers list")))
