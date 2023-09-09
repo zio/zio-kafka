@@ -2,10 +2,16 @@ package zio.kafka.consumer
 
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.utils.PendingCommit
-import zio.{Chunk, Promise, Ref, Schedule, Scope, Task, UIO, URIO, ZIO}
+import zio.{ Chunk, Promise, Ref, Schedule, Scope, Task, UIO, URIO, ZIO }
 
 trait Committer {
   def commit(records: Chunk[CommittableRecord[_, _]]): UIO[PendingCommit[Throwable, Unit]]
+
+  final def commitAndAwait(records: Chunk[CommittableRecord[_, _]]): Task[Unit] =
+    commit(records).flatMap(_.awaitCommit)
+
+  final def commitAndForget(records: Chunk[CommittableRecord[_, _]]): UIO[Unit] =
+    commit(records).unit
 }
 
 //noinspection ConvertExpressionToSAM

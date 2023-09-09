@@ -1,17 +1,12 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{
-  Consumer => JConsumer,
-  ConsumerRecord,
-  OffsetAndMetadata,
-  OffsetAndTimestamp
-}
+import org.apache.kafka.clients.consumer.{ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp, Consumer => JConsumer}
 import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
-import zio.kafka.serde.{ Deserializer, Serde }
+import zio.kafka.consumer.internal.{ConsumerAccess, RunloopAccess}
+import zio.kafka.serde.{Deserializer, Serde}
 import zio.kafka.utils.SslHelper
 import zio.stream._
 
@@ -169,9 +164,6 @@ object Consumer {
   case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
   case object CommitTimeout  extends RuntimeException("Commit timeout") with NoStackTrace
 
-  val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
-    ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
-
   def live: RLayer[ConsumerSettings & Diagnostics, Consumer] =
     ZLayer.scoped {
       for {
@@ -231,6 +223,9 @@ object Consumer {
     timeout: Duration = Duration.Infinity
   ): RIO[Consumer, Map[TopicPartition, Option[OffsetAndMetadata]]] =
     ZIO.serviceWithZIO(_.committed(partitions, timeout))
+
+  def commitAccumBatch[R](commitschedule: Schedule[R, Any, Any]): URIO[R & Consumer, Committer] =
+    ZIO.serviceWithZIO[Consumer](_.commitAccumBatch(commitschedule))
 
   /**
    * Accessor method
@@ -423,7 +418,6 @@ private[consumer] final class ConsumerLive private[consumer] (
   consumer: ConsumerAccess,
   runloopAccess: RunloopAccess
 ) extends Consumer {
-  import Consumer._
 
   override def assignment: Task[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
@@ -525,15 +519,17 @@ private[consumer] final class ConsumerLive private[consumer] (
     f: ConsumerRecord[K, V] => URIO[R1, Unit]
   ): ZIO[R & R1, Throwable, Unit] =
     for {
-      r <- ZIO.environment[R & R1]
+      r         <- ZIO.environment[R & R1]
+      committer <- commitAccumBatch(commitRetryPolicy)
       _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
              .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
-               partitionStream.mapChunksZIO(_.mapZIO((c: CommittableRecord[K, V]) => f(c.record).as(c.offset)))
+               partitionStream.mapChunksZIO(records =>
+                 records.mapZIO((r: CommittableRecord[K, V]) => f(r.record)).as(records)
+               )
              }
-             .provideEnvironment(r)
-             .aggregateAsync(offsetBatches)
-             .mapZIO(_.commitOrRetry(commitRetryPolicy))
+             .mapChunksZIO(committer.commitAndAwait(_).as(Chunk.empty))
              .runDrain
+             .provideEnvironment(r)
     } yield ()
 
   override def offsetsForTimes(
