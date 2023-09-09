@@ -30,16 +30,21 @@ private[consumer] final class RunloopAccess private (
   diagnostics: Diagnostics
 ) {
 
-  private def withRunloopZIO[R, E](
+  private def withRunloopZIO__[R, E, A](
     shouldStartIfNot: Boolean
-  )(whenRunning: Runloop => ZIO[R, E, Unit]): ZIO[R, E, Unit] =
+  )(whenRunning: Runloop => ZIO[R, E, A])(orElse: ZIO[R, E, A]): ZIO[R, E, A] =
     runloopStateRef.updateSomeAndGetZIO {
       case RunloopState.NotStarted if shouldStartIfNot => makeRunloop.map(RunloopState.Started.apply)
     }.flatMap {
-      case RunloopState.NotStarted       => ZIO.unit
+      case RunloopState.NotStarted       => orElse
       case RunloopState.Started(runloop) => whenRunning(runloop)
-      case RunloopState.Finalized        => ZIO.unit
+      case RunloopState.Finalized        => orElse
     }
+
+  private def withRunloopZIO[R, E](shouldStartIfNot: Boolean)(
+    whenRunning: Runloop => ZIO[R, E, Unit]
+  ): ZIO[R, E, Unit] =
+    withRunloopZIO__(shouldStartIfNot)(whenRunning)(ZIO.unit)
 
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has not been started or has been stopped.
@@ -70,6 +75,13 @@ private[consumer] final class RunloopAccess private (
 
   def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(record: CommittableRecord[_, _]): RIO[R, Unit] =
     withRunloopZIO(shouldStartIfNot = false)(_.commitOrRetry(policy)(record))
+
+  def commitAccumBatch[R](
+    commitschedule: Schedule[R, Any, Any]
+  ): URIO[R, Chunk[CommittableRecord[_, _]] => UIO[Task[Unit]]] =
+    withRunloopZIO__(shouldStartIfNot = false)(_.commitAccumBatch(commitschedule))(
+      ZIO.succeed((_: Chunk[CommittableRecord[_, _]]) => ZIO.succeed(ZIO.unit))
+    )
 
 }
 

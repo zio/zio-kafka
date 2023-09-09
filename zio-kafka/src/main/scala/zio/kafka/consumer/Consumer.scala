@@ -49,6 +49,10 @@ trait Consumer {
 
   def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(record: CommittableRecord[_, _]): RIO[R, Unit]
 
+  def commitAccumBatch[R](
+    commitschedule: Schedule[R, Any, Any]
+  ): URIO[R, Chunk[CommittableRecord[_, _]] => UIO[Task[Unit]]]
+
   def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]]
 
   /**
@@ -458,6 +462,11 @@ private[consumer] final class ConsumerLive private[consumer] (
 
   override def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(record: CommittableRecord[_, _]): RIO[R, Unit] =
     runloopAccess.commitOrRetry(policy)(record)
+
+  override def commitAccumBatch[R](
+    commitSchedule: Schedule[R, Any, Any]
+  ): URIO[R, Chunk[CommittableRecord[_, _]] => UIO[Task[Unit]]] =
+    runloopAccess.commitAccumBatch(commitSchedule)
 
   override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
     consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)

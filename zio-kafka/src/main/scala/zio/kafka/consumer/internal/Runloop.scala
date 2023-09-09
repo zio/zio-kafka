@@ -32,7 +32,8 @@ private[consumer] final class Runloop private (
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
   currentStateRef: Ref[State],
-  fetchStrategy: FetchStrategy
+  fetchStrategy: FetchStrategy,
+  runloopScope: Scope
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
@@ -127,6 +128,35 @@ private[consumer] final class Runloop private (
         case _                                 => false
       } && policy
     )
+
+  // noinspection YieldingZIOEffectInspection
+  private[internal] def commitAccumBatch[R](
+    commitSchedule: Schedule[R, Any, Any]
+  ): URIO[R, Chunk[CommittableRecord[_, _]] => UIO[Task[Unit]]] =
+    for {
+      acc <- Ref.Synchronized.make(Map.empty[TopicPartition, Long] -> List.empty[Promise[Throwable, Unit]])
+      _ <- acc.updateZIO { case data @ (offsets, promises) =>
+             if (offsets.isEmpty) ZIO.succeed(data)
+             else
+               commit(offsets)
+                 .foldZIO(
+                   e => ZIO.foreachDiscard(promises)(_.fail(e)),
+                   _ => ZIO.foreachDiscard(promises)(_.succeed(()))
+                 )
+                 .as((Map.empty[TopicPartition, Long], List.empty[Promise[Throwable, Unit]]))
+           }
+             .schedule(commitSchedule)
+             .forkIn(runloopScope)
+    } yield { (records: Chunk[CommittableRecord[_, _]]) =>
+      for {
+        p <- Promise.make[Throwable, Unit]
+        _ <- acc.update { case (offsets, promises) =>
+               val newOffsets  = offsets ++ records.map(record => record.topicPartition -> record.record.offset())
+               val newPromises = promises :+ p
+               (newOffsets, newPromises)
+             }
+      } yield p.await
+    }
 
   private val commit: Map[TopicPartition, Long] => Task[Unit] =
     offsets =>
@@ -587,6 +617,7 @@ private[consumer] object Runloop {
       initialState = State.initial
       currentStateRef <- Ref.make(initialState)
       runtime         <- ZIO.runtime[Any]
+      scope           <- ZIO.scope
       runloop = new Runloop(
                   runtime = runtime,
                   hasGroupId = hasGroupId,
@@ -602,7 +633,8 @@ private[consumer] object Runloop {
                   userRebalanceListener = userRebalanceListener,
                   restartStreamsOnRebalancing = restartStreamsOnRebalancing,
                   currentStateRef = currentStateRef,
-                  fetchStrategy = fetchStrategy
+                  fetchStrategy = fetchStrategy,
+                  runloopScope = scope
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
