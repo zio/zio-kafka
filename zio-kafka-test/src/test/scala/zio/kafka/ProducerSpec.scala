@@ -194,8 +194,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                        withConsumer(Topics(Set(topic1)), settings).flatMap { consumer =>
                          for {
                            messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
-                           record = messages
-                                      .filter(rec => rec.key == key1 && rec.value == value1)
+                           record = messages.filter(rec => rec.key == key1 && rec.value == value1)
                          } yield record
                        }
                      }

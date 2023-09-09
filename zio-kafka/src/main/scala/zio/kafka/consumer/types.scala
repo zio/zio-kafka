@@ -5,7 +5,6 @@ import org.apache.kafka.common.TopicPartition
 import zio.kafka.serde.Deserializer
 import zio.prelude.Subtype
 import zio.{ Chunk, RIO }
-import scala.collection.immutable.Map
 
 object types {
 
@@ -36,8 +35,7 @@ object types {
 
   type Offset = Offset.Type
   object Offset extends Subtype[(TopicPartition, Long)] {
-    def from(record: ConsumerRecord[_, _]): Offset =
-      Offset((topicPartition(record), record.offset()))
+    def from(record: ConsumerRecord[_, _]): Offset = Offset((topicPartition(record), record.offset()))
   }
 
   type OffsetBatch = OffsetBatch.Type
@@ -47,8 +45,13 @@ object types {
     def from(record: ConsumerRecord[_, _]): OffsetBatch =
       OffsetBatch(Map(topicPartition(record) -> record.offset()))
 
-    def from(records: Chunk[ConsumerRecord[_, _]]): OffsetBatch =
-      OffsetBatch.wrap(records.map(record => topicPartition(record) -> record.offset()).toMap)
+    def from(records: Chunk[ConsumerRecord[_, _]]): OffsetBatch = {
+      val newOffsets = Map.newBuilder[TopicPartition, Long]
+      records.foreach { record =>
+        newOffsets += topicPartition(record) -> record.offset()
+      }
+      OffsetBatch(newOffsets.result())
+    }
 
     implicit final class OffsetBatchOps(private val self: OffsetBatch) extends AnyVal {
       def merge(other: OffsetBatch): OffsetBatch = {
