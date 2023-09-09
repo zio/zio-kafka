@@ -116,12 +116,15 @@ private[consumer] final class Runloop private (
     }
   }
 
-  private[internal] def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(offsetBatch: OffsetBatch): RIO[R, Unit] =
+  private[internal] def commitOrRetry[R](
+    retryPolicy: Schedule[R, Throwable, Any],
+    offsetBatch: OffsetBatch
+  ): RIO[R, Unit] =
     commit(offsetBatch).retry(
       Schedule.recurWhile[Throwable] {
         case _: RetriableCommitFailedException => true
         case _                                 => false
-      } && policy
+      } && retryPolicy
     )
 
   private[internal] def commit(offsets: OffsetBatch): Task[Unit] =

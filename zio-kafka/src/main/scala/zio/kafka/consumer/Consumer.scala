@@ -42,9 +42,9 @@ trait Consumer {
   def commit(records: Chunk[ConsumerRecord[_, _]]): Task[Unit]
   def commit(offsetBatch: OffsetBatch): Task[Unit]
 
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], record: ConsumerRecord[_, _]): RIO[R, Unit]
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], records: Chunk[ConsumerRecord[_, _]]): RIO[R, Unit]
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], offsetBatch: OffsetBatch): RIO[R, Unit]
+  def commitOrRetry[R](retryPolicy: Schedule[R, Throwable, Any], record: ConsumerRecord[_, _]): RIO[R, Unit]
+  def commitOrRetry[R](retryPolicy: Schedule[R, Throwable, Any], records: Chunk[ConsumerRecord[_, _]]): RIO[R, Unit]
+  def commitOrRetry[R](retryPolicy: Schedule[R, Throwable, Any], offsetBatch: OffsetBatch): RIO[R, Unit]
 
   /**
    * Retrieve the last committed offset for the given topic-partitions
@@ -468,25 +468,25 @@ private[consumer] final class ConsumerLive private[consumer] (
     }
 
   override def commit(record: ConsumerRecord[_, _]): Task[Unit] =
-    runloopAccess.commit(OffsetBatch.from(record))
+    commit(OffsetBatch.from(record))
 
   override def commit(records: Chunk[ConsumerRecord[_, _]]): Task[Unit] =
-    runloopAccess.commit(OffsetBatch.from(records))
+    commit(OffsetBatch.from(records))
 
   override def commit(offsetBatch: OffsetBatch): Task[Unit] =
     runloopAccess.commit(offsetBatch)
 
-  override def commitOrRetry[R](policy: Schedule[R, Throwable, Any], record: ConsumerRecord[_, _]): RIO[R, Unit] =
-    runloopAccess.commitOrRetry(policy)(OffsetBatch.from(record))
+  override def commitOrRetry[R](retryPolicy: Schedule[R, Throwable, Any], record: ConsumerRecord[_, _]): RIO[R, Unit] =
+    commitOrRetry(retryPolicy, OffsetBatch.from(record))
 
   override def commitOrRetry[R](
-    policy: Schedule[R, Throwable, Any],
+    retryPolicy: Schedule[R, Throwable, Any],
     records: Chunk[ConsumerRecord[_, _]]
   ): RIO[R, Unit] =
-    runloopAccess.commitOrRetry(policy)(OffsetBatch.from(records))
+    commitOrRetry(retryPolicy, OffsetBatch.from(records))
 
-  override def commitOrRetry[R](policy: Schedule[R, Throwable, Any], offsetBatch: OffsetBatch): RIO[R, Unit] =
-    runloopAccess.commitOrRetry(policy)(offsetBatch)
+  override def commitOrRetry[R](retryPolicy: Schedule[R, Throwable, Any], offsetBatch: OffsetBatch): RIO[R, Unit] =
+    runloopAccess.commitOrRetry(retryPolicy, offsetBatch)
 
   override def committed(
     partitions: Set[TopicPartition],

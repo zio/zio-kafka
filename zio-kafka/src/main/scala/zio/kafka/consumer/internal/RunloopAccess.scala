@@ -69,8 +69,8 @@ private[consumer] final class RunloopAccess private (
   def commit(offsetBatch: OffsetBatch): Task[Unit] =
     withRunloopZIO(shouldStartIfNot = false)(_.commit(offsetBatch))
 
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(offsetBatch: OffsetBatch): RIO[R, Unit] =
-    withRunloopZIO(shouldStartIfNot = false)(_.commitOrRetry(policy)(offsetBatch))
+  def commitOrRetry[R](retryPolicy: Schedule[R, Throwable, Any], offsetBatch: OffsetBatch): RIO[R, Unit] =
+    withRunloopZIO(shouldStartIfNot = false)(_.commitOrRetry(retryPolicy, offsetBatch))
 
 }
 
