@@ -5,7 +5,7 @@ import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings, InvalidSubscriptionUnion, Subscription }
+import zio.kafka.consumer.{ CommittableRecord, Committer, ConsumerSettings, InvalidSubscriptionUnion, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio._
 
@@ -76,12 +76,8 @@ private[consumer] final class RunloopAccess private (
   def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(record: CommittableRecord[_, _]): RIO[R, Unit] =
     withRunloopZIO(shouldStartIfNot = false)(_.commitOrRetry(policy)(record))
 
-  def commitAccumBatch[R](
-    commitschedule: Schedule[R, Any, Any]
-  ): URIO[R, Chunk[CommittableRecord[_, _]] => UIO[Task[Unit]]] =
-    withRunloopZIO__(shouldStartIfNot = false)(_.commitAccumBatch(commitschedule))(
-      ZIO.succeed((_: Chunk[CommittableRecord[_, _]]) => ZIO.succeed(ZIO.unit))
-    )
+  def commitAccumBatch[R](commitschedule: Schedule[R, Any, Any]): URIO[R, Committer] =
+    withRunloopZIO__(shouldStartIfNot = false)(_.commitAccumBatch(commitschedule))(ZIO.succeed(Committer.unit))
 
 }
 
