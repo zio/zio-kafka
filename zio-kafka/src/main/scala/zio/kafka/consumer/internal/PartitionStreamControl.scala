@@ -2,14 +2,14 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
+import zio.kafka.consumer.internal.Runloop.ByteArrayConsumerRecord
 import zio.stream.{ Take, ZStream }
 import zio.{ Chunk, LogAnnotation, Promise, Queue, Ref, UIO, ZIO }
 
 final class PartitionStreamControl private (
   val tp: TopicPartition,
-  stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
-  dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
+  stream: ZStream[Any, Throwable, ByteArrayConsumerRecord],
+  dataQueue: Queue[Take[Throwable, ByteArrayConsumerRecord]],
   interruptionPromise: Promise[Throwable, Unit],
   completedPromise: Promise[Nothing, Unit],
   queueSizeRef: Ref[Int]
@@ -21,7 +21,7 @@ final class PartitionStreamControl private (
   )
 
   /** Offer new data for the stream to process. */
-  private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
+  private[internal] def offerRecords(data: Chunk[ByteArrayConsumerRecord]): ZIO[Any, Nothing, Unit] =
     queueSizeRef.update(_ + data.size) *> dataQueue.offer(Take.chunk(data)).unit
 
   def queueSize: UIO[Int] = queueSizeRef.get
@@ -45,7 +45,7 @@ final class PartitionStreamControl private (
   private[internal] def isRunning: ZIO[Any, Nothing, Boolean] =
     isCompleted.negate
 
-  private[internal] val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
+  private[internal] val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayConsumerRecord]) =
     (tp, stream)
 }
 
@@ -60,7 +60,7 @@ object PartitionStreamControl {
       _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
       interruptionPromise <- Promise.make[Throwable, Unit]
       completedPromise    <- Promise.make[Nothing, Unit]
-      dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
+      dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayConsumerRecord]]
       queueSize           <- Ref.make(0)
       requestAndAwaitData =
         for {

@@ -1,13 +1,13 @@
 package zio.kafka.producer
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, OffsetAndMetadata }
 import org.apache.kafka.clients.producer.{ KafkaProducer, RecordMetadata }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidGroupIdException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio._
-import zio.kafka.consumer.OffsetBatch
+import zio.kafka.consumer.types.OffsetBatch
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -26,7 +26,10 @@ object TransactionalProducer {
   ) extends TransactionalProducer {
     private val abortTransaction: Task[Unit] = ZIO.attemptBlocking(live.p.abortTransaction())
 
-    private def commitTransactionWithOffsets(offsetBatch: OffsetBatch): Task[Unit] = {
+    private def commitTransactionWithOffsets(
+      offsetBatch: OffsetBatch,
+      consumerGroupMetadata: Option[ConsumerGroupMetadata]
+    ): Task[Unit] = {
       val sendOffsetsToTransaction: Task[Unit] =
         ZIO.suspendSucceed {
           @inline def invalidGroupIdException: IO[InvalidGroupIdException, Nothing] =
@@ -36,11 +39,11 @@ object TransactionalProducer {
               )
             )
 
-          offsetBatch.consumerGroupMetadata match {
+          consumerGroupMetadata match {
             case None => invalidGroupIdException
             case Some(consumerGroupMetadata) =>
               val offsets: util.Map[TopicPartition, OffsetAndMetadata] =
-                offsetBatch.offsets.map { case (topicPartition, offset) =>
+                offsetBatch.map { case (topicPartition, offset) =>
                   topicPartition -> new OffsetAndMetadata(offset + 1)
                 }.asJava
 
@@ -48,14 +51,19 @@ object TransactionalProducer {
           }
         }
 
-      sendOffsetsToTransaction.when(offsetBatch.offsets.nonEmpty) *> ZIO.attemptBlocking(live.p.commitTransaction())
+      sendOffsetsToTransaction.when(offsetBatch.nonEmpty) *> ZIO.attemptBlocking(live.p.commitTransaction())
     }
 
     private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): UIO[Unit] =
       exit match {
         case Exit.Success(_) =>
           transaction.offsetBatchRef.get
-            .flatMap(offsetBatch => commitTransactionWithOffsets(offsetBatch).retryN(5).orDie)
+            .flatMap(offsetBatch =>
+              commitTransactionWithOffsets(
+                offsetBatch,
+                consumerGroupMetadata = None // TODO Jules
+              ).retryN(5).orDie
+            )
         case Exit.Failure(Fail(UserInitiatedAbort, _)) => abortTransaction.retryN(5).orDie
         case Exit.Failure(_)                           => abortTransaction.retryN(5).orDie
       }

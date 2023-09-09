@@ -1,33 +1,37 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import zio.kafka.consumer.types.OffsetBatch
 import zio.kafka.utils.PendingCommit
 import zio.{ Chunk, Promise, Ref, Schedule, Scope, Task, UIO, URIO, ZIO }
 
 trait Committer {
-  def commit(records: Chunk[CommittableRecord[_, _]]): UIO[PendingCommit[Throwable, Unit]]
+  def commit(offsetBatch: OffsetBatch): UIO[PendingCommit[Throwable, Unit]]
 
-  final def commitAndAwait(records: Chunk[CommittableRecord[_, _]]): Task[Unit] =
+  final def commit(records: Chunk[ConsumerRecord[_, _]]): UIO[PendingCommit[Throwable, Unit]] =
+    commit(OffsetBatch.from(records))
+
+  final def commitAndAwait(records: Chunk[ConsumerRecord[_, _]]): Task[Unit] =
     commit(records).flatMap(_.awaitCommit)
 
-  final def commitAndForget(records: Chunk[CommittableRecord[_, _]]): UIO[Unit] =
+  final def commitAndForget(records: Chunk[ConsumerRecord[_, _]]): UIO[Unit] =
     commit(records).unit
 }
 
 //noinspection ConvertExpressionToSAM
 object Committer {
-  private val emptyState: (Map[TopicPartition, Long], List[Promise[Throwable, Unit]]) =
-    (Map.empty[TopicPartition, Long], List.empty[Promise[Throwable, Unit]])
+  private val emptyState: (OffsetBatch, List[Promise[Throwable, Unit]]) =
+    (OffsetBatch.empty, List.empty[Promise[Throwable, Unit]])
 
   val unit: Committer =
     new Committer {
-      override def commit(records: Chunk[CommittableRecord[_, _]]): UIO[PendingCommit[Throwable, Unit]] =
+      override def commit(offsetBatch: OffsetBatch): UIO[PendingCommit[Throwable, Unit]] =
         ZIO.succeed(PendingCommit.unit.asInstanceOf[PendingCommit[Throwable, Unit]])
     }
 
   private[zio] def fromSchedule[R](
     commitSchedule: Schedule[R, Any, Any],
-    commit: Map[TopicPartition, Long] => Task[Unit],
+    commit: OffsetBatch => Task[Unit],
     scope: Scope
   ): URIO[R, Committer] =
     for {
@@ -45,11 +49,10 @@ object Committer {
              .schedule(commitSchedule)
              .forkIn(scope)
     } yield new Committer {
-      override def commit(records: Chunk[CommittableRecord[_, _]]): UIO[PendingCommit[Throwable, Unit]] =
+      override def commit(offsetBatch: OffsetBatch): UIO[PendingCommit[Throwable, Unit]] =
         for {
           p <- Promise.make[Throwable, Unit]
-          newOffsets = records.map(record => record.topicPartition -> record.record.offset())
-          _ <- acc.update { case (offsets, promises) => (offsets ++ newOffsets, promises :+ p) }
+          _ <- acc.update { case (offsets, promises) => (offsets merge offsetBatch, promises :+ p) }
         } yield PendingCommit(p)
     }
 }

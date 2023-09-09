@@ -1,11 +1,13 @@
 package zio.kafka
 
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import zio._
 import zio.kafka.admin.AdminClient.NewTopic
 import zio.kafka.consumer._
+import zio.kafka.consumer.types.{ Offset, OffsetBatch }
 import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
 import zio.kafka.producer.{ ByteRecord, Producer, Transaction, TransactionalProducer }
 import zio.kafka.serde.Serde
@@ -26,7 +28,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   def withConsumerInt(
     subscription: Subscription,
     settings: ConsumerSettings
-  ): ZIO[Any with Scope, Throwable, Dequeue[Take[Throwable, CommittableRecord[String, Int]]]] =
+  ): ZIO[Any with Scope, Throwable, Dequeue[Take[Throwable, ConsumerRecord[String, Int]]]] =
     Consumer.make(settings).flatMap { c =>
       c.plainStream(subscription, Serde.string, Serde.int).toQueue()
     }
@@ -193,7 +195,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                          for {
                            messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
                            record = messages
-                                      .filter(rec => rec.record.key == key1 && rec.record.value == value1)
+                                      .filter(rec => rec.key == key1 && rec.value == value1)
                          } yield record
                        }
                      }
@@ -201,7 +203,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                        withConsumer(Topics(Set(topic2)), settings).flatMap { consumer =>
                          for {
                            messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
-                           record = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
+                           record = messages.filter(rec => rec.key == key2 && rec.value == value2)
                          } yield record
                        }
                      }
@@ -289,7 +291,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                  messages <- consumer.take
                                                .flatMap(_.done)
                                                .mapError(_.getOrElse(new NoSuchElementException))
-                                 record = messages.filter(rec => rec.record.key == "bob")
+                                 record = messages.filter(_.key == "bob")
                                } yield record
                              }
                            }
@@ -329,7 +331,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                  messages <- consumer.take
                                                .flatMap(_.done)
                                                .mapError(_.getOrElse(new NoSuchElementException))
-                                 record = messages.filter(rec => rec.record.key == "bob")
+                                 record = messages.filter(_.key == "bob")
                                } yield record
                              }
                            }
@@ -417,7 +419,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                                     messages <- consumer.take
                                                                   .flatMap(_.done)
                                                                   .mapError(_.getOrElse(new NoSuchElementException))
-                                                    record = messages.filter(rec => rec.record.key == "no one")
+                                                    record = messages.filter(_.key == "no one")
                                                   } yield record
 
                                                 }
@@ -458,7 +460,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                                     messages <- consumer.take
                                                                   .flatMap(_.done)
                                                                   .mapError(_.getOrElse(new NoSuchElementException))
-                                                    record = messages.filter(rec => rec.record.key == "no one")
+                                                    record = messages.filter(_.key == "no one")
                                                   } yield record
                                                 }
                                               }
@@ -504,7 +506,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                  messages <- consumer.take
                                                .flatMap(_.done)
                                                .mapError(_.getOrElse(new NoSuchElementException))
-                                 record = messages.filter(rec => rec.record.key == "no one")
+                                 record = messages.filter(_.key == "no one")
                                } yield record
                              }
                            }
@@ -544,7 +546,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                      aliceAccountFeesPaid,
                                      Serde.string,
                                      Serde.int,
-                                     Some(aliceHadMoneyCommittableMessage.offset)
+                                     Some(Offset.from(aliceHadMoneyCommittableMessage))
                                    )
                                  }
                                }
@@ -591,7 +593,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                                     aliceAccountFeesPaid,
                                                     Serde.string,
                                                     Serde.int,
-                                                    Some(aliceHadMoneyCommittableMessage.offset)
+                                                    Some(Offset.from(aliceHadMoneyCommittableMessage))
                                                   ) *>
                                                     t.abort
                                                 }

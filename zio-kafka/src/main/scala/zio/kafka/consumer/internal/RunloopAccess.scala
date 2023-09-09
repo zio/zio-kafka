@@ -3,11 +3,12 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
+import zio.kafka.consumer.internal.Runloop.ByteArrayConsumerRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.{ CommittableRecord, Committer, ConsumerSettings, InvalidSubscriptionUnion, Subscription }
+import zio.kafka.consumer.{ Committer, ConsumerSettings, InvalidSubscriptionUnion, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio._
+import zio.kafka.consumer.types.OffsetBatch
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -70,11 +71,11 @@ private[consumer] final class RunloopAccess private (
            }
     } yield stream
 
-  def commit(record: CommittableRecord[_, _]): Task[Unit] =
-    withRunloopZIO(shouldStartIfNot = false)(_.commit(record))
+  def commit(offsetBatch: OffsetBatch): Task[Unit] =
+    withRunloopZIO(shouldStartIfNot = false)(_.commit(offsetBatch))
 
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(record: CommittableRecord[_, _]): RIO[R, Unit] =
-    withRunloopZIO(shouldStartIfNot = false)(_.commitOrRetry(policy)(record))
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(offsetBatch: OffsetBatch): RIO[R, Unit] =
+    withRunloopZIO(shouldStartIfNot = false)(_.commitOrRetry(policy)(offsetBatch))
 
   def commitAccumBatch[R](commitschedule: Schedule[R, Any, Any]): URIO[R, Committer] =
     withRunloopZIO__(shouldStartIfNot = false)(_.commitAccumBatch(commitschedule))(ZIO.succeed(Committer.unit))
@@ -82,7 +83,7 @@ private[consumer] final class RunloopAccess private (
 }
 
 private[consumer] object RunloopAccess {
-  type PartitionAssignment = (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])
+  type PartitionAssignment = (TopicPartition, Stream[Throwable, ByteArrayConsumerRecord])
 
   def make(
     settings: ConsumerSettings,
