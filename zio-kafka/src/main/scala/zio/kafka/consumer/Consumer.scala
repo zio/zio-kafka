@@ -42,6 +42,10 @@ trait Consumer {
   def commit(records: Chunk[ConsumerRecord[_, _]]): Task[Unit]
   def commit(offsetBatch: OffsetBatch): Task[Unit]
 
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], record: ConsumerRecord[_, _]): RIO[R, Unit]
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], records: Chunk[ConsumerRecord[_, _]]): RIO[R, Unit]
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], offsetBatch: OffsetBatch): RIO[R, Unit]
+
   /**
    * Retrieve the last committed offset for the given topic-partitions
    */
@@ -49,12 +53,6 @@ trait Consumer {
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
   ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]]
-
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(record: ConsumerRecord[_, _]): RIO[R, Unit]
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(records: Chunk[ConsumerRecord[_, _]]): RIO[R, Unit]
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(offsetBatch: OffsetBatch): RIO[R, Unit]
-
-  def commitAccumBatch[R](commitschedule: Schedule[R, Any, Any]): URIO[R, Committer]
 
   def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]]
 
@@ -234,6 +232,18 @@ object Consumer {
   def commit(offsetBatch: OffsetBatch): RIO[Consumer, Unit] =
     ZIO.serviceWithZIO[Consumer](_.commit(offsetBatch))
 
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], record: ConsumerRecord[_, _]): RIO[R & Consumer, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.commitOrRetry(policy, record))
+
+  def commitOrRetry[R](
+    policy: Schedule[R, Throwable, Any],
+    records: Chunk[ConsumerRecord[_, _]]
+  ): RIO[R & Consumer, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.commitOrRetry(policy, records))
+
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], offsetBatch: OffsetBatch): RIO[R & Consumer, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.commitOrRetry(policy, offsetBatch))
+
   /**
    * Accessor method
    */
@@ -242,9 +252,6 @@ object Consumer {
     timeout: Duration = Duration.Infinity
   ): RIO[Consumer, Map[TopicPartition, Option[OffsetAndMetadata]]] =
     ZIO.serviceWithZIO(_.committed(partitions, timeout))
-
-  def commitAccumBatch[R](commitschedule: Schedule[R, Any, Any]): URIO[R & Consumer, Committer] =
-    ZIO.serviceWithZIO[Consumer](_.commitAccumBatch(commitschedule))
 
   /**
    * Accessor method
@@ -469,6 +476,18 @@ private[consumer] final class ConsumerLive private[consumer] (
   override def commit(offsetBatch: OffsetBatch): Task[Unit] =
     runloopAccess.commit(offsetBatch)
 
+  override def commitOrRetry[R](policy: Schedule[R, Throwable, Any], record: ConsumerRecord[_, _]): RIO[R, Unit] =
+    runloopAccess.commitOrRetry(policy)(OffsetBatch.from(record))
+
+  override def commitOrRetry[R](
+    policy: Schedule[R, Throwable, Any],
+    records: Chunk[ConsumerRecord[_, _]]
+  ): RIO[R, Unit] =
+    runloopAccess.commitOrRetry(policy)(OffsetBatch.from(records))
+
+  override def commitOrRetry[R](policy: Schedule[R, Throwable, Any], offsetBatch: OffsetBatch): RIO[R, Unit] =
+    runloopAccess.commitOrRetry(policy)(offsetBatch)
+
   override def committed(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
@@ -476,20 +495,6 @@ private[consumer] final class ConsumerLive private[consumer] (
     consumer.withConsumer(
       _.committed(partitions.asJava, timeout.asJava).asScala.map { case (k, v) => k -> Option(v) }.toMap
     )
-
-  override def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(record: ConsumerRecord[_, _]): RIO[R, Unit] =
-    runloopAccess.commitOrRetry(policy)(OffsetBatch.from(record))
-
-  override def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(
-    records: Chunk[ConsumerRecord[_, _]]
-  ): RIO[R, Unit] =
-    runloopAccess.commitOrRetry(policy)(OffsetBatch.from(records))
-
-  override def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(offsetBatch: OffsetBatch): RIO[R, Unit] =
-    runloopAccess.commitOrRetry(policy)(offsetBatch)
-
-  override def commitAccumBatch[R](commitSchedule: Schedule[R, Any, Any]): URIO[R, Committer] =
-    runloopAccess.commitAccumBatch(commitSchedule)
 
   override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
     consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)
@@ -552,13 +557,12 @@ private[consumer] final class ConsumerLive private[consumer] (
     f: ConsumerRecord[K, V] => URIO[R1, Unit]
   ): ZIO[R & R1, Throwable, Unit] =
     for {
-      r         <- ZIO.environment[R & R1]
-      committer <- commitAccumBatch(commitRetryPolicy)
+      r <- ZIO.environment[R & R1]
       _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
              .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
                partitionStream.mapChunksZIO(records => records.mapZIO(f).as(records))
              }
-             .mapChunksZIO(committer.commitAndAwait(_).as(Chunk.empty))
+             .mapChunksZIO(commitOrRetry(commitRetryPolicy, _).as(Chunk.empty))
              .runDrain
              .provideEnvironment(r)
     } yield ()
