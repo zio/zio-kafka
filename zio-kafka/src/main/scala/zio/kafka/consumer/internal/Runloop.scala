@@ -4,10 +4,10 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
-import zio.kafka.consumer.Consumer.{ CommitTimeout, OffsetRetrieval, RunloopTimeout }
+import zio.kafka.consumer.Consumer.{CommitTimeout, OffsetRetrieval, RunloopTimeout}
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
-import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.diagnostics.{DiagnosticEvent, Diagnostics}
 import zio.kafka.consumer.fetch.FetchStrategy
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
@@ -264,8 +264,7 @@ private[consumer] final class Runloop private (
       pollResult <-
         consumer.runloopAccess { c =>
           ZIO.suspend {
-            val prevAssigned        = c.assignment().asScala.toSet
-            val requestedPartitions = state.pendingRequests.map(_.tp)
+            val prevAssigned = c.assignment().asScala.toSet
 
             resumeAndPausePartitions(c, prevAssigned, partitionsToFetch)
 
@@ -323,12 +322,13 @@ private[consumer] final class Runloop private (
                             }
 
               _ <- diagnostics.emit {
-                     val providedTps            = polledRecords.partitions().asScala.toSet
-                     val requestedPartitionsSet = requestedPartitions.toSet
+                     val providedTps         = polledRecords.partitions().asScala.toSet
+                     val requestedPartitions = state.pendingRequests.map(_.tp).toSet
+
                      DiagnosticEvent.Poll(
-                       tpRequested = requestedPartitionsSet,
+                       tpRequested = requestedPartitions,
                        tpWithData = providedTps,
-                       tpWithoutData = requestedPartitionsSet -- providedTps
+                       tpWithoutData = requestedPartitions -- providedTps
                      )
                    }
 
