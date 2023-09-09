@@ -6,9 +6,9 @@ import zio.kafka.utils.PendingCommit
 import zio.{ Chunk, Promise, Ref, Schedule, Scope, Task, UIO, URIO, ZIO }
 
 trait Committer {
-  def commit(offsetBatch: OffsetBatch): UIO[PendingCommit[Throwable, Unit]]
+  def commit(offsetBatch: OffsetBatch): UIO[PendingCommit]
 
-  final def commit(records: Chunk[ConsumerRecord[_, _]]): UIO[PendingCommit[Throwable, Unit]] =
+  final def commit(records: Chunk[ConsumerRecord[_, _]]): UIO[PendingCommit] =
     commit(OffsetBatch.from(records))
 
   final def commitAndAwait(records: Chunk[ConsumerRecord[_, _]]): Task[Unit] =
@@ -25,8 +25,7 @@ object Committer {
 
   val unit: Committer =
     new Committer {
-      override def commit(offsetBatch: OffsetBatch): UIO[PendingCommit[Throwable, Unit]] =
-        ZIO.succeed(PendingCommit.unit.asInstanceOf[PendingCommit[Throwable, Unit]])
+      override def commit(offsetBatch: OffsetBatch): UIO[PendingCommit] = ZIO.succeed(PendingCommit.unit)
     }
 
   private[zio] def fromSchedule[R](
@@ -49,7 +48,7 @@ object Committer {
              .schedule(commitSchedule)
              .forkIn(scope)
     } yield new Committer {
-      override def commit(offsetBatch: OffsetBatch): UIO[PendingCommit[Throwable, Unit]] =
+      override def commit(offsetBatch: OffsetBatch): UIO[PendingCommit] =
         for {
           p <- Promise.make[Throwable, Unit]
           _ <- acc.update { case (offsets, promises) => (offsets merge offsetBatch, promises :+ p) }

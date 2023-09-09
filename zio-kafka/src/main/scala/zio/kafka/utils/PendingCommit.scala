@@ -1,20 +1,21 @@
 package zio.kafka.utils
 
-import zio.{ IO, Promise, Trace, ZIO }
+import zio.{ Promise, Task, Trace, ZIO }
 
 /**
- * Less powerful interface than Promise
+ * Represent a commit that is pending to be committed. It can be awaited to be completed.
  *
- * Avoid leaking to the users the Promise methods we don't want them to have access to.
+ * Less powerful interface than Promise. Avoid leaking to the users the Promise methods we don't want them to have
+ * access to.
  */
 // noinspection ConvertExpressionToSAM
-trait PendingCommit[E, A] { self =>
+trait PendingCommit { self =>
 
-  def awaitCommit(implicit trace: Trace): IO[E, A]
+  def awaitCommit(implicit trace: Trace): Task[Unit]
 
-  final def combineDiscard(other: PendingCommit[E, _]): PendingCommit[E, Unit] =
-    new PendingCommit[E, Unit] {
-      override def awaitCommit(implicit trace: Trace): IO[E, Unit] =
+  final def combine(other: PendingCommit): PendingCommit =
+    new PendingCommit {
+      override def awaitCommit(implicit trace: Trace): Task[Unit] =
         for {
           _ <- self.awaitCommit
           _ <- other.awaitCommit
@@ -24,13 +25,13 @@ trait PendingCommit[E, A] { self =>
 
 //noinspection ConvertExpressionToSAM
 object PendingCommit {
-  private[zio] def apply[E, A](p: Promise[E, A]): PendingCommit[E, A] =
-    new PendingCommit[E, A] {
-      override def awaitCommit(implicit trace: Trace): IO[E, A] = p.await
+  private[zio] def apply(p: Promise[Throwable, Unit]): PendingCommit =
+    new PendingCommit {
+      override def awaitCommit(implicit trace: Trace): Task[Unit] = p.await
     }
 
-  val unit: PendingCommit[Nothing, Unit] =
-    new PendingCommit[Nothing, Unit] {
-      override def awaitCommit(implicit trace: Trace): IO[Nothing, Unit] = ZIO.unit
+  val unit: PendingCommit =
+    new PendingCommit {
+      override def awaitCommit(implicit trace: Trace): Task[Unit] = ZIO.unit
     }
 }
