@@ -33,8 +33,7 @@ private[consumer] final class Runloop private (
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
   currentStateRef: Ref[State],
-  fetchStrategy: FetchStrategy,
-  runloopScope: Scope
+  fetchStrategy: FetchStrategy
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
@@ -124,10 +123,6 @@ private[consumer] final class Runloop private (
         case _                                 => false
       } && policy
     )
-
-  // noinspection YieldingZIOEffectInspection
-  private[internal] def commitAccumBatch[R](commitSchedule: Schedule[R, Any, Any]): URIO[R, Committer] =
-    Committer.fromSchedule(commitSchedule, commit, runloopScope)
 
   private[internal] def commit(offsets: OffsetBatch): Task[Unit] =
     for {
@@ -580,7 +575,6 @@ private[consumer] object Runloop {
       initialState = State.initial
       currentStateRef <- Ref.make(initialState)
       runtime         <- ZIO.runtime[Any]
-      scope           <- ZIO.scope
       runloop = new Runloop(
                   runtime = runtime,
                   hasGroupId = hasGroupId,
@@ -596,8 +590,7 @@ private[consumer] object Runloop {
                   userRebalanceListener = userRebalanceListener,
                   restartStreamsOnRebalancing = restartStreamsOnRebalancing,
                   currentStateRef = currentStateRef,
-                  fetchStrategy = fetchStrategy,
-                  runloopScope = scope
+                  fetchStrategy = fetchStrategy
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 

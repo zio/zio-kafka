@@ -1,14 +1,14 @@
 package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
+import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayConsumerRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.{ Committer, ConsumerSettings, InvalidSubscriptionUnion, Subscription }
-import zio.stream.{ Stream, Take, UStream, ZStream }
-import zio._
 import zio.kafka.consumer.types.OffsetBatch
+import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription }
+import zio.stream.{ Stream, Take, UStream, ZStream }
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -31,21 +31,16 @@ private[consumer] final class RunloopAccess private (
   diagnostics: Diagnostics
 ) {
 
-  private def withRunloopZIO__[R, E, A](
+  private def withRunloopZIO[R, E, A](
     shouldStartIfNot: Boolean
-  )(whenRunning: Runloop => ZIO[R, E, A])(orElse: ZIO[R, E, A]): ZIO[R, E, A] =
+  )(whenRunning: Runloop => ZIO[R, E, Unit]): ZIO[R, E, Unit] =
     runloopStateRef.updateSomeAndGetZIO {
       case RunloopState.NotStarted if shouldStartIfNot => makeRunloop.map(RunloopState.Started.apply)
     }.flatMap {
-      case RunloopState.NotStarted       => orElse
+      case RunloopState.NotStarted       => ZIO.unit
       case RunloopState.Started(runloop) => whenRunning(runloop)
-      case RunloopState.Finalized        => orElse
+      case RunloopState.Finalized        => ZIO.unit
     }
-
-  private def withRunloopZIO[R, E](shouldStartIfNot: Boolean)(
-    whenRunning: Runloop => ZIO[R, E, Unit]
-  ): ZIO[R, E, Unit] =
-    withRunloopZIO__(shouldStartIfNot)(whenRunning)(ZIO.unit)
 
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has not been started or has been stopped.
@@ -76,9 +71,6 @@ private[consumer] final class RunloopAccess private (
 
   def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(offsetBatch: OffsetBatch): RIO[R, Unit] =
     withRunloopZIO(shouldStartIfNot = false)(_.commitOrRetry(policy)(offsetBatch))
-
-  def commitAccumBatch[R](commitschedule: Schedule[R, Any, Any]): URIO[R, Committer] =
-    withRunloopZIO__(shouldStartIfNot = false)(_.commitAccumBatch(commitschedule))(ZIO.succeed(Committer.unit))
 
 }
 
