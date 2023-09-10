@@ -264,8 +264,7 @@ private[consumer] final class Runloop private (
       pollResult <-
         consumer.runloopAccess { c =>
           ZIO.suspend {
-            val prevAssigned        = c.assignment().asScala.toSet
-            val requestedPartitions = state.pendingRequests.map(_.tp).toSet
+            val prevAssigned = c.assignment().asScala.toSet
 
             resumeAndPausePartitions(c, prevAssigned, partitionsToFetch)
 
@@ -323,7 +322,9 @@ private[consumer] final class Runloop private (
                             }
 
               _ <- diagnostics.emit {
-                     val providedTps = polledRecords.partitions().asScala.toSet
+                     val providedTps         = polledRecords.partitions().asScala.toSet
+                     val requestedPartitions = state.pendingRequests.map(_.tp).toSet
+
                      DiagnosticEvent.Poll(
                        tpRequested = requestedPartitions,
                        tpWithData = providedTps,
