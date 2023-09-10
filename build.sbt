@@ -78,8 +78,8 @@ lazy val root = project
 def stdSettings(prjName: String) = Seq(
   name              := s"$prjName",
   scalafmtOnCompile := !insideCI.value,
-  Compile / compile / scalacOptions ++=
-    optionsOn("2.13")("-Wconf:cat=unused-nowarn:s").value,
+  scalacOptions ++= optionsOn("2.13")("-Wconf:cat=unused-nowarn:s").value,
+  scalacOptions ++= optionsOn("2.12")("-Xfuture", "-Xsource:2.13").value,
   scalacOptions -= "-Xlint:infer-any",
   // workaround for bad constant pool issue
   (Compile / doc) := Def.taskDyn {
