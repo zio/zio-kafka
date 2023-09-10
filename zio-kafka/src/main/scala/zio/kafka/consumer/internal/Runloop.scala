@@ -199,8 +199,6 @@ private[consumer] final class Runloop private (
     ignoreRecordsForTps: Set[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
   ): UIO[Runloop.FulfillResult] = {
-    type Record = ConsumerRecord[Array[Byte], Array[Byte]]
-
     // The most efficient way to get the records from [[ConsumerRecords]] per
     // topic-partition, is by first getting the set of topic-partitions, and
     // then requesting the records per topic-partition.
@@ -216,14 +214,9 @@ private[consumer] final class Runloop private (
         _ <- ZIO.foreachParDiscard(streams) { streamControl =>
                val tp      = streamControl.tp
                val records = polledRecords.records(tp)
+
                if (records.isEmpty) ZIO.unit
-               else {
-                 val builder  = ChunkBuilder.make[Record](records.size())
-                 val iterator = records.iterator()
-                 while (iterator.hasNext)
-                   builder += iterator.next()
-                 streamControl.offerRecords(builder.result())
-               }
+               else streamControl.offerRecords(Chunk.fromJavaIterable(records))
              }
       } yield fulfillResult
     }
