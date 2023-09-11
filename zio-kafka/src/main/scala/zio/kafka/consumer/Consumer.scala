@@ -181,7 +181,7 @@ object Consumer {
   ): ZIO[Scope, Throwable, Consumer] =
     for {
       _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
-      _              <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
+      _              <- SslHelper.validateEndpoint(settings.driverSettings)
       consumerAccess <- ConsumerAccess.make(settings)
       runloopAccess  <- RunloopAccess.make(settings, consumerAccess, diagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)

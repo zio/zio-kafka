@@ -1513,9 +1513,9 @@ object AdminClient {
   def javaClientFromSettings(settings: AdminClientSettings): ZIO[Scope, Throwable, JAdmin] =
     ZIO.acquireRelease {
       val endpointCheck = SslHelper
-        .validateEndpoint(settings.bootstrapServers, settings.properties)
+        .validateEndpoint(settings.properties)
 
-      endpointCheck *> ZIO.attempt(JAdmin.create(settings.driverSettings.asJava))
+      endpointCheck *> ZIO.attempt(JAdmin.create(settings.properties.asJava))
     }(client => ZIO.attemptBlocking(client.close(settings.closeTimeout)).orDie)
 
   implicit final class MapOps[K1, V1](private val v: Map[K1, V1]) extends AnyVal {

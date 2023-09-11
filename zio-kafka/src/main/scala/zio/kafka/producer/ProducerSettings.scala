@@ -5,17 +5,12 @@ import zio._
 import zio.kafka.security.KafkaCredentialStore
 
 final case class ProducerSettings(
-  bootstrapServers: List[String],
   closeTimeout: Duration = 30.seconds,
   sendBufferSize: Int = 4096,
   properties: Map[String, AnyRef] = Map.empty
 ) {
-  def driverSettings: Map[String, AnyRef] =
-    Map(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers.mkString(",")) ++
-      properties
-
   def withBootstrapServers(servers: List[String]): ProducerSettings =
-    copy(bootstrapServers = servers)
+    withProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, servers.mkString(","))
 
   def withClientId(clientId: String): ProducerSettings =
     withProperty(ProducerConfig.CLIENT_ID_CONFIG, clientId)
@@ -36,4 +31,11 @@ final case class ProducerSettings(
     withProperties(credentialsStore.properties)
 
   def withSendBufferSize(sendBufferSize: Int) = copy(sendBufferSize = sendBufferSize)
+}
+
+object ProducerSettings {
+  def apply(
+    bootstrapServers: List[String]
+  ): ProducerSettings =
+    ProducerSettings().withBootstrapServers(bootstrapServers)
 }
