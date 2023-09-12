@@ -1,14 +1,14 @@
 package zio.kafka.consumer
 
 import io.github.embeddedkafka.EmbeddedKafka
-import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerRecord }
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
 import zio.kafka.testkit.{ Kafka, KafkaRandom }
-import zio.stream.{ ZSink, ZStream }
+import zio.stream.ZStream
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
@@ -42,12 +42,12 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               .runCollect)
             .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
         (records1, records2) = records
-        kvOut1               = records1.map(r => (r.record.key, r.record.value)).toList
-        kvOut2               = records2.map(r => (r.record.key, r.record.value)).toList
+        kvOut1               = records1.map(r => (r.key, r.value)).toList
+        kvOut2               = records2.map(r => (r.key, r.value)).toList
       } yield assertTrue(kvOut1 == kvs) &&
         assertTrue(kvOut2 == kvs) &&
-        assertTrue(records1.map(_.record.topic()).forall(_ == topic1)) &&
-        assertTrue(records2.map(_.record.topic()).forall(_ == topic2))
+        assertTrue(records1.map(_.topic()).forall(_ == topic1)) &&
+        assertTrue(records2.map(_.topic()).forall(_ == topic2))
     },
     test("consumes from two pattern subscriptions") {
       val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
@@ -71,12 +71,12 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               .runCollect)
             .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
         (records1, records2) = records
-        kvOut1               = records1.map(r => (r.record.key, r.record.value)).toList
-        kvOut2               = records2.map(r => (r.record.key, r.record.value)).toList
+        kvOut1               = records1.map(r => (r.key, r.value)).toList
+        kvOut2               = records2.map(r => (r.key, r.value)).toList
       } yield assertTrue(kvOut1 == kvs) &&
         assertTrue(kvOut2 == kvs) &&
-        assertTrue(records1.map(_.record.topic()).forall(_ == topic1)) &&
-        assertTrue(records2.map(_.record.topic()).forall(_ == topic2))
+        assertTrue(records1.map(_.topic()).forall(_ == topic1)) &&
+        assertTrue(records2.map(_.topic()).forall(_ == topic2))
     },
     test(
       "gives an error when attempting to subscribe using a manual subscription when there is already a topic subscription"
@@ -261,23 +261,18 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
         _ <- produceMany(topic1, kvs)
 
-        recordsConsumed <- Ref.make(Chunk.empty[CommittableRecord[String, String]])
+        recordsConsumed <- Ref.make(Chunk.empty[ConsumerRecord[String, String]])
         _ <-
           Consumer
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .take(40)
-            .transduce(
-              Consumer.offsetBatches.contramap[CommittableRecord[String, String]](_.offset) <&> ZSink
-                .collectAll[CommittableRecord[String, String]]
-            )
-            .mapZIO { case (offsetBatch, records) => offsetBatch.commit.as(records) }
-            .flattenChunks
+            .mapChunksZIO(records => Consumer.commit(records).as(records))
             .runCollect
             .tap(records => recordsConsumed.update(_ ++ records))
             .repeatN(24)
             .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
         consumed <- recordsConsumed.get
-      } yield assert(consumed.map(r => r.value))(hasSameElements(Chunk.fromIterable(kvs.map(_._2))))
+      } yield assert(consumed.map(_.value))(hasSameElements(Chunk.fromIterable(kvs.map(_._2))))
     } @@ TestAspect.nonFlaky(3)
   )
     .provideSome[Scope & Kafka](producer)

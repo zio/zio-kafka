@@ -11,6 +11,7 @@ import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
+import zio.kafka.consumer.types.{ deserializeWith, OffsetBatch }
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
 import zio.stream._
@@ -36,6 +37,14 @@ trait Consumer {
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
   ): Task[Map[TopicPartition, Long]]
+
+  def commit(record: ConsumerRecord[_, _]): Task[Unit]
+  def commit(records: Chunk[ConsumerRecord[_, _]]): Task[Unit]
+  def commit(offsetBatch: OffsetBatch): Task[Unit]
+
+  def commitOrRetry[R](retryPolicy: Schedule[R, Throwable, Any], record: ConsumerRecord[_, _]): RIO[R, Unit]
+  def commitOrRetry[R](retryPolicy: Schedule[R, Throwable, Any], records: Chunk[ConsumerRecord[_, _]]): RIO[R, Unit]
+  def commitOrRetry[R](retryPolicy: Schedule[R, Throwable, Any], offsetBatch: OffsetBatch): RIO[R, Unit]
 
   /**
    * Retrieve the last committed offset for the given topic-partitions
@@ -67,7 +76,7 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
+  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, ConsumerRecord[K, V]])]]
 
   /**
    * Create a stream with messages on the subscribed topic-partitions by topic-partition
@@ -90,7 +99,7 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
+  ): Stream[Throwable, (TopicPartition, ZStream[R, Throwable, ConsumerRecord[K, V]])]
 
   /**
    * Create a stream with all messages on the subscribed topic-partitions
@@ -115,7 +124,7 @@ trait Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
-  ): ZStream[R, Throwable, CommittableRecord[K, V]]
+  ): ZStream[R, Throwable, ConsumerRecord[K, V]]
 
   /**
    * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
@@ -162,9 +171,6 @@ trait Consumer {
 object Consumer {
   case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
   case object CommitTimeout  extends RuntimeException("Commit timeout") with NoStackTrace
-
-  val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
-    ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
 
   def live: RLayer[ConsumerSettings & Diagnostics, Consumer] =
     ZLayer.scoped {
@@ -217,6 +223,27 @@ object Consumer {
   ): RIO[Consumer, Map[TopicPartition, Long]] =
     ZIO.serviceWithZIO(_.beginningOffsets(partitions, timeout))
 
+  def commit(record: ConsumerRecord[_, _]): RIO[Consumer, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.commit(record))
+
+  def commit(records: Chunk[ConsumerRecord[_, _]]): RIO[Consumer, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.commit(records))
+
+  def commit(offsetBatch: OffsetBatch): RIO[Consumer, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.commit(offsetBatch))
+
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], record: ConsumerRecord[_, _]): RIO[R & Consumer, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.commitOrRetry(policy, record))
+
+  def commitOrRetry[R](
+    policy: Schedule[R, Throwable, Any],
+    records: Chunk[ConsumerRecord[_, _]]
+  ): RIO[R & Consumer, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.commitOrRetry(policy, records))
+
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any], offsetBatch: OffsetBatch): RIO[R & Consumer, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.commitOrRetry(policy, offsetBatch))
+
   /**
    * Accessor method
    */
@@ -250,7 +277,7 @@ object Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): ZStream[Consumer, Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] =
+  ): ZStream[Consumer, Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, ConsumerRecord[K, V]])]] =
     ZStream.serviceWithStream[Consumer](_.partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer))
 
   /**
@@ -263,7 +290,7 @@ object Consumer {
   ): ZStream[
     Consumer,
     Throwable,
-    (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
+    (TopicPartition, ZStream[R, Throwable, ConsumerRecord[K, V]])
   ] =
     ZStream.serviceWithStream[Consumer](_.partitionedStream(subscription, keyDeserializer, valueDeserializer))
 
@@ -275,7 +302,7 @@ object Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
-  ): ZStream[R & Consumer, Throwable, CommittableRecord[K, V]] =
+  ): ZStream[R & Consumer, Throwable, ConsumerRecord[K, V]] =
     ZStream.serviceWithStream[Consumer](
       _.plainStream(subscription, keyDeserializer, valueDeserializer, bufferSize)
     )
@@ -417,7 +444,6 @@ private[consumer] final class ConsumerLive private[consumer] (
   consumer: ConsumerAccess,
   runloopAccess: RunloopAccess
 ) extends Consumer {
-  import Consumer._
 
   override def assignment: Task[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
@@ -441,6 +467,27 @@ private[consumer] final class ConsumerLive private[consumer] (
       offs.asScala.map { case (k, v) => k -> v.longValue() }.toMap
     }
 
+  override def commit(record: ConsumerRecord[_, _]): Task[Unit] =
+    commit(OffsetBatch.from(record))
+
+  override def commit(records: Chunk[ConsumerRecord[_, _]]): Task[Unit] =
+    commit(OffsetBatch.from(records))
+
+  override def commit(offsetBatch: OffsetBatch): Task[Unit] =
+    runloopAccess.commit(offsetBatch)
+
+  override def commitOrRetry[R](retryPolicy: Schedule[R, Throwable, Any], record: ConsumerRecord[_, _]): RIO[R, Unit] =
+    commitOrRetry(retryPolicy, OffsetBatch.from(record))
+
+  override def commitOrRetry[R](
+    retryPolicy: Schedule[R, Throwable, Any],
+    records: Chunk[ConsumerRecord[_, _]]
+  ): RIO[R, Unit] =
+    commitOrRetry(retryPolicy, OffsetBatch.from(records))
+
+  override def commitOrRetry[R](retryPolicy: Schedule[R, Throwable, Any], offsetBatch: OffsetBatch): RIO[R, Unit] =
+    runloopAccess.commitOrRetry(retryPolicy, offsetBatch)
+
   override def committed(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
@@ -456,7 +503,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
+  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, ConsumerRecord[K, V]])]] = {
     val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
 
     ZStream.unwrapScoped {
@@ -468,10 +515,10 @@ private[consumer] final class ConsumerLive private[consumer] (
         .map {
           _.collect {
             case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
-              val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
+              val stream: ZStream[R, Throwable, ConsumerRecord[K, V]] =
                 if (onlyByteArraySerdes)
-                  partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
-                else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
+                  partitionStream.asInstanceOf[ZStream[R, Throwable, ConsumerRecord[K, V]]]
+                else partitionStream.mapChunksZIO(_.mapZIO(deserializeWith(keyDeserializer, valueDeserializer)))
 
               tp -> stream
           }
@@ -483,7 +530,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): ZStream[Any, Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] =
+  ): ZStream[Any, Throwable, (TopicPartition, ZStream[R, Throwable, ConsumerRecord[K, V]])] =
     partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer).flattenChunks
 
   override def plainStream[R, K, V](
@@ -491,7 +538,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int
-  ): ZStream[R, Throwable, CommittableRecord[K, V]] =
+  ): ZStream[R, Throwable, ConsumerRecord[K, V]] =
     partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
       n = Int.MaxValue,
       bufferSize = bufferSize
@@ -513,12 +560,11 @@ private[consumer] final class ConsumerLive private[consumer] (
       r <- ZIO.environment[R & R1]
       _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
              .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
-               partitionStream.mapChunksZIO(_.mapZIO((c: CommittableRecord[K, V]) => f(c.record).as(c.offset)))
+               partitionStream.mapChunksZIO(records => records.mapZIO(f).as(records))
              }
-             .provideEnvironment(r)
-             .aggregateAsync(offsetBatches)
-             .mapZIO(_.commitOrRetry(commitRetryPolicy))
+             .mapChunksZIO(commitOrRetry(commitRetryPolicy, _).as(Chunk.empty))
              .runDrain
+             .provideEnvironment(r)
     } yield ()
 
   override def offsetsForTimes(

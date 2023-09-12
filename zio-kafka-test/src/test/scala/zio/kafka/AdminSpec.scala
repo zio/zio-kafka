@@ -23,7 +23,7 @@ import zio.kafka.admin.AdminClient.{
 }
 import zio.kafka.admin.acl._
 import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
-import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
+import zio.kafka.consumer.{ Consumer, Subscription }
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
 import zio.kafka.testkit._
@@ -228,13 +228,8 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               .partitionedStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
               .flatMapPar(partitionCount)(_._2)
               .take(count)
-              .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
-              .mapConcatZIO { committableRecords =>
-                val records     = committableRecords.map(_.record)
-                val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
-
-                offsetBatch.commit.as(records)
-              }
+              .transduce(ZSink.collectAllN[ConsumerRecord[String, String]](20))
+              .mapConcatZIO(records => Consumer.commit(records).as(records))
               .runCollect
               .provideSomeLayer[Kafka](consumer("adminspec-topic10", Some(consumerGroupID)))
 
@@ -301,7 +296,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           Consumer
             .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
             .take(count)
-            .foreach(_.offset.commit)
+            .foreach(Consumer.commit)
             .provideSomeLayer[Kafka](consumer(topic, Some(groupId)))
 
         KafkaTestUtils.withAdmin { client =>
@@ -344,7 +339,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           Consumer
             .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
             .take(count)
-            .foreach(_.offset.commit)
+            .foreach(Consumer.commit)
             .provideSomeLayer[Kafka](consumer(topic, Some(groupId)))
 
         KafkaTestUtils.withAdmin { client =>
@@ -645,7 +640,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     groupInstanceId: Option[String] = None
   ): ZIO[Kafka, Throwable, Unit] = Consumer
     .plainStream(Subscription.topics(topicName), Serde.string, Serde.string)
-    .foreach(_.offset.commit)
+    .foreach(Consumer.commit)
     .provideSomeLayer(consumer(clientId, Some(groupId), groupInstanceId))
 
   private def getStableConsumerGroupDescription(

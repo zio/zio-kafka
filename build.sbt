@@ -7,6 +7,7 @@ lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients" 
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.11.0"
 lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.15.2"
 lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.11"
+lazy val zioPrelude            = "dev.zio"                   %% "zio-prelude"             % "1.0.0-RC20"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
@@ -77,8 +78,8 @@ lazy val root = project
 def stdSettings(prjName: String) = Seq(
   name              := s"$prjName",
   scalafmtOnCompile := !insideCI.value,
-  Compile / compile / scalacOptions ++=
-    optionsOn("2.13")("-Wconf:cat=unused-nowarn:s").value,
+  scalacOptions ++= optionsOn("2.13")("-Wconf:cat=unused-nowarn:s").value,
+  scalacOptions ++= optionsOn("2.12")("-Xfuture", "-Xsource:2.13").value,
   scalacOptions -= "-Xlint:infer-any",
   // workaround for bad constant pool issue
   (Compile / doc) := Def.taskDyn {
@@ -102,6 +103,7 @@ lazy val zioKafka =
     .settings(enableZIO(enableStreaming = true))
     .settings(
       libraryDependencies ++= Seq(
+        zioPrelude,
         kafkaClients,
         jacksonDatabind,
         scalaCollectionCompat

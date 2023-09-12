@@ -11,6 +11,7 @@ import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.fetch.FetchStrategy
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
+import zio.kafka.consumer.types.OffsetBatch
 import zio.stream._
 
 import java.util
@@ -115,14 +116,24 @@ private[consumer] final class Runloop private (
     }
   }
 
-  private val commit: Map[TopicPartition, Long] => Task[Unit] =
-    offsets =>
-      for {
-        p <- Promise.make[Throwable, Unit]
-        _ <- commandQueue.offer(RunloopCommand.Commit(offsets, p)).unit
-        _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
-        _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
-      } yield ()
+  private[internal] def commitOrRetry[R](
+    retryPolicy: Schedule[R, Throwable, Any],
+    offsetBatch: OffsetBatch
+  ): RIO[R, Unit] =
+    commit(offsetBatch).retry(
+      Schedule.recurWhile[Throwable] {
+        case _: RetriableCommitFailedException => true
+        case _                                 => false
+      } && retryPolicy
+    )
+
+  private[internal] def commit(offsets: OffsetBatch): Task[Unit] =
+    for {
+      p <- Promise.make[Throwable, Unit]
+      _ <- commandQueue.offer(RunloopCommand.Commit(offsets, p)).unit
+      _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
+      _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
+    } yield ()
 
   private def doCommit(cmd: RunloopCommand.Commit): UIO[Unit] = {
     val offsets   = cmd.offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
@@ -188,8 +199,6 @@ private[consumer] final class Runloop private (
     ignoreRecordsForTps: Set[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
   ): UIO[Runloop.FulfillResult] = {
-    type Record = CommittableRecord[Array[Byte], Array[Byte]]
-
     // The most efficient way to get the records from [[ConsumerRecords]] per
     // topic-partition, is by first getting the set of topic-partitions, and
     // then requesting the records per topic-partition.
@@ -201,25 +210,13 @@ private[consumer] final class Runloop private (
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
       for {
-        consumerGroupMetadata <- getConsumerGroupMetadataIfAny
+        /*consumerGroupMetadata*/ _ <- getConsumerGroupMetadataIfAny // TODO Jules: Use: how?
         _ <- ZIO.foreachParDiscard(streams) { streamControl =>
                val tp      = streamControl.tp
                val records = polledRecords.records(tp)
+
                if (records.isEmpty) ZIO.unit
-               else {
-                 val builder  = ChunkBuilder.make[Record](records.size())
-                 val iterator = records.iterator()
-                 while (iterator.hasNext) {
-                   val consumerRecord = iterator.next()
-                   builder +=
-                     CommittableRecord[Array[Byte], Array[Byte]](
-                       record = consumerRecord,
-                       commitHandle = commit,
-                       consumerGroupMetadata = consumerGroupMetadata
-                     )
-                 }
-                 streamControl.offerRecords(builder.result())
-               }
+               else streamControl.offerRecords(Chunk.fromJavaIterable(records))
              }
       } yield fulfillResult
     }
@@ -528,7 +525,7 @@ private[consumer] object Runloop {
     }
   }
 
-  type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
+  type ByteArrayConsumerRecord = ConsumerRecord[Array[Byte], Array[Byte]]
 
   private final case class PollResult(
     startingTps: Set[TopicPartition],
