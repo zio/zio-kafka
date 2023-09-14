@@ -7,7 +7,7 @@ import zio.kafka.serde.Serializer
 package object producer {
   type ByteRecord = ProducerRecord[Array[Byte], Array[Byte]]
 
-  def serialize[R, K, V](
+  private[zio] def serialize[R, K, V](
     r: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
