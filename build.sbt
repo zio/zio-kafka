@@ -168,10 +168,10 @@ lazy val zioKafkaExample =
     .settings(run / fork := false)
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                 %% "zio"                % "2.0.16",
+        "dev.zio"                 %% "zio"                % "2.0.17",
         "dev.zio"                 %% "zio-kafka"          % "2.4.2",
         "dev.zio"                 %% "zio-kafka-testkit"  % "2.4.2"  % Test,
-        "dev.zio"                 %% "zio-test"           % "2.0.16" % Test,
+        "dev.zio"                 %% "zio-test"           % "2.0.17" % Test,
         "ch.qos.logback"           % "logback-classic"    % "1.4.11",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.14",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion
