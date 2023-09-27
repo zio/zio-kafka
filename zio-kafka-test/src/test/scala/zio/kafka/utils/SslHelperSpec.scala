@@ -149,7 +149,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
                             if (isValidAddress) SocketChannel.open(address)
                             else throw new java.net.ConnectException("Connection refused")
-                          }(settingsWithDownNode.properties)
+                          }(settingsWithDownNode.driverSettings)
               } yield result
             ).provide(Kafka.embedded)
 
@@ -171,7 +171,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
                             if (isValidAddress) SocketChannel.open(address)
                             else throw new java.net.ConnectException("Connection refused")
-                          }(settingsWithDownNode.properties)
+                          }(settingsWithDownNode.driverSettings)
               } yield result
             ).provide(Kafka.sslEmbedded)
 
@@ -241,7 +241,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     array(2) = e
                     throw e
                 }
-              }(settings.properties)
+              }(settings.driverSettings)
 
             // custom assertion. More readable with a proper name.
             val hasNoMessage = not(hasMessage(anything))
@@ -285,7 +285,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     array(2) = e
                     throw e
                 }
-              }(settings.properties).fork.flatMap(fiber => fiber.interrupt.delay(1.seconds))
+              }(settings.driverSettings).fork.flatMap(fiber => fiber.interrupt.delay(1.seconds))
 
             // custom assertion. More readable with a proper name.
             val hasNoMessage = not(hasMessage(anything))
@@ -306,7 +306,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     ) @@ withLiveClock @@ sequential
 
   implicit class SettingsHelper(adminClientSettings: AdminClientSettings) {
-    def bootstrapServers: List[String] = adminClientSettings.properties
+    def bootstrapServers: List[String] = adminClientSettings.driverSettings
       .getOrElse(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "")
       .toString
       .split(",")

@@ -88,7 +88,7 @@ object TransactionalProducer {
       rawProducer <- ZIO.acquireRelease(
                        ZIO.attempt(
                          new KafkaProducer[Array[Byte], Array[Byte]](
-                           settings.producerSettings.properties.asJava,
+                           settings.producerSettings.driverSettings.asJava,
                            new ByteArraySerializer(),
                            new ByteArraySerializer()
                          )
