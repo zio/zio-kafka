@@ -7,7 +7,7 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
-import zio.{ Hub, IO, Ref, Scope, UIO, ZIO, ZLayer }
+import zio.{ Hub, IO, Ref, Scope, Task, UIO, ZIO, ZLayer }
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -64,6 +64,9 @@ private[consumer] final class RunloopAccess private (
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
     } yield stream
+
+  def commit(offsets: Map[TopicPartition, Long]): Task[Unit] =
+    withRunloopZIO(true)(_.commit(offsets))
 
 }
 

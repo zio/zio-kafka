@@ -4,7 +4,8 @@ import org.apache.kafka.clients.consumer.{
   Consumer => JConsumer,
   ConsumerRecord,
   OffsetAndMetadata,
-  OffsetAndTimestamp
+  OffsetAndTimestamp,
+  RetriableCommitFailedException
 }
 import org.apache.kafka.common._
 import zio._
@@ -157,6 +158,14 @@ trait Consumer {
    * Expose internal consumer metrics
    */
   def metrics: Task[Map[MetricName, Metric]]
+
+  def commit(offset: CommittableOffset): Task[Unit]
+
+  /**
+   * Attempts to commit and retries according to the given policy when the commit fails with a
+   * RetriableCommitFailedException
+   */
+  def commitOrRetry[R](offset: CommittableOffset, policy: Schedule[R, Throwable, Any]): RIO[R, Unit]
 }
 
 object Consumer {
@@ -392,6 +401,21 @@ object Consumer {
   def metrics: RIO[Consumer, Map[MetricName, Metric]] =
     ZIO.serviceWithZIO(_.metrics)
 
+  /**
+   * Accessor method
+   */
+  def commit(offset: CommittableOffset): RIO[Consumer, Unit] =
+    ZIO.serviceWithZIO(_.commit(offset))
+
+  /**
+   * Accessor method
+   */
+  def commitOrRetry[R](
+    offset: CommittableOffset,
+    policy: Schedule[R, Throwable, Any]
+  ): ZIO[R with Consumer, Throwable, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.commitOrRetry[R](offset, policy))
+
   sealed trait OffsetRetrieval
   object OffsetRetrieval {
     final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest)                extends OffsetRetrieval
@@ -517,7 +541,7 @@ private[consumer] final class ConsumerLive private[consumer] (
              }
              .provideEnvironment(r)
              .aggregateAsync(offsetBatches)
-             .mapZIO(_.commitOrRetry(commitRetryPolicy))
+             .mapZIO(commitOrRetry(_, commitRetryPolicy))
              .runDrain
     } yield ()
 
@@ -550,4 +574,14 @@ private[consumer] final class ConsumerLive private[consumer] (
   override def metrics: Task[Map[MetricName, Metric]] =
     consumer.withConsumer(_.metrics().asScala.toMap)
 
+  override def commit(offset: CommittableOffset): Task[Unit] = runloopAccess.commit(offset.offsets)
+
+  override def commitOrRetry[R](offset: CommittableOffset, policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
+    commit(offset)
+      .retry(
+        Schedule.recurWhile[Throwable] {
+          case _: RetriableCommitFailedException => true
+          case _                                 => false
+        } && policy
+      )
 }

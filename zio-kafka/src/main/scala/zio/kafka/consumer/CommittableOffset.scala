@@ -2,23 +2,18 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata
 import org.apache.kafka.common.TopicPartition
-import zio.{ RIO, Schedule, Task, ZIO }
 
-sealed trait OffsetBatch {
+trait CommittableOffset {
   def offsets: Map[TopicPartition, Long]
-  def commit: Task[Unit]
+}
+
+// TODO remove the trait and just keep the implementation..?
+sealed trait OffsetBatch extends CommittableOffset {
   def add(offset: Offset): OffsetBatch
   @deprecated("Use add(Offset) instead", "2.1.4")
   def merge(offset: Offset): OffsetBatch
   def merge(offsets: OffsetBatch): OffsetBatch
   def consumerGroupMetadata: Option[ConsumerGroupMetadata]
-
-  /**
-   * Attempts to commit and retries according to the given policy when the commit fails with a
-   * RetriableCommitFailedException
-   */
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
-    Offset.commitOrRetry(commit, policy)
 }
 
 object OffsetBatch {
@@ -29,11 +24,8 @@ object OffsetBatch {
 
 private final case class OffsetBatchImpl(
   offsets: Map[TopicPartition, Long],
-  commitHandle: Map[TopicPartition, Long] => Task[Unit],
   consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) extends OffsetBatch {
-  override def commit: Task[Unit] = commitHandle(offsets)
-
   override def add(offset: Offset): OffsetBatch =
     copy(
       offsets = offsets + (offset.topicPartition -> (offsets
@@ -57,9 +49,30 @@ private final case class OffsetBatchImpl(
 
 case object EmptyOffsetBatch extends OffsetBatch {
   override val offsets: Map[TopicPartition, Long]                   = Map.empty
-  override val commit: Task[Unit]                                   = ZIO.unit
   override def add(offset: Offset): OffsetBatch                     = offset.batch
   override def merge(offset: Offset): OffsetBatch                   = add(offset)
   override def merge(offsets: OffsetBatch): OffsetBatch             = offsets
   override def consumerGroupMetadata: Option[ConsumerGroupMetadata] = None
+}
+
+sealed trait Offset extends CommittableOffset {
+  def topic: String
+  def partition: Int
+  def offset: Long
+  def batch: OffsetBatch
+  def consumerGroupMetadata: Option[ConsumerGroupMetadata]
+
+  final lazy val topicPartition: TopicPartition = new TopicPartition(topic, partition)
+}
+
+object Offset {}
+
+private final case class OffsetImpl(
+  topic: String,
+  partition: Int,
+  offset: Long,
+  consumerGroupMetadata: Option[ConsumerGroupMetadata]
+) extends Offset {
+  override def batch: OffsetBatch                 = OffsetBatchImpl(offsets, consumerGroupMetadata)
+  override def offsets: Map[TopicPartition, Long] = Map(topicPartition -> offset)
 }

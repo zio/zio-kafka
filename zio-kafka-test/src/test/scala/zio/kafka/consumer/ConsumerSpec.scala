@@ -196,7 +196,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                            val records     = committableRecords.map(_.record)
                                            val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
 
-                                           offsetBatch.commit.as(records)
+                                           Consumer.commit(offsetBatch).as(records)
                                          }
                                          .runCollect
                                          .provideSomeLayer[Kafka](
@@ -214,7 +214,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                    val records     = committableRecords.map(_.record)
                                    val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
 
-                                   offsetBatch.commit.as(records)
+                                   Consumer.commit(offsetBatch).as(records)
                                  }
                                  .runCollect
                                  .provideSomeLayer[Kafka](
@@ -287,7 +287,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                  .zipWithIndex
                  .tap { case (record, idx) =>
                    (Consumer.stopConsumption <* ZIO.logDebug("Stopped consumption")).when(idx == 3) *>
-                     record.offset.commit <* ZIO.logDebug(s"Committed $idx")
+                     Consumer.commit(record.offset) <* ZIO.logDebug(s"Committed $idx")
                  }
                  .tap { case (_, idx) => ZIO.logDebug(s"Consumed $idx") }
                  .runDrain
@@ -315,7 +315,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         } yield if (nr < 10) Seq(record.offset) else Seq.empty
                       }
                       .transduce(Consumer.offsetBatches)
-                      .mapZIO(_.commit)
+                      .mapZIO(Consumer.commit)
                       .runDrain *>
                       Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head))
                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
@@ -343,7 +343,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                        .take(nrMessages.toLong)
                        .transduce(Consumer.offsetBatches)
                        .take(1)
-                       .mapZIO(_.commit)
+                       .mapZIO(Consumer.commit)
                        .runDrain *>
                        Consumer.committed((0 until nrPartitions).map(new TopicPartition(topic, _)).toSet))
                        .provideSomeLayer[Kafka](consumer(client, Some(group)))
@@ -465,7 +465,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                    val records     = committableRecords.map(_.record)
                    val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
 
-                   offsetBatch.commit.as(records)
+                   Consumer.commit(offsetBatch).as(records)
                  }
                  .runCollect
                  .provideSomeLayer[Kafka](consumer(client1, Some(group)))
@@ -675,7 +675,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                              .flatMapPar(Int.MaxValue) { case (tp, partitionStream) =>
                                ZStream.finalizer(ZIO.logDebug(s"TP ${tp.toString} finalizer")) *>
                                  partitionStream.mapChunksZIO { records =>
-                                   OffsetBatch(records.map(_.offset)).commit *> messagesReceived(tp.partition)
+                                   Consumer.commit(OffsetBatch(records.map(_.offset))) *> messagesReceived(tp.partition)
                                      .update(_ + records.size)
                                      .as(records)
                                  }
@@ -814,7 +814,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .mapZIO(record => messagesReceivedConsumer1.update(_ + 1).as(record))
                         .map(_.offset)
                         .aggregateAsync(Consumer.offsetBatches)
-                        .mapZIO(offsetBatch => offsetBatch.commit)
+                        .mapZIO(Consumer.commit)
                         .runDrain
                   }
                   .mapZIO(_ => drainCount.updateAndGet(_ + 1))
@@ -839,7 +839,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                   .mapZIO(record => messagesReceivedConsumer2.update(_ + 1).as(record))
                   .map(_.offset)
                   .aggregateAsync(Consumer.offsetBatches)
-                  .mapZIO(offsetBatch => offsetBatch.commit)
+                  .mapZIO(Consumer.commit)
                   .runDrain
                   .provideSomeLayer[Kafka](
                     customConsumer("consumer2", Some(group))
@@ -1207,7 +1207,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       .take(11)
                       .map(_.offset)
                       .aggregateAsync(Consumer.offsetBatches)
-                      .mapZIO(_.commit) // Hangs without timeout
+                      .mapZIO(Consumer.commit) // Hangs without timeout
                       .runDrain
                       .exit
                       .provideSomeLayer[Kafka](consumer(client, Some(group), commitTimeout = 2.seconds))

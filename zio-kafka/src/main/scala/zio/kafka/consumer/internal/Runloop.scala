@@ -115,14 +115,13 @@ private[consumer] final class Runloop private (
     }
   }
 
-  private val commit: Map[TopicPartition, Long] => Task[Unit] =
-    offsets =>
-      for {
-        p <- Promise.make[Throwable, Unit]
-        _ <- commandQueue.offer(RunloopCommand.Commit(offsets, p)).unit
-        _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
-        _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
-      } yield ()
+  def commit(offsets: Map[TopicPartition, Long]): Task[Unit] =
+    for {
+      p <- Promise.make[Throwable, Unit]
+      _ <- commandQueue.offer(RunloopCommand.Commit(offsets, p)).unit
+      _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
+      _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
+    } yield ()
 
   private def doCommit(cmd: RunloopCommand.Commit): UIO[Unit] = {
     val offsets   = cmd.offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
@@ -214,7 +213,6 @@ private[consumer] final class Runloop private (
                    builder +=
                      CommittableRecord[Array[Byte], Array[Byte]](
                        record = consumerRecord,
-                       commitHandle = commit,
                        consumerGroupMetadata = consumerGroupMetadata
                      )
                  }

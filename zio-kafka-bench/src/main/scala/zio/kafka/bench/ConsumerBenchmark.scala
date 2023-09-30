@@ -67,7 +67,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                .aggregateAsyncWithin(ZSink.collectAll[Offset], Schedule.fixed(100.millis))
                .tap(batch => counter.update(_ + batch.size))
                .map(OffsetBatch.apply)
-               .mapZIO(_.commit)
+               .mapZIO(Consumer.commit)
                .takeUntilZIO(_ => counter.get.map(_ >= nrMessages))
                .runDrain
                .provideSome[Kafka](env)
