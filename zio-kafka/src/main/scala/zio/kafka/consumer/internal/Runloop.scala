@@ -451,7 +451,7 @@ private[consumer] final class Runloop private (
    *   - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *     initialization and rebalancing
    */
-  def run(initialState: State): ZIO[Scope, Throwable, Any] = {
+  private def run(initialState: State): ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
 
     ZStream
