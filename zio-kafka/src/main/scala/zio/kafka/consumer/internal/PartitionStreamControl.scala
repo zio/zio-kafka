@@ -64,7 +64,7 @@ object PartitionStreamControl {
       queueSize           <- Ref.make(0)
       requestAndAwaitData =
         for {
-          _     <- commandQueue.offer(RunloopCommand.Request(tp))
+          _     <- commandQueue.offer(RunloopCommand.Poll)
           _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
           taken <- dataQueue.takeBetween(1, Int.MaxValue)
         } yield taken
