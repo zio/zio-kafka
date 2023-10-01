@@ -17,14 +17,17 @@ object ReproducerProducer extends ZIOAppDefault {
 
   override def run: ZIO[Environment with ZIOAppArgs with Scope, Nothing, Any] = {
     val appLogic =
-      (ZIO.serviceWithZIO[AdminClient](_.createTopic(NewTopic("_test_topic1", 2, 1))).ignore *>
-        ZIO.serviceWithZIO[AdminClient](_.createTopic(NewTopic("_test_topic2", 2, 1))).ignore *>
+      (ZIO.serviceWithZIO[AdminClient](_.createTopic(NewTopic("_test_topic3", 2, 1))).ignore *>
+        ZIO.serviceWithZIO[AdminClient](_.createTopic(NewTopic("_test_topic4", 2, 1))).ignore *>
         ZIO.foreach(Chunk.fromIterable((1 to 200000))) { _ =>
           for {
             key   <- ZIO.randomWith(_.nextUUID)
             value <- ZIO.randomWith(_.nextInt)
-          } yield new ProducerRecord("_test_topic1", key.toString, value.toString)
-        }).flatMap(Producer.produceChunk(_, Serde.string, Serde.string))
+          } yield Chunk(
+            new ProducerRecord("_test_topic3", key.toString, value.toString),
+            new ProducerRecord("_test_topic4", key.toString, value.toString)
+          )
+        }).map(_.flatten).flatMap(Producer.produceChunk(_, Serde.string, Serde.string))
 
     val producerSettings = ProducerSettings(List("localhost:9092"))
 
@@ -63,7 +66,7 @@ object ReproducerConsumer extends ZIOAppDefault { self =>
       )
 
     val consumer = Consumer
-      .partitionedStream(Topics(Set("_test_topic1", "_test_topic2")), Serde.string, Serde.string)
+      .partitionedStream(Topics(Set("_test_topic3", "_test_topic4")), Serde.string, Serde.string)
       .flatMapPar(10) { case (_, partition) =>
         partition
           .aggregateAsyncWithin(
@@ -76,7 +79,7 @@ object ReproducerConsumer extends ZIOAppDefault { self =>
             Schedule.fixed(5.seconds)
           )
       }
-      .mapZIO { case (offsets, records) =>
+      .mapZIOParUnordered(8) { case (offsets, records) =>
         for {
           _ <- ZIO.logDebug(s"Consumer processing batch of ${records.size}. Committing offset...")
           _ <- offsets.commitOrRetry(Schedule.spaced(100.milliseconds) && Schedule.recurs(10))
