@@ -238,15 +238,16 @@ private[consumer] final class Runloop private (
 
   private def handlePoll(state: State): Task[State] =
     for {
-      _                 <- ZIO.logDebug(s"Starting poll with ${state.pendingCommits.size} pending commits")
-      _                 <- currentStateRef.set(state)
-      partitionsToFetch <- fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
+      _                      <- ZIO.logDebug(s"Starting poll with ${state.pendingCommits.size} pending commits")
+      _                      <- currentStateRef.set(state)
+      partitionsAwaitingData <- ZIO.filter(state.assignedStreams)(_.awaitingData).map(_.map(_.tp))
+      partitionsToFetch      <- fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
       pollResult <-
         consumer.runloopAccess { c =>
           ZIO.suspend {
-            val prevAssigned = c.assignment().asScala.toSet
-
-            resumeAndPausePartitions(c, prevAssigned, partitionsToFetch)
+            val prevAssigned       = c.assignment().asScala.toSet
+            val partitionsToResume = partitionsToFetch ++ partitionsAwaitingData
+            resumeAndPausePartitions(c, prevAssigned, partitionsToResume)
 
             val polledRecords = {
               val records = c.poll(pollTimeout)
@@ -255,8 +256,8 @@ private[consumer] final class Runloop private (
 
             val currentAssigned          = c.assignment().asScala.toSet
             val newlyAssigned            = currentAssigned -- prevAssigned
-            val currentPartitionsToFetch = partitionsToFetch intersect currentAssigned
-            val morePollsNeeded          = currentPartitionsToFetch.size > polledRecords.partitions().size()
+            val currentResumedPartitions = partitionsToResume intersect currentAssigned
+            val morePollsNeeded          = currentResumedPartitions.size > polledRecords.partitions().size()
 
             for {
               ignoreRecordsForTps <- doSeekForNewPartitions(c, newlyAssigned)
@@ -305,7 +306,7 @@ private[consumer] final class Runloop private (
                      val providedTps = polledRecords.partitions().asScala.toSet
                      DiagnosticEvent.Poll(
                        tpWithData = providedTps,
-                       tpWithoutData = currentPartitionsToFetch -- providedTps
+                       tpWithoutData = currentResumedPartitions -- providedTps
                      )
                    }
 

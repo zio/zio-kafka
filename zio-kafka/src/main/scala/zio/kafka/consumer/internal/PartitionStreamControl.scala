@@ -12,6 +12,7 @@ final class PartitionStreamControl private (
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
   interruptionPromise: Promise[Throwable, Unit],
   completedPromise: Promise[Nothing, Unit],
+  awaitingDataRef: Ref[Boolean],
   queueSizeRef: Ref[Int]
 ) {
 
@@ -19,6 +20,8 @@ final class PartitionStreamControl private (
     LogAnnotation("topic", tp.topic()),
     LogAnnotation("partition", tp.partition().toString)
   )
+
+  private[internal] def awaitingData: UIO[Boolean] = awaitingDataRef.get
 
   /** Offer new data for the stream to process. */
   private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
@@ -61,12 +64,16 @@ object PartitionStreamControl {
       interruptionPromise <- Promise.make[Throwable, Unit]
       completedPromise    <- Promise.make[Nothing, Unit]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
+      awaitingDataRef     <- Ref.make(true)
       queueSize           <- Ref.make(0)
+
       requestAndAwaitData =
         for {
+          _     <- awaitingDataRef.set(true)
           _     <- commandQueue.offer(RunloopCommand.Poll)
           _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
           taken <- dataQueue.takeBetween(1, Int.MaxValue)
+          _     <- awaitingDataRef.set(false)
         } yield taken
 
       stream = ZStream.logAnnotate(
@@ -84,6 +91,14 @@ object PartitionStreamControl {
                  }.flattenTake
                    .chunksWith(_.tap(records => queueSize.update(_ - records.size)))
                    .interruptWhen(interruptionPromise)
-    } yield new PartitionStreamControl(tp, stream, dataQueue, interruptionPromise, completedPromise, queueSize)
+    } yield new PartitionStreamControl(
+      tp,
+      stream,
+      dataQueue,
+      interruptionPromise,
+      completedPromise,
+      awaitingDataRef,
+      queueSize
+    )
 
 }
