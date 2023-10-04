@@ -1,5 +1,6 @@
 package zio.kafka.consumer.internal
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.consumer.{ InvalidSubscriptionUnion, Subscription }
@@ -19,7 +20,8 @@ object RunloopCommand {
   case object StopRunloop    extends Control
   case object StopAllStreams extends StreamCommand
 
-  final case class Commit(offsets: Map[TopicPartition, Long], cont: Promise[Throwable, Unit]) extends RunloopCommand {
+  final case class Commit(offsets: Map[TopicPartition, OffsetAndMetadata], cont: Promise[Throwable, Unit])
+      extends RunloopCommand {
     @inline def isDone: UIO[Boolean]    = cont.isDone
     @inline def isPending: UIO[Boolean] = isDone.negate
   }

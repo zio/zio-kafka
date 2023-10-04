@@ -113,7 +113,7 @@ private[consumer] final class Runloop private (
   }
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
-  private val commit: Map[TopicPartition, Long] => Task[Unit] =
+  private val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] =
     offsets =>
       for {
         p <- Promise.make[Throwable, Unit]
@@ -127,16 +127,21 @@ private[consumer] final class Runloop private (
     commits: Chunk[RunloopCommand.Commit]
   ): (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback, Throwable => UIO[Unit]) = {
     val offsets = commits
-      .foldLeft(mutable.Map.empty[TopicPartition, Long]) { case (acc, commit) =>
+      .foldLeft(mutable.Map.empty[TopicPartition, OffsetAndMetadata]) { case (acc, commit) =>
         commit.offsets.foreach { case (tp, offset) =>
-          acc += (tp -> acc.get(tp).map(_ max offset).getOrElse(offset))
+          acc += (tp -> acc
+            .get(tp)
+            .map(current => if (current.offset() > offset.offset()) current else offset)
+            .getOrElse(offset))
         }
         acc
       }
       .toMap
-    val offsetsWithMetaData = offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
-    val cont                = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
-    val onSuccess           = cont(Exit.unit) <* diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
+    val offsetsWithMetaData = offsets.map { case (tp, offset) =>
+      tp -> new OffsetAndMetadata(offset.offset + 1, offset.leaderEpoch, offset.metadata)
+    }
+    val cont      = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
+    val onSuccess = cont(Exit.unit) <* diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
         for {
