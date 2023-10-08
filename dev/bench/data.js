@@ -96,36 +96,6 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "41898282+github-actions[bot]@users.noreply.github.com",
-            "name": "github-actions[bot]",
-            "username": "github-actions[bot]"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
-          "id": "bc988f2d20a0b9b6c3c467390219ba3981376ec1",
-          "message": "Update zio, zio-streams, zio-test, ... to 2.0.10 (#690)\n\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>",
-          "timestamp": "2023-03-07T10:23:29+08:00",
-          "tree_id": "eb4e6f913625cf177921a560a9b41702e6e09450",
-          "url": "https://github.com/zio/zio-kafka/commit/bc988f2d20a0b9b6c3c467390219ba3981376ec1"
-        },
-        "date": 1678156223571,
-        "tool": "jmh",
-        "benches": [
-          {
-            "name": "zio.kafka.bench.JMHSample_01_HelloWorld.wellHelloThere",
-            "value": 1703427952.20542,
-            "unit": "ops/s",
-            "extra": "iterations: 3\nforks: 5\nthreads: 1"
-          }
-        ]
-      },
-      {
-        "commit": {
-          "author": {
             "email": "svroonland@gmail.com",
             "name": "Steven Vroonland",
             "username": "svroonland"
@@ -24580,18 +24550,6 @@ window.BENCHMARK_DATA = {
             "value": 1157.02089594,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1863.89515472,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1644.6328486200002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -24646,18 +24604,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1104.4989106,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1831.3334299,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1732.22839966,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -25004,18 +24950,6 @@ window.BENCHMARK_DATA = {
             "value": 1498.4617562399999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2081.30464572,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1992.60919388,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -25070,18 +25004,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1108.3583564199998,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1521.23880978,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1509.57034338,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -25140,18 +25062,6 @@ window.BENCHMARK_DATA = {
             "value": 1165.7018420199997,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1572.1802686800002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1456.0103931399995,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -25206,18 +25116,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1171.5385598399998,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1801.6018602600002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1771.4847226199997,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -25276,18 +25174,6 @@ window.BENCHMARK_DATA = {
             "value": 1120.24234608,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1823.44389168,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2012.61196208,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -25342,18 +25228,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1168.8378022,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1538.3867773200004,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1561.31097912,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -25416,18 +25290,6 @@ window.BENCHMARK_DATA = {
             "value": 1546.3273293600002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2229.7099400000006,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1798.2965601199999,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -25484,18 +25346,6 @@ window.BENCHMARK_DATA = {
             "value": 1241.33084942,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1852.3504091200002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1555.8014621,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -25550,18 +25400,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1137.96776796,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1700.49588014,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1672.75204042,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -25624,18 +25462,6 @@ window.BENCHMARK_DATA = {
             "value": 1553.0316045200002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2129.7203694400005,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2274.46965876,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -25690,18 +25516,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1145.85828156,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1486.23363588,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1503.3767834799996,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -25760,18 +25574,6 @@ window.BENCHMARK_DATA = {
             "value": 1425.4066162800002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1852.7904053999998,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2046.6318931,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -25826,18 +25628,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1371.4132057400004,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1887.1390732800005,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1808.28357914,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -25900,18 +25690,6 @@ window.BENCHMARK_DATA = {
             "value": 1164.1827914199998,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1994.30132216,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1660.0483210600005,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -25966,18 +25744,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1045.68870918,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1725.4364165599995,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1580.4403047400003,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -26040,18 +25806,6 @@ window.BENCHMARK_DATA = {
             "value": 1435.222815,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2059.90448396,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2015.2732181599995,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -26110,18 +25864,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1217.21555958,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1598.0348301800002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1921.6594954399998,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -26184,18 +25926,6 @@ window.BENCHMARK_DATA = {
             "value": 1163.11326254,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1687.5201430000002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1902.1869532799997,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -26254,18 +25984,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1179.6527021,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1839.9605983,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1778.1672415000003,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -26328,18 +26046,6 @@ window.BENCHMARK_DATA = {
             "value": 1399.81392082,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1734.3238782799997,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2194.62483056,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -26394,18 +26100,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1375.4028127600002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2169.29476792,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2030.8327549599999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -26464,18 +26158,6 @@ window.BENCHMARK_DATA = {
             "value": 1172.4699392200002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1793.81118376,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2212.113556,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -26530,18 +26212,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1145.7639207,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1812.27473658,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1731.2617741999995,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -26600,18 +26270,6 @@ window.BENCHMARK_DATA = {
             "value": 1062.97377416,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1818.65623612,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1840.2680774200003,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -26666,18 +26324,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1046.91179876,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1895.4811664200001,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1690.3901847799998,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -26740,18 +26386,6 @@ window.BENCHMARK_DATA = {
             "value": 1402.3730424,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2374.2869918799997,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1752.04584318,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -26808,18 +26442,6 @@ window.BENCHMARK_DATA = {
             "value": 1107.66521452,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1585.34136846,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1510.2846129800007,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -26874,18 +26496,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1522.7371052000003,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2349.35304404,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2017.12949984,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -26948,18 +26558,6 @@ window.BENCHMARK_DATA = {
             "value": 1055.1188953800001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1612.2152071599996,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1645.98214474,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -27014,18 +26612,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1375.0876977600003,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1871.1372257199996,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2114.2857825400006,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -27088,18 +26674,6 @@ window.BENCHMARK_DATA = {
             "value": 1482.6238750399998,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2087.82435604,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2046.0015849399997,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -27154,18 +26728,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1154.6245615,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1596.20034034,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1777.0982376200002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -27224,18 +26786,6 @@ window.BENCHMARK_DATA = {
             "value": 1146.9697900800002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1598.0955758,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1375.8390608,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -27292,18 +26842,6 @@ window.BENCHMARK_DATA = {
             "value": 1430.1749044000003,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2194.9433932,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2192.2454404000005,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -27358,18 +26896,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1218.01821742,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1999.7227277400002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1767.5409691399996,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -27432,18 +26958,6 @@ window.BENCHMARK_DATA = {
             "value": 1211.6345270199997,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1948.8290106400004,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2177.8257180400005,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -27498,18 +27012,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1038.09955176,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1526.73109106,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1816.8715710599997,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -27568,18 +27070,6 @@ window.BENCHMARK_DATA = {
             "value": 1311.5576497200004,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1961.3058344800002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1703.5373017600002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -27636,18 +27126,6 @@ window.BENCHMARK_DATA = {
             "value": 1344.17365258,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1819.26426788,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2093.1941126,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -27702,18 +27180,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1300.5112398000003,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2198.38008544,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2351.6282627799997,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -27776,18 +27242,6 @@ window.BENCHMARK_DATA = {
             "value": 1339.42160976,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1848.26010228,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1678.0171176800002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -27842,18 +27296,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1105.54621314,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1751.49375352,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1726.18889536,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -27912,18 +27354,6 @@ window.BENCHMARK_DATA = {
             "value": 1079.5788443,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1602.5779898000003,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1394.4746126799998,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -27978,18 +27408,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1046.2371256200004,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2003.1251501,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1870.7660025599994,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -28048,18 +27466,6 @@ window.BENCHMARK_DATA = {
             "value": 1546.4668448400002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2433.8934612400003,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2095.6504086,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -28114,18 +27520,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1493.5925334800004,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1933.55328692,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1977.5865918799996,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -28188,18 +27582,6 @@ window.BENCHMARK_DATA = {
             "value": 1152.18836582,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1796.46666772,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2107.2827061800003,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -28258,18 +27640,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1120.64152592,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1780.087968,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1722.88589434,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -28332,18 +27702,6 @@ window.BENCHMARK_DATA = {
             "value": 1089.1847151,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1609.1721791200002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1915.98167918,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -28400,18 +27758,6 @@ window.BENCHMARK_DATA = {
             "value": 1034.6645740400002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1470.4376329200002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1350.3872690200003,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -28466,18 +27812,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1168.33010682,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2069.1824847999997,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1671.9906949200004,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -28540,18 +27874,6 @@ window.BENCHMARK_DATA = {
             "value": 1193.81499816,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2113.0088336400004,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1955.8281187999999,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -28606,18 +27928,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1431.0291419600003,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2012.7840442600002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1868.6267127999997,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -28680,18 +27990,6 @@ window.BENCHMARK_DATA = {
             "value": 972.7038435600001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2082.4099058999996,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1446.59336246,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -28746,18 +28044,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1322.6618688400004,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1762.36495736,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1784.3950109,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -28816,18 +28102,6 @@ window.BENCHMARK_DATA = {
             "value": 1310.8654666,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2107.40588662,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1468.47244908,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -28882,18 +28156,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1247.4210353600001,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2072.60734024,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1689.3809274800005,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -28952,18 +28214,6 @@ window.BENCHMARK_DATA = {
             "value": 1217.79227314,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1715.6678252400004,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2022.8486295599996,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -29018,18 +28268,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1178.5021444999998,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1978.8748157000002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1763.4399575199996,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -29088,18 +28326,6 @@ window.BENCHMARK_DATA = {
             "value": 1132.488636,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2001.4211467600003,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1573.10969744,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -29154,18 +28380,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1605.0865295600001,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2312.4181316400004,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2250.9391582800004,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -29224,18 +28438,6 @@ window.BENCHMARK_DATA = {
             "value": 1275.27870522,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1657.0992838200002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1460.9108410799997,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -29290,18 +28492,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1086.59198802,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2129.0868084999997,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1772.3654242599994,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -29360,18 +28550,6 @@ window.BENCHMARK_DATA = {
             "value": 1387.7087401599995,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2007.7562965600007,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1964.1029569599998,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -29426,18 +28604,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1086.8194259000002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1970.34872024,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1659.61929214,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -29496,18 +28662,6 @@ window.BENCHMARK_DATA = {
             "value": 1170.64472156,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2093.142531159999,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1665.5698568999996,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -29562,18 +28716,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1389.42098258,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2080.9515310799993,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1755.6316093799999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -29632,18 +28774,6 @@ window.BENCHMARK_DATA = {
             "value": 1448.0939238800001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1968.5276948399999,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2030.3616112000004,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -29698,18 +28828,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1274.4649294399999,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2064.9731652800006,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1733.0031765400001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -29768,18 +28886,6 @@ window.BENCHMARK_DATA = {
             "value": 1189.9598508800002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1818.4635291000002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1621.7327945,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -29834,18 +28940,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1219.3271143599998,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1612.0118280400002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1687.20125894,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -29904,18 +28998,6 @@ window.BENCHMARK_DATA = {
             "value": 1152.13249286,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1957.0311940599997,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1671.0813934,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -29972,18 +29054,6 @@ window.BENCHMARK_DATA = {
             "value": 1056.2608929599999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1914.6537074599996,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1684.9022032400003,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -30038,18 +29108,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1184.7766582000002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1830.7842635200002,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1695.3733252200002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -30110,18 +29168,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1125.6000274,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1685.7183402199998,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1890.0086265200005,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -30234,18 +29280,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1224.24942512,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1722.1836656600003,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2001.6038392199998,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -30372,18 +29406,6 @@ window.BENCHMARK_DATA = {
             "value": 1118.57379858,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1782.2056471,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1660.64331764,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
         ]
       },
@@ -30438,18 +29460,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1172.88143836,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 1659.6506978599998,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 2119.8866018,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
@@ -30578,18 +29588,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1433.8730889600001,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.manualZioKafka",
-            "value": 2413.2188370999997,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaNoOptimisticResumeBenchmarks.zioKafka",
-            "value": 1890.23706254,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
