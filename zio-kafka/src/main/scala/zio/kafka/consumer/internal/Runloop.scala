@@ -10,6 +10,7 @@ import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.fetch.FetchStrategy
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
+import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.stream._
 
@@ -86,26 +87,20 @@ private[consumer] final class Runloop private (
               ZIO.fail(new IllegalStateException(s"Multiple onAssigned calls on rebalance listener"))
           },
       onRevoked = (_, _) =>
-        ZIO.logDebug("Rebalancing started") *>
-          currentStateRef.get.flatMap { state =>
-            // End all streams
-            endRevokedPartitions(
-              state.pendingRequests,
-              state.assignedStreams,
-              isRevoked = _ => true
-            ).flatMap { result =>
-              lastRebalanceEvent.updateZIO {
-                case None =>
-                  ZIO.some(Runloop.RebalanceEvent.Revoked(result))
-                case _ =>
-                  ZIO.fail(
-                    new IllegalStateException(
-                      s"onRevoked called on rebalance listener with pending assigned event"
-                    )
-                  )
-              }
-            }
-          }
+        for {
+          _     <- ZIO.logDebug("Rebalancing started")
+          state <- currentStateRef.get
+          // End all streams
+          result <- endRevokedPartitions(state.pendingRequests, state.assignedStreams, isRevoked = _ => true)
+          _ <- lastRebalanceEvent.updateZIO {
+                 case None =>
+                   ZIO.some(Runloop.RebalanceEvent.Revoked(result))
+                 case _ =>
+                   ZIO.fail(
+                     new IllegalStateException(s"onRevoked called on rebalance listener with pending assigned event")
+                   )
+               }
+        } yield ()
     )
 
     if (restartStreamsOnRebalancing) {
@@ -483,7 +478,7 @@ private[consumer] final class Runloop private (
    *   - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *     initialization and rebalancing
    */
-  def run(initialState: State): ZIO[Scope, Throwable, Any] = {
+  private def run(initialState: State): ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
 
     ZStream
@@ -606,26 +601,26 @@ private[consumer] object Runloop {
                ZIO.logDebug("Shut down Runloop")
            )
     } yield runloop
-}
 
-private[internal] final case class State(
-  pendingRequests: Chunk[RunloopCommand.Request],
-  pendingCommits: Chunk[RunloopCommand.Commit],
-  assignedStreams: Chunk[PartitionStreamControl],
-  subscriptionState: SubscriptionState
-) {
-  def addCommit(c: RunloopCommand.Commit): State   = copy(pendingCommits = pendingCommits :+ c)
-  def addRequest(r: RunloopCommand.Request): State = copy(pendingRequests = pendingRequests :+ r)
+  private final case class State(
+    pendingRequests: Chunk[RunloopCommand.Request],
+    pendingCommits: Chunk[RunloopCommand.Commit],
+    assignedStreams: Chunk[PartitionStreamControl],
+    subscriptionState: SubscriptionState
+  ) {
+    def addCommit(c: RunloopCommand.Commit): State   = copy(pendingCommits = pendingCommits :+ c)
+    def addRequest(r: RunloopCommand.Request): State = copy(pendingRequests = pendingRequests :+ r)
 
-  def shouldPoll: Boolean =
-    subscriptionState.isSubscribed && (pendingRequests.nonEmpty || pendingCommits.nonEmpty || assignedStreams.isEmpty)
-}
+    def shouldPoll: Boolean =
+      subscriptionState.isSubscribed && (pendingRequests.nonEmpty || pendingCommits.nonEmpty || assignedStreams.isEmpty)
+  }
 
-object State {
-  val initial: State = State(
-    pendingRequests = Chunk.empty,
-    pendingCommits = Chunk.empty,
-    assignedStreams = Chunk.empty,
-    subscriptionState = SubscriptionState.NotSubscribed
-  )
+  private object State {
+    val initial: State = State(
+      pendingRequests = Chunk.empty,
+      pendingCommits = Chunk.empty,
+      assignedStreams = Chunk.empty,
+      subscriptionState = SubscriptionState.NotSubscribed
+    )
+  }
 }
