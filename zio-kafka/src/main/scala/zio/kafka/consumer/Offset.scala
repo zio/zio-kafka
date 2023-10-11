@@ -1,8 +1,8 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ConsumerGroupMetadata, OffsetAndMetadata, RetriableCommitFailedException}
+import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, OffsetAndMetadata, RetriableCommitFailedException }
 import org.apache.kafka.common.TopicPartition
-import zio.{RIO, Schedule, Task}
+import zio.{ RIO, Schedule, Task }
 
 sealed trait Offset {
   def topic: String
