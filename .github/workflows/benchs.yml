@@ -6,6 +6,8 @@ on:
       - master
   pull_request:
     types: [ opened, reopened, synchronize ]
+    branches-ignore:
+      - gh-pages
 
 permissions:
   # deployments permission to deploy GitHub pages website
