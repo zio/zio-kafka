@@ -27,7 +27,6 @@ private[consumer] final class Runloop private (
   pollTimeout: Duration,
   commitTimeout: Duration,
   runloopTimeout: Duration,
-  commitQueue: Queue[Runloop.Commit],
   commandQueue: Queue[RunloopCommand],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
@@ -118,11 +117,62 @@ private[consumer] final class Runloop private (
     offsets =>
       for {
         p <- Promise.make[Throwable, Unit]
-        _ <- commitQueue.offer(Runloop.Commit(offsets, p))
-        _ <- commandQueue.offer(RunloopCommand.CommitAvailable)
+        _ <- commandQueue.offer(RunloopCommand.Commit(offsets, p)).unit
         _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
       } yield ()
+
+  /** Merge commits and prepare parameters for calling `consumer.commitAsync`. */
+  private def asyncCommitParameters(
+    commits: Chunk[RunloopCommand.Commit]
+  ): (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback, Throwable => UIO[Unit]) = {
+    val offsets = commits
+      .foldLeft(mutable.Map.empty[TopicPartition, Long]) { case (acc, commit) =>
+        commit.offsets.foreach { case (tp, offset) =>
+          acc += (tp -> acc.get(tp).map(_ max offset).getOrElse(offset))
+        }
+        acc
+      }
+      .toMap
+    val offsetsWithMetaData = offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
+    val cont                = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
+    val onSuccess           = cont(Exit.unit) <* diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
+    val onFailure: Throwable => UIO[Unit] = {
+      case _: RebalanceInProgressException =>
+        for {
+          _ <- ZIO.logDebug(s"Rebalance in progress, commit for offsets $offsets will be retried")
+          _ <- commandQueue.offerAll(commits)
+        } yield ()
+      case err: Throwable =>
+        cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsetsWithMetaData, err))
+    }
+    val callback =
+      new OffsetCommitCallback {
+        override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
+          Unsafe.unsafe { implicit u =>
+            runtime.unsafe.run {
+              if (exception eq null) onSuccess else onFailure(exception)
+            }
+              .getOrThrowFiberFailure()
+          }
+      }
+    (offsetsWithMetaData.asJava, callback, onFailure)
+  }
+
+  private def handleCommits(state: State, commits: Chunk[RunloopCommand.Commit]): UIO[State] =
+    if (commits.isEmpty) {
+      ZIO.succeed(state)
+    } else {
+      val (offsets, callback, onFailure) = asyncCommitParameters(commits)
+      val newState                       = state.addCommits(commits)
+      consumer.runloopAccess { c =>
+        // We don't wait for the completion of the commit here, because it
+        // will only complete once we poll again.
+        ZIO.attempt(c.commitAsync(offsets, callback))
+      }
+        .catchAll(onFailure)
+        .as(newState)
+    }
 
   /**
    * Does all needed to end revoked partitions:
@@ -341,59 +391,6 @@ private[consumer] final class Runloop private (
       assignedStreams = updatedStreams
     )
 
-  private def handleCommits(state: State, commits: Chunk[Runloop.Commit]): UIO[State] =
-    if (commits.isEmpty) {
-      ZIO.succeed(state)
-    } else {
-      val (offsets, callback, onFailure) = asyncCommitParameters(commits)
-      val newState                       = state.addCommits(commits)
-      consumer.runloopAccess { c =>
-        // We don't wait for the completion of the commit here, because it
-        // will only complete once we poll again.
-        ZIO.attempt(c.commitAsync(offsets, callback))
-      }
-        .catchAll(onFailure)
-        .as(newState)
-    }
-
-  /** Merge commits and prepare parameters for calling `consumer.commitAsync`. */
-  private def asyncCommitParameters(
-    commits: Chunk[Runloop.Commit]
-  ): (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback, Throwable => UIO[Unit]) = {
-    val offsets = commits
-      .foldLeft(mutable.Map.empty[TopicPartition, Long]) { case (acc, commit) =>
-        commit.offsets.foreach { case (tp, offset) =>
-          acc += (tp -> acc.get(tp).map(_ max offset).getOrElse(offset))
-        }
-        acc
-      }
-      .toMap
-    val offsetsWithMetaData = offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
-    val cont                = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
-    val onSuccess           = cont(Exit.unit) <* diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
-    val onFailure: Throwable => UIO[Unit] = {
-      case _: RebalanceInProgressException =>
-        for {
-          _ <- ZIO.logDebug(s"Rebalance in progress, commit for offsets $offsets will be retried")
-          _ <- commitQueue.offerAll(commits)
-          _ <- commandQueue.offer(RunloopCommand.CommitAvailable)
-        } yield ()
-      case err: Throwable =>
-        cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsetsWithMetaData, err))
-    }
-    val callback =
-      new OffsetCommitCallback {
-        override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
-          Unsafe.unsafe { implicit u =>
-            runtime.unsafe.run {
-              if (exception eq null) onSuccess else onFailure(exception)
-            }
-              .getOrThrowFiberFailure()
-          }
-      }
-    (offsetsWithMetaData.asJava, callback, onFailure)
-  }
-
   private def handleCommand(state: State, cmd: RunloopCommand.StreamCommand): Task[State] = {
     def doChangeSubscription(newSubscriptionState: SubscriptionState): Task[State] =
       applyNewSubscriptionState(newSubscriptionState).flatMap { newAssignedStreams =>
@@ -519,9 +516,9 @@ private[consumer] final class Runloop private (
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
-          commits <- commitQueue.takeAll
-          _ <- ZIO.logDebug(s"Processing ${commits.size} commits, ${commands.size} commands: ${commands.mkString(",")}")
-          stateAfterCommits <- handleCommits(state, commits)
+          _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
+          commitCommands = commands.collect { case cmd: RunloopCommand.Commit => cmd }
+          stateAfterCommits <- handleCommits(state, commitCommands)
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
           stateAfterCommands <- ZIO.foldLeft(streamCommands)(stateAfterCommits)(handleCommand)
 
@@ -584,15 +581,6 @@ private[consumer] object Runloop {
     ) extends RebalanceEvent
   }
 
-  // TODO: make `private` as soon as `State` has been moved into `Runloop`, see https://github.com/zio/zio-kafka/pull/1065
-  final case class Commit(
-    offsets: Map[TopicPartition, Long],
-    cont: Promise[Throwable, Unit]
-  ) {
-    @inline def isDone: UIO[Boolean]    = cont.isDone
-    @inline def isPending: UIO[Boolean] = isDone.negate
-  }
-
   def make(
     hasGroupId: Boolean,
     consumer: ConsumerAccess,
@@ -608,7 +596,6 @@ private[consumer] object Runloop {
   ): URIO[Scope, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
-      commitQueue        <- ZIO.acquireRelease(Queue.unbounded[Runloop.Commit])(_.shutdown)
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
       initialState = State.initial
@@ -621,7 +608,6 @@ private[consumer] object Runloop {
                   pollTimeout = pollTimeout,
                   commitTimeout = commitTimeout,
                   runloopTimeout = runloopTimeout,
-                  commitQueue = commitQueue,
                   commandQueue = commandQueue,
                   lastRebalanceEvent = lastRebalanceEvent,
                   partitionsHub = partitionsHub,
@@ -653,8 +639,8 @@ private[consumer] object Runloop {
     assignedStreams: Chunk[PartitionStreamControl],
     subscriptionState: SubscriptionState
   ) {
-    def addCommits(c: Chunk[RunloopCommand.Commit]): State  = copy(pendingCommits = pendingCommits ++ c)
-    def addRequest(r: RunloopCommand.Request): State        = copy(pendingRequests = pendingRequests :+ r)
+    def addCommits(c: Chunk[RunloopCommand.Commit]): State = copy(pendingCommits = pendingCommits ++ c)
+    def addRequest(r: RunloopCommand.Request): State       = copy(pendingRequests = pendingRequests :+ r)
 
     def shouldPoll: Boolean =
       subscriptionState.isSubscribed && (pendingRequests.nonEmpty || pendingCommits.nonEmpty || assignedStreams.isEmpty)
