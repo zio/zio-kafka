@@ -13,7 +13,9 @@ env:
     branches:
     - master
     - series/0.x
-  pull_request: {}
+  pull_request:
+    branches-ignore:
+    - gh-pages
 jobs:
   build:
     name: Build
