@@ -21,7 +21,7 @@ object TransactionalProducer {
   final case class TransactionLeaked(offsetBatch: OffsetBatch) extends RuntimeException
 
   private final class LiveTransactionalProducer(
-    live: Producer.Live,
+    live: ProducerLive,
     semaphore: Semaphore
   ) extends TransactionalProducer {
     private val abortTransaction: Task[Unit] = ZIO.attemptBlocking(live.p.abortTransaction())
@@ -85,24 +85,23 @@ object TransactionalProducer {
 
   def make(settings: TransactionalProducerSettings): ZIO[Scope, Throwable, TransactionalProducer] =
     for {
-      props <- ZIO.attempt(settings.producerSettings.driverSettings)
-      rawProducer <- ZIO.attempt(
-                       new KafkaProducer[Array[Byte], Array[Byte]](
-                         props.asJava,
-                         new ByteArraySerializer(),
-                         new ByteArraySerializer()
+      rawProducer <- ZIO.acquireRelease(
+                       ZIO.attempt(
+                         new KafkaProducer[Array[Byte], Array[Byte]](
+                           settings.producerSettings.driverSettings.asJava,
+                           new ByteArraySerializer(),
+                           new ByteArraySerializer()
+                         )
                        )
-                     )
+                     )(p => ZIO.attemptBlocking(p.close(settings.producerSettings.closeTimeout)).orDie)
       _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
       semaphore <- Semaphore.make(1)
       runtime   <- ZIO.runtime[Any]
       sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])](
+        Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
           settings.producerSettings.sendBufferSize
         )
-      live <- ZIO.acquireRelease(
-                ZIO.succeed(new Producer.Live(rawProducer, settings.producerSettings, runtime, sendQueue))
-              )(_.close)
+      live = new ProducerLive(rawProducer, runtime, sendQueue)
       _ <- ZIO.blocking(live.sendFromQueue).forkScoped
     } yield new LiveTransactionalProducer(live, semaphore)
 }
