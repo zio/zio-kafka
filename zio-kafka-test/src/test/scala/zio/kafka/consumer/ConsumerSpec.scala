@@ -412,7 +412,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       },
       test("handle rebalancing by completing topic-partition streams") {
         val nrMessages   = 50
-        val nrPartitions = 6
+        val nrPartitions = 6 // Must be even and strictly positive
 
         for {
           // Produce messages on several partitions
@@ -1206,6 +1206,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           test(
             "it's possible to start a new consumption session from a Consumer that had a consumption session stopped previously"
           ) {
+            // NOTE:
+            // When this test fails with the message `100000 was not less than 100000`, it's because
+            // your computer is so fast that the first consumer already consumed all 100000 messages.
             val numberOfMessages: Int           = 100000
             val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key-$i", s"msg-$i"))
 

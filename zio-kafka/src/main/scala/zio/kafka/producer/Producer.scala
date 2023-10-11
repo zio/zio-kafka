@@ -192,12 +192,11 @@ object Producer {
 
   def make(settings: ProducerSettings): ZIO[Scope, Throwable, Producer] =
     for {
-      props <- ZIO.attempt(settings.driverSettings)
-      _     <- SslHelper.validateEndpoint(settings.bootstrapServers, props)
+      _ <- SslHelper.validateEndpoint(settings.driverSettings)
       rawProducer <- ZIO.acquireRelease(
                        ZIO.attempt(
                          new KafkaProducer[Array[Byte], Array[Byte]](
-                           props.asJava,
+                           settings.driverSettings.asJava,
                            new ByteArraySerializer(),
                            new ByteArraySerializer()
                          )
@@ -212,7 +211,7 @@ object Producer {
    * You are responsible for creating and closing the KafkaProducer
    */
   def fromJavaProducer(
-    javaProducer: KafkaProducer[Array[Byte], Array[Byte]],
+    javaProducer: JProducer[Array[Byte], Array[Byte]],
     settings: ProducerSettings
   ): ZIO[Scope, Throwable, Producer] =
     for {
