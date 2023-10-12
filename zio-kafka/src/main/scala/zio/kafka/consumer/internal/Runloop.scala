@@ -16,7 +16,6 @@ import zio.stream._
 
 import java.util
 import java.util.{ Map => JavaMap }
-import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 //noinspection SimplifyWhenInspection,SimplifyUnlessInspection
@@ -127,16 +126,15 @@ private[consumer] final class Runloop private (
     commits: Chunk[RunloopCommand.Commit]
   ): (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback, Throwable => UIO[Unit]) = {
     val offsets = commits
-      .foldLeft(mutable.Map.empty[TopicPartition, Long]) { case (acc, commit) =>
+      .foldLeft(new java.util.HashMap[TopicPartition, Long]()) { case (acc, commit) =>
         commit.offsets.foreach { case (tp, offset) =>
-          acc += (tp -> acc.get(tp).map(_ max offset).getOrElse(offset))
+          acc.merge(tp, offset, _ max _)
         }
         acc
       }
-      .toMap
-    val offsetsWithMetaData = offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
+    val offsetsWithMetaData = offsets.asScala.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset + 1) }
     val cont                = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
-    val onSuccess           = cont(Exit.unit) <* diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
+    val onSuccess = cont(Exit.unit) <* diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData.toMap))
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
         for {
@@ -144,7 +142,7 @@ private[consumer] final class Runloop private (
           _ <- commandQueue.offerAll(commits)
         } yield ()
       case err: Throwable =>
-        cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsetsWithMetaData, err))
+        cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsetsWithMetaData.toMap, err))
     }
     val callback =
       new OffsetCommitCallback {
