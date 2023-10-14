@@ -4,7 +4,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
-import zio.kafka.consumer.Consumer.{ CommitTimeout, OffsetRetrieval, RunloopTimeout }
+import zio.kafka.consumer.Consumer.{ CommitTimeout, OffsetRetrieval }
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
@@ -25,8 +25,8 @@ private[consumer] final class Runloop private (
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
   pollTimeout: Duration,
+  maxPollInterval: Duration,
   commitTimeout: Duration,
-  runloopTimeout: Duration,
   commandQueue: Queue[RunloopCommand],
   lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
@@ -39,7 +39,7 @@ private[consumer] final class Runloop private (
 ) {
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
-    PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics)
+    PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, maxPollInterval)
 
   def stopConsumption: UIO[Unit] =
     ZIO.logDebug("stopConsumption called") *>
@@ -189,7 +189,7 @@ private[consumer] final class Runloop private (
       assignedStreams.partition(control => isRevoked(control.tp))
 
     ZIO
-      .foreachDiscard(revokedStreams)(_.end())
+      .foreachDiscard(revokedStreams)(_.end)
       .as(
         Runloop.RevokeResult(
           pendingRequests = pendingRequests.filter(req => !isRevoked(req.tp)),
@@ -385,11 +385,28 @@ private[consumer] final class Runloop private (
                          pollResult.records
                        )
       updatedPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
+      // Using `runningStreams` instead of `updatedStreams` because starting streams cannot exceed
+      // their poll interval yet:
+      _ <- checkStreamPollInterval(runningStreams)
     } yield state.copy(
       pendingRequests = fulfillResult.pendingRequests,
       pendingCommits = updatedPendingCommits,
       assignedStreams = updatedStreams
     )
+
+  /**
+   * Check each stream to see if it exceeded its poll interval. If so, halt it. In addition, if any stream has exceeded
+   * its poll interval, shutdown the consumer.
+   */
+  private def checkStreamPollInterval(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Unit] =
+    for {
+      anyExceeded <- ZIO.foldLeft(streams)(false) { case (acc, stream) =>
+                       stream.maxPollIntervalExceeded
+                         .tap(exceeded => if (exceeded) stream.halt else ZIO.unit)
+                         .map(acc || _)
+                     }
+      _ <- shutdown.when(anyExceeded)
+    } yield ()
 
   private def handleCommand(state: State, cmd: RunloopCommand.StreamCommand): Task[State] = {
     def doChangeSubscription(newSubscriptionState: SubscriptionState): Task[State] =
@@ -458,7 +475,7 @@ private[consumer] final class Runloop private (
       case RunloopCommand.StopAllStreams =>
         for {
           _ <- ZIO.logDebug("Stop all streams initiated")
-          _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end())
+          _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end)
           _ <- partitionsHub.publish(Take.end)
           _ <- ZIO.logDebug("Stop all streams done")
         } yield state.copy(pendingRequests = Chunk.empty)
@@ -512,7 +529,6 @@ private[consumer] final class Runloop private (
 
     ZStream
       .fromQueue(commandQueue)
-      .timeoutFail[Throwable](RunloopTimeout)(runloopTimeout)
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
@@ -585,13 +601,13 @@ private[consumer] object Runloop {
     hasGroupId: Boolean,
     consumer: ConsumerAccess,
     pollTimeout: Duration,
+    maxPollInterval: Duration,
     commitTimeout: Duration,
     diagnostics: Diagnostics,
     offsetRetrieval: OffsetRetrieval,
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
     partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
-    runloopTimeout: Duration,
     fetchStrategy: FetchStrategy
   ): URIO[Scope, Runloop] =
     for {
@@ -606,8 +622,8 @@ private[consumer] object Runloop {
                   hasGroupId = hasGroupId,
                   consumer = consumer,
                   pollTimeout = pollTimeout,
+                  maxPollInterval = maxPollInterval,
                   commitTimeout = commitTimeout,
-                  runloopTimeout = runloopTimeout,
                   commandQueue = commandQueue,
                   lastRebalanceEvent = lastRebalanceEvent,
                   partitionsHub = partitionsHub,
