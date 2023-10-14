@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1697275394194,
+  "lastUpdate": 1697278068052,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -14744,6 +14744,66 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1498.2192336800001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e17900013e44b2add8dcfb1cf6d7a37de0c118ab",
+          "message": "Add processing timeout at the stream level (#1009)\n\nKafka's process to detect halted consumers is crude. Because it is based on polls, it works per consumer. Here we make it more fine-grained by doing slow consumer detection per stream.\r\n\r\nFor the Kafka client 'halting' means poll is not called for longer than `max.poll.interval.ms`. Translated to zio-kafka 'halting' means that a stream does not consume any records for `max.poll.interval.ms` or longer, while records are available.\r\n\r\nThe halted stream is interrupted so that it can fail properly. In addition, we shut down the entire consumer. This will help the broker to detect slow consumers. Ideally we would only stop the subscription that the stream belongs to. Unfortunately, we do not maintain a topic belongs-to subscription relation. Therefore, stopping only the affected subscription is left for a future change.\r\n\r\nFixes #902.",
+          "timestamp": "2023-10-14T11:52:04+02:00",
+          "tree_id": "9731e497813b01f6a77e55cc87b7dfe0167e1acb",
+          "url": "https://github.com/zio/zio-kafka/commit/e17900013e44b2add8dcfb1cf6d7a37de0c118ab"
+        },
+        "date": 1697278049243,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 555.7818149,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 556.93892108,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 684.3293836400001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 683.4796817399999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1695.8758614999997,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 1322.9938578800002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
