@@ -35,6 +35,32 @@ final case class ConsumerSettings(
     case OffsetRetrieval.Manual(_)   => Map.empty
   }
 
+  /**
+   * Tunes the consumer for high throughput.
+   *
+   * Sets poll timeout to 500 ms and `max.poll.records` to 2000.
+   *
+   * @see withPollTimeout
+   * @see withMaxPollRecords
+   */
+  def tuneForHighThroughput: ConsumerSettings =
+    this
+      .withPollTimeout(500.millis)
+      .withMaxPollRecords(2000)
+
+  /**
+   * Tunes the consumer for low latency.
+   *
+   * Sets poll timeout to 50 ms and `max.poll.records` to 100.
+   *
+   * @see withPollTimeout
+   * @see withMaxPollRecords
+   */
+  def tuneForLowLatency: ConsumerSettings =
+    this
+      .withPollTimeout(50.millis)
+      .withMaxPollRecords(100)
+
   def driverSettings: Map[String, AnyRef] =
     Map(
       ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false"
@@ -69,7 +95,7 @@ final case class ConsumerSettings(
    * number of record to poll (see https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records) is
    * collected.
    *
-   * The default is `50ms` which to good for low latency applications. Set this higher, e.g. `500ms` for better
+   * The default is `50ms` which is good for low latency applications. Set this higher, e.g. `500ms` for better
    * throughput.
    */
   def withPollTimeout(timeout: Duration): ConsumerSettings =
@@ -148,7 +174,6 @@ final case class ConsumerSettings(
 }
 
 object ConsumerSettings {
-  val defaultRunloopTimeout: Duration = 4.minutes
   val defaultCommitTimeout: Duration  = 15.seconds
 
   def apply(bootstrapServers: List[String]) =
