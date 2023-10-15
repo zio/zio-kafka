@@ -336,13 +336,17 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                           maxPollInterval = 1.second,
                           `max.poll.records` = 2
                         )
-            consumer <- Consumer.make(settings.withPollTimeout(100.millis))
+                          .map(_.withPollTimeout(50.millis))
+            consumer <- Consumer.make(settings)
             _        <- scheduledProduce(topic1, Schedule.fixed(50.millis).jittered).runDrain.forkScoped
             _        <- scheduledProduce(topic2, Schedule.fixed(200.millis).jittered).runDrain.forkScoped
             // The slow consumer:
             c1 <- consumer
                     .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
-                    .tap(r => ZIO.sleep(5.seconds).when(r.key == "key3"))
+                    // The runner for GitHub Actions is a bit underpowered. The machine is so busy that the logic
+                    // that detects the timeout doesn't get the chance to execute quickly enough. To compensate we
+                    // sleep a huge amount of time:
+                    .tap(r => ZIO.sleep(10.seconds).when(r.key == "key3"))
                     // Use `take` to ensure the test ends quickly, even when the interrupt fails to occur.
                     // Because of chunking, we need to pull more than 3 records before the interrupt kicks in.
                     .take(100)
