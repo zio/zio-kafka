@@ -38,28 +38,32 @@ final case class ConsumerSettings(
   /**
    * Tunes the consumer for high throughput.
    *
-   * Sets poll timeout to 500 ms and `max.poll.records` to 2000.
+   * Sets poll timeout to 500 ms, `max.poll.records` to 2000 and `maxPartitionQueueSize` to 4096.
    *
-   * @see withPollTimeout
-   * @see withMaxPollRecords
+   * @see [[ConsumerSettings.withPollTimeout]]
+   * @see [[ConsumerSettings.withMaxPollRecords]]
+   * @see [[zio.kafka.consumer.fetch.QueueSizeBasedFetchStrategy]]
    */
   def tuneForHighThroughput: ConsumerSettings =
     this
       .withPollTimeout(500.millis)
       .withMaxPollRecords(2000)
+      .withFetchStrategy(QueueSizeBasedFetchStrategy(maxPartitionQueueSize = 4096))
 
   /**
    * Tunes the consumer for low latency.
    *
-   * Sets poll timeout to 50 ms and `max.poll.records` to 100.
+   * Sets poll timeout to 50 ms, `max.poll.records` to 100 and `maxPartitionQueueSize` to 512.
    *
-   * @see withPollTimeout
-   * @see withMaxPollRecords
+   * @see [[ConsumerSettings.withPollTimeout]]
+   * @see [[ConsumerSettings.withMaxPollRecords]]
+   * @see [[zio.kafka.consumer.fetch.QueueSizeBasedFetchStrategy]]
    */
   def tuneForLowLatency: ConsumerSettings =
     this
       .withPollTimeout(50.millis)
       .withMaxPollRecords(100)
+      .withFetchStrategy(QueueSizeBasedFetchStrategy(maxPartitionQueueSize = 512))
 
   def driverSettings: Map[String, AnyRef] =
     Map(
