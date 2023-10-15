@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1697358570545,
+  "lastUpdate": 1697358683221,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -15084,6 +15084,62 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1352.69985518,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "committer": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "id": "88ab0b7fc0b1d31a0a1721b077986c184f1e5724",
+          "message": "Attempt to fix flaky test",
+          "timestamp": "2023-10-14T06:18:35Z",
+          "url": "https://github.com/zio/zio-kafka/pull/1082/commits/88ab0b7fc0b1d31a0a1721b077986c184f1e5724"
+        },
+        "date": 1697358662485,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 562.4512173799999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 561.7210950599999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 700.7128939400001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 702.2422349200001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1662.308713,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 1378.34432052,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
