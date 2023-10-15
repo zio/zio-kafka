@@ -14,9 +14,13 @@ val settings = ConsumerSettings(bootstrapServers)
 The kafka client can be tuned for either high throughput or low latency, unfortunately not both.
 The most important settings for tuning throughput and latency are:
 
-* poll timeout — This is the maximum time to block while polling the Kafka consumer. Zio-kafka's default is 50ms which is good for low latency applications. Set this higher, e.g. `500ms` for better throughput.
-* [configuration `max.poll.records`](https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records) — The maximum number of records a poll will return. Kafka defaults this to 500. You can set this higher for more throughput, or lower for lower latency.
-* the fetch strategy parameter `maxPartitionQueueSize` — when the number of records in a partition queue is below this value, zio-kafka will start to pre-fetch more records from Kafka. The default value for this parameter is `1024`; 2 * the default `max.poll.records` of 500, rounded to the nearest power of 2.
+* poll timeout — This is the maximum time to block while polling the Kafka consumer. Zio-kafka's default is 50ms which
+  is good for low latency applications. Set this higher, e.g. `500ms` for better throughput.
+* [configuration `max.poll.records`](https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records) — The maximum number of records a poll will return. Kafka defaults this to
+  500. You can set this higher for more throughput, or lower for lower latency.
+* the fetch strategy parameter `partitionPreFetchBufferLimit` — when the number of records in a partition queue is
+  below this value, zio-kafka will start to pre-fetch and buffer more records from Kafka. The default value for this
+  parameter is `1024`; 2 * the default `max.poll.records` of 500, rounded to the nearest power of 2.
 
 Methods `ConsumerSettings.tuneForHighThroughput` and `ConsumerSettings.tuneForLowLatency` make it easy to configure
 these parameters:
@@ -27,19 +31,25 @@ val lowLatencySettings = ConsumerSettings(bootstrapServers).tuneForLowLatency
 ```
 
 Kafka’s performance is not very sensitive to record size. However, when records become very small (< 100 bytes) or very
-large (> 100Kb), increasing or decreasing `max.poll.records` and `maxPartitionQueueSize` can be considered.
+large (> 100Kb), increasing or decreasing `max.poll.records` and `partitionPreFetchBufferLimit` can be considered.
 
 ## High number of partitions
 
-When a lot of partitions need to be consumed, we need to take into account that heap is needed to store the records in the partition queues. A very rough estimate for the maximum amount of heap needed is given by: `average record size` * `number of of partitions` * max(`maxPartitionQueueSize`, `max.poll.records`).
+When a lot of partitions need to be consumed, we need to take into account that heap is needed to store the records in
+the partition queues. A very rough estimate for the maximum amount of heap needed is given by: `average record size` *
+`number of of partitions` * max(`partitionPreFetchBufferLimit`, `max.poll.records`).
 
-The total can be tuned by changing the `maxPartitionQueueSize`, `max.poll.records` settings.
+The total can be tuned by changing the `partitionPreFetchBufferLimit`, `max.poll.records` settings.
 
-Another option is to write a custom `FetchStrategy`. For example the `ManyPartitionsQueueSizeBasedFetchStrategy` in [draft PR 970](https://github.com/zio/zio-kafka/pull/970) (not yet tested at scale, use at your own risk). Note that the fetch strategy API is marked as experimental and may change without notice in any future zio-kafka version.
+Another option is to write a custom `FetchStrategy`. For example the `ManyPartitionsQueueSizeBasedFetchStrategy` in
+[draft PR 970](https://github.com/zio/zio-kafka/pull/970) (not yet tested at scale, use at your own risk). Note that the fetch strategy API is marked as
+experimental and may change without notice in any future zio-kafka version.
 
 ## Long processing durations
 
-To detect stalled consumers, Kafka revokes a partition when a consumer does not poll within the max poll interval (see [configuration `max.poll.interval.ms`](https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms)). The default max poll interval is 5 minutes. After a partition is revoked, it will be assigned to another consumer.
+To detect stalled consumers, Kafka revokes a partition when a consumer does not poll within the max poll interval (see
+[configuration `max.poll.interval.ms`](https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms)). The default max poll interval is 5 minutes. After a partition is revoked,
+it will be assigned to another consumer.
 
 In zio-kafka (versions 2.5.1+) a stream needs to pull data within the max poll interval. If this doesn't happen, the
 stream is interrupted with a failure and the whole consumer shuts down.
@@ -63,4 +73,5 @@ On older zio-kafka versions `withMaxPollInterval` is not available. Use the foll
 ```
 
 ⚠️In zio-kafka versions 2.2 up to 2.5.0 it may also be necessary to increase the `runloopTimeout` setting.
-When no stream is processing data for this amount of time (while new data is available), the consumer will halt with a failure. In zio-kafka 2.5.0 `runloopTimeout` defaults to 4 minutes, a little bit lower than `max.poll.interval.ms`.
+When no stream is processing data for this amount of time (while new data is available), the consumer will halt with a
+failure. In zio-kafka 2.5.0 `runloopTimeout` defaults to 4 minutes, a little bit lower than `max.poll.interval.ms`.

@@ -46,7 +46,7 @@ trait ComparisonBenchmark extends ZioBenchmark[Env] {
         groupId = Some(randomThing("client")),
         // A more production worthy value:
         `max.poll.records` = 1000
-      ).map(_.withMaxPartitionQueueSize(8192))
+      ).map(_.withPartitionPreFetchBufferLimit(8192))
     )
 
   override final def bootstrap: ULayer[Env] =
