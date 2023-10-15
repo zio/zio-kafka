@@ -7,9 +7,7 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.{ Take, ZStream }
 import zio.{ Chunk, Clock, Duration, LogAnnotation, Promise, Queue, Ref, UIO, ZIO }
 
-import java.time.Instant
 import java.util.concurrent.TimeoutException
-import scala.math.Ordered.orderingToOrdered
 import scala.util.control.NoStackTrace
 
 final class PartitionStreamControl private (
@@ -21,6 +19,8 @@ final class PartitionStreamControl private (
   queueInfoRef: Ref[QueueInfo],
   maxPollInterval: Duration
 ) {
+  private val maxPollIntervalNanos = maxPollInterval.toNanos
+
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),
     LogAnnotation("partition", tp.partition().toString)
@@ -29,8 +29,8 @@ final class PartitionStreamControl private (
   /** Offer new data for the stream to process. */
   private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
     for {
-      now <- Clock.instant
-      newPullDeadline = now.plus(maxPollInterval)
+      now <- Clock.nanoTime
+      newPullDeadline = now + maxPollIntervalNanos
       _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
       _ <- dataQueue.offer(Take.chunk(data))
     } yield ()
@@ -44,7 +44,7 @@ final class PartitionStreamControl private (
    */
   private[internal] def maxPollIntervalExceeded: UIO[Boolean] =
     for {
-      now       <- Clock.instant
+      now       <- Clock.nanoTime
       queueInfo <- queueInfoRef.get
     } yield queueInfo.deadlineExceeded(now)
 
@@ -82,16 +82,20 @@ final class PartitionStreamControl private (
 
 object PartitionStreamControl {
 
+  private type NanoTime = Long
+
   private[internal] def newPartitionStream(
     tp: TopicPartition,
     commandQueue: Queue[RunloopCommand],
     diagnostics: Diagnostics,
     maxPollInterval: Duration
   ): UIO[PartitionStreamControl] = {
+    val maxPollIntervalNanos = maxPollInterval.toNanos
+
     def registerPull(queueInfo: Ref[QueueInfo], recordCount: Int): UIO[Unit] =
       for {
-        now <- Clock.instant
-        newPullDeadline = now.plus(maxPollInterval)
+        now <- Clock.nanoTime
+        newPullDeadline = now + maxPollIntervalNanos
         _ <- queueInfo.update(_.withPull(newPullDeadline, recordCount))
       } yield ()
 
@@ -100,7 +104,7 @@ object PartitionStreamControl {
       interruptionPromise <- Promise.make[Throwable, Unit]
       completedPromise    <- Promise.make[Nothing, Unit]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
-      now                 <- Clock.instant
+      now                 <- Clock.nanoTime
       queueInfo           <- Ref.make(QueueInfo(now, 0))
       requestAndAwaitData =
         for {
@@ -137,14 +141,14 @@ object PartitionStreamControl {
 
   // The `pullDeadline` is only relevant when `size > 0`. We initialize `pullDeadline` as soon as size goes above 0.
   // (Note that theoretically `size` can go below 0 when the update operations are reordered.)
-  private final case class QueueInfo(pullDeadline: Instant, size: Int) {
-    def withOffer(newPullDeadline: Instant, recordCount: Int): QueueInfo =
+  private final case class QueueInfo(pullDeadline: NanoTime, size: Int) {
+    def withOffer(newPullDeadline: NanoTime, recordCount: Int): QueueInfo =
       QueueInfo(if (size <= 0) newPullDeadline else pullDeadline, size + recordCount)
 
-    def withPull(newPullDeadline: Instant, recordCount: Int): QueueInfo =
+    def withPull(newPullDeadline: NanoTime, recordCount: Int): QueueInfo =
       QueueInfo(newPullDeadline, size - recordCount)
 
-    def deadlineExceeded(now: Instant): Boolean =
+    def deadlineExceeded(now: NanoTime): Boolean =
       size > 0 && pullDeadline <= now
   }
 
