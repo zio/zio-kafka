@@ -40,9 +40,12 @@ final case class ConsumerSettings(
    *
    * Sets poll timeout to 500 ms, `max.poll.records` to 2000 and `maxPartitionQueueSize` to 4096.
    *
-   * @see [[ConsumerSettings.withPollTimeout]]
-   * @see [[ConsumerSettings.withMaxPollRecords]]
-   * @see [[zio.kafka.consumer.fetch.QueueSizeBasedFetchStrategy]]
+   * @see
+   *   [[ConsumerSettings.withPollTimeout]]
+   * @see
+   *   [[ConsumerSettings.withMaxPollRecords]]
+   * @see
+   *   [[zio.kafka.consumer.fetch.QueueSizeBasedFetchStrategy]]
    */
   def tuneForHighThroughput: ConsumerSettings =
     this
@@ -55,9 +58,12 @@ final case class ConsumerSettings(
    *
    * Sets poll timeout to 50 ms, `max.poll.records` to 100 and `maxPartitionQueueSize` to 512.
    *
-   * @see [[ConsumerSettings.withPollTimeout]]
-   * @see [[ConsumerSettings.withMaxPollRecords]]
-   * @see [[zio.kafka.consumer.fetch.QueueSizeBasedFetchStrategy]]
+   * @see
+   *   [[ConsumerSettings.withPollTimeout]]
+   * @see
+   *   [[ConsumerSettings.withMaxPollRecords]]
+   * @see
+   *   [[zio.kafka.consumer.fetch.QueueSizeBasedFetchStrategy]]
    */
   def tuneForLowLatency: ConsumerSettings =
     this
@@ -178,7 +184,7 @@ final case class ConsumerSettings(
 }
 
 object ConsumerSettings {
-  val defaultCommitTimeout: Duration  = 15.seconds
+  val defaultCommitTimeout: Duration = 15.seconds
 
   def apply(bootstrapServers: List[String]) =
     new ConsumerSettings().withBootstrapServers(bootstrapServers)
