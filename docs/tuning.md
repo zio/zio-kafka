@@ -9,6 +9,13 @@ val settings = ConsumerSettings(bootstrapServers)
   .... etc.
 ```
 
+## Names
+
+Two very similarly named settings are relevant. Don't mix them up:
+
+* `pollTimeout` — how long a poll may take
+* `max.poll.interval.ms` — the maximum time between polls
+
 ## Throughput and latency
 
 The kafka client can be tuned for either high throughput or low latency, unfortunately not both.
