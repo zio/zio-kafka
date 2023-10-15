@@ -82,6 +82,8 @@ final class PartitionStreamControl private (
 
 object PartitionStreamControl {
 
+  private type NanoTime = Long
+
   private[internal] def newPartitionStream(
     tp: TopicPartition,
     commandQueue: Queue[RunloopCommand],
@@ -139,14 +141,14 @@ object PartitionStreamControl {
 
   // The `pullDeadline` is only relevant when `size > 0`. We initialize `pullDeadline` as soon as size goes above 0.
   // (Note that theoretically `size` can go below 0 when the update operations are reordered.)
-  private final case class QueueInfo(pullDeadline: Long, size: Int) {
-    def withOffer(newPullDeadline: Long, recordCount: Int): QueueInfo =
+  private final case class QueueInfo(pullDeadline: NanoTime, size: Int) {
+    def withOffer(newPullDeadline: NanoTime, recordCount: Int): QueueInfo =
       QueueInfo(if (size <= 0) newPullDeadline else pullDeadline, size + recordCount)
 
-    def withPull(newPullDeadline: Long, recordCount: Int): QueueInfo =
+    def withPull(newPullDeadline: NanoTime, recordCount: Int): QueueInfo =
       QueueInfo(newPullDeadline, size - recordCount)
 
-    def deadlineExceeded(now: Long): Boolean =
+    def deadlineExceeded(now: NanoTime): Boolean =
       size > 0 && pullDeadline <= now
   }
 
