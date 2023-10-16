@@ -1,7 +1,7 @@
 package zio.kafka.consumer.fetch
 
 import org.apache.kafka.common.TopicPartition
-import zio.kafka.consumer.internal.PartitionStreamControl
+import zio.kafka.consumer.internal.PartitionStream
 import zio.{ Chunk, ZIO }
 
 import scala.collection.mutable
@@ -21,7 +21,7 @@ trait FetchStrategy {
    * @return
    *   the partitions that may fetch in the next poll
    */
-  def selectPartitionsToFetch(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Set[TopicPartition]]
+  def selectPartitionsToFetch(streams: Chunk[PartitionStream]): ZIO[Any, Nothing, Set[TopicPartition]]
 }
 
 /**
@@ -38,7 +38,7 @@ trait FetchStrategy {
  * The default value for this parameter is 2 * the default `max.poll.records` of 500, rounded to the nearest power of 2.
  */
 final case class QueueSizeBasedFetchStrategy(partitionPreFetchBufferLimit: Int = 1024) extends FetchStrategy {
-  override def selectPartitionsToFetch(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Set[TopicPartition]] =
+  override def selectPartitionsToFetch(streams: Chunk[PartitionStream]): ZIO[Any, Nothing, Set[TopicPartition]] =
     ZIO
       .foldLeft(streams)(mutable.ArrayBuilder.make[TopicPartition]) { case (acc, stream) =>
         stream.queueSize.map { queueSize =>

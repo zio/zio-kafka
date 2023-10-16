@@ -10,6 +10,11 @@ import zio.{ Chunk, Clock, Duration, LogAnnotation, Promise, Queue, Ref, UIO, ZI
 import java.util.concurrent.TimeoutException
 import scala.util.control.NoStackTrace
 
+abstract class PartitionStream {
+  def tp: TopicPartition
+  def queueSize: UIO[Int]
+}
+
 final class PartitionStreamControl private (
   val tp: TopicPartition,
   stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
@@ -18,7 +23,7 @@ final class PartitionStreamControl private (
   completedPromise: Promise[Nothing, Unit],
   queueInfoRef: Ref[QueueInfo],
   maxPollInterval: Duration
-) {
+) extends PartitionStream {
   private val maxPollIntervalNanos = maxPollInterval.toNanos
 
   private val logAnnotate = ZIO.logAnnotate(
