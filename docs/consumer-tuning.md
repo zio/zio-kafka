@@ -1,4 +1,7 @@
-# Tuning the consumer
+---
+id: consumer-tuning
+title: "Tuning the consumer"
+---
 
 Zio-kafka's consumer can be tuned with the `ConsumerSettings` class. 
 
@@ -21,16 +24,17 @@ Two very similarly named settings are relevant. Don't mix them up:
 The kafka client can be tuned for either high throughput or low latency, unfortunately not both.
 The most important settings for tuning throughput and latency are:
 
-* poll timeout — This is the maximum time to block while polling the Kafka consumer. Zio-kafka's default is 50ms which
-  is good for low latency applications. Set this higher, e.g. `500ms` for better throughput.
-* [configuration `max.poll.records`](https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records) — The maximum number of records a poll will return. Kafka defaults this to
-  500. You can set this higher for more throughput, or lower for lower latency.
-* the fetch strategy parameter `partitionPreFetchBufferLimit` — when the number of records in a partition queue is
+* zio-kafka's `pollTimeout` — This is the maximum time to block while polling the Kafka consumer. Zio-kafka's default
+  is `50ms` which is good for low latency applications. Set this higher, e.g. `500ms` for better throughput.
+* kafka's [configuration `max.poll.records`](https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records) — The maximum number of records a poll will return. Kafka defaults
+  this to `500`. You can set this higher for more throughput, or lower for lower latency.
+* zio-kafka's fetch-strategy `partitionPreFetchBufferLimit` — when the number of records in a partition queue is
   below this value, zio-kafka will start to pre-fetch and buffer more records from Kafka. The default value for this
   parameter is `1024`; 2 * the default `max.poll.records` of 500, rounded to the nearest power of 2.
 
-Methods `ConsumerSettings.tuneForHighThroughput` and `ConsumerSettings.tuneForLowLatency` make it easy to configure
-these parameters:
+Zio-kafka provides 2 methods that set these settings for 2 common use cases: `ConsumerSettings.tuneForHighThroughput`
+and `ConsumerSettings.tuneForLowLatency`.
+Note that their implementation may vary over time. You can use them as follows:
 
 ```scala
 val highThroughputSettings = ConsumerSettings(bootstrapServers).tuneForHighThroughput

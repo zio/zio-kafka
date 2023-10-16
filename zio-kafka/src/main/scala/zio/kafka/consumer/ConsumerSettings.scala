@@ -172,7 +172,7 @@ final case class ConsumerSettings(
   def withPartitionPreFetchBufferLimit(partitionPreFetchBufferLimit: Int): ConsumerSettings =
     copy(fetchStrategy = QueueSizeBasedFetchStrategy(partitionPreFetchBufferLimit))
 
-  @deprecated("Use withPartitionPreFetchBufferLimit instead", "3.5.1")
+  @deprecated("Use withPartitionPreFetchBufferLimit instead", "2.6.0")
   def withMaxPartitionQueueSize(partitionPreFetchBufferLimit: Int): ConsumerSettings =
     withPartitionPreFetchBufferLimit(partitionPreFetchBufferLimit)
 
