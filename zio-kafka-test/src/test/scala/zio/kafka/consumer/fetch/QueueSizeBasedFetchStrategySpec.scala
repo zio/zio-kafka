@@ -8,8 +8,8 @@ import zio.{ Chunk, Scope, UIO, ZIO }
 
 object QueueSizeBasedFetchStrategySpec extends ZIOSpecDefaultSlf4j {
 
-  private val maxPartitionQueueSize = 50
-  private val fetchStrategy         = QueueSizeBasedFetchStrategy(maxPartitionQueueSize)
+  private val partitionPreFetchBufferLimit = 50
+  private val fetchStrategy                = QueueSizeBasedFetchStrategy(partitionPreFetchBufferLimit)
 
   private val tp10 = new TopicPartition("topic1", 0)
   private val tp11 = new TopicPartition("topic1", 1)
@@ -17,13 +17,19 @@ object QueueSizeBasedFetchStrategySpec extends ZIOSpecDefaultSlf4j {
 
   override def spec: Spec[TestEnvironment with Scope, Any] =
     suite("QueueSizeBasedFetchStrategySpec")(
-      test("stream with queue size above maxSize is paused") {
+      test("stream with queue size above limit is paused") {
         val streams = Chunk(newStream(tp10, currentQueueSize = 100))
         for {
           result <- fetchStrategy.selectPartitionsToFetch(streams)
         } yield assertTrue(result.isEmpty)
       },
-      test("stream with queue size less-equal maxSize may resume") {
+      test("stream with queue size equal to limit is paused") {
+        val streams = Chunk(newStream(tp10, currentQueueSize = partitionPreFetchBufferLimit))
+        for {
+          result <- fetchStrategy.selectPartitionsToFetch(streams)
+        } yield assertTrue(result.isEmpty)
+      },
+      test("stream with queue size below limit may resume") {
         val streams = Chunk(newStream(tp10, currentQueueSize = 10))
         for {
           result <- fetchStrategy.selectPartitionsToFetch(streams)
@@ -32,7 +38,7 @@ object QueueSizeBasedFetchStrategySpec extends ZIOSpecDefaultSlf4j {
       test("some streams may resume") {
         val streams = Chunk(
           newStream(tp10, currentQueueSize = 10),
-          newStream(tp11, currentQueueSize = maxPartitionQueueSize),
+          newStream(tp11, currentQueueSize = partitionPreFetchBufferLimit - 1),
           newStream(tp20, currentQueueSize = 100)
         )
         for {
