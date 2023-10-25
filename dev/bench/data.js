@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1698197062121,
+  "lastUpdate": 1698215300323,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -15944,6 +15944,66 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1308.6229269000003,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "145262613+zio-scala-steward[bot]@users.noreply.github.com",
+            "name": "zio-scala-steward[bot]",
+            "username": "zio-scala-steward[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "898170644d31046350678feed7eca9ae28b74f4d",
+          "message": "Update scalafmt-core to 3.7.15 (#1085)\n\nCo-authored-by: zio-scala-steward[bot] <145262613+zio-scala-steward[bot]@users.noreply.github.com>",
+          "timestamp": "2023-10-25T10:13:00+04:00",
+          "tree_id": "32859d5c8d3c317cc9b4e2a6f2efc01bd6afa75c",
+          "url": "https://github.com/zio/zio-kafka/commit/898170644d31046350678feed7eca9ae28b74f4d"
+        },
+        "date": 1698215281657,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 554.47983144,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 554.4073390199999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 693.1414893599999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 692.3071636599999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1503.7507733599998,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 1262.97053964,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
