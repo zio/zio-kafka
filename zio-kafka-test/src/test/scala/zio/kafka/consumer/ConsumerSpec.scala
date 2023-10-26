@@ -740,6 +740,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       test("restartStreamsOnRebalancing mode closes all partition streams") {
         val nrPartitions = 5
         val nrMessages   = 100
+        val partitionIds = (0 until nrPartitions).toList
 
         for {
           // Produce messages on several partitions
@@ -755,9 +756,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                }
 
           // Consume messages
-          messagesReceived <-
-            ZIO.foreach((0 until nrPartitions).toList)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
-          drainCount <- Ref.make(0)
+          // A map with partition as key, and a messages-received-counter Ref as value:
+          messagesReceived <- ZIO.foreach(partitionIds)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
+          drainCount       <- Ref.make(0)
           subscription = Subscription.topics(topic)
           fib <- ZIO
                    .logAnnotate("consumer", "1") {
@@ -771,9 +772,10 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                              .flatMapPar(Int.MaxValue) { case (tp, partitionStream) =>
                                ZStream.finalizer(ZIO.logDebug(s"TP ${tp.toString} finalizer")) *>
                                  partitionStream.mapChunksZIO { records =>
-                                   OffsetBatch(records.map(_.offset)).commit *> messagesReceived(tp.partition)
-                                     .update(_ + records.size)
-                                     .as(records)
+                                   for {
+                                     _ <- OffsetBatch(records.map(_.offset)).commit
+                                     _ <- messagesReceived(tp.partition).update(_ + records.size)
+                                   } yield records
                                  }
                              }
                              .runDrain
@@ -803,6 +805,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _ <- ZIO
                  .foreach(messagesReceived.values)(_.get)
                  .map(_.sum)
+                 .debug("Messages received by Fib1: ")
                  .repeat(Schedule.recurUntil((n: Int) => n == nrMessages) && Schedule.fixed(100.millis))
 
           // Starting a new consumer that will stop after receiving 20 messages,
@@ -825,17 +828,20 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     .fork
 
           // Waiting until fib1's partition streams got restarted because of the rebalancing
-          _ <- drainCount.get.repeat(Schedule.recurUntil((n: Int) => n == 1) && Schedule.fixed(100.millis))
+          // Note: on fast computers we may not never see `drainCount == 1` but `2` immediately, therefore
+          // we need to check for `drainCount >= 1`.
+          _ <- drainCount.get.repeat(Schedule.recurUntil((_: Int) >= 1) && Schedule.fixed(100.millis))
           _ <- ZIO.logDebug("Consumer 1 finished rebalancing")
 
           // All messages processed, the partition streams of fib are still running.
           // Saving the values and resetting the counters
           messagesReceived0 <-
             ZIO
-              .foreach((0 until nrPartitions).toList) { i =>
-                messagesReceived(i).get.flatMap { v =>
-                  Ref.make(v).map(r => i -> r)
-                } <* messagesReceived(i).set(0)
+              .foreach(partitionIds) { i =>
+                for {
+                  v <- messagesReceived(i).getAndSet(0)
+                  p <- Ref.make(v).map(i -> _)
+                } yield p
               }
               .map(_.toMap)
 
