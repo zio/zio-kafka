@@ -817,12 +817,16 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .take(20)
                         .runDrain
                         .provideSomeLayer[Kafka](
-                          consumer(
-                            client2,
-                            Some(group),
-                            clientInstanceId = Some("consumer2"),
-                            properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "10")
-                          )
+                          // Reduce `max.poll.records` and disable pre-fetch so that we are sure that consumer 2 does
+                          // not pre-fetch more than it will process.
+                          ZLayer {
+                            consumerSettings(
+                              client2,
+                              Some(group),
+                              clientInstanceId = Some("consumer2"),
+                              `max.poll.records` = 10
+                            ).map(_.withFetchStrategy(_ => ZIO.succeed(Set.empty)))
+                          } >>> minimalConsumer()
                         )
                     }
                     .fork
