@@ -51,9 +51,11 @@ private final case class OffsetBatchImpl(
     val newOffsets = Map.newBuilder[TopicPartition, OffsetAndMetadata]
     newOffsets ++= offsets
     otherOffsets.offsets.foreach { case (tp, offset) =>
-      val existing = offsets.getOrElse(tp, new OffsetAndMetadata(-1L))
-      if (existing.offset < offset.offset)
-        newOffsets += tp -> offset
+      val laterOffset = offsets.get(tp) match {
+        case Some(existing) => if (existing.offset < offset.offset) offset else existing
+        case None => offset
+      }
+      newOffsets += tp -> laterOffset
     }
 
     copy(offsets = newOffsets.result())
