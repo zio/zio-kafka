@@ -416,6 +416,29 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                        .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / nrPartitions))))
       },
+      test("commits an offset with metadata") {
+        for {
+          topic    <- randomTopic
+          group    <- randomGroup
+          metadata <- randomThing("metadata")
+          client   <- randomClient
+          _        <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = 1))
+          _        <- produceOne(topic, "key", "msg")
+
+          // Consume messages
+          subscription = Subscription.topics(topic)
+          offsets <- (Consumer
+                       .partitionedStream(subscription, Serde.string, Serde.string)
+                       .flatMap(_._2.map(_.offset.withMetadata(metadata)))
+                       .take(1)
+                       .transduce(Consumer.offsetBatches)
+                       .take(1)
+                       .mapZIO(_.commit)
+                       .runDrain *>
+                       Consumer.committed(Set(new TopicPartition(topic, 0))))
+                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
+        } yield assert(offsets.values.headOption.flatten.map(_.metadata))(isSome(equalTo(metadata)))
+      },
       test("handle rebalancing by completing topic-partition streams") {
         val nrMessages   = 50
         val nrPartitions = 6 // Must be even and strictly positive
