@@ -53,7 +53,7 @@ private final case class OffsetBatchImpl(
     otherOffsets.offsets.foreach { case (tp, offset) =>
       val laterOffset = offsets.get(tp) match {
         case Some(existing) => if (existing.offset < offset.offset) offset else existing
-        case None => offset
+        case None           => offset
       }
       newOffsets += tp -> laterOffset
     }
