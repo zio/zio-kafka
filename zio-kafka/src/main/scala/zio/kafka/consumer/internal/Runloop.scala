@@ -294,7 +294,6 @@ private[consumer] final class Runloop private (
                s" resuming ${partitionsToFetch} partitions"
            )
       _ <- currentStateRef.set(state)
-      _ <- lastRebalanceEvent.set(RebalanceEvent.None)
       pollResult <-
         consumer.runloopAccess { c =>
           ZIO.suspend {
@@ -317,7 +316,7 @@ private[consumer] final class Runloop private (
                 tpWithoutData = requestedPartitions -- providedTps
               )
             } *>
-              lastRebalanceEvent.get.flatMap {
+              lastRebalanceEvent.getAndSet(RebalanceEvent.None).flatMap {
                 case RebalanceEvent(false, _, _, _, _) =>
                   // The fast track, rebalance listener was not invoked:
                   //   no assignment changes, only new records.
