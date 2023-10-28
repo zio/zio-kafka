@@ -346,7 +346,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     // The runner for GitHub Actions is a bit underpowered. The machine is so busy that the logic
                     // that detects the timeout doesn't get the chance to execute quickly enough. To compensate we
                     // sleep a huge amount of time:
-                    .tap(r => ZIO.sleep(10.seconds).when(r.key == "key3"))
+                    .tap(r => ZIO.sleep(20.seconds).when(r.key == "key3"))
                     // Use `take` to ensure the test ends quickly, even when the interrupt fails to occur.
                     // Because of chunking, we need to pull more than 3 records before the interrupt kicks in.
                     .take(100)
