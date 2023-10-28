@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1698481433374,
+  "lastUpdate": 1698482772324,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -16456,6 +16456,66 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1265.17930756,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9ada445c46b2bcf2454991245fba073ec4315279",
+          "message": "Keep track of last pulled offset (#1086)\n\nFor #830 we need to keep track of which records were pulled from the stream so that we can wait for them to be committed. This change prepares for that.\r\n\r\nThe idea is that the rebalance listener first ends the streams for revoked partitions, then it will get the last consumed offset using the now public `completedPromise`. With that info, it can await these commits to complete.\r\n\r\nThe advantage of this approach is that it is very precise; we only await offset commits for records that we know were pulled from the stream. Alternative implementation would track the given offsets inside Runloop where we do not have the exact knowledge of what was pulled or not.",
+          "timestamp": "2023-10-28T10:29:50+02:00",
+          "tree_id": "9d9f61ba2062eda2e0c8b6588cadf98c0e45d778",
+          "url": "https://github.com/zio/zio-kafka/commit/9ada445c46b2bcf2454991245fba073ec4315279"
+        },
+        "date": 1698482752080,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 563.1448476799999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 561.21139754,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 704.35276446,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 711.7456366,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1559.34980446,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 1391.57455896,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
