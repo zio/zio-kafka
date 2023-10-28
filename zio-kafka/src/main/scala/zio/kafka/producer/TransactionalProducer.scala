@@ -41,7 +41,7 @@ object TransactionalProducer {
             case Some(consumerGroupMetadata) =>
               val offsets: util.Map[TopicPartition, OffsetAndMetadata] =
                 offsetBatch.offsets.map { case (topicPartition, offset) =>
-                  topicPartition -> new OffsetAndMetadata(offset + 1)
+                  topicPartition -> new OffsetAndMetadata(offset.offset + 1, offset.metadata)
                 }.asJava
 
               ZIO.attemptBlocking(live.p.sendOffsetsToTransaction(offsets, consumerGroupMetadata))

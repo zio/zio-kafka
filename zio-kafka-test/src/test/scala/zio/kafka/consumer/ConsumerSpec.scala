@@ -346,7 +346,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     // The runner for GitHub Actions is a bit underpowered. The machine is so busy that the logic
                     // that detects the timeout doesn't get the chance to execute quickly enough. To compensate we
                     // sleep a huge amount of time:
-                    .tap(r => ZIO.sleep(10.seconds).when(r.key == "key3"))
+                    .tap(r => ZIO.sleep(20.seconds).when(r.key == "key3"))
                     // Use `take` to ensure the test ends quickly, even when the interrupt fails to occur.
                     // Because of chunking, we need to pull more than 3 records before the interrupt kicks in.
                     .take(100)
@@ -415,6 +415,29 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                        Consumer.committed((0 until nrPartitions).map(new TopicPartition(topic, _)).toSet))
                        .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / nrPartitions))))
+      },
+      test("commits an offset with metadata") {
+        for {
+          topic    <- randomTopic
+          group    <- randomGroup
+          metadata <- randomThing("metadata")
+          client   <- randomClient
+          _        <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = 1))
+          _        <- produceOne(topic, "key", "msg")
+
+          // Consume messages
+          subscription = Subscription.topics(topic)
+          offsets <- (Consumer
+                       .partitionedStream(subscription, Serde.string, Serde.string)
+                       .flatMap(_._2.map(_.offset.withMetadata(metadata)))
+                       .take(1)
+                       .transduce(Consumer.offsetBatches)
+                       .take(1)
+                       .mapZIO(_.commit)
+                       .runDrain *>
+                       Consumer.committed(Set(new TopicPartition(topic, 0))))
+                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
+        } yield assert(offsets.values.headOption.flatten.map(_.metadata))(isSome(equalTo(metadata)))
       },
       test("handle rebalancing by completing topic-partition streams") {
         val nrMessages   = 50
