@@ -759,6 +759,14 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           // A map with partition as key, and a messages-received-counter Ref as value:
           messagesReceived <- ZIO.foreach(partitionIds)(i => Ref.make[Int](0).map(i -> _)).map(_.toMap)
           drainCount       <- Ref.make(0)
+          // Reduce `max.poll.records` and disable pre-fetch.
+          consumer1Settings <- consumerSettings(
+                                 client1,
+                                 Some(group),
+                                 clientInstanceId = Some("consumer1"),
+                                 restartStreamOnRebalancing = true,
+                                 `max.poll.records` = 10
+                               ).map(_.withoutPartitionPreFetching)
           subscription = Subscription.topics(topic)
           fib <- ZIO
                    .logAnnotate("consumer", "1") {
@@ -790,13 +798,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                        )
                        .runDrain
                        .provideSomeLayer[Kafka](
-                         consumer(
-                           client1,
-                           Some(group),
-                           clientInstanceId = Some("consumer1"),
-                           restartStreamOnRebalancing = true,
-                           properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "10")
-                         )
+                         ZLayer.succeed(consumer1Settings) >>> minimalConsumer()
                        )
                    }
                    .fork
@@ -808,8 +810,16 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                  .debug("Messages received by Fib1: ")
                  .repeat(Schedule.recurUntil((n: Int) => n == nrMessages) && Schedule.fixed(100.millis))
 
-          // Starting a new consumer that will stop after receiving 20 messages,
-          // causing two rebalancing events for fib1 consumers on start and stop
+          // Starting a new consumer that will stop after receiving 20 messages, causing two rebalancing events for fib1
+          // consumers on start and stop.
+          // Reduce `max.poll.records` and disable pre-fetch so that we are sure that consumer 2 does not pre-fetch more
+          // than it will process.
+          consumer2Settings <- consumerSettings(
+                                 client2,
+                                 Some(group),
+                                 clientInstanceId = Some("consumer2"),
+                                 `max.poll.records` = 10
+                               ).map(_.withoutPartitionPreFetching)
           fib2 <- ZIO
                     .logAnnotate("consumer", "2") {
                       Consumer
@@ -817,23 +827,14 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .take(20)
                         .runDrain
                         .provideSomeLayer[Kafka](
-                          // Reduce `max.poll.records` and disable pre-fetch so that we are sure that consumer 2 does
-                          // not pre-fetch more than it will process.
-                          ZLayer {
-                            consumerSettings(
-                              client2,
-                              Some(group),
-                              clientInstanceId = Some("consumer2"),
-                              `max.poll.records` = 10
-                            ).map(_.withFetchStrategy(_ => ZIO.succeed(Set.empty)))
-                          } >>> minimalConsumer()
+                          ZLayer.succeed(consumer2Settings) >>> minimalConsumer()
                         )
                     }
                     .fork
 
           // Waiting until fib1's partition streams got restarted because of the rebalancing
-          // Note: on fast computers we may not never see `drainCount == 1` but `2` immediately, therefore
-          // we need to check for `drainCount >= 1`.
+          // Note: on fast computers we may not never see `drainCount == 1` but `2` immediately, therefore we need to
+          // check for `drainCount >= 1`.
           _ <- drainCount.get.repeat(Schedule.recurUntil((_: Int) >= 1) && Schedule.fixed(100.millis))
           _ <- ZIO.logDebug("Consumer 1 finished rebalancing")
 
@@ -849,8 +850,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               }
               .map(_.toMap)
 
-          // Publishing another N messages - now they will be distributed among the two consumers until
-          // fib2 stops after 20 messages
+          // Publishing another N messages - now they will be distributed among the two consumers until fib2 stops after
+          // 20 messages
           _ <- ZIO.foreachDiscard((nrMessages + 1) to (2 * nrMessages)) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
