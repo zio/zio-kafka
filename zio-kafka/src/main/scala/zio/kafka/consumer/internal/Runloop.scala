@@ -405,8 +405,10 @@ private[consumer] final class Runloop private (
    */
   private def checkStreamPollInterval(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Unit] =
     for {
+      now <- Clock.nanoTime
       anyExceeded <- ZIO.foldLeft(streams)(false) { case (acc, stream) =>
-                       stream.maxPollIntervalExceeded
+                       stream
+                         .maxPollIntervalExceeded(now)
                          .tap(exceeded => if (exceeded) stream.halt else ZIO.unit)
                          .map(acc || _)
                      }

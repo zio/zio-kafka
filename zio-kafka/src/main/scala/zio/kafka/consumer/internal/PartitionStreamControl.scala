@@ -3,7 +3,7 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.Offset
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.consumer.internal.PartitionStreamControl.QueueInfo
+import zio.kafka.consumer.internal.PartitionStreamControl.{ NanoTime, QueueInfo }
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.{ Take, ZStream }
 import zio.{ Chunk, Clock, Duration, LogAnnotation, Promise, Queue, Ref, UIO, ZIO }
@@ -62,15 +62,14 @@ final class PartitionStreamControl private (
   def queueSize: UIO[Int] = queueInfoRef.get.map(_.size)
 
   /**
+   * @param now
+   *   the time as given by `Clock.nanoTime`
    * @return
    *   `true` when the stream has data available, but none has been pulled for more than `maxPollInterval` (since data
    *   became available), `false` otherwise
    */
-  private[internal] def maxPollIntervalExceeded: UIO[Boolean] =
-    for {
-      now       <- Clock.nanoTime
-      queueInfo <- queueInfoRef.get
-    } yield queueInfo.deadlineExceeded(now)
+  private[internal] def maxPollIntervalExceeded(now: NanoTime): UIO[Boolean] =
+    queueInfoRef.get.map(_.deadlineExceeded(now))
 
   /** To be invoked when the partition was lost. */
   private[internal] def lost: UIO[Boolean] =
@@ -106,7 +105,7 @@ final class PartitionStreamControl private (
 
 object PartitionStreamControl {
 
-  private type NanoTime = Long
+  type NanoTime = Long
 
   private[internal] def newPartitionStream(
     tp: TopicPartition,
@@ -152,9 +151,11 @@ object PartitionStreamControl {
                    // First try to take all records that are available right now.
                    // When no data is available, request more data and await its arrival.
                    dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
-                 }.flattenTake
-                   .chunksWith(_.tap(records => registerPull(queueInfo, records)))
-                   .interruptWhen(interruptionPromise)
+                 }.flattenTake.chunksWith { s =>
+                   s.tap(records => registerPull(queueInfo, records))
+                     // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
+                     .mapZIO(chunk => interruptionPromise.await.whenZIO(interruptionPromise.isDone).as(chunk))
+                 }
     } yield new PartitionStreamControl(
       tp,
       stream,
