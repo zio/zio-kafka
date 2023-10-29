@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1698611040306,
+  "lastUpdate": 1698611150171,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -17364,6 +17364,66 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 1055.4897669199997,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a4ec8e0759f57889a2b69d642234b24916492131",
+          "message": "Make `partitionPreFetchBufferLimit` value `0` disable prefetching (#1091)\n\nBefore `ConsumerSettings.partitionPreFetchBufferLimit(1)` was needed to disable pre-fetching. After this change you can disable pre-fetching with `ConsumerSettings.partitionPreFetchBufferLimit(0)`, or simply with `ConsumerSettings.withoutPartitionPreFetching`.\r\n\r\nAlso: \r\n - fix flaky test `a consumer timeout interrupts the stream and shuts down the consumer` by no longer using `Zstream.interruptWhen`,\r\n - detect slow consumers slightly more performant by requesting time less often,\r\n - removed no longer true statement about powers of 2 in the documentation.",
+          "timestamp": "2023-10-29T21:08:32+01:00",
+          "tree_id": "d15b1c5633495edfa7ac46bed2c556fb4b5024ec",
+          "url": "https://github.com/zio/zio-kafka/commit/a4ec8e0759f57889a2b69d642234b24916492131"
+        },
+        "date": 1698611127470,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 565.8810973199999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 566.58676518,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 766.1443003600002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 746.0311789199998,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1362.2863387599998,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 1235.5044938799997,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
