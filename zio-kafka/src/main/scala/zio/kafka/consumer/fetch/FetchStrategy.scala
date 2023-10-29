@@ -34,7 +34,7 @@ trait FetchStrategy {
  *   values effectively disable backpressure at the cost of high memory usage, low values will effectively disable
  *   prefetching in favor of low memory consumption. The number of records that is fetched on every poll is controlled
  *   by the `max.poll.records` setting, the number of records fetched for every partition is somewhere between 0 and
- *   `max.poll.records`. A value that is a power of 2 offers somewhat better queueing performance.
+ *   `max.poll.records`.
  *
  * The default value for this parameter is 2 * the default `max.poll.records` of 500, rounded to the nearest power of 2.
  *

@@ -152,12 +152,11 @@ object PartitionStreamControl {
                    // First try to take all records that are available right now.
                    // When no data is available, request more data and await its arrival.
                    dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
-                 }.flattenTake
-                   .chunksWith(_.tap(records => registerPull(queueInfo, records)))
-                   // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
-                   .mapZIO { chunk =>
-                     interruptionPromise.await.whenZIO(interruptionPromise.isDone).as(chunk)
-                   }
+                 }.flattenTake.chunksWith { s =>
+                   s.tap(records => registerPull(queueInfo, records))
+                     // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
+                     .mapZIO(chunk => interruptionPromise.await.whenZIO(interruptionPromise.isDone).as(chunk))
+                 }
     } yield new PartitionStreamControl(
       tp,
       stream,
