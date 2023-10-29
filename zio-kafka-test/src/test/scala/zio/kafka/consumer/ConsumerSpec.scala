@@ -377,7 +377,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             subscriptions.isEmpty
           )
         }
-      } @@ flaky(3),
+      },
       test("a slow producer doesnot interrupt the stream") {
         ZIO.scoped {
           for {

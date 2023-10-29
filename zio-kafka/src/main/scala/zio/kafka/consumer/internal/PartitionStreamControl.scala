@@ -154,7 +154,10 @@ object PartitionStreamControl {
                    dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
                  }.flattenTake
                    .chunksWith(_.tap(records => registerPull(queueInfo, records)))
-                   .interruptWhen(interruptionPromise)
+                   // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
+                   .mapZIO { chunk =>
+                     interruptionPromise.await.whenZIO(interruptionPromise.isDone).as(chunk)
+                   }
     } yield new PartitionStreamControl(
       tp,
       stream,
