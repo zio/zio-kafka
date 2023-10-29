@@ -351,11 +351,11 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             c1 <- consumer
                     .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
                     // consumer timeout detection is done per chunk, sleep for some seconds to simulate
-                    // a consumer that is stuck. Note: we only sleep for the very first chunk.
+                    // a consumer that is stuck.
                     .chunksWith(
                       _.tap { c =>
                         ZIO.logDebug(s"chunk of ${c.size} elements") *>
-                          ZIO.sleep(4.seconds).when(c.head.key == "key0")
+                          ZIO.sleep(4.seconds)
                       }
                     )
                     // Use `take` to ensure the test ends quickly, even when the interrupt fails to occur.
