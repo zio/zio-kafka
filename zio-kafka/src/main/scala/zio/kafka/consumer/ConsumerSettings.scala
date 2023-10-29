@@ -177,7 +177,7 @@ final case class ConsumerSettings(
   /**
    * Disables partition record pre-fetching.
    */
-  def withoutPartitionPreFetching(): ConsumerSettings =
+  def withoutPartitionPreFetching: ConsumerSettings =
     withPartitionPreFetchBufferLimit(0)
 
   @deprecated("Use withPartitionPreFetchBufferLimit instead", "2.6.0")

@@ -322,33 +322,43 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
       },
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
+        // Setup of this test:
+        // Set the max poll interval very low: a couple of seconds.
+        // Consumer 1 consumes very slowly; each chunk takes more than the max poll interval.
+        // Consumer 2 is fast.
+        // We assert that consumer 1 is interrupted and that consumer 2 is stopped.
         ZIO.scoped {
           for {
             topic1   <- randomTopic
             topic2   <- randomTopic
             group    <- randomGroup
             clientId <- randomClient
-            _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic1))
+            _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic1, partitions = 1))
             _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic2))
             settings <- consumerSettings(
                           clientId = clientId,
                           groupId = Some(group),
-                          maxPollInterval = 1.second,
-                          `max.poll.records` = 2
+                          maxPollInterval = 2.seconds,
+                          `max.poll.records` = 1
                         )
-                          .map(_.withPollTimeout(50.millis).withPartitionPreFetchBufferLimit(0))
+                          .map(_.withoutPartitionPreFetching)
             consumer <- Consumer.make(settings)
-            _        <- scheduledProduce(topic1, Schedule.fixed(50.millis).jittered).runDrain.forkScoped
+            _        <- scheduledProduce(topic1, Schedule.fixed(100.millis).jittered).runDrain.forkScoped
             _        <- scheduledProduce(topic2, Schedule.fixed(200.millis).jittered).runDrain.forkScoped
             // The slow consumer:
             c1 <- consumer
                     .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
-                    // The runner for GitHub Actions is a bit underpowered. The machine is so busy that the logic
-                    // that detects the timeout doesn't get the chance to execute quickly enough. To compensate we
-                    // sleep a huge amount of time:
-                    .tap(r => ZIO.sleep(20.seconds).when(r.key == "key3"))
+                    // consumer timeout detection is done per chunk, sleep for some seconds to simulate
+                    // a consumer that is stuck. Note: we only sleep for the very first chunk.
+                    .chunksWith(
+                      _.tap { c =>
+                        ZIO.logDebug(s"chunk of ${c.size} elements") *>
+                          ZIO.sleep(4.seconds).when(c.head.key == "key0")
+                      }
+                    )
                     // Use `take` to ensure the test ends quickly, even when the interrupt fails to occur.
-                    // Because of chunking, we need to pull more than 3 records before the interrupt kicks in.
+                    // Because of a race condition in ZStream.interruptWhen, we need to pull a lot of
+                    // chunks before the interrupt kicks in.
                     .take(100)
                     .runDrain
                     .exit
