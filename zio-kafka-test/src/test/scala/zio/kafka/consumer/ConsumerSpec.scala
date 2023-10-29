@@ -324,57 +324,53 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
         // Setup of this test:
         // - Set the max poll interval very low: a couple of seconds.
-        // - Continuously produce records so that data is always available. We produce more than the consumers
-        //   can consume due to the max-poll-records and poll-timeout configurations.
+        // - Continuously produce records so that data is always available.
         // - Consumer 1 consumes very slowly; each chunk takes more than the max poll interval.
         // - Consumer 2 is fast.
         // - We assert that consumer 1 is interrupted and that consumer 2 is stopped.
-        ZIO.scoped {
-          for {
-            topic1   <- randomTopic
-            topic2   <- randomTopic
-            group    <- randomGroup
-            clientId <- randomClient
-            _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic1, partitions = 1))
-            _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic2))
-            settings <- consumerSettings(
-                          clientId = clientId,
-                          groupId = Some(group),
-                          maxPollInterval = 2.seconds,
-                          `max.poll.records` = 1
-                        )
-                          .map(_.withoutPartitionPreFetching.withPollTimeout(1.second))
-            consumer <- Consumer.make(settings)
-            _        <- scheduledProduce(topic1, Schedule.fixed(500.millis).jittered).runDrain.forkScoped
-            _        <- scheduledProduce(topic2, Schedule.fixed(500.millis).jittered).runDrain.forkScoped
-            // The slow consumer:
-            c1 <- consumer
-                    .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
-                    // consumer timeout detection is done per chunk, sleep for some seconds to simulate
-                    // a consumer that is stuck (only sleep for the first chunk).
-                    .chunksWith(
-                      _.tap { c =>
-                        ZIO.logDebug(s"chunk of ${c.size} elements") *>
-                          ZIO.sleep(4.seconds).when(c.head.key == "key0")
-                      }
-                    )
-                    // Use `take` to ensure the test ends quickly, even when the interrupt fails to occur.
-                    .take(8)
-                    .runDrain
-                    .exit
-                    .fork
-            // Another consumer:
-            _ <- consumer
-                   .plainStream(Subscription.topics(topic2), Serde.string, Serde.string)
-                   .runDrain
-                   .forkScoped
-            c1Exit        <- c1.join
-            subscriptions <- consumer.subscription.delay(500.millis)
-          } yield assertTrue(
-            c1Exit.isFailure,
-            subscriptions.isEmpty
-          )
-        }
+        for {
+          topic1   <- randomTopic
+          topic2   <- randomTopic
+          group    <- randomGroup
+          clientId <- randomClient
+          _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic1, partitions = 1))
+          _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic2))
+          settings <- consumerSettings(
+                        clientId = clientId,
+                        groupId = Some(group),
+                        maxPollInterval = 2.seconds,
+                        `max.poll.records` = 2
+                      )
+                        .map(_.withoutPartitionPreFetching.withPollTimeout(100.millis))
+          consumer <- Consumer.make(settings)
+          _        <- scheduledProduce(topic1, Schedule.fixed(500.millis).jittered).runDrain.forkScoped
+          _        <- scheduledProduce(topic2, Schedule.fixed(500.millis).jittered).runDrain.forkScoped
+          // The slow consumer:
+          c1 <- consumer
+                  .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
+                  // Consumer timeout detection is done per chunk. From here on, work per chunk
+                  .chunks
+                  // Sleep for some seconds to simulate a consumer that is stuck (only sleep for the first chunk).
+                  // Because slow consumers are only detected once every run-loop, detection can take many seconds.
+                  .tap { c =>
+                    ZIO.sleep(10.seconds).when(c.head.key == "key0")
+                  }
+                  // Use `take` to ensure the test ends quickly, even when the interrupt fails to occur.
+                  .take(8)
+                  .runDrain
+                  .exit
+                  .fork
+          // Another consumer:
+          _ <- consumer
+                 .plainStream(Subscription.topics(topic2), Serde.string, Serde.string)
+                 .runDrain
+                 .forkScoped
+          c1Exit        <- c1.join
+          subscriptions <- consumer.subscription.delay(500.millis)
+        } yield assertTrue(
+          c1Exit.isFailure,
+          subscriptions.isEmpty
+        )
       },
       test("a slow producer doesnot interrupt the stream") {
         ZIO.scoped {
