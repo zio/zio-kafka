@@ -323,10 +323,12 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       },
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
         // Setup of this test:
-        // Set the max poll interval very low: a couple of seconds.
-        // Consumer 1 consumes very slowly; each chunk takes more than the max poll interval.
-        // Consumer 2 is fast.
-        // We assert that consumer 1 is interrupted and that consumer 2 is stopped.
+        // - Set the max poll interval very low: a couple of seconds.
+        // - Continuously produce records so that data is always available. We produce more than the consumers
+        //   can consume due to the max-poll-records and poll-timeout configurations.
+        // - Consumer 1 consumes very slowly; each chunk takes more than the max poll interval.
+        // - Consumer 2 is fast.
+        // - We assert that consumer 1 is interrupted and that consumer 2 is stopped.
         ZIO.scoped {
           for {
             topic1   <- randomTopic
@@ -341,10 +343,10 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                           maxPollInterval = 2.seconds,
                           `max.poll.records` = 1
                         )
-                          .map(_.withoutPartitionPreFetching)
+                          .map(_.withoutPartitionPreFetching.withPollTimeout(1.second))
             consumer <- Consumer.make(settings)
-            _        <- scheduledProduce(topic1, Schedule.fixed(100.millis).jittered).runDrain.forkScoped
-            _        <- scheduledProduce(topic2, Schedule.fixed(200.millis).jittered).runDrain.forkScoped
+            _        <- scheduledProduce(topic1, Schedule.fixed(500.millis).jittered).runDrain.forkScoped
+            _        <- scheduledProduce(topic2, Schedule.fixed(500.millis).jittered).runDrain.forkScoped
             // The slow consumer:
             c1 <- consumer
                     .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
@@ -358,8 +360,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     )
                     // Use `take` to ensure the test ends quickly, even when the interrupt fails to occur.
                     // Because of a race condition in ZStream.interruptWhen, we need to pull a lot of
-                    // chunks before the interrupt kicks in.
-                    .take(100)
+                    // chunks before the stream sees that the underlying stream has been interrupted.
+                    .take(200)
                     .runDrain
                     .exit
                     .fork
@@ -369,7 +371,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                    .runDrain
                    .forkScoped
             c1Exit        <- c1.join
-            subscriptions <- consumer.subscription.delay(100.millis)
+            subscriptions <- consumer.subscription.delay(500.millis)
           } yield assertTrue(
             c1Exit.isFailure,
             subscriptions.isEmpty
