@@ -9,6 +9,8 @@ final case class ProducerSettings(
   sendBufferSize: Int = 4096,
   properties: Map[String, AnyRef] = Map.empty
 ) {
+  def driverSettings: Map[String, AnyRef] = properties
+
   def withBootstrapServers(servers: List[String]): ProducerSettings =
     withProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, servers.mkString(","))
 

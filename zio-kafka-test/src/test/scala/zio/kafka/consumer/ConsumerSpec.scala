@@ -321,6 +321,73 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
       },
+      test("a consumer timeout interrupts the stream and shuts down the consumer") {
+        ZIO.scoped {
+          for {
+            topic1   <- randomTopic
+            topic2   <- randomTopic
+            group    <- randomGroup
+            clientId <- randomClient
+            _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic1))
+            _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic2))
+            settings <- consumerSettings(
+                          clientId = clientId,
+                          groupId = Some(group),
+                          maxPollInterval = 1.second,
+                          `max.poll.records` = 2
+                        )
+                          .map(_.withPollTimeout(50.millis))
+            consumer <- Consumer.make(settings)
+            _        <- scheduledProduce(topic1, Schedule.fixed(50.millis).jittered).runDrain.forkScoped
+            _        <- scheduledProduce(topic2, Schedule.fixed(200.millis).jittered).runDrain.forkScoped
+            // The slow consumer:
+            c1 <- consumer
+                    .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
+                    // The runner for GitHub Actions is a bit underpowered. The machine is so busy that the logic
+                    // that detects the timeout doesn't get the chance to execute quickly enough. To compensate we
+                    // sleep a huge amount of time:
+                    .tap(r => ZIO.sleep(20.seconds).when(r.key == "key3"))
+                    // Use `take` to ensure the test ends quickly, even when the interrupt fails to occur.
+                    // Because of chunking, we need to pull more than 3 records before the interrupt kicks in.
+                    .take(100)
+                    .runDrain
+                    .exit
+                    .fork
+            // Another consumer:
+            _ <- consumer
+                   .plainStream(Subscription.topics(topic2), Serde.string, Serde.string)
+                   .runDrain
+                   .forkScoped
+            c1Exit        <- c1.join
+            subscriptions <- consumer.subscription.delay(100.millis)
+          } yield assertTrue(
+            c1Exit.isFailure,
+            subscriptions.isEmpty
+          )
+        }
+      },
+      test("a slow producer doesnot interrupt the stream") {
+        ZIO.scoped {
+          for {
+            topic    <- randomTopic
+            group    <- randomGroup
+            clientId <- randomClient
+            _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic))
+            settings <- consumerSettings(
+                          clientId = clientId,
+                          groupId = Some(group),
+                          maxPollInterval = 300.millis
+                        )
+            consumer <- Consumer.make(settings.withPollTimeout(50.millis))
+            // A slow producer
+            _ <- scheduledProduce(topic, Schedule.fixed(1.second)).runDrain.forkScoped
+            consumed <- consumer
+                          .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
+                          .take(2)
+                          .runCollect
+          } yield assertTrue(consumed.size == 2)
+        }
+      },
       test("offset batching collects the latest offset for all partitions") {
         val nrMessages   = 50
         val nrPartitions = 5
@@ -349,9 +416,32 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                        .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / nrPartitions))))
       },
+      test("commits an offset with metadata") {
+        for {
+          topic    <- randomTopic
+          group    <- randomGroup
+          metadata <- randomThing("metadata")
+          client   <- randomClient
+          _        <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = 1))
+          _        <- produceOne(topic, "key", "msg")
+
+          // Consume messages
+          subscription = Subscription.topics(topic)
+          offsets <- (Consumer
+                       .partitionedStream(subscription, Serde.string, Serde.string)
+                       .flatMap(_._2.map(_.offset.withMetadata(metadata)))
+                       .take(1)
+                       .transduce(Consumer.offsetBatches)
+                       .take(1)
+                       .mapZIO(Consumer.commit)
+                       .runDrain *>
+                       Consumer.committed(Set(new TopicPartition(topic, 0))))
+                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
+        } yield assert(offsets.values.headOption.flatten.map(_.metadata))(isSome(equalTo(metadata)))
+      },
       test("handle rebalancing by completing topic-partition streams") {
         val nrMessages   = 50
-        val nrPartitions = 6
+        val nrPartitions = 6 // Must be even and strictly positive
 
         for {
           // Produce messages on several partitions
@@ -1062,14 +1152,17 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       },
       suite("issue #856")(
         test(
-          "Booting a Consumer to do something else than consuming should not fail with `RunloopTimeout` exception"
+          "Booting a Consumer to do something else than consuming should not fail with a timeout exception"
         ) {
           def test(diagnostics: Diagnostics) =
             for {
               clientId <- randomClient
-              settings <- consumerSettings(clientId = clientId, runloopTimeout = 500.millis)
-              _        <- Consumer.make(settings, diagnostics = diagnostics)
-              _        <- ZIO.sleep(1.second)
+              settings <- consumerSettings(
+                            clientId = clientId,
+                            maxPollInterval = 500.millis
+                          )
+              _ <- Consumer.make(settings, diagnostics = diagnostics)
+              _ <- ZIO.sleep(1.second)
             } yield assertCompletes
 
           for {
@@ -1142,6 +1235,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           test(
             "it's possible to start a new consumption session from a Consumer that had a consumption session stopped previously"
           ) {
+            // NOTE:
+            // When this test fails with the message `100000 was not less than 100000`, it's because
+            // your computer is so fast that the first consumer already consumed all 100000 messages.
             val numberOfMessages: Int           = 100000
             val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key-$i", s"msg-$i"))
 

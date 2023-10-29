@@ -8,6 +8,8 @@ final case class AdminClientSettings(
   closeTimeout: Duration,
   properties: Map[String, AnyRef]
 ) {
+  def driverSettings: Map[String, AnyRef] = properties
+
   def withBootstrapServers(servers: List[String]): AdminClientSettings =
     withProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, servers.mkString(","))
 

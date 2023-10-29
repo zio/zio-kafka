@@ -42,7 +42,8 @@ final case class CommittableRecord[K, V](
       topic = record.topic(),
       partition = record.partition(),
       offset = record.offset(),
-      consumerGroupMetadata = consumerGroupMetadata
+      consumerGroupMetadata = consumerGroupMetadata,
+      metadata = None
     )
 }
 
