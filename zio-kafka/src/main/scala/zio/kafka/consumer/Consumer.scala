@@ -574,7 +574,7 @@ private[consumer] final class ConsumerLive private[consumer] (
   override def metrics: Task[Map[MetricName, Metric]] =
     consumer.withConsumer(_.metrics().asScala.toMap)
 
-  override def commit(offset: CommittableOffset): Task[Unit] = runloopAccess.commit(offset.offsets)
+  override def commit(offset: CommittableOffset): Task[Unit] = runloopAccess.commit(offset.offsetsAsMap)
 
   override def commitOrRetry[R](offset: CommittableOffset, policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
     commit(offset)

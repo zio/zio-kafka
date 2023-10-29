@@ -82,7 +82,7 @@ final private[producer] class TransactionImpl(
     offsets: OffsetBatch
   ): RIO[R, Chunk[RecordMetadata]] =
     haltIfClosed *>
-      offsetBatchRef.update(_ merge offsets) *>
+      offsetBatchRef.update(_ add offsets) *>
       producer.produceChunk[R, K, V](records, keySerializer, valueSerializer)
 
   def abort: IO[TransactionalProducer.UserInitiatedAbort.type, Nothing] =

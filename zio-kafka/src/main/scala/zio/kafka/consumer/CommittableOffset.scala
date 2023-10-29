@@ -3,17 +3,16 @@ package zio.kafka.consumer
 import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, OffsetAndMetadata }
 import org.apache.kafka.common.TopicPartition
 
-trait CommittableOffset {
-  def offsets: Map[TopicPartition, OffsetAndMetadata]
+/**
+ * Supertype for a single offset or a batch of offsets for multiple topic-partitions
+ */
+sealed trait CommittableOffset {
+  def offsetsAsMap: Map[TopicPartition, OffsetAndMetadata]
+  def consumerGroupMetadata: Option[ConsumerGroupMetadata]
 }
 
-// TODO remove the trait and just keep the implementation..?
 sealed trait OffsetBatch extends CommittableOffset {
-  def add(offset: Offset): OffsetBatch
-  @deprecated("Use add(Offset) instead", "2.1.4")
-  def merge(offset: Offset): OffsetBatch
-  def merge(offsets: OffsetBatch): OffsetBatch
-  def consumerGroupMetadata: Option[ConsumerGroupMetadata]
+  def add(offset: CommittableOffset): OffsetBatch
 }
 
 object OffsetBatch {
@@ -23,42 +22,46 @@ object OffsetBatch {
 }
 
 private final case class OffsetBatchImpl(
-  offsets: Map[TopicPartition, OffsetAndMetadata],
+  offsetsAsMap: Map[TopicPartition, OffsetAndMetadata],
   consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) extends OffsetBatch {
-  override def add(offset: Offset): OffsetBatch = {
-    val maxOffsetAndMetadata = offsets.get(offset.topicPartition) match {
-      case Some(existing) if existing.offset > offset.offset => existing
-      case _                                                 => offset.asJavaOffsetAndMetadata
+  def add(offset: CommittableOffset): OffsetBatch =
+    offset match {
+      case batch: OffsetBatch => merge(batch)
+      case offset: Offset =>
+        val maxOffsetAndMetadata = offsetsAsMap.get(offset.topicPartition) match {
+          case Some(existing) if existing.offset > offset.offset => existing
+          case _                                                 => offset.asJavaOffsetAndMetadata
+        }
+
+        copy(
+          offsetsAsMap = offsetsAsMap + (offset.topicPartition -> maxOffsetAndMetadata)
+        )
     }
 
-    copy(
-      offsets = offsets + (offset.topicPartition -> maxOffsetAndMetadata)
-    )
-  }
-
-  override def merge(offset: Offset): OffsetBatch = add(offset)
-
-  override def merge(otherOffsets: OffsetBatch): OffsetBatch = {
+  private def merge(otherOffsets: OffsetBatch): OffsetBatch = {
     val newOffsets = Map.newBuilder[TopicPartition, OffsetAndMetadata]
-    newOffsets ++= offsets
-    otherOffsets.offsets.foreach { case (tp, offset) =>
-      val laterOffset = offsets.get(tp) match {
+    newOffsets ++= offsetsAsMap
+    otherOffsets.offsetsAsMap.foreach { case (tp, offset) =>
+      val laterOffset = offsetsAsMap.get(tp) match {
         case Some(existing) => if (existing.offset < offset.offset) offset else existing
         case None           => offset
       }
       newOffsets += tp -> laterOffset
     }
 
-    copy(offsets = newOffsets.result())
+    copy(offsetsAsMap = newOffsets.result())
   }
 }
 
 case object EmptyOffsetBatch extends OffsetBatch {
-  override val offsets: Map[TopicPartition, OffsetAndMetadata]      = Map.empty
-  override def add(offset: Offset): OffsetBatch                     = offset.batch
-  override def merge(offset: Offset): OffsetBatch                   = add(offset)
-  override def merge(offsets: OffsetBatch): OffsetBatch             = offsets
+  override val offsetsAsMap: Map[TopicPartition, OffsetAndMetadata] = Map.empty
+
+  override def add(offset: CommittableOffset): OffsetBatch = offset match {
+    case batch: OffsetBatch => batch
+    case o: Offset => OffsetBatchImpl(Map(o.topicPartition -> o.asJavaOffsetAndMetadata), consumerGroupMetadata)
+  }
+
   override def consumerGroupMetadata: Option[ConsumerGroupMetadata] = None
 }
 
@@ -76,16 +79,14 @@ sealed trait Offset extends CommittableOffset {
   final lazy val topicPartition: TopicPartition = new TopicPartition(topic, partition)
 }
 
-object Offset {}
-
-private final case class OffsetImpl(
+final case class OffsetImpl(
   topic: String,
   partition: Int,
   offset: Long,
   consumerGroupMetadata: Option[ConsumerGroupMetadata],
   metadata: Option[String] = None
 ) extends Offset {
-  override def batch: OffsetBatch                              = OffsetBatchImpl(offsets, consumerGroupMetadata)
-  override def offsets: Map[TopicPartition, OffsetAndMetadata] = Map(topicPartition -> asJavaOffsetAndMetadata)
-  def withMetadata(metadata: String): OffsetImpl               = copy(metadata = Some(metadata))
+  def batch: OffsetBatch = OffsetBatchImpl(offsetsAsMap, consumerGroupMetadata)
+  override def offsetsAsMap: Map[TopicPartition, OffsetAndMetadata] = Map(topicPartition -> asJavaOffsetAndMetadata)
+  def withMetadata(metadata: String): Offset                        = copy(metadata = Some(metadata))
 }

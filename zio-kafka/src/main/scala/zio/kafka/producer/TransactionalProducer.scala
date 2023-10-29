@@ -40,7 +40,7 @@ object TransactionalProducer {
             case None => invalidGroupIdException
             case Some(consumerGroupMetadata) =>
               val offsets: util.Map[TopicPartition, OffsetAndMetadata] =
-                offsetBatch.offsets.map { case (topicPartition, offset) =>
+                offsetBatch.offsetsAsMap.map { case (topicPartition, offset) =>
                   topicPartition -> new OffsetAndMetadata(offset.offset + 1, offset.metadata)
                 }.asJava
 
@@ -48,7 +48,9 @@ object TransactionalProducer {
           }
         }
 
-      sendOffsetsToTransaction.when(offsetBatch.offsets.nonEmpty) *> ZIO.attemptBlocking(live.p.commitTransaction())
+      sendOffsetsToTransaction.when(offsetBatch.offsetsAsMap.nonEmpty) *> ZIO.attemptBlocking(
+        live.p.commitTransaction()
+      )
     }
 
     private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): UIO[Unit] =
