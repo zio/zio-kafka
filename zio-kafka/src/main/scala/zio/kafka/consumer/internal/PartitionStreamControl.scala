@@ -72,8 +72,10 @@ final class PartitionStreamControl private (
     queueInfoRef.get.map(_.deadlineExceeded(now))
 
   /** To be invoked when the partition was lost. */
-  private[internal] def lost: UIO[Boolean] =
-    interruptionPromise.fail(new RuntimeException(s"Partition ${tp.toString} was lost"))
+  private[internal] def lost: UIO[Boolean] = {
+    val lostException = new RuntimeException(s"Partition ${tp.toString} was lost") with NoStackTrace
+    interruptionPromise.fail(lostException)
+  }
 
   /** To be invoked when the stream is no longer processing. */
   private[internal] def halt: UIO[Boolean] = {
