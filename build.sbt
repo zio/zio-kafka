@@ -5,7 +5,6 @@ lazy val embeddedKafkaVersion = "3.6.0" // Should be the same as kafkaVersion, e
 
 lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
 lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.11.0"
-lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.15.3"
 lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.11"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
@@ -103,7 +102,6 @@ lazy val zioKafka =
     .settings(
       libraryDependencies ++= Seq(
         kafkaClients,
-        jacksonDatabind,
         scalaCollectionCompat
       )
     )
@@ -143,7 +141,6 @@ lazy val zioKafkaTest =
     .settings(
       libraryDependencies ++= Seq(
         kafkaClients,
-        jacksonDatabind,
         logback    % Test,
         "dev.zio" %% "zio-logging-slf4j" % "2.1.14" % Test,
         scalaCollectionCompat
