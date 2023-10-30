@@ -854,6 +854,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _ <- ZIO.foreachDiscard((nrMessages + 1) to (2 * nrMessages)) { i =>
                  produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
                }
+          // Give the consumers some time
+          _ <- ZIO.sleep(500.millis)
           _ <- fib2.join
           _ <- ZIO.logDebug("Consumer 2 done")
           _ <- fib.join
