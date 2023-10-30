@@ -807,7 +807,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _ <- ZIO
                  .foreach(messagesReceived.values)(_.get)
                  .map(_.sum)
-                 .debug("Messages received by Fib1: ")
                  .repeat(Schedule.recurUntil((n: Int) => n == nrMessages) && Schedule.fixed(100.millis))
 
           // Starting a new consumer that will stop after receiving 20 messages, causing two rebalancing events for fib1
@@ -833,8 +832,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     .fork
 
           // Waiting until fib1's partition streams got restarted because of the rebalancing
-          // Note: on fast computers we may not never see `drainCount == 1` but `2` immediately, therefore we need to
-          // check for `drainCount >= 1`.
+          // Note: on fast computers we may never see `drainCount == 1` but `2` immediately, therefore we need to check
+          // for `drainCount >= 1`.
           _ <- drainCount.get.repeat(Schedule.recurUntil((_: Int) >= 1) && Schedule.fixed(100.millis))
           _ <- ZIO.logDebug("Consumer 1 finished rebalancing")
 
