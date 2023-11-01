@@ -739,17 +739,19 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       },
       test("restartStreamsOnRebalancing mode closes all partition streams") {
         // Test plan:
-        // - Throughout the test, continuously produce to all partitions of a topics.
-        // - Start consumer 1,
-        //   - track which partitions are assigned after each rebalance.
-        //   - track which streams stopped
+        // - Throughout the test, continuously produce to all partitions of a topic.
+        // - Start consumer 1:
+        //   - track which partitions are assigned after each rebalance,
+        //   - track which streams stopped.
         // - Start consumer 2 but finish after just a few records. This results in 2 rebalances for consumer 1.
         // - Verify that in the first rebalance, consumer 1 ends the streams for _all_ partitions,
-        //   and starts them again.
+        //   and then starts them again.
         //
         // NOTE: we need to use the cooperative sticky assignor. The default assignor `ConsumerPartitionAssignor`,
-        // revokes all partitions and re-assigns them on every rebalance, so the behavior for
-        // `restartStreamOnRebalancing` is already the default.
+        // revokes all partitions and re-assigns them on every rebalance. This means that all streams are restarted
+        // on every rebalance, exactly what `restartStreamOnRebalancing` would have caused. In other words, with the
+        // default assignor the externally visible behavior is the same, regardless of whether
+        // `restartStreamOnRebalancing` is `true` or `false`.
 
         val nrPartitions = 5
         val partitionIds = Chunk.fromIterable(0 until nrPartitions)
