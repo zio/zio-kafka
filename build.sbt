@@ -3,9 +3,9 @@ import sbt.Def
 lazy val kafkaVersion         = "3.6.0"
 lazy val embeddedKafkaVersion = "3.6.0" // Should be the same as kafkaVersion, except for the patch part
 
-lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
-lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.11.0"
-lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.11"
+lazy val kafkaClients          = "org.apache.kafka"        % "kafka-clients"           % kafkaVersion
+lazy val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.11.0"
+lazy val logback               = "ch.qos.logback"          % "logback-classic"         % "1.3.11"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 

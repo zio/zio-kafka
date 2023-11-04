@@ -28,7 +28,7 @@ private[consumer] final class Runloop private (
   maxPollInterval: Duration,
   commitTimeout: Duration,
   commandQueue: Queue[RunloopCommand],
-  lastRebalanceEvent: Ref.Synchronized[Option[Runloop.RebalanceEvent]],
+  lastRebalanceEvent: Ref.Synchronized[Runloop.RebalanceEvent],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
   diagnostics: Diagnostics,
   offsetRetrieval: OffsetRetrieval,
@@ -71,45 +71,59 @@ private[consumer] final class Runloop private (
     commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
 
   private val rebalanceListener: RebalanceListener = {
-    val emitDiagnostics = RebalanceListener(
-      (assigned, _) => diagnostics.emit(DiagnosticEvent.Rebalance.Assigned(assigned)),
-      (revoked, _) => diagnostics.emit(DiagnosticEvent.Rebalance.Revoked(revoked)),
-      (lost, _) => diagnostics.emit(DiagnosticEvent.Rebalance.Lost(lost))
-    )
-
-    def restartStreamsRebalancingListener = RebalanceListener(
-      onAssigned = (assigned, _) =>
-        ZIO.logDebug("Rebalancing completed") *>
-          lastRebalanceEvent.updateZIO {
-            case None =>
-              ZIO.some(Runloop.RebalanceEvent.Assigned(assigned))
-            case Some(Runloop.RebalanceEvent.Revoked(revokeResult)) =>
-              ZIO.some(Runloop.RebalanceEvent.RevokedAndAssigned(revokeResult, assigned))
-            case Some(_) =>
-              ZIO.fail(new IllegalStateException(s"Multiple onAssigned calls on rebalance listener"))
-          },
-      onRevoked = (_, _) =>
+    // During a poll, the java kafka client might call each method of the rebalance listener 0 or 1 times.
+    // We do not know the order in which the call-back methods are invoked.
+    //
+    // Ref `lastRebalanceEvent` is used to track what happens during the poll. Just before the poll the
+    // `RebalanceEvent.None` is stored. Then during the poll, inside each method of the rebalance listener,
+    // the ref is updated.
+    //
+    // Each method:
+    // - emits a diagnostic event
+    // - determines if this is the first method invoked during this poll (`rebalanceEvent.wasInvoked`) to
+    //   make sure that the `restartStreamsOnRebalancing` feature is applied only once per poll
+    // - ends streams that need to be ended
+    // - updates `lastRebalanceEvent`
+    //
+    val recordRebalanceRebalancingListener = RebalanceListener(
+      onAssigned = (assignedTps, _) =>
         for {
-          _     <- ZIO.logDebug("Rebalancing started")
-          state <- currentStateRef.get
-          // End all streams
-          result <- endRevokedPartitions(state.pendingRequests, state.assignedStreams, isRevoked = _ => true)
-          _ <- lastRebalanceEvent.updateZIO {
-                 case None =>
-                   ZIO.some(Runloop.RebalanceEvent.Revoked(result))
-                 case _ =>
-                   ZIO.fail(
-                     new IllegalStateException(s"onRevoked called on rebalance listener with pending assigned event")
-                   )
-               }
+          _              <- ZIO.logDebug(s"${assignedTps.size} partitions are assigned")
+          _              <- diagnostics.emit(DiagnosticEvent.Rebalance.Assigned(assignedTps))
+          rebalanceEvent <- lastRebalanceEvent.get
+          state          <- currentStateRef.get
+          streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) state.assignedStreams
+                         else Chunk.empty
+          _ <- ZIO.foreachDiscard(streamsToEnd)(_.end)
+          _ <- lastRebalanceEvent.set(rebalanceEvent.onAssigned(assignedTps, endedStreams = streamsToEnd))
+          _ <- ZIO.logTrace("onAssigned done")
+        } yield (),
+      onRevoked = (revokedTps, _) =>
+        for {
+          _              <- ZIO.logDebug(s"${revokedTps.size} partitions are revoked")
+          _              <- diagnostics.emit(DiagnosticEvent.Rebalance.Revoked(revokedTps))
+          rebalanceEvent <- lastRebalanceEvent.get
+          state          <- currentStateRef.get
+          streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) state.assignedStreams
+                         else state.assignedStreams.filter(control => revokedTps.contains(control.tp))
+          _ <- ZIO.foreachDiscard(streamsToEnd)(_.end)
+          _ <- lastRebalanceEvent.set(rebalanceEvent.onRevoked(revokedTps, endedStreams = streamsToEnd))
+          _ <- ZIO.logTrace("onRevoked done")
+        } yield (),
+      onLost = (lostTps, _) =>
+        for {
+          _              <- ZIO.logDebug(s"${lostTps.size} partitions are lost")
+          _              <- diagnostics.emit(DiagnosticEvent.Rebalance.Lost(lostTps))
+          rebalanceEvent <- lastRebalanceEvent.get
+          state          <- currentStateRef.get
+          lostStreams = state.assignedStreams.filter(control => lostTps.contains(control.tp))
+          _ <- ZIO.foreachDiscard(lostStreams)(_.lost)
+          _ <- lastRebalanceEvent.set(rebalanceEvent.onLost(lostTps))
+          _ <- ZIO.logTrace(s"onLost done")
         } yield ()
     )
 
-    if (restartStreamsOnRebalancing) {
-      emitDiagnostics ++ restartStreamsRebalancingListener ++ userRebalanceListener
-    } else {
-      emitDiagnostics ++ userRebalanceListener
-    }
+    recordRebalanceRebalancingListener ++ userRebalanceListener
   }
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
@@ -284,12 +298,13 @@ private[consumer] final class Runloop private (
 
   private def handlePoll(state: State): Task[State] =
     for {
-      _ <-
-        ZIO.logDebug(
-          s"Starting poll with ${state.pendingRequests.size} pending requests and ${state.pendingCommits.size} pending commits"
-        )
-      _                 <- currentStateRef.set(state)
       partitionsToFetch <- fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
+      _ <- ZIO.logDebug(
+             s"Starting poll with ${state.pendingRequests.size} pending requests and" +
+               s" ${state.pendingCommits.size} pending commits," +
+               s" resuming ${partitionsToFetch} partitions"
+           )
+      _ <- currentStateRef.set(state)
       pollResult <-
         consumer.runloopAccess { c =>
           ZIO.suspend {
@@ -302,101 +317,86 @@ private[consumer] final class Runloop private (
               if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
             }
 
-            val currentAssigned = c.assignment().asScala.toSet
-            val newlyAssigned   = currentAssigned -- prevAssigned
+            diagnostics.emit {
+              val providedTps         = polledRecords.partitions().asScala.toSet
+              val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-            for {
-              ignoreRecordsForTps <- doSeekForNewPartitions(c, newlyAssigned)
+              DiagnosticEvent.Poll(
+                tpRequested = requestedPartitions,
+                tpWithData = providedTps,
+                tpWithoutData = requestedPartitions -- providedTps
+              )
+            } *>
+              lastRebalanceEvent.getAndSet(RebalanceEvent.None).flatMap {
+                case RebalanceEvent(false, _, _, _, _) =>
+                  // The fast track, rebalance listener was not invoked:
+                  //   no assignment changes, only new records.
+                  ZIO.succeed(
+                    PollResult(
+                      records = polledRecords,
+                      ignoreRecordsForTps = Set.empty,
+                      pendingRequests = state.pendingRequests,
+                      assignedStreams = state.assignedStreams
+                    )
+                  )
 
-              rebalanceEvent <- lastRebalanceEvent.getAndSet(None)
+                case RebalanceEvent(true, assignedTps, revokedTps, lostTps, endedStreams) =>
+                  // The slow track, the rebalance listener was invoked:
+                  //   some partitions were assigned, revoked or lost,
+                  //   some streams have ended.
 
-              revokeResult <- rebalanceEvent match {
-                                case Some(Runloop.RebalanceEvent.Revoked(result)) =>
-                                  // If we get here, `restartStreamsOnRebalancing == true`
-                                  // Use revoke result from endRevokedPartitions that was called previously in the rebalance listener
-                                  ZIO.succeed(result)
-                                case Some(Runloop.RebalanceEvent.RevokedAndAssigned(result, _)) =>
-                                  // If we get here, `restartStreamsOnRebalancing == true`
-                                  // Use revoke result from endRevokedPartitions that was called previously in the rebalance listener
-                                  ZIO.succeed(result)
-                                case Some(Runloop.RebalanceEvent.Assigned(_)) =>
-                                  // If we get here, `restartStreamsOnRebalancing == true`
-                                  // endRevokedPartitions was not called yet in the rebalance listener,
-                                  // and all partitions should be revoked
-                                  endRevokedPartitions(
-                                    state.pendingRequests,
-                                    state.assignedStreams,
-                                    isRevoked = _ => true
-                                  )
-                                case None =>
-                                  // End streams for partitions that are no longer assigned
-                                  endRevokedPartitions(
-                                    state.pendingRequests,
-                                    state.assignedStreams,
-                                    isRevoked = (tp: TopicPartition) => !currentAssigned.contains(tp)
-                                  )
-                              }
+                  val currentAssigned = c.assignment().asScala.toSet
+                  val endedTps        = endedStreams.map(_.tp).toSet
+                  for {
+                    ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
 
-              startingTps = rebalanceEvent match {
-                              case Some(_) =>
-                                // If we get here, `restartStreamsOnRebalancing == true`,
-                                // some partitions were revoked and/or assigned and
-                                // all already assigned streams were ended.
-                                // Therefore, all currently assigned tps are starting,
-                                // either because they are restarting, or because they
-                                // are new.
-                                currentAssigned
-                              case None =>
-                                newlyAssigned
-                            }
+                    // The topic partitions that need a new stream are:
+                    //  1. Those that are freshly assigned
+                    //  2. Those that are still assigned but were ended in the rebalance listener because
+                    //     of `restartStreamsOnRebalancing` being true
+                    startingTps = assignedTps ++ (currentAssigned intersect endedTps)
 
-              _ <- diagnostics.emit {
-                     val providedTps         = polledRecords.partitions().asScala.toSet
-                     val requestedPartitions = state.pendingRequests.map(_.tp).toSet
+                    startingStreams <-
+                      ZIO.foreach(Chunk.fromIterable(startingTps))(newPartitionStream).tap { newStreams =>
+                        ZIO.logDebug(s"Offering partition assignment $startingTps") *>
+                          partitionsHub.publish(
+                            Take.chunk(newStreams.map(_.tpStream))
+                          )
+                      }
 
-                     DiagnosticEvent.Poll(
-                       tpRequested = requestedPartitions,
-                       tpWithData = providedTps,
-                       tpWithoutData = requestedPartitions -- providedTps
-                     )
-                   }
+                    updatedAssignedStreams =
+                      state.assignedStreams.filter(s => !endedTps.contains(s.tp)) ++ startingStreams
 
-            } yield Runloop.PollResult(
-              startingTps = startingTps,
-              pendingRequests = revokeResult.pendingRequests,
-              assignedStreams = revokeResult.assignedStreams,
-              records = polledRecords,
-              ignoreRecordsForTps = ignoreRecordsForTps
-            )
+                    // Remove pending requests for all streams that ended:
+                    //  1. streams that were ended because the partition was lost
+                    //  2. streams that were ended because the partition was revoked
+                    //  3. streams that were ended because of `restartStreamsOnRebalancing` being true
+                    updatedPendingRequests =
+                      state.pendingRequests.filter { pendingRequest =>
+                        val tp = pendingRequest.tp
+                        !(lostTps.contains(tp) || revokedTps.contains(tp) || endedStreams.exists(_.tp == tp))
+                      }
+                  } yield Runloop.PollResult(
+                    records = polledRecords,
+                    ignoreRecordsForTps = ignoreRecordsForTps,
+                    pendingRequests = updatedPendingRequests,
+                    assignedStreams = updatedAssignedStreams
+                  )
+              }
           }
         }
-      startingStreams <-
-        if (pollResult.startingTps.isEmpty) {
-          ZIO.succeed(Chunk.empty[PartitionStreamControl])
-        } else {
-          ZIO
-            .foreach(Chunk.fromIterable(pollResult.startingTps))(newPartitionStream)
-            .tap { newStreams =>
-              ZIO.logDebug(s"Offering partition assignment ${pollResult.startingTps}") *>
-                partitionsHub.publish(Take.chunk(Chunk.fromIterable(newStreams.map(_.tpStream))))
-            }
-        }
-      runningStreams <- ZIO.filter(pollResult.assignedStreams)(_.isRunning)
-      updatedStreams = runningStreams ++ startingStreams
       fulfillResult <- offerRecordsToStreams(
-                         updatedStreams,
+                         pollResult.assignedStreams,
                          pollResult.pendingRequests,
                          pollResult.ignoreRecordsForTps,
                          pollResult.records
                        )
       updatedPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
-      // Using `runningStreams` instead of `updatedStreams` because starting streams cannot exceed
-      // their poll interval yet:
-      _ <- checkStreamPollInterval(runningStreams)
+      _                     <- checkStreamPollInterval(pollResult.assignedStreams)
     } yield state.copy(
       pendingRequests = fulfillResult.pendingRequests,
       pendingCommits = updatedPendingCommits,
-      assignedStreams = updatedStreams
+      assignedStreams = pollResult.assignedStreams
     )
 
   /**
@@ -438,7 +438,12 @@ private[consumer] final class Runloop private (
       }
 
     cmd match {
-      case req: RunloopCommand.Request => ZIO.succeed(state.addRequest(req))
+      case req: RunloopCommand.Request =>
+        // Ignore request from streams that were ended or lost.
+        ZIO.succeed(
+          if (state.assignedStreams.exists(_.tp == req.tp)) state.addRequest(req)
+          else state
+        )
       case cmd @ RunloopCommand.AddSubscription(newSubscription, _) =>
         state.subscriptionState match {
           case SubscriptionState.NotSubscribed =>
@@ -580,11 +585,10 @@ private[consumer] object Runloop {
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
 
   private final case class PollResult(
-    startingTps: Set[TopicPartition],
-    pendingRequests: Chunk[RunloopCommand.Request],
-    assignedStreams: Chunk[PartitionStreamControl],
     records: ConsumerRecords[Array[Byte], Array[Byte]],
-    ignoreRecordsForTps: Set[TopicPartition]
+    ignoreRecordsForTps: Set[TopicPartition],
+    pendingRequests: Chunk[RunloopCommand.Request],
+    assignedStreams: Chunk[PartitionStreamControl]
   )
   private final case class RevokeResult(
     pendingRequests: Chunk[RunloopCommand.Request],
@@ -594,14 +598,33 @@ private[consumer] object Runloop {
     pendingRequests: Chunk[RunloopCommand.Request]
   )
 
-  private sealed trait RebalanceEvent
+  private final case class RebalanceEvent(
+    wasInvoked: Boolean,
+    assignedTps: Set[TopicPartition],
+    revokedTps: Set[TopicPartition],
+    lostTps: Set[TopicPartition],
+    endedStreams: Chunk[PartitionStreamControl]
+  ) {
+    def onAssigned(assigned: Set[TopicPartition], endedStreams: Chunk[PartitionStreamControl]): RebalanceEvent =
+      copy(
+        wasInvoked = true,
+        assignedTps = assignedTps ++ assigned,
+        endedStreams = this.endedStreams ++ endedStreams
+      )
+
+    def onRevoked(revoked: Set[TopicPartition], endedStreams: Chunk[PartitionStreamControl]): RebalanceEvent =
+      copy(
+        wasInvoked = true,
+        revokedTps = revokedTps ++ revoked,
+        endedStreams = this.endedStreams ++ endedStreams
+      )
+
+    def onLost(lost: Set[TopicPartition]): RebalanceEvent =
+      copy(wasInvoked = true, lostTps = lostTps ++ lost)
+  }
+
   private object RebalanceEvent {
-    final case class Revoked(revokeResult: Runloop.RevokeResult)  extends RebalanceEvent
-    final case class Assigned(newlyAssigned: Set[TopicPartition]) extends RebalanceEvent
-    final case class RevokedAndAssigned(
-      revokeResult: Runloop.RevokeResult,
-      newlyAssigned: Set[TopicPartition]
-    ) extends RebalanceEvent
+    val None: RebalanceEvent = RebalanceEvent(wasInvoked = false, Set.empty, Set.empty, Set.empty, Chunk.empty)
   }
 
   def make(
@@ -620,7 +643,7 @@ private[consumer] object Runloop {
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
-      lastRebalanceEvent <- Ref.Synchronized.make[Option[Runloop.RebalanceEvent]](None)
+      lastRebalanceEvent <- Ref.Synchronized.make[Runloop.RebalanceEvent](Runloop.RebalanceEvent.None)
       initialState = State.initial
       currentStateRef <- Ref.make(initialState)
       runtime         <- ZIO.runtime[Any]
