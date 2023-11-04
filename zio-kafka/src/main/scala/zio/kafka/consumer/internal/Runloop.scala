@@ -71,6 +71,20 @@ private[consumer] final class Runloop private (
     commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
 
   private val rebalanceListener: RebalanceListener = {
+    // During a poll, the java kafka client might call each method of the rebalance listener 0 or 1 times.
+    // We do not know the order in which the call-back methods are invoked.
+    //
+    // Ref `lastRebalanceEvent` is used to track what happens during the poll. Just before the poll the
+    // `RebalanceEvent.None` is stored. Then during the poll, inside each method of the rebalance listener,
+    // the ref is updated.
+    //
+    // Each method:
+    // - emits a diagnostic event
+    // - determines if this is the first method invoked during this poll (`rebalanceEvent.wasInvoked`) to
+    //   make sure that the `restartStreamsOnRebalancing` feature is applied only once per poll
+    // - ends streams that need to be ended
+    // - updates `lastRebalanceEvent`
+    //
     val recordRebalanceRebalancingListener = RebalanceListener(
       onAssigned = (assignedTps, _) =>
         for {
