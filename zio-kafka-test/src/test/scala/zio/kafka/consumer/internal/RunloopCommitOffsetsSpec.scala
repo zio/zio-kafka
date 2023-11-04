@@ -54,12 +54,32 @@ object RunloopCommitOffsetsSpec extends ZIOSpecDefault {
         val s1 = Runloop.CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
         val s2 = s1.keepPartitions(Set(tp10))
         assertTrue(s2.offsets == Map(tp10 -> 10L))
+      },
+      test("does not 'contain' offset when tp is not present") {
+        val s1     = Runloop.CommitOffsets(Map(tp10 -> 10L))
+        val result = s1.contains(tp20, 10)
+        assertTrue(!result)
+      },
+      test("does not 'contain' a higher offset") {
+        val s1     = Runloop.CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
+        val result = s1.contains(tp10, 11)
+        assertTrue(!result)
+      },
+      test("does 'contain' equal offset") {
+        val s1     = Runloop.CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
+        val result = s1.contains(tp10, 10)
+        assertTrue(result)
+      },
+      test("does 'contain' lower offset") {
+        val s1     = Runloop.CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
+        val result = s1.contains(tp20, 19)
+        assertTrue(result)
       }
     )
 
-  private def makeCommit(offsets: Map[TopicPartition, Long]): RunloopCommand.Commit = {
+  private def makeCommit(offsets: Map[TopicPartition, Long]): Runloop.Commit = {
     val o = offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset) }
     val p = Unsafe.unsafe(implicit unsafe => Promise.unsafe.make[Throwable, Unit](FiberId.None))
-    RunloopCommand.Commit(o, p)
+    Runloop.Commit(o, p)
   }
 }

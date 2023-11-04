@@ -96,6 +96,7 @@ private[consumer] object RunloopAccess {
                         offsetRetrieval = settings.offsetRetrieval,
                         userRebalanceListener = settings.rebalanceListener,
                         restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
+                        rebalanceSafeCommits = settings.rebalanceSafeCommits,
                         partitionsHub = partitionsHub,
                         fetchStrategy = settings.fetchStrategy
                       )

@@ -28,6 +28,7 @@ final case class ConsumerSettings(
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
+  rebalanceSafeCommits: Boolean = false,
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy()
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
@@ -154,6 +155,40 @@ final case class ConsumerSettings(
   def withRestartStreamOnRebalancing(value: Boolean): ConsumerSettings =
     copy(restartStreamOnRebalancing = value)
 
+  /**
+   * WARNING: 'rebalanceSafeCommits' is an EXPERIMENTAL feature. It is not recommended for production use yet.
+   *
+   * @param value
+   *   Whether to hold up a rebalance until all offsets of consumed messages have been committed. The default is
+   *   `false`, but the recommended value is `true` as it prevents duplicate messages.
+   *
+   * Use `false` when:
+   *   - your streams do not commit, or
+   *   - your streams require access to the consumer (the consumer is not available until the rebalance is done), or
+   *   - when it is okay to process records twice (possibly concurrently), for example, because processing is
+   *     idempotent.
+   *
+   * When `true`, messages consumed from revoked partitions must be committed before we allow the rebalance to continue.
+   *
+   * When a partition is revoked, consuming the messages will be taken over by another consumer. The other consumer will
+   * continue from the committed offset. It is therefore important that this consumer commits offsets of all consumed
+   * messages. Therefore, by holding up the rebalance until these commits are done, we ensure that the new consumer will
+   * start from the correct offset.
+   *
+   * During a rebalance no new messages can be received _for any stream_. Therefore, _all_ streams are deprived of new
+   * messages until the revoked streams are ready committing.
+   *
+   * Rebalances are held up for at most 3/5 of `maxPollInterval` (see [[withMaxPollInterval]]), by default this
+   * calculates to 3 minutes.
+   *
+   * When `false`, streams for revoked partitions may continue to run even though the rebalance is not held up. Any
+   * offset commits from these streams have a high chance of being delayed (commits are not possible during some phases
+   * of a rebalance). The consumer that takes over the partition will likely not see these delayed commits and will
+   * start from an earlier offset. The result is that some messages are processed twice and concurrently.
+   */
+  def withRebalanceSafeCommits(value: Boolean): ConsumerSettings =
+    copy(rebalanceSafeCommits = value)
+
   def withCredentials(credentialsStore: KafkaCredentialStore): ConsumerSettings =
     withProperties(credentialsStore.properties)
 
@@ -200,6 +235,6 @@ final case class ConsumerSettings(
 object ConsumerSettings {
   val defaultCommitTimeout: Duration = 15.seconds
 
-  def apply(bootstrapServers: List[String]) =
+  def apply(bootstrapServers: List[String]): ConsumerSettings =
     new ConsumerSettings().withBootstrapServers(bootstrapServers)
 }

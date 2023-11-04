@@ -1,6 +1,5 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.consumer.{ InvalidSubscriptionUnion, Subscription }
@@ -17,14 +16,11 @@ object RunloopCommand {
   /** Used as a signal that another poll is needed. */
   case object Poll extends Control
 
+  /** Used as a signal to the poll-loop that commits are available in the commit-queue. */
+  case object CommitAvailable extends Control
+
   case object StopRunloop    extends Control
   case object StopAllStreams extends StreamCommand
-
-  final case class Commit(offsets: Map[TopicPartition, OffsetAndMetadata], cont: Promise[Throwable, Unit])
-      extends RunloopCommand {
-    @inline def isDone: UIO[Boolean]    = cont.isDone
-    @inline def isPending: UIO[Boolean] = isDone.negate
-  }
 
   /** Used by a stream to request more records. */
   final case class Request(tp: TopicPartition) extends StreamCommand
