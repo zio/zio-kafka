@@ -438,7 +438,12 @@ private[consumer] final class Runloop private (
       }
 
     cmd match {
-      case req: RunloopCommand.Request => ZIO.succeed(state.addRequest(req))
+      case req: RunloopCommand.Request =>
+        // Ignore request from streams that were ended or lost.
+        ZIO.succeed(
+          if (state.assignedStreams.exists(_.tp == req.tp)) state.addRequest(req)
+          else state
+        )
       case cmd @ RunloopCommand.AddSubscription(newSubscription, _) =>
         state.subscriptionState match {
           case SubscriptionState.NotSubscribed =>
