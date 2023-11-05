@@ -14,6 +14,7 @@ import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.stream._
 
+import java.lang.Math.max
 import java.util
 import java.util.{ Map => JavaMap }
 import scala.collection.mutable
@@ -715,15 +716,18 @@ object Runloop {
 
   // package private for unit testing
   private[internal] final case class CommitOffsets(offsets: Map[TopicPartition, Long]) {
-    def addCommits(c: Chunk[RunloopCommand.Commit]): CommitOffsets =
-      CommitOffsets(
-        c.foldLeft(offsets) { case (offsetsAcc, newCommit) =>
-          newCommit.offsets.foldLeft(offsetsAcc) { case (acc, (tp, offsetAndMetadata)) =>
-            val newOffset = offsetAndMetadata.offset()
-            acc.updatedWith(tp)(currentOffset => currentOffset.map(_ max newOffset).orElse(Some(newOffset)))
-          }
+    def addCommits(c: Chunk[RunloopCommand.Commit]): CommitOffsets = {
+      val updatedOffsets = mutable.Map.empty[TopicPartition, Long]
+      updatedOffsets.sizeHint(offsets.size)
+      updatedOffsets ++= offsets
+      c.foreach { commit =>
+        commit.offsets.foreach { case (tp, offsetAndMeta) =>
+          val offset = offsetAndMeta.offset()
+          updatedOffsets += tp -> updatedOffsets.get(tp).fold(offset)(max(_, offset))
         }
-      )
+      }
+      CommitOffsets(offsets = updatedOffsets.toMap)
+    }
 
     def keepPartitions(tps: Set[TopicPartition]): CommitOffsets =
       CommitOffsets(offsets.view.filterKeys(tps.contains).toMap)
