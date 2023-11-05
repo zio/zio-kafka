@@ -36,7 +36,7 @@ private[consumer] final class Runloop private (
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
   currentStateRef: Ref[State],
-  completedCommitsRef: Ref[CommitOffsets],
+  committedOffsetsRef: Ref[CommitOffsets],
   fetchStrategy: FetchStrategy
 ) {
 
@@ -158,7 +158,7 @@ private[consumer] final class Runloop private (
     }
     val cont = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
     val onSuccess =
-      completedCommitsRef.update(_.addCommits(commits)) *>
+      committedOffsetsRef.update(_.addCommits(commits)) *>
         cont(Exit.unit) <*
         diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
     val onFailure: Throwable => UIO[Unit] = {
@@ -382,10 +382,10 @@ private[consumer] final class Runloop private (
                         !(lostTps.contains(tp) || revokedTps.contains(tp) || endedStreams.exists(_.tp == tp))
                       }
 
-                    // Remove completed commits for partitions that are no longer assigned:
+                    // Remove committed offsets for partitions that are no longer assigned:
                     // NOTE: the type annotation is needed to keep the IntelliJ compiler happy.
                     _ <-
-                      completedCommitsRef.update(_.keepPartitions(updatedAssignedStreams.map(_.tp).toSet)): Task[Unit]
+                      committedOffsetsRef.update(_.keepPartitions(updatedAssignedStreams.map(_.tp).toSet)): Task[Unit]
 
                   } yield Runloop.PollResult(
                     records = polledRecords,
@@ -657,7 +657,7 @@ object Runloop {
       lastRebalanceEvent <- Ref.Synchronized.make[Runloop.RebalanceEvent](Runloop.RebalanceEvent.None)
       initialState = State.initial
       currentStateRef     <- Ref.make(initialState)
-      completedCommitsRef <- Ref.make(CommitOffsets.empty)
+      committedOffsetsRef <- Ref.make(CommitOffsets.empty)
       runtime             <- ZIO.runtime[Any]
       runloop = new Runloop(
                   runtime = runtime,
@@ -674,7 +674,7 @@ object Runloop {
                   userRebalanceListener = userRebalanceListener,
                   restartStreamsOnRebalancing = restartStreamsOnRebalancing,
                   currentStateRef = currentStateRef,
-                  completedCommitsRef = completedCommitsRef,
+                  committedOffsetsRef = committedOffsetsRef,
                   fetchStrategy = fetchStrategy
                 )
       _ <- ZIO.logDebug("Starting Runloop")
