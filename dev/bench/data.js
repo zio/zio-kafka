@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1699188236063,
+  "lastUpdate": 1699190287343,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -18216,6 +18216,66 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 910.4898530200002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5fb8b5ec86830cf5a1958553bead259fd0ed9217",
+          "message": "Track latest completed commit offset per partition (#1097)\n\nBy tracking these offsets we can skip awaiting already completed commits from the rebalance listener in #830.\r\n\r\nTo prevent unbounded memory usage, after a rebalance we remove the committed offset for partitions that are no longer assigned to this consumer.\r\n\r\nNote that a commit might complete just after a partition was revoked. This is not a big issue; the offset will still be removed in the next rebalance. When the `rebalanceSafeCommits` feature is available and enabled (see #830) commits will complete in the rebalance listener and this cannot happen anymore.\r\n\r\nThe offsets map is wrapped in a case class for 2 reasons:\r\n* It provides a very nice place to put the updating methods.\r\n* Having updating methods makes the code that uses `CommitOffsets` very concise.",
+          "timestamp": "2023-11-05T14:01:37+01:00",
+          "tree_id": "5fd086dd1b7ab4a4a93f68ccd0fdcd89fb59b6c1",
+          "url": "https://github.com/zio/zio-kafka/commit/5fb8b5ec86830cf5a1958553bead259fd0ed9217"
+        },
+        "date": 1699190271156,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 577.66556508,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 566.5568644399999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 747.6229844199997,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 733.41636272,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1289.81831406,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 1124.70084008,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
