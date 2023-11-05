@@ -730,7 +730,7 @@ object Runloop {
     }
 
     def keepPartitions(tps: Set[TopicPartition]): CommitOffsets =
-      CommitOffsets(offsets.view.filterKeys(tps.contains).toMap)
+      CommitOffsets(offsets.filter { case (tp, _) => tps.contains(tp) })
   }
 
   private[internal] object CommitOffsets {
