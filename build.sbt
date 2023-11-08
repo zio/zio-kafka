@@ -12,7 +12,7 @@ enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 inThisBuild(
   List(
     name                     := "ZIO Kafka",
-    zioVersion               := "2.0.18",
+    zioVersion               := "2.0.19",
     scala212                 := "2.12.18",
     scala213                 := "2.13.12",
     scala3                   := "3.3.1",
