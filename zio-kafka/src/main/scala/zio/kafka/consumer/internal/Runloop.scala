@@ -6,7 +6,7 @@ import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio._
 import zio.kafka.consumer.Consumer.{ CommitTimeout, OffsetRetrieval }
 import zio.kafka.consumer._
-import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
+import zio.kafka.consumer.diagnostics.DiagnosticEvent.{ Finalization, Rebalance }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.fetch.FetchStrategy
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
@@ -91,7 +91,6 @@ private[consumer] final class Runloop private (
       onAssigned = (assignedTps, _) =>
         for {
           _              <- ZIO.logDebug(s"${assignedTps.size} partitions are assigned")
-          _              <- diagnostics.emit(DiagnosticEvent.Rebalance.Assigned(assignedTps))
           rebalanceEvent <- lastRebalanceEvent.get
           state          <- currentStateRef.get
           streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) state.assignedStreams
@@ -103,7 +102,6 @@ private[consumer] final class Runloop private (
       onRevoked = (revokedTps, _) =>
         for {
           _              <- ZIO.logDebug(s"${revokedTps.size} partitions are revoked")
-          _              <- diagnostics.emit(DiagnosticEvent.Rebalance.Revoked(revokedTps))
           rebalanceEvent <- lastRebalanceEvent.get
           state          <- currentStateRef.get
           streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) state.assignedStreams
@@ -115,7 +113,6 @@ private[consumer] final class Runloop private (
       onLost = (lostTps, _) =>
         for {
           _              <- ZIO.logDebug(s"${lostTps.size} partitions are lost")
-          _              <- diagnostics.emit(DiagnosticEvent.Rebalance.Lost(lostTps))
           rebalanceEvent <- lastRebalanceEvent.get
           state          <- currentStateRef.get
           lostStreams = state.assignedStreams.filter(control => lostTps.contains(control.tp))
@@ -134,7 +131,7 @@ private[consumer] final class Runloop private (
       for {
         p <- Promise.make[Throwable, Unit]
         _ <- commandQueue.offer(RunloopCommand.Commit(offsets, p)).unit
-        _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
+        _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets)).forkDaemon
         _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
       } yield ()
 
@@ -160,7 +157,7 @@ private[consumer] final class Runloop private (
     val onSuccess =
       committedOffsetsRef.update(_.addCommits(commits)) *>
         cont(Exit.unit) <*
-        diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
+        diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData)).forkDaemon
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
         for {
@@ -168,7 +165,7 @@ private[consumer] final class Runloop private (
           _ <- commandQueue.offerAll(commits)
         } yield ()
       case err: Throwable =>
-        cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsetsWithMetaData, err))
+        cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsetsWithMetaData, err)).forkDaemon
     }
     val callback =
       new OffsetCommitCallback {
@@ -307,7 +304,7 @@ private[consumer] final class Runloop private (
       _ <- ZIO.logDebug(
              s"Starting poll with ${state.pendingRequests.size} pending requests and" +
                s" ${state.pendingCommits.size} pending commits," +
-               s" resuming ${partitionsToFetch} partitions"
+               s" resuming $partitionsToFetch partitions"
            )
       _ <- currentStateRef.set(state)
       pollResult <-
@@ -331,7 +328,7 @@ private[consumer] final class Runloop private (
                 tpWithData = providedTps,
                 tpWithoutData = requestedPartitions -- providedTps
               )
-            } *>
+            }.forkDaemon *>
               lastRebalanceEvent.getAndSet(RebalanceEvent.None).flatMap {
                 case RebalanceEvent(false, _, _, _, _) =>
                   // The fast track, rebalance listener was not invoked:
@@ -387,6 +384,16 @@ private[consumer] final class Runloop private (
                     _ <-
                       committedOffsetsRef.update(_.keepPartitions(updatedAssignedStreams.map(_.tp).toSet)): Task[Unit]
 
+                    _ <- diagnostics
+                           .emit(
+                             Rebalance(
+                               revoked = revokedTps,
+                               assigned = assignedTps,
+                               lost = lostTps,
+                               ended = endedStreams.map(_.tp).toSet
+                             )
+                           )
+                           .forkDaemon
                   } yield Runloop.PollResult(
                     records = polledRecords,
                     ignoreRecordsForTps = ignoreRecordsForTps,
