@@ -10,6 +10,7 @@ import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.consumer.diagnostics.Diagnostics.QueuedDiagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
@@ -180,10 +181,11 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
-      _              <- SslHelper.validateEndpoint(settings.driverSettings)
-      consumerAccess <- ConsumerAccess.make(settings)
-      runloopAccess  <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+      queuedDiagnostics <- QueuedDiagnostics.make(diagnostics)
+      _                 <- ZIO.addFinalizer(queuedDiagnostics.emit(Finalization.ConsumerFinalized))
+      _                 <- SslHelper.validateEndpoint(settings.driverSettings)
+      consumerAccess    <- ConsumerAccess.make(settings)
+      runloopAccess     <- RunloopAccess.make(settings, consumerAccess, queuedDiagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**

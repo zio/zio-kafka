@@ -131,7 +131,7 @@ private[consumer] final class Runloop private (
       for {
         p <- Promise.make[Throwable, Unit]
         _ <- commandQueue.offer(RunloopCommand.Commit(offsets, p)).unit
-        _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets)).forkDaemon
+        _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
       } yield ()
 
@@ -157,7 +157,7 @@ private[consumer] final class Runloop private (
     val onSuccess =
       committedOffsetsRef.update(_.addCommits(commits)) *>
         cont(Exit.unit) <*
-        diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData)).forkDaemon
+        diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
         for {
@@ -165,7 +165,7 @@ private[consumer] final class Runloop private (
           _ <- commandQueue.offerAll(commits)
         } yield ()
       case err: Throwable =>
-        cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsetsWithMetaData, err)).forkDaemon
+        cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsetsWithMetaData, err))
     }
     val callback =
       new OffsetCommitCallback {
@@ -328,7 +328,7 @@ private[consumer] final class Runloop private (
                 tpWithData = providedTps,
                 tpWithoutData = requestedPartitions -- providedTps
               )
-            }.forkDaemon *>
+            } *>
               lastRebalanceEvent.getAndSet(RebalanceEvent.None).flatMap {
                 case RebalanceEvent(false, _, _, _, _) =>
                   // The fast track, rebalance listener was not invoked:
@@ -384,16 +384,14 @@ private[consumer] final class Runloop private (
                     _ <-
                       committedOffsetsRef.update(_.keepPartitions(updatedAssignedStreams.map(_.tp).toSet)): Task[Unit]
 
-                    _ <- diagnostics
-                           .emit(
-                             Rebalance(
-                               revoked = revokedTps,
-                               assigned = assignedTps,
-                               lost = lostTps,
-                               ended = endedStreams.map(_.tp).toSet
-                             )
+                    _ <- diagnostics.emit(
+                           Rebalance(
+                             revoked = revokedTps,
+                             assigned = assignedTps,
+                             lost = lostTps,
+                             ended = endedStreams.map(_.tp).toSet
                            )
-                           .forkDaemon
+                         )
                   } yield Runloop.PollResult(
                     records = polledRecords,
                     ignoreRecordsForTps = ignoreRecordsForTps,
