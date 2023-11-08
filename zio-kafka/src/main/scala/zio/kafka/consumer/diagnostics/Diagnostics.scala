@@ -11,7 +11,7 @@ object Diagnostics {
     override def emit(event: => DiagnosticEvent): UIO[Unit] = ZIO.unit
   }
 
-  final case class SlidingQueue private (queue: Queue[DiagnosticEvent]) extends Diagnostics {
+  final case class SlidingQueue private[Diagnostics] (queue: Queue[DiagnosticEvent]) extends Diagnostics {
     override def emit(event: => DiagnosticEvent): UIO[Unit] = queue.offer(event).unit
   }
   object SlidingQueue {
