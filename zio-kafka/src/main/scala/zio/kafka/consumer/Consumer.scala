@@ -180,7 +180,8 @@ object Consumer {
    * A new consumer.
    *
    * @param diagnostics
-   *   a callback for key events in the consumer life-cycle. The callbacks will be executed in a separate fiber
+   *   an optional callback for key events in the consumer life-cycle. The callbacks will be executed in a separate
+   *   fiber. Since the events are queued, failure to handle these events leads to out of memory errors
    */
   def make(
     settings: ConsumerSettings,

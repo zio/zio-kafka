@@ -32,7 +32,7 @@ object Diagnostics {
       else {
         for {
           queue <- ZIO.acquireRelease(Queue.unbounded[DiagnosticEvent])(_.shutdown)
-          _     <- ZStream.fromQueue(queue).tap(wrapped.emit(_)).runDrain.forkScoped
+          _     <- ZStream.fromQueue(queue).tap(wrapped.emit(_)).runDrain.forkDaemon
         } yield new Diagnostics {
           override def emit(event: => DiagnosticEvent): UIO[Unit] = queue.offer(event).unit
         }
