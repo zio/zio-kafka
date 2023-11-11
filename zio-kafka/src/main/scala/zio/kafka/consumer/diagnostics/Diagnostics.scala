@@ -14,25 +14,28 @@ object Diagnostics {
   final case class SlidingQueue private[Diagnostics] (queue: Queue[DiagnosticEvent]) extends Diagnostics {
     override def emit(event: => DiagnosticEvent): UIO[Unit] = queue.offer(event).unit
   }
+
   object SlidingQueue {
     def make(queueSize: Int = 16): ZIO[Scope, Nothing, SlidingQueue] =
       ZIO.acquireRelease(Queue.sliding[DiagnosticEvent](queueSize))(_.shutdown).map(SlidingQueue(_))
   }
 
-  object QueuedDiagnostics {
+  object ConcurrentDiagnostics {
 
     /**
      * @return
-     *   a new `Diagnostics` that emits the events to a queue first and runs the wrapped `Diagnostics` in a separate
-     *   fiber
+     *   a `Diagnostics` that runs the wrapped `Diagnostics` concurrently in a separate fiber. Events are emitting to
+     *   the fiber via an unbounded queue
      */
-    def make(wrapped: Diagnostics, queueSize: Int = 16): ZIO[Scope, Nothing, Diagnostics] =
+    def make(wrapped: Diagnostics): ZIO[Scope, Nothing, Diagnostics] =
       if (wrapped == Diagnostics.NoOp) ZIO.succeed(Diagnostics.NoOp)
       else {
         for {
-          queue <- ZIO.acquireRelease(Queue.sliding[DiagnosticEvent](queueSize))(_.shutdown)
+          queue <- ZIO.acquireRelease(Queue.unbounded[DiagnosticEvent])(_.shutdown)
           _     <- ZStream.fromQueue(queue).tap(wrapped.emit(_)).runDrain.forkScoped
-        } yield SlidingQueue(queue)
+        } yield new Diagnostics {
+          override def emit(event: => DiagnosticEvent): UIO[Unit] = queue.offer(event).unit
+        }
       }
   }
 
