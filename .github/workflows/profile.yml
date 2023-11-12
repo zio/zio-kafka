@@ -26,6 +26,8 @@ jobs:
           distribution: temurin
           java-version: 17
           check-latest: true
+      - uses: coursier/cache-action@v6
+      - uses: VirtusLab/scala-cli-setup@main
       - name: Use CI sbt jvmopts
         shell: bash
         run: |
@@ -68,6 +70,7 @@ jobs:
           git clean -fdx
           git checkout gh-pages
           git pull
+          scala-cli scripts/prune-flame-graph.sc
           mkdir -p dev/profile/$REV
           mv /tmp/zio.kafka.bench.* dev/profile/$REV
           cd dev/profile
@@ -76,6 +79,7 @@ jobs:
           cd ../../
           git config --global user.name "zio-kafka CI"
           git config --global user.email "ziokafkaci@users.noreply.github.com"
+          git ls-files --deleted | xargs git rm
           git add .
           git commit -m "Flame graphs for $REV"
           git push

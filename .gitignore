@@ -71,3 +71,6 @@ project/plugins/project/
 
 # MacOS
 .DS_Store
+
+#scala-cli
+.scala-build/
