@@ -114,3 +114,6 @@ project/plugins/project/
 # End of https://www.gitignore.io/api/sbt,scala,intellij+all
 
 .vscode
+
+#scala-cli
+.scala-build/
