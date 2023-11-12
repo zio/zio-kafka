@@ -13,9 +13,7 @@ inThisBuild(
   List(
     name                     := "ZIO Kafka",
     zioVersion               := "2.0.19",
-    scala212                 := "2.12.18",
-    scala213                 := "2.13.12",
-    scala3                   := "3.3.1",
+    crossScalaVersions       := List("2.13.12", "3.3.1"),
     ciEnabledBranches        := Seq("master", "series/0.x"),
     useCoursier              := false,
     Test / parallelExecution := false,
