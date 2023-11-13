@@ -2,6 +2,7 @@ package zio.kafka.consumer.diagnostics
 
 import zio.stream.ZStream
 import zio._
+import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization.ConsumerFinalized
 
 trait Diagnostics {
   def emit(event: => DiagnosticEvent): UIO[Unit]
@@ -30,16 +31,13 @@ object Diagnostics {
     def make(wrapped: Diagnostics): ZIO[Scope, Nothing, Diagnostics] =
       if (wrapped == Diagnostics.NoOp) ZIO.succeed(Diagnostics.NoOp)
       else {
-        // Run the diagnostics from a separate fiber. The fiber is interrupted when it tries to poll from the queue
-        // while that queue is shut down. To give the fiber a chance to get the last item in the queue, we delay the
-        // queue shut down by 10ms.
         for {
-          queue <- ZIO.acquireRelease(Queue.unbounded[DiagnosticEvent])(_.shutdown.delay(10.millis))
-          _     <- ZStream.fromQueue(queue).tap(wrapped.emit(_)).runDrain.forkDaemon
+          queue <- ZIO.acquireRelease(Queue.unbounded[DiagnosticEvent])(_.shutdown)
+          fib   <- ZStream.fromQueue(queue).tap(wrapped.emit(_)).takeUntil(_ == ConsumerFinalized).runDrain.forkScoped
+          _     <- ZIO.addFinalizer(queue.offer(ConsumerFinalized) *> fib.await)
         } yield new Diagnostics {
           override def emit(event: => DiagnosticEvent): UIO[Unit] = queue.offer(event).unit
         }
       }
   }
-
 }
