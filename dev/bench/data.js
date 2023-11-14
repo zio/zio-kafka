@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1699909903808,
+  "lastUpdate": 1699946423424,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -19972,6 +19972,66 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 765.9563533799999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d1c3029613604d62f0223f8c35d5eb4356111706",
+          "message": "Protect agains user diagnostics, better rebalance events (#1102)\n\nDiagnostics is a feature of zio-kafka that allows users to listen to key events. Since zio-kafka calls out to the user's implementation of the Diagnostics trait, there are no guarantees on how well it behaves.\r\n\r\nThis is even more important inside the rebalance listener where we (soon, with #1098) run on the same-thread-runtime and can not afford to be switched to another thread by ZIO operations that are normally safe to use.\r\n\r\nTo protect against these issues the user's diagnostics implementation is run on a separate fiber, feeding from a queue of events.\r\n\r\nIn addition, the rebalance events are replaced by a single event which is emitted from outside the rebalance listener. The new event gives the full picture of a rebalance, including which streams were ended. Previously it was not clear which rebalance events belonged to the same rebalance.\r\n\r\n**Breaking change**\r\n\r\nSince the rebalance events are changed, this is a breaking change.",
+          "timestamp": "2023-11-14T08:08:12+01:00",
+          "tree_id": "99824bd52844dcac6debf17ffb36a943da0790f2",
+          "url": "https://github.com/zio/zio-kafka/commit/d1c3029613604d62f0223f8c35d5eb4356111706"
+        },
+        "date": 1699946421943,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 534.58696108,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 535.01017298,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 618.09349074,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 619.1377402799999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1119.26207726,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 757.92625106,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
