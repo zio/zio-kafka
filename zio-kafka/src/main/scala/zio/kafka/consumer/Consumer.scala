@@ -10,6 +10,7 @@ import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.consumer.diagnostics.Diagnostics.ConcurrentDiagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
@@ -175,15 +176,23 @@ object Consumer {
       } yield consumer
     }
 
+  /**
+   * A new consumer.
+   *
+   * @param diagnostics
+   *   an optional callback for key events in the consumer life-cycle. The callbacks will be executed in a separate
+   *   fiber. Since the events are queued, failure to handle these events leads to out of memory errors
+   */
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
-      _              <- SslHelper.validateEndpoint(settings.driverSettings)
-      consumerAccess <- ConsumerAccess.make(settings)
-      runloopAccess  <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+      wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
+      _                  <- ZIO.addFinalizer(wrappedDiagnostics.emit(Finalization.ConsumerFinalized))
+      _                  <- SslHelper.validateEndpoint(settings.driverSettings)
+      consumerAccess     <- ConsumerAccess.make(settings)
+      runloopAccess      <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**
