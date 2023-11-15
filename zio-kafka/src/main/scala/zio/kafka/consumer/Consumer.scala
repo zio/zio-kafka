@@ -137,6 +137,18 @@ trait Consumer {
   ): ZIO[R & R1, Throwable, Unit]
 
   /**
+   * See [[Consumer.consumeVia]].
+   */
+  def consumeVia[R: EnvironmentTag, R1: EnvironmentTag, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V],
+    commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+  )(
+    f: ZPipeline[R1, Nothing, CommittableRecord[K, V], Offset]
+  ): ZIO[R & R1, Throwable, Unit]
+
+  /**
    * Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the earliest
    * offset whose timestamp is greater than or equal to the given timestamp in the corresponding partition.
    *
@@ -363,6 +375,22 @@ object Consumer {
     }
 
   /**
+   * Like consumeWith, but uses a ZPipeline to process the records. When using this method, be careful to emit the
+   * Offsets in the same order that you receive them – otherwise you can end up committing messages that were not
+   * actually processed and thus lose messages! E. g. ZPipeline.mapZIOPar is fine (if you are OK with messages not being
+   * processed sequentially), but avoid ZPipeline.mapZIOParUnordered!
+   */
+  def consumeVia[R: EnvironmentTag, R1: EnvironmentTag, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V],
+    commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+  )(
+    f: ZPipeline[R1, Nothing, CommittableRecord[K, V], Offset]
+  ): ZIO[Consumer & R & R1, Throwable, Unit] =
+    ZIO.serviceWithZIO[Consumer](_.consumeVia(subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
+
+  /**
    * Accessor method
    */
   def offsetsForTimes(
@@ -518,11 +546,23 @@ private[consumer] final class ConsumerLive private[consumer] (
   )(
     f: ConsumerRecord[K, V] => URIO[R1, Unit]
   ): ZIO[R & R1, Throwable, Unit] =
+    consumeVia(subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(
+      ZPipeline.mapZIO(r => f(r.record).as(r.offset))
+    )
+
+  def consumeVia[R: EnvironmentTag, R1: EnvironmentTag, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V],
+    commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+  )(
+    f: ZPipeline[R1, Nothing, CommittableRecord[K, V], Offset]
+  ): ZIO[R & R1, Throwable, Unit] =
     for {
       r <- ZIO.environment[R & R1]
       _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
              .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
-               partitionStream.mapChunksZIO(_.mapZIO((c: CommittableRecord[K, V]) => f(c.record).as(c.offset)))
+               partitionStream.via(f)
              }
              .provideEnvironment(r)
              .aggregateAsync(offsetBatches)
