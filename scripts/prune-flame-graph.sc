@@ -32,11 +32,18 @@ val (newIndexContentBuilder, removeDirsBuilder) = indexContent
 val newIndexContent = newIndexContentBuilder.result().mkString("\n")
 val removeDirs = removeDirsBuilder.result()
 
-if (removeDirs.nonEmpty) {
+if (removeDirs.isEmpty) {
+  println("There are no old flame graph directories to remove")
+} else {
+  println(s"::group::Removing ${removeDirs.size} old flame graph directories")
   removeDirs.foreach { removeDir =>
-    os.remove.all(flameDir / removeDir)
+    println(s"git rm -r $removeDir")
+    os.proc("git", "rm", "-r", removeDir).call(cwd = flameDir)
   }
   os.write.over(indexPath, newIndexContent)
+  val indexFileStr = indexPath.relativeTo(os.pwd).toString
+  os.proc("git", "add", indexFileStr).call()
+  os.proc("git", "commit", "-m", s"Remove old flame graph directories").call()
+  println("Committed to git")
+  println("::endgroup::")
 }
-
-println(s"Pruned ${removeDirs.size} old flame graph directories")
