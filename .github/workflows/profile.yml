@@ -61,25 +61,30 @@ jobs:
 
       - name: Store flame graphs
         run: |
+          echo "Collecting new flame graph"
           git config pull.rebase true
           read REV COMMIT_DATE COMMIT_TIME COMMIT_TZ COMMIT_MSG <<< \
             $(git log --pretty=format:'%h %ad %s' --date=iso8601 -n 1 ${{ github.event.pull_request.head.sha }})
           HTML_LINE="  <li>$COMMIT_DATE $COMMIT_TIME <a href=\"$REV\">Flame graphs for $REV</a> $COMMIT_MSG</li>"
+          echo "::group::Content of zio-kafka-bench directory"
           ls -al zio-kafka-bench/
+          echo "::endgroup::"
           mv zio-kafka-bench/zio.kafka.bench.* /tmp
+          echo "Checkout gh-pages branch"
           git clean -fdx
           git checkout gh-pages
           git pull
+          git config --global user.name "zio-kafka CI"
+          git config --global user.email "ziokafkaci@users.noreply.github.com"
+          echo "Remove old flame graphs"
           scala-cli scripts/prune-flame-graph.sc
+          echo "Adding new flame graph"
           mkdir -p dev/profile/$REV
           mv /tmp/zio.kafka.bench.* dev/profile/$REV
           cd dev/profile
           find . -maxdepth 1 -type d \( ! -name . \) -exec bash -c "cd '{}' && tree -H . -o index.html" \;
           sed -i'' -e '/NEW-FLAME-GRAPHS-GO-HERE/a\'$'\n'"$HTML_LINE"$'\n' index.html
           cd ../../
-          git config --global user.name "zio-kafka CI"
-          git config --global user.email "ziokafkaci@users.noreply.github.com"
-          git ls-files --deleted | xargs git rm
           git add .
           git commit -m "Flame graphs for $REV"
           git push
