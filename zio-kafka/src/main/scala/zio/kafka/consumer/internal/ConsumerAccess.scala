@@ -8,16 +8,18 @@ import zio.kafka.consumer.ConsumerSettings
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 
 import scala.jdk.CollectionConverters._
+import zio.concurrent.ReentrantLock
 
 private[consumer] final class ConsumerAccess(
   private[consumer] val consumer: ByteArrayKafkaConsumer,
-  access: Semaphore
+  access: ReentrantLock
 ) {
+
   def withConsumer[A](f: ByteArrayKafkaConsumer => A): Task[A] =
     withConsumerZIO[Any, A](c => ZIO.attempt(f(c)))
 
   def withConsumerZIO[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
-    access.withPermit(withConsumerNoPermit(f))
+    access.lock *> withConsumerNoPermit(f) <* access.unlock
 
   private[consumer] def withConsumerNoPermit[R, A](
     f: ByteArrayKafkaConsumer => RIO[R, A]
@@ -34,7 +36,7 @@ private[consumer] final class ConsumerAccess(
    * Do not use this method outside of the Runloop
    */
   private[internal] def runloopAccess[R, E, A](f: ByteArrayKafkaConsumer => ZIO[R, E, A]): ZIO[R, E, A] =
-    access.withPermit(f(consumer))
+    access.lock *> f(consumer) <* access.unlock
 }
 
 private[consumer] object ConsumerAccess {
@@ -58,6 +60,6 @@ private[consumer] object ConsumerAccess {
 
   def make(consumer: ByteArrayKafkaConsumer): ZIO[Scope, Throwable, ConsumerAccess] =
     for {
-      access <- Semaphore.make(1)
+      access <- ReentrantLock.make(fairness = true)
     } yield new ConsumerAccess(consumer, access)
 }
