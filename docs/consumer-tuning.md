@@ -41,8 +41,12 @@ val highThroughputSettings = ConsumerSettings(bootstrapServers).tuneForHighThrou
 val lowLatencySettings = ConsumerSettings(bootstrapServers).tuneForLowLatency
 ```
 
-Kafka’s performance is not very sensitive to record size. However, when records become very small (< 100 bytes) or very
-large (> 100Kb), increasing or decreasing `max.poll.records` and `partitionPreFetchBufferLimit` can be considered.
+## Small and large records
+
+Kafka’s performance is not very sensitive to record size. However, when records become very small (< 100 bytes) it
+might be beneficial to increase `max.poll.records` and `partitionPreFetchBufferLimit`. Similarly, when records are
+very large (> 100Kb), `max.poll.records` can be decreased and pre-fetching can be limited by decreasing
+`partitionPreFetchBufferLimit` or even disabled by using `ConsumerSettngs.withoutPartitionPreFetching`.
 
 ## High number of partitions
 
