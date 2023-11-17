@@ -19,7 +19,7 @@ private[consumer] final class ConsumerAccess(
     withConsumerZIO[Any, A](c => ZIO.attempt(f(c)))
 
   def withConsumerZIO[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
-    access.lock *> withConsumerNoPermit(f) <* access.unlock
+    access.lock.zipRight(withConsumerNoPermit(f)).ensuring(access.unlock)
 
   private[consumer] def withConsumerNoPermit[R, A](
     f: ByteArrayKafkaConsumer => RIO[R, A]
@@ -36,7 +36,7 @@ private[consumer] final class ConsumerAccess(
    * Do not use this method outside of the Runloop
    */
   private[internal] def runloopAccess[R, E, A](f: ByteArrayKafkaConsumer => ZIO[R, E, A]): ZIO[R, E, A] =
-    access.lock *> f(consumer) <* access.unlock
+    access.lock.zipRight(f(consumer)).ensuring(access.unlock)
 }
 
 private[consumer] object ConsumerAccess {
