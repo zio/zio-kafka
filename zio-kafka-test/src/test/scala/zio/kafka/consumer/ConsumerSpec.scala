@@ -477,7 +477,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                  .provideSomeLayer[Kafka](consumer(client, Some(group), commitTimeout = 2.seconds))
           offsets <- committedOffsetRef.get
         } yield assert(offsets)(equalTo(expectedResult))
-      },
+      } @@ TestAspect.timeout(20.seconds),
       test("handle rebalancing by completing topic-partition streams") {
         val nrMessages   = 50
         val nrPartitions = 6 // Must be even and strictly positive
