@@ -547,7 +547,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     f: ConsumerRecord[K, V] => URIO[R1, Unit]
   ): ZIO[R & R1, Throwable, Unit] =
     consumeVia(subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(
-      ZPipeline.mapZIO(r => f(r.record).as(r.offset))
+      ZPipeline.mapChunksZIO(_.mapZIO(r => f(r.record).as(r.offset)))
     )
 
   def consumeVia[R: EnvironmentTag, R1: EnvironmentTag, K, V](
