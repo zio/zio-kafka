@@ -445,6 +445,79 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                        .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(offsets.values.headOption.flatten.map(_.metadata))(isSome(equalTo(metadata)))
       },
+      test("access to the java consumer must be fair") {
+        val kvs = (1 to 10).toList.map(i => (s"key$i", s"msg$i"))
+
+        val expectedResult = (0 to 9).toList.map(i => i.toLong -> i.toLong)
+
+        for {
+          topic  <- randomTopic
+          client <- randomClient
+          group  <- randomGroup
+
+          _                  <- produceMany(topic, kvs)
+          committedOffsetRef <- Ref.make(Seq.empty[(Long, Long)])
+
+          topicPartition = new TopicPartition(topic, 0)
+
+          _ <- Consumer
+                 .plainStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
+                 .take(10)
+                 .map(_.offset)
+                 .mapZIO(offsetBatch =>
+                   Consumer
+                     .committed(Set(topicPartition))
+                     .flatMap(offset =>
+                       committedOffsetRef.update(map =>
+                         map :+ (offsetBatch.offset -> offset(topicPartition).map(_.offset()).getOrElse(0L))
+                       ) *> offsetBatch.commit
+                     )
+                 )
+                 .runDrain
+                 .provideSomeLayer[Kafka](consumer(client, Some(group), commitTimeout = 2.seconds))
+          offsets <- committedOffsetRef.get
+        } yield assert(offsets)(equalTo(expectedResult))
+      } @@ TestAspect.timeout(20.seconds),
+      test("handle rebalancing by completing topic-partition streams") {
+        val nrMessages   = 50
+        val nrPartitions = 6 // Must be even and strictly positive
+
+        for {
+          // Produce messages on several partitions
+          topic   <- randomTopic
+          group   <- randomGroup
+          client1 <- randomClient
+          client2 <- randomClient
+
+          _ <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+          _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
+                 produceMany(topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+               }
+
+          // Consume messages
+          subscription = Subscription.topics(topic)
+          consumer1 <- Consumer
+                         .partitionedStream(subscription, Serde.string, Serde.string)
+                         .flatMapPar(nrPartitions) { case (tp, partition) =>
+                           ZStream
+                             .fromZIO(partition.runDrain)
+                             .as(tp)
+                         }
+                         .take(nrPartitions.toLong / 2)
+                         .runDrain
+                         .provideSomeLayer[Kafka](consumer(client1, Some(group)))
+                         .fork
+          _ <- Live.live(ZIO.sleep(5.seconds))
+          consumer2 <- Consumer
+                         .partitionedStream(subscription, Serde.string, Serde.string)
+                         .take(nrPartitions.toLong / 2)
+                         .runDrain
+                         .provideSomeLayer[Kafka](consumer(client2, Some(group)))
+                         .fork
+          _ <- consumer1.join
+          _ <- consumer2.join
+        } yield assertCompletes
+      },
       test("produce diagnostic events when rebalancing") {
         val nrMessages   = 50
         val nrPartitions = 6
