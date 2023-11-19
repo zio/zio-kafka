@@ -82,25 +82,16 @@ private[consumer] final class Runloop private (
     // `ZStream.repeat`, `Promise.await` on non-completed promises, and any other ZIO operation that shifts the work to
     // another thread cannot be used.
 
-    /**
-     * Maximum time spent in the rebalance callback.
-     *
-     * In this time zio-kafka awaits processing of records and the completion of commits.
-     *
-     * We use 3/5 of `maxPollInterval` which by default calculates to 3 minutes.
-     */
+    // Maximum time spent in the rebalance callback.
+    // In this time zio-kafka awaits processing of records and the completion of commits.
+    // We use 3/5 of `maxPollInterval` which by default calculates to 3 minutes.
     val maxEndingStreamsInterval = (maxPollInterval.toNanos / 5L) * 3L
 
-    /**
-     * Time between polling the commit queue from the rebalance listener when `rebalanceSafeCommits` is enabled.
-     */
+    // Time between polling the commit queue from the rebalance listener when `rebalanceSafeCommits` is enabled.
     val commitQueuePollInterval = 100.millis
 
-    /**
-     * End streams from the rebalance listener.
-     *
-     * When `rebalanceSafeCommits` is enabled, wait for consumed offsets to be committed.
-     */
+    // End streams from the rebalance listener.
+    // When `rebalanceSafeCommits` is enabled, wait for consumed offsets to be committed.
     def endStreams(state: State, streamsToEnd: Chunk[PartitionStreamControl]): Task[Unit] =
       if (streamsToEnd.isEmpty) ZIO.unit
       else {
