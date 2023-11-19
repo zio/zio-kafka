@@ -123,6 +123,8 @@ private[consumer] final class Runloop private (
           ZIO.logDebug(s"Async commit of ${offsets.size} offsets for ${commits.size} commits") *>
             ZIO.attempt(consumer.commitAsync(offsets, callback)).catchAll(onFailure)
         } else {
+          // Continue to drive communication with the broker...
+          // No longer needed once KIP-848 is available.
           ZIO.attempt(consumer.commitAsync(java.util.Collections.emptyMap(), null)).ignore
         }
 
