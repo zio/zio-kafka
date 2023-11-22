@@ -165,8 +165,8 @@ lazy val zioKafkaExample =
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                 %% "zio"                % "2.0.19",
-        "dev.zio"                 %% "zio-kafka"          % "2.6.0",
-        "dev.zio"                 %% "zio-kafka-testkit"  % "2.6.0"  % Test,
+        "dev.zio"                 %% "zio-kafka"          % "2.7.0",
+        "dev.zio"                 %% "zio-kafka-testkit"  % "2.7.0"  % Test,
         "dev.zio"                 %% "zio-test"           % "2.0.19" % Test,
         "ch.qos.logback"           % "logback-classic"    % "1.4.11",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.15",
