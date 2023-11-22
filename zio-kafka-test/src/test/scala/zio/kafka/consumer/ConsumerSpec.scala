@@ -659,6 +659,129 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           consumedMessages <- messagesReceived.get
         } yield assert(consumedMessages)(contains(newMessage).negate)
       },
+      suite("rebalanceSafeCommits prevents processing messages twice when rebalancing")({
+
+        /**
+         * Outline of this test:
+         *   - A producer generates some messages on every partition of a topic (2 partitions),
+         *   - A consumer starts reading from the topic. It is the only consumer so it handles all partitions.
+         *   - After a few messages a second consumer is started. One partition will be re-assigned.
+         *
+         * Since the first consumer is slow, we expect it to not have committed the offsets yet when the rebalance
+         * happens. As a consequence, the second consumer would see some messages the first consumer already consumed.
+         *
+         * '''However,''' since we enable `rebalanceSafeCommits` on the first consumer, no messages should be consumed
+         * by both consumers.
+         */
+        def testForPartitionAssignmentStrategy[T <: ConsumerPartitionAssignor: ClassTag] =
+          test(implicitly[ClassTag[T]].runtimeClass.getName) {
+            val partitionCount = 2
+
+            def makeConsumer(
+              clientId: String,
+              groupId: String,
+              rebalanceSafeCommits: Boolean
+            ): ZIO[Scope with Kafka, Throwable, Consumer] =
+              for {
+                settings <- consumerSettings(
+                              clientId = clientId,
+                              groupId = Some(groupId),
+                              `max.poll.records` = 1,
+                              rebalanceSafeCommits = rebalanceSafeCommits
+                            )
+                consumer <- Consumer.make(settings)
+              } yield consumer
+
+            for {
+              topic <- randomTopic
+              subscription = Subscription.topics(topic)
+              clientId1 <- randomClient
+              clientId2 <- randomClient
+              groupId   <- randomGroup
+              _         <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = partitionCount))
+              // Produce one message to all partitions, every 500 ms
+              pFib <- ZStream
+                        .fromSchedule(Schedule.fixed(500.millis))
+                        .mapZIO { i =>
+                          ZIO.foreachDiscard(0 until partitionCount) { p =>
+                            produceMany(topic, p, Seq((s"key-$p-$i", s"msg-$p-$i")))
+                          }
+                        }
+                        .runDrain
+                        .fork
+              _         <- ZIO.logDebug("Starting consumer 1")
+              c1        <- makeConsumer(clientId1, groupId, rebalanceSafeCommits = true)
+              c1Sleep   <- Ref.make[Int](3)
+              c1Started <- Promise.make[Nothing, Unit]
+              c1Keys    <- Ref.make(Chunk.empty[String])
+              fib1 <-
+                ZIO
+                  .logAnnotate("consumer", "1") {
+                    // When the stream ends, the topic subscription ends as well. Because of that the consumer
+                    // shuts down and commits are no longer possible. Therefore, we signal the second consumer in
+                    // such a way that it doesn't close the stream.
+                    c1
+                      .plainStream(subscription, Serde.string, Serde.string)
+                      .tap(record =>
+                        ZIO.logDebug(
+                          s"Received record with offset ${record.partition}:${record.offset.offset} and key ${record.key}"
+                        )
+                      )
+                      .tap { record =>
+                        // Signal consumer 2 can start when a record is seen for every partition.
+                        for {
+                          keys <- c1Keys.updateAndGet(_ :+ record.key)
+                          _    <- c1Started.succeed(()).when(keys.map(_.split('-')(1)).toSet.size == partitionCount)
+                        } yield ()
+                      }
+                      // Buffer so that the above can run ahead of the below, this is important;
+                      // we want consumer 2 to start before consumer 1 commits.
+                      .buffer(partitionCount)
+                      .mapZIO { record =>
+                        for {
+                          s <- c1Sleep.get
+                          _ <- ZIO.sleep(s.seconds)
+                          _ <- ZIO.logDebug(
+                                 s"Committing offset ${record.partition}:${record.offset.offset} for key ${record.key}"
+                               )
+                          _ <- record.offset.commit
+                        } yield record.key
+                      }
+                      .runCollect
+                      .map(_.toSet)
+                  }
+                  .fork
+              _  <- c1Started.await
+              _  <- ZIO.logDebug("Starting consumer 2")
+              c2 <- makeConsumer(clientId2, groupId, rebalanceSafeCommits = false)
+              fib2 <- ZIO
+                        .logAnnotate("consumer", "2") {
+                          c2
+                            .plainStream(subscription, Serde.string, Serde.string)
+                            .tap(msg => ZIO.logDebug(s"Received ${msg.key}"))
+                            .mapZIO(msg => msg.offset.commit.as(msg.key))
+                            .take(5)
+                            .runCollect
+                            .map(_.toSet)
+                        }
+                        .fork
+              _                   <- ZIO.logDebug("Waiting for consumers to end")
+              c2Keys: Set[String] <- fib2.join
+              _                   <- ZIO.logDebug("Consumer 2 ready")
+              _                   <- c1.stopConsumption
+              _                   <- c1Sleep.set(0)
+              c1Keys: Set[String] <- fib1.join
+              _                   <- ZIO.logDebug("Consumer 1 ready")
+              _                   <- pFib.interrupt
+            } yield assertTrue((c1Keys intersect c2Keys).isEmpty)
+          }
+
+        // Test for both default partition assignment strategies
+        Seq(
+          testForPartitionAssignmentStrategy[RangeAssignor],
+          testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
+        )
+      }: _*),
       test("partitions for topic doesn't fail if doesn't exist") {
         for {
           topic  <- randomTopic
