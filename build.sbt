@@ -77,6 +77,7 @@ def stdSettings(prjName: String) = Seq(
   Compile / compile / scalacOptions ++=
     optionsOn("2.13")("-Wconf:cat=unused-nowarn:s").value,
   scalacOptions -= "-Xlint:infer-any",
+  scalacOptions ++= Seq("-release", "8"),
   // workaround for bad constant pool issue
   (Compile / doc) := Def.taskDyn {
     val default = (Compile / doc).taskValue
