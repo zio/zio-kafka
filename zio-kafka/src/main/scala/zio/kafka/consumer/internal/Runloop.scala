@@ -36,6 +36,7 @@ private[consumer] final class Runloop private (
   offsetRetrieval: OffsetRetrieval,
   userRebalanceListener: RebalanceListener,
   restartStreamsOnRebalancing: Boolean,
+  maxRebalanceDuration: Duration,
   rebalanceSafeCommits: Boolean,
   currentStateRef: Ref[State],
   committedOffsetsRef: Ref[CommitOffsets],
@@ -82,11 +83,6 @@ private[consumer] final class Runloop private (
     // `ZStream.repeat`, `Promise.await` on non-completed promises, and any other ZIO operation that shifts the work to
     // another thread cannot be used.
 
-    // Maximum time spent in the rebalance callback.
-    // In this time zio-kafka awaits processing of records and the completion of commits.
-    // We use 3/5 of `maxPollInterval` which by default calculates to 3 minutes.
-    val maxEndingStreamsInterval = (maxPollInterval.toNanos / 5L) * 3L
-
     // Time between polling the commit queue from the rebalance listener when `rebalanceSafeCommits` is enabled.
     val commitQueuePollInterval = 100.millis
 
@@ -107,7 +103,7 @@ private[consumer] final class Runloop private (
       state: State,
       streamsToEnd: Chunk[PartitionStreamControl]
     ): Task[Unit] = {
-      val deadline = java.lang.System.nanoTime() + maxEndingStreamsInterval - commitTimeout.toNanos
+      val deadline = java.lang.System.nanoTime() + maxRebalanceDuration.toNanos - commitTimeout.toNanos
 
       val endingTps = streamsToEnd.map(_.tp).toSet
 
@@ -790,6 +786,7 @@ object Runloop {
     userRebalanceListener: RebalanceListener,
     restartStreamsOnRebalancing: Boolean,
     rebalanceSafeCommits: Boolean,
+    maxRebalanceDuration: Duration,
     partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
     fetchStrategy: FetchStrategy
   ): URIO[Scope, Runloop] =
@@ -818,6 +815,7 @@ object Runloop {
                   userRebalanceListener = userRebalanceListener,
                   restartStreamsOnRebalancing = restartStreamsOnRebalancing,
                   rebalanceSafeCommits = rebalanceSafeCommits,
+                  maxRebalanceDuration = maxRebalanceDuration,
                   currentStateRef = currentStateRef,
                   committedOffsetsRef = committedOffsetsRef,
                   fetchStrategy = fetchStrategy

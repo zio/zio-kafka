@@ -29,6 +29,7 @@ final case class ConsumerSettings(
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
   rebalanceSafeCommits: Boolean = false,
+  maxRebalanceDuration: Option[Duration] = None,
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy()
 ) {
   private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
@@ -156,7 +157,7 @@ final case class ConsumerSettings(
     copy(restartStreamOnRebalancing = value)
 
   /**
-   * WARNING: 'rebalanceSafeCommits' is an EXPERIMENTAL feature. It is not recommended for production use yet.
+   * NOTE: 'rebalanceSafeCommits' is an EXPERIMENTAL feature. It is not recommended for production use yet.
    *
    * @param value
    *   Whether to hold up a rebalance until all offsets of consumed messages have been committed. The default is
@@ -179,7 +180,7 @@ final case class ConsumerSettings(
    * messages until the revoked streams are ready committing.
    *
    * Rebalances are held up for at most 3/5 of `maxPollInterval` (see [[withMaxPollInterval]]), by default this
-   * calculates to 3 minutes.
+   * calculates to 3 minutes. See [[#withMaxRebalanceDuration]] to change the default.
    *
    * When `false`, streams for revoked partitions may continue to run even though the rebalance is not held up. Any
    * offset commits from these streams have a high chance of being delayed (commits are not possible during some phases
@@ -188,6 +189,23 @@ final case class ConsumerSettings(
    */
   def withRebalanceSafeCommits(value: Boolean): ConsumerSettings =
     copy(rebalanceSafeCommits = value)
+
+  /**
+   * NOTE: 'rebalanceSafeCommits' is an EXPERIMENTAL feature. It is not recommended for production use yet.
+   *
+   * @param value
+   *   Maximum time spent in the rebalance callback when `rebalanceSafeCommits` is enabled.
+   *
+   * In this time zio-kafka awaits processing of records and the completion of commits.
+   *
+   * By default this value is set to 3/5 of `maxPollInterval` which by default calculates to 3 minutes. Only values
+   * between `commitTimeout` and `maxPollInterval` are useful. Lower values will make the rebalance callback be done
+   * immediately, higher values lead to lost partitions.
+   *
+   * See [[#withRebalanceSafeCommits]] for more information.
+   */
+  def withMaxRebalanceDuration(value: Duration): ConsumerSettings =
+    copy(maxRebalanceDuration = Some(value))
 
   def withCredentials(credentialsStore: KafkaCredentialStore): ConsumerSettings =
     withProperties(credentialsStore.properties)
