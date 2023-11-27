@@ -9,6 +9,7 @@ const sidebars = {
         "consuming-kafka-topics-using-zio-streams",
         "example-of-consuming-producing-and-committing-offsets",
         "partition-assignment-and-offset-retrieval",
+        "consumer-tuning",
         "sharing-consumer",
         "serialization-and-deserialization",
         "writing-tests"

@@ -1513,7 +1513,7 @@ object AdminClient {
   def javaClientFromSettings(settings: AdminClientSettings): ZIO[Scope, Throwable, JAdmin] =
     ZIO.acquireRelease {
       val endpointCheck = SslHelper
-        .validateEndpoint(settings.bootstrapServers, settings.properties)
+        .validateEndpoint(settings.driverSettings)
 
       endpointCheck *> ZIO.attempt(JAdmin.create(settings.driverSettings.asJava))
     }(client => ZIO.attemptBlocking(client.close(settings.closeTimeout)).orDie)

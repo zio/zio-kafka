@@ -40,7 +40,7 @@ trait Transaction {
   def abort: IO[TransactionalProducer.UserInitiatedAbort.type, Nothing]
 }
 
-final private[producer] class TransactionImpl(
+private[producer] final class TransactionImpl(
   producer: Producer,
   private[producer] val offsetBatchRef: Ref[OffsetBatch],
   closed: Ref[Boolean]
