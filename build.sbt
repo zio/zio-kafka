@@ -101,7 +101,6 @@ lazy val zioKafka =
       libraryDependencies ++= Seq(
         kafkaClients,
         scalaCollectionCompat,
-        "dev.zio" %% "zio-concurrent" % zioVersion.value
       )
     )
 
