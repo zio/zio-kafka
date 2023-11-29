@@ -322,7 +322,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       .provideSomeLayer[Kafka](consumer(client, Some(group)))
         } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
       },
-      test("process outstanding commits after a graceful shutdown with aggregateAsync") {
+      test("process outstanding commits after a graceful shutdown with aggregateAsync using `maxRebalanceDuration`") {
         val kvs   = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
         val topic = "test-outstanding-commits"
         for {
@@ -330,21 +330,30 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           client           <- randomClient
           _                <- produceMany(topic, kvs)
           messagesReceived <- Ref.make[Int](0)
-          offset <- (Consumer
-                      .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
-                      .mapConcatZIO { record =>
-                        for {
-                          nr <- messagesReceived.updateAndGet(_ + 1)
-                          _  <- Consumer.stopConsumption.when(nr == 10)
-                        } yield if (nr < 10) Seq(record.offset) else Seq.empty
-                      }
-                      .aggregateAsync(Consumer.offsetBatches)
-                      .mapZIO(_.commit)
-                      .runDrain *>
-                      Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head))
-                      .provideSomeLayer[Kafka](consumer(client, Some(group), commitTimeout = 5.seconds))
-        } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
-      } @@ TestAspect.nonFlaky(10),
+          offset <- (
+            Consumer
+              .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
+              .mapConcatZIO { record =>
+                for {
+                  nr <- messagesReceived.updateAndGet(_ + 1)
+                  _  <- Consumer.stopConsumption.when(nr == 10)
+                } yield if (nr < 10) Seq(record.offset) else Seq.empty
+              }
+              .aggregateAsync(Consumer.offsetBatches)
+              .mapZIO(_.commit)
+              .runDrain *>
+              Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
+            )
+            .provideSomeLayer[Kafka](
+              consumer(
+                client, Some(group), commitTimeout = 4.seconds,
+                rebalanceSafeCommits = true, maxRebalanceDuration = 6.seconds
+              )
+            )
+        } yield {
+          assertTrue(offset.map(_.offset).contains(9L))
+        }
+      } @@ TestAspect.nonFlaky(5),
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
         // Setup of this test:
         // - Set the max poll interval very low: a couple of seconds.
