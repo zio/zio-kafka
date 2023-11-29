@@ -331,28 +331,29 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _                <- produceMany(topic, kvs)
           messagesReceived <- Ref.make[Int](0)
           offset <- (
-            Consumer
-              .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
-              .mapConcatZIO { record =>
-                for {
-                  nr <- messagesReceived.updateAndGet(_ + 1)
-                  _  <- Consumer.stopConsumption.when(nr == 10)
-                } yield if (nr < 10) Seq(record.offset) else Seq.empty
-              }
-              .aggregateAsync(Consumer.offsetBatches)
-              .mapZIO(_.commit)
-              .runDrain *>
-              Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
-            )
-            .provideSomeLayer[Kafka](
-              consumer(
-                client, Some(group), commitTimeout = 4.seconds,
-                rebalanceSafeCommits = true, maxRebalanceDuration = 6.seconds
-              )
-            )
-        } yield {
-          assertTrue(offset.map(_.offset).contains(9L))
-        }
+                      Consumer
+                        .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
+                        .mapConcatZIO { record =>
+                          for {
+                            nr <- messagesReceived.updateAndGet(_ + 1)
+                            _  <- Consumer.stopConsumption.when(nr == 10)
+                          } yield if (nr < 10) Seq(record.offset) else Seq.empty
+                        }
+                        .aggregateAsync(Consumer.offsetBatches)
+                        .mapZIO(_.commit)
+                        .runDrain *>
+                        Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
+                    )
+                      .provideSomeLayer[Kafka](
+                        consumer(
+                          client,
+                          Some(group),
+                          commitTimeout = 4.seconds,
+                          rebalanceSafeCommits = true,
+                          maxRebalanceDuration = 6.seconds
+                        )
+                      )
+        } yield assertTrue(offset.map(_.offset).contains(9L))
       } @@ TestAspect.nonFlaky(5),
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
         // Setup of this test:
