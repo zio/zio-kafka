@@ -117,6 +117,7 @@ object KafkaTestUtils {
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
     restartStreamOnRebalancing: Boolean = false,
     rebalanceSafeCommits: Boolean = false,
+    maxRebalanceDuration: Duration = 3.minutes,
     maxPollInterval: Duration = 5.minutes,
     `max.poll.records`: Int = 100, // settings this higher can cause concurrency bugs to go unnoticed
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
@@ -140,6 +141,7 @@ object KafkaTestUtils {
         .withOffsetRetrieval(offsetRetrieval)
         .withRestartStreamOnRebalancing(restartStreamOnRebalancing)
         .withRebalanceSafeCommits(rebalanceSafeCommits)
+        .withMaxRebalanceDuration(maxRebalanceDuration)
         .withProperties(properties)
 
       val withClientInstanceId = clientInstanceId.fold(settings)(settings.withGroupInstanceId)
@@ -207,6 +209,7 @@ object KafkaTestUtils {
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
     rebalanceSafeCommits: Boolean = false,
+    maxRebalanceDuration: Duration = 3.minutes,
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
     properties: Map[String, String] = Map.empty
   ): ZLayer[Kafka, Throwable, Consumer] =
@@ -219,6 +222,7 @@ object KafkaTestUtils {
         offsetRetrieval = offsetRetrieval,
         restartStreamOnRebalancing = restartStreamOnRebalancing,
         rebalanceSafeCommits = rebalanceSafeCommits,
+        maxRebalanceDuration = maxRebalanceDuration,
         properties = properties,
         commitTimeout = commitTimeout
       )
