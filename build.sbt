@@ -168,7 +168,7 @@ lazy val zioKafkaExample =
         "dev.zio"                 %% "zio-kafka"          % "2.7.1",
         "dev.zio"                 %% "zio-kafka-testkit"  % "2.7.1"  % Test,
         "dev.zio"                 %% "zio-test"           % "2.0.19" % Test,
-        "ch.qos.logback"           % "logback-classic"    % "1.4.13",
+        "ch.qos.logback"           % "logback-classic"    % "1.4.14",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.16",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion
       ),
