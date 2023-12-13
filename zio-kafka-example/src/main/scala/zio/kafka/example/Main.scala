@@ -27,7 +27,7 @@ object MyKafka {
         "super.users"                      -> "User:ANONYMOUS"
       )
     )
-    ZIO.acquireRelease(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
+    ZIO.acquireRelease(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(kafkaService => ZIO.logDebug("Shutting down Kafka") *> kafkaService.stop() <* ZIO.logDebug("Done shutting down Kafka"))
   }
 }
 

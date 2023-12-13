@@ -50,16 +50,19 @@ private[consumer] final class Runloop private (
       commandQueue.offer(RunloopCommand.StopAllStreams).unit
 
   private[consumer] def shutdown: UIO[Unit] =
-    ZIO.logDebug(s"Shutting down runloop initiated") *>
-      commandQueue
-        .offerAll(
-          Chunk(
-            RunloopCommand.RemoveAllSubscriptions,
-            RunloopCommand.StopAllStreams,
-            RunloopCommand.StopRunloop
-          )
-        )
-        .unit
+    for {
+      _    <- ZIO.logDebug(s"Shutting down runloop initiated")
+      done <- Promise.make[Nothing, Unit]
+      _    <- commandQueue
+           .offerAll(
+             Chunk(
+               RunloopCommand.RemoveAllSubscriptions(done),
+               RunloopCommand.StopAllStreams,
+               RunloopCommand.StopRunloop
+             )
+           )
+      _ <- done.await
+    } yield ()
 
   private[internal] def addSubscription(subscription: Subscription): IO[InvalidSubscriptionUnion, Unit] =
     for {
@@ -72,7 +75,14 @@ private[consumer] final class Runloop private (
     } yield ()
 
   private[internal] def removeSubscription(subscription: Subscription): UIO[Unit] =
-    commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
+    for {
+      _    <- ZIO.logDebug(s"Remove subscription $subscription")
+      done <- Promise.make[Nothing, Unit]
+      _    <- commandQueue.offer(RunloopCommand.RemoveSubscription(subscription, done))
+      _    <- ZIO.logDebug(s"Waiting for removal of subscription $subscription")
+      _    <- done.await
+      _    <- ZIO.logDebug(s"Subscription $subscription was removed")
+    } yield ()
 
   private val rebalanceListener: RebalanceListener = {
     // All code in this block is called from the rebalance listener and therefore runs on the same-thread-runtime. This
@@ -171,9 +181,17 @@ private[consumer] final class Runloop private (
       //
       // Note, we cannot use ZStream.fromQueue because that will emit nothing when the queue is empty.
       // Instead, we poll the queue in a loop.
-      ZIO.logDebug(s"Waiting for ${streamsToEnd.size} streams to end") *>
+      ZIO.logError(s"Waiting for ${streamsToEnd.size} streams to end [][][][]") *>
         ZStream
-          .fromZIO(blockingSleep(commitQueuePollInterval) *> commitQueue.takeAll)
+          .fromZIO {
+            for {
+              _ <- ZIO.logDebug("~~~START WAIT~~~")
+              _ <- blockingSleep(commitQueuePollInterval)
+              _ <- ZIO.logDebug("~~~END WAIT~~~")
+              r <- commitQueue.takeAll
+            } yield r
+          }
+          .debug("========== Commit queue polled")
           .tap(commitAsync)
           .forever
           .takeWhile(_ => java.lang.System.nanoTime() <= deadline)
@@ -214,19 +232,21 @@ private[consumer] final class Runloop private (
           _ <- ZIO.logTrace("onAssigned done")
         } yield (),
       onRevoked = (revokedTps, _) =>
-        for {
-          rebalanceEvent <- lastRebalanceEvent.get
-          _ <- ZIO.logDebug {
-                 val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
-                 s"${revokedTps.size} partitions are revoked$sameRebalance"
-               }
-          state <- currentStateRef.get
-          streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) state.assignedStreams
-                         else state.assignedStreams.filter(control => revokedTps.contains(control.tp))
-          _ <- endStreams(state, streamsToEnd)
-          _ <- lastRebalanceEvent.set(rebalanceEvent.onRevoked(revokedTps, endedStreams = streamsToEnd))
-          _ <- ZIO.logTrace("onRevoked done")
-        } yield (),
+        ZIO.uninterruptible {
+          for {
+            rebalanceEvent <- lastRebalanceEvent.get
+            _ <- ZIO.logDebug {
+              val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
+              s"${revokedTps.size} partitions are revoked$sameRebalance"
+            }
+            state <- currentStateRef.get
+            streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) state.assignedStreams
+            else state.assignedStreams.filter(control => revokedTps.contains(control.tp))
+            _ <- endStreams(state, streamsToEnd)
+            _ <- lastRebalanceEvent.set(rebalanceEvent.onRevoked(revokedTps, endedStreams = streamsToEnd))
+            _ <- ZIO.logTrace("onRevoked done")
+          } yield ()
+        },
       onLost = (lostTps, _) =>
         for {
           _              <- ZIO.logDebug(s"${lostTps.size} partitions are lost")
@@ -246,6 +266,7 @@ private[consumer] final class Runloop private (
   private val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] =
     offsets =>
       for {
+        _ <- ZIO.logWarning(s"Starting commit for offsets $offsets")
         p <- Promise.make[Throwable, Unit]
         startTime = java.lang.System.nanoTime()
         _ <- commitQueue.offer(Runloop.Commit(java.lang.System.nanoTime(), offsets, p))
@@ -255,6 +276,7 @@ private[consumer] final class Runloop private (
         endTime = java.lang.System.nanoTime()
         latency = (endTime - startTime).nanoseconds
         _ <- consumerMetrics.observeCommit(latency)
+        _ <- ZIO.logWarning(s"Commit for offsets $offsets took $latency")
       } yield ()
 
   /** Merge commits and prepare parameters for calling `consumer.commitAsync`. */
@@ -500,6 +522,8 @@ private[consumer] final class Runloop private (
                                 //     of `restartStreamsOnRebalancing` being true
                                 startingTps = assignedTps ++ (currentAssigned intersect endedTps)
 
+                                _ <- ZIO.checkInterruptible(s => ZIO.debug(s"Interruptible assign: ${s.toString}"))
+
                                 startingStreams <-
                                   ZIO.foreach(Chunk.fromIterable(startingTps))(newPartitionStream).tap { newStreams =>
                                     ZIO.logDebug(s"Offering partition assignment $startingTps") *>
@@ -631,8 +655,8 @@ private[consumer] final class Runloop private (
                 cmd.succeed *> doChangeSubscription(newSubState)
             }
         }
-      case RunloopCommand.RemoveSubscription(subscription) =>
-        state.subscriptionState match {
+      case RunloopCommand.RemoveSubscription(subscription, cont) =>
+        (state.subscriptionState match {
           case SubscriptionState.NotSubscribed => ZIO.succeed(state)
           case SubscriptionState.Subscribed(existingSubscriptions, _) =>
             val newUnion: Option[(Subscription, NonEmptyChunk[Subscription])] =
@@ -649,8 +673,9 @@ private[consumer] final class Runloop private (
                 ZIO.logDebug(s"Unsubscribing kafka consumer") *>
                   doChangeSubscription(SubscriptionState.NotSubscribed)
             }
-        }
-      case RunloopCommand.RemoveAllSubscriptions => doChangeSubscription(SubscriptionState.NotSubscribed)
+        }) <* cont.succeed(())
+      case RunloopCommand.RemoveAllSubscriptions(cont) =>
+        doChangeSubscription(SubscriptionState.NotSubscribed) <* cont.succeed(())
       case RunloopCommand.StopAllStreams =>
         for {
           _ <- ZIO.logDebug("Stop all streams initiated")
@@ -870,7 +895,7 @@ object Runloop {
       waitForRunloopStop = fiber.join.orDie
 
       _ <- ZIO.addFinalizer(
-             ZIO.logDebug("Shutting down Runloop") *>
+             ZIO.logError("Shutting down Runloop") *>
                runloop.shutdown *>
                waitForRunloopStop <*
                ZIO.logDebug("Shut down Runloop")

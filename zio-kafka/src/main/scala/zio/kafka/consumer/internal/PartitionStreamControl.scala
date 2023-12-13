@@ -135,6 +135,7 @@ object PartitionStreamControl {
 
     for {
       _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
+      _ <-                    ZIO.checkInterruptible(s => ZIO.debug(s"Interruptible make stream: ${s.toString}"))
       interruptionPromise <- Promise.make[Throwable, Unit]
       completedPromise    <- Promise.make[Nothing, Option[Offset]]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
@@ -144,7 +145,9 @@ object PartitionStreamControl {
         for {
           _     <- commandQueue.offer(RunloopCommand.Request(tp))
           _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
+          _     <- ZIO.logDebug("Awaiting more data in stream")
           taken <- dataQueue.takeBetween(1, Int.MaxValue)
+          _     <- ZIO.logDebug(s"Done awaiting more data in stream, got ${taken.size} records")
         } yield taken
 
       stream = ZStream.logAnnotate(
@@ -153,19 +156,27 @@ object PartitionStreamControl {
                ) *>
                  ZStream.finalizer {
                    for {
+                     _  <- ZIO.logDebug(s"Partition stream ${tp.toString} is ending")
                      qi <- queueInfo.get
                      _  <- completedPromise.succeed(qi.lastPulledOffset)
-                     _  <- ZIO.logDebug(s"Partition stream ${tp.toString} has ended")
                    } yield ()
                  } *>
                  ZStream.repeatZIOChunk {
+                   ZIO.checkInterruptible(s => ZIO.debug(s"Interruptible stream: ${s.toString}")) *>
                    // First try to take all records that are available right now.
                    // When no data is available, request more data and await its arrival.
                    dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
-                 }.flattenTake.chunksWith { s =>
-                   s.tap(records => registerPull(queueInfo, records))
-                     // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
-                     .mapZIO(chunk => interruptionPromise.await.whenZIO(interruptionPromise.isDone).as(chunk))
+                 }.flattenTake.mapChunksZIO { records =>
+                   (completedPromise.isDone <*> interruptionPromise.isDone).flatMap {
+                     case (false, false) =>
+                       ZIO.logDebug(s"Stream producing ${records.size} records (offsets ${records.head.offset.offset} - ${records.last.offset.offset})") *>
+                         registerPull(queueInfo, records).as(records)
+                     case (_, true) =>
+                       ZIO.logDebug("Stream interrupted, ignoring new data") *>
+                         interruptionPromise.await.as(Chunk.empty)
+                     case _ =>
+                       ZIO.logDebug(s"Stream completed, ignoring new data").as(Chunk.empty)
+                   }
                  }
     } yield new PartitionStreamControl(
       tp,

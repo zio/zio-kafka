@@ -1,18 +1,14 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{
-  Consumer => JConsumer,
-  ConsumerRecord,
-  OffsetAndMetadata,
-  OffsetAndTimestamp
-}
+import org.apache.kafka.clients.consumer.{ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp, Consumer => JConsumer}
 import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.diagnostics.Diagnostics.ConcurrentDiagnostics
-import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
-import zio.kafka.serde.{ Deserializer, Serde }
+import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
+import zio.kafka.consumer.internal.{ConsumerAccess, RunloopAccess}
+import zio.kafka.serde.{Deserializer, Serde}
 import zio.kafka.utils.SslHelper
 import zio.stream._
 
@@ -192,6 +188,7 @@ object Consumer {
       _                  <- SslHelper.validateEndpoint(settings.driverSettings)
       consumerAccess     <- ConsumerAccess.make(settings)
       runloopAccess      <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
+      _                  <- ZIO.addFinalizer(ZIO.logDebug("-------- Consumer shutdown started --------"))
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**
@@ -474,7 +471,9 @@ private[consumer] final class ConsumerLive private[consumer] (
 
     ZStream.unwrapScoped {
       for {
-        stream <- runloopAccess.subscribe(subscription)
+        _ <- ZIO.checkInterruptible(s => ZIO.debug(s"Interruptible partitionedAssignmentStream: ${s.toString}"))
+        stream: ZStream[Any, Nothing, Take[Throwable, (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord])]] <-
+          runloopAccess.subscribe(subscription)
       } yield stream
         .map(_.exit)
         .flattenExitOption
@@ -486,9 +485,9 @@ private[consumer] final class ConsumerLive private[consumer] (
                   partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
                 else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
 
-              tp -> stream
+              tp -> (ZStream.finalizer(ZIO.logInfo("Partitioned assignment stream finalizing")) *> stream)
           }
-        }
+        } ++ ZStream.fromIterableZIO(ZIO.logInfo("partitionedAssignmentStream end of stream").as(Chunk.empty))
     }
   }
 
@@ -504,11 +503,13 @@ private[consumer] final class ConsumerLive private[consumer] (
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int
-  ): ZStream[R, Throwable, CommittableRecord[K, V]] =
+  ): ZStream[R, Throwable, CommittableRecord[K, V]] = {
+    ZStream.finalizer(ZIO.logInfo("plainStream finalizing")) *>
     partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
       n = Int.MaxValue,
       bufferSize = bufferSize
-    )(_._2)
+    )(_._2) ++ ZStream.fromIterableZIO(ZIO.logInfo("plainStream end of stream").as(Chunk.empty))
+  }
 
   override def stopConsumption: UIO[Unit] =
     ZIO.logDebug("stopConsumption called") *>

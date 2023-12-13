@@ -61,8 +61,10 @@ private[consumer] final class RunloopAccess private (
       // starts the Runloop if not already started
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
+        ZIO.logDebug("-------- Subscription shutdown started (1) --------") *>
              withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription)) <*
-               diagnostics.emit(Finalization.SubscriptionFinalized)
+               diagnostics.emit(Finalization.SubscriptionFinalized) <*
+               ZIO.logDebug("-------- Subscription shutdown started (2) --------")
            }
     } yield stream
 

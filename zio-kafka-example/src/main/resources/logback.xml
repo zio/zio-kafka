@@ -19,6 +19,7 @@
     <logger name="state.change.logger" level="WARN"/>
     <logger name="org.apache.kafka.common.utils.AppInfoParser" level="ERROR"/>
     <logger name="com.yammer.metrics" level="ERROR"/>
+    <logger name="zio.kafka.consumer.internal" level="DEBUG"/>
     <logger name="zio.kafka" level="DEBUG"/>
     <logger name="zio" level="DEBUG"/>
 
@@ -26,6 +27,7 @@
         <appender-ref ref="ASYNC_STDOUT"/>
     </root>
 
-    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
-    <shutdownHook class="ch.qos.logback.core.hook.DefaultShutdownHook"/>
+    <shutdownHook class="ch.qos.logback.core.hook.DefaultShutdownHook">
+        <delay>500</delay>
+    </shutdownHook>
 </configuration>

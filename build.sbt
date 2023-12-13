@@ -157,6 +157,7 @@ lazy val zioKafkaBench =
 lazy val zioKafkaExample =
   project
     .in(file("zio-kafka-example"))
+    .dependsOn(zioKafka, zioKafkaTestkit)
     .enablePlugins(JavaAppPackaging)
     .settings(stdSettings("zio-kafka-example"))
     .settings(publish / skip := true)
@@ -164,11 +165,9 @@ lazy val zioKafkaExample =
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                 %% "zio"                % "2.0.20",
-        "dev.zio"                 %% "zio-kafka"          % "2.7.2",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.2.0",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
         logback,
-        "dev.zio" %% "zio-kafka-testkit" % "2.7.2"  % Test,
         "dev.zio" %% "zio-test"          % "2.0.20" % Test
       ),
       // Scala 3 compiling fails with:
