@@ -114,7 +114,7 @@ object KafkaTestUtils {
     groupId: Option[String] = None,
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
-    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     restartStreamOnRebalancing: Boolean = false,
     rebalanceSafeCommits: Boolean = false,
     maxRebalanceDuration: Duration = 3.minutes,
@@ -132,7 +132,6 @@ object KafkaTestUtils {
         .withMaxPollRecords(`max.poll.records`)
         .withCommitTimeout(commitTimeout)
         .withProperties(
-          ConsumerConfig.AUTO_OFFSET_RESET_CONFIG        -> "earliest",
           ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",
           ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "3000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "1000",
@@ -156,7 +155,7 @@ object KafkaTestUtils {
     clientId: String,
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
-    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     restartStreamOnRebalancing: Boolean = false,
     rebalanceSafeCommits: Boolean = false,
     properties: Map[String, String] = Map.empty

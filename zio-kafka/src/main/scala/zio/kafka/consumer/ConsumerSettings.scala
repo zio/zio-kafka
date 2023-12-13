@@ -32,9 +32,12 @@ final case class ConsumerSettings(
   maxRebalanceDuration: Option[Duration] = None,
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy()
 ) {
-  private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
-    case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
-    case OffsetRetrieval.Manual(_)   => Map.empty
+  private[this] def autoOffsetResetConfig: Map[String, String] = {
+    val resetStrategy = offsetRetrieval match {
+      case OffsetRetrieval.Auto(reset)                => reset
+      case OffsetRetrieval.Manual(_, defaultStrategy) => defaultStrategy
+    }
+    Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> resetStrategy.toConfig)
   }
 
   /**
@@ -99,6 +102,36 @@ final case class ConsumerSettings(
   def withGroupInstanceId(groupInstanceId: String): ConsumerSettings =
     withProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
 
+  /**
+   * Which offset to start consuming from for new partitions.
+   *
+   * The options are:
+   * {{{
+   *   import zio.kafka.consumer.Consumer._
+   *   OffsetRetrieval.Auto(AutoOffsetStrategy.Latest) // the default
+   *   OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)
+   *   OffsetRetrieval.Auto(AutoOffsetStrategy.None)
+   *   OffsetRetrieval.Manual(getOffsets, defaultStrategy)
+   * }}}
+   *
+   * The `Auto` options make consuming start from the latest committed offset. When no committed offset is available,
+   * the given offset strategy is used and consuming starts from the `Latest` offset (the default), the `Earliest`
+   * offset, or results in an error for `None`.
+   *
+   * The `Manual` option allows fine grained control over which offset to consume from. The provided `getOffsets`
+   * function should return an offset for each topic-partition that is being assigned. When the returned offset is
+   * smaller than the log start offset or larger than the log end offset, the `defaultStrategy` is used and consuming
+   * starts from the `Latest` offset (the default), the `Earliest` offset, or results in an error for `None`.
+   *
+   * When the returned map does ''not'' contain an entry for a topic-partition, the consumer will continue from the last
+   * committed offset. When no committed offset is available, the `defaultStrategy` is used and consuming starts from
+   * the `Latest` offset (the default), the `Earliest` offset, or results in an error for `None`.
+   *
+   * This configuration applies for both subscribed and assigned partitions.
+   *
+   * This method sets the `auto.offset.reset` Kafka configuration. See
+   * https://kafka.apache.org/documentation/#consumerconfigs_auto.offset.reset for more information.
+   */
   def withOffsetRetrieval(retrieval: OffsetRetrieval): ConsumerSettings =
     copy(offsetRetrieval = retrieval)
 

@@ -607,44 +607,92 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         }.flatten
           .map(diagnosticEvents => assert(diagnosticEvents.size)(isGreaterThanEqualTo(2)))
       },
-      test("support manual seeking") {
-        val nrRecords        = 10
-        val data             = (1 to nrRecords).toList.map(i => s"key$i" -> s"msg$i")
-        val manualOffsetSeek = 3
+      suite("support manual seeking") {
+        val manualOffsetSeek = 3L
+        def manualSeekTest(defaultStrategy: AutoOffsetStrategy): ZIO[Kafka & Producer, Throwable, Map[Int, Long]] = {
+          val nrRecords    = 10
+          val data         = (1 to nrRecords).map(i => s"key$i" -> s"msg$i")
+          val nrPartitions = 4
+          for {
+            topic   <- randomTopic
+            group   <- randomGroup
+            client1 <- randomClient
+            client2 <- randomClient
+            _       <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = nrPartitions))
+            produceToAll = ZIO.foreachDiscard(0 until nrPartitions)(p => produceMany(topic, p, data))
+            _ <- produceToAll
+            // Consume 5 records from partitions 0, 1 and 2 (not 3). This sets the current offset to 5.
+            _ <- ZIO
+                   .foreachDiscard(Chunk(0, 1, 2)) { partition =>
+                     Consumer
+                       .plainStream(Subscription.manual(topic, partition), Serde.string, Serde.string)
+                       .take(5)
+                       .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
+                       .mapConcatZIO { committableRecords =>
+                         val records     = committableRecords.map(_.record)
+                         val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
+                         offsetBatch.commit.as(records)
+                       }
+                       .runCollect
+                   }
+                   .provideSomeLayer[Kafka](consumer(client1, Some(group)))
+            // Start a new consumer with manual offsets. The given offset per partition is:
+            //  p0: 3, before the current offset => should consume from the given offset
+            //  p1: _Maxvalue_, offset out of range (invalid) => should consume using default strategy
+            //  p2: _nothing_ given => should consume from the committed offset
+            //  p4: _nothing_ given => should consume using default strategy
+            offsetRetrieval = OffsetRetrieval.Manual(
+                                getOffsets = _ =>
+                                  ZIO.attempt(
+                                    Map(
+                                      new TopicPartition(topic, 0) -> manualOffsetSeek,
+                                      new TopicPartition(topic, 1) -> Long.MaxValue
+                                    )
+                                  ),
+                                defaultStrategy = defaultStrategy
+                              )
+            // Start the second consumer.
+            c2Fib <- Consumer
+                       .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
+                       .runFoldWhile(Map.empty[Int, Long])(_.size < nrPartitions) { case (acc, record) =>
+                         if (acc.contains(record.partition)) acc
+                         else acc + (record.partition -> record.offset.offset)
+                       }
+                       .provideSomeLayer[Kafka](
+                         consumer(client2, Some(group), offsetRetrieval = offsetRetrieval)
+                       )
+                       .fork
+            // For defaultStrategy 'latest' the second consumer won't see a record until we produce some more.
+            produceFib <- produceToAll
+                            .repeat(Schedule.spaced(1.second))
+                            .when(defaultStrategy == AutoOffsetStrategy.Latest)
+                            .fork
+            c2Results <- c2Fib.join
+            _         <- produceFib.interrupt
+          } yield c2Results
+        }
 
-        for {
-          topic   <- randomTopic
-          group   <- randomGroup
-          client1 <- randomClient
-          client2 <- randomClient
-
-          _ <- produceMany(topic, 0, data)
-          // Consume 5 records to have the offset committed at 5
-          _ <- Consumer
-                 .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
-                 .take(5)
-                 .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
-                 .mapConcatZIO { committableRecords =>
-                   val records     = committableRecords.map(_.record)
-                   val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
-
-                   offsetBatch.commit.as(records)
-                 }
-                 .runCollect
-                 .provideSomeLayer[Kafka](consumer(client1, Some(group)))
-          // Start a new consumer with manual offset before the committed offset
-          offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO.attempt(tps.map(_ -> manualOffsetSeek.toLong).toMap))
-          secondResults <- Consumer
-                             .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
-                             .take(nrRecords.toLong - manualOffsetSeek)
-                             .map(_.record)
-                             .runCollect
-                             .provideSomeLayer[Kafka](
-                               consumer(client2, Some(group), offsetRetrieval = offsetRetrieval)
-                             )
-          // Check that we only got the records starting from the manually seek'd offset
-        } yield assert(secondResults.map(rec => rec.key() -> rec.value()).toList)(
-          equalTo(data.drop(manualOffsetSeek))
+        Seq(
+          test("manual seek with earliest default strategy") {
+            for {
+              consumeStartOffsets <- manualSeekTest(AutoOffsetStrategy.Earliest)
+            } yield assertTrue(
+              consumeStartOffsets(0) == manualOffsetSeek,
+              consumeStartOffsets(1) == 0L,
+              consumeStartOffsets(2) == 5L,
+              consumeStartOffsets(3) == 0L
+            )
+          },
+          test("manual seek with latest default strategy") {
+            for {
+              consumeStartOffsets <- manualSeekTest(AutoOffsetStrategy.Latest)
+            } yield assertTrue(
+              consumeStartOffsets(0) == manualOffsetSeek,
+              consumeStartOffsets(1) >= 10L,
+              consumeStartOffsets(2) == 5L,
+              consumeStartOffsets(3) >= 10L
+            )
+          }
         )
       },
       test("commit offsets for all consumed messages") {

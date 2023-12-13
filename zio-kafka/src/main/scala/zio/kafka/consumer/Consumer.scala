@@ -401,10 +401,14 @@ object Consumer {
   def metrics: RIO[Consumer, Map[MetricName, Metric]] =
     ZIO.serviceWithZIO(_.metrics)
 
+  /** See ConsumerSettings.withOffsetRetrieval. */
   sealed trait OffsetRetrieval
   object OffsetRetrieval {
-    final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest)                extends OffsetRetrieval
-    final case class Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]]) extends OffsetRetrieval
+    final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest) extends OffsetRetrieval
+    final case class Manual(
+      getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]],
+      defaultStrategy: AutoOffsetStrategy = AutoOffsetStrategy.Latest
+    ) extends OffsetRetrieval
   }
 
   sealed trait AutoOffsetStrategy { self =>
@@ -415,6 +419,7 @@ object Consumer {
     }
   }
 
+  /** See ConsumerSettings.withOffsetRetrieval. */
   object AutoOffsetStrategy {
     case object Earliest extends AutoOffsetStrategy
     case object Latest   extends AutoOffsetStrategy
