@@ -118,7 +118,7 @@ final case class ConsumerSettings(
    * committed offset. When no committed offset is available, the `defaultStrategy` is used and consuming starts from
    * the `Latest` offset (the default), the `Earliest` offset, or results in an error for `None`.
    *
-   * This configuration applies for both subscribed and assigned partitions.
+   * This configuration applies to both subscribed and assigned partitions.
    *
    * This method sets the `auto.offset.reset` Kafka configuration. See
    * https://kafka.apache.org/documentation/#consumerconfigs_auto.offset.reset for more information.
