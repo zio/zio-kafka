@@ -386,6 +386,7 @@ private[consumer] final class Runloop private (
     if (hasGroupId) consumer.runloopAccess(c => ZIO.attempt(c.groupMetadata())).fold(_ => None, Some(_))
     else ZIO.none
 
+  /** @return the topic-partitions for which received records should be ignored */
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
     offsetRetrieval match {
       case OffsetRetrieval.Auto(_) => ZIO.succeed(Set.empty)
