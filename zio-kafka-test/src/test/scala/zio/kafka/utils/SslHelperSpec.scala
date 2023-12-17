@@ -303,7 +303,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     suite(".validateEndpoint")(
       integrationTests,
       unitTests
-    ) @@ withLiveClock @@ sequential
+    ) @@ withLiveClock
 
   implicit class SettingsHelper(adminClientSettings: AdminClientSettings) {
     def bootstrapServers: List[String] = adminClientSettings.driverSettings

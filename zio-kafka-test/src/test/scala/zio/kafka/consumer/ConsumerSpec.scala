@@ -323,9 +323,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
       },
       test("process outstanding commits after a graceful shutdown with aggregateAsync using `maxRebalanceDuration`") {
-        val kvs   = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
-        val topic = "test-outstanding-commits"
+        val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
         for {
+          topic            <- randomTopic
           group            <- randomGroup
           client           <- randomClient
           _                <- produceMany(topic, kvs)
@@ -354,7 +354,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         )
                       )
         } yield assertTrue(offset.map(_.offset).contains(9L))
-      } @@ TestAspect.nonFlaky(5),
+      } @@ TestAspect.nonFlaky(2),
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
         // Setup of this test:
         // - Set the max poll interval very low: a couple of seconds.
@@ -1282,7 +1282,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         transactionalConsumer(
                           clientId,
                           consumerGroupId,
-                          offsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
                           restartStreamOnRebalancing = true,
                           properties = Map(
                             ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG ->
@@ -1297,7 +1296,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               }
 
             for {
-              tProducerSettings <- transactionalProducerSettings
+              transactionalId   <- randomThing("transactional")
+              tProducerSettings <- transactionalProducerSettings(transactionalId)
               tProducer         <- TransactionalProducer.make(tProducerSettings)
 
               topicA <- randomTopic
@@ -1355,7 +1355,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                         transactionalConsumer(
                                           validatorClientId,
                                           groupB,
-                                          offsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
                                           properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200")
                                         )
                                       )
@@ -1558,6 +1557,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       .provideSome[Scope & Kafka](producer)
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ sequential @@ timeout(2.minutes)
+      ) @@ withLiveClock @@ timeout(2.minutes)
 
 }
