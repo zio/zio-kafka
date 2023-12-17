@@ -124,7 +124,7 @@ final case class ConsumerSettings(
    * https://kafka.apache.org/documentation/#consumerconfigs_auto.offset.reset for more information.
    */
   def withOffsetRetrieval(retrieval: OffsetRetrieval): ConsumerSettings = {
-    val resetStrategy = offsetRetrieval match {
+    val resetStrategy = retrieval match {
       case OffsetRetrieval.Auto(reset)                => reset
       case OffsetRetrieval.Manual(_, defaultStrategy) => defaultStrategy
     }
