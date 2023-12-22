@@ -1196,7 +1196,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
          *   - A producer generates some messages on topic A,
          *   - a transactional consumer/producer pair (copier1) reads these and copies them to topic B transactionally,
          *   - after a few messages we start a second transactional consumer/producer pair (copier2) that does the same
-         *     (in the same consumer group) this triggers a rebalance,
+         *     (in the same consumer group), this triggers a rebalance,
          *   - produce some more messages to topic A,
          *   - a consumer that empties topic B,
          *   - when enough messages have been received, the copiers are interrupted.
@@ -1347,8 +1347,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               messagesOnTopicB <- ZIO.logAnnotate("consumer", "validator") {
                                     Consumer
                                       .plainStream(Subscription.topics(topicB), Serde.string, Serde.string)
-                                      .map(_.value)
-                                      .timeout(5.seconds)
+                                      .mapChunks(_.map(_.value))
+                                      .take(messageCount.toLong)
+                                      .timeout(10.seconds)
                                       .runCollect
                                       .provideSome[Kafka](
                                         transactionalConsumer(
@@ -1373,7 +1374,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 //          testForPartitionAssignmentStrategy[CooperativeStickyAssignor] // TODO not yet supported
         )
 
-      }: _*) @@ TestAspect.nonFlaky(3),
+      }: _*) @@ TestAspect.nonFlaky(2),
       test("running streams don't stall after a poll timeout") {
         for {
           topic      <- randomTopic

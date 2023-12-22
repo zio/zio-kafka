@@ -161,8 +161,7 @@ trait Consumer {
 }
 
 object Consumer {
-  case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
-  case object CommitTimeout  extends RuntimeException("Commit timeout") with NoStackTrace
+  case object CommitTimeout extends RuntimeException("Commit timeout") with NoStackTrace
 
   val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)

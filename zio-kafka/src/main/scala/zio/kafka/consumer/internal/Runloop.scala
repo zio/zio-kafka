@@ -202,9 +202,12 @@ private[consumer] final class Runloop private (
     val recordRebalanceRebalancingListener = RebalanceListener(
       onAssigned = (assignedTps, _) =>
         for {
-          _              <- ZIO.logDebug(s"${assignedTps.size} partitions are assigned")
           rebalanceEvent <- lastRebalanceEvent.get
-          state          <- currentStateRef.get
+          _ <- ZIO.logInfo {
+                 val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
+                 s"${assignedTps.size} partitions are assigned$sameRebalance"
+               }
+          state <- currentStateRef.get
           streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) state.assignedStreams
                          else Chunk.empty
           _ <- endStreams(state, streamsToEnd)
@@ -213,9 +216,12 @@ private[consumer] final class Runloop private (
         } yield (),
       onRevoked = (revokedTps, _) =>
         for {
-          _              <- ZIO.logDebug(s"${revokedTps.size} partitions are revoked")
           rebalanceEvent <- lastRebalanceEvent.get
-          state          <- currentStateRef.get
+          _ <- ZIO.logInfo {
+                 val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
+                 s"${revokedTps.size} partitions are revoked$sameRebalance"
+               }
+          state <- currentStateRef.get
           streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) state.assignedStreams
                          else state.assignedStreams.filter(control => revokedTps.contains(control.tp))
           _ <- endStreams(state, streamsToEnd)
