@@ -5,7 +5,7 @@ lazy val embeddedKafkaVersion = "3.6.1" // Should be the same as kafkaVersion, e
 
 lazy val kafkaClients          = "org.apache.kafka"        % "kafka-clients"           % kafkaVersion
 lazy val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.11.0"
-lazy val logback               = "ch.qos.logback"          % "logback-classic"         % "1.3.14"
+lazy val logback               = "ch.qos.logback"          % "logback-classic"         % "1.4.14"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
@@ -166,11 +166,11 @@ lazy val zioKafkaExample =
       libraryDependencies ++= Seq(
         "dev.zio"                 %% "zio"                % "2.0.20",
         "dev.zio"                 %% "zio-kafka"          % "2.7.1",
-        "dev.zio"                 %% "zio-kafka-testkit"  % "2.7.1"  % Test,
-        "dev.zio"                 %% "zio-test"           % "2.0.20" % Test,
-        "ch.qos.logback"           % "logback-classic"    % "1.4.14",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.16",
-        "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion
+        "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
+        logback,
+        "dev.zio" %% "zio-kafka-testkit" % "2.7.1"  % Test,
+        "dev.zio" %% "zio-test"          % "2.0.20" % Test
       ),
       // Scala 3 compiling fails with:
       // [error] Modules were resolved with conflicting cross-version suffixes in ProjectRef(uri("file:/home/runner/work/zio-kafka/zio-kafka/"), "zioKafkaExample"):

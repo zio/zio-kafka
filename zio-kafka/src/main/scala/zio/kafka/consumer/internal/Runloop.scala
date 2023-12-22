@@ -203,7 +203,7 @@ private[consumer] final class Runloop private (
       onAssigned = (assignedTps, _) =>
         for {
           rebalanceEvent <- lastRebalanceEvent.get
-          _ <- ZIO.logInfo {
+          _ <- ZIO.logDebug {
                  val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
                  s"${assignedTps.size} partitions are assigned$sameRebalance"
                }
@@ -217,7 +217,7 @@ private[consumer] final class Runloop private (
       onRevoked = (revokedTps, _) =>
         for {
           rebalanceEvent <- lastRebalanceEvent.get
-          _ <- ZIO.logInfo {
+          _ <- ZIO.logDebug {
                  val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
                  s"${revokedTps.size} partitions are revoked$sameRebalance"
                }

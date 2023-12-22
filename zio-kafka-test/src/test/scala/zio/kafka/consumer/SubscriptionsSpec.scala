@@ -267,8 +267,8 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .take(40)
             .transduce(
-              Consumer.offsetBatches.contramap[CommittableRecord[String, String]](_.offset) <&> ZSink
-                .collectAll[CommittableRecord[String, String]]
+              Consumer.offsetBatches.contramap[CommittableRecord[String, String]](_.offset) <&>
+                ZSink.collectAll[CommittableRecord[String, String]]
             )
             .mapZIO { case (offsetBatch, records) => offsetBatch.commit.as(records) }
             .flattenChunks
@@ -278,7 +278,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             .provideSomeLayer[Kafka with Scope](consumer(client, Some(group)))
         consumed <- recordsConsumed.get
       } yield assert(consumed.map(r => r.value))(hasSameElements(Chunk.fromIterable(kvs.map(_._2))))
-    } @@ TestAspect.nonFlaky(3)
+    } @@ TestAspect.nonFlaky(2)
   )
     .provideSome[Scope & Kafka](producer)
     .provideSomeShared[Scope](

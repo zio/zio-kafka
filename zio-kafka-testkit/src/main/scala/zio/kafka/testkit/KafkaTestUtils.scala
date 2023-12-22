@@ -34,19 +34,31 @@ object KafkaTestUtils {
     )
 
   /**
-   * Default transactional Producer settings you can use in your tests.
+   * Default transactional producer settings you can use in your tests.
+   *
+   * Note: to run multiple tests in parallel, you need to use different transactional ids via
+   * `transactionalProducerSettings(transactionalId)`.
    */
   val transactionalProducerSettings: ZIO[Kafka, Nothing, TransactionalProducerSettings] =
+    transactionalProducerSettings("test-transaction")
+
+  def transactionalProducerSettings(transactionalId: String): ZIO[Kafka, Nothing, TransactionalProducerSettings] =
     ZIO
       .serviceWith[Kafka](_.bootstrapServers)
-      .map(TransactionalProducerSettings(_, "test-transaction"))
+      .map(TransactionalProducerSettings(_, transactionalId))
 
   /**
-   * Transactional Producer instance you can use in your tests. It uses the default transactional Producer settings.
+   * Transactional producer instance you can use in your tests. It uses the default transactional producer settings.
+   *
+   * Note: to run multiple tests in parallel, you need to use different transactional ids via
+   * `transactionalProducer(transactionalId)`.
    */
   val transactionalProducer: ZLayer[Kafka, Throwable, TransactionalProducer] =
+    transactionalProducer("test-transaction")
+
+  def transactionalProducer(transactionalId: String): ZLayer[Kafka, Throwable, TransactionalProducer] =
     ZLayer.makeSome[Kafka, TransactionalProducer](
-      ZLayer(transactionalProducerSettings),
+      ZLayer(transactionalProducerSettings(transactionalId)),
       TransactionalProducer.live
     )
 
@@ -234,7 +246,7 @@ object KafkaTestUtils {
     clientId: String,
     groupId: String,
     clientInstanceId: Option[String] = None,
-    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
