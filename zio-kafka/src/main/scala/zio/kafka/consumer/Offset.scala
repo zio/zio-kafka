@@ -35,6 +35,7 @@ object Offset {
     commit.retry(
       Schedule.recurWhile[Throwable] {
         case _: RetriableCommitFailedException => true
+        case Consumer.CommitTimeout            => true
         case _                                 => false
       } && policy
     )
