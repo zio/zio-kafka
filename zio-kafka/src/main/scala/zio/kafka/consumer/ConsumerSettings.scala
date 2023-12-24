@@ -30,7 +30,8 @@ final case class ConsumerSettings(
   restartStreamOnRebalancing: Boolean = false,
   rebalanceSafeCommits: Boolean = false,
   maxRebalanceDuration: Option[Duration] = None,
-  fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy()
+  fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy(),
+  metricsConsumerId: Option[String] = None
 ) {
 
   /**
@@ -278,6 +279,21 @@ final case class ConsumerSettings(
    */
   def withFetchStrategy(fetchStrategy: FetchStrategy): ConsumerSettings =
     copy(fetchStrategy = fetchStrategy)
+
+  /**
+   * @param consumerId
+   *   The value given to the metrics label `consumer_id` for all metrics. When this value is not set, the consumer
+   *   group id is used, when no group id is set, it defaults to a random value that is generated when the consumer is
+   *   created.
+   */
+  def withMetricsConsumerId(consumerId: String): ConsumerSettings =
+    copy(metricsConsumerId = Some(consumerId))
+
+  def derivedMetricsConsumerId: String =
+    metricsConsumerId
+      .orElse(properties.get(ConsumerConfig.GROUP_ID_CONFIG).map(_.toString))
+      .getOrElse(Seq.fill(6)(scala.util.Random.nextInt(16).toHexString).mkString)
+
 }
 
 object ConsumerSettings {

@@ -22,6 +22,7 @@ import scala.jdk.CollectionConverters._
 
 //noinspection SimplifyWhenInspection,SimplifyUnlessInspection
 private[consumer] final class Runloop private (
+  metricsConsumerId: String,
   sameThreadRuntime: Runtime[Any],
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
@@ -42,6 +43,8 @@ private[consumer] final class Runloop private (
   committedOffsetsRef: Ref[CommitOffsets],
   fetchStrategy: FetchStrategy
 ) {
+
+  private val consumerMetrics = ConsumerMetrics(metricsConsumerId)
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, maxPollInterval)
@@ -683,6 +686,7 @@ private[consumer] final class Runloop private (
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
+          _              <- consumerMetrics.observeMetrics(state)
           commitCommands <- commitQueue.takeAll
           _ <- ZIO.logDebug(
                  s"Processing ${commitCommands.size} commits," +
@@ -785,6 +789,7 @@ object Runloop {
   }
 
   private[consumer] def make(
+    metricsConsumerId: String,
     hasGroupId: Boolean,
     consumer: ConsumerAccess,
     pollTimeout: Duration,
@@ -809,6 +814,7 @@ object Runloop {
       committedOffsetsRef <- Ref.make(CommitOffsets.empty)
       sameThreadRuntime   <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       runloop = new Runloop(
+                  metricsConsumerId = metricsConsumerId,
                   sameThreadRuntime = sameThreadRuntime,
                   hasGroupId = hasGroupId,
                   consumer = consumer,
@@ -844,7 +850,7 @@ object Runloop {
            )
     } yield runloop
 
-  private final case class State(
+  private[internal] final case class State(
     pendingRequests: Chunk[RunloopCommand.Request],
     pendingCommits: Chunk[Runloop.Commit],
     assignedStreams: Chunk[PartitionStreamControl],

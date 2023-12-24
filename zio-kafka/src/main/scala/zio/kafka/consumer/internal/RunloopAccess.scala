@@ -89,6 +89,7 @@ private[consumer] object RunloopAccess {
       runloopStateRef <- Ref.Synchronized.make[RunloopState](RunloopState.NotStarted)
       makeRunloop = Runloop
                       .make(
+                        metricsConsumerId = settings.derivedMetricsConsumerId,
                         hasGroupId = settings.hasGroupId,
                         consumer = consumerAccess,
                         pollTimeout = settings.pollTimeout,
