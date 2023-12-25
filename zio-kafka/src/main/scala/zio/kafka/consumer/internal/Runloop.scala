@@ -686,7 +686,7 @@ private[consumer] final class Runloop private (
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
-          _              <- consumerMetrics.observeMetrics(state)
+          _              <- consumerMetrics.observeMetrics(state).fork
           commitCommands <- commitQueue.takeAll
           _ <- ZIO.logDebug(
                  s"Processing ${commitCommands.size} commits," +
