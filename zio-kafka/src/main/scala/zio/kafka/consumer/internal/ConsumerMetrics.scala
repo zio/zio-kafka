@@ -17,7 +17,7 @@ final case class ConsumerMetrics(metricsConsumerId: String) {
   private val pendingRequestsHistogram =
     Metric
       .histogram(
-        "consumer_pending_requests",
+        "ziokafka_consumer_pending_requests",
         "The number of partition streams that are awaiting new records.",
         streamCountBoundaries
       )
@@ -26,7 +26,7 @@ final case class ConsumerMetrics(metricsConsumerId: String) {
   private val pendingCommitsHistogram =
     Metric
       .histogram(
-        "consumer_pending_commits",
+        "ziokafka_consumer_pending_commits",
         "The number of commits that are awaiting completion.",
         streamCountBoundaries
       )
@@ -35,7 +35,7 @@ final case class ConsumerMetrics(metricsConsumerId: String) {
   private val queueSizeHistogram =
     Metric
       .histogram(
-        "consumer_queue_size",
+        "ziokafka_consumer_queue_size",
         "The number of records queued per partition.",
         streamSizeBoundaries
       )
@@ -44,7 +44,7 @@ final case class ConsumerMetrics(metricsConsumerId: String) {
   private val allQueueSizeHistogram =
     Metric
       .histogram(
-        "consumer_all_queue_size",
+        "ziokafka_consumer_all_queue_size",
         "The number of records queued in the consumer (all partitions).",
         streamSizeBoundaries
       )
