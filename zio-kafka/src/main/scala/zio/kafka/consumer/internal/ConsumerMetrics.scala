@@ -14,6 +14,9 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
   private val streamSizeBoundaries: Histogram.Boundaries =
     MetricKeyType.Histogram.Boundaries.fromChunk(Chunk(0.0) ++ Chunk.iterate(100.0, 9)(_ * Math.E).map(Math.ceil))
 
+  private val pollSizeBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk[Double](0, 1, 2, 3, 4, 5, 6, 7, 8, 9))
+
   private val pendingRequestsHistogram =
     Metric
       .histogram(
@@ -41,6 +44,15 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
       )
       .tagged(metricLabels)
 
+  private val queuePollsHistogram =
+    Metric
+      .histogram(
+        "ziokafka_consumer_queue_polls",
+        "The number of polls records are idling in the queue for a partition.",
+        pollSizeBoundaries
+      )
+      .tagged(metricLabels)
+
   private val allQueueSizeHistogram =
     Metric
       .histogram(
@@ -54,6 +66,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
     ZIO
       .when(state.subscriptionState.isSubscribed) {
         for {
+          _          <- ZIO.foreachDiscard(state.assignedStreams)(_.outstandingPolls @@ queuePollsHistogram)
           queueSizes <- ZIO.foreach(state.assignedStreams)(_.queueSize.map(_.toDouble))
           _          <- ZIO.foreachDiscard(queueSizes)(qs => queueSizeHistogram.update(qs))
           _          <- allQueueSizeHistogram.update(queueSizes.sum)
