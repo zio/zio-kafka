@@ -2,7 +2,7 @@ package zio.kafka.consumer.internal
 
 import zio.metrics.MetricKeyType.Histogram
 import zio.metrics._
-import zio.{ Chunk, UIO, ZIO }
+import zio._
 
 final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
 
@@ -25,6 +25,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         streamCountBoundaries
       )
       .tagged(metricLabels)
+      .contramap((_: Int).toDouble)
 
   private val pendingCommitsHistogram =
     Metric
@@ -34,6 +35,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         streamCountBoundaries
       )
       .tagged(metricLabels)
+      .contramap((_: Int).toDouble)
 
   private val queueSizeHistogram =
     Metric
@@ -43,6 +45,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         streamSizeBoundaries
       )
       .tagged(metricLabels)
+      .contramap((_: Int).toDouble)
 
   private val queuePollsHistogram =
     Metric
@@ -52,6 +55,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         pollSizeBoundaries
       )
       .tagged(metricLabels)
+      .contramap((_: Int).toDouble)
 
   private val allQueueSizeHistogram =
     Metric
@@ -61,17 +65,18 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         streamSizeBoundaries
       )
       .tagged(metricLabels)
+      .contramap((_: Int).toDouble)
 
   def observeMetrics(state: Runloop.State): UIO[Unit] =
     ZIO
       .when(state.subscriptionState.isSubscribed) {
         for {
           _          <- ZIO.foreachDiscard(state.assignedStreams)(_.outstandingPolls @@ queuePollsHistogram)
-          queueSizes <- ZIO.foreach(state.assignedStreams)(_.queueSize.map(_.toDouble))
+          queueSizes <- ZIO.foreach(state.assignedStreams)(_.queueSize)
           _          <- ZIO.foreachDiscard(queueSizes)(qs => queueSizeHistogram.update(qs))
           _          <- allQueueSizeHistogram.update(queueSizes.sum)
-          _          <- ZIO.succeed(state.pendingRequests.size.toDouble) @@ pendingRequestsHistogram
-          _          <- ZIO.succeed(state.pendingCommits.size.toDouble) @@ pendingCommitsHistogram
+          _          <- pendingRequestsHistogram.update(state.pendingRequests.size)
+          _          <- pendingCommitsHistogram.update(state.pendingCommits.size)
         } yield ()
       }
       .unit
