@@ -284,6 +284,13 @@ final case class ConsumerSettings(
   /**
    * @param metricLabels
    *   The labels given to all metrics collected by zio-kafka. By default no labels are set.
+   *
+   * For applications with multiple consumers it is recommended to set some metric labels. For example, if one is used,
+   * the consumer group id could be used as a label:
+   *
+   * {{{
+   *   consumerSettings.withMetricLabels(Set(MetricLabel("group-id", groupId)))
+   * }}}
    */
   def withMetricsLabels(metricLabels: Set[MetricLabel]): ConsumerSettings =
     copy(metricLabels = metricLabels)
