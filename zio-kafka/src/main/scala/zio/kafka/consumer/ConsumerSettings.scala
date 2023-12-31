@@ -5,6 +5,7 @@ import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.fetch.{ FetchStrategy, QueueSizeBasedFetchStrategy }
 import zio.kafka.security.KafkaCredentialStore
+import zio.metrics.MetricLabel
 
 /**
  * Settings for the consumer.
@@ -31,7 +32,7 @@ final case class ConsumerSettings(
   rebalanceSafeCommits: Boolean = false,
   maxRebalanceDuration: Option[Duration] = None,
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy(),
-  metricsConsumerId: Option[String] = None
+  metricLabels: Set[MetricLabel] = Set.empty
 ) {
 
   /**
@@ -281,21 +282,11 @@ final case class ConsumerSettings(
     copy(fetchStrategy = fetchStrategy)
 
   /**
-   * @param consumerId
-   *   The value given to the metrics label `consumer_id` for all metrics. When this value is not set, the first set
-   *   value from the following list is used:
-   *   - the group instance id (Kafka config `group.instance.id`),
-   *   - the group id (Kafka config `group.id`),
-   *   - hash code of this consumer settings
+   * @param metricLabels
+   *   The labels given to all metrics collected by zio-kafka. By default no labels are set.
    */
-  def withMetricsConsumerId(consumerId: String): ConsumerSettings =
-    copy(metricsConsumerId = Some(consumerId))
-
-  def derivedMetricsConsumerId: String =
-    metricsConsumerId
-      .orElse(properties.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG).map(_.toString))
-      .orElse(properties.get(ConsumerConfig.GROUP_ID_CONFIG).map(_.toString))
-      .getOrElse(hashCode().abs.toHexString.take(6))
+  def withMetricsLabels(metricLabels: Set[MetricLabel]): ConsumerSettings =
+    copy(metricLabels = metricLabels)
 
 }
 

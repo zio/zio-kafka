@@ -12,6 +12,7 @@ import zio.kafka.consumer.fetch.FetchStrategy
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
+import zio.metrics.MetricLabel
 import zio.stream._
 
 import java.lang.Math.max
@@ -22,7 +23,7 @@ import scala.jdk.CollectionConverters._
 
 //noinspection SimplifyWhenInspection,SimplifyUnlessInspection
 private[consumer] final class Runloop private (
-  metricsConsumerId: String,
+  metricLabels: Set[MetricLabel],
   sameThreadRuntime: Runtime[Any],
   hasGroupId: Boolean,
   consumer: ConsumerAccess,
@@ -44,7 +45,7 @@ private[consumer] final class Runloop private (
   fetchStrategy: FetchStrategy
 ) {
 
-  private val consumerMetrics = ConsumerMetrics(metricsConsumerId)
+  private val consumerMetrics = ConsumerMetrics(metricLabels)
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, maxPollInterval)
@@ -789,7 +790,7 @@ object Runloop {
   }
 
   private[consumer] def make(
-    metricsConsumerId: String,
+    metricLabels: Set[MetricLabel],
     hasGroupId: Boolean,
     consumer: ConsumerAccess,
     pollTimeout: Duration,
@@ -814,7 +815,7 @@ object Runloop {
       committedOffsetsRef <- Ref.make(CommitOffsets.empty)
       sameThreadRuntime   <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       runloop = new Runloop(
-                  metricsConsumerId = metricsConsumerId,
+                  metricLabels = metricLabels,
                   sameThreadRuntime = sameThreadRuntime,
                   hasGroupId = hasGroupId,
                   consumer = consumer,

@@ -4,7 +4,7 @@ import zio.metrics.MetricKeyType.Histogram
 import zio.metrics._
 import zio.{ Chunk, UIO, ZIO }
 
-final case class ConsumerMetrics(metricsConsumerId: String) {
+final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
 
   // Chunk(0,1,3,8,21,55,149,404,1097,2981)
   private val streamCountBoundaries: Histogram.Boundaries =
@@ -21,7 +21,7 @@ final case class ConsumerMetrics(metricsConsumerId: String) {
         "The number of partition streams that are awaiting new records.",
         streamCountBoundaries
       )
-      .tagged("consumer_id", metricsConsumerId)
+      .tagged(metricLabels)
 
   private val pendingCommitsHistogram =
     Metric
@@ -30,7 +30,7 @@ final case class ConsumerMetrics(metricsConsumerId: String) {
         "The number of commits that are awaiting completion.",
         streamCountBoundaries
       )
-      .tagged("consumer_id", metricsConsumerId)
+      .tagged(metricLabels)
 
   private val queueSizeHistogram =
     Metric
@@ -39,7 +39,7 @@ final case class ConsumerMetrics(metricsConsumerId: String) {
         "The number of records queued per partition.",
         streamSizeBoundaries
       )
-      .tagged("consumer_id", metricsConsumerId)
+      .tagged(metricLabels)
 
   private val allQueueSizeHistogram =
     Metric
@@ -48,7 +48,7 @@ final case class ConsumerMetrics(metricsConsumerId: String) {
         "The number of records queued in the consumer (all partitions).",
         streamSizeBoundaries
       )
-      .tagged("consumer_id", metricsConsumerId)
+      .tagged(metricLabels)
 
   def observeMetrics(state: Runloop.State): UIO[Unit] =
     ZIO
