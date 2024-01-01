@@ -198,7 +198,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  def observeMetrics(state: Runloop.State): UIO[Unit] =
+  def observePartitionStreamMetrics(state: Runloop.State): UIO[Unit] =
     ZIO
       .when(state.subscriptionState.isSubscribed) {
         for {

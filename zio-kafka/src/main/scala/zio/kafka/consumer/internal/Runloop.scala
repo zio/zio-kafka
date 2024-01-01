@@ -706,7 +706,6 @@ private[consumer] final class Runloop private (
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
-          _              <- consumerMetrics.observeMetrics(state).fork
           commitCommands <- commitQueue.takeAll
           _ <- ZIO.logDebug(
                  s"Processing ${commitCommands.size} commits," +
@@ -720,11 +719,19 @@ private[consumer] final class Runloop private (
                                    else ZIO.succeed(stateAfterCommands)
           // Immediately poll again, after processing all new queued commands
           _ <- if (updatedStateAfterPoll.shouldPoll) commandQueue.offer(RunloopCommand.Poll) else ZIO.unit
+          // Save the current state for other parts of Runloop (read-only, for metrics only)
+          _ <- currentStateRef.set(updatedStateAfterPoll)
         } yield updatedStateAfterPoll
       }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitionsHub.offer(Take.failCause(cause)))
   }
+
+  private val observePartitionStreamMetrics: ZIO[Any, Nothing, Unit] =
+    currentStateRef.get
+      .flatMap(consumerMetrics.observePartitionStreamMetrics)
+      .repeat(Schedule.fixed(500.millis))
+      .unit
 }
 
 object Runloop {
@@ -857,10 +864,12 @@ object Runloop {
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
-      // Run the entire loop on the a dedicated thread to avoid executor shifts
+      // Run the entire loop on a dedicated thread to avoid executor shifts
       executor <- RunloopExecutor.newInstance
       fiber    <- ZIO.onExecutor(executor)(runloop.run(initialState)).forkScoped
       waitForRunloopStop = fiber.join.orDie
+
+      _ <- runloop.observePartitionStreamMetrics.forkScoped
 
       _ <- ZIO.addFinalizer(
              ZIO.logDebug("Shutting down Runloop") *>
