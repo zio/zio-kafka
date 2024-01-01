@@ -252,10 +252,14 @@ private[consumer] final class Runloop private (
     offsets =>
       for {
         p <- Promise.make[Throwable, Unit]
+        start = java.lang.System.nanoTime()
         _ <- commitQueue.offer(Runloop.Commit(offsets, p))
         _ <- commandQueue.offer(RunloopCommand.CommitAvailable)
         _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
+        end     = java.lang.System.nanoTime()
+        latency = (end - start).nanoseconds
+        _ <- consumerMetrics.observeCommit(latency, 0) // TODO: get commit size
       } yield ()
 
   /** Merge commits and prepare parameters for calling `consumer.commitAsync`. */

@@ -52,6 +52,50 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
 
   // -----------------------------------------------------
   //
+  // Commit metrics
+  //
+
+  // Chunk(0.01,0.02,0.04,0.08,0.16,0.32,0.64,1.28,2.56) in seconds
+  // Chunk(10,20,40,80,160,320,640,1280,2560) in milliseconds
+  private val commitLatencyBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.exponential(0.01, 2.0, 9)
+
+  // Chunk(1,3,8,21,55,149,404,1097,2981,8104)
+  private val commitSizeBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk.iterate(1.0, 10)(_ * Math.E).map(Math.ceil))
+
+  private val commitCounter: Metric.Counter[Int] =
+    Metric.counterInt("ziokafka_consumer_commits", "The number of commits.").tagged(metricLabels)
+
+  private val commitLatencyHistogram: Metric.Histogram[Duration] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_commit_latency",
+        "The duration of a single commit in seconds.",
+        commitLatencyBoundaries
+      )
+      .contramap[Duration](_.toNanos.toDouble / 1e9)
+      .tagged(metricLabels)
+
+  private val commitSizeHistogram: Metric.Histogram[Int] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_commit_size",
+        "The number of records (offsets) per commit.",
+        commitSizeBoundaries
+      )
+      .contramap[Int](_.toDouble)
+      .tagged(metricLabels)
+
+  def observeCommit(latency: Duration, commitSize: Int): UIO[Unit] =
+    for {
+      _ <- commitCounter.increment
+      _ <- commitLatencyHistogram.update(latency)
+      _ <- commitSizeHistogram.update(commitSize)
+    } yield ()
+
+  // -----------------------------------------------------
+  //
   // Rebalance metrics
   //
 
