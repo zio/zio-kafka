@@ -426,7 +426,14 @@ private[consumer] final class Runloop private (
     if (toPause.nonEmpty) c.pause(toPause.asJava)
   }
 
-  private def handlePoll(state: State): Task[State] =
+  private def handlePoll(state: State): Task[State] = {
+    def timed[A](task: => A): (Duration, A) = {
+      val start  = java.lang.System.nanoTime()
+      val result = task
+      val end    = java.lang.System.nanoTime()
+      ((end - start).nanoseconds, result)
+    }
+
     for {
       partitionsToFetch <- fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
       _ <- ZIO.logDebug(
@@ -442,21 +449,21 @@ private[consumer] final class Runloop private (
 
             resumeAndPausePartitions(c, prevAssigned, partitionsToFetch)
 
-            val polledRecords = {
-              val records = c.poll(pollTimeout)
-              if (records eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else records
-            }
+            val (pollDuration, recordsOrNull) = timed(c.poll(pollTimeout))
+            val polledRecords =
+              if (recordsOrNull eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else recordsOrNull
 
-            diagnostics.emit {
-              val providedTps         = polledRecords.partitions().asScala.toSet
-              val requestedPartitions = state.pendingRequests.map(_.tp).toSet
+            consumerMetrics.observePoll(pollDuration, polledRecords.count()) *>
+              diagnostics.emit {
+                val providedTps         = polledRecords.partitions().asScala.toSet
+                val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-              DiagnosticEvent.Poll(
-                tpRequested = requestedPartitions,
-                tpWithData = providedTps,
-                tpWithoutData = requestedPartitions -- providedTps
-              )
-            } *>
+                DiagnosticEvent.Poll(
+                  tpRequested = requestedPartitions,
+                  tpWithData = providedTps,
+                  tpWithoutData = requestedPartitions -- providedTps
+                )
+              } *>
               lastRebalanceEvent.getAndSet(RebalanceEvent.None).flatMap {
                 case RebalanceEvent(false, _, _, _, _) =>
                   // The fast track, rebalance listener was not invoked:
@@ -548,6 +555,7 @@ private[consumer] final class Runloop private (
       pendingCommits = updatedPendingCommits,
       assignedStreams = pollResult.assignedStreams
     )
+  }
 
   /**
    * Check each stream to see if it exceeded its poll interval. If so, halt it. In addition, if any stream has exceeded

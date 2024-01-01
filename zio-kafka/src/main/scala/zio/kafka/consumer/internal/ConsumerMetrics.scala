@@ -8,6 +8,50 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
 
   // -----------------------------------------------------
   //
+  // Poll metrics
+  //
+
+  // Chunk(0.01,0.02,0.04,0.08,0.16,0.32,0.64,1.28,2.56) in seconds
+  // Chunk(10,20,40,80,160,320,640,1280,2560) in milliseconds
+  private val pollLatencyBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.exponential(0.01, 2.0, 9)
+
+  // Chunk(1,3,8,21,55,149,404,1097,2981,8104)
+  private val pollSizeBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk.iterate(1.0, 10)(_ * Math.E).map(Math.ceil))
+
+  private val pollCounter: Metric.Counter[Int] =
+    Metric.counterInt("ziokafka_consumer_polls", "The number of polls.").tagged(metricLabels)
+
+  private val pollLatencyHistogram: Metric.Histogram[Duration] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_poll_latency",
+        "The duration of a single poll in seconds.",
+        pollLatencyBoundaries
+      )
+      .contramap[Duration](_.toNanos.toDouble / 1e9)
+      .tagged(metricLabels)
+
+  private val pollSizeHistogram: Metric.Histogram[Int] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_poll_size",
+        "The number of records fetched by a single poll.",
+        pollSizeBoundaries
+      )
+      .contramap[Int](_.toDouble)
+      .tagged(metricLabels)
+
+  def observePoll(latency: Duration, pollSize: Int): UIO[Unit] =
+    for {
+      _ <- pollCounter.increment
+      _ <- pollLatencyHistogram.update(latency)
+      _ <- pollSizeHistogram.update(pollSize)
+    } yield ()
+
+  // -----------------------------------------------------
+  //
   // Rebalance metrics
   //
 
@@ -20,8 +64,8 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         "ziokafka_consumer_partitions_currently_assigned",
         "The number of partitions currently assigned to the consumer"
       )
-      .tagged(metricLabels)
       .contramap[Int](_.toDouble)
+      .tagged(metricLabels)
 
   private def partitionsToStateCounter(state: String): Metric.Counter[Int] =
     Metric
@@ -57,7 +101,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
   private val streamSizeBoundaries: Histogram.Boundaries =
     MetricKeyType.Histogram.Boundaries.fromChunk(Chunk(0.0) ++ Chunk.iterate(100.0, 9)(_ * Math.E).map(Math.ceil))
 
-  private val pollSizeBoundaries: Histogram.Boundaries =
+  private val queuePollSizeBoundaries: Histogram.Boundaries =
     MetricKeyType.Histogram.Boundaries.fromChunk(Chunk[Double](0, 1, 2, 3, 4, 5, 6, 7, 8, 9))
 
   private val pendingRequestsHistogram =
@@ -67,8 +111,8 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         "The number of partition streams that are awaiting new records.",
         streamCountBoundaries
       )
-      .tagged(metricLabels)
       .contramap[Int](_.toDouble)
+      .tagged(metricLabels)
 
   private val pendingCommitsHistogram =
     Metric
@@ -77,8 +121,8 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         "The number of commits that are awaiting completion.",
         streamCountBoundaries
       )
-      .tagged(metricLabels)
       .contramap[Int](_.toDouble)
+      .tagged(metricLabels)
 
   private val queueSizeHistogram =
     Metric
@@ -87,18 +131,18 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         "The number of records queued per partition.",
         streamSizeBoundaries
       )
-      .tagged(metricLabels)
       .contramap[Int](_.toDouble)
+      .tagged(metricLabels)
 
   private val queuePollsHistogram =
     Metric
       .histogram(
         "ziokafka_consumer_queue_polls",
         "The number of polls records are idling in the queue for a partition.",
-        pollSizeBoundaries
+        queuePollSizeBoundaries
       )
-      .tagged(metricLabels)
       .contramap[Int](_.toDouble)
+      .tagged(metricLabels)
 
   private val allQueueSizeHistogram =
     Metric
@@ -107,8 +151,8 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         "The number of records queued in the consumer (all partitions).",
         streamSizeBoundaries
       )
-      .tagged(metricLabels)
       .contramap[Int](_.toDouble)
+      .tagged(metricLabels)
 
   def observeMetrics(state: Runloop.State): UIO[Unit] =
     ZIO
