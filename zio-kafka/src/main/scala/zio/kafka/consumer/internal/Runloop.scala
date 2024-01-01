@@ -512,6 +512,12 @@ private[consumer] final class Runloop private (
                     _ <-
                       committedOffsetsRef.update(_.keepPartitions(updatedAssignedStreams.map(_.tp).toSet)): Task[Unit]
 
+                    _ <- consumerMetrics.observeRebalance(
+                           currentAssigned.size,
+                           assignedTps.size,
+                           revokedTps.size,
+                           lostTps.size
+                         )
                     _ <- diagnostics.emit(
                            Rebalance(
                              revoked = revokedTps,

@@ -6,6 +6,49 @@ import zio._
 
 final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
 
+  // -----------------------------------------------------
+  //
+  // Rebalance metrics
+  //
+
+  private val rebalanceCounter: Metric.Counter[Int] =
+    Metric.counterInt("ziokafka_consumer_rebalances", "The number of rebalances").tagged(metricLabels)
+
+  private val partitionsCurrentlyAssignedGauge: Metric.Gauge[Int] =
+    Metric
+      .gauge(
+        "ziokafka_consumer_partitions_currently_assigned",
+        "The number of partitions currently assigned to the consumer"
+      )
+      .tagged(metricLabels)
+      .contramap[Int](_.toDouble)
+
+  private def partitionsToStateCounter(state: String): Metric.Counter[Int] =
+    Metric
+      .counterInt(
+        s"ziokafka_consumer_partitions_$state",
+        s"The number of partitions $state to the consumer"
+      )
+      .tagged(metricLabels)
+
+  private val partitionsAssignedCounter = partitionsToStateCounter("assigned")
+  private val partitionsRevokedCounter  = partitionsToStateCounter("revoked")
+  private val partitionsLostCounter     = partitionsToStateCounter("lost")
+
+  def observeRebalance(currentlyAssignedCount: Int, assignedCount: Int, revokedCount: Int, lostCount: Int): UIO[Unit] =
+    for {
+      _ <- rebalanceCounter.increment
+      _ <- partitionsCurrentlyAssignedGauge.update(currentlyAssignedCount)
+      _ <- partitionsAssignedCounter.incrementBy(assignedCount)
+      _ <- partitionsRevokedCounter.incrementBy(revokedCount)
+      _ <- partitionsLostCounter.incrementBy(lostCount)
+    } yield ()
+
+  // -----------------------------------------------------
+  //
+  // Partition stream metrics
+  //
+
   // Chunk(0,1,3,8,21,55,149,404,1097,2981)
   private val streamCountBoundaries: Histogram.Boundaries =
     MetricKeyType.Histogram.Boundaries.fromChunk(Chunk(0.0) ++ Chunk.iterate(1.0, 9)(_ * Math.E).map(Math.ceil))
@@ -25,7 +68,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         streamCountBoundaries
       )
       .tagged(metricLabels)
-      .contramap((_: Int).toDouble)
+      .contramap[Int](_.toDouble)
 
   private val pendingCommitsHistogram =
     Metric
@@ -35,7 +78,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         streamCountBoundaries
       )
       .tagged(metricLabels)
-      .contramap((_: Int).toDouble)
+      .contramap[Int](_.toDouble)
 
   private val queueSizeHistogram =
     Metric
@@ -45,7 +88,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         streamSizeBoundaries
       )
       .tagged(metricLabels)
-      .contramap((_: Int).toDouble)
+      .contramap[Int](_.toDouble)
 
   private val queuePollsHistogram =
     Metric
@@ -55,7 +98,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         pollSizeBoundaries
       )
       .tagged(metricLabels)
-      .contramap((_: Int).toDouble)
+      .contramap[Int](_.toDouble)
 
   private val allQueueSizeHistogram =
     Metric
@@ -65,7 +108,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
         streamSizeBoundaries
       )
       .tagged(metricLabels)
-      .contramap((_: Int).toDouble)
+      .contramap[Int](_.toDouble)
 
   def observeMetrics(state: Runloop.State): UIO[Unit] =
     ZIO
