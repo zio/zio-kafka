@@ -163,13 +163,13 @@ lazy val zioKafkaExample =
     .settings(run / fork := false)
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                 %% "zio"                % "2.0.20",
+        "dev.zio"                 %% "zio"                % "2.0.21",
         "dev.zio"                 %% "zio-kafka"          % "2.7.1",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.16",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
         logback,
         "dev.zio" %% "zio-kafka-testkit" % "2.7.1"  % Test,
-        "dev.zio" %% "zio-test"          % "2.0.20" % Test
+        "dev.zio" %% "zio-test"          % "2.0.21" % Test
       ),
       // Scala 3 compiling fails with:
       // [error] Modules were resolved with conflicting cross-version suffixes in ProjectRef(uri("file:/home/runner/work/zio-kafka/zio-kafka/"), "zioKafkaExample"):
