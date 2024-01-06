@@ -259,20 +259,16 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
       .tagged(metricLabels)
 
   def observeRunloopMetrics(state: Runloop.State, commandQueueSize: Int, commitQueueSize: Int): UIO[Unit] =
-    ZIO
-      .when(state.subscriptionState.isSubscribed) {
-        for {
-          _          <- ZIO.foreachDiscard(state.assignedStreams)(_.outstandingPolls @@ queuePollsHistogram)
-          queueSizes <- ZIO.foreach(state.assignedStreams)(_.queueSize)
-          _          <- ZIO.foreachDiscard(queueSizes)(qs => queueSizeHistogram.update(qs))
-          _          <- allQueueSizeHistogram.update(queueSizes.sum)
-          _          <- pendingRequestsHistogram.update(state.pendingRequests.size)
-          _          <- pendingCommitsHistogram.update(state.pendingCommits.size)
-          _          <- subscriptionStateGauge.update(state.subscriptionState)
-          _          <- commandQueueSizeHistogram.update(commandQueueSize)
-          _          <- commitQueueSizeHistogram.update(commitQueueSize)
-        } yield ()
-      }
-      .unit
+    for {
+      _          <- ZIO.foreachDiscard(state.assignedStreams)(_.outstandingPolls @@ queuePollsHistogram)
+      queueSizes <- ZIO.foreach(state.assignedStreams)(_.queueSize)
+      _          <- ZIO.foreachDiscard(queueSizes)(qs => queueSizeHistogram.update(qs))
+      _          <- allQueueSizeHistogram.update(queueSizes.sum)
+      _          <- pendingRequestsHistogram.update(state.pendingRequests.size)
+      _          <- pendingCommitsHistogram.update(state.pendingCommits.size)
+      _          <- subscriptionStateGauge.update(state.subscriptionState)
+      _          <- commandQueueSizeHistogram.update(commandQueueSize)
+      _          <- commitQueueSizeHistogram.update(commitQueueSize)
+    } yield ()
 
 }

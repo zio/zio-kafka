@@ -744,6 +744,7 @@ private[consumer] final class Runloop private (
     observe
       .repeat(Schedule.fixed(500.millis))
       .unit
+      .interruptible
   }
 }
 
@@ -878,13 +879,18 @@ object Runloop {
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
+      observeFiber <- runloop.observeRunloopMetrics.forkScoped
+
       // Run the entire loop on a dedicated thread to avoid executor shifts
       executor <- RunloopExecutor.newInstance
       fiber    <- ZIO.onExecutor(executor)(runloop.run(initialState)).forkScoped
       waitForRunloopStop = fiber.join.orDie
 
-      _ <- runloop.observeRunloopMetrics.forkScoped
-
+      _ <- ZIO.addFinalizer(
+             ZIO.logDebug("Shutting down metrics observer") *>
+               observeFiber.interrupt <*
+               ZIO.logDebug("Done shutting down metrics observer")
+           )
       _ <- ZIO.addFinalizer(
              ZIO.logDebug("Shutting down Runloop") *>
                runloop.shutdown *>
