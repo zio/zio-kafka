@@ -25,6 +25,24 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
       .counterInt("ziokafka_consumer_polls", "The number of polls.")
       .tagged(metricLabels)
 
+  private val partitionsCurrentlyResumedGauge: Metric.Gauge[Int] =
+    Metric
+      .gauge(
+        "ziokafka_consumer_partitions_currently_resumed",
+        "The number of partitions currently resumed."
+      )
+      .contramap[Int](_.toDouble)
+      .tagged(metricLabels)
+
+  private val partitionsCurrentlyPausedGauge: Metric.Gauge[Int] =
+    Metric
+      .gauge(
+        "ziokafka_consumer_partitions_currently_paused",
+        "The number of partitions currently paused because of backpressure."
+      )
+      .contramap[Int](_.toDouble)
+      .tagged(metricLabels)
+
   private val pollLatencyHistogram: Metric.Histogram[Duration] =
     Metric
       .histogram(
@@ -45,9 +63,11 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  def observePoll(latency: Duration, pollSize: Int): UIO[Unit] =
+  def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int): UIO[Unit] =
     for {
       _ <- pollCounter.increment
+      _ <- partitionsCurrentlyResumedGauge.update(resumedCount)
+      _ <- partitionsCurrentlyPausedGauge.update(pausedCount)
       _ <- pollLatencyHistogram.update(latency)
       _ <- pollSizeHistogram.update(pollSize)
     } yield ()

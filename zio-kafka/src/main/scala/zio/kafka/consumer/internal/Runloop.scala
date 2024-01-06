@@ -425,12 +425,14 @@ private[consumer] final class Runloop private (
     c: ByteArrayKafkaConsumer,
     assignment: Set[TopicPartition],
     requestedPartitions: Set[TopicPartition]
-  ): Unit = {
+  ): (Int, Int) = {
     val toResume = assignment intersect requestedPartitions
     val toPause  = assignment -- requestedPartitions
 
     if (toResume.nonEmpty) c.resume(toResume.asJava)
     if (toPause.nonEmpty) c.pause(toPause.asJava)
+
+    (toResume.size, toPause.size)
   }
 
   private def handlePoll(state: State): Task[State] = {
@@ -454,13 +456,13 @@ private[consumer] final class Runloop private (
           ZIO.suspend {
             val prevAssigned = c.assignment().asScala.toSet
 
-            resumeAndPausePartitions(c, prevAssigned, partitionsToFetch)
+            val (toResumeCount, toPauseCount) = resumeAndPausePartitions(c, prevAssigned, partitionsToFetch)
 
             val (pollDuration, recordsOrNull) = timed(c.poll(pollTimeout))
             val polledRecords =
               if (recordsOrNull eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else recordsOrNull
 
-            consumerMetrics.observePoll(pollDuration, polledRecords.count()) *>
+            consumerMetrics.observePoll(toResumeCount, toPauseCount, pollDuration, polledRecords.count()) *>
               diagnostics.emit {
                 val providedTps         = polledRecords.partitions().asScala.toSet
                 val requestedPartitions = state.pendingRequests.map(_.tp).toSet
