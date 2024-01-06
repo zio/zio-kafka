@@ -239,4 +239,39 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
       }
       .unit
 
+  // -----------------------------------------------------
+  //
+  // Run loop metrics
+  //
+
+  // Chunk(0,1,3,8,21,55,149,404,1097,2981)
+  private val commandAndCommitQueueSizeBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk(0.0) ++ Chunk.iterate(1.0, 9)(_ * Math.E).map(Math.ceil))
+
+  private val commandQueueSizeHistogram =
+    Metric
+      .histogram(
+        "ziokafka_consumer_command_queue_size",
+        "The number of commands queued in the consumer.",
+        commandAndCommitQueueSizeBoundaries
+      )
+      .contramap[Int](_.toDouble)
+      .tagged(metricLabels)
+
+  private val commitQueueSizeHistogram =
+    Metric
+      .histogram(
+        "ziokafka_consumer_commit_queue_size",
+        "The number of commits queued in the consumer.",
+        commandAndCommitQueueSizeBoundaries
+      )
+      .contramap[Int](_.toDouble)
+      .tagged(metricLabels)
+
+  def observeRunloopMetrics(commandQueueSize: Int, commitQueueSize: Int): UIO[Unit] =
+    for {
+      _ <- commandQueueSizeHistogram.update(commandQueueSize)
+      _ <- commitQueueSizeHistogram.update(commitQueueSize)
+    } yield ()
+
 }

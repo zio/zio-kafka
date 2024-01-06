@@ -732,11 +732,19 @@ private[consumer] final class Runloop private (
       .onError(cause => partitionsHub.offer(Take.failCause(cause)))
   }
 
-  private val observePartitionStreamMetrics: ZIO[Any, Nothing, Unit] =
-    currentStateRef.get
-      .flatMap(consumerMetrics.observePartitionStreamMetrics)
+  private def observeStreamAndRunloopMetrics: ZIO[Any, Nothing, Unit] = {
+    val observe = for {
+      currentState     <- currentStateRef.get
+      commandQueueSize <- commandQueue.size
+      commitQueueSize  <- commitQueue.size
+      _                <- consumerMetrics.observePartitionStreamMetrics(currentState)
+      _                <- consumerMetrics.observeRunloopMetrics(commandQueueSize, commitQueueSize)
+    } yield ()
+
+    observe
       .repeat(Schedule.fixed(500.millis))
       .unit
+  }
 }
 
 object Runloop {
@@ -875,7 +883,7 @@ object Runloop {
       fiber    <- ZIO.onExecutor(executor)(runloop.run(initialState)).forkScoped
       waitForRunloopStop = fiber.join.orDie
 
-      _ <- runloop.observePartitionStreamMetrics.forkScoped
+      _ <- runloop.observeStreamAndRunloopMetrics.forkScoped
 
       _ <- ZIO.addFinalizer(
              ZIO.logDebug("Shutting down Runloop") *>
