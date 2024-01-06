@@ -252,20 +252,17 @@ private[consumer] final class Runloop private (
     offsets =>
       for {
         p <- Promise.make[Throwable, Unit]
-        start = java.lang.System.nanoTime()
-        _ <- commitQueue.offer(Runloop.Commit(offsets, p))
+        _ <- commitQueue.offer(Runloop.Commit(java.lang.System.nanoTime(), offsets, p))
         _ <- commandQueue.offer(RunloopCommand.CommitAvailable)
         _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
-        end     = java.lang.System.nanoTime()
-        latency = (end - start).nanoseconds
-        _ <- consumerMetrics.observeCommit(latency, 0) // TODO: get commit size
       } yield ()
 
   /** Merge commits and prepare parameters for calling `consumer.commitAsync`. */
   private def asyncCommitParameters(
     commits: Chunk[Runloop.Commit]
   ): (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback, Throwable => UIO[Unit]) = {
+    val createdAt = commits.map(_.createdAt).minOption
     val offsets = commits
       .foldLeft(mutable.Map.empty[TopicPartition, OffsetAndMetadata]) { case (acc, commit) =>
         commit.offsets.foreach { case (tp, offset) =>
@@ -281,10 +278,16 @@ private[consumer] final class Runloop private (
       tp -> new OffsetAndMetadata(offset.offset + 1, offset.leaderEpoch, offset.metadata)
     }
     val cont = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
-    val onSuccess =
-      committedOffsetsRef.update(_.addCommits(commits)) *>
-        cont(Exit.unit) <*
-        diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
+    val onSuccess = {
+      val endTime = java.lang.System.nanoTime()
+      val latency = createdAt.map(c => (endTime - c).nanoseconds)
+      for {
+        offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
+        _              <- latency.fold(ZIO.unit)(latency => consumerMetrics.observeCommit(latency, offsetIncrease))
+        _              <- diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
+        result         <- cont(Exit.unit)
+      } yield result
+    }
     val onFailure: Throwable => UIO[Unit] = {
       case _: RebalanceInProgressException =>
         for {
@@ -808,6 +811,7 @@ object Runloop {
   }
 
   private[internal] final case class Commit(
+    createdAt: NanoTime,
     offsets: Map[TopicPartition, OffsetAndMetadata],
     cont: Promise[Throwable, Unit]
   ) {
@@ -903,17 +907,30 @@ object Runloop {
 
   // package private for unit testing
   private[internal] final case class CommitOffsets(offsets: Map[TopicPartition, Long]) {
-    def addCommits(c: Chunk[Runloop.Commit]): CommitOffsets = {
+
+    /** Returns an estimate of the total offset increase, and a new `CommitOffsets` with the given offsets added. */
+    def addCommits(c: Chunk[Runloop.Commit]): (Long, CommitOffsets) = {
       val updatedOffsets = mutable.Map.empty[TopicPartition, Long]
       updatedOffsets.sizeHint(offsets.size)
       updatedOffsets ++= offsets
+      var offsetIncrease = 0L
       c.foreach { commit =>
         commit.offsets.foreach { case (tp, offsetAndMeta) =>
           val offset = offsetAndMeta.offset()
-          updatedOffsets += tp -> updatedOffsets.get(tp).fold(offset)(max(_, offset))
+          val maxOffset = updatedOffsets.get(tp) match {
+            case Some(existingOffset) =>
+              offsetIncrease += max(0L, (offset - existingOffset))
+              max(existingOffset, offset)
+            case None =>
+              // This partition was not committed to before from this consumer. Therefore we do not know the offset
+              // increase. A good estimate would be the poll size for this consumer, another okayish estimate is 0.
+              // Lets go with the simplest one for now: ```offsetIncrease += 0```
+              offset
+          }
+          updatedOffsets += tp -> maxOffset
         }
       }
-      CommitOffsets(offsets = updatedOffsets.toMap)
+      (offsetIncrease, CommitOffsets(offsets = updatedOffsets.toMap))
     }
 
     def keepPartitions(tps: Set[TopicPartition]): CommitOffsets =

@@ -21,7 +21,9 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
     MetricKeyType.Histogram.Boundaries.fromChunk(Chunk.iterate(1.0, 10)(_ * Math.E).map(Math.ceil))
 
   private val pollCounter: Metric.Counter[Int] =
-    Metric.counterInt("ziokafka_consumer_polls", "The number of polls.").tagged(metricLabels)
+    Metric
+      .counterInt("ziokafka_consumer_polls", "The number of polls.")
+      .tagged(metricLabels)
 
   private val pollLatencyHistogram: Metric.Histogram[Duration] =
     Metric
@@ -65,29 +67,32 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
     MetricKeyType.Histogram.Boundaries.fromChunk(Chunk.iterate(1.0, 10)(_ * Math.E).map(Math.ceil))
 
   private val commitCounter: Metric.Counter[Int] =
-    Metric.counterInt("ziokafka_consumer_commits", "The number of commits.").tagged(metricLabels)
+    Metric
+      .counterInt("ziokafka_consumer_commits", "The number of aggregated commits.")
+      .tagged(metricLabels)
 
   private val commitLatencyHistogram: Metric.Histogram[Duration] =
     Metric
       .histogram(
         "ziokafka_consumer_commit_latency",
-        "The duration of a single commit in seconds.",
+        "The duration of a single aggregated commit in seconds.",
         commitLatencyBoundaries
       )
       .contramap[Duration](_.toNanos.toDouble / 1e9)
       .tagged(metricLabels)
 
-  private val commitSizeHistogram: Metric.Histogram[Int] =
+  // Note: the metric is an approximation because the first commit to a partition is not included.
+  private val commitSizeHistogram: Metric.Histogram[Long] =
     Metric
       .histogram(
         "ziokafka_consumer_commit_size",
-        "The number of records (offsets) per commit.",
+        "An approximation of the number of records (offsets) per aggregated commit.",
         commitSizeBoundaries
       )
-      .contramap[Int](_.toDouble)
+      .contramap[Long](_.toDouble)
       .tagged(metricLabels)
 
-  def observeCommit(latency: Duration, commitSize: Int): UIO[Unit] =
+  def observeCommit(latency: Duration, commitSize: Long): UIO[Unit] =
     for {
       _ <- commitCounter.increment
       _ <- commitLatencyHistogram.update(latency)
@@ -100,7 +105,9 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
   //
 
   private val rebalanceCounter: Metric.Counter[Int] =
-    Metric.counterInt("ziokafka_consumer_rebalances", "The number of rebalances").tagged(metricLabels)
+    Metric
+      .counterInt("ziokafka_consumer_rebalances", "The number of rebalances")
+      .tagged(metricLabels)
 
   private val partitionsCurrentlyAssignedGauge: Metric.Gauge[Int] =
     Metric
