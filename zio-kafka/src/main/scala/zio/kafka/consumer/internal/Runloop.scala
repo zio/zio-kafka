@@ -458,9 +458,10 @@ private[consumer] final class Runloop private (
 
             val (toResumeCount, toPauseCount) = resumeAndPausePartitions(c, prevAssigned, partitionsToFetch)
 
-            val (pollDuration, recordsOrNull) = timed(c.poll(pollTimeout))
-            val polledRecords =
+            val (pollDuration, polledRecords) = timed {
+              val recordsOrNull = c.poll(pollTimeout)
               if (recordsOrNull eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]() else recordsOrNull
+            }
 
             consumerMetrics.observePoll(toResumeCount, toPauseCount, pollDuration, polledRecords.count()) *>
               diagnostics.emit {
