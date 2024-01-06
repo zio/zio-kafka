@@ -161,7 +161,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
 
   // -----------------------------------------------------
   //
-  // Partition stream metrics
+  // Runloop metrics
   //
 
   // Chunk(0,1,3,8,21,55,149,404,1097,2981)
@@ -225,30 +225,20 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  def observePartitionStreamMetrics(state: Runloop.State): UIO[Unit] =
-    ZIO
-      .when(state.subscriptionState.isSubscribed) {
-        for {
-          _          <- ZIO.foreachDiscard(state.assignedStreams)(_.outstandingPolls @@ queuePollsHistogram)
-          queueSizes <- ZIO.foreach(state.assignedStreams)(_.queueSize)
-          _          <- ZIO.foreachDiscard(queueSizes)(qs => queueSizeHistogram.update(qs))
-          _          <- allQueueSizeHistogram.update(queueSizes.sum)
-          _          <- pendingRequestsHistogram.update(state.pendingRequests.size)
-          _          <- pendingCommitsHistogram.update(state.pendingCommits.size)
-        } yield ()
-      }
-      .unit
-
-  // -----------------------------------------------------
-  //
-  // Run loop metrics
-  //
+  private val subscriptionStateGauge: Metric.Gauge[SubscriptionState] =
+    Metric
+      .gauge(
+        "ziokafka_consumer_subscription_state",
+        "Whether the consumer is subscribed (1) or not (0)."
+      )
+      .contramap[SubscriptionState](s => if (s.isSubscribed) 1 else 0)
+      .tagged(metricLabels)
 
   // Chunk(0,1,3,8,21,55,149,404,1097,2981)
   private val commandAndCommitQueueSizeBoundaries: Histogram.Boundaries =
     MetricKeyType.Histogram.Boundaries.fromChunk(Chunk(0.0) ++ Chunk.iterate(1.0, 9)(_ * Math.E).map(Math.ceil))
 
-  private val commandQueueSizeHistogram =
+  private val commandQueueSizeHistogram: Metric.Histogram[Int] =
     Metric
       .histogram(
         "ziokafka_consumer_command_queue_size",
@@ -258,7 +248,7 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  private val commitQueueSizeHistogram =
+  private val commitQueueSizeHistogram: Metric.Histogram[Int] =
     Metric
       .histogram(
         "ziokafka_consumer_commit_queue_size",
@@ -268,10 +258,21 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  def observeRunloopMetrics(commandQueueSize: Int, commitQueueSize: Int): UIO[Unit] =
-    for {
-      _ <- commandQueueSizeHistogram.update(commandQueueSize)
-      _ <- commitQueueSizeHistogram.update(commitQueueSize)
-    } yield ()
+  def observeRunloopMetrics(state: Runloop.State, commandQueueSize: Int, commitQueueSize: Int): UIO[Unit] =
+    ZIO
+      .when(state.subscriptionState.isSubscribed) {
+        for {
+          _          <- ZIO.foreachDiscard(state.assignedStreams)(_.outstandingPolls @@ queuePollsHistogram)
+          queueSizes <- ZIO.foreach(state.assignedStreams)(_.queueSize)
+          _          <- ZIO.foreachDiscard(queueSizes)(qs => queueSizeHistogram.update(qs))
+          _          <- allQueueSizeHistogram.update(queueSizes.sum)
+          _          <- pendingRequestsHistogram.update(state.pendingRequests.size)
+          _          <- pendingCommitsHistogram.update(state.pendingCommits.size)
+          _          <- subscriptionStateGauge.update(state.subscriptionState)
+          _          <- commandQueueSizeHistogram.update(commandQueueSize)
+          _          <- commitQueueSizeHistogram.update(commitQueueSize)
+        } yield ()
+      }
+      .unit
 
 }

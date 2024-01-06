@@ -284,8 +284,8 @@ private[consumer] final class Runloop private (
       for {
         offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
         _              <- latency.fold(ZIO.unit)(latency => consumerMetrics.observeCommit(latency, offsetIncrease))
-        _              <- diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
         result         <- cont(Exit.unit)
+        _              <- diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
       } yield result
     }
     val onFailure: Throwable => UIO[Unit] = {
@@ -732,13 +732,13 @@ private[consumer] final class Runloop private (
       .onError(cause => partitionsHub.offer(Take.failCause(cause)))
   }
 
-  private def observeStreamAndRunloopMetrics: ZIO[Any, Nothing, Unit] = {
+  private def observeRunloopMetrics: ZIO[Any, Nothing, Unit] = {
     val observe = for {
       currentState     <- currentStateRef.get
       commandQueueSize <- commandQueue.size
       commitQueueSize  <- commitQueue.size
-      _                <- consumerMetrics.observePartitionStreamMetrics(currentState)
-      _                <- consumerMetrics.observeRunloopMetrics(commandQueueSize, commitQueueSize)
+      _ <- consumerMetrics
+             .observeRunloopMetrics(currentState, commandQueueSize, commitQueueSize)
     } yield ()
 
     observe
@@ -883,7 +883,7 @@ object Runloop {
       fiber    <- ZIO.onExecutor(executor)(runloop.run(initialState)).forkScoped
       waitForRunloopStop = fiber.join.orDie
 
-      _ <- runloop.observeStreamAndRunloopMetrics.forkScoped
+      _ <- runloop.observeRunloopMetrics.forkScoped
 
       _ <- ZIO.addFinalizer(
              ZIO.logDebug("Shutting down Runloop") *>
@@ -932,9 +932,9 @@ object Runloop {
               offsetIncrease += max(0L, (offset - existingOffset))
               max(existingOffset, offset)
             case None =>
-              // This partition was not committed to before from this consumer. Therefore we do not know the offset
+              // This partition was not committed to from this consumer yet. Therefore we do not know the offset
               // increase. A good estimate would be the poll size for this consumer, another okayish estimate is 0.
-              // Lets go with the simplest one for now: ```offsetIncrease += 0```
+              // Lets go with the simplest for now: ```offsetIncrease += 0```
               offset
           }
           updatedOffsets += tp -> maxOffset
