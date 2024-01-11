@@ -266,6 +266,12 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           metrics <- Producer.metrics
         } yield assertTrue(metrics.nonEmpty)
       },
+      test("partitionsFor") {
+        for {
+          topic <- randomTopic
+          info  <- Producer.partitionsFor(topic).debug
+        } yield assertTrue(info.headOption.map(_.topic()) == Some(topic))
+      },
       suite("transactions")(
         test("a simple transaction") {
           import Subscription._
