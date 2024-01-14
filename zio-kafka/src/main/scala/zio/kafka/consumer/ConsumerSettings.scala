@@ -32,7 +32,8 @@ final case class ConsumerSettings(
   rebalanceSafeCommits: Boolean = false,
   maxRebalanceDuration: Option[Duration] = None,
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy(),
-  metricLabels: Set[MetricLabel] = Set.empty
+  metricLabels: Set[MetricLabel] = Set.empty,
+  runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis)
 ) {
 
   /**
@@ -294,6 +295,14 @@ final case class ConsumerSettings(
    */
   def withMetricsLabels(metricLabels: Set[MetricLabel]): ConsumerSettings =
     copy(metricLabels = metricLabels)
+
+  /**
+   * @param runloopMetricsSchedule
+   *   The schedule at which the runloop metrics are measured. Example runloop metrics are queue sizes and number of
+   *   outstanding commits. The default is to measure every 500ms.
+   */
+  def withRunloopMetricsSchedule(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ConsumerSettings =
+    copy(runloopMetricsSchedule = runloopMetricsSchedule)
 
 }
 
