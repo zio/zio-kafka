@@ -11,10 +11,12 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
   // Poll metrics
   //
 
-  // Chunk(0.01,0.02,0.04,0.08,0.16,0.32,0.64,1.28,2.56) in seconds
-  // Chunk(10,20,40,80,160,320,640,1280,2560) in milliseconds
+  // 0.01,0.03,0.08,0.21,0.55,1.49,4.04,10.97,29.81,81.04 in seconds
+  // 10,30,80,210,550,1490,4040,10970,29810,81040 in milliseconds
   private val pollLatencyBoundaries: Histogram.Boundaries =
-    MetricKeyType.Histogram.Boundaries.exponential(0.01, 2.0, 9)
+    MetricKeyType.Histogram.Boundaries.fromChunk(
+      Chunk.iterate(0.01, 10)(_ * Math.E).map(d => Math.ceil(d * 100.0) / 100.0)
+    )
 
   // Chunk(1,3,8,21,55,149,404,1097,2981,8104)
   private val pollSizeBoundaries: Histogram.Boundaries =
@@ -25,20 +27,20 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
       .counterInt("ziokafka_consumer_polls", "The number of polls.")
       .tagged(metricLabels)
 
-  private val partitionsCurrentlyResumedGauge: Metric.Gauge[Int] =
+  private val partitionsResumedInLatestPollGauge: Metric.Gauge[Int] =
     Metric
       .gauge(
-        "ziokafka_consumer_partitions_currently_resumed",
-        "The number of partitions currently resumed."
+        "ziokafka_consumer_partitions_resumed_in_latest_poll",
+        "The number of partitions resumed in the latest poll call."
       )
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  private val partitionsCurrentlyPausedGauge: Metric.Gauge[Int] =
+  private val partitionsPausedInLatestPollGauge: Metric.Gauge[Int] =
     Metric
       .gauge(
-        "ziokafka_consumer_partitions_currently_paused",
-        "The number of partitions currently paused because of backpressure."
+        "ziokafka_consumer_partitions_paused_in_latest_poll",
+        "The number of partitions paused in the latest poll call (because of backpressure)."
       )
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
@@ -66,8 +68,8 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
   def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int): UIO[Unit] =
     for {
       _ <- pollCounter.increment
-      _ <- partitionsCurrentlyResumedGauge.update(resumedCount)
-      _ <- partitionsCurrentlyPausedGauge.update(pausedCount)
+      _ <- partitionsResumedInLatestPollGauge.update(resumedCount)
+      _ <- partitionsPausedInLatestPollGauge.update(pausedCount)
       _ <- pollLatencyHistogram.update(latency)
       _ <- pollSizeHistogram.update(pollSize)
     } yield ()
@@ -77,10 +79,12 @@ final case class ConsumerMetrics(metricLabels: Set[MetricLabel]) {
   // Commit metrics
   //
 
-  // Chunk(0.01,0.02,0.04,0.08,0.16,0.32,0.64,1.28,2.56) in seconds
-  // Chunk(10,20,40,80,160,320,640,1280,2560) in milliseconds
+  // 0.01,0.03,0.08,0.21,0.55,1.49,4.04,10.97,29.81,81.04 in seconds
+  // 10,30,80,210,550,1490,4040,10970,29810,81040 in milliseconds
   private val commitLatencyBoundaries: Histogram.Boundaries =
-    MetricKeyType.Histogram.Boundaries.exponential(0.01, 2.0, 9)
+    MetricKeyType.Histogram.Boundaries.fromChunk(
+      Chunk.iterate(0.01, 10)(_ * Math.E).map(d => Math.ceil(d * 100.0) / 100.0)
+    )
 
   // Chunk(1,3,8,21,55,149,404,1097,2981,8104)
   private val commitSizeBoundaries: Histogram.Boundaries =

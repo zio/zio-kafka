@@ -186,9 +186,11 @@ object PartitionStreamControl {
     lastPulledOffset: Option[Offset],
     outstandingPolls: Int
   ) {
+    // To be called when a poll resulted in 0 records.
     def withEmptyPoll: QueueInfo =
       copy(outstandingPolls = outstandingPolls + 1)
 
+    // To be called when a poll resulted in >0 records.
     def withOffer(newPullDeadline: NanoTime, recordCount: Int): QueueInfo =
       QueueInfo(
         pullDeadline = if (size <= 0) newPullDeadline else pullDeadline,
