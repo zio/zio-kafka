@@ -40,7 +40,7 @@ private[consumer] final class Runloop private (
   private val restartStreamsOnRebalancing = settings.restartStreamOnRebalancing
   private val rebalanceSafeCommits        = settings.rebalanceSafeCommits
 
-  private val consumerMetrics = ConsumerMetrics(settings.metricLabels)
+  private val consumerMetrics = new ZioConsumerMetrics(settings.metricLabels)
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, maxPollInterval)
