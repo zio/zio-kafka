@@ -449,8 +449,11 @@ private[consumer] final class Runloop private (
       pollResult <-
         consumer.runloopAccess { c =>
           for {
-            (toResumeCount, toPauseCount) <- resumeAndPausePartitions(c, partitionsToFetch)
-            (pollDuration, polledRecords) <- doPoll(c).timed
+            resumeAndPauseCounts <- resumeAndPausePartitions(c, partitionsToFetch)
+            (toResumeCount, toPauseCount) = resumeAndPauseCounts
+
+            pullDurationAndRecords <- doPoll(c).timed
+            (pollDuration, polledRecords) = pullDurationAndRecords
 
             _ <- consumerMetrics.observePoll(toResumeCount, toPauseCount, pollDuration, polledRecords.count()) *>
                    diagnostics.emit {
