@@ -8,7 +8,7 @@ import zio._
  * Implementations of this trait are responsible for measuring all consumer metrics. The different methods are invoked
  * from different places in the consumer.
  *
- * WARNING: This is an INTERNAL API. If may change in an incompatible way, or disappear, without notice, in any
+ * WARNING: This is an INTERNAL API and may change in an incompatible way, or disappear, without notice, in any
  * zio-kafka version.
  */
 private[internal] trait ConsumerMetrics {
@@ -24,7 +24,7 @@ private[internal] trait ConsumerMetrics {
  *
  * Sub-classes are allowed to override the Histogram boundaries.
  *
- * WARNING: This is an INTERNAL API. If may change in an incompatible way, or disappear, without notice, in any
+ * WARNING: This is an INTERNAL API and may change in an incompatible way, or disappear, without notice, in any
  * zio-kafka version.
  *
  * @param metricLabels
