@@ -247,17 +247,20 @@ private[consumer] final class Runloop private (
     offsets =>
       for {
         p <- Promise.make[Throwable, Unit]
+        startTime = java.lang.System.nanoTime()
         _ <- commitQueue.offer(Runloop.Commit(java.lang.System.nanoTime(), offsets, p))
         _ <- commandQueue.offer(RunloopCommand.CommitAvailable)
         _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
+        endTime = java.lang.System.nanoTime()
+        latency = (endTime - startTime).nanoseconds
+        _ <- consumerMetrics.observeCommit(latency)
       } yield ()
 
   /** Merge commits and prepare parameters for calling `consumer.commitAsync`. */
   private def asyncCommitParameters(
     commits: Chunk[Runloop.Commit]
   ): (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback, Throwable => UIO[Unit]) = {
-    val createdAt = commits.map(_.createdAt).minOption
     val offsets = commits
       .foldLeft(mutable.Map.empty[TopicPartition, OffsetAndMetadata]) { case (acc, commit) =>
         commit.offsets.foreach { case (tp, offset) =>
@@ -273,12 +276,14 @@ private[consumer] final class Runloop private (
       tp -> new OffsetAndMetadata(offset.offset + 1, offset.leaderEpoch, offset.metadata)
     }
     val cont = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
+    // We assume the commit is started immediately after returning from this method.
+    val startTime = java.lang.System.nanoTime()
     val onSuccess = {
       val endTime = java.lang.System.nanoTime()
-      val latency = createdAt.map(c => (endTime - c).nanoseconds)
+      val latency = (endTime - startTime).nanoseconds
       for {
         offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
-        _              <- latency.fold(ZIO.unit)(latency => consumerMetrics.observeCommit(latency, offsetIncrease))
+        _              <- consumerMetrics.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
         result         <- cont(Exit.unit)
         _              <- diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
       } yield result

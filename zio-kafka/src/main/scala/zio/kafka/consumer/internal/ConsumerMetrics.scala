@@ -13,7 +13,8 @@ import zio._
  */
 private[internal] trait ConsumerMetrics {
   def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int): UIO[Unit]
-  def observeCommit(latency: Duration, commitSize: Long): UIO[Unit]
+  def observeCommit(latency: Duration): UIO[Unit]
+  def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit]
   def observeRebalance(currentlyAssignedCount: Int, assignedCount: Int, revokedCount: Int, lostCount: Int): UIO[Unit]
   def observeRunloopMetrics(state: Runloop.State, commandQueueSize: Int, commitQueueSize: Int): UIO[Unit]
 }
@@ -74,7 +75,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
   private val pollLatencyHistogram: Metric.Histogram[Duration] =
     Metric
       .histogram(
-        "ziokafka_consumer_poll_latency",
+        "ziokafka_consumer_poll_latency_seconds",
         "The duration of a single poll in seconds.",
         pollLatencyBoundaries
       )
@@ -112,41 +113,76 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
       Chunk.iterate(0.01, 10)(_ * Math.E).map(d => Math.ceil(d * 100.0) / 100.0)
     )
 
-  // 1,3,8,21,55,149,404,1097,2981,8104
-  protected val commitSizeBoundaries: Histogram.Boundaries =
-    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk.iterate(1.0, 10)(_ * Math.E).map(Math.ceil))
-
   private val commitCounter: Metric.Counter[Int] =
     Metric
-      .counterInt("ziokafka_consumer_commits", "The number of aggregated commits.")
+      .counterInt("ziokafka_consumer_commits", "The number of commits.")
       .tagged(metricLabels)
 
   private val commitLatencyHistogram: Metric.Histogram[Duration] =
     Metric
       .histogram(
-        "ziokafka_consumer_commit_latency",
-        "The duration of a single aggregated commit in seconds.",
+        "ziokafka_consumer_commit_latency_seconds",
+        "The duration of a commit in seconds.",
         commitLatencyBoundaries
       )
       .contramap[Duration](_.toNanos.toDouble / 1e9)
       .tagged(metricLabels)
 
-  // Note: the metric is an approximation because the first commit to a partition is not included.
-  private val commitSizeHistogram: Metric.Histogram[Long] =
+  override def observeCommit(latency: zio.Duration): UIO[Unit] =
+    for {
+      _ <- commitCounter.increment
+      _ <- commitLatencyHistogram.update(latency)
+    } yield ()
+
+  // -----------------------------------------------------
+  //
+  // Aggregated commit metrics
+  //
+  // Each runloop cycle zio-kafka aggregates all commit requests into a single aggregated commit.
+  //
+
+  // 0.01,0.03,0.08,0.21,0.55,1.49,4.04,10.97,29.81,81.04 in seconds
+  // 10,30,80,210,550,1490,4040,10970,29810,81040 in milliseconds
+  protected val aggregatedCommitLatencyBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.fromChunk(
+      Chunk.iterate(0.01, 10)(_ * Math.E).map(d => Math.ceil(d * 100.0) / 100.0)
+    )
+
+  // 1,3,8,21,55,149,404,1097,2981,8104
+  protected val aggregatedCommitSizeBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk.iterate(1.0, 10)(_ * Math.E).map(Math.ceil))
+
+  private val aggregatedCommitCounter: Metric.Counter[Int] =
+    Metric
+      .counterInt("ziokafka_consumer_aggregated_commits", "The number of aggregated commits.")
+      .tagged(metricLabels)
+
+  private val aggregatedCommitLatencyHistogram: Metric.Histogram[Duration] =
     Metric
       .histogram(
-        "ziokafka_consumer_commit_size",
+        "ziokafka_consumer_aggregated_commit_latency_seconds",
+        "The duration of an aggregated commit in seconds.",
+        aggregatedCommitLatencyBoundaries
+      )
+      .contramap[Duration](_.toNanos.toDouble / 1e9)
+      .tagged(metricLabels)
+
+  // Note: the metric is an approximation because the first commit to a partition is not included.
+  private val aggregatedCommitSizeHistogram: Metric.Histogram[Long] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_aggregated_commit_size",
         "An approximation of the number of records (offsets) per aggregated commit.",
-        commitSizeBoundaries
+        aggregatedCommitSizeBoundaries
       )
       .contramap[Long](_.toDouble)
       .tagged(metricLabels)
 
-  override def observeCommit(latency: Duration, commitSize: Long): UIO[Unit] =
+  override def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit] =
     for {
-      _ <- commitCounter.increment
-      _ <- commitLatencyHistogram.update(latency)
-      _ <- commitSizeHistogram.update(commitSize)
+      _ <- aggregatedCommitCounter.increment
+      _ <- aggregatedCommitLatencyHistogram.update(latency)
+      _ <- aggregatedCommitSizeHistogram.update(commitSize)
     } yield ()
 
   // -----------------------------------------------------
