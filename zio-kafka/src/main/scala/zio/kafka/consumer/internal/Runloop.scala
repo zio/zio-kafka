@@ -744,7 +744,6 @@ private[consumer] final class Runloop private (
     observe
       .repeat(runloopMetricsSchedule)
       .unit
-      .interruptible
   }
 }
 
