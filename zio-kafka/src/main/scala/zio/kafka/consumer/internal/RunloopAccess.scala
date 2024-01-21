@@ -96,6 +96,7 @@ private[consumer] object RunloopAccess {
                         consumer = consumerAccess,
                         partitionsHub = partitionsHub
                       )
+                      .interruptible
                       .withFinalizer(_ => runloopStateRef.set(RunloopState.Finalized))
                       .provide(ZLayer.succeed(consumerScope))
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
