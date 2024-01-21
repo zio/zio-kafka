@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1705778781884,
+  "lastUpdate": 1705821822500,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -15104,6 +15104,66 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 766.0050254800002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7b2093e43dbc1a97e111b4ed67c692bdf7cd3c5e",
+          "message": "Collect consumer metrics (#1143)\n\nCollect metrics for the consumer using the zio-metrics API. This allows any zio-metrics backend to access and process the observed values.\r\n\r\nBy default no tags are added, but this can be configured via the new method `ConsumerSettings.withMetricsLabels`.\r\n\r\nThe following metrics are collected (kudos to @svroonland for most of the ideas):\r\n- Poll metrics: poll count (counter), number of records per poll (histogram), poll latency (histogram).\r\n- Partition stream metrics: queue size per partition (histogram), total queue size per consumer (histogram), number of polls for which records are idle in the queue (histogram).\r\n- The number of partitions that are paused/resumed (gauge).\r\n- Rebalance metrics: currently assigned partitions count (gauge), assigned/revoked/lost partitions (counter).\r\n- Commit metrics: commit count (counter), commit latency (histogram). These metrics measure commit requests issued through zio-kafka's api.\r\n- Aggregated commit metrics: commit count (counter), commit latency (histogram), commit size (number of offsets per commit) (histogram). After every poll zio-kafka combines all outstanding commit requests into 1 aggregated commit. These metrics are for the aggregated commits.\r\n- Number of entries in the command and commit queues (histogram).\r\n- Subscription state, `1` for subscribed, `0` of unsubscribed (gauge).\r\n\r\nLike the zio-metrics API we follow Prometheus conventions. This means that:\r\n- durations are expressed in seconds,\r\n- counters can only increase,\r\n- metric names use snake_case and end in the unit where possible.\r\n\r\nThe histograms each use 10 buckets. To reach a decent range while keeping sufficient accuracy at the low end, most bucket boundaries use an exponential series based on 𝑒.",
+          "timestamp": "2024-01-21T08:10:55+01:00",
+          "tree_id": "399f6f72df660d3642cb71229134a9283337dbdf",
+          "url": "https://github.com/zio/zio-kafka/commit/7b2093e43dbc1a97e111b4ed67c692bdf7cd3c5e"
+        },
+        "date": 1705821821924,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 535.67818002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 534.3407637600001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 621.8185442399999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 618.2739864000001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1019.4662259,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 799.9973341599999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
