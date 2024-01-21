@@ -5,6 +5,8 @@ import zio.internal.ExecutionMetrics
 
 package object internal {
 
+  private[internal] type NanoTime = Long
+
   /**
    * A runtime layer that can be used to run everything on the thread of the caller.
    *

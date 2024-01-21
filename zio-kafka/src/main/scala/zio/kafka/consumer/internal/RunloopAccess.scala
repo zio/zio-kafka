@@ -89,19 +89,12 @@ private[consumer] object RunloopAccess {
       runloopStateRef <- Ref.Synchronized.make[RunloopState](RunloopState.NotStarted)
       makeRunloop = Runloop
                       .make(
-                        hasGroupId = settings.hasGroupId,
-                        consumer = consumerAccess,
-                        pollTimeout = settings.pollTimeout,
+                        settings = settings,
                         maxPollInterval = maxPollInterval,
-                        commitTimeout = settings.commitTimeout,
-                        diagnostics = diagnostics,
-                        offsetRetrieval = settings.offsetRetrieval,
-                        userRebalanceListener = settings.rebalanceListener,
-                        restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
-                        rebalanceSafeCommits = settings.rebalanceSafeCommits,
                         maxRebalanceDuration = maxRebalanceDuration,
-                        partitionsHub = partitionsHub,
-                        fetchStrategy = settings.fetchStrategy
+                        diagnostics = diagnostics,
+                        consumer = consumerAccess,
+                        partitionsHub = partitionsHub
                       )
                       .withFinalizer(_ => runloopStateRef.set(RunloopState.Finalized))
                       .provide(ZLayer.succeed(consumerScope))
