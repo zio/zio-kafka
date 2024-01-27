@@ -29,7 +29,8 @@ object Main extends ZIOAppDefault {
                 .interruptible
             }
             //  .take(50)
-            .chunksWith(_.takeUntilZIO(_ => stop.isDone))
+            .chunksWith(_.takeUntilZIO(_ => stop.isDone.debug("stop.isDone")))
+//            .takeUntilZIO(_ => stop.isDone.debug("stop.isDone"))
             .tap(r => ZIO.logInfo(s"${r.value} p:${r.offset.partition}, o:${r.offset.offset}"))
             .mapZIO(ZIO.succeed(_).delay(100.millis))
             .map(_.offset)
