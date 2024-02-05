@@ -3,7 +3,7 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.Offset
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.consumer.internal.PartitionStreamControl.{ NanoTime, QueueInfo }
+import zio.kafka.consumer.internal.PartitionStreamControl.QueueInfo
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.{ Take, ZStream }
 import zio.{ Chunk, Clock, Duration, LogAnnotation, Promise, Queue, Ref, UIO, ZIO }
@@ -50,16 +50,27 @@ final class PartitionStreamControl private (
     LogAnnotation("partition", tp.partition().toString)
   )
 
-  /** Offer new data for the stream to process. */
+  /** Offer new data for the stream to process. Should be called on every poll, also when `data.isEmpty` */
   private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
-    for {
-      now <- Clock.nanoTime
-      newPullDeadline = now + maxPollIntervalNanos
-      _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
-      _ <- dataQueue.offer(Take.chunk(data))
-    } yield ()
+    if (data.isEmpty) {
+      queueInfoRef.update(_.withEmptyPoll)
+    } else {
+      for {
+        now <- Clock.nanoTime
+        newPullDeadline = now + maxPollIntervalNanos
+        _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
+        _ <- dataQueue.offer(Take.chunk(data))
+      } yield ()
+    }
 
   def queueSize: UIO[Int] = queueInfoRef.get.map(_.size)
+
+  /**
+   * @return
+   *   the number of polls there are records idling in the queue. It is increased on every poll (when the queue is
+   *   nonEmpty) and reset to 0 when the stream pulls the records
+   */
+  def outstandingPolls: UIO[Int] = queueInfoRef.get.map(_.outstandingPolls)
 
   /**
    * @param now
@@ -107,8 +118,6 @@ final class PartitionStreamControl private (
 
 object PartitionStreamControl {
 
-  type NanoTime = Long
-
   private[internal] def newPartitionStream(
     tp: TopicPartition,
     commandQueue: Queue[RunloopCommand],
@@ -130,7 +139,7 @@ object PartitionStreamControl {
       completedPromise    <- Promise.make[Nothing, Option[Offset]]
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
       now                 <- Clock.nanoTime
-      queueInfo           <- Ref.make(QueueInfo(now, 0, None))
+      queueInfo           <- Ref.make(QueueInfo(now, 0, None, 0))
       requestAndAwaitData =
         for {
           _     <- commandQueue.offer(RunloopCommand.Request(tp))
@@ -171,12 +180,32 @@ object PartitionStreamControl {
 
   // The `pullDeadline` is only relevant when `size > 0`. We initialize `pullDeadline` as soon as size goes above 0.
   // (Note that theoretically `size` can go below 0 when the update operations are reordered.)
-  private final case class QueueInfo(pullDeadline: NanoTime, size: Int, lastPulledOffset: Option[Offset]) {
+  private final case class QueueInfo(
+    pullDeadline: NanoTime,
+    size: Int,
+    lastPulledOffset: Option[Offset],
+    outstandingPolls: Int
+  ) {
+    // To be called when a poll resulted in 0 records.
+    def withEmptyPoll: QueueInfo =
+      copy(outstandingPolls = outstandingPolls + 1)
+
+    // To be called when a poll resulted in >0 records.
     def withOffer(newPullDeadline: NanoTime, recordCount: Int): QueueInfo =
-      QueueInfo(if (size <= 0) newPullDeadline else pullDeadline, size + recordCount, lastPulledOffset)
+      QueueInfo(
+        pullDeadline = if (size <= 0) newPullDeadline else pullDeadline,
+        size = size + recordCount,
+        lastPulledOffset = lastPulledOffset,
+        outstandingPolls = outstandingPolls + 1
+      )
 
     def withPull(newPullDeadline: NanoTime, records: Chunk[ByteArrayCommittableRecord]): QueueInfo =
-      QueueInfo(newPullDeadline, size - records.size, records.lastOption.map(_.offset).orElse(lastPulledOffset))
+      QueueInfo(
+        pullDeadline = newPullDeadline,
+        size = size - records.size,
+        lastPulledOffset = records.lastOption.map(_.offset).orElse(lastPulledOffset),
+        outstandingPolls = 0
+      )
 
     def deadlineExceeded(now: NanoTime): Boolean =
       size > 0 && pullDeadline <= now
