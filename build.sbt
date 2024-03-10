@@ -9,11 +9,19 @@ lazy val logback               = "ch.qos.logback"          % "logback-classic"  
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
+lazy val _scala213 = "2.13.13"
+lazy val _scala3   = "3.3.3"
+
 inThisBuild(
   List(
-    name                     := "ZIO Kafka",
-    zioVersion               := "2.0.21",
-    crossScalaVersions       := List("2.13.13", "3.3.3"),
+    name         := "ZIO Kafka",
+    zioVersion   := "2.0.21",
+    scalaVersion := _scala213,
+    // zio-sbt defines these 'scala213' and 'scala3' settings, but we need to define them here to override the defaults and better control them
+    scala213 := _scala213,
+    scala3   := _scala3,
+    // We only support Scala 2.13+ and 3+. See https://github.com/zio/zio-kafka/releases/tag/v2.7.0
+    crossScalaVersions       := List(scala213.value, scala3.value),
     ciEnabledBranches        := Seq("master", "series/0.x"),
     useCoursier              := false,
     Test / parallelExecution := false,
