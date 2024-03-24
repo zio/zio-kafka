@@ -6,7 +6,7 @@ import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription }
+import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription, SubscriptionStreamControl }
 import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio._
 
@@ -55,7 +55,7 @@ private[consumer] final class RunloopAccess private (
    */
   def subscribe(
     subscription: Subscription
-  ): ZIO[Scope, InvalidSubscriptionUnion, UStream[Take[Throwable, PartitionAssignment]]] =
+  ): ZIO[Scope, InvalidSubscriptionUnion, (SubscriptionStreamControl, UStream[Take[Throwable, PartitionAssignment]])] =
     for {
       stream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
@@ -64,7 +64,11 @@ private[consumer] final class RunloopAccess private (
              withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription)) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
-    } yield stream
+      control = new SubscriptionStreamControl {
+                  override def stop: UIO[Unit] =
+                    withRunloopZIO(requireRunning = true)(_.stopSubscribedTopicPartitions(subscription))
+                }
+    } yield (control, stream)
 
 }
 
