@@ -588,34 +588,24 @@ private[consumer] final class ConsumerLive private[consumer] (
     )
   ] = {
     val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
-    ZIO.succeed {
-      val control = new SubscriptionStreamControl {
-        override def stop: UIO[Unit] = ZIO.unit
-      }
+    for {
+      (control, stream) <- runloopAccess.subscribe(subscription)
+    } yield {
+      val deserializedStream = stream
+        .map(_.exit)
+        .flattenExitOption
+        .map {
+          _.collect {
+            case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
+              val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
+                if (onlyByteArraySerdes)
+                  partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
+                else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
 
-      val stream = ZStream.unwrapScoped {
-        for {
-          stream <- runloopAccess.subscribe(subscription)
-        } yield {
-          val deserializedStream = stream
-            .map(_.exit)
-            .flattenExitOption
-            .map {
-              _.collect {
-                case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
-                  val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
-                    if (onlyByteArraySerdes)
-                      partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
-                    else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
-
-                  tp -> stream
-              }
-            }
-          deserializedStream
+              tp -> stream
+          }
         }
-      }
-
-      (control, stream)
+      (control, deserializedStream)
     }
   }
 
