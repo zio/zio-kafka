@@ -355,6 +355,35 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       )
         } yield assertTrue(offset.map(_.offset).contains(9L))
       } @@ TestAspect.nonFlaky(2),
+      suite("streamWithControl") {
+        test("process outstanding commits after a stopping the subscription") {
+          val kvs   = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+          val topic = "test-outstanding-commits"
+          for {
+            group            <- randomGroup
+            client           <- randomClient
+            _                <- produceMany(topic, kvs)
+            messagesReceived <- Ref.make[Int](0)
+            offset <- ZIO.scoped {
+                        for {
+                          (control, stream) <-
+                            Consumer
+                              .plainStreamWithControl(Subscription.topics(topic), Serde.string, Serde.string)
+                          offset <- (stream.mapConcatZIO { record =>
+                                      for {
+                                        nr <- messagesReceived.updateAndGet(_ + 1)
+                                        _  <- control.stop.when(nr == 10)
+                                      } yield if (nr < 10) Seq(record.offset) else Seq.empty
+                                    }
+                                      .transduce(Consumer.offsetBatches)
+                                      .mapZIO(_.commit)
+                                      .runDrain *>
+                                      Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head))
+                        } yield offset
+                      }.provideSomeLayer[Kafka](consumer(client, Some(group)))
+          } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
+        }
+      },
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
         // Setup of this test:
         // - Set the max poll interval very low: a couple of seconds.
