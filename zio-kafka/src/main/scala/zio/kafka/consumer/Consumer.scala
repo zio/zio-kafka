@@ -186,7 +186,6 @@ trait Consumer {
    * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
    * requests.
    */
-  @deprecated("Use the plain/partitionedStreamWithControl methods", "2.8.0")
   def stopConsumption: UIO[Unit]
 
   /**
@@ -402,7 +401,6 @@ object Consumer {
   /**
    * Accessor method
    */
-  @deprecated("Use the plain/partitionedStreamWithControl methods", "2.8.0")
   def stopConsumption: RIO[Consumer, Unit] =
     ZIO.serviceWithZIO(_.stopConsumption)
 
