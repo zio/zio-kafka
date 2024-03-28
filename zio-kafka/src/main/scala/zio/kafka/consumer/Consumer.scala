@@ -19,7 +19,19 @@ import zio.stream._
 import scala.jdk.CollectionConverters._
 import scala.util.control.NoStackTrace
 
+/**
+ * Allows graceful shutdown of a stream, where no more records are being fetched but the in-flight records can continue
+ * to be processed and their offsets committed.
+ *
+ * As long as this object is in scope, the Kafka consumer remains subscribed.
+ * @tparam StreamType
+ *   Type of the stream returned from [[stream]]
+ */
 trait SubscriptionStreamControl[StreamType] {
+
+  /**
+   * The stream of partitions / records for this subscription
+   */
   def stream: StreamType
 
   /**
@@ -81,9 +93,6 @@ trait Consumer {
    *
    * On completion of the stream, the consumer is unsubscribed. In case of multiple subscriptions, the total consumer
    * subscription is changed to exclude this subscription.
-   *
-   * @return
-   *   Tuple of a SubscriptionStreamControl and a stream of partition assignments While the SubscriptionStreamControl
    */
   def partitionedAssignmentStream[R, K, V](
     subscription: Subscription,
@@ -98,6 +107,9 @@ trait Consumer {
   /**
    * Like [[partitionedAssignmentStream]] but returns a [[SubscriptionStreamControl]] used to do a controlled shutdown
    * of the stream
+   *
+   * The returned scope determines the lifetime of the subscription of the kafka consumer, which is necessary to be able
+   * to commit offsets.
    */
   def partitionedAssignmentStreamWithControl[R, K, V](
     subscription: Subscription,
@@ -137,6 +149,9 @@ trait Consumer {
   /**
    * Like [[partitionedStream]] but returns a [[SubscriptionStreamControl]] used to do a controlled shutdown of the
    * stream
+   *
+   * The returned scope determines the lifetime of the subscription of the kafka consumer, which is necessary to be able
+   * to commit offsets.
    */
   def partitionedStreamWithControl[R, K, V](
     subscription: Subscription,
@@ -179,6 +194,9 @@ trait Consumer {
 
   /**
    * Like [[plainStream]] but returns a [[SubscriptionStreamControl]] used to do a controlled shutdown of the stream
+   *
+   * The returned scope determines the lifetime of the subscription of the kafka consumer, which is necessary to be able
+   * to commit offsets.
    */
   def plainStreamWithControl[R, K, V](
     subscription: Subscription,
