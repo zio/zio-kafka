@@ -474,6 +474,44 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               )
             )
           )
+        },
+        test("can stop one stream while keeping another one running") {
+          val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+          for {
+            topic1 <- randomTopic
+            topic2 <- randomTopic
+            client <- randomClient
+            group  <- randomGroup
+
+            _ <- produceMany(topic1, kvs)
+            _ <- produceMany(topic2, kvs)
+            _ <- ZIO.scoped {
+                   for {
+                     streamControl1 <-
+                       Consumer.plainStreamWithControl(Subscription.topics(topic1), Serde.string, Serde.string)
+                     streamControl2 <-
+                       Consumer.plainStreamWithControl(Subscription.topics(topic2), Serde.string, Serde.string)
+
+                     stream1Started <- Promise.make[Nothing, Unit]
+                     stream1Fib <- streamControl1.stream
+                                     .tap(_ => stream1Started.succeed(()))
+                                     .zipWithIndex
+                                     .map(_._2)
+                                     .debug
+                                     .takeWhile(_ < 2 * kvs.size - 1)
+                                     .runDrain
+                                     .forkScoped
+                     _ <- stream1Started.await
+                     _ <- streamControl2.stream.zipWithIndex
+                            .map(_._2)
+                            .tap(count => streamControl2.stop.when(count == 4))
+                            .runDrain
+                     _ <- produceMany(topic1, kvs)
+                     _ <- stream1Fib.join
+
+                   } yield ()
+                 }.provideSomeLayer[Kafka with Scope with Producer](consumer(client, Some(group)))
+          } yield assertCompletes
         }
       ),
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
