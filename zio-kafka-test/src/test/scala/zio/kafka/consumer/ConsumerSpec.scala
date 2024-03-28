@@ -371,9 +371,38 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                      _ <- streamControl.stream
                             .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
                               partitionStream.zipWithIndex.tap { case (record, idx) =>
+                                (streamControl.stop <* ZIO.logDebug("Stopped consumption"))
+                                  .when(idx == 3) *>
+                                  record.offset.commit <* ZIO.logDebug(s"Committed $idx")
+                              }.tap { case (_, idx) => ZIO.logDebug(s"Consumed $idx") }
+                            }
+                            .runDrain
+                            .tap(_ => ZIO.logDebug("Stream completed"))
+                   } yield ()
+                 }
+                   .provideSomeLayer[Kafka](
+                     consumer(client, Some(group))
+                   )
+            _ <- keepProducing.set(false)
+          } yield assertCompletes
+        },
+        test("can handle stopping twice") {
+          for {
+            topic  <- randomTopic
+            group  <- randomGroup
+            client <- randomClient
+
+            keepProducing <- Ref.make(true)
+            _             <- produceOne(topic, "key", "value").repeatWhileZIO(_ => keepProducing.get).fork
+            _ <- ZIO.scoped {
+                   for {
+                     streamControl <-
+                       Consumer.partitionedStreamWithControl(Subscription.topics(topic), Serde.string, Serde.string)
+                     _ <- streamControl.stream
+                            .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
+                              partitionStream.zipWithIndex.tap { case (record, idx) =>
                                 streamControl.stop *>
-                                  (streamControl.stop <* ZIO.logDebug("Stopped consumption"))
-                                    .when(idx == 3) *>
+                                  (streamControl.stop <* ZIO.logDebug("Stopped consumption")).when(idx == 3) *>
                                   record.offset.commit <* ZIO.logDebug(s"Committed $idx")
                               }.tap { case (_, idx) => ZIO.logDebug(s"Consumed $idx") }
                             }
