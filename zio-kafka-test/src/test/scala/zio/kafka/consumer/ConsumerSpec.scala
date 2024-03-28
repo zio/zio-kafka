@@ -366,13 +366,13 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             _             <- produceOne(topic, "key", "value").repeatWhileZIO(_ => keepProducing.get).fork
             _ <- ZIO.scoped {
                    for {
-                     (control, stream) <-
+                     streamControl <-
                        Consumer.partitionedStreamWithControl(Subscription.topics(topic), Serde.string, Serde.string)
-                     _ <- stream
+                     _ <- streamControl.stream
                             .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
                               partitionStream.zipWithIndex.tap { case (record, idx) =>
-                                control.stop *>
-                                  (control.stop <* ZIO.logDebug("Stopped consumption"))
+                                streamControl.stop *>
+                                  (streamControl.stop <* ZIO.logDebug("Stopped consumption"))
                                     .when(idx == 3) *>
                                   record.offset.commit <* ZIO.logDebug(s"Committed $idx")
                               }.tap { case (_, idx) => ZIO.logDebug(s"Consumed $idx") }
@@ -397,13 +397,13 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             messagesReceived <- Ref.make[Int](0)
             offset <- ZIO.scoped {
                         for {
-                          (control, stream) <-
+                          streamControl <-
                             Consumer
                               .plainStreamWithControl(Subscription.topics(topic), Serde.string, Serde.string)
-                          offset <- (stream.mapConcatZIO { record =>
+                          offset <- (streamControl.stream.mapConcatZIO { record =>
                                       for {
                                         nr <- messagesReceived.updateAndGet(_ + 1)
-                                        _  <- control.stop.when(nr == 10)
+                                        _  <- streamControl.stop.when(nr == 10)
                                       } yield if (nr < 10) Seq(record.offset) else Seq.empty
                                     }
                                       .transduce(Consumer.offsetBatches)
@@ -433,15 +433,15 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               // Starting a consumption session to start the Runloop
               consumed0 <- ZIO.scoped {
                              for {
-                               (control, stream) <-
+                               streamControl <-
                                  consumer
                                    .plainStreamWithControl(Subscription.manual(topic -> 0), Serde.string, Serde.string)
-                               fiber <- stream
+                               fiber <- streamControl.stream
                                           .take(numberOfMessages.toLong)
                                           .runCount
                                           .forkScoped
                                _         <- ZIO.sleep(200.millis)
-                               _         <- control.stop
+                               _         <- streamControl.stop
                                consumed0 <- fiber.join
                                _         <- ZIO.logDebug(s"consumed0: $consumed0")
                              } yield consumed0
