@@ -96,9 +96,8 @@ trait Consumer {
   }
 
   /**
-   * Like [[partitionedAssignmentStream()]] but also returns a [[SubscriptionStreamControl]]
-   *
-   * @return
+   * Like [[partitionedAssignmentStream]] but returns a [[SubscriptionStreamControl]] used to do a controlled shutdown
+   * of the stream
    */
   def partitionedAssignmentStreamWithControl[R, K, V](
     subscription: Subscription,
@@ -136,7 +135,8 @@ trait Consumer {
   }
 
   /**
-   * Like [[partitionedStream()]] but also returns a [[SubscriptionStreamControl]]
+   * Like [[partitionedStream]] but returns a [[SubscriptionStreamControl]] used to do a controlled shutdown of the
+   * stream
    */
   def partitionedStreamWithControl[R, K, V](
     subscription: Subscription,
@@ -177,6 +177,9 @@ trait Consumer {
       } yield streamControl.stream
     }
 
+  /**
+   * Like [[plainStream]] but returns a [[SubscriptionStreamControl]] used to do a controlled shutdown of the stream
+   */
   def plainStreamWithControl[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
