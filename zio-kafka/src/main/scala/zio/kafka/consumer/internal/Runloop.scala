@@ -74,6 +74,13 @@ private[consumer] final class Runloop private (
   private[internal] def removeSubscription(subscription: Subscription): UIO[Unit] =
     commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
 
+  private[internal] def stopSubscribedTopicPartitions(subscription: Subscription): UIO[Unit] =
+    for {
+      promise <- Promise.make[Nothing, Unit]
+      _       <- commandQueue.offer(RunloopCommand.StopSubscribedTopicPartitions(subscription, promise)).unit
+      _       <- promise.await
+    } yield ()
+
   private val rebalanceListener: RebalanceListener = {
     // All code in this block is called from the rebalance listener and therefore runs on the same-thread-runtime. This
     // is because the Java kafka client requires us to invoke the consumer from the same thread that invoked the
@@ -631,6 +638,11 @@ private[consumer] final class Runloop private (
                 cmd.succeed *> doChangeSubscription(newSubState)
             }
         }
+      case RunloopCommand.StopSubscribedTopicPartitions(subscription, cont) =>
+        ZIO.foreachDiscard(
+          state.assignedStreams.filter(stream => Subscription.subscriptionMatches(subscription, stream.tp))
+        )(_.end) *> cont.succeed(()).as(state)
+
       case RunloopCommand.RemoveSubscription(subscription) =>
         state.subscriptionState match {
           case SubscriptionState.NotSubscribed => ZIO.succeed(state)
