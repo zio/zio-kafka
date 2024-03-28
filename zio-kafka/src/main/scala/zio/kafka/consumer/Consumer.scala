@@ -104,13 +104,9 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): ZIO[
-    Scope,
-    Throwable,
-    SubscriptionStreamControl[
-      Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
-    ]
-  ]
+  ): ZIO[Scope, Throwable, SubscriptionStreamControl[
+    Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
+  ]]
 
   /**
    * Create a stream with messages on the subscribed topic-partitions by topic-partition
@@ -146,11 +142,9 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): ZIO[
-    Scope,
-    Throwable,
-    SubscriptionStreamControl[Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
-  ]
+  ): ZIO[Scope, Throwable, SubscriptionStreamControl[
+    Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
+  ]]
 
   /**
    * Create a stream with all messages on the subscribed topic-partitions
@@ -586,13 +580,9 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): ZIO[
-    Scope,
-    Throwable,
-    SubscriptionStreamControl[
-      Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
-    ]
-  ] = {
+  ): ZIO[Scope, Throwable, SubscriptionStreamControl[
+    Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
+  ]] = {
     val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
     for {
       streamControl <- runloopAccess.subscribe(subscription)
