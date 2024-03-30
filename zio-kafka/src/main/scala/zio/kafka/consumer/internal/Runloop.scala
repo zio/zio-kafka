@@ -74,7 +74,7 @@ private[consumer] final class Runloop private (
   private[internal] def removeSubscription(subscription: Subscription): UIO[Unit] =
     commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
 
-  private val rebalanceListener: RebalanceListener = {
+  private def makeRebalanceListener: UIO[RebalanceListener] = ZIO.executor.map { executor =>
     // All code in this block is called from the rebalance listener and therefore runs on the same-thread-runtime. This
     // is because the Java kafka client requires us to invoke the consumer from the same thread that invoked the
     // rebalance listener.
@@ -239,7 +239,7 @@ private[consumer] final class Runloop private (
         } yield ()
     )
 
-    recordRebalanceRebalancingListener ++ settings.rebalanceListener
+    recordRebalanceRebalancingListener ++ settings.rebalanceListener.runOnExecutor(executor)
   }
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
@@ -672,14 +672,18 @@ private[consumer] final class Runloop private (
             .as(Chunk.empty)
         case SubscriptionState.Subscribed(_, Subscription.Pattern(pattern)) =>
           val rc = RebalanceConsumer.Live(c)
-          ZIO
-            .attempt(c.subscribe(pattern.pattern, rebalanceListener.toKafka(sameThreadRuntime, rc)))
-            .as(Chunk.empty)
+          makeRebalanceListener.flatMap { rebalanceListener =>
+            ZIO
+              .attempt(c.subscribe(pattern.pattern, rebalanceListener.toKafka(sameThreadRuntime, rc)))
+              .as(Chunk.empty)
+          }
         case SubscriptionState.Subscribed(_, Subscription.Topics(topics)) =>
           val rc = RebalanceConsumer.Live(c)
-          ZIO
-            .attempt(c.subscribe(topics.asJava, rebalanceListener.toKafka(sameThreadRuntime, rc)))
-            .as(Chunk.empty)
+          makeRebalanceListener.flatMap { rebalanceListener =>
+            ZIO
+              .attempt(c.subscribe(topics.asJava, rebalanceListener.toKafka(sameThreadRuntime, rc)))
+              .as(Chunk.empty)
+          }
         case SubscriptionState.Subscribed(_, Subscription.Manual(topicPartitions)) =>
           // For manual subscriptions we have to do some manual work before starting the run loop
           for {

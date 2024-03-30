@@ -2,7 +2,8 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 import org.apache.kafka.common.TopicPartition
-import zio.{ Runtime, Task, Unsafe, ZIO }
+import zio.{ Executor, Runtime, Task, Unsafe, ZIO }
+
 import scala.jdk.CollectionConverters._
 
 /**
@@ -26,6 +27,12 @@ final case class RebalanceListener(
       (revoked, consumer) => onRevoked(revoked, consumer) *> that.onRevoked(revoked, consumer),
       (lost, consumer) => onLost(lost, consumer) *> that.onLost(lost, consumer)
     )
+
+  def runOnExecutor(executor: Executor): RebalanceListener = RebalanceListener(
+    (assigned, consumer) => onAssigned(assigned, consumer).onExecutor(executor),
+    (revoked, consumer) => onRevoked(revoked, consumer).onExecutor(executor),
+    (lost, consumer) => onLost(lost, consumer).onExecutor(executor)
+  )
 
   def toKafka(
     runtime: Runtime[Any],
