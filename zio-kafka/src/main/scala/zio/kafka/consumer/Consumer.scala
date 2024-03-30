@@ -393,13 +393,18 @@ object Consumer {
    * Takes a SubscriptionStreamControl for some stream and runs the given ZIO workflow on that stream such that, when
    * interrupted, stops fetching records and gracefully waits for the ZIO workflow to complete.
    *
+   * @param streamControl
+   *   Result of `plainStreamWithControl`, `partitionedStreamWithControl` or `partitionedAssignmentStreamWithControl`
+   * @param shutdownTimeout
+   *   Timeout for the workflow to complete after initiating the graceful shutdown
    * @param f
    *   Takes the stream as input and returns a ZIO workflow that processes the stream. The workflow cannot have a
    *   meaningful result value (`Any` type), because it is expected to run forever until external interruption. `f` is
    *   typically something like `stream => stream.mapZIO(record => ZIO.debug(record)).mapZIO(_.offset.commit)`
    */
   def runWithGracefulShutdown[StreamType, R, E](
-    streamControl: ZIO[Scope with Consumer, E, SubscriptionStreamControl[StreamType]]
+    streamControl: ZIO[Scope with Consumer, E, SubscriptionStreamControl[StreamType]],
+    shutdownTimeout: Duration = 60.seconds
   )(
     f: StreamType => ZIO[R, E, Any]
   ): ZIO[R with Consumer, E, Any] =
@@ -407,7 +412,7 @@ object Consumer {
       for {
         control <- streamControl
         fib     <- f(control.stream).forkScoped
-        result  <- fib.join.onInterrupt(control.stop *> fib.join.ignore)
+        result  <- fib.join.onInterrupt(control.stop *> fib.join.timeout(shutdownTimeout).ignore)
       } yield result
     }
 
