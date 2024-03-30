@@ -75,8 +75,8 @@ trait Consumer {
   }
 
   /**
-   * Like [[partitionedAssignmentStream]] but returns a [[SubscriptionStreamControl]] used to do a controlled shutdown
-   * of the stream
+   * Like [[partitionedAssignmentStream]] but returns a [[SubscriptionStreamControl]] used to do a graceful shutdown of
+   * the stream
    *
    * The returned scope determines the lifetime of the subscription of the kafka consumer, which is necessary to be able
    * to commit offsets.
@@ -117,8 +117,7 @@ trait Consumer {
   }
 
   /**
-   * Like [[partitionedStream]] but returns a [[SubscriptionStreamControl]] used to do a controlled shutdown of the
-   * stream
+   * Like [[partitionedStream]] but returns a [[SubscriptionStreamControl]] used to do a graceful shutdown of the stream
    *
    * The returned scope determines the lifetime of the subscription of the kafka consumer, which is necessary to be able
    * to commit offsets.
@@ -163,7 +162,7 @@ trait Consumer {
     }
 
   /**
-   * Like [[plainStream]] but returns a [[SubscriptionStreamControl]] used to do a controlled shutdown of the stream
+   * Like [[plainStream]] but returns a [[SubscriptionStreamControl]] used to do a graceful shutdown of the stream
    *
    * The returned scope determines the lifetime of the subscription of the kafka consumer, which is necessary to be able
    * to commit offsets.
@@ -389,6 +388,28 @@ object Consumer {
     ZIO.serviceWithZIO[Consumer](
       _.plainStreamWithControl(subscription, keyDeserializer, valueDeserializer, bufferSize)
     )
+
+  /**
+   * Takes a SubscriptionStreamControl for some stream and runs the given ZIO workflow on that stream such that, when
+   * interrupted, stops fetching records and gracefully waits for the ZIO workflow to complete.
+   *
+   * @param f
+   *   Takes the stream as input and returns a ZIO workflow that processes the stream. The workflow cannot have a
+   *   meaningful result value (`Any` type), because it is expected to run forever until external interruption. `f` is
+   *   typically something like `stream => stream.mapZIO(record => ZIO.debug(record)).mapZIO(_.offset.commit)`
+   */
+  def runWithGracefulShutdown[StreamType, R, E](
+    streamControl: ZIO[Scope with Consumer, E, SubscriptionStreamControl[StreamType]]
+  )(
+    f: StreamType => ZIO[R, E, Any]
+  ): ZIO[R with Consumer, E, Any] =
+    ZIO.scoped[R with Consumer] {
+      for {
+        control <- streamControl
+        fib     <- f(control.stream).forkScoped
+        result  <- fib.join.onInterrupt(control.stop *> fib.join.ignore)
+      } yield result
+    }
 
   /**
    * Accessor method
