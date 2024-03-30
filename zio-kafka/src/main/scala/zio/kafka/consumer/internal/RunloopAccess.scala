@@ -68,11 +68,9 @@ private[consumer] final class RunloopAccess private (
            }
     } yield SubscriptionStreamControl(
       ZStream.fromQueue(partitionAssignmentQueue),
-      withRunloopZIO(requireRunning = true)(
-        _.stopSubscribedTopicPartitions(subscription) *> partitionAssignmentQueue
-          .offer(Take.end)
-          .ignore
-      )
+      withRunloopZIO(requireRunning = true)(_.stopSubscribedTopicPartitions(subscription)) *> partitionAssignmentQueue
+        .offer(Take.end)
+        .ignore
     )
 
 }

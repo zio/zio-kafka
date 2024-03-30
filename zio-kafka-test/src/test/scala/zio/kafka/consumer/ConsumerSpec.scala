@@ -356,7 +356,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         } yield assertTrue(offset.map(_.offset).contains(9L))
       } @@ TestAspect.nonFlaky(2),
       suite("streamWithControl")(
-        test("must end streams while still processing commits") {
+        test("stop must end streams while still processing commits") {
           for {
             topic  <- randomTopic
             group  <- randomGroup
@@ -385,6 +385,39 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                    )
             _ <- keepProducing.set(false)
           } yield assertCompletes
+        },
+        test("runWithGracefulShutdown must end streams while still processing commits") {
+          val kvs   = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+          val topic = "test-run-with-graceful-shutdown"
+          for {
+            group            <- randomGroup
+            client           <- randomClient
+            _                <- produceMany(topic, kvs)
+            messagesReceived <- Ref.make[Int](0)
+            offset <- ZIO.scoped {
+                        for {
+                          stop <- Promise.make[Nothing, Unit]
+                          fib <-
+                            Consumer
+                              .runWithGracefulShutdown(
+                                Consumer.plainStreamWithControl(Subscription.topics(topic), Serde.string, Serde.string)
+                              ) { stream =>
+                                stream.mapConcatZIO { record =>
+                                  for {
+                                    nr <- messagesReceived.updateAndGet(_ + 1)
+                                    _  <- stop.succeed(()).when(nr == 10)
+                                  } yield if (nr < 10) Seq(record.offset) else Seq.empty
+                                }
+                                  .transduce(Consumer.offsetBatches)
+                                  .mapZIO(_.commit)
+                                  .runDrain
+                              }
+                              .forkScoped
+                          _      <- stop.await *> fib.interrupt
+                          offset <- Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
+                        } yield offset
+                      }.provideSomeLayer[Kafka](consumer(client, Some(group)))
+          } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
         },
         test("can handle stopping twice") {
           for {
@@ -526,7 +559,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                      .tap(_ => stream1Started.succeed(()))
                                      .zipWithIndex
                                      .map(_._2)
-                                     .debug
                                      .takeWhile(_ < 2 * kvs.size - 1)
                                      .runDrain
                                      .forkScoped

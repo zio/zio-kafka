@@ -6,6 +6,7 @@ import zio.UIO
  * to be processed and their offsets committed.
  *
  * As long as this object is in scope, the Kafka consumer remains subscribed.
+ *
  * @tparam StreamType
  *   Type of the stream returned from [[stream]]
  */
@@ -21,8 +22,8 @@ trait SubscriptionStreamControl[StreamType] {
    * proceed (consumer remains subscribed)
    */
   def stop: UIO[Unit]
-
 }
+
 object SubscriptionStreamControl {
   def apply[T](stream0: T, stop0: UIO[Unit]): SubscriptionStreamControl[T] = new SubscriptionStreamControl[T] {
     override def stream: T       = stream0
