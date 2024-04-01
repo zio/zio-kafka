@@ -402,7 +402,7 @@ object Consumer {
    *   workflow runs until an external interruption, the result value (Any type) is meaningless. `withStream` is
    *   typically something like `stream => stream.mapZIO(record => ZIO.debug(record)).mapZIO(_.offset.commit)`
    */
-  def runWithGracefulShutdown[StreamType, R, E](
+  def runWithGracefulShutdown[StreamType <: ZStream[_, _, _], R, E](
     streamControl: ZIO[Scope with Consumer, E, SubscriptionStreamControl[StreamType]],
     shutdownTimeout: Duration = 15.seconds
   )(
