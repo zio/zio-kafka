@@ -1,6 +1,6 @@
 package zio.kafka.consumer
 import zio.UIO
-import zio.stream.Stream
+import zio.stream.ZStream
 
 /**
  * Allows graceful shutdown of a stream, where no more records are being fetched but the in-flight records can continue
@@ -11,7 +11,7 @@ import zio.stream.Stream
  * @tparam S
  *   Type of the stream returned from [[stream]]
  */
-trait SubscriptionStreamControl[S <: Stream[_, _]] {
+trait SubscriptionStreamControl[S <: ZStream[_, _, _]] {
 
   /**
    * The stream of partitions / records for this subscription
@@ -26,7 +26,7 @@ trait SubscriptionStreamControl[S <: Stream[_, _]] {
 }
 
 object SubscriptionStreamControl {
-  def apply[S <: Stream[_, _]](stream0: S, stop0: UIO[Unit]): SubscriptionStreamControl[S] =
+  def apply[S <: ZStream[_, _, _]](stream0: S, stop0: UIO[Unit]): SubscriptionStreamControl[S] =
     new SubscriptionStreamControl[S] {
       override def stream: S       = stream0
       override def stop: UIO[Unit] = stop0
