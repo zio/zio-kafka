@@ -449,7 +449,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             _ <- keepProducing.set(false)
           } yield assertCompletes
         },
-        test("process outstanding commits after a stopping the subscription") {
+        test("process outstanding commits after stopping the subscription") {
           val kvs   = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
           val topic = "test-outstanding-commits"
           for {
