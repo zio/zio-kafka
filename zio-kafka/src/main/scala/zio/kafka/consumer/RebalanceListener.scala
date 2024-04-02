@@ -10,9 +10,9 @@ import scala.jdk.CollectionConverters._
  * ZIO wrapper around Kafka's `ConsumerRebalanceListener` to work with Scala collection types and ZIO effects.
  */
 final case class RebalanceListener(
-  onAssigned: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
-  onRevoked: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
-  onLost: (Set[TopicPartition], RebalanceConsumer) => Task[Unit]
+  onAssigned: Set[TopicPartition] => Task[Unit],
+  onRevoked: Set[TopicPartition] => Task[Unit],
+  onLost: Set[TopicPartition] => Task[Unit]
 ) {
 
   /**
@@ -20,9 +20,9 @@ final case class RebalanceListener(
    */
   def ++(that: RebalanceListener): RebalanceListener =
     RebalanceListener(
-      (assigned, consumer) => onAssigned(assigned, consumer) *> that.onAssigned(assigned, consumer),
-      (revoked, consumer) => onRevoked(revoked, consumer) *> that.onRevoked(revoked, consumer),
-      (lost, consumer) => onLost(lost, consumer) *> that.onLost(lost, consumer)
+      assigned => onAssigned(assigned) *> that.onAssigned(assigned),
+      revoked => onRevoked(revoked) *> that.onRevoked(revoked),
+      lost => onLost(lost) *> that.onLost(lost)
     )
 
   def runOnExecutor(executor: Executor): RebalanceListener = RebalanceListener(
@@ -32,15 +32,14 @@ final case class RebalanceListener(
   )
 
   def toKafka(
-    runtime: Runtime[Any],
-    consumer: RebalanceConsumer
+    runtime: Runtime[Any]
   ): ConsumerRebalanceListener =
     new ConsumerRebalanceListener {
       override def onPartitionsRevoked(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe
-          .run(onRevoked(partitions.asScala.toSet, consumer))
+          .run(onRevoked(partitions.asScala.toSet))
           .getOrThrowFiberFailure()
         ()
       }
@@ -49,7 +48,7 @@ final case class RebalanceListener(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe
-          .run(onAssigned(partitions.asScala.toSet, consumer))
+          .run(onAssigned(partitions.asScala.toSet))
           .getOrThrowFiberFailure()
         ()
       }
@@ -58,7 +57,7 @@ final case class RebalanceListener(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe
-          .run(onLost(partitions.asScala.toSet, consumer))
+          .run(onLost(partitions.asScala.toSet))
           .getOrThrowFiberFailure()
         ()
       }

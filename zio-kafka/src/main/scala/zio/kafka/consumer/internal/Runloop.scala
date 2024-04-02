@@ -75,7 +75,7 @@ private[consumer] final class Runloop private (
   private[internal] def removeSubscription(subscription: Subscription): UIO[Unit] =
     commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
 
-  private def makeRebalanceListener(rc: RebalanceConsumer.Live): ConsumerRebalanceListener = {
+  private def makeRebalanceListener: ConsumerRebalanceListener = {
     // All code in this block is called from the rebalance listener and therefore runs on the same-thread-runtime. This
     // is because the Java kafka client requires us to invoke the consumer from the same thread that invoked the
     // rebalance listener.
@@ -242,7 +242,7 @@ private[consumer] final class Runloop private (
     )
 
     (recordRebalanceRebalancingListener ++ settings.rebalanceListener.runOnExecutor(topLevelExecutor))
-      .toKafka(sameThreadRuntime, rc)
+      .toKafka(sameThreadRuntime)
   }
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
@@ -674,12 +674,12 @@ private[consumer] final class Runloop private (
             .attempt(c.unsubscribe())
             .as(Chunk.empty)
         case SubscriptionState.Subscribed(_, Subscription.Pattern(pattern)) =>
-          val rebalanceListener = makeRebalanceListener(RebalanceConsumer.Live(c))
+          val rebalanceListener = makeRebalanceListener
           ZIO
             .attempt(c.subscribe(pattern.pattern, rebalanceListener))
             .as(Chunk.empty)
         case SubscriptionState.Subscribed(_, Subscription.Topics(topics)) =>
-          val rebalanceListener = makeRebalanceListener(RebalanceConsumer.Live(c))
+          val rebalanceListener = makeRebalanceListener
           ZIO
             .attempt(c.subscribe(topics.asJava, rebalanceListener))
             .as(Chunk.empty)
