@@ -1212,15 +1212,15 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
             def transactionalRebalanceListener(streamCompleteOnRebalanceRef: Ref[Option[Promise[Nothing, Unit]]]) =
               RebalanceListener(
-                onAssigned = (_, _) => ZIO.unit,
-                onRevoked = (_, _) =>
+                onAssigned = _ => ZIO.unit,
+                onRevoked = _ =>
                   streamCompleteOnRebalanceRef.get.flatMap {
                     case Some(p) =>
                       ZIO.logDebug("onRevoked, awaiting stream completion") *>
                         p.await.timeoutFail(new InterruptedException("Timed out waiting stream to complete"))(1.minute)
                     case None => ZIO.unit
                   },
-                onLost = (_, _) => ZIO.logDebug("Lost some partitions")
+                onLost = _ => ZIO.logDebug("Lost some partitions")
               )
 
             def makeCopyingTransactionalConsumer(

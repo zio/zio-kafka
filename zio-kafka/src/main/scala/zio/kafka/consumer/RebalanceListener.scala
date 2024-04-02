@@ -31,38 +31,6 @@ final case class RebalanceListener(
     lost => onLost(lost).onExecutor(executor)
   )
 
-  def toKafka(
-    runtime: Runtime[Any]
-  ): ConsumerRebalanceListener =
-    new ConsumerRebalanceListener {
-      override def onPartitionsRevoked(
-        partitions: java.util.Collection[TopicPartition]
-      ): Unit = Unsafe.unsafe { implicit u =>
-        runtime.unsafe
-          .run(onRevoked(partitions.asScala.toSet))
-          .getOrThrowFiberFailure()
-        ()
-      }
-
-      override def onPartitionsAssigned(
-        partitions: java.util.Collection[TopicPartition]
-      ): Unit = Unsafe.unsafe { implicit u =>
-        runtime.unsafe
-          .run(onAssigned(partitions.asScala.toSet))
-          .getOrThrowFiberFailure()
-        ()
-      }
-
-      override def onPartitionsLost(
-        partitions: java.util.Collection[TopicPartition]
-      ): Unit = Unsafe.unsafe { implicit u =>
-        runtime.unsafe
-          .run(onLost(partitions.asScala.toSet))
-          .getOrThrowFiberFailure()
-        ()
-      }
-    }
-
 }
 
 object RebalanceListener {
@@ -77,4 +45,37 @@ object RebalanceListener {
     _ => ZIO.unit,
     _ => ZIO.unit
   )
+
+  private[kafka] def toKafka(
+    rebalanceListener: RebalanceListener,
+    runtime: Runtime[Any]
+  ): ConsumerRebalanceListener =
+    new ConsumerRebalanceListener {
+      override def onPartitionsRevoked(
+        partitions: java.util.Collection[TopicPartition]
+      ): Unit = Unsafe.unsafe { implicit u =>
+        runtime.unsafe
+          .run(rebalanceListener.onRevoked(partitions.asScala.toSet))
+          .getOrThrowFiberFailure()
+        ()
+      }
+
+      override def onPartitionsAssigned(
+        partitions: java.util.Collection[TopicPartition]
+      ): Unit = Unsafe.unsafe { implicit u =>
+        runtime.unsafe
+          .run(rebalanceListener.onAssigned(partitions.asScala.toSet))
+          .getOrThrowFiberFailure()
+        ()
+      }
+
+      override def onPartitionsLost(
+        partitions: java.util.Collection[TopicPartition]
+      ): Unit = Unsafe.unsafe { implicit u =>
+        runtime.unsafe
+          .run(rebalanceListener.onLost(partitions.asScala.toSet))
+          .getOrThrowFiberFailure()
+        ()
+      }
+    }
 }

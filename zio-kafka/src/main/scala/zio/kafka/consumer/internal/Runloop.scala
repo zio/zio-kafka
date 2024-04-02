@@ -247,7 +247,8 @@ private[consumer] final class Runloop private (
         case RebalanceListener.noop => RebalanceListener.noop
         case _                      => settings.rebalanceListener.runOnExecutor(topLevelExecutor)
       }
-    (recordRebalanceRebalancingListener ++ userRebalanceListener).toKafka(sameThreadRuntime)
+
+    RebalanceListener.toKafka(recordRebalanceRebalancingListener ++ userRebalanceListener, sameThreadRuntime)
   }
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
