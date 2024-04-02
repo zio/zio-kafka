@@ -241,8 +241,13 @@ private[consumer] final class Runloop private (
         } yield ()
     )
 
-    (recordRebalanceRebalancingListener ++ settings.rebalanceListener.runOnExecutor(topLevelExecutor))
-      .toKafka(sameThreadRuntime)
+    // Here we just want to avoid any executor shift if the user provided listener is the noop listener.
+    val userRebalanceListener =
+      settings.rebalanceListener match {
+        case RebalanceListener.noop => RebalanceListener.noop
+        case _                      => settings.rebalanceListener.runOnExecutor(topLevelExecutor)
+      }
+    (recordRebalanceRebalancingListener ++ userRebalanceListener).toKafka(sameThreadRuntime)
   }
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
