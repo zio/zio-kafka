@@ -26,9 +26,9 @@ final case class RebalanceListener(
     )
 
   def runOnExecutor(executor: Executor): RebalanceListener = RebalanceListener(
-    (assigned, consumer) => onAssigned(assigned, consumer).onExecutor(executor),
-    (revoked, consumer) => onRevoked(revoked, consumer).onExecutor(executor),
-    (lost, consumer) => onLost(lost, consumer).onExecutor(executor)
+    assigned => onAssigned(assigned).onExecutor(executor),
+    revoked => onRevoked(revoked).onExecutor(executor),
+    lost => onLost(lost).onExecutor(executor)
   )
 
   def toKafka(
@@ -67,14 +67,14 @@ final case class RebalanceListener(
 
 object RebalanceListener {
   def apply(
-    onAssigned: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
-    onRevoked: (Set[TopicPartition], RebalanceConsumer) => Task[Unit]
+    onAssigned: Set[TopicPartition] => Task[Unit],
+    onRevoked: Set[TopicPartition] => Task[Unit]
   ): RebalanceListener =
     RebalanceListener(onAssigned, onRevoked, onRevoked)
 
   val noop: RebalanceListener = RebalanceListener(
-    (_, _) => ZIO.unit,
-    (_, _) => ZIO.unit,
-    (_, _) => ZIO.unit
+    _ => ZIO.unit,
+    _ => ZIO.unit,
+    _ => ZIO.unit
   )
 }

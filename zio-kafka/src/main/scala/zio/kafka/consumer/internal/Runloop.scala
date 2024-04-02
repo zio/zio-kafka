@@ -201,7 +201,7 @@ private[consumer] final class Runloop private (
     // - updates `lastRebalanceEvent`
     //
     val recordRebalanceRebalancingListener = RebalanceListener(
-      onAssigned = (assignedTps, _) =>
+      onAssigned = assignedTps =>
         for {
           rebalanceEvent <- lastRebalanceEvent.get
           _ <- ZIO.logDebug {
@@ -215,7 +215,7 @@ private[consumer] final class Runloop private (
           _ <- lastRebalanceEvent.set(rebalanceEvent.onAssigned(assignedTps, endedStreams = streamsToEnd))
           _ <- ZIO.logTrace("onAssigned done")
         } yield (),
-      onRevoked = (revokedTps, _) =>
+      onRevoked = revokedTps =>
         for {
           rebalanceEvent <- lastRebalanceEvent.get
           _ <- ZIO.logDebug {
@@ -229,7 +229,7 @@ private[consumer] final class Runloop private (
           _ <- lastRebalanceEvent.set(rebalanceEvent.onRevoked(revokedTps, endedStreams = streamsToEnd))
           _ <- ZIO.logTrace("onRevoked done")
         } yield (),
-      onLost = (lostTps, _) =>
+      onLost = lostTps =>
         for {
           _              <- ZIO.logDebug(s"${lostTps.size} partitions are lost")
           rebalanceEvent <- lastRebalanceEvent.get
