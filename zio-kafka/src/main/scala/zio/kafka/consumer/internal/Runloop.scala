@@ -22,6 +22,7 @@ import scala.jdk.CollectionConverters._
 //noinspection SimplifyWhenInspection,SimplifyUnlessInspection
 private[consumer] final class Runloop private (
   settings: ConsumerSettings,
+  topLevelExecutor: Executor,
   sameThreadRuntime: Runtime[Any],
   consumer: ConsumerAccess,
   maxPollInterval: Duration,
@@ -74,7 +75,7 @@ private[consumer] final class Runloop private (
   private[internal] def removeSubscription(subscription: Subscription): UIO[Unit] =
     commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
 
-  private val rebalanceListener: RebalanceListener = {
+  private def makeRebalanceListener: ConsumerRebalanceListener = {
     // All code in this block is called from the rebalance listener and therefore runs on the same-thread-runtime. This
     // is because the Java kafka client requires us to invoke the consumer from the same thread that invoked the
     // rebalance listener.
@@ -92,7 +93,8 @@ private[consumer] final class Runloop private (
       else {
         for {
           _ <- ZIO.foreachDiscard(streamsToEnd)(_.end)
-          _ <- if (rebalanceSafeCommits) consumer.rebalanceListenerAccess(doAwaitStreamCommits(_, state, streamsToEnd))
+          _ <- if (rebalanceSafeCommits)
+                 consumer.rebalanceListenerAccess(doAwaitStreamCommits(_, state, streamsToEnd))
                else ZIO.unit
         } yield ()
       }
@@ -199,7 +201,7 @@ private[consumer] final class Runloop private (
     // - updates `lastRebalanceEvent`
     //
     val recordRebalanceRebalancingListener = RebalanceListener(
-      onAssigned = (assignedTps, _) =>
+      onAssigned = assignedTps =>
         for {
           rebalanceEvent <- lastRebalanceEvent.get
           _ <- ZIO.logDebug {
@@ -213,7 +215,7 @@ private[consumer] final class Runloop private (
           _ <- lastRebalanceEvent.set(rebalanceEvent.onAssigned(assignedTps, endedStreams = streamsToEnd))
           _ <- ZIO.logTrace("onAssigned done")
         } yield (),
-      onRevoked = (revokedTps, _) =>
+      onRevoked = revokedTps =>
         for {
           rebalanceEvent <- lastRebalanceEvent.get
           _ <- ZIO.logDebug {
@@ -227,7 +229,7 @@ private[consumer] final class Runloop private (
           _ <- lastRebalanceEvent.set(rebalanceEvent.onRevoked(revokedTps, endedStreams = streamsToEnd))
           _ <- ZIO.logTrace("onRevoked done")
         } yield (),
-      onLost = (lostTps, _) =>
+      onLost = lostTps =>
         for {
           _              <- ZIO.logDebug(s"${lostTps.size} partitions are lost")
           rebalanceEvent <- lastRebalanceEvent.get
@@ -239,7 +241,14 @@ private[consumer] final class Runloop private (
         } yield ()
     )
 
-    recordRebalanceRebalancingListener ++ settings.rebalanceListener
+    // Here we just want to avoid any executor shift if the user provided listener is the noop listener.
+    val userRebalanceListener =
+      settings.rebalanceListener match {
+        case RebalanceListener.noop => RebalanceListener.noop
+        case _                      => settings.rebalanceListener.runOnExecutor(topLevelExecutor)
+      }
+
+    RebalanceListener.toKafka(recordRebalanceRebalancingListener ++ userRebalanceListener, sameThreadRuntime)
   }
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
@@ -671,14 +680,14 @@ private[consumer] final class Runloop private (
             .attempt(c.unsubscribe())
             .as(Chunk.empty)
         case SubscriptionState.Subscribed(_, Subscription.Pattern(pattern)) =>
-          val rc = RebalanceConsumer.Live(c)
+          val rebalanceListener = makeRebalanceListener
           ZIO
-            .attempt(c.subscribe(pattern.pattern, rebalanceListener.toKafka(sameThreadRuntime, rc)))
+            .attempt(c.subscribe(pattern.pattern, rebalanceListener))
             .as(Chunk.empty)
         case SubscriptionState.Subscribed(_, Subscription.Topics(topics)) =>
-          val rc = RebalanceConsumer.Live(c)
+          val rebalanceListener = makeRebalanceListener
           ZIO
-            .attempt(c.subscribe(topics.asJava, rebalanceListener.toKafka(sameThreadRuntime, rc)))
+            .attempt(c.subscribe(topics.asJava, rebalanceListener))
             .as(Chunk.empty)
         case SubscriptionState.Subscribed(_, Subscription.Manual(topicPartitions)) =>
           // For manual subscriptions we have to do some manual work before starting the run loop
@@ -846,8 +855,10 @@ object Runloop {
       currentStateRef     <- Ref.make(initialState)
       committedOffsetsRef <- Ref.make(CommitOffsets.empty)
       sameThreadRuntime   <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
+      executor            <- ZIO.executor
       runloop = new Runloop(
                   settings = settings,
+                  topLevelExecutor = executor,
                   sameThreadRuntime = sameThreadRuntime,
                   consumer = consumer,
                   maxPollInterval = maxPollInterval,
