@@ -68,26 +68,23 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = ZStream.unwrapScoped {
-    for {
-      streamControl <- partitionedAssignmentStreamWithControl(subscription, keyDeserializer, valueDeserializer)
-    } yield streamControl.stream
-  }
+  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
 
   /**
-   * Like [[partitionedAssignmentStream]] but returns a [[SubscriptionStreamControl]] used to do a graceful shutdown of
-   * the stream
-   *
-   * The returned scope determines the lifetime of the subscription of the kafka consumer, which is necessary to be able
-   * to commit offsets.
+   * Like [[partitionedAssignmentStream]] but wraps the stream in a construct that ensures graceful shutdown
    */
-  def partitionedAssignmentStreamWithControl[R, K, V](
+  def partitionedAssignmentStreamWithGracefulShutdown[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
-  ): ZIO[Scope, Throwable, SubscriptionStreamControl[
-    Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
-  ]]
+    valueDeserializer: Deserializer[R, V],
+    shutdownTimeout: Duration = 15.seconds
+  )(
+    withStream: Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] => ZIO[
+      R,
+      Throwable,
+      Any
+    ]
+  ): ZIO[R, Throwable, Any]
 
   /**
    * Create a stream with messages on the subscribed topic-partitions by topic-partition
@@ -110,25 +107,23 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] = ZStream.unwrapScoped {
-    for {
-      streamControl <- partitionedStreamWithControl(subscription, keyDeserializer, valueDeserializer)
-    } yield streamControl.stream
-  }
+  ): Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
 
   /**
-   * Like [[partitionedStream]] but returns a [[SubscriptionStreamControl]] used to do a graceful shutdown of the stream
-   *
-   * The returned scope determines the lifetime of the subscription of the kafka consumer, which is necessary to be able
-   * to commit offsets.
+   * Like [[partitionedStream]] but wraps the stream in a construct that ensures graceful shutdown
    */
-  def partitionedStreamWithControl[R, K, V](
+  def partitionedStreamWithGracefulShutdown[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
-  ): ZIO[Scope, Throwable, SubscriptionStreamControl[
-    Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
-  ]]
+    valueDeserializer: Deserializer[R, V],
+    shutdownTimeout: Duration = 15.seconds
+  )(
+    withStream: Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] => ZIO[
+      R,
+      Throwable,
+      Any
+    ]
+  ): ZIO[R, Throwable, Any]
 
   /**
    * Create a stream with all messages on the subscribed topic-partitions
@@ -154,25 +149,20 @@ trait Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
-  ): ZStream[R, Throwable, CommittableRecord[K, V]] =
-    ZStream.unwrapScoped {
-      for {
-        streamControl <- plainStreamWithControl(subscription, keyDeserializer, valueDeserializer, bufferSize)
-      } yield streamControl.stream
-    }
+  ): ZStream[R, Throwable, CommittableRecord[K, V]]
 
   /**
-   * Like [[plainStream]] but returns a [[SubscriptionStreamControl]] used to do a graceful shutdown of the stream
-   *
-   * The returned scope determines the lifetime of the subscription of the kafka consumer, which is necessary to be able
-   * to commit offsets.
+   * Like [[plainStream]] but wraps the stream in a construct that ensures graceful shutdown
    */
-  def plainStreamWithControl[R, K, V](
+  def plainStreamWithGracefulShutdown[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    bufferSize: Int = 4
-  ): ZIO[Scope, Throwable, SubscriptionStreamControl[ZStream[R, Throwable, CommittableRecord[K, V]]]]
+    bufferSize: Int,
+    shutdownTimeout: Duration = 15.seconds
+  )(
+    withStream: ZStream[R, Throwable, CommittableRecord[K, V]] => ZIO[R, Throwable, Any]
+  ): ZIO[R, Throwable, Any]
 
   /**
    * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
@@ -320,19 +310,25 @@ object Consumer {
   /**
    * Accessor method
    */
-  def partitionedAssignmentStreamWithControl[R, K, V](
+  def partitionedAssignmentStreamWithGracefulShutdown[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
-  ): ZIO[
-    Scope with Consumer,
-    Throwable,
-    SubscriptionStreamControl[
-      Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
+    valueDeserializer: Deserializer[R, V],
+    shutdownTimeout: Duration = 15.seconds
+  )(
+    withStream: Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] => ZIO[
+      R,
+      Throwable,
+      Any
     ]
-  ] =
+  ): ZIO[R with Consumer, Throwable, Any] =
     ZIO.serviceWithZIO[Consumer](
-      _.partitionedAssignmentStreamWithControl(subscription, keyDeserializer, valueDeserializer)
+      _.partitionedAssignmentStreamWithGracefulShutdown(
+        subscription,
+        keyDeserializer,
+        valueDeserializer,
+        shutdownTimeout
+      )(withStream)
     )
 
   /**
@@ -352,16 +348,23 @@ object Consumer {
   /**
    * Accessor method
    */
-  def partitionedStreamWithControl[R, K, V](
+  def partitionedStreamWithGracefulShutdown[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
-  ): ZIO[
-    Scope with Consumer,
-    Throwable,
-    SubscriptionStreamControl[Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
-  ] =
-    ZIO.serviceWithZIO[Consumer](_.partitionedStreamWithControl(subscription, keyDeserializer, valueDeserializer))
+    valueDeserializer: Deserializer[R, V],
+    shutdownTimeout: Duration = 15.seconds
+  )(
+    withStream: Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] => ZIO[
+      R,
+      Throwable,
+      Any
+    ]
+  ): ZIO[R with Consumer, Throwable, Any] =
+    ZIO.serviceWithZIO[Consumer](
+      _.partitionedStreamWithGracefulShutdown(subscription, keyDeserializer, valueDeserializer, shutdownTimeout)(
+        withStream
+      )
+    )
 
   /**
    * Accessor method
@@ -379,42 +382,20 @@ object Consumer {
   /**
    * Accessor method
    */
-  def plainStreamWithControl[R, K, V](
+  def plainStreamWithGracefulShutdown[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    bufferSize: Int = 4
-  ): ZIO[Scope with Consumer, Throwable, SubscriptionStreamControl[ZStream[R, Throwable, CommittableRecord[K, V]]]] =
-    ZIO.serviceWithZIO[Consumer](
-      _.plainStreamWithControl(subscription, keyDeserializer, valueDeserializer, bufferSize)
-    )
-
-  /**
-   * Takes a SubscriptionStreamControl for some stream and runs the given ZIO workflow on that stream such that, when
-   * interrupted, stops fetching records and gracefully waits for the ZIO workflow to complete.
-   *
-   * @param streamControl
-   *   Result of `plainStreamWithControl`, `partitionedStreamWithControl` or `partitionedAssignmentStreamWithControl`
-   * @param shutdownTimeout
-   *   Timeout for the workflow to complete after initiating the graceful shutdown
-   * @param withStream
-   *   Takes the stream as input and returns a ZIO workflow that processes the stream. As in most programs the given
-   *   workflow runs until an external interruption, the result value (Any type) is meaningless. `withStream` is
-   *   typically something like `stream => stream.mapZIO(record => ZIO.debug(record)).mapZIO(_.offset.commit)`
-   */
-  def runWithGracefulShutdown[StreamType <: ZStream[_, _, _], R, E](
-    streamControl: ZIO[Scope with Consumer, E, SubscriptionStreamControl[StreamType]],
+    bufferSize: Int = 4,
     shutdownTimeout: Duration = 15.seconds
   )(
-    withStream: StreamType => ZIO[R, E, Any]
-  ): ZIO[R with Consumer, E, Any] =
-    ZIO.scoped[R with Consumer] {
-      for {
-        control <- streamControl
-        fib     <- withStream(control.stream).forkScoped
-        result  <- fib.join.onInterrupt(control.stop *> fib.join.timeout(shutdownTimeout).ignore)
-      } yield result
-    }
+    withStream: ZStream[R, Throwable, CommittableRecord[K, V]] => ZIO[R, Throwable, Any]
+  ): ZIO[R with Consumer, Throwable, Any] =
+    ZIO.serviceWithZIO[Consumer](
+      _.plainStreamWithGracefulShutdown(subscription, keyDeserializer, valueDeserializer, bufferSize, shutdownTimeout)(
+        withStream
+      )
+    )
 
   /**
    * Accessor method
@@ -593,7 +574,7 @@ private[consumer] final class ConsumerLive private[consumer] (
   override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
     consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)
 
-  override def partitionedAssignmentStreamWithControl[R, K, V](
+  private def partitionedAssignmentStreamWithControl[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
@@ -622,27 +603,130 @@ private[consumer] final class ConsumerLive private[consumer] (
     )
   }
 
-  override def partitionedStreamWithControl[R, K, V](
+  override def partitionedAssignmentStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): ZIO[Scope, Throwable, SubscriptionStreamControl[
-    Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
-  ]] = for {
-    streamControl <- partitionedAssignmentStreamWithControl(subscription, keyDeserializer, valueDeserializer)
-  } yield SubscriptionStreamControl(streamControl.stream.flattenChunks, streamControl.stop)
+  ): Stream[
+    Throwable,
+    Chunk[
+      (
+        TopicPartition,
+        ZStream[R, Throwable, CommittableRecord[K, V]]
+      )
+    ]
+  ] = ZStream.unwrapScoped {
+    for {
+      streamControl <- partitionedAssignmentStreamWithControl(subscription, keyDeserializer, valueDeserializer)
+    } yield streamControl.stream
+  }
 
-  override def plainStreamWithControl[R, K, V](
+  override def partitionedAssignmentStreamWithGracefulShutdown[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    bufferSize: Int
-  ): ZIO[Scope, Throwable, SubscriptionStreamControl[ZStream[R, Throwable, CommittableRecord[K, V]]]] = for {
-    streamControl <- partitionedStreamWithControl(subscription, keyDeserializer, valueDeserializer)
-  } yield SubscriptionStreamControl(
-    streamControl.stream.flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(_._2),
-    streamControl.stop
+    shutdownTimeout: Duration = 15.seconds
+  )(
+    withStream: Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] => ZIO[
+      R,
+      Throwable,
+      Any
+    ]
+  ): ZIO[R, Throwable, Any] = runWithGracefulShutdown[Stream[Throwable, Chunk[
+    (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
+  ]], R, Throwable](
+    partitionedAssignmentStreamWithControl(subscription, keyDeserializer, valueDeserializer),
+    shutdownTimeout
+  )(
+    withStream
   )
+
+  override def partitionedStream[R, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): Stream[
+    Throwable,
+    (
+      TopicPartition,
+      ZStream[R, Throwable, CommittableRecord[K, V]]
+    )
+  ] = ZStream.unwrapScoped {
+    for {
+      streamControl <- partitionedAssignmentStreamWithControl(subscription, keyDeserializer, valueDeserializer)
+    } yield streamControl.stream.flattenChunks
+  }
+
+  override def partitionedStreamWithGracefulShutdown[R, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V],
+    shutdownTimeout: Duration = 15.seconds
+  )(
+    withStream: Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] => ZIO[
+      R,
+      Throwable,
+      Any
+    ]
+  ): ZIO[R, Throwable, Any] =
+    partitionedAssignmentStreamWithGracefulShutdown(subscription, keyDeserializer, valueDeserializer, shutdownTimeout) {
+      stream =>
+        withStream(stream.flattenChunks)
+    }
+
+  override def plainStream[R, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V],
+    bufferSize: RuntimeFlags
+  ): ZStream[R, Throwable, CommittableRecord[K, V]] =
+    ZStream.unwrapScoped {
+      for {
+        streamControl <- partitionedAssignmentStreamWithControl(subscription, keyDeserializer, valueDeserializer)
+      } yield streamControl.stream.flattenChunks.flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(_._2)
+    }
+
+  override def plainStreamWithGracefulShutdown[R, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V],
+    bufferSize: Int,
+    shutdownTimeout: Duration = 15.seconds
+  )(
+    withStream: ZStream[R, Throwable, CommittableRecord[K, V]] => ZIO[R, Throwable, Any]
+  ): ZIO[R, Throwable, Any] =
+    partitionedStreamWithGracefulShutdown(subscription, keyDeserializer, valueDeserializer, shutdownTimeout) {
+      partitionedStream =>
+        withStream(partitionedStream.flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(_._2))
+    }
+
+  /**
+   * Takes a SubscriptionStreamControl for some stream and runs the given ZIO workflow on that stream such that, when
+   * interrupted, stops fetching records and gracefully waits for the ZIO workflow to complete.
+   *
+   * @param streamControl
+   *   Result of `plainStreamWithGracefulShutdown`, `partitionedStreamWithGracefulShutdown` or
+   *   `partitionedAssignmentStreamWithGracefulShutdown`
+   * @param shutdownTimeout
+   *   Timeout for the workflow to complete after initiating the graceful shutdown
+   * @param withStream
+   *   Takes the stream as input and returns a ZIO workflow that processes the stream. As in most programs the given
+   *   workflow runs until an external interruption, the result value (Any type) is meaningless. `withStream` is
+   *   typically something like `stream => stream.mapZIO(record => ZIO.debug(record)).mapZIO(_.offset.commit)`
+   */
+  private def runWithGracefulShutdown[StreamType <: ZStream[_, _, _], R, E](
+    streamControl: ZIO[Scope, E, SubscriptionStreamControl[StreamType]],
+    shutdownTimeout: Duration
+  )(
+    withStream: StreamType => ZIO[R, E, Any]
+  ): ZIO[R, E, Any] =
+    ZIO.scoped[R] {
+      for {
+        control <- streamControl
+        fib     <- withStream(control.stream).forkScoped
+        result  <- fib.join.onInterrupt(control.stop *> fib.join.timeout(shutdownTimeout).ignore)
+      } yield result
+    }
 
   override def stopConsumption: UIO[Unit] =
     ZIO.logDebug("stopConsumption called") *>
