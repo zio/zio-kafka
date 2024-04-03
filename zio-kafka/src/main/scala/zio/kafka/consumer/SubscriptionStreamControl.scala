@@ -11,7 +11,7 @@ import zio.stream.ZStream
  * @tparam S
  *   Type of the stream returned from [[stream]]
  */
-trait SubscriptionStreamControl[S <: ZStream[_, _, _]] {
+private[consumer] trait SubscriptionStreamControl[S <: ZStream[_, _, _]] {
 
   /**
    * The stream of partitions / records for this subscription
@@ -25,7 +25,7 @@ trait SubscriptionStreamControl[S <: ZStream[_, _, _]] {
   def stop: UIO[Unit]
 }
 
-object SubscriptionStreamControl {
+private[consumer] object SubscriptionStreamControl {
   def apply[S <: ZStream[_, _, _]](stream0: S, stop0: UIO[Unit]): SubscriptionStreamControl[S] =
     new SubscriptionStreamControl[S] {
       override def stream: S       = stream0
