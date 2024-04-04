@@ -5,6 +5,7 @@ import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.fetch.{ FetchStrategy, QueueSizeBasedFetchStrategy }
 import zio.kafka.security.KafkaCredentialStore
+import zio.metrics.MetricLabel
 
 /**
  * Settings for the consumer.
@@ -30,7 +31,9 @@ final case class ConsumerSettings(
   restartStreamOnRebalancing: Boolean = false,
   rebalanceSafeCommits: Boolean = false,
   maxRebalanceDuration: Option[Duration] = None,
-  fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy()
+  fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy(),
+  metricLabels: Set[MetricLabel] = Set.empty,
+  runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis)
 ) {
 
   /**
@@ -278,6 +281,29 @@ final case class ConsumerSettings(
    */
   def withFetchStrategy(fetchStrategy: FetchStrategy): ConsumerSettings =
     copy(fetchStrategy = fetchStrategy)
+
+  /**
+   * @param metricLabels
+   *   The labels given to all metrics collected by zio-kafka. By default no labels are set.
+   *
+   * For applications with multiple consumers it is recommended to set some metric labels. For example, if one is used,
+   * the consumer group id could be used as a label:
+   *
+   * {{{
+   *   consumerSettings.withMetricLabels(Set(MetricLabel("group-id", groupId)))
+   * }}}
+   */
+  def withMetricsLabels(metricLabels: Set[MetricLabel]): ConsumerSettings =
+    copy(metricLabels = metricLabels)
+
+  /**
+   * @param runloopMetricsSchedule
+   *   The schedule at which the runloop metrics are measured. Example runloop metrics are queue sizes and number of
+   *   outstanding commits. The default is to measure every 500ms.
+   */
+  def withRunloopMetricsSchedule(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ConsumerSettings =
+    copy(runloopMetricsSchedule = runloopMetricsSchedule)
+
 }
 
 object ConsumerSettings {

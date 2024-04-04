@@ -2,7 +2,7 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.{ KafkaProducer, Producer => JProducer, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization.ByteArraySerializer
-import org.apache.kafka.common.{ Metric, MetricName }
+import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo }
 import zio._
 import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
@@ -168,6 +168,11 @@ trait Producer {
   def produceChunkAsyncWithFailures(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
   ): UIO[UIO[Chunk[Either[Throwable, RecordMetadata]]]]
+
+  /**
+   * Get the partition metadata for the given topic
+   */
+  def partitionsFor(topic: String): Task[Chunk[PartitionInfo]]
 
   /**
    * Flushes the producer's internal buffer. This will guarantee that all records currently buffered will be transmitted
@@ -340,6 +345,12 @@ object Producer {
   /**
    * Accessor method
    */
+  def partitionsFor(topic: String): RIO[Producer, Chunk[PartitionInfo]] =
+    ZIO.serviceWithZIO(_.partitionsFor(topic))
+
+  /**
+   * Accessor method
+   */
   val flush: RIO[Producer, Unit] = ZIO.serviceWithZIO(_.flush)
 
   /**
@@ -439,6 +450,9 @@ private[producer] final class ProducerLive(
         _    <- sendQueue.offer((records, done))
       } yield done.await
     }
+
+  override def partitionsFor(topic: String): Task[Chunk[PartitionInfo]] =
+    ZIO.attemptBlocking(Chunk.fromJavaIterable(p.partitionsFor(topic)))
 
   override def flush: Task[Unit] = ZIO.attemptBlocking(p.flush())
 
