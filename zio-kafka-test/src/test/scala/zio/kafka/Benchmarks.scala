@@ -1,14 +1,18 @@
 package zio.kafka
 
+import org.apache.kafka.clients.consumer.{ ConsumerConfig, KafkaConsumer }
 import org.apache.kafka.clients.producer.ProducerRecord
-import zio.{ System => _, _ }, zio.stream._
+import org.apache.kafka.clients.producer.ProducerConfig
+import org.apache.kafka.common.serialization.StringDeserializer
+import zio.{ System => _, _ }
+import zio.stream._
 import zio.kafka.producer._
 import zio.kafka.serde._
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.clients.consumer.{ ConsumerConfig, KafkaConsumer }
+import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
+
 import scala.jdk.CollectionConverters._
 import java.time.Duration
-import org.apache.kafka.common.serialization.StringDeserializer
+
 import java.util.concurrent.TimeUnit
 
 object PopulateTopic extends ZIOAppDefault {
@@ -79,7 +83,7 @@ object ZIOKafka extends ZIOAppDefault {
     val expectedCount = 1000000
     val settings = ConsumerSettings(List("localhost:9092"))
       .withGroupId(s"zio-kafka-${scala.util.Random.nextInt()}")
-      .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+      .withOffsetRetrieval(OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest))
       .withProperty("fetch.min.bytes", "128000")
       .withPollTimeout(50.millis)
 

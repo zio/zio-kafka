@@ -28,7 +28,7 @@ object TransactionalProducer {
 
     private def commitTransactionWithOffsets(offsetBatch: OffsetBatch): Task[Unit] = {
       val sendOffsetsToTransaction: Task[Unit] =
-        ZIO.suspendSucceed {
+        ZIO.suspend {
           @inline def invalidGroupIdException: IO[InvalidGroupIdException, Nothing] =
             ZIO.fail(
               new InvalidGroupIdException(
@@ -41,7 +41,7 @@ object TransactionalProducer {
             case Some(consumerGroupMetadata) =>
               val offsets: util.Map[TopicPartition, OffsetAndMetadata] =
                 offsetBatch.offsets.map { case (topicPartition, offset) =>
-                  topicPartition -> new OffsetAndMetadata(offset + 1)
+                  topicPartition -> new OffsetAndMetadata(offset.offset + 1, offset.metadata)
                 }.asJava
 
               ZIO.attemptBlocking(live.p.sendOffsetsToTransaction(offsets, consumerGroupMetadata))
@@ -85,24 +85,23 @@ object TransactionalProducer {
 
   def make(settings: TransactionalProducerSettings): ZIO[Scope, Throwable, TransactionalProducer] =
     for {
-      props <- ZIO.attempt(settings.producerSettings.driverSettings)
-      rawProducer <- ZIO.attempt(
-                       new KafkaProducer[Array[Byte], Array[Byte]](
-                         props.asJava,
-                         new ByteArraySerializer(),
-                         new ByteArraySerializer()
+      rawProducer <- ZIO.acquireRelease(
+                       ZIO.attempt(
+                         new KafkaProducer[Array[Byte], Array[Byte]](
+                           settings.producerSettings.driverSettings.asJava,
+                           new ByteArraySerializer(),
+                           new ByteArraySerializer()
+                         )
                        )
-                     )
+                     )(p => ZIO.attemptBlocking(p.close(settings.producerSettings.closeTimeout)).orDie)
       _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
       semaphore <- Semaphore.make(1)
       runtime   <- ZIO.runtime[Any]
       sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Promise[Throwable, Chunk[RecordMetadata]])](
+        Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
           settings.producerSettings.sendBufferSize
         )
-      live <- ZIO.acquireRelease(
-                ZIO.succeed(new ProducerLive(rawProducer, settings.producerSettings, runtime, sendQueue))
-              )(_.close)
+      live = new ProducerLive(rawProducer, runtime, sendQueue)
       _ <- ZIO.blocking(live.sendFromQueue).forkScoped
     } yield new LiveTransactionalProducer(live, semaphore)
 }

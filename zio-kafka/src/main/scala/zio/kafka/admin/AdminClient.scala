@@ -986,12 +986,17 @@ object AdminClient {
       override def asJava = JConfigResource.Type.UNKNOWN
     }
 
+    case object ClientMetrics extends ConfigResourceType {
+      override def asJava = JConfigResource.Type.CLIENT_METRICS
+    }
+
     def apply(jcrt: JConfigResource.Type): ConfigResourceType =
       jcrt match {
-        case JConfigResource.Type.BROKER_LOGGER => BrokerLogger
-        case JConfigResource.Type.BROKER        => Broker
-        case JConfigResource.Type.TOPIC         => Topic
-        case JConfigResource.Type.UNKNOWN       => Unknown
+        case JConfigResource.Type.BROKER_LOGGER  => BrokerLogger
+        case JConfigResource.Type.BROKER         => Broker
+        case JConfigResource.Type.TOPIC          => Topic
+        case JConfigResource.Type.UNKNOWN        => Unknown
+        case JConfigResource.Type.CLIENT_METRICS => ClientMetrics
       }
   }
 
@@ -1513,7 +1518,7 @@ object AdminClient {
   def javaClientFromSettings(settings: AdminClientSettings): ZIO[Scope, Throwable, JAdmin] =
     ZIO.acquireRelease {
       val endpointCheck = SslHelper
-        .validateEndpoint(settings.bootstrapServers, settings.properties)
+        .validateEndpoint(settings.driverSettings)
 
       endpointCheck *> ZIO.attempt(JAdmin.create(settings.driverSettings.asJava))
     }(client => ZIO.attemptBlocking(client.close(settings.closeTimeout)).orDie)

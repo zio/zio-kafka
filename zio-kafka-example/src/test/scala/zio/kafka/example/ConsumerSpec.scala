@@ -6,7 +6,7 @@ import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils.{ consumer, produceMany, producer }
 import zio.kafka.testkit._
 import zio.test.Assertion.hasSameElements
-import zio.test.TestAspect.{ sequential, timeout }
+import zio.test.TestAspect.timeout
 import zio.test._
 
 /**
@@ -41,5 +41,5 @@ object ConsumerSpec extends ZIOSpecDefault with KafkaRandom {
       )
         .provideSome[Kafka](producer)             // Here, we provide a new instance of Producer per test
         .provideSomeShared[Scope](Kafka.embedded) // Here, we provide an instance of Kafka for the entire suite
-    ) @@ timeout(2.minutes) @@ sequential
+    ) @@ timeout(2.minutes)
 }

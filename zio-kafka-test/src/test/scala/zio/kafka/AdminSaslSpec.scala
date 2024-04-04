@@ -52,6 +52,6 @@ object AdminSaslSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
         }
       }
-    ).provideSomeShared[Scope](Kafka.saslEmbedded) @@ withLiveClock @@ sequential
+    ).provideSomeShared[Scope](Kafka.saslEmbedded) @@ withLiveClock
 
 }

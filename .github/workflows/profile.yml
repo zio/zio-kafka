@@ -15,16 +15,19 @@ jobs:
   benchmark:
     name: Profile benchmarks
     runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.head.repo.fork }} # comes from https://github.com/orgs/community/discussions/25217#discussioncomment-3246904
     steps:
-      - uses: actions/checkout@v3.0.2
+      - uses: actions/checkout@v4.1.1
         with:
           fetch-depth: 0
       - name: Setup Java
-        uses: actions/setup-java@v3.12.0
+        uses: actions/setup-java@v4.2.1
         with:
           distribution: temurin
           java-version: 17
           check-latest: true
+      - uses: coursier/cache-action@v6.4.5
+      - uses: VirtusLab/scala-cli-setup@main
       - name: Use CI sbt jvmopts
         shell: bash
         run: |
@@ -56,22 +59,35 @@ jobs:
           mv .jvmopts_old .jvmopts
           cat .jvmopts
 
-      - name: Store flamegraphs
+      - name: Store flame graphs
         run: |
-          git config pull.rebase true 
-          export REV=$(git rev-parse --short HEAD)
+          echo "Store flame graphs"
+          echo "Collecting new flame graph"
+          git config pull.rebase true
+          read REV COMMIT_DATE COMMIT_TIME COMMIT_TZ COMMIT_MSG <<< \
+            $(git log --pretty=format:'%h %ad %s' --date=iso8601 -n 1 ${{ github.event.pull_request.head.sha }})
+          HTML_LINE="  <li>$COMMIT_DATE $COMMIT_TIME <a href=\"$REV\">Flame graphs for $REV</a> $COMMIT_MSG</li>"
+          echo "::group::Content of zio-kafka-bench directory"
           ls -al zio-kafka-bench/
+          echo "::endgroup::"
           mv zio-kafka-bench/zio.kafka.bench.* /tmp
+          echo "::group::Checkout gh-pages branch"
           git clean -fdx
           git checkout gh-pages
           git pull
+          git config --global user.name "zio-kafka CI"
+          git config --global user.email "ziokafkaci@users.noreply.github.com"
+          echo "::endgroup::"
+          echo "Remove old flame graphs"
+          scala-cli scripts/prune-flame-graph.sc
+          echo "::group::Adding new flame graph"
           mkdir -p dev/profile/$REV
           mv /tmp/zio.kafka.bench.* dev/profile/$REV
           cd dev/profile
           find . -maxdepth 1 -type d \( ! -name . \) -exec bash -c "cd '{}' && tree -H . -o index.html" \;
+          sed -i'' -e '/NEW-FLAME-GRAPHS-GO-HERE/a\'$'\n'"$HTML_LINE"$'\n' index.html
           cd ../../
-          git config --global user.name "zio-kafka CI"
-          git config --global user.email "ziokafkaci@users.noreply.github.com"
           git add .
-          git commit -m "flamegraphs for $REV"
+          git commit -m "Flame graphs for $REV"
           git push
+          echo "::endgroup::"

@@ -2,7 +2,9 @@ package zio.kafka
 
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import zio._
+import zio.kafka.admin.AdminClient.NewTopic
 import zio.kafka.consumer._
 import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
 import zio.kafka.producer.{ ByteRecord, Producer, Transaction, TransactionalProducer }
@@ -15,13 +17,14 @@ import zio.test.TestAspect._
 import zio.test._
 
 import java.nio.charset.StandardCharsets
+import java.util.UUID
 
 object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "producerspec"
 
   private def asString(v: Array[Byte]) = new String(v, StandardCharsets.UTF_8)
 
-  def withConsumerInt(
+  private def withConsumerInt(
     subscription: Subscription,
     settings: ConsumerSettings
   ): ZIO[Any with Scope, Throwable, Dequeue[Take[Throwable, CommittableRecord[String, Int]]]] =
@@ -207,6 +210,51 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           assertTrue(record1.nonEmpty) &&
           assertTrue(record2.nonEmpty)
       },
+      test("a non-empty chunk of records with partial failure") {
+        import Subscription._
+
+        def withConsumer(subscription: Subscription, settings: ConsumerSettings) =
+          Consumer.make(settings).flatMap { c =>
+            c.plainStream(subscription, Serde.string, Serde.string).toQueue()
+          }
+
+        def makeChunk(standardTopic: String, compactedTopic: String): Chunk[ByteRecord] = {
+          // Specifically a null key so publishing to compacted topic fails
+          val key2: Array[Byte] = null
+
+          Chunk.fromIterable(
+            List[ByteRecord](
+              new ProducerRecord(standardTopic, "boo".getBytes, "baa".getBytes),
+              new ProducerRecord(compactedTopic, key2, "boo".getBytes),
+              new ProducerRecord(standardTopic, "hello".getBytes, "world".getBytes)
+            )
+          )
+        }
+
+        for {
+          compactedTopic <- randomTopic
+          standardTopic  <- randomTopic
+          _ <- withAdmin(
+                 _.createTopic(NewTopic(compactedTopic, 1, 1, Map(TopicConfig.CLEANUP_POLICY_CONFIG -> "compact")))
+               )
+          group  <- randomGroup
+          client <- randomClient
+          chunk = makeChunk(standardTopic, compactedTopic)
+          outcome  <- Producer.produceChunkAsyncWithFailures(chunk).flatten
+          settings <- consumerSettings(client, Some(group))
+          recordsConsumed <- ZIO.scoped {
+                               withConsumer(Topics(Set(standardTopic)), settings).flatMap { consumer =>
+                                 consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
+                               }
+                             }
+        } yield assertTrue(
+          outcome.length == 3,
+          outcome(0).isRight,
+          outcome(1).swap.exists(_.getMessage.contains("Compacted topic cannot accept message without key")),
+          outcome(2).isRight,
+          recordsConsumed.length == 2
+        )
+      },
       test("an empty chunk of records") {
         val chunks = Chunk.fromIterable(List.empty)
         for {
@@ -217,6 +265,12 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           metrics <- Producer.metrics
         } yield assertTrue(metrics.nonEmpty)
+      },
+      test("partitionsFor") {
+        for {
+          topic <- randomTopic
+          info  <- Producer.partitionsFor(topic).debug
+        } yield assertTrue(info.headOption.map(_.topic()) == Some(topic))
       },
       suite("transactions")(
         test("a simple transaction") {
@@ -599,11 +653,11 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       produceChunkSpec
     )
       .provideSome[Kafka](
-        (KafkaTestUtils.producer ++ transactionalProducer)
+        (KafkaTestUtils.producer ++ transactionalProducer(UUID.randomUUID().toString))
           .mapError(TestFailure.fail),
         KafkaTestUtils.consumer(clientId = "producer-spec-consumer", groupId = Some("group-0"))
       )
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ timeout(3.minutes) @@ sequential
+      ) @@ withLiveClock @@ timeout(3.minutes)
 }

@@ -1,6 +1,6 @@
 package zio.kafka.utils
 
-import org.apache.kafka.clients.{ ClientDnsLookup, ClientUtils }
+import org.apache.kafka.clients.{ ClientDnsLookup, ClientUtils, CommonClientConfigs }
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.TransferableChannel
 import org.apache.kafka.common.protocol.ApiKeys
@@ -32,19 +32,19 @@ object SslHelper {
   private final case class ConnectionError(cause: Throwable) extends NoStackTrace
 
   // ⚠️ Must not do anything else than calling `doValidateEndpoint`. The algorithm of this function must be completely contained in `doValidateEndpoint`.
-  def validateEndpoint(bootstrapServers: List[String], props: Map[String, AnyRef]): IO[KafkaException, Unit] =
-    doValidateEndpoint(SocketChannel.open)(bootstrapServers, props)
+  def validateEndpoint(props: Map[String, AnyRef]): IO[KafkaException, Unit] =
+    doValidateEndpoint(SocketChannel.open)(props)
 
   /**
    * We use this private function so that we can easily manipulate the `openSocket` function in unit-tests.
    */
   private[utils] def doValidateEndpoint(
     unsafeOpenSocket: InetSocketAddress => SocketChannel // Handy for unit-tests
-  )(bootstrapServers: List[String], props: Map[String, AnyRef]): IO[KafkaException, Unit] = {
+  )(props: Map[String, AnyRef]): IO[KafkaException, Unit] = {
     @inline def `request.timeout.ms`: Duration = {
       val defaultValue = 30.seconds
 
-      props.get("request.timeout.ms") match {
+      props.get(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG) match {
         case None => defaultValue
         case Some(raw) =>
           try {
@@ -56,12 +56,17 @@ object SslHelper {
       }
     }
 
+    val bootstrapServers = props.get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG) match {
+      case Some(config) => config.toString.split(",").toList
+      case None         => List.empty
+    }
+
     if (bootstrapServers.isEmpty) ZIO.fail(kafkaException(new IllegalArgumentException("Empty bootstrapServers list")))
     else
       ZIO
         .unless(
           props
-            .get("security.protocol")
+            .get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG)
             .exists {
               case x: String if x.toUpperCase().contains("SSL") => true
               case _                                            => false

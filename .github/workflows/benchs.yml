@@ -6,6 +6,8 @@ on:
       - master
   pull_request:
     types: [ opened, reopened, synchronize ]
+    branches-ignore:
+      - gh-pages
 
 permissions:
   # deployments permission to deploy GitHub pages website
@@ -17,13 +19,14 @@ jobs:
   benchmark: # See https://github.com/marketplace/actions/continuous-benchmark
     name: Run benchmark
     runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.head.repo.fork }} # comes from https://github.com/orgs/community/discussions/25217#discussioncomment-3246904
     steps:
       - name: Checkout current branch
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
         with:
           fetch-depth: 0
       - name: Setup Java
-        uses: actions/setup-java@v3.12.0
+        uses: actions/setup-java@v4.2.1
         with:
           distribution: temurin
           java-version: 17

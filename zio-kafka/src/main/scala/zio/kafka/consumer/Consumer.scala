@@ -1,10 +1,16 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata, OffsetAndTimestamp }
+import org.apache.kafka.clients.consumer.{
+  Consumer => JConsumer,
+  ConsumerRecord,
+  OffsetAndMetadata,
+  OffsetAndTimestamp
+}
 import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.consumer.diagnostics.Diagnostics.ConcurrentDiagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
@@ -27,6 +33,11 @@ trait Consumer {
     timeout: Duration = Duration.Infinity
   ): Task[Map[TopicPartition, Long]]
 
+  def endOffsets(
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  ): Task[Map[TopicPartition, Long]]
+
   /**
    * Retrieve the last committed offset for the given topic-partitions
    */
@@ -34,11 +45,6 @@ trait Consumer {
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
   ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]]
-
-  def endOffsets(
-    partitions: Set[TopicPartition],
-    timeout: Duration = Duration.Infinity
-  ): Task[Map[TopicPartition, Long]]
 
   def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]]
 
@@ -155,150 +161,7 @@ trait Consumer {
 }
 
 object Consumer {
-  case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
-
   case object CommitTimeout extends RuntimeException("Commit timeout") with NoStackTrace
-
-  private final class Live private[Consumer] (
-    consumer: ConsumerAccess,
-    runloopAccess: RunloopAccess
-  ) extends Consumer {
-
-    override def assignment: Task[Set[TopicPartition]] =
-      consumer.withConsumer(_.assignment().asScala.toSet)
-
-    override def beginningOffsets(
-      partitions: Set[TopicPartition],
-      timeout: Duration = Duration.Infinity
-    ): Task[Map[TopicPartition, Long]] =
-      consumer.withConsumer(
-        _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.map { case (tp, l) =>
-          tp -> l.longValue()
-        }.toMap
-      )
-
-    override def committed(
-      partitions: Set[TopicPartition],
-      timeout: Duration = Duration.Infinity
-    ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]] =
-      consumer.withConsumer(
-        _.committed(partitions.asJava, timeout.asJava).asScala.map { case (k, v) => k -> Option(v) }.toMap
-      )
-
-    override def endOffsets(
-      partitions: Set[TopicPartition],
-      timeout: Duration = Duration.Infinity
-    ): Task[Map[TopicPartition, Long]] =
-      consumer.withConsumer { eo =>
-        val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
-        offs.asScala.map { case (k, v) => k -> v.longValue() }.toMap
-      }
-
-    /**
-     * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
-     * requests.
-     */
-    override def stopConsumption: UIO[Unit] =
-      ZIO.logDebug("stopConsumption called") *>
-        runloopAccess.stopConsumption
-
-    override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
-      consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)
-
-    override def offsetsForTimes(
-      timestamps: Map[TopicPartition, Long],
-      timeout: Duration = Duration.Infinity
-    ): Task[Map[TopicPartition, OffsetAndTimestamp]] =
-      consumer.withConsumer(
-        _.offsetsForTimes(timestamps.map { case (k, v) => k -> Long.box(v) }.asJava, timeout.asJava).asScala.toMap
-          // If a partition doesn't exist yet, the map will have 'null' as entry.
-          // It's more idiomatic scala to then simply not have that map entry.
-          .filter(_._2 != null)
-      )
-
-    override def partitionedAssignmentStream[R, K, V](
-      subscription: Subscription,
-      keyDeserializer: Deserializer[R, K],
-      valueDeserializer: Deserializer[R, V]
-    ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
-      val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
-
-      ZStream.unwrapScoped {
-        for {
-          stream <- runloopAccess.subscribe(subscription)
-        } yield stream
-          .map(_.exit)
-          .flattenExitOption
-          .map {
-            _.collect {
-              case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
-                val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
-                  if (onlyByteArraySerdes)
-                    partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
-                  else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
-
-                tp -> stream
-            }
-          }
-      }
-    }
-
-    override def partitionedStream[R, K, V](
-      subscription: Subscription,
-      keyDeserializer: Deserializer[R, K],
-      valueDeserializer: Deserializer[R, V]
-    ): ZStream[Any, Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] =
-      partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer).flattenChunks
-
-    override def partitionsFor(
-      topic: String,
-      timeout: Duration = Duration.Infinity
-    ): Task[List[PartitionInfo]] =
-      consumer.withConsumer { c =>
-        val partitions = c.partitionsFor(topic, timeout.asJava)
-        if (partitions eq null) List.empty else partitions.asScala.toList
-      }
-
-    override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): Task[Long] =
-      consumer.withConsumer(_.position(partition, timeout.asJava))
-
-    override def plainStream[R, K, V](
-      subscription: Subscription,
-      keyDeserializer: Deserializer[R, K],
-      valueDeserializer: Deserializer[R, V],
-      bufferSize: Int
-    ): ZStream[R, Throwable, CommittableRecord[K, V]] =
-      partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
-        n = Int.MaxValue,
-        bufferSize = bufferSize
-      )(_._2)
-
-    override def subscription: Task[Set[String]] =
-      consumer.withConsumer(_.subscription().asScala.toSet)
-
-    override def consumeWith[R: EnvironmentTag, R1: EnvironmentTag, K, V](
-      subscription: Subscription,
-      keyDeserializer: Deserializer[R, K],
-      valueDeserializer: Deserializer[R, V],
-      commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
-    )(
-      f: ConsumerRecord[K, V] => URIO[R1, Unit]
-    ): ZIO[R & R1, Throwable, Unit] =
-      for {
-        r <- ZIO.environment[R & R1]
-        _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
-               .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
-                 partitionStream.mapChunksZIO(_.mapZIO((c: CommittableRecord[K, V]) => f(c.record).as(c.offset)))
-               }
-               .provideEnvironment(r)
-               .aggregateAsync(offsetBatches)
-               .mapZIO(_.commitOrRetry(commitRetryPolicy))
-               .runDrain
-      } yield ()
-
-    override def metrics: Task[Map[MetricName, Metric]] =
-      consumer.withConsumer(_.metrics().asScala.toMap)
-  }
 
   val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
@@ -312,25 +175,49 @@ object Consumer {
       } yield consumer
     }
 
+  /**
+   * A new consumer.
+   *
+   * @param diagnostics
+   *   an optional callback for key events in the consumer life-cycle. The callbacks will be executed in a separate
+   *   fiber. Since the events are queued, failure to handle these events leads to out of memory errors
+   */
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
-      _              <- SslHelper.validateEndpoint(settings.bootstrapServers, settings.properties)
-      consumerAccess <- ConsumerAccess.make(settings)
-      runloopAccess  <- RunloopAccess.make(settings, consumerAccess, diagnostics)
-    } yield new Live(consumerAccess, runloopAccess)
+      wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
+      _                  <- ZIO.addFinalizer(wrappedDiagnostics.emit(Finalization.ConsumerFinalized))
+      _                  <- SslHelper.validateEndpoint(settings.driverSettings)
+      consumerAccess     <- ConsumerAccess.make(settings)
+      runloopAccess      <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
+    } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**
-   * Accessor method for [[Consumer.assignment]]
+   * Create a zio-kafka Consumer from an org.apache.kafka KafkaConsumer
+   *
+   * You are responsible for creating and closing the KafkaConsumer
+   */
+  def fromJavaConsumer(
+    javaConsumer: JConsumer[Array[Byte], Array[Byte]],
+    settings: ConsumerSettings,
+    diagnostics: Diagnostics = Diagnostics.NoOp
+  ): ZIO[Scope, Throwable, Consumer] =
+    for {
+      _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
+      consumerAccess <- ConsumerAccess.make(javaConsumer)
+      runloopAccess  <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+    } yield new ConsumerLive(consumerAccess, runloopAccess)
+
+  /**
+   * Accessor method
    */
   def assignment: RIO[Consumer, Set[TopicPartition]] =
     ZIO.serviceWithZIO(_.assignment)
 
   /**
-   * Accessor method for [[Consumer.beginningOffsets]]
+   * Accessor method
    */
   def beginningOffsets(
     partitions: Set[TopicPartition],
@@ -339,7 +226,7 @@ object Consumer {
     ZIO.serviceWithZIO(_.beginningOffsets(partitions, timeout))
 
   /**
-   * Accessor method for [[Consumer.committed]]
+   * Accessor method
    */
   def committed(
     partitions: Set[TopicPartition],
@@ -348,7 +235,7 @@ object Consumer {
     ZIO.serviceWithZIO(_.committed(partitions, timeout))
 
   /**
-   * Accessor method for [[Consumer.endOffsets]]
+   * Accessor method
    */
   def endOffsets(
     partitions: Set[TopicPartition],
@@ -357,13 +244,16 @@ object Consumer {
     ZIO.serviceWithZIO(_.endOffsets(partitions, timeout))
 
   /**
-   * Accessor method for [[Consumer.listTopics]]
+   * Accessor method
    */
   def listTopics(
     timeout: Duration = Duration.Infinity
   ): RIO[Consumer, Map[String, List[PartitionInfo]]] =
     ZIO.serviceWithZIO(_.listTopics(timeout))
 
+  /**
+   * Accessor method
+   */
   def partitionedAssignmentStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
@@ -372,7 +262,7 @@ object Consumer {
     ZStream.serviceWithStream[Consumer](_.partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer))
 
   /**
-   * Accessor method for [[Consumer.partitionedStream]]
+   * Accessor method
    */
   def partitionedStream[R, K, V](
     subscription: Subscription,
@@ -386,7 +276,7 @@ object Consumer {
     ZStream.serviceWithStream[Consumer](_.partitionedStream(subscription, keyDeserializer, valueDeserializer))
 
   /**
-   * Accessor method for [[Consumer.plainStream]]
+   * Accessor method
    */
   def plainStream[R, K, V](
     subscription: Subscription,
@@ -399,7 +289,7 @@ object Consumer {
     )
 
   /**
-   * Accessor method for [[Consumer.stopConsumption]]
+   * Accessor method
    */
   def stopConsumption: RIO[Consumer, Unit] =
     ZIO.serviceWithZIO(_.stopConsumption)
@@ -472,7 +362,7 @@ object Consumer {
     }
 
   /**
-   * Accessor method for [[Consumer.offsetsForTimes]]
+   * Accessor method
    */
   def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
@@ -481,7 +371,7 @@ object Consumer {
     ZIO.serviceWithZIO(_.offsetsForTimes(timestamps, timeout))
 
   /**
-   * Accessor method for [[Consumer.partitionsFor]]
+   * Accessor method
    */
   def partitionsFor(
     topic: String,
@@ -490,7 +380,7 @@ object Consumer {
     ZIO.serviceWithZIO(_.partitionsFor(topic, timeout))
 
   /**
-   * Accessor method for [[Consumer.position]]
+   * Accessor method
    */
   def position(
     partition: TopicPartition,
@@ -499,21 +389,25 @@ object Consumer {
     ZIO.serviceWithZIO(_.position(partition, timeout))
 
   /**
-   * Accessor method for [[Consumer.subscription]]
+   * Accessor method
    */
   def subscription: RIO[Consumer, Set[String]] =
     ZIO.serviceWithZIO(_.subscription)
 
   /**
-   * Accessor method for [[Consumer.metrics]]
+   * Accessor method
    */
   def metrics: RIO[Consumer, Map[MetricName, Metric]] =
     ZIO.serviceWithZIO(_.metrics)
 
+  /** See ConsumerSettings.withOffsetRetrieval. */
   sealed trait OffsetRetrieval
   object OffsetRetrieval {
-    final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest)                extends OffsetRetrieval
-    final case class Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]]) extends OffsetRetrieval
+    final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest) extends OffsetRetrieval
+    final case class Manual(
+      getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]],
+      defaultStrategy: AutoOffsetStrategy = AutoOffsetStrategy.Latest
+    ) extends OffsetRetrieval
   }
 
   sealed trait AutoOffsetStrategy { self =>
@@ -524,9 +418,149 @@ object Consumer {
     }
   }
 
+  /** See ConsumerSettings.withOffsetRetrieval. */
   object AutoOffsetStrategy {
     case object Earliest extends AutoOffsetStrategy
     case object Latest   extends AutoOffsetStrategy
     case object None     extends AutoOffsetStrategy
   }
+}
+
+private[consumer] final class ConsumerLive private[consumer] (
+  consumer: ConsumerAccess,
+  runloopAccess: RunloopAccess
+) extends Consumer {
+  import Consumer._
+
+  override def assignment: Task[Set[TopicPartition]] =
+    consumer.withConsumer(_.assignment().asScala.toSet)
+
+  override def beginningOffsets(
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  ): Task[Map[TopicPartition, Long]] =
+    consumer.withConsumer(
+      _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.map { case (tp, l) =>
+        tp -> l.longValue()
+      }.toMap
+    )
+
+  override def endOffsets(
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  ): Task[Map[TopicPartition, Long]] =
+    consumer.withConsumer { eo =>
+      val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
+      offs.asScala.map { case (k, v) => k -> v.longValue() }.toMap
+    }
+
+  override def committed(
+    partitions: Set[TopicPartition],
+    timeout: Duration = Duration.Infinity
+  ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]] =
+    consumer.withConsumer(
+      _.committed(partitions.asJava, timeout.asJava).asScala.map { case (k, v) => k -> Option(v) }.toMap
+    )
+
+  override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
+    consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)
+
+  override def partitionedAssignmentStream[R, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
+    val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
+
+    ZStream.unwrapScoped {
+      for {
+        stream <- runloopAccess.subscribe(subscription)
+      } yield stream
+        .map(_.exit)
+        .flattenExitOption
+        .map {
+          _.collect {
+            case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
+              val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
+                if (onlyByteArraySerdes)
+                  partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
+                else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
+
+              tp -> stream
+          }
+        }
+    }
+  }
+
+  override def partitionedStream[R, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): ZStream[Any, Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] =
+    partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer).flattenChunks
+
+  override def plainStream[R, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V],
+    bufferSize: Int
+  ): ZStream[R, Throwable, CommittableRecord[K, V]] =
+    partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
+      n = Int.MaxValue,
+      bufferSize = bufferSize
+    )(_._2)
+
+  override def stopConsumption: UIO[Unit] =
+    ZIO.logDebug("stopConsumption called") *>
+      runloopAccess.stopConsumption
+
+  override def consumeWith[R: EnvironmentTag, R1: EnvironmentTag, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V],
+    commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+  )(
+    f: ConsumerRecord[K, V] => URIO[R1, Unit]
+  ): ZIO[R & R1, Throwable, Unit] =
+    for {
+      r <- ZIO.environment[R & R1]
+      _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
+             .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
+               partitionStream.mapChunksZIO(_.mapZIO((c: CommittableRecord[K, V]) => f(c.record).as(c.offset)))
+             }
+             .provideEnvironment(r)
+             .aggregateAsync(offsetBatches)
+             .mapZIO(_.commitOrRetry(commitRetryPolicy))
+             .runDrain
+    } yield ()
+
+  override def offsetsForTimes(
+    timestamps: Map[TopicPartition, Long],
+    timeout: Duration = Duration.Infinity
+  ): Task[Map[TopicPartition, OffsetAndTimestamp]] =
+    consumer.withConsumer(
+      _.offsetsForTimes(timestamps.map { case (k, v) => k -> Long.box(v) }.asJava, timeout.asJava).asScala.toMap
+        // If a partition doesn't exist yet, the map will have 'null' as entry.
+        // It's more idiomatic scala to then simply not have that map entry.
+        .filter(_._2 != null)
+    )
+
+  override def partitionsFor(
+    topic: String,
+    timeout: Duration = Duration.Infinity
+  ): Task[List[PartitionInfo]] =
+    consumer.withConsumer { c =>
+      val partitions = c.partitionsFor(topic, timeout.asJava)
+      if (partitions eq null) List.empty else partitions.asScala.toList
+    }
+
+  override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): Task[Long] =
+    consumer.withConsumer(_.position(partition, timeout.asJava))
+
+  override def subscription: Task[Set[String]] =
+    consumer.withConsumer(_.subscription().asScala.toSet)
+
+  override def metrics: Task[Map[MetricName, Metric]] =
+    consumer.withConsumer(_.metrics().asScala.toMap)
+
 }

@@ -1,23 +1,27 @@
 import sbt.Def
 
-lazy val kafkaVersion         = "3.5.1"
-lazy val embeddedKafkaVersion = "3.5.0" // Should be the same as kafkaVersion, except for the patch part
+lazy val kafkaVersion         = "3.7.0"
+lazy val embeddedKafkaVersion = "3.7.0" // Should be the same as kafkaVersion, except for the patch part
 
-lazy val kafkaClients          = "org.apache.kafka"           % "kafka-clients"           % kafkaVersion
-lazy val scalaCollectionCompat = "org.scala-lang.modules"    %% "scala-collection-compat" % "2.11.0"
-lazy val jacksonDatabind       = "com.fasterxml.jackson.core" % "jackson-databind"        % "2.15.2"
-lazy val logback               = "ch.qos.logback"             % "logback-classic"         % "1.3.8"
+lazy val kafkaClients          = "org.apache.kafka"        % "kafka-clients"           % kafkaVersion
+lazy val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.11.0"
+lazy val logback               = "ch.qos.logback"          % "logback-classic"         % "1.5.3"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
+lazy val _scala213 = "2.13.13"
+lazy val _scala3   = "3.3.3"
+
 inThisBuild(
   List(
-    name       := "ZIO Kafka",
-    zioVersion := "2.0.15",
-    scala212   := "2.12.18",
-    scala213   := "2.13.11",
-    scala3     := "3.3.0",
-    crossScalaVersions -= scala211.value,
+    name         := "ZIO Kafka",
+    zioVersion   := "2.0.21",
+    scalaVersion := _scala213,
+    // zio-sbt defines these 'scala213' and 'scala3' settings, but we need to define them here to override the defaults and better control them
+    scala213 := _scala213,
+    scala3   := _scala3,
+    // We only support Scala 2.13+ and 3+. See https://github.com/zio/zio-kafka/releases/tag/v2.7.0
+    crossScalaVersions       := List(scala213.value, scala3.value),
     ciEnabledBranches        := Seq("master", "series/0.x"),
     useCoursier              := false,
     Test / parallelExecution := false,
@@ -104,11 +108,10 @@ lazy val zioKafka =
     .settings(
       libraryDependencies ++= Seq(
         kafkaClients,
-        jacksonDatabind,
         scalaCollectionCompat,
-        "ch.qos.logback" % "logback-classic"    % "1.4.6",
-        "dev.zio"       %% "zio-logging-slf4j2" % "2.1.13",
-        "dev.zio"       %% "zio-logging-slf4j"  % "2.1.13" % Test
+        "ch.qos.logback" % "logback-classic"    % "1.4.14",
+        "dev.zio"       %% "zio-logging-slf4j2" % "2.2.0",
+        "dev.zio"       %% "zio-logging-slf4j"  % "2.2.0" % Test
       )
     )
 
@@ -147,9 +150,8 @@ lazy val zioKafkaTest =
     .settings(
       libraryDependencies ++= Seq(
         kafkaClients,
-        jacksonDatabind,
         logback    % Test,
-        "dev.zio" %% "zio-logging-slf4j" % "2.1.13" % Test,
+        "dev.zio" %% "zio-logging-slf4j" % "2.2.2" % Test,
         scalaCollectionCompat
       ) ++ `embedded-kafka`.value
     )
@@ -172,13 +174,13 @@ lazy val zioKafkaExample =
     .settings(run / fork := false)
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                 %% "zio"                % "2.0.15",
-        "dev.zio"                 %% "zio-kafka"          % "2.4.1",
-        "dev.zio"                 %% "zio-kafka-testkit"  % "2.4.1"  % Test,
-        "dev.zio"                 %% "zio-test"           % "2.0.15" % Test,
-        "ch.qos.logback"           % "logback-classic"    % "1.4.6",
-        "dev.zio"                 %% "zio-logging-slf4j2" % "2.1.13",
-        "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion
+        "dev.zio"                 %% "zio"                % "2.0.21",
+        "dev.zio"                 %% "zio-kafka"          % "2.7.4",
+        "dev.zio"                 %% "zio-logging-slf4j2" % "2.2.2",
+        "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
+        logback,
+        "dev.zio" %% "zio-kafka-testkit" % "2.7.4"  % Test,
+        "dev.zio" %% "zio-test"          % "2.0.21" % Test
       ),
       // Scala 3 compiling fails with:
       // [error] Modules were resolved with conflicting cross-version suffixes in ProjectRef(uri("file:/home/runner/work/zio-kafka/zio-kafka/"), "zioKafkaExample"):
