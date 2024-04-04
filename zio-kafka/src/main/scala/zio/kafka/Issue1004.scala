@@ -7,11 +7,10 @@ import zio.kafka.admin.AdminClient.NewTopic
 import zio.kafka.admin.{ AdminClient, AdminClientSettings }
 import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
 import zio.kafka.consumer.Subscription.Topics
-import zio.kafka.consumer.{ CommittableRecord, Consumer, ConsumerSettings, OffsetBatch }
+import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 import zio.kafka.producer._
-import zio.logging.backend.SLF4J
 import zio.kafka.serde.Serde
-import zio.stream.ZSink
+import zio.logging.backend.SLF4J
 
 object ReproducerProducer extends ZIOAppDefault {
 
@@ -66,26 +65,12 @@ object ReproducerConsumer extends ZIOAppDefault { self =>
       )
 
     val consumer = Consumer
-      .partitionedStream(Topics(Set("_test_topic3", "_test_topic4")), Serde.string, Serde.string)
-      .flatMapPar(10) { case (_, partition) =>
-        partition
-          .aggregateAsyncWithin(
-            ZSink.foldUntil[CommittableRecord[String, String], (OffsetBatch, Chunk[CommittableRecord[String, String]])](
-              (OffsetBatch.empty, Chunk.empty[CommittableRecord[String, String]]),
-              2048
-            ) { case ((offsets, records), record) =>
-              (offsets.add(record.offset), records.appended(record))
-            },
-            Schedule.fixed(5.seconds)
-          )
-      }
-      .mapZIOParUnordered(8) { case (offsets, records) =>
-        for {
-          _ <- ZIO.logDebug(s"Consumer processing batch of ${records.size}. Committing offset...")
-          _ <- offsets.commitOrRetry(Schedule.spaced(100.milliseconds) && Schedule.recurs(10))
-          _ <- ZIO.logDebug("Commit done")
-        } yield ()
-      }
+      .plainStream(Topics(Set("_test_topic3", "_test_topic4")), Serde.string, Serde.string)
+      .take(400000)
+      .zipWithIndex
+      .filter(_._2 % 1000 == 0)
+      .debug
+      .map(_._1.offset)
       .provideLayer(ZLayer.scoped(Consumer.make(consumerSettings)))
 
     val producerSettings = ProducerSettings(List("localhost:9092"))
