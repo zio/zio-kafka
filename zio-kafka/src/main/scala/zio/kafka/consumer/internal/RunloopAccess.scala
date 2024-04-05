@@ -55,7 +55,7 @@ private[consumer] final class RunloopAccess private (
    */
   def subscribe(
     subscription: Subscription
-  ): ZIO[Scope, InvalidSubscriptionUnion, SubscriptionStreamControl[UStream[Take[Throwable, PartitionAssignment]]]] =
+  ): ZIO[Scope, InvalidSubscriptionUnion, (UStream[Take[Throwable, PartitionAssignment]], SubscriptionStreamControl)] =
     for {
       partitionAssignmentQueue <- Queue.unbounded[Take[Throwable, PartitionAssignment]]
       stream                   <- ZStream.fromHubScoped(partitionHub)
@@ -66,8 +66,7 @@ private[consumer] final class RunloopAccess private (
              withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription)) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
-    } yield SubscriptionStreamControl(
-      ZStream.fromQueue(partitionAssignmentQueue),
+    } yield ZStream.fromQueue(partitionAssignmentQueue) -> SubscriptionStreamControl(
       withRunloopZIO(requireRunning = true)(_.stopSubscribedTopicPartitions(subscription)) *> partitionAssignmentQueue
         .offer(Take.end)
         .ignore
