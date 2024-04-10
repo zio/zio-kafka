@@ -5,6 +5,7 @@ import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.fetch.{ FetchStrategy, QueueSizeBasedFetchStrategy }
 import zio.kafka.security.KafkaCredentialStore
+import zio.metrics.MetricLabel
 
 /**
  * Settings for the consumer.
@@ -29,12 +30,11 @@ final case class ConsumerSettings(
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
   restartStreamOnRebalancing: Boolean = false,
   rebalanceSafeCommits: Boolean = false,
-  fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy()
+  maxRebalanceDuration: Option[Duration] = None,
+  fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy(),
+  metricLabels: Set[MetricLabel] = Set.empty,
+  runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis)
 ) {
-  private[this] def autoOffsetResetConfig: Map[String, String] = offsetRetrieval match {
-    case OffsetRetrieval.Auto(reset) => Map(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> reset.toConfig)
-    case OffsetRetrieval.Manual(_)   => Map.empty
-  }
 
   /**
    * Tunes the consumer for high throughput.
@@ -73,9 +73,7 @@ final case class ConsumerSettings(
       .withFetchStrategy(QueueSizeBasedFetchStrategy(partitionPreFetchBufferLimit = 512))
 
   def driverSettings: Map[String, AnyRef] =
-    Map(
-      ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false"
-    ) ++ autoOffsetResetConfig ++ properties
+    Map(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false") ++ properties
 
   def withBootstrapServers(servers: List[String]): ConsumerSettings =
     withProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, servers.mkString(","))
@@ -98,8 +96,44 @@ final case class ConsumerSettings(
   def withGroupInstanceId(groupInstanceId: String): ConsumerSettings =
     withProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
 
-  def withOffsetRetrieval(retrieval: OffsetRetrieval): ConsumerSettings =
+  /**
+   * Which offset to start consuming from for new partitions.
+   *
+   * The options are:
+   * {{{
+   *   import zio.kafka.consumer.Consumer._
+   *   OffsetRetrieval.Auto(AutoOffsetStrategy.Latest) // the default
+   *   OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)
+   *   OffsetRetrieval.Auto(AutoOffsetStrategy.None)
+   *   OffsetRetrieval.Manual(getOffsets, defaultStrategy)
+   * }}}
+   *
+   * The `Auto` options make consuming start from the latest committed offset. When no committed offset is available,
+   * the given offset strategy is used and consuming starts from the `Latest` offset (the default), the `Earliest`
+   * offset, or results in an error for `None`.
+   *
+   * The `Manual` option allows fine grained control over which offset to consume from. The provided `getOffsets`
+   * function should return an offset for each topic-partition that is being assigned. When the returned offset is
+   * smaller than the log start offset or larger than the log end offset, the `defaultStrategy` is used and consuming
+   * starts from the `Latest` offset (the default), the `Earliest` offset, or results in an error for `None`.
+   *
+   * When the returned map does ''not'' contain an entry for a topic-partition, the consumer will continue from the last
+   * committed offset. When no committed offset is available, the `defaultStrategy` is used and consuming starts from
+   * the `Latest` offset (the default), the `Earliest` offset, or results in an error for `None`.
+   *
+   * This configuration applies to both subscribed and assigned partitions.
+   *
+   * This method sets the `auto.offset.reset` Kafka configuration. See
+   * https://kafka.apache.org/documentation/#consumerconfigs_auto.offset.reset for more information.
+   */
+  def withOffsetRetrieval(retrieval: OffsetRetrieval): ConsumerSettings = {
+    val resetStrategy = retrieval match {
+      case OffsetRetrieval.Auto(reset)                => reset
+      case OffsetRetrieval.Manual(_, defaultStrategy) => defaultStrategy
+    }
     copy(offsetRetrieval = retrieval)
+      .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, resetStrategy.toConfig)
+  }
 
   /**
    * The maximum time to block while polling the Kafka consumer. The Kafka consumer will return earlier when the maximum
@@ -156,7 +190,7 @@ final case class ConsumerSettings(
     copy(restartStreamOnRebalancing = value)
 
   /**
-   * WARNING: 'rebalanceSafeCommits' is an EXPERIMENTAL feature. It is not recommended for production use yet.
+   * NOTE: 'rebalanceSafeCommits' is an EXPERIMENTAL feature. It is not recommended for production use yet.
    *
    * @param value
    *   Whether to hold up a rebalance until all offsets of consumed messages have been committed. The default is
@@ -179,7 +213,7 @@ final case class ConsumerSettings(
    * messages until the revoked streams are ready committing.
    *
    * Rebalances are held up for at most 3/5 of `maxPollInterval` (see [[withMaxPollInterval]]), by default this
-   * calculates to 3 minutes.
+   * calculates to 3 minutes. See [[#withMaxRebalanceDuration]] to change the default.
    *
    * When `false`, streams for revoked partitions may continue to run even though the rebalance is not held up. Any
    * offset commits from these streams have a high chance of being delayed (commits are not possible during some phases
@@ -188,6 +222,23 @@ final case class ConsumerSettings(
    */
   def withRebalanceSafeCommits(value: Boolean): ConsumerSettings =
     copy(rebalanceSafeCommits = value)
+
+  /**
+   * NOTE: 'rebalanceSafeCommits' is an EXPERIMENTAL feature. It is not recommended for production use yet.
+   *
+   * @param value
+   *   Maximum time spent in the rebalance callback when `rebalanceSafeCommits` is enabled.
+   *
+   * In this time zio-kafka awaits processing of records and the completion of commits.
+   *
+   * By default this value is set to 3/5 of `maxPollInterval` which by default calculates to 3 minutes. Only values
+   * between `commitTimeout` and `maxPollInterval` are useful. Lower values will make the rebalance callback be done
+   * immediately, higher values lead to lost partitions.
+   *
+   * See [[#withRebalanceSafeCommits]] for more information.
+   */
+  def withMaxRebalanceDuration(value: Duration): ConsumerSettings =
+    copy(maxRebalanceDuration = Some(value))
 
   def withCredentials(credentialsStore: KafkaCredentialStore): ConsumerSettings =
     withProperties(credentialsStore.properties)
@@ -230,6 +281,29 @@ final case class ConsumerSettings(
    */
   def withFetchStrategy(fetchStrategy: FetchStrategy): ConsumerSettings =
     copy(fetchStrategy = fetchStrategy)
+
+  /**
+   * @param metricLabels
+   *   The labels given to all metrics collected by zio-kafka. By default no labels are set.
+   *
+   * For applications with multiple consumers it is recommended to set some metric labels. For example, if one is used,
+   * the consumer group id could be used as a label:
+   *
+   * {{{
+   *   consumerSettings.withMetricLabels(Set(MetricLabel("group-id", groupId)))
+   * }}}
+   */
+  def withMetricsLabels(metricLabels: Set[MetricLabel]): ConsumerSettings =
+    copy(metricLabels = metricLabels)
+
+  /**
+   * @param runloopMetricsSchedule
+   *   The schedule at which the runloop metrics are measured. Example runloop metrics are queue sizes and number of
+   *   outstanding commits. The default is to measure every 500ms.
+   */
+  def withRunloopMetricsSchedule(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ConsumerSettings =
+    copy(runloopMetricsSchedule = runloopMetricsSchedule)
+
 }
 
 object ConsumerSettings {

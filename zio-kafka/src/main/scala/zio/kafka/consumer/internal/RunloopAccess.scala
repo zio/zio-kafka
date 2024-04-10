@@ -78,6 +78,8 @@ private[consumer] object RunloopAccess {
   ): ZIO[Scope, Throwable, RunloopAccess] =
     for {
       maxPollInterval <- maxPollIntervalConfig(settings)
+      // See scaladoc of [[ConsumerSettings.withMaxRebalanceDuration]]:
+      maxRebalanceDuration = settings.maxRebalanceDuration.getOrElse(((maxPollInterval.toNanos / 5L) * 3L).nanos)
       // This scope allows us to link the lifecycle of the Runloop and of the Hub to the lifecycle of the Consumer
       // When the Consumer is shutdown, the Runloop and the Hub will be shutdown too (before the consumer)
       consumerScope <- ZIO.scope
@@ -87,19 +89,14 @@ private[consumer] object RunloopAccess {
       runloopStateRef <- Ref.Synchronized.make[RunloopState](RunloopState.NotStarted)
       makeRunloop = Runloop
                       .make(
-                        hasGroupId = settings.hasGroupId,
-                        consumer = consumerAccess,
-                        pollTimeout = settings.pollTimeout,
+                        settings = settings,
                         maxPollInterval = maxPollInterval,
-                        commitTimeout = settings.commitTimeout,
+                        maxRebalanceDuration = maxRebalanceDuration,
                         diagnostics = diagnostics,
-                        offsetRetrieval = settings.offsetRetrieval,
-                        userRebalanceListener = settings.rebalanceListener,
-                        restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
-                        rebalanceSafeCommits = settings.rebalanceSafeCommits,
-                        partitionsHub = partitionsHub,
-                        fetchStrategy = settings.fetchStrategy
+                        consumer = consumerAccess,
+                        partitionsHub = partitionsHub
                       )
+                      .interruptible
                       .withFinalizer(_ => runloopStateRef.set(RunloopState.Finalized))
                       .provide(ZLayer.succeed(consumerScope))
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)

@@ -28,7 +28,7 @@ object TransactionalProducer {
 
     private def commitTransactionWithOffsets(offsetBatch: OffsetBatch): Task[Unit] = {
       val sendOffsetsToTransaction: Task[Unit] =
-        ZIO.suspendSucceed {
+        ZIO.suspend {
           @inline def invalidGroupIdException: IO[InvalidGroupIdException, Nothing] =
             ZIO.fail(
               new InvalidGroupIdException(
