@@ -5,7 +5,7 @@ lazy val embeddedKafkaVersion = "3.7.0" // Should be the same as kafkaVersion, e
 
 lazy val kafkaClients          = "org.apache.kafka"        % "kafka-clients"           % kafkaVersion
 lazy val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.11.0"
-lazy val logback               = "ch.qos.logback"          % "logback-classic"         % "1.5.3"
+lazy val logback               = "ch.qos.logback"          % "logback-classic"         % "1.5.4"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
