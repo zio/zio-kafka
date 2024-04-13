@@ -5,14 +5,20 @@ import sbt.*
 import sbt.Keys.{ name, organization }
 
 object MimaSettings {
-  lazy val bincompatVersionToCompare = "2.4.2"
 
-  def mimaSettings(failOnProblem: Boolean) =
-    Seq(
-      mimaPreviousArtifacts := Set(organization.value %% name.value % bincompatVersionToCompare),
-      mimaBinaryIssueFilters ++= Seq(
-        exclude[Problem]("zio.kafka.consumer.internal.*")
-      ),
-      mimaFailOnProblem := failOnProblem
-    )
+  def mimaSettings(binCompatVersionToCompare: Option[String], failOnProblem: Boolean): Seq[Def.Setting[?]] =
+    binCompatVersionToCompare match {
+      case None =>
+        Seq.empty
+      case Some(binCompatVersion) =>
+        Seq(
+          mimaPreviousArtifacts := Set(organization.value %% name.value % binCompatVersion),
+          mimaBinaryIssueFilters ++= Seq(
+            exclude[Problem]("zio.kafka.consumer.internal.*")
+          ),
+          mimaFailOnProblem := failOnProblem
+        )
+
+    }
+
 }

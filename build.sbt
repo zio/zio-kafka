@@ -1,6 +1,16 @@
 import sbt.Def
 import MimaSettings.mimaSettings
 
+/**
+ * As of zio-kafka version 2.8.0 releases are binary compatible. This is checked with Mima.
+ *
+ * Keep this value set to the oldest minor release (with patch version set to "0") that is still binary compatible.
+ *
+ * Set this value to `None` when master is _not_ binary compatible with te last minor release, the next release shall
+ * increase the minor version.
+ */
+lazy val binCompatVersionToCompare = None // Some("2.8.0")
+
 lazy val kafkaVersion         = "3.7.0"
 lazy val embeddedKafkaVersion = "3.7.0" // Should be the same as kafkaVersion, except for the patch part
 
@@ -106,7 +116,7 @@ lazy val zioKafka =
     .enablePlugins(BuildInfoPlugin)
     .settings(stdSettings("zio-kafka"))
     .settings(buildInfoSettings("zio.kafka"))
-    .settings(mimaSettings(failOnProblem = true))
+    .settings(mimaSettings(binCompatVersionToCompare, failOnProblem = true))
     .settings(enableZIO(enableStreaming = true))
     .settings(
       libraryDependencies ++= Seq(
@@ -129,7 +139,7 @@ lazy val zioKafkaTestkit =
     .dependsOn(zioKafka)
     .enablePlugins(BuildInfoPlugin)
     .settings(stdSettings("zio-kafka-testkit"))
-    .settings(mimaSettings(failOnProblem = false))
+    .settings(mimaSettings(binCompatVersionToCompare, failOnProblem = false))
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio" %% "zio"      % zioVersion.value,
@@ -212,6 +222,7 @@ lazy val docs = project
   .enablePlugins(WebsitePlugin)
   .dependsOn(zioKafka, zioKafkaTestkit)
 
+// Extend 'lint' with mimaCheck
 lazy val lint = {
   val defaultLint = zio.sbt.Commands.ComposableCommand.lint
   defaultLint.copy(commandStrings = defaultLint.commandStrings :+ "mimaCheck").toCommand
