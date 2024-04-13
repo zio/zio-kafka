@@ -6,7 +6,7 @@ import MimaSettings.mimaSettings
  *
  * Keep this value set to the oldest minor release (with patch version set to "0") that is still binary compatible.
  *
- * Set this value to `None` when master is _not_ binary compatible with te last minor release, the next release shall
+ * Set this value to `None` when master is _not_ binary compatible with the latest minor release, the next release shall
  * increase the minor version.
  */
 lazy val binCompatVersionToCompare = None // Some("2.8.0")
