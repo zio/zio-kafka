@@ -9,7 +9,7 @@ object MimaSettings {
   def mimaSettings(binCompatVersionToCompare: Option[String], failOnProblem: Boolean): Seq[Def.Setting[?]] =
     binCompatVersionToCompare match {
       case None =>
-        Seq.empty
+        Seq(mimaFailOnProblem := false)
       case Some(binCompatVersion) =>
         Seq(
           mimaPreviousArtifacts := Set(organization.value %% name.value % binCompatVersion),
