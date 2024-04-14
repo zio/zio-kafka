@@ -158,7 +158,7 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    bufferSize: Int,
+    bufferSize: Int = 4,
     shutdownTimeout: Duration = 15.seconds
   )(
     withStream: ZStream[R, Throwable, CommittableRecord[K, V]] => ZIO[R, Throwable, Any]
@@ -678,7 +678,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    bufferSize: RuntimeFlags
+    bufferSize: Int = 4
   ): ZStream[R, Throwable, CommittableRecord[K, V]] =
     ZStream.unwrapScoped {
       for {
@@ -690,7 +690,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    bufferSize: Int,
+    bufferSize: Int = 4,
     shutdownTimeout: Duration = 15.seconds
   )(
     withStream: ZStream[R, Throwable, CommittableRecord[K, V]] => ZIO[R, Throwable, Any]
