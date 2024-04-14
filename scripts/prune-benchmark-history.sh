@@ -8,12 +8,13 @@ if [ "$current_branch" != "gh-pages" ]; then
   exit 1
 fi
 
+# calculate the cut off date: 7 days ago
 if date --version >/dev/null 2>&1 ; then
   # GNU date
-  cut_off_date="$(date --date="1 month ago" +%s)000"
+  cut_off_date="$(date --date="7 days ago" +%s)000"
 else
   # BSD date
-  cut_off_date="$(date -v -1m +%s)000"
+  cut_off_date="$(date -v -7d +%s)000"
 fi
 
 (
