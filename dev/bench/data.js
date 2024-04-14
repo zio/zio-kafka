@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1713076503001,
+  "lastUpdate": 1713076528511,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -22072,6 +22072,66 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 946.8904036799997,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "49699333+dependabot[bot]@users.noreply.github.com",
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0b2b72485a3988a2ed0d45fc937090f0e3167430",
+          "message": "Bump coursier/cache-action from 6.4.5 to 6.4.6 (#1209)\n\nBumps [coursier/cache-action](https://github.com/coursier/cache-action)\r\nfrom 6.4.5 to 6.4.6.\r\n<details>\r\n<summary>Release notes</summary>\r\n<p><em>Sourced from <a\r\nhref=\"https://github.com/coursier/cache-action/releases\">coursier/cache-action's\r\nreleases</a>.</em></p>\r\n<blockquote>\r\n<h2>v6.4.6</h2>\r\n<h2>What's Changed</h2>\r\n<ul>\r\n<li>fix: explicit termination in the post-step by <a\r\nhref=\"https://github.com/laughedelic\"><code>@​laughedelic</code></a> in\r\n<a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/598\">coursier/cache-action#598</a></li>\r\n</ul>\r\n<h2>Updates / maintenance</h2>\r\n<ul>\r\n<li>Bump <code>@​actions/core</code> from 1.10.0 to 1.10.1 by <a\r\nhref=\"https://github.com/dependabot\"><code>@​dependabot</code></a> in <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/569\">coursier/cache-action#569</a></li>\r\n<li>Bump peter-evans/create-pull-request from 5 to 6 by <a\r\nhref=\"https://github.com/dependabot\"><code>@​dependabot</code></a> in <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/571\">coursier/cache-action#571</a></li>\r\n<li>Bump prettier from 3.2.4 to 3.2.5 by <a\r\nhref=\"https://github.com/dependabot\"><code>@​dependabot</code></a> in <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/572\">coursier/cache-action#572</a></li>\r\n<li>Bump <code>@​typescript-eslint/eslint-plugin</code> from 6.19.1 to\r\n7.0.0 by <a\r\nhref=\"https://github.com/dependabot\"><code>@​dependabot</code></a> in <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/576\">coursier/cache-action#576</a></li>\r\n<li>Bump <code>@​actions/cache</code> from 3.2.2 to 3.2.4 by <a\r\nhref=\"https://github.com/dependabot\"><code>@​dependabot</code></a> in <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/570\">coursier/cache-action#570</a></li>\r\n<li>Bump <code>@​types/node</code> from 20.9.0 to 20.11.29 by <a\r\nhref=\"https://github.com/dependabot\"><code>@​dependabot</code></a> in <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/585\">coursier/cache-action#585</a></li>\r\n<li>Update dist by <a\r\nhref=\"https://github.com/github-actions\"><code>@​github-actions</code></a>\r\nin <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/584\">coursier/cache-action#584</a></li>\r\n<li>Update checkout version in README.md by <a\r\nhref=\"https://github.com/cptwunderlich\"><code>@​cptwunderlich</code></a>\r\nin <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/574\">coursier/cache-action#574</a></li>\r\n<li>Bump eslint from 8.56.0 to 8.57.0 by <a\r\nhref=\"https://github.com/dependabot\"><code>@​dependabot</code></a> in <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/587\">coursier/cache-action#587</a></li>\r\n<li>Bump <code>@​types/node</code> from 20.11.29 to 20.12.4 by <a\r\nhref=\"https://github.com/dependabot\"><code>@​dependabot</code></a> in <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/596\">coursier/cache-action#596</a></li>\r\n<li>Bump typescript from 5.3.3 to 5.4.4 by <a\r\nhref=\"https://github.com/dependabot\"><code>@​dependabot</code></a> in <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/597\">coursier/cache-action#597</a></li>\r\n<li>Bump eslint-plugin-github from 4.10.1 to 4.10.2 by <a\r\nhref=\"https://github.com/dependabot\"><code>@​dependabot</code></a> in <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/589\">coursier/cache-action#589</a></li>\r\n<li>Update dist by <a\r\nhref=\"https://github.com/github-actions\"><code>@​github-actions</code></a>\r\nin <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/599\">coursier/cache-action#599</a></li>\r\n</ul>\r\n<h2>New Contributors</h2>\r\n<ul>\r\n<li><a\r\nhref=\"https://github.com/cptwunderlich\"><code>@​cptwunderlich</code></a>\r\nmade their first contribution in <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/574\">coursier/cache-action#574</a></li>\r\n<li><a\r\nhref=\"https://github.com/laughedelic\"><code>@​laughedelic</code></a>\r\nmade their first contribution in <a\r\nhref=\"https://redirect.github.com/coursier/cache-action/pull/598\">coursier/cache-action#598</a></li>\r\n</ul>\r\n<p><strong>Full Changelog</strong>: <a\r\nhref=\"https://github.com/coursier/cache-action/compare/v6.4.5...v6.4.6\">https://github.com/coursier/cache-action/compare/v6.4.5...v6.4.6</a></p>\r\n</blockquote>\r\n</details>\r\n<details>\r\n<summary>Commits</summary>\r\n<ul>\r\n<li><a\r\nhref=\"https://github.com/coursier/cache-action/commit/142d2738bd29f0eb9d44610828acb3a19809feab\"><code>142d273</code></a>\r\nUpdate dist (<a\r\nhref=\"https://redirect.github.com/coursier/cache-action/issues/599\">#599</a>)</li>\r\n<li><a\r\nhref=\"https://github.com/coursier/cache-action/commit/9129103630963671b644f211a66faec23671bdcd\"><code>9129103</code></a>\r\nBump eslint-plugin-github from 4.10.1 to 4.10.2 (<a\r\nhref=\"https://redirect.github.com/coursier/cache-action/issues/589\">#589</a>)</li>\r\n<li><a\r\nhref=\"https://github.com/coursier/cache-action/commit/d95d61ec7cbba428df3c37ad6d1e5334b425ff14\"><code>d95d61e</code></a>\r\nBump typescript from 5.3.3 to 5.4.4 (<a\r\nhref=\"https://redirect.github.com/coursier/cache-action/issues/597\">#597</a>)</li>\r\n<li><a\r\nhref=\"https://github.com/coursier/cache-action/commit/5743260873ce6cb1bd0db238c2dfd0f7a16011e7\"><code>5743260</code></a>\r\nBump <code>@​types/node</code> from 20.11.29 to 20.12.4 (<a\r\nhref=\"https://redirect.github.com/coursier/cache-action/issues/596\">#596</a>)</li>\r\n<li><a\r\nhref=\"https://github.com/coursier/cache-action/commit/2dea3cc38582fc58bb6c3da21ba16b5bf4e1be06\"><code>2dea3cc</code></a>\r\nBump eslint from 8.56.0 to 8.57.0 (<a\r\nhref=\"https://redirect.github.com/coursier/cache-action/issues/587\">#587</a>)</li>\r\n<li><a\r\nhref=\"https://github.com/coursier/cache-action/commit/1f647d4174868710407817a30d0059c8b02eb2aa\"><code>1f647d4</code></a>\r\nfix dangling post-save (<a\r\nhref=\"https://redirect.github.com/coursier/cache-action/issues/598\">#598</a>)</li>\r\n<li><a\r\nhref=\"https://github.com/coursier/cache-action/commit/0938be49d7f5f4f81ee798b5b1a3d46efb71cfab\"><code>0938be4</code></a>\r\nUpdate checkout version in README.md (<a\r\nhref=\"https://redirect.github.com/coursier/cache-action/issues/574\">#574</a>)</li>\r\n<li><a\r\nhref=\"https://github.com/coursier/cache-action/commit/9ae081f181ff99842dbc2ac8cecb513bc4bcf82f\"><code>9ae081f</code></a>\r\nUpdate dist (<a\r\nhref=\"https://redirect.github.com/coursier/cache-action/issues/584\">#584</a>)</li>\r\n<li><a\r\nhref=\"https://github.com/coursier/cache-action/commit/85bd3d77f403a5db53ed521115b71c4d083fe418\"><code>85bd3d7</code></a>\r\nBump <code>@​types/node</code> from 20.9.0 to 20.11.29 (<a\r\nhref=\"https://redirect.github.com/coursier/cache-action/issues/585\">#585</a>)</li>\r\n<li><a\r\nhref=\"https://github.com/coursier/cache-action/commit/c28cb8581f7dc5aef394461575f7814402f917bd\"><code>c28cb85</code></a>\r\nBump <code>@​actions/cache</code> from 3.2.2 to 3.2.4 (<a\r\nhref=\"https://redirect.github.com/coursier/cache-action/issues/570\">#570</a>)</li>\r\n<li>Additional commits viewable in <a\r\nhref=\"https://github.com/coursier/cache-action/compare/v6.4.5...v6.4.6\">compare\r\nview</a></li>\r\n</ul>\r\n</details>\r\n<br />\r\n\r\n\r\n[![Dependabot compatibility\r\nscore](https://dependabot-badges.githubapp.com/badges/compatibility_score?dependency-name=coursier/cache-action&package-manager=github_actions&previous-version=6.4.5&new-version=6.4.6)](https://docs.github.com/en/github/managing-security-vulnerabilities/about-dependabot-security-updates#about-compatibility-scores)\r\n\r\nDependabot will resolve any conflicts with this PR as long as you don't\r\nalter it yourself. You can also trigger a rebase manually by commenting\r\n`@dependabot rebase`.\r\n\r\n[//]: # (dependabot-automerge-start)\r\n[//]: # (dependabot-automerge-end)\r\n\r\n---\r\n\r\n<details>\r\n<summary>Dependabot commands and options</summary>\r\n<br />\r\n\r\nYou can trigger Dependabot actions by commenting on this PR:\r\n- `@dependabot rebase` will rebase this PR\r\n- `@dependabot recreate` will recreate this PR, overwriting any edits\r\nthat have been made to it\r\n- `@dependabot merge` will merge this PR after your CI passes on it\r\n- `@dependabot squash and merge` will squash and merge this PR after\r\nyour CI passes on it\r\n- `@dependabot cancel merge` will cancel a previously requested merge\r\nand block automerging\r\n- `@dependabot reopen` will reopen this PR if it is closed\r\n- `@dependabot close` will close this PR and stop Dependabot recreating\r\nit. You can achieve the same result by closing it manually\r\n- `@dependabot show <dependency name> ignore conditions` will show all\r\nof the ignore conditions of the specified dependency\r\n- `@dependabot ignore this major version` will close this PR and stop\r\nDependabot creating any more for this major version (unless you reopen\r\nthe PR or upgrade to it yourself)\r\n- `@dependabot ignore this minor version` will close this PR and stop\r\nDependabot creating any more for this minor version (unless you reopen\r\nthe PR or upgrade to it yourself)\r\n- `@dependabot ignore this dependency` will close this PR and stop\r\nDependabot creating any more for this dependency (unless you reopen the\r\nPR or upgrade to it yourself)\r\n\r\n\r\n</details>\r\n\r\nSigned-off-by: dependabot[bot] <support@github.com>\r\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+          "timestamp": "2024-04-14T08:22:29+02:00",
+          "tree_id": "530fef172ad3930b9ca6aad665bc6494ed1d2c73",
+          "url": "https://github.com/zio/zio-kafka/commit/0b2b72485a3988a2ed0d45fc937090f0e3167430"
+        },
+        "date": 1713076527153,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 539.53395162,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 539.32807216,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 631.4482367999999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 625.62635768,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1038.7941828799997,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 938.37850266,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
