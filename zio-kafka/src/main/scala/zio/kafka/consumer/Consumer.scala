@@ -723,8 +723,12 @@ private[consumer] final class ConsumerLive private[consumer] (
     ZIO.scoped[R] {
       for {
         control <- streamControl
-        fib     <- withStream(control.stream).forkScoped
-        result  <- fib.join.onInterrupt(control.stop *> fib.join.timeout(shutdownTimeout).ignore)
+        fib     <- withStream(control.stream).forkDaemon
+        result <- fib.join.onInterrupt(
+                    control.stop *> fib.join.disconnect
+                      .timeout(shutdownTimeout)
+                      .ignore
+                  )
       } yield result
     }
 
