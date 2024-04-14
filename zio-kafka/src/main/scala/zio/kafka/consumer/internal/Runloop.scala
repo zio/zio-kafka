@@ -75,10 +75,10 @@ private[consumer] final class Runloop private (
   private[internal] def removeSubscription(subscription: Subscription): UIO[Unit] =
     commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
 
-  private[internal] def stopSubscribedTopicPartitions(subscription: Subscription): UIO[Unit] =
+  private[internal] def endStreamsBySubscription(subscription: Subscription): UIO[Unit] =
     for {
       promise <- Promise.make[Nothing, Unit]
-      _       <- commandQueue.offer(RunloopCommand.StopSubscribedTopicPartitions(subscription, promise)).unit
+      _       <- commandQueue.offer(RunloopCommand.EndStreamsBySubscription(subscription, promise)).unit
       _       <- promise.await
     } yield ()
 
@@ -648,7 +648,7 @@ private[consumer] final class Runloop private (
                 cmd.succeed *> doChangeSubscription(newSubState)
             }
         }
-      case RunloopCommand.StopSubscribedTopicPartitions(subscription, cont) =>
+      case RunloopCommand.EndStreamsBySubscription(subscription, cont) =>
         ZIO.foreachDiscard(
           state.assignedStreams.filter(stream => Subscription.subscriptionMatches(subscription, stream.tp))
         )(_.end) *> cont.succeed(()).as(state)

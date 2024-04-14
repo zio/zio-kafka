@@ -32,7 +32,7 @@ object RunloopCommand {
   }
   final case class RemoveSubscription(subscription: Subscription) extends StreamCommand
 
-  final case class StopSubscribedTopicPartitions(subscription: Subscription, cont: Promise[Nothing, Unit])
+  final case class EndStreamsBySubscription(subscription: Subscription, cont: Promise[Nothing, Unit])
       extends StreamCommand {
     @inline def succeed: UIO[Unit] = cont.succeed(()).unit
   }

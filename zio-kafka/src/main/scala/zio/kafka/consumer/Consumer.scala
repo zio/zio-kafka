@@ -671,7 +671,7 @@ private[consumer] final class ConsumerLive private[consumer] (
   ): ZIO[R, Throwable, Any] =
     partitionedAssignmentStreamWithGracefulShutdown(subscription, keyDeserializer, valueDeserializer, shutdownTimeout) {
       stream =>
-        withStream(stream.flattenChunks)
+        withStream(stream.debug("partitionedStreamWithGracefulShutdown").flattenChunks)
     }
 
   override def plainStream[R, K, V](

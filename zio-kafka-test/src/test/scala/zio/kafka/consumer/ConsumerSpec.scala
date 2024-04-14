@@ -377,7 +377,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                   for {
                                     nr <- messagesReceived.updateAndGet(_ + 1)
                                     _  <- stop.succeed(()).when(nr == 10)
-//                                      _  <- ZIO.debug(nr)
                                   } yield if (nr < 10) Seq(record.offset) else Seq.empty
                                 }
                                   .transduce(Consumer.offsetBatches)
