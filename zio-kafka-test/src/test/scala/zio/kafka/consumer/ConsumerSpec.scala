@@ -385,7 +385,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                               }
                               .forkScoped
                           _      <- produceMany(topic, kvs)
-                          _      <- stop.await *> fib.interrupt.debug
+                          _      <- stop.await *> fib.interrupt
                           offset <- Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
                         } yield offset
                       }.provideSomeLayer[Kafka with Producer](consumer(client, Some(group)))
