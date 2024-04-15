@@ -67,7 +67,7 @@ private[consumer] final class RunloopAccess private (
            }
     } yield SubscriptionStreamControl(
       stream.merge(ZStream.fromZIO(end.await).as(Take.end)),
-      withRunloopZIO(requireRunning = true)(_.endStreamsBySubscription(subscription)) *>
+      withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription)) *>
         end.succeed(()).ignore
     )
 
