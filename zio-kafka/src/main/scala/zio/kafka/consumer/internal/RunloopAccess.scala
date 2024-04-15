@@ -57,9 +57,8 @@ private[consumer] final class RunloopAccess private (
     subscription: Subscription
   ): ZIO[Scope, InvalidSubscriptionUnion, SubscriptionStreamControl[UStream[Take[Throwable, PartitionAssignment]]]] =
     for {
-      partitionAssignmentQueue <- Queue.unbounded[Take[Throwable, PartitionAssignment]]
-      stream                   <- ZStream.fromHubScoped(partitionHub)
-      _                        <- stream.flattenTake.runIntoQueue(partitionAssignmentQueue).forkScoped
+      end    <- Promise.make[Nothing, Unit]
+      stream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
@@ -67,10 +66,9 @@ private[consumer] final class RunloopAccess private (
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
     } yield SubscriptionStreamControl(
-      ZStream.fromQueue(partitionAssignmentQueue),
-      withRunloopZIO(requireRunning = true)(_.endStreamsBySubscription(subscription)) *> partitionAssignmentQueue
-        .offer(Take.end)
-        .ignore
+      stream.merge(ZStream.fromZIO(end.await).as(Take.end)),
+      withRunloopZIO(requireRunning = true)(_.endStreamsBySubscription(subscription)) *>
+        end.succeed(()).ignore
     )
 
 }
