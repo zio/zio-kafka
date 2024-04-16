@@ -14,9 +14,8 @@ lazy val binCompatVersionToCompare = None // Some("2.8.0")
 lazy val kafkaVersion         = "3.7.0"
 lazy val embeddedKafkaVersion = "3.7.0" // Should be the same as kafkaVersion, except for the patch part
 
-lazy val kafkaClients          = "org.apache.kafka"        % "kafka-clients"           % kafkaVersion
-lazy val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.12.0"
-lazy val logback               = "ch.qos.logback"          % "logback-classic"         % "1.5.5"
+lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
+lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.5"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
@@ -119,10 +118,7 @@ lazy val zioKafka =
     .settings(mimaSettings(binCompatVersionToCompare, failOnProblem = true))
     .settings(enableZIO(enableStreaming = true))
     .settings(
-      libraryDependencies ++= Seq(
-        kafkaClients,
-        scalaCollectionCompat
-      )
+      libraryDependencies ++= Seq(kafkaClients)
     )
 
 lazy val `embedded-kafka`: Def.Initialize[Seq[sbt.ModuleID]] = {
@@ -144,8 +140,7 @@ lazy val zioKafkaTestkit =
       libraryDependencies ++= Seq(
         "dev.zio" %% "zio"      % zioVersion.value,
         "dev.zio" %% "zio-test" % zioVersion.value,
-        kafkaClients,
-        scalaCollectionCompat
+        kafkaClients
       ) ++ `embedded-kafka`.value
     )
 
@@ -162,8 +157,7 @@ lazy val zioKafkaTest =
       libraryDependencies ++= Seq(
         kafkaClients,
         logback    % Test,
-        "dev.zio" %% "zio-logging-slf4j" % "2.2.2" % Test,
-        scalaCollectionCompat
+        "dev.zio" %% "zio-logging-slf4j" % "2.2.2" % Test
       ) ++ `embedded-kafka`.value
     )
 
