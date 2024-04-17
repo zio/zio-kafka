@@ -23,6 +23,9 @@ libraryDependencies += "dev.zio" %% "zio-kafka"         % "@VERSION@"
 libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "@VERSION@" % Test
 ```
 
+Snapshots are available on Sonatype's snapshot repository https://oss.sonatype.org/content/repositories/snapshots.
+[Browse here](https://oss.sonatype.org/content/repositories/snapshots/dev/zio/zio-kafka_3/) to find available versions.
+
 ## Example
 
 Let's write a simple Kafka producer and consumer using ZIO Kafka with ZIO Streams. Before everything, we need a running instance of Kafka. We can do that by saving the following docker-compose script in the `docker-compose.yml` file and run `docker-compose up`:
