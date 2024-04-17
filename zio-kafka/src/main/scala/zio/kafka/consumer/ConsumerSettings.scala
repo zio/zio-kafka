@@ -190,8 +190,6 @@ final case class ConsumerSettings(
     copy(restartStreamOnRebalancing = value)
 
   /**
-   * NOTE: 'rebalanceSafeCommits' is an EXPERIMENTAL feature. It is not recommended for production use yet.
-   *
    * @param value
    *   Whether to hold up a rebalance until all offsets of consumed messages have been committed. The default is
    *   `false`, but the recommended value is `true` as it prevents duplicate messages.
@@ -224,8 +222,6 @@ final case class ConsumerSettings(
     copy(rebalanceSafeCommits = value)
 
   /**
-   * NOTE: 'rebalanceSafeCommits' is an EXPERIMENTAL feature. It is not recommended for production use yet.
-   *
    * @param value
    *   Maximum time spent in the rebalance callback when `rebalanceSafeCommits` is enabled.
    *
