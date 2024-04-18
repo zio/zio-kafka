@@ -10,6 +10,7 @@ const sidebars = {
         "example-of-consuming-producing-and-committing-offsets",
         "partition-assignment-and-offset-retrieval",
         "consumer-tuning",
+        "preventing-duplicates",
         "sharing-consumer",
         "serialization-and-deserialization",
         "writing-tests"
