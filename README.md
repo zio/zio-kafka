@@ -23,6 +23,9 @@ libraryDependencies += "dev.zio" %% "zio-kafka"         % "2.7.4"
 libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "2.7.4" % Test
 ```
 
+Snapshots are available on Sonatype's snapshot repository https://oss.sonatype.org/content/repositories/snapshots.
+[Browse here](https://oss.sonatype.org/content/repositories/snapshots/dev/zio/zio-kafka_3/) to find available versions.
+
 ## Example
 
 Let's write a simple Kafka producer and consumer using ZIO Kafka with ZIO Streams. Before everything, we need a running instance of Kafka. We can do that by saving the following docker-compose script in the `docker-compose.yml` file and run `docker-compose up`:
@@ -110,7 +113,9 @@ object MainApp extends ZIOAppDefault {
 
 ## Resources
 
-- [An Introduction to ZIO Kafka](https://ziverge.com/blog/introduction-to-zio-kafka/)
+- [ZIO Kafka tutorial](https://zio.dev/guides/tutorials/producing-consuming-data-from-kafka-topics/)
+- [Making ZIO-Kafka Safer and Faster in 2023](https://www.youtube.com/watch?v=MJoRwEyyVxM) by Erik van Oosten (November 2023)
+- [ZIO Kafka with Scala: A Tutorial](https://www.youtube.com/watch?v=ExFjjczwwHs) by Rock the JVM (August 2021)
 - [Streaming microservices with ZIO and Kafka](https://scalac.io/streaming-microservices-with-zio-and-kafka/) by Aleksandar Skrbic (February 2021)
 - [ZIO WORLD - ZIO Kafka](https://www.youtube.com/watch?v=GECv1ONieLw) by Aleksandar Skrbic (March 2020) — Aleksandar Skrbic presented ZIO Kafka, a critical library for the modern Scala developer, which hides some of the complexities of Kafka.
 
