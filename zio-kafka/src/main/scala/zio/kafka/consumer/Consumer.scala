@@ -671,7 +671,7 @@ private[consumer] final class ConsumerLive private[consumer] (
   ): ZIO[R, Throwable, Any] =
     partitionedAssignmentStreamWithGracefulShutdown(subscription, keyDeserializer, valueDeserializer, shutdownTimeout) {
       stream =>
-        withStream(stream.debug("partitionedStreamWithGracefulShutdown").flattenChunks)
+        withStream(stream.flattenChunks)
     }
 
   override def plainStream[R, K, V](
@@ -723,7 +723,9 @@ private[consumer] final class ConsumerLive private[consumer] (
     ZIO.scoped[R] {
       for {
         control <- streamControl
-        fib     <- withStream(control.stream).forkDaemon
+        fib <- withStream(control.stream)
+                 .onInterrupt(ZIO.logError("withStream in runWithGracefulShutdown interrupted, this should not happen"))
+                 .forkDaemon
         result <- fib.join.onInterrupt(
                     control.stop *> fib.join.disconnect
                       .timeout(shutdownTimeout)
