@@ -243,6 +243,11 @@ trait AdminClient {
   def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit]
 
   /**
+   * Remove all members from a consumer group.
+   */
+  def removeMembersFromConsumerGroup(groupId: String): Task[Unit]
+
+  /**
    * Describe the log directories of the specified brokers
    */
   def describeLogDirs(
@@ -749,6 +754,18 @@ object AdminClient {
       val options = new RemoveMembersFromConsumerGroupOptions(
         membersToRemove.map(new MemberToRemove(_)).asJavaCollection
       )
+      fromKafkaFuture(
+        ZIO.attemptBlocking(
+          adminClient.removeMembersFromConsumerGroup(groupId, options).all()
+        )
+      ).unit
+    }
+
+    /**
+     * Remove all members from a consumer group.
+     */
+    override def removeMembersFromConsumerGroup(groupId: String): Task[Unit] = {
+      val options = new RemoveMembersFromConsumerGroupOptions()
       fromKafkaFuture(
         ZIO.attemptBlocking(
           adminClient.removeMembersFromConsumerGroup(groupId, options).all()
