@@ -651,7 +651,16 @@ private[consumer] final class Runloop private (
       case RunloopCommand.EndStreamsBySubscription(subscription, cont) =>
         ZIO.foreachDiscard(
           state.assignedStreams.filter(stream => Subscription.subscriptionMatches(subscription, stream.tp))
-        )(_.end) *> cont.succeed(()).as(state)
+        )(_.end) *> cont
+          .succeed(())
+          .as(
+            state.copy(
+              pendingRequests =
+                state.pendingRequests.filterNot(req => Subscription.subscriptionMatches(subscription, req.tp)),
+              assignedStreams =
+                state.assignedStreams.filterNot(stream => Subscription.subscriptionMatches(subscription, stream.tp))
+            )
+          )
 
       case RunloopCommand.RemoveSubscription(subscription) =>
         state.subscriptionState match {

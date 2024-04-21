@@ -374,7 +374,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                 Serde.string
                               ) { stream =>
                                 stream
-                                  .flatMapPar(Int.MaxValue) { case (tp, partitionStream) =>
+                                  .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
                                     partitionStream.mapConcatZIO { record =>
                                       for {
                                         nr <- messagesReceived.updateAndGet(_ + 1)

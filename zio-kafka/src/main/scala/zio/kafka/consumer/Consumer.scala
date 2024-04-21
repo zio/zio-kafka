@@ -697,7 +697,9 @@ private[consumer] final class ConsumerLive private[consumer] (
   ): ZIO[R, Throwable, Any] =
     partitionedStreamWithGracefulShutdown(subscription, keyDeserializer, valueDeserializer, shutdownTimeout) {
       partitionedStream =>
-        withStream(partitionedStream.flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(_._2))
+        withStream(
+          partitionedStream.flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(_._2)
+        )
     }
 
   /**
@@ -724,8 +726,7 @@ private[consumer] final class ConsumerLive private[consumer] (
       for {
         control <- streamControl
         fib <- withStream(control.stream)
-                 .onInterrupt(ZIO.logError("withStream in runWithGracefulShutdown interrupted, this should not happen"))
-                 .forkDaemon
+                 .onInterrupt(ZIO.logError("withStream in runWithGracefulShutdown interrupted, this should not happen")).forkScoped
         result <-
           fib.join.onInterrupt(
             control.stop *> fib.join
