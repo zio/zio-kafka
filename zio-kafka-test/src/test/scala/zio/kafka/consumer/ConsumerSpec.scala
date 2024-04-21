@@ -368,19 +368,22 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                           stop <- Promise.make[Nothing, Unit]
                           fib <-
                             Consumer
-                              .plainStreamWithGracefulShutdown(
+                              .partitionedStreamWithGracefulShutdown[Any, String, String](
                                 Subscription.topics(topic),
                                 Serde.string,
                                 Serde.string
                               ) { stream =>
-                                stream.mapConcatZIO { record =>
-                                  for {
-                                    nr <- messagesReceived.updateAndGet(_ + 1)
-                                    _  <- stop.succeed(()).when(nr == 10)
-                                  } yield if (nr < 10) Seq(record.offset) else Seq.empty
-                                }
+                                stream
+                                  .flatMapPar(Int.MaxValue) { case (tp, partitionStream) =>
+                                    partitionStream.mapConcatZIO { record =>
+                                      for {
+                                        nr <- messagesReceived.updateAndGet(_ + 1)
+                                        _  <- stop.succeed(()).when(nr == 10)
+                                      } yield if (nr < 10) Seq(record.offset) else Seq.empty
+                                    }
+                                  }
                                   .transduce(Consumer.offsetBatches)
-                                  .mapZIO(_.commit)
+                                  .mapZIO(_.commit *> ZIO.logInfo("Commit done"))
                                   .runDrain
                               }
                               .forkScoped
