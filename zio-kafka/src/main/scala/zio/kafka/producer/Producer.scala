@@ -199,7 +199,7 @@ object Producer {
     for {
       _ <- SslHelper.validateEndpoint(settings.driverSettings)
       rawProducer <- ZIO.acquireRelease(
-                       ZIO.attempt(
+                       ZIO.attemptBlocking(
                          new KafkaProducer[Array[Byte], Array[Byte]](
                            settings.driverSettings.asJava,
                            new ByteArraySerializer(),
