@@ -726,7 +726,8 @@ private[consumer] final class ConsumerLive private[consumer] (
       for {
         control <- streamControl
         fib <- withStream(control.stream)
-                 .onInterrupt(ZIO.logError("withStream in runWithGracefulShutdown interrupted, this should not happen")).forkScoped
+                 .onInterrupt(ZIO.logError("withStream in runWithGracefulShutdown interrupted, this should not happen"))
+                 .forkScoped
         result <-
           fib.join.onInterrupt(
             control.stop *> fib.join
