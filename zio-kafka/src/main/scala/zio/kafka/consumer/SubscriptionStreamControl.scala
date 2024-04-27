@@ -12,4 +12,4 @@ import zio.stream.ZStream
  *   Stop fetching records for the subscribed topic-partitions and end the associated streams, while allowing commits to
  *   proceed (consumer remains subscribed)
  */
-private[consumer] case class SubscriptionStreamControl[S <: ZStream[_, _, _]](stream: S, stop: UIO[Unit])
+final private[consumer] case class SubscriptionStreamControl[S <: ZStream[_, _, _]](stream: S, stop: UIO[Unit])
