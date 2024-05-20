@@ -512,7 +512,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                               .forkScoped
                           }
                      _ <- stream1Interrupted.await
-                     _ <- ZIO.logInfo("Producing second batch topic1")
                      _ <- produceMany(topic1, kvs)
                      _ <- stream1Done.await
                             .tapErrorCause(c => ZIO.logErrorCause("Stream 1 await failed", c))
