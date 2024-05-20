@@ -16,6 +16,7 @@ import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
 import zio.stream._
 
+import scala.annotation.unused
 import scala.jdk.CollectionConverters._
 import scala.util.control.NoStackTrace
 
@@ -718,24 +719,32 @@ private[consumer] final class ConsumerLive private[consumer] (
    */
   private def runWithGracefulShutdown[StreamType <: ZStream[_, _, _], R, E](
     streamControl: ZIO[Scope, E, SubscriptionStreamControl[StreamType]],
-    shutdownTimeout: Duration
+    @unused shutdownTimeout: Duration
   )(
     withStream: StreamType => ZIO[R, E, Any]
   ): ZIO[R, E, Any] =
     ZIO.scoped[R] {
       for {
         control <- streamControl
-        fib <- withStream(control.stream)
-                 .onInterrupt(ZIO.logError("withStream in runWithGracefulShutdown interrupted, this should not happen"))
-                 .forkScoped
+        fib <-
+          (withStream(control.stream)
+            .onInterrupt(
+              ZIO.logError("withStream in runWithGracefulShutdown interrupted, this should not happen")
+            ))
+            .tapErrorCause(cause => ZIO.logErrorCause("Error in withStream fiber in runWithGracefulShutdown", cause))
+            .forkScoped
         result <-
           fib.join.onInterrupt(
-            control.stop *> fib.join
-              .timeout(shutdownTimeout)
-              .tapErrorCause(cause =>
-                ZIO.logErrorCause("Error joining withStream fiber in runWithGracefulShutdown", cause)
-              )
-              .ignore
+            ZIO.fiberIdWith(id => ZIO.logInfo(s"Interrupting from ${id.toString}")) *>
+              control.stop *> ZIO.logInfo("Control stopped") *>
+              fib.join
+                /// TODO this still gives errors..
+//                .timeout(shutdownTimeout)
+                .tapErrorCause(cause =>
+                  ZIO.logErrorCause("Error joining withStream fiber in runWithGracefulShutdown", cause)
+                )
+                .tap(_ => ZIO.logInfo("Join done"))
+                .ignore
           )
       } yield result
     }

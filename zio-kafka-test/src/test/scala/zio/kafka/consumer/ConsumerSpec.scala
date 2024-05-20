@@ -473,37 +473,53 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             _ <- produceMany(topic2, kvs)
             _ <- ZIO.scoped {
                    for {
-                     stream1Started <- Promise.make[Nothing, Unit]
-                     stream1Fib <-
-                       Consumer
-                         .plainStreamWithGracefulShutdown(Subscription.topics(topic1), Serde.string, Serde.string) {
-                           stream =>
-                             stream
-                               .tap(_ => stream1Started.succeed(()))
-                               .zipWithIndex
-                               .map(_._2)
-                               .takeWhile(_ < 2 * kvs.size - 1)
-                               .runDrain
-
-                         }
-                         .forkScoped
+                     stream1Started     <- Promise.make[Nothing, Unit]
+                     stream1Done        <- Promise.make[Nothing, Unit]
+                     stream1Interrupted <- Promise.make[Nothing, Unit]
+                     stream1Fib <- ZIO.logAnnotate("stream", "1") {
+                                     (Consumer
+                                       .plainStreamWithGracefulShutdown(
+                                         Subscription.topics(topic1),
+                                         Serde.string,
+                                         Serde.string
+                                       ) { stream =>
+                                         stream
+                                           .tap(_ => stream1Started.succeed(()))
+                                           .zipWithIndex
+                                           .map(_._2)
+                                           .runDrain
+                                       }
+                                       .tapErrorCause(c => ZIO.logErrorCause("Stream 1 failed", c))
+                                       .ensuring(stream1Done.succeed(())))
+                                       .forkScoped
+                                   }
                      _ <- stream1Started.await
-                     _ <-
-                       Consumer
-                         .plainStreamWithGracefulShutdown(Subscription.topics(topic2), Serde.string, Serde.string) {
-                           stream =>
-                             stream.zipWithIndex
-                               .map(_._2)
-                               .tap(count => stream1Fib.interrupt.when(count == 4))
-                               .runDrain
-                         }
-                         .forkScoped
+                     _ <- ZIO.logAnnotate("stream", "2") {
+                            Consumer
+                              .plainStreamWithGracefulShutdown(
+                                Subscription.topics(topic2),
+                                Serde.string,
+                                Serde.string
+                              ) { stream =>
+                                stream.zipWithIndex
+                                  .map(_._2)
+                                  .tap(count =>
+                                    (stream1Fib.interrupt <* stream1Interrupted.succeed(())).when(count == 4)
+                                  )
+                                  .runDrain
+                              }
+                              .tapErrorCause(c => ZIO.logErrorCause("Stream 2 failed", c))
+                              .forkScoped
+                          }
+                     _ <- stream1Interrupted.await
+                     _ <- ZIO.logInfo("Producing second batch topic1")
                      _ <- produceMany(topic1, kvs)
-                     _ <- stream1Fib.join
+                     _ <- stream1Done.await
+                            .tapErrorCause(c => ZIO.logErrorCause("Stream 1 await failed", c))
                    } yield ()
                  }.provideSomeLayer[Kafka with Scope with Producer](consumer(client, Some(group)))
           } yield assertCompletes
-        }
+        } @@ nonFlaky(10)
       ),
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
         // Setup of this test:
