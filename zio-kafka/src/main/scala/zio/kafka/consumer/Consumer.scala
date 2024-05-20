@@ -16,7 +16,6 @@ import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
 import zio.stream._
 
-import scala.annotation.unused
 import scala.jdk.CollectionConverters._
 import scala.util.control.NoStackTrace
 
@@ -719,7 +718,7 @@ private[consumer] final class ConsumerLive private[consumer] (
    */
   private def runWithGracefulShutdown[StreamType <: ZStream[_, _, _], R, E](
     streamControl: ZIO[Scope, E, SubscriptionStreamControl[StreamType]],
-    @unused shutdownTimeout: Duration
+    shutdownTimeout: Duration
   )(
     withStream: StreamType => ZIO[R, E, Any]
   ): ZIO[R, E, Any] =
