@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1717832592255,
+  "lastUpdate": 1718009632154,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -21608,6 +21608,66 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 951.9541525600001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d399b849bb559cf6d3be6ac3ed563737025d1b15",
+          "message": "Allow stream to be interrupted when there is no traffic (#1251)\n\nWhen a partition is lost while there is no traffic,\r\n`PartitionStreamControl` is blocked waiting for data. We fix this by\r\nracing with the `interruptPromise`. (Thanks @josdirksen for the\r\nanalysis! See #1250.)\r\n\r\nNote: this situation can only occur with lost partitions. Timeouts (the\r\nother reason for interrupts) do not occur when there is no traffic.\r\nCurrently, we have no way to test lost partitions. Therefore, there are\r\nno added tests.\r\n\r\nThis PR does _not_ change how lost partitions are handled. That is, the\r\nstream for the partition that is lost is interrupted, the other streams\r\nare closed gracefully, the consumer aborts with an error.",
+          "timestamp": "2024-06-10T10:40:55+02:00",
+          "tree_id": "37c816a0f197641fc8c215a30e2ab7607188b387",
+          "url": "https://github.com/zio/zio-kafka/commit/d399b849bb559cf6d3be6ac3ed563737025d1b15"
+        },
+        "date": 1718009631357,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 539.2397462599998,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 538.39291754,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 624.22119392,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 622.5317664400002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1262.1588037799997,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 932.7012652000001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
