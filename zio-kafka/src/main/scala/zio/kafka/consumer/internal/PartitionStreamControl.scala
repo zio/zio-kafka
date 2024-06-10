@@ -91,7 +91,7 @@ final class PartitionStreamControl private (
     interruptionPromise.fail(consumeTimeout)
   }
 
-  /** To be invoked when the partition was lost. It clears the queue end ends the stream. */
+  /** To be invoked when the partition was lost. It clears the queue and ends the stream. */
   private[internal] def lost: UIO[Unit] =
     logAnnotate {
       ZIO.logDebug(s"Partition ${tp.toString} lost") *>
