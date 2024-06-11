@@ -94,9 +94,12 @@ final class PartitionStreamControl private (
   /** To be invoked when the partition was lost. It clears the queue and ends the stream. */
   private[internal] def lost: UIO[Unit] =
     logAnnotate {
-      ZIO.logDebug(s"Partition ${tp.toString} lost") *>
-        dataQueue.takeAll *>
-        dataQueue.offer(Take.end).unit
+      for {
+        _     <- ZIO.logDebug(s"Partition ${tp.toString} lost")
+        taken <- dataQueue.takeAll.map(_.size)
+        _     <- dataQueue.offer(Take.end)
+        _     <- ZIO.logDebug(s"Ignored ${taken} records on lost partition").when(taken != 0)
+      } yield ()
     }
 
   /** To be invoked when the partition was revoked or otherwise needs to be ended. */
