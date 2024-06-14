@@ -1,35 +1,10 @@
 package zio.kafka.example
 
-import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import zio._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.serde.Serde
 import zio.logging.backend.SLF4J
-
-trait MyKafka {
-  def bootstrapServers: List[String]
-  def stop(): UIO[Unit]
-}
-
-object MyKafka {
-  final case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends MyKafka {
-    override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
-    override def stop(): UIO[Unit]              = ZIO.succeed(embeddedK.stop(true))
-  }
-
-  val embedded: ZLayer[Any, Throwable, MyKafka] = ZLayer.scoped {
-    implicit val embeddedKafkaConfig: EmbeddedKafkaConfig = EmbeddedKafkaConfig(
-      customBrokerProperties = Map(
-        "group.min.session.timeout.ms"     -> "500",
-        "group.initial.rebalance.delay.ms" -> "0",
-        "authorizer.class.name"            -> "kafka.security.authorizer.AclAuthorizer",
-        "super.users"                      -> "User:ANONYMOUS"
-      )
-    )
-    ZIO.acquireRelease(ZIO.attempt(EmbeddedKafkaService(EmbeddedKafka.start())))(_.stop())
-  }
-}
 
 object Main extends ZIOAppDefault {
 
@@ -41,9 +16,9 @@ object Main extends ZIOAppDefault {
 
   private val topic = "test-topic"
 
-  private def consumerLayer(kafka: MyKafka): ZLayer[Any, Throwable, Consumer] = {
+  private def consumerLayer: ZLayer[Any, Throwable, Consumer] = {
     val consumerSettings =
-      ConsumerSettings(kafka.bootstrapServers)
+      ConsumerSettings(List("localhost:9092"))
         .withPollTimeout(500.millis)
         .withGroupId("test")
 
@@ -58,15 +33,14 @@ object Main extends ZIOAppDefault {
     ZIO.addFinalizer(ZIO.logInfo("Stopping app")) *>
       (
         for {
-          _     <- ZIO.logInfo(s"Starting app")
-          kafka <- ZIO.service[MyKafka]
+          _ <- ZIO.logInfo(s"Starting app")
           stream = Consumer
                      .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
-                     .provideLayer(consumerLayer(kafka))
+                     .provideLayer(consumerLayer)
           _        <- ZIO.logInfo(s"Consuming messages...")
           consumed <- stream.take(1000).tap(r => ZIO.logInfo(s"Consumed record $r")).runCount
           _        <- ZIO.logInfo(s"Consumed $consumed records")
         } yield ()
-      ).provideSomeLayer[ZIOAppArgs with Scope](MyKafka.embedded)
+      )
 
 }
