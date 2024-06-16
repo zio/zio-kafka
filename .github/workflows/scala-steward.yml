@@ -1,6 +1,6 @@
 name: Scala Steward
 
-# This workflow will launch everyday at 00:00
+# This workflow will launch every day at 00:00
 on:
   schedule:
     - cron: '0 0 * * *'
