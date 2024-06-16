@@ -52,16 +52,20 @@ final class PartitionStreamControl private (
 
   /** Offer new data for the stream to process. Should be called on every poll, also when `data.isEmpty` */
   private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
-    if (data.isEmpty) {
-      queueInfoRef.update(_.withEmptyPoll)
-    } else {
-      for {
-        now <- Clock.nanoTime
-        newPullDeadline = now + maxPollIntervalNanos
-        _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
-        _ <- dataQueue.offer(Take.chunk(data))
-      } yield ()
-    }
+    ZIO
+      .whenZIO(isRunning) {
+        if (data.isEmpty) {
+          queueInfoRef.update(_.withEmptyPoll)
+        } else {
+          for {
+            now <- Clock.nanoTime
+            newPullDeadline = now + maxPollIntervalNanos
+            _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
+            _ <- dataQueue.offer(Take.chunk(data))
+          } yield ()
+        }
+      }
+      .unit
 
   def queueSize: UIO[Int] = queueInfoRef.get.map(_.size)
 
