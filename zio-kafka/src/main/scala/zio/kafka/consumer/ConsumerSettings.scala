@@ -33,7 +33,8 @@ final case class ConsumerSettings(
   maxRebalanceDuration: Option[Duration] = None,
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy(),
   metricLabels: Set[MetricLabel] = Set.empty,
-  runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis)
+  runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis),
+  notAuthedContinuePollCount: Int = 5
 ) {
 
   /**
@@ -299,6 +300,16 @@ final case class ConsumerSettings(
    */
   def withRunloopMetricsSchedule(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ConsumerSettings =
     copy(runloopMetricsSchedule = runloopMetricsSchedule)
+
+  /**
+   * @param notAuthedContinuePollCount
+   *   The number of times that the consumer will continue polling even though it is not authorized or authenticated.
+   *   This setting helps with brokers that are sometimes too slow to authorize or authenticate and fail the poll.
+   *   Worded differently: the consumer will fail after this number of polls that are not authorized or authenticated.
+   *   The default is 5.
+   */
+  def notAuthedContinuePollCount(notAuthedContinuePollCount: Int): ConsumerSettings =
+    copy(notAuthedContinuePollCount = notAuthedContinuePollCount)
 
 }
 
