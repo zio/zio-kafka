@@ -451,7 +451,7 @@ private[consumer] final class Runloop private (
       .catchSome {
         case _: AuthorizationException | AuthenticationException
             if state.pollAuthFailureCount < settings.notAuthedContinuePollCount =>
-          ZIO.succeed(RawPollResult.authFail())
+          ZIO.sleep(settings.pollTimeout).as(RawPollResult.authFail())
       }
 
   private def handlePoll(state: State): Task[State] = {
