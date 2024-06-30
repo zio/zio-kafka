@@ -444,15 +444,22 @@ private[consumer] final class Runloop private (
     (toResume.size, toPause.size)
   }
 
-  private def doPoll(state: State, c: ByteArrayKafkaConsumer): Task[RawPollResult] =
-    ZIO
-      .attempt(RawPollResult.success(c.poll(settings.pollTimeout)))
+  private def doPoll(c: ByteArrayKafkaConsumer): Task[ConsumerRecords[Array[Byte], Array[Byte]]] =
+    ZIO.attempt {
+      val recordsOrNull = c.poll(settings.pollTimeout)
+      if (recordsOrNull eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]()
+      else recordsOrNull
+    }
       // Recover from spurious auth failures:
-      .catchSome {
-        case _: AuthorizationException | _: AuthenticationException
-            if state.pollAuthErrorCount + 1 <= settings.pollAuthErrorRetries =>
-          ZIO.sleep(settings.pollTimeout).as(RawPollResult.authFail())
-      }
+      .retry(
+        Schedule.recurWhile[Throwable] {
+          case _: AuthorizationException  => true
+          case _: AuthenticationException => true
+          case _                          => false
+        } &&
+          Schedule.recurs(settings.pollAuthErrorRetries) &&
+          Schedule.spaced(settings.pollTimeout)
+      )
 
   private def handlePoll(state: State): Task[State] = {
     for {
@@ -469,22 +476,21 @@ private[consumer] final class Runloop private (
             resumeAndPauseCounts <- resumeAndPausePartitions(c, partitionsToFetch)
             (toResumeCount, toPauseCount) = resumeAndPauseCounts
 
-            pullDurationAndRecords <- doPoll(state, c).timed
-            (pollDuration, RawPollResult(authFailed, polledRecords)) = pullDurationAndRecords
+            pullDurationAndRecords <- doPoll(c).timed
+            (pollDuration, polledRecords) = pullDurationAndRecords
 
-            _ <-
-              consumerMetrics.observePoll(toResumeCount, toPauseCount, pollDuration, polledRecords.count(), authFailed)
-            _ <- diagnostics.emit {
-                   val providedTps         = polledRecords.partitions().asScala.toSet
-                   val requestedPartitions = state.pendingRequests.map(_.tp).toSet
+            _ <- consumerMetrics.observePoll(toResumeCount, toPauseCount, pollDuration, polledRecords.count()) *>
+                   diagnostics.emit {
+                     val providedTps         = polledRecords.partitions().asScala.toSet
+                     val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-                   DiagnosticEvent.Poll(
-                     tpRequested = requestedPartitions,
-                     tpWithData = providedTps,
-                     tpWithoutData = requestedPartitions -- providedTps
-                   )
-                 }
-            pollResult <- lastRebalanceEvent.getAndSet(RebalanceEvent.None).flatMap {
+                     DiagnosticEvent.Poll(
+                       tpRequested = requestedPartitions,
+                       tpWithData = providedTps,
+                       tpWithoutData = requestedPartitions -- providedTps
+                     )
+                   }
+            pollresult <- lastRebalanceEvent.getAndSet(RebalanceEvent.None).flatMap {
                             case RebalanceEvent(false, _, _, _, _) =>
                               // The fast track, rebalance listener was not invoked:
                               //   no assignment changes, no new commits, only new records.
@@ -493,8 +499,7 @@ private[consumer] final class Runloop private (
                                   records = polledRecords,
                                   ignoreRecordsForTps = Set.empty,
                                   pendingRequests = state.pendingRequests,
-                                  assignedStreams = state.assignedStreams,
-                                  authFailed = authFailed
+                                  assignedStreams = state.assignedStreams
                                 )
                               )
 
@@ -560,11 +565,10 @@ private[consumer] final class Runloop private (
                                 records = polledRecords,
                                 ignoreRecordsForTps = ignoreRecordsForTps,
                                 pendingRequests = updatedPendingRequests,
-                                assignedStreams = updatedAssignedStreams,
-                                authFailed = authFailed
+                                assignedStreams = updatedAssignedStreams
                               )
                           }
-          } yield pollResult
+          } yield pollresult
         }
       fulfillResult <- offerRecordsToStreams(
                          pollResult.assignedStreams,
@@ -577,8 +581,7 @@ private[consumer] final class Runloop private (
     } yield state.copy(
       pendingRequests = fulfillResult.pendingRequests,
       pendingCommits = updatedPendingCommits,
-      assignedStreams = pollResult.assignedStreams,
-      pollAuthErrorCount = if (pollResult.authFailed) state.pollAuthErrorCount + 1 else 0
+      assignedStreams = pollResult.assignedStreams
     )
   }
 
@@ -786,23 +789,11 @@ object Runloop {
 
   type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
 
-  private final case class RawPollResult(
-    authFailed: Boolean,
-    records: ConsumerRecords[Array[Byte], Array[Byte]]
-  )
-  private object RawPollResult {
-    def success(records: ConsumerRecords[Array[Byte], Array[Byte]]): RawPollResult =
-      RawPollResult(authFailed = false, if (records eq null) ConsumerRecords.empty else records)
-
-    def authFail(): RawPollResult = RawPollResult(authFailed = true, ConsumerRecords.empty)
-  }
-
   private final case class PollResult(
     records: ConsumerRecords[Array[Byte], Array[Byte]],
     ignoreRecordsForTps: Set[TopicPartition],
     pendingRequests: Chunk[RunloopCommand.Request],
-    assignedStreams: Chunk[PartitionStreamControl],
-    authFailed: Boolean
+    assignedStreams: Chunk[PartitionStreamControl]
   )
   private final case class RevokeResult(
     pendingRequests: Chunk[RunloopCommand.Request],
@@ -911,8 +902,7 @@ object Runloop {
     pendingRequests: Chunk[RunloopCommand.Request],
     pendingCommits: Chunk[Runloop.Commit],
     assignedStreams: Chunk[PartitionStreamControl],
-    subscriptionState: SubscriptionState,
-    pollAuthErrorCount: Int
+    subscriptionState: SubscriptionState
   ) {
     def addPendingCommits(c: Chunk[Runloop.Commit]): State = copy(pendingCommits = pendingCommits ++ c)
     def addRequest(r: RunloopCommand.Request): State       = copy(pendingRequests = pendingRequests :+ r)
@@ -926,8 +916,7 @@ object Runloop {
       pendingRequests = Chunk.empty,
       pendingCommits = Chunk.empty,
       assignedStreams = Chunk.empty,
-      subscriptionState = SubscriptionState.NotSubscribed,
-      pollAuthErrorCount = 0
+      subscriptionState = SubscriptionState.NotSubscribed
     )
   }
 
