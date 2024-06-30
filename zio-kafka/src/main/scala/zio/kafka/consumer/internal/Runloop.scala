@@ -450,7 +450,7 @@ private[consumer] final class Runloop private (
       // Recover from spurious auth failures:
       .catchSome {
         case _: AuthorizationException | _: AuthenticationException
-            if state.pollAuthErrorCount < settings.pollAuthErrorRetries =>
+            if state.pollAuthErrorCount + 1 <= settings.pollAuthErrorRetries =>
           ZIO.sleep(settings.pollTimeout).as(RawPollResult.authFail())
       }
 
