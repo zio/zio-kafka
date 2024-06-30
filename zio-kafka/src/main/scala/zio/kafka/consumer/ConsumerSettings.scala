@@ -309,7 +309,7 @@ final case class ConsumerSettings(
    *
    * Worded differently: the consumer will fail after this number of polls that are not authorized or authenticated.
    *
-   * The default is 5.
+   * Set to 0 to fail the consumer on the first auth error. The default is 5.
    */
   def withPollAuthErrorRetries(pollAuthErrorRetries: Int): ConsumerSettings =
     copy(pollAuthErrorRetries = pollAuthErrorRetries)
