@@ -17,9 +17,6 @@ import zio.metrics.MetricLabel
  *     .withProperties(properties)
  *     .... etc.
  * }}}
- *
- * @param bootstrapServers
- *   the Kafka bootstrap servers
  */
 final case class ConsumerSettings(
   properties: Map[String, AnyRef] = Map.empty,
@@ -34,7 +31,7 @@ final case class ConsumerSettings(
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy(),
   metricLabels: Set[MetricLabel] = Set.empty,
   runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis),
-  notAuthedContinuePollCount: Int = 5
+  pollAuthErrorRetries: Int = 5
 ) {
 
   /**
@@ -302,14 +299,20 @@ final case class ConsumerSettings(
     copy(runloopMetricsSchedule = runloopMetricsSchedule)
 
   /**
-   * @param notAuthedContinuePollCount
-   *   The number of times that the consumer will continue polling even though it is not authorized or authenticated.
-   *   This setting helps with brokers that are sometimes too slow to authorize or authenticate and fail the poll.
-   *   Worded differently: the consumer will fail after this number of polls that are not authorized or authenticated.
-   *   The default is 5.
+   * @param pollAuthErrorRetries
+   *   The number of times that the consumer continues polling the broker for more records, even though a poll fails
+   *   with an [[org.apache.kafka.common.errors.AuthorizationException]] or
+   *   [[org.apache.kafka.common.errors.AuthenticationException]]. Retries are delayed for [[pollTimeout]].
+   *
+   * This setting helps with failed polls due to too slow authorization or authentication in the broker. You may also
+   * consider increasing `pollTimeout` to reduce auth-work on the broker.
+   *
+   * Worded differently: the consumer will fail after this number of polls that are not authorized or authenticated.
+   *
+   * The default is 5.
    */
-  def notAuthedContinuePollCount(notAuthedContinuePollCount: Int): ConsumerSettings =
-    copy(notAuthedContinuePollCount = notAuthedContinuePollCount)
+  def withPollAuthErrorRetries(pollAuthErrorRetries: Int): ConsumerSettings =
+    copy(pollAuthErrorRetries = pollAuthErrorRetries)
 
 }
 

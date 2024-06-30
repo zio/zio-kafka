@@ -449,8 +449,8 @@ private[consumer] final class Runloop private (
       .attempt(RawPollResult.success(c.poll(settings.pollTimeout)))
       // Recover from spurious auth failures:
       .catchSome {
-        case _: AuthorizationException | AuthenticationException
-            if state.pollAuthFailureCount < settings.notAuthedContinuePollCount =>
+        case _: AuthorizationException | _: AuthenticationException
+            if state.pollAuthErrorCount < settings.pollAuthErrorRetries =>
           ZIO.sleep(settings.pollTimeout).as(RawPollResult.authFail())
       }
 
@@ -484,7 +484,7 @@ private[consumer] final class Runloop private (
                      tpWithoutData = requestedPartitions -- providedTps
                    )
                  }
-            pollresult <- lastRebalanceEvent.getAndSet(RebalanceEvent.None).flatMap {
+            pollResult <- lastRebalanceEvent.getAndSet(RebalanceEvent.None).flatMap {
                             case RebalanceEvent(false, _, _, _, _) =>
                               // The fast track, rebalance listener was not invoked:
                               //   no assignment changes, no new commits, only new records.
@@ -564,7 +564,7 @@ private[consumer] final class Runloop private (
                                 authFailed = authFailed
                               )
                           }
-          } yield pollresult
+          } yield pollResult
         }
       fulfillResult <- offerRecordsToStreams(
                          pollResult.assignedStreams,
@@ -578,7 +578,7 @@ private[consumer] final class Runloop private (
       pendingRequests = fulfillResult.pendingRequests,
       pendingCommits = updatedPendingCommits,
       assignedStreams = pollResult.assignedStreams,
-      pollAuthFailureCount = if (pollResult.authFailed) state.pollAuthFailureCount + 1 else 0
+      pollAuthErrorCount = if (pollResult.authFailed) state.pollAuthErrorCount + 1 else 0
     )
   }
 
@@ -912,7 +912,7 @@ object Runloop {
     pendingCommits: Chunk[Runloop.Commit],
     assignedStreams: Chunk[PartitionStreamControl],
     subscriptionState: SubscriptionState,
-    pollAuthFailureCount: Int
+    pollAuthErrorCount: Int
   ) {
     def addPendingCommits(c: Chunk[Runloop.Commit]): State = copy(pendingCommits = pendingCommits ++ c)
     def addRequest(r: RunloopCommand.Request): State       = copy(pendingRequests = pendingRequests :+ r)
@@ -927,7 +927,7 @@ object Runloop {
       pendingCommits = Chunk.empty,
       assignedStreams = Chunk.empty,
       subscriptionState = SubscriptionState.NotSubscribed,
-      pollAuthFailureCount = 0
+      pollAuthErrorCount = 0
     )
   }
 
@@ -945,7 +945,7 @@ object Runloop {
           val offset = offsetAndMeta.offset()
           val maxOffset = updatedOffsets.get(tp) match {
             case Some(existingOffset) =>
-              offsetIncrease += max(0L, (offset - existingOffset))
+              offsetIncrease += max(0L, offset - existingOffset)
               max(existingOffset, offset)
             case None =>
               // This partition was not committed to from this consumer yet. Therefore we do not know the offset
