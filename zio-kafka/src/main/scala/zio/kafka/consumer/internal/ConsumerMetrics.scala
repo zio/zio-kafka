@@ -12,7 +12,7 @@ import zio._
  * zio-kafka version.
  */
 private[internal] trait ConsumerMetrics {
-  def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int, authFail: Boolean): UIO[Unit]
+  def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int): UIO[Unit]
   def observeCommit(latency: Duration): UIO[Unit]
   def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit]
   def observeRebalance(currentlyAssignedCount: Int, assignedCount: Int, revokedCount: Int, lostCount: Int): UIO[Unit]
@@ -92,28 +92,13 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  private val authFailCounter: Metric.Counter[Int] =
-    Metric
-      .counterInt(
-        "ziokafka_consumer_polls_auth_fail",
-        "The number of polls that failed authorization or authentication."
-      )
-      .tagged(metricLabels)
-
-  override def observePoll(
-    resumedCount: Int,
-    pausedCount: Int,
-    latency: Duration,
-    pollSize: Int,
-    authFail: Boolean
-  ): UIO[Unit] =
+  override def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int): UIO[Unit] =
     for {
       _ <- pollCounter.increment
       _ <- partitionsResumedInLatestPollGauge.update(resumedCount)
       _ <- partitionsPausedInLatestPollGauge.update(pausedCount)
       _ <- pollLatencyHistogram.update(latency)
       _ <- pollSizeHistogram.update(pollSize)
-      _ <- authFailCounter.increment
     } yield ()
 
   // -----------------------------------------------------
