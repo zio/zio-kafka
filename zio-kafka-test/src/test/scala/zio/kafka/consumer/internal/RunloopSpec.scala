@@ -2,12 +2,12 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer.{ ConsumerRecord, MockConsumer, OffsetResetStrategy }
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.AuthorizationException
+import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException }
 import zio._
 import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.metrics.MetricState
+import zio.metrics.{ MetricState, Metrics }
 import zio.stream.{ Take, ZStream }
 import zio.test.TestAspect.withLiveClock
 import zio.test._
@@ -35,7 +35,7 @@ object RunloopSpec extends ZIOSpecDefault {
           }
           for {
             streamStream <- ZStream.fromHubScoped(partitionsHub)
-            _            <- runloop.addSubscription(Subscription.Topics(Set("t1")))
+            _            <- runloop.addSubscription(Subscription.Topics(Set(tp10.topic())))
             record <- streamStream
                         .map(_.exit)
                         .flattenExitOption
@@ -52,7 +52,7 @@ object RunloopSpec extends ZIOSpecDefault {
           )
         }
       },
-      test("runloop retries poll upon AuthorizationException") {
+      test("runloop retries poll upon AuthorizationException and AuthenticationException") {
         withRunloop { (mockConsumer, partitionsHub, runloop) =>
           mockConsumer.schedulePollTask { () =>
             mockConsumer.updateEndOffsets(Map(tp10 -> Long.box(0L)).asJava)
@@ -62,14 +62,14 @@ object RunloopSpec extends ZIOSpecDefault {
             mockConsumer.setPollException(new AuthorizationException("~~test~~"))
           }
           mockConsumer.schedulePollTask { () =>
-            mockConsumer.setPollException(new AuthorizationException("~~test~~"))
+            mockConsumer.setPollException(new AuthenticationException("~~test~~"))
           }
           mockConsumer.schedulePollTask { () =>
             mockConsumer.addRecord(makeConsumerRecord(tp10, key123))
           }
           for {
             streamStream <- ZStream.fromHubScoped(partitionsHub)
-            _            <- runloop.addSubscription(Subscription.Topics(Set("t1")))
+            _            <- runloop.addSubscription(Subscription.Topics(Set(tp10.topic())))
             record <- streamStream
                         .map(_.exit)
                         .flattenExitOption
@@ -81,14 +81,7 @@ object RunloopSpec extends ZIOSpecDefault {
                         }
                         .runHead
                         .someOrFail(new AssertionError("Expected at least 1 record from the streams"))
-            metrics <- ZIO.metrics
-            authErrorCount = metrics.metrics
-                               .find(_.metricKey.name == "ziokafka_consumer_poll_auth_errors")
-                               .map(_.metricState)
-                               .flatMap {
-                                 case MetricState.Counter(count) => Some(count)
-                                 case _                          => Option.empty[Double]
-                               }
+            authErrorCount <- ZIO.metrics.map(counterValue("ziokafka_consumer_poll_auth_errors"))
           } yield assertTrue(
             record.key sameElements key123,
             authErrorCount.contains(2d)
@@ -123,4 +116,12 @@ object RunloopSpec extends ZIOSpecDefault {
   private def makeConsumerRecord(tp: TopicPartition, key: Array[Byte]): ConsumerRecord[Array[Byte], Array[Byte]] =
     new ConsumerRecord[Array[Byte], Array[Byte]](tp.topic(), tp.partition(), 0L, key, "value".getBytes)
 
+  private def counterValue(counterName: String)(metrics: Metrics): Option[Double] =
+    metrics.metrics
+      .find(_.metricKey.name == counterName)
+      .map(_.metricState)
+      .flatMap {
+        case MetricState.Counter(count) => Some(count)
+        case _                          => Option.empty[Double]
+      }
 }
