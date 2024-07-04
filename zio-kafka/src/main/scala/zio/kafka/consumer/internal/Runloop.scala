@@ -452,10 +452,10 @@ private[consumer] final class Runloop private (
     }
       // Recover from spurious auth failures:
       .retry(
-        Schedule.recurWhile[Throwable] {
-          case _: AuthorizationException  => true
-          case _: AuthenticationException => true
-          case _                          => false
+        Schedule.recurWhileZIO[Any, Throwable] {
+          case _: AuthorizationException | _: AuthenticationException =>
+            consumerMetrics.observePollAuthError().as(true)
+          case _ => ZIO.succeed(false)
         } &&
           Schedule.recurs(settings.pollAuthErrorRetries) &&
           Schedule.spaced(settings.pollTimeout)
