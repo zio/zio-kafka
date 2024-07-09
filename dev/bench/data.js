@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1720441445476,
+  "lastUpdate": 1720553723967,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -23792,6 +23792,66 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 906.0005026599999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a8596f38fbce56a2dd10e5a38a8b18511a24e41d",
+          "message": "A lost partition is no longer fatal (#1252)\n\nBefore 2.7.0 a lost partition was treated as a revoked partition. Since\r\nthe partition is already assigned to another node, this potentially\r\nleads to duplicate processing of records.\r\n\r\nZio-kafka 2.7.0 assumes that a lost partition is a fatal event. It leads\r\nto an interrupt in the stream that handles the partition. The other\r\nstreams are ended, and the consumer closes with an error. Usually, a\r\nfull program restart is needed to resume consuming.\r\n\r\nIt should be noted that stream processing is not interrupted\r\nimmediately. Only when the stream requests new records, the interrupt is\r\nobserved. Unfortunately, we have not found a clean way to interrupt the\r\nstream consumer directly.\r\n\r\nMeanwhile, from bug reports (#1233, #1250), we understand that\r\npartitions are usually lost when no records have been received for a\r\nlong time.\r\n\r\nIn conclusion, 1) it is not possible to immediately interrupt user\r\nstream processing, and 2) it is most likely not needed anyway because\r\nthe stream is already done processing and awaiting more records.\r\n\r\nWith this change, a lost partition no longer leads to an interrupt.\r\nInstead, we first drain the stream's internal queue (just to be sure, it\r\nis probably already empty), and then we end the stream gracefully (that\r\nis, without error, like we do with revoked partitions). Other streams\r\nare not affected, the consumer will continue to work.\r\n\r\nLost partitions do not affect the features `rebalanceSafeCommits` and\r\n`restartStreamsOnRebalancing`; they do _not_ hold up a rebalance waiting\r\nfor commits to complete, and they do _not_ lead to restarts of other\r\nstreams.\r\n\r\nClients that want to handle the partition lost event somehow, instead of\r\nhandling the failed stream they need to create their own `RebalanceListener`\r\nand handle the `onLost` call.\r\n\r\nFixes #1233 and #1250.",
+          "timestamp": "2024-07-09T21:22:34+02:00",
+          "tree_id": "c11cd9af71090896fd8528bd23ad9c39e5fb5df6",
+          "url": "https://github.com/zio/zio-kafka/commit/a8596f38fbce56a2dd10e5a38a8b18511a24e41d"
+        },
+        "date": 1720553723295,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 538.8721550799999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 538.25053128,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 621.2809328400001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 630.69585378,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1182.6077420600002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 924.62000022,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
