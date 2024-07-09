@@ -31,7 +31,7 @@ final case class ConsumerSettings(
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy(),
   metricLabels: Set[MetricLabel] = Set.empty,
   runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis),
-  pollAuthErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.recurs(5) && Schedule.spaced(500.millis)
+  authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.recurs(5) && Schedule.spaced(500.millis)
 ) {
 
   /**
@@ -299,7 +299,7 @@ final case class ConsumerSettings(
     copy(runloopMetricsSchedule = runloopMetricsSchedule)
 
   /**
-   * @param pollAuthErrorRetrySchedule
+   * @param authErrorRetrySchedule
    *   The schedule at which the consumer will retry polling the broker for more records, even though a poll fails with
    *   an [[org.apache.kafka.common.errors.AuthorizationException]] or
    *   [[org.apache.kafka.common.errors.AuthenticationException]].
@@ -311,8 +311,8 @@ final case class ConsumerSettings(
    *
    * The default is {{{Schedule.recurs(5) && Schedule.spaced(500.millis)}}} which is, to retry 5 times, spaced by 500ms.
    */
-  def withPollAuthErrorRetrySchedule(pollAuthErrorRetrySchedule: Schedule[Any, Throwable, Any]): ConsumerSettings =
-    copy(pollAuthErrorRetrySchedule = pollAuthErrorRetrySchedule)
+  def withAuthErrorRetrySchedule(authErrorRetrySchedule: Schedule[Any, Throwable, Any]): ConsumerSettings =
+    copy(authErrorRetrySchedule = authErrorRetrySchedule)
 
 }
 

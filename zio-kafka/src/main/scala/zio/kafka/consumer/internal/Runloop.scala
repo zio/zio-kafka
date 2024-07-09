@@ -457,7 +457,7 @@ private[consumer] final class Runloop private (
             consumerMetrics.observePollAuthError().as(true)
           case _ => ZIO.succeed(false)
         } &&
-          settings.pollAuthErrorRetrySchedule
+          settings.authErrorRetrySchedule
       )
 
   private def handlePoll(state: State): Task[State] = {
