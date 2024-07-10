@@ -488,7 +488,7 @@ private[producer] final class ProducerLive(
 
             // Since we might be sending to multiple partitions, the callbacks
             // are _not_ necessarily called in order.
-            p.send(
+            val _ = p.send(
               rec,
               (metadata: RecordMetadata, err: Exception) => {
                 res(idx) = Either.cond(err == null, metadata, err)
