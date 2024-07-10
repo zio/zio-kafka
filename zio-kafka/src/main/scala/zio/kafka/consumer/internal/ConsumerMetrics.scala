@@ -17,6 +17,7 @@ private[internal] trait ConsumerMetrics {
   def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit]
   def observeRebalance(currentlyAssignedCount: Int, assignedCount: Int, revokedCount: Int, lostCount: Int): UIO[Unit]
   def observeRunloopMetrics(state: Runloop.State, commandQueueSize: Int, commitQueueSize: Int): UIO[Unit]
+  def observePollAuthError(): UIO[Unit]
 }
 
 /**
@@ -341,5 +342,21 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
       _          <- commandQueueSizeHistogram.update(commandQueueSize)
       _          <- commitQueueSizeHistogram.update(commitQueueSize)
     } yield ()
+
+  // -----------------------------------------------------
+  //
+  // Poll auth error metrics
+  //
+
+  private val pollAuthErrorCounter: Metric.Counter[Int] =
+    Metric
+      .counterInt(
+        "ziokafka_consumer_poll_auth_errors",
+        "The number of polls that ended with an authentication or authorization error."
+      )
+      .tagged(metricLabels)
+
+  def observePollAuthError(): UIO[Unit] =
+    pollAuthErrorCounter.increment
 
 }
