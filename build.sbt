@@ -180,11 +180,11 @@ lazy val zioKafkaExample =
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                 %% "zio"                % "2.1.6",
-        "dev.zio"                 %% "zio-kafka"          % "2.7.5",
+        "dev.zio"                 %% "zio-kafka"          % "2.8.0",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.3.0",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
         logback,
-        "dev.zio" %% "zio-kafka-testkit" % "2.7.5" % Test,
+        "dev.zio" %% "zio-kafka-testkit" % "2.8.0" % Test,
         "dev.zio" %% "zio-test"          % "2.1.6" % Test
       ),
       // Scala 3 compiling fails with:
