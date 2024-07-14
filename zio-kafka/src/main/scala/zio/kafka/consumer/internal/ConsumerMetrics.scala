@@ -193,14 +193,14 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
 
   private val rebalanceCounter: Metric.Counter[Int] =
     Metric
-      .counterInt("ziokafka_consumer_rebalances", "The number of rebalances")
+      .counterInt("ziokafka_consumer_rebalances", "The number of rebalances.")
       .tagged(metricLabels)
 
   private val partitionsCurrentlyAssignedGauge: Metric.Gauge[Int] =
     Metric
       .gauge(
         "ziokafka_consumer_partitions_currently_assigned",
-        "The number of partitions currently assigned to the consumer"
+        "The number of partitions currently assigned to the consumer."
       )
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
@@ -209,7 +209,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
     Metric
       .counterInt(
         s"ziokafka_consumer_partitions_$state",
-        s"The number of partitions $state to the consumer"
+        s"The number of partitions $state to the consumer."
       )
       .tagged(metricLabels)
 

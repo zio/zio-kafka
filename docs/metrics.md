@@ -17,19 +17,7 @@ a PR to copy them to the zio-metrics API is welcome.
 The zio-kafka consumer collects some additional metrics using the zio-metrics API. This allows any zio-metrics backend
 to access and process the observed values.
 
-By default, no tags are added, but this can be configured via the new method `ConsumerSettings.withMetricsLabels`.
-
-The following metrics are collected:
-
-- Poll metrics: poll count (counter), number of records per poll (histogram), poll latency (histogram).
-- Partition stream metrics: queue size per partition (histogram), total queue size per consumer (histogram), number of polls for which records are idle in the queue (histogram).
-- The number of partitions that are paused/resumed (gauge).
-- Rebalance metrics: currently assigned partitions count (gauge), assigned/revoked/lost partitions (counter).
-- Commit metrics: commit count (counter), commit latency (histogram). These metrics measure commit requests issued through zio-kafka's api.
-- Aggregated commit metrics: commit count (counter), commit latency (histogram), commit size (number of offsets per commit) (histogram). After every poll zio-kafka combines all outstanding commit requests into 1 aggregated commit. These metrics are for the aggregated commits.
-- Number of entries in the command and commit queues (histogram).
-- Subscription state, `1` for subscribed, `0` of unsubscribed (gauge).
-- The number of polls that ended with an authentication or authorization error (counter).
+By default, no tags are added. Tags can be configured via `ConsumerSettings.withMetricsLabels`.
 
 Like the zio-metrics API we follow Prometheus conventions. This means that:
 
@@ -39,3 +27,68 @@ Like the zio-metrics API we follow Prometheus conventions. This means that:
 
 The histograms each use 10 buckets. To reach a decent range while keeping sufficient accuracy at the low end, most
 bucket boundaries use an exponential series based on 𝑒.
+
+### Poll metrics
+
+| Type      | Name                                                  | Description                                                                        |
+|-----------|-------------------------------------------------------|------------------------------------------------------------------------------------|
+| counter   | `ziokafka_consumer_polls`                             | The number of polls.                                                               |
+| histogram | `ziokafka_consumer_poll_latency_seconds`              | The duration of a single poll in seconds.                                          |
+| histogram | `ziokafka_consumer_poll_size`                         | The number of records fetched by a single poll.                                    |
+| gauge     | `ziokafka_consumer_partitions_resumed_in_latest_poll` | The number of partitions resumed in the latest poll call.                          |
+| gauge     | `ziokafka_consumer_partitions_paused_in_latest_poll`  | The number of partitions paused in the latest poll call (because of backpressure). |
+| counter   | `ziokafka_consumer_poll_auth_errors`                  | The number of polls that ended with an authentication or authorization error.      |
+
+### Partition stream metrics
+
+These metrics are updated after every poll.
+
+| Type      | Name                                   | Description                                                               |
+|-----------|----------------------------------------|---------------------------------------------------------------------------|
+| histogram | `ziokafka_consumer_pending_requests`   | The number of partition queues that ran out of records.                   |
+| histogram | `ziokafka_consumer_queue_size`         | The number of records in a partition queue.                               |
+| histogram | `ziokafka_consumer_all_queue_size`     | The total number of records in all partition queues.                      |
+| histogram | `ziokafka_consumer_queue_polls`        | The number of polls during which records are idling in a partition queue. |
+
+### Commit metrics
+
+These metrics measure the separate commit requests issued through zio-kafka's api.
+
+| Type       | Name                                       | Description                                         |
+|------------|--------------------------------------------|-----------------------------------------------------|
+| histogram  | `ziokafka_consumer_pending_commits`        | The number of commits that are awaiting completion. |
+| counterInt | `ziokafka_consumer_commits`                | The number of commits.                              |
+| histogram  | `ziokafka_consumer_commit_latency_seconds` | The duration of a commit in seconds.                |
+
+
+### Aggregated commit metrics
+
+After every poll zio-kafka combines all outstanding commit requests into 1 aggregated commit. These metrics are for the aggregated commits.
+
+| Type       | Name                                                  | Description                                                                |
+|------------|-------------------------------------------------------|----------------------------------------------------------------------------|
+| counterInt | `ziokafka_consumer_aggregated_commits`                | The number of aggregated commits.                                          |
+| histogram  | `ziokafka_consumer_aggregated_commit_latency_seconds` | The duration of an aggregated commit in seconds.                           |
+| histogram  | `ziokafka_consumer_aggregated_commit_size`            | An approximation of the number of records (offsets) per aggregated commit. |
+
+### Rebalance metrics
+
+| Type       | Name                                              | Description                                                  |
+|------------|---------------------------------------------------|--------------------------------------------------------------|
+| counterInt | `ziokafka_consumer_rebalances`                    | The number of rebalances.                                    |
+| gauge      | `ziokafka_consumer_partitions_currently_assigned` | The number of partitions currently assigned to the consumer. |
+| counterInt | `ziokafka_consumer_partitions_assigned`           | The number of partitions assigned to the consumer.           |
+| counterInt | `ziokafka_consumer_partitions_revoked`            | The number of partitions revoked to the consumer.            |
+| counterInt | `ziokafka_consumer_partitions_lost`               | The number of partitions lost to the consumer.               |
+
+### Runloop metrics
+
+These metrics are updated after every poll.
+
+| Type      | Name                                   | Description                                        |
+|-----------|----------------------------------------|----------------------------------------------------|
+| gauge     | `ziokafka_consumer_subscription_state` | Whether the consumer is subscribed (1) or not (0). |
+| histogram | `ziokafka_consumer_command_queue_size` | The number of commands queued in the consumer.     |
+| histogram | `ziokafka_consumer_commit_queue_size`  | The number of commits queued in the consumer.      |
+
+See [ConsumerMetrics.scala](https://github.com/zio/zio-kafka/blob/master/zio-kafka/src/main/scala/zio/kafka/consumer/internal/ConsumerMetrics.scala) for the exact details.
