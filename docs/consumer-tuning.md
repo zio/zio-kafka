@@ -97,7 +97,7 @@ Zio-Kafka exposes [metrics](metrics.md) that can be used to further tune the con
 
 ![](consumer-internals.svg)
 
-The runloop is at the heart of every zio-kakfa consumer.
+The runloop is at the heart of every zio-kafka consumer.
 It creates a zstream for each partition, eventually this is the zstream your applications consumes from.
 When the zstream starts, and every time the record queue is empty, it sends a request for data to the runloop.
 The request causes the runloop to resume the partition so that the next poll may receive records.
@@ -107,8 +107,8 @@ The zstream reads from the queue and emits the records to the user code.
 
 An optimally configured consumer has the following properties:
 
-- the zstreams never have to wait for new records,
-- the record queues contains as little records as possible.
+- the zstreams never have to wait for new records (to get high throughput),
+- the record queues contains as little records as possible (to get low latency and low heap usage).
 
 The following strategy can help you get to this state:
 
