@@ -90,3 +90,37 @@ On older zio-kafka versions `withMaxPollInterval` is not available. Use the foll
 ⚠️In zio-kafka versions 2.2 up to 2.5.0 it may also be necessary to increase the `runloopTimeout` setting.
 When no stream is processing data for this amount of time (while new data is available), the consumer will halt with a
 failure. In zio-kafka 2.5.0 `runloopTimeout` defaults to 4 minutes, a little bit lower than `max.poll.interval.ms`.
+
+## Using metrics to tune the consumer
+
+Zio-Kafka exposes [metrics](metrics.md) that can be used to further tune the consumer. To interpret these metrics you need to know how zio-kafka works internally.
+
+![](consumer-internals.svg)
+
+The runloop is at the heart of every zio-kakfa consumer.
+It creates a zstream for each partition, eventually this is the zstream your applications consumes from.
+When the zstream starts, and every time the record queue is empty, it sends a request for data to the runloop.
+The request causes the runloop to resume the partition so that the next poll may receive records.
+Any received records are put in a record queue.
+When the record queue reaches a certain size (as determined by the configured `FetchStrategy`), the partition is paused.
+The zstream reads from the queue and emits the records to the user code.
+
+An optimally configured consumer has the following properties:
+
+- the zstreams never have to wait for new records,
+- the record queues contains as little records as possible.
+
+The following strategy can help you get to this state:
+
+1. First make sure that the `pollTimeout` and `max.poll.records` make sense for the latency and throughput requirements
+   of your application.
+2. Configure `partitionPreFetchBufferLimit` to `0`.
+3. Observe metric `ziokafka_consumer_queue_polls` which gives the number of polls during which records are idling in
+   the records queue.
+4. Increase `partitionPreFetchBufferLimit` in steps until `ziokafka_consumer_queue_polls` trends to zero.
+   Metric `ziokafka_consumer_queue_size` (number of records in the record queues) is useful to observe whether the
+   queues are indeed increasing in size.
+
+When many (hundreds of) partitions need to be consumed, the metric `ziokafka_consumer_all_queue_size` should also be
+observed as increasing `partitionPreFetchBufferLimit` can lead to high heap usage. (See 'High number of partitions'
+above.)

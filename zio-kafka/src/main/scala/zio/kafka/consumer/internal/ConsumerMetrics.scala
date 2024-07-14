@@ -251,7 +251,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
     Metric
       .histogram(
         "ziokafka_consumer_pending_requests",
-        "The number of partition queues that that ran out of records.",
+        "The number of partition queues that ran out of records.",
         streamCountBoundaries
       )
       .contramap[Int](_.toDouble)
