@@ -19,7 +19,7 @@ to access and process the observed values.
 
 By default, no tags are added. Tags can be configured via `ConsumerSettings.withMetricsLabels`.
 
-Like the zio-metrics API we follow Prometheus conventions. This means that:
+Like the zio-metrics we follow Prometheus conventions. This means that:
 
 - durations are expressed in seconds,
 - counters can only increase,
@@ -43,12 +43,12 @@ bucket boundaries use an exponential series based on 𝑒.
 
 These metrics are updated after every poll.
 
-| Type      | Name                                   | Description                                                               |
-|-----------|----------------------------------------|---------------------------------------------------------------------------|
-| histogram | `ziokafka_consumer_pending_requests`   | The number of partition queues that ran out of records.                   |
-| histogram | `ziokafka_consumer_queue_size`         | The number of records in a partition queue.                               |
-| histogram | `ziokafka_consumer_all_queue_size`     | The total number of records in all partition queues.                      |
-| histogram | `ziokafka_consumer_queue_polls`        | The number of polls during which records are idling in a partition queue. |
+| Type      | Name                                 | Description                                                            |
+|-----------|--------------------------------------|------------------------------------------------------------------------|
+| histogram | `ziokafka_consumer_pending_requests` | The number of partitions that ran out of records (the queue is empty). |
+| histogram | `ziokafka_consumer_queue_size`       | The number of records queued for a partition.                          |
+| histogram | `ziokafka_consumer_all_queue_size`   | The total number of records queued for all partitions.                 |
+| histogram | `ziokafka_consumer_queue_polls`      | The number of polls during which records are idling in a queue.        |
 
 ### Commit metrics
 
