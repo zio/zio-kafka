@@ -2,7 +2,7 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.RebalanceInProgressException
+import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException, RebalanceInProgressException }
 import zio._
 import zio.kafka.consumer.Consumer.{ CommitTimeout, OffsetRetrieval }
 import zio.kafka.consumer._
@@ -457,6 +457,15 @@ private[consumer] final class Runloop private (
       if (recordsOrNull eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]()
       else recordsOrNull
     }
+      // Recover from spurious auth failures:
+      .retry(
+        Schedule.recurWhileZIO[Any, Throwable] {
+          case _: AuthorizationException | _: AuthenticationException =>
+            consumerMetrics.observePollAuthError().as(true)
+          case _ => ZIO.succeed(false)
+        } &&
+          settings.authErrorRetrySchedule
+      )
 
   private def handlePoll(state: State): Task[State] = {
     for {
@@ -946,7 +955,7 @@ object Runloop {
           val offset = offsetAndMeta.offset()
           val maxOffset = updatedOffsets.get(tp) match {
             case Some(existingOffset) =>
-              offsetIncrease += max(0L, (offset - existingOffset))
+              offsetIncrease += max(0L, offset - existingOffset)
               max(existingOffset, offset)
             case None =>
               // This partition was not committed to from this consumer yet. Therefore we do not know the offset

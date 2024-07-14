@@ -26,7 +26,7 @@ import zio._
 import zio.kafka.consumer._
 import zio.kafka.serde._
 
-val data: Task[Chunk[CommittableRecord[String, String]]] = 
+val data: Task[Chunk[CommittableRecord[String, String]]] =
   Consumer.plainStream(Subscription.topics("topic"), Serde.string, Serde.string).take(50).runCollect
     .provideSomeLayer(consumer)
 ```
@@ -62,6 +62,8 @@ Consumer.partitionedStream(Subscription.topics("topic150"), Serde.string, Serde.
   .mapZIO(_.commit)
   .runDrain
 ```
+
+When using partitionedStream with `flatMapPar(n)`, it is recommended to set n to `Int.MaxValue`. N must be equal or greater than the number of partitions your consumer subscribes to otherwise there'll be unhandled partitions and Kafka will eventually evict your consumer.
 
 ## Controlled shutdown
 
