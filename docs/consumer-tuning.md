@@ -57,7 +57,7 @@ the partition queues. A very rough estimate for the maximum amount of heap neede
 The total can be tuned by changing the `partitionPreFetchBufferLimit`, `max.poll.records` settings.
 
 Another option is to write a custom `FetchStrategy`. For example the `ManyPartitionsQueueSizeBasedFetchStrategy` in
-[draft PR 970](https://github.com/zio/zio-kafka/pull/970) (not yet tested at scale, use at your own risk). Note that the fetch strategy API is marked as
+[draft PR 970](https://github.com/zio/zio-kafka/pull/970) (merged into zio-kafka since 2.8.1). Note that the fetch strategy API is marked as
 experimental and may change without notice in any future zio-kafka version.
 
 ## Long processing durations
