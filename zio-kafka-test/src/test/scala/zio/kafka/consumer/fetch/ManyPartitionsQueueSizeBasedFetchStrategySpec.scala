@@ -72,9 +72,39 @@ object ManyPartitionsQueueSizeBasedFetchStrategySpec extends ZIOSpecDefaultSlf4j
           result5 <- fetchStrategy.selectPartitionsToFetch(streams)
           results = Chunk(result1, result2, result3, result4, result5)
         } yield assertTrue(
-          results.forall(_.size == 2),
+          // Only partitions from topic 2 are selected (since 40 <= 50):
           results.forall(_.forall(_.topic() == "topic2")),
-          results.flatten.toSet.size == 3
+          // 2 partitions are selected every time (since 2*40 <= 80):
+          results.forall(_.size == 2),
+          // All partitions from topic 2 are selected eventually:
+          results.flatten.toSet == Set(tp20, tp21, tp22)
+        )
+      },
+      test("different streams may resume every time") {
+        val streams = Chunk(
+          newStream(tp10, currentQueueSize = 25),
+          newStream(tp11, currentQueueSize = 25),
+          newStream(tp20, currentQueueSize = 25),
+          newStream(tp21, currentQueueSize = 25),
+          newStream(tp22, currentQueueSize = 25)
+        )
+        for {
+          result1 <- fetchStrategy.selectPartitionsToFetch(streams)
+          result2 <- fetchStrategy.selectPartitionsToFetch(streams)
+          result3 <- fetchStrategy.selectPartitionsToFetch(streams)
+          result4 <- fetchStrategy.selectPartitionsToFetch(streams)
+          result5 <- fetchStrategy.selectPartitionsToFetch(streams)
+          results = Chunk(result1, result2, result3, result4, result5)
+        } yield assertTrue(
+          // All partitions are selected eventually (since 25 <= 50):
+          results.flatten.toSet.size == 5,
+          // 3 partitions are selected every time (since 3*25 <= 80):
+          results.forall(_.size == 3),
+          // In at least 3 different combinations:
+          results.combinations(2).count {
+            case Chunk(resultA, resultB) => resultA != resultB
+            case _                       => false // can not happen
+          } >= 3
         )
       }
     )
