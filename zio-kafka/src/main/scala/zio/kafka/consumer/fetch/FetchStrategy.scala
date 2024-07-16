@@ -32,7 +32,7 @@ trait FetchStrategy {
  *   The queue size at or below which more records are fetched and buffered (per partition). This buffer improves
  *   throughput and supports varying downstream message processing time, while maintaining some backpressure. Large
  *   values effectively disable backpressure at the cost of high memory usage, low values will effectively disable
- *   prefetching in favor of low memory consumption. The number of records that is fetched on every poll is controlled
+ *   prefetching in favor of low memory consumption. The number of records that are fetched on every poll is controlled
  *   by the `max.poll.records` setting, the number of records fetched for every partition is somewhere between 0 and
  *   `max.poll.records`.
  *
