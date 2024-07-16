@@ -1,12 +1,14 @@
 package zio.kafka.producer
 
-import org.apache.kafka.clients.producer.{ KafkaProducer, Producer => JProducer, ProducerRecord, RecordMetadata }
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata, Producer => JProducer}
+import org.apache.kafka.common.errors.AuthenticationException
+import org.apache.kafka.common.errors.AuthorizationException
 import org.apache.kafka.common.serialization.ByteArraySerializer
-import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo }
+import org.apache.kafka.common.{Metric, MetricName, PartitionInfo}
 import zio._
 import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
-import zio.stream.{ ZPipeline, ZStream }
+import zio.stream.{ZPipeline, ZStream}
 
 import java.util.concurrent.atomic.AtomicLong
 import scala.jdk.CollectionConverters._
@@ -87,7 +89,7 @@ trait Producer {
    * Produces a single record. The effect returned from this method has two layers and describes the completion of two
    * actions:
    *   1. The outer layer describes the enqueueing of the record to the Producer's internal buffer.
-   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the record.
+   *   2. The inner layer describes receiving an acknowledgement from the broker for the transmission of the record.
    *
    * It is usually recommended to not await the inner layer of every individual record, but enqueue a batch of records
    * and await all of their acknowledgements at once. That amortizes the cost of sending requests to Kafka and increases
@@ -123,7 +125,7 @@ trait Producer {
    * Produces a chunk of records. The effect returned from this method has two layers and describes the completion of
    * two actions:
    *   1. The outer layer describes the enqueueing of all the records to the Producer's internal buffer.
-   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
+   *   2. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
    *
    * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
    * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
@@ -224,7 +226,7 @@ object Producer {
         Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
           settings.sendBufferSize
         )
-      producer = new ProducerLive(javaProducer, sendQueue)
+      producer = new ProducerLive(javaProducer, sendQueue, settings)
       _ <- producer.sendFromQueue.forkScoped
     } yield producer
 
@@ -359,9 +361,10 @@ object Producer {
 
 }
 
-private[producer] final class ProducerLive(
+final private[producer] class ProducerLive(
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
-  sendQueue: Queue[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])]
+  sendQueue: Queue[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])],
+  settings: ProducerSettings
 ) extends Producer {
 
   override def produce(record: ProducerRecord[Array[Byte], Array[Byte]]): Task[RecordMetadata] =
@@ -504,7 +507,20 @@ private[producer] final class ProducerLive(
             callback(ZIO.succeed(Chunk.fill(serializedRecords.size)(Left(e))))
         }
       }
-
+      .flatMap(r =>
+        r.headOption match {
+          case Some(value) =>
+            value match {
+              case Left(value) => ZIO.fail(value)
+              case _           => ZIO.succeed(r)
+            }
+          case None => ZIO.succeed(r)
+        })
+      .retry(Schedule.recurWhile[Throwable] {
+        case _: AuthorizationException | _: AuthenticationException => settings.retryOnAuthFailures
+        case _                                                      => false
+      } && settings.authErrorRetrySchedule)
+      .catchAll(e => ZIO.succeed(Chunk.fill(serializedRecords.size)(Left(e))))
   private def serialize[R, K, V](
     r: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],

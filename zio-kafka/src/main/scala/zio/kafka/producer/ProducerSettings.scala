@@ -7,7 +7,9 @@ import zio.kafka.security.KafkaCredentialStore
 final case class ProducerSettings(
   closeTimeout: Duration = 30.seconds,
   sendBufferSize: Int = 4096,
-  properties: Map[String, AnyRef] = Map.empty
+  properties: Map[String, AnyRef] = Map.empty,
+  retryOnAuthFailures: Boolean = false,
+  authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.recurs(5) && Schedule.spaced(500.millis)
 ) {
   def driverSettings: Map[String, AnyRef] = properties
 
@@ -33,6 +35,10 @@ final case class ProducerSettings(
     withProperties(credentialsStore.properties)
 
   def withSendBufferSize(sendBufferSize: Int) = copy(sendBufferSize = sendBufferSize)
+
+  def withRetryOnAuthFailures(retry: Boolean) = copy(retryOnAuthFailures = retry)
+
+  def withAuthErrorRetrySchedule(schedule: Schedule[Any, Throwable, Any]) = copy(authErrorRetrySchedule = schedule)
 }
 
 object ProducerSettings {
