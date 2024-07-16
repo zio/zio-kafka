@@ -193,14 +193,14 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
 
   private val rebalanceCounter: Metric.Counter[Int] =
     Metric
-      .counterInt("ziokafka_consumer_rebalances", "The number of rebalances")
+      .counterInt("ziokafka_consumer_rebalances", "The number of rebalances.")
       .tagged(metricLabels)
 
   private val partitionsCurrentlyAssignedGauge: Metric.Gauge[Int] =
     Metric
       .gauge(
         "ziokafka_consumer_partitions_currently_assigned",
-        "The number of partitions currently assigned to the consumer"
+        "The number of partitions currently assigned to the consumer."
       )
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
@@ -209,7 +209,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
     Metric
       .counterInt(
         s"ziokafka_consumer_partitions_$state",
-        s"The number of partitions $state to the consumer"
+        s"The number of partitions $state to the consumer."
       )
       .tagged(metricLabels)
 
@@ -251,7 +251,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
     Metric
       .histogram(
         "ziokafka_consumer_pending_requests",
-        "The number of partition queues that that ran out of records.",
+        "The number of partitions that ran out of records (the queue is empty).",
         streamCountBoundaries
       )
       .contramap[Int](_.toDouble)
@@ -271,7 +271,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
     Metric
       .histogram(
         "ziokafka_consumer_queue_size",
-        "The number of records in a partition queue.",
+        "The number of records queued for a partition.",
         streamSizeBoundaries
       )
       .contramap[Int](_.toDouble)
@@ -281,7 +281,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
     Metric
       .histogram(
         "ziokafka_consumer_queue_polls",
-        "The number of polls during which records are idling in a partition queue.",
+        "The number of polls during which records are idling in a queue.",
         queuePollSizeBoundaries
       )
       .contramap[Int](_.toDouble)
@@ -291,7 +291,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
     Metric
       .histogram(
         "ziokafka_consumer_all_queue_size",
-        "The total number of records in all partition queues.",
+        "The total number of records queued for all partitions.",
         streamSizeBoundaries
       )
       .contramap[Int](_.toDouble)
