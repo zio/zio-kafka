@@ -32,7 +32,7 @@ import scala.collection.mutable
  * below `maxTotalQueueSize`. The randomization ensures fairness and prevents read-starvation for streams at the end of
  * the list.
  *
- * The default value is 20 * the default for `maxTotalQueueSize`, allowing approximately 20 partitions to do
+ * The default value is 20 * the default for `maxPartitionQueueSize`, allowing approximately 20 partitions to do
  * pre-fetching in each poll.
  */
 final case class ManyPartitionsQueueSizeBasedFetchStrategy(
