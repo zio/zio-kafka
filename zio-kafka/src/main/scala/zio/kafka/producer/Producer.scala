@@ -182,6 +182,11 @@ trait Producer {
    * Expose internal producer metrics
    */
   def metrics: Task[Map[MetricName, Metric]]
+
+  /**
+   * Liveness check for this producer
+   */
+  def isAlive: UIO[Boolean]
 }
 
 object Producer {
@@ -218,12 +223,16 @@ object Producer {
     settings: ProducerSettings
   ): ZIO[Scope, Throwable, Producer] =
     for {
-      sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
-          settings.sendBufferSize
-        )
-      producer = new ProducerLive(javaProducer, sendQueue)
-      _ <- producer.sendFromQueue.forkScoped
+      producer <- ZIO.acquireRelease( for {
+        sendQueue <-
+          Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
+            settings.sendBufferSize
+          )
+        alive <- Ref.make(true)
+        producer = new ProducerLive(javaProducer, sendQueue, alive, settings)
+        _ <- producer.sendFromQueue.forkScoped
+      } yield producer)(producer => producer.close().orDie)
+
     } yield producer
 
   /**
@@ -359,8 +368,17 @@ object Producer {
 
 private[producer] final class ProducerLive(
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
-  sendQueue: Queue[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])]
+  sendQueue: Queue[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])],
+  alive: Ref[Boolean],
+  settings: ProducerSettings
 ) extends Producer {
+
+  def close(): Task[Unit] = alive.set(false) *> ZIO.attemptBlocking(p.close(settings.closeTimeout))
+
+  /**
+   * Liveness check for this producer
+   */
+  override def isAlive: UIO[Boolean] = alive.get
 
   override def produce(record: ProducerRecord[Array[Byte], Array[Byte]]): Task[RecordMetadata] =
     produceAsync(record).flatten
