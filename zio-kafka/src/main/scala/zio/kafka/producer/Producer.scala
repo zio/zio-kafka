@@ -472,7 +472,10 @@ final private[producer] class ProducerLive(
         .runDrain
     }
 
-  private def sendRecordCancellable(record: ByteRecord)(cb: Either[Throwable, RecordMetadata] => Unit): () => Unit = {
+  private def sendRecordCancellable(
+    record: ByteRecord
+  )(cb: Either[Throwable, RecordMetadata] => Unit): () => Unit = {
+    println("in sendRecordCancellable")
     val f = p.send(
       record,
       (metadata: RecordMetadata, exception: Exception) =>
@@ -481,7 +484,10 @@ final private[producer] class ProducerLive(
         else cb(Right(metadata))
     )
 
-    () => f.cancel(false): Unit
+    () => {
+      val _ = f.cancel(false)
+      println("trying to cancel the request cause we got interrupted")
+    }
   }
 
   private def send(record: ByteRecord)(implicit trace: Trace): Task[RecordMetadata] =
@@ -497,7 +503,7 @@ final private[producer] class ProducerLive(
   private def sendChunk(
     serializedRecords: Chunk[ByteRecord]
   ): ZIO[Any, Nothing, Chunk[Either[Throwable, RecordMetadata]]] =
-    for {
+    (for {
       fibers <-
         ZIO
           .foreach(serializedRecords.zipWithIndex) { record =>
@@ -520,7 +526,9 @@ final private[producer] class ProducerLive(
                   .foreach(fibers)(_.join)
                   .map(_.sortBy(_._2))
                   .map(_.map(_._1))
-    } yield result
+      _ <- ZIO.debug("Warn!!!! result size is not equal to requests size!").when(result.size != serializedRecords.size)
+      _ <- ZIO.debug("Yeah!!!! result size is equal to requests size!").when(result.size == serializedRecords.size)
+    } yield result)
 
   private def serialize[R, K, V](
     r: ProducerRecord[K, V],
