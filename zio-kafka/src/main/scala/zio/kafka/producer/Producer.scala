@@ -57,7 +57,7 @@ trait Producer {
    * Produces a single record. The effect returned from this method has two layers and describes the completion of two
    * actions:
    *   1. The outer layer describes the enqueueing of the record to the Producer's internal buffer.
-   *   2. The inner layer describes receiving an acknowledgement from the broker for the transmission of the record.
+   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the record.
    *
    * It is usually recommended to not await the inner layer of every individual record, but enqueue a batch of records
    * and await all of their acknowledgements at once. That amortizes the cost of sending requests to Kafka and increases
@@ -71,7 +71,7 @@ trait Producer {
    * Produces a single record. The effect returned from this method has two layers and describes the completion of two
    * actions:
    *   1. The outer layer describes the enqueueing of the record to the Producer's internal buffer.
-   *   2. The inner layer describes receiving an acknowledgement from the broker for the transmission of the record.
+   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the record.
    *
    * It is usually recommended to not await the inner layer of every individual record, but enqueue a batch of records
    * and await all of their acknowledgements at once. That amortizes the cost of sending requests to Kafka and increases
@@ -87,7 +87,7 @@ trait Producer {
    * Produces a single record. The effect returned from this method has two layers and describes the completion of two
    * actions:
    *   1. The outer layer describes the enqueueing of the record to the Producer's internal buffer.
-   *   2. The inner layer describes receiving an acknowledgement from the broker for the transmission of the record.
+   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the record.
    *
    * It is usually recommended to not await the inner layer of every individual record, but enqueue a batch of records
    * and await all of their acknowledgements at once. That amortizes the cost of sending requests to Kafka and increases
@@ -123,7 +123,7 @@ trait Producer {
    * Produces a chunk of records. The effect returned from this method has two layers and describes the completion of
    * two actions:
    *   1. The outer layer describes the enqueueing of all the records to the Producer's internal buffer.
-   *   2. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
+   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
    *
    * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
    * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
@@ -137,7 +137,7 @@ trait Producer {
    * Produces a chunk of records. The effect returned from this method has two layers and describes the completion of
    * two actions:
    *   1. The outer layer describes the enqueueing of all the records to the Producer's internal buffer.
-   *   2. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
+   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
    *
    * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
    * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
@@ -153,7 +153,7 @@ trait Producer {
    * Produces a chunk of records. The effect returned from this method has two layers and describes the completion of
    * two actions:
    *   1. The outer layer describes the enqueueing of all the records to the Producer's internal buffer.
-   *   2. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
+   *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
    *
    * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
    * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
@@ -359,7 +359,7 @@ object Producer {
 
 }
 
-final private[producer] class ProducerLive(
+private[producer] final class ProducerLive(
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
   sendQueue: Queue[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])],
   settings: ProducerSettings
@@ -475,7 +475,6 @@ final private[producer] class ProducerLive(
   private def sendRecordCancellable(
     record: ByteRecord
   )(cb: Either[Throwable, RecordMetadata] => Unit): () => Unit = {
-    println("in sendRecordCancellable")
     val f = p.send(
       record,
       (metadata: RecordMetadata, exception: Exception) =>
@@ -485,8 +484,8 @@ final private[producer] class ProducerLive(
     )
 
     () => {
-      val _ = f.cancel(false)
-      println("trying to cancel the request cause we got interrupted")
+      val _ = f.cancel(false) // prevent warning for not using the result
+      ()
     }
   }
 
@@ -505,6 +504,9 @@ final private[producer] class ProducerLive(
   ): ZIO[Any, Nothing, Chunk[Either[Throwable, RecordMetadata]]] =
     (for {
       fibers <-
+        // Since we might be sending to multiple partitions,
+        // the results might not return in order. Because of this,
+        // we add a zipWithIndex to keep track of the original order
         ZIO
           .foreach(serializedRecords.zipWithIndex) { record =>
             val e: URIO[Any, Either[Throwable, RecordMetadata]] =
@@ -521,13 +523,10 @@ final private[producer] class ProducerLive(
 
             e.map(v => (v, record._2)).fork
           }
-      _ <- Fiber.awaitAll(fibers)
-      result <- ZIO
-                  .foreach(fibers)(_.join)
-                  .map(_.sortBy(_._2))
-                  .map(_.map(_._1))
-      _ <- ZIO.debug("Warn!!!! result size is not equal to requests size!").when(result.size != serializedRecords.size)
-      _ <- ZIO.debug("Yeah!!!! result size is equal to requests size!").when(result.size == serializedRecords.size)
+      result <- Fiber
+                  .collectAll(fibers)
+                  .join
+                  .map(_.sortBy(_._2).map(_._1))
     } yield result)
 
   private def serialize[R, K, V](

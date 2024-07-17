@@ -129,8 +129,8 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       test("produces messages") {
         for {
           topic <- randomTopic
-          firstMessage  = "toto"
-          secondMessage = "tata"
+          firstMessage  = "firstMessage"
+          secondMessage = "secondMessage"
           consume = (n: Int) =>
                       Consumer
                         .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
