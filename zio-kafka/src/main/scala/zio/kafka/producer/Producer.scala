@@ -1,14 +1,21 @@
 package zio.kafka.producer
 
-import org.apache.kafka.clients.producer.{ KafkaProducer, Producer => JProducer, ProducerRecord, RecordMetadata }
+import scala.jdk.CollectionConverters._
+
+import org.apache.kafka.clients.producer.{ Producer => JProducer }
+import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.serialization.ByteArraySerializer
-import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo }
+import org.apache.kafka.common.Metric
+import org.apache.kafka.common.MetricName
+import org.apache.kafka.common.PartitionInfo
+
 import zio._
 import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
-import zio.stream.{ ZPipeline, ZStream }
-
-import scala.jdk.CollectionConverters._
+import zio.stream.ZPipeline
+import zio.stream.ZStream
 
 trait Producer {
 
@@ -223,15 +230,16 @@ object Producer {
     settings: ProducerSettings
   ): ZIO[Scope, Throwable, Producer] =
     for {
-      producer <- ZIO.acquireRelease( for {
-        sendQueue <-
-          Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
-            settings.sendBufferSize
-          )
-        alive <- Ref.make(true)
-        producer = new ProducerLive(javaProducer, sendQueue, alive, settings)
-        _ <- producer.sendFromQueue.forkScoped
-      } yield producer)(producer => producer.close().orDie)
+
+      alive <- Ref.make(true)
+      sendQueue <-
+        Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
+          settings.sendBufferSize
+        )
+      producer <- ZIO.acquireRelease(
+                    ZIO.attempt(new ProducerLive(javaProducer, sendQueue, alive))
+                  )(_ => alive.set(false))
+      _ <- producer.sendFromQueue.forkScoped
 
     } yield producer
 
@@ -366,14 +374,11 @@ object Producer {
 
 }
 
-private[producer] final class ProducerLive(
+final private[producer] class ProducerLive(
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
   sendQueue: Queue[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])],
-  alive: Ref[Boolean],
-  settings: ProducerSettings
+  alive: Ref[Boolean]
 ) extends Producer {
-
-  def close(): Task[Unit] = alive.set(false) *> ZIO.attemptBlocking(p.close(settings.closeTimeout))
 
   /**
    * Liveness check for this producer
@@ -488,13 +493,18 @@ private[producer] final class ProducerLive(
       // Calls to 'send' may block when updating metadata or when communication with the broker is (temporarily) lost,
       // therefore this stream is run on the blocking thread pool.
       ZIO.blocking {
-        ZStream
-          .fromQueueWithShutdown(sendQueue)
-          .mapZIO { case (serializedRecords, done) =>
-            sendChunk(runtime, serializedRecords)
-              .flatMap(done.succeed(_))
-          }
-          .runDrain
+        {
+          ZStream
+            .fromQueueWithShutdown(sendQueue)
+            .mapZIO { case (serializedRecords, done) =>
+              sendChunk(runtime, serializedRecords)
+                .flatMap(done.succeed(_))
+            }
+            .runDrain
+            .tapDefect(c =>
+              ZIO.logWarningCause("defect in producer sendQueue, producer stopped", c) *> alive.set(false)
+            )
+        } <* (ZIO.logDebug("producer sendQueue stopped") *> alive.set(false))
       }
     }
 

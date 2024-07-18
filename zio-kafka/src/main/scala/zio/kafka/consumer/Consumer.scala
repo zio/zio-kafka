@@ -158,6 +158,11 @@ trait Consumer {
    * Expose internal consumer metrics
    */
   def metrics: Task[Map[MetricName, Metric]]
+
+  /**
+   * Liveness check for this consumer
+   */
+  def isAlive: UIO[Boolean]
 }
 
 object Consumer {
@@ -431,6 +436,9 @@ private[consumer] final class ConsumerLive private[consumer] (
   runloopAccess: RunloopAccess
 ) extends Consumer {
   import Consumer._
+
+  override def isAlive: UIO[Boolean] =
+    runloopAccess.isAlive
 
   override def assignment: Task[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
