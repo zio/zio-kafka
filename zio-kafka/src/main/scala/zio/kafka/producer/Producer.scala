@@ -1,6 +1,7 @@
 package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.{ KafkaProducer, Producer => JProducer, ProducerRecord, RecordMetadata }
+import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException }
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo }
 import zio._
@@ -222,7 +223,7 @@ object Producer {
         Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
           settings.sendBufferSize
         )
-      producer = new ProducerLive(javaProducer, sendQueue)
+      producer = new ProducerLive(javaProducer, sendQueue, settings)
       _ <- producer.sendFromQueue.forkScoped
     } yield producer
 
@@ -359,7 +360,8 @@ object Producer {
 
 private[producer] final class ProducerLive(
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
-  sendQueue: Queue[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])]
+  sendQueue: Queue[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])],
+  settings: ProducerSettings
 ) extends Producer {
 
   override def produce(record: ProducerRecord[Array[Byte], Array[Byte]]): Task[RecordMetadata] =
@@ -485,9 +487,60 @@ private[producer] final class ProducerLive(
     serializedRecords: Chunk[ByteRecord]
   ): ZIO[Any, Nothing, Chunk[Either[Throwable, RecordMetadata]]] =
     for {
-      promises <- ZIO.foreach(serializedRecords)(sendRecord(runtime))
-      results  <- ZIO.foreach(promises)(_.await.either)
-    } yield results
+      promises       <- ZIO.foreach(serializedRecords)(sendRecord(runtime))
+      results        <- ZIO.foreach(promises)(_.await.either)
+      retryDriver    <- settings.authErrorRetrySchedule.driver
+      retriedResults <- retryAuthFailures(runtime, retryDriver, serializedRecords, results)
+    } yield retriedResults
+
+  private def retryAuthFailures(
+    runtime: Runtime[Any],
+    retryDriver: Schedule.Driver[Any, Any, Throwable, Any],
+    serializedRecords: Chunk[ByteRecord],
+    results: Chunk[Either[Throwable, RecordMetadata]]
+  ): ZIO[Any, Nothing, Chunk[Either[Throwable, RecordMetadata]]] = {
+    // retry when there are auth errors, but no other errors
+    val retry = {
+      val errorCount = results.count(_.isLeft)
+      def authErrorCount = results.count {
+        case Left(_: AuthorizationException | _: AuthenticationException) => true
+        case _                                                            => false
+      }
+      errorCount > 0 && errorCount == authErrorCount
+    }
+
+    def doRetry: ZIO[Any, Nothing, Chunk[Either[Throwable, RecordMetadata]]] = {
+      // assertion: results contains at least 1 error AND all errors in results are auth errors
+      val toRetryRecords = serializedRecords
+        .zip(results)
+        .filter(_._2.isLeft)
+        .map(_._1)
+      for {
+        retryPromises <- ZIO.foreach(toRetryRecords)(sendRecord(runtime))
+        retryResults  <- ZIO.foreach(retryPromises)(_.await.either)
+        retryResultsIter = retryResults.iterator
+        combinedResults = serializedRecords
+                            .zip(results)
+                            .map {
+                              case (_, Left(_)) => retryResultsIter.next()
+                              case (_, right)   => right
+                            }
+        retriedResults <- retryAuthFailures(runtime, retryDriver, serializedRecords, combinedResults)
+      } yield retriedResults
+    }
+
+    if (!retry) ZIO.succeed(results)
+    else {
+      // assertion: results contains at least 1 error AND all errors in results are auth errors
+      val firstAuthError = results.collectFirst { case Left(err) => err }.get
+      retryDriver
+        .next(firstAuthError)
+        .foldZIO(
+          _ => ZIO.succeed(results),
+          _ => doRetry
+        )
+    }
+  }
 
   private def sendRecord(
     runtime: Runtime[Any]
