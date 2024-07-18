@@ -1,8 +1,6 @@
 package zio.kafka.producer
 
-import org.apache.kafka.clients.producer
 import org.apache.kafka.clients.producer.{ KafkaProducer, Producer => JProducer, ProducerRecord, RecordMetadata }
-import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException }
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo }
 import zio._
@@ -10,10 +8,7 @@ import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
 import zio.stream.{ ZPipeline, ZStream }
 
-import java.util.concurrent.atomic.AtomicLong
-import scala.collection.immutable.BitSet
 import scala.jdk.CollectionConverters._
-import scala.util.control.NonFatal
 
 trait Producer {
 
