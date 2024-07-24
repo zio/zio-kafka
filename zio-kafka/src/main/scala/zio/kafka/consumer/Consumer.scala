@@ -243,7 +243,7 @@ object Consumer {
   /**
    * Create a zio-kafka Consumer from an org.apache.kafka KafkaConsumer
    *
-   * You are responsible for creating and closing the KafkaConsumer
+   * You are responsible for creating and closing the KafkaConsumer. Make sure auto.commit is disabled.
    */
   def fromJavaConsumer(
     javaConsumer: JConsumer[Array[Byte], Array[Byte]],
