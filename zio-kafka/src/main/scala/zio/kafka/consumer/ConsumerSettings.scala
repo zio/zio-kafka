@@ -33,6 +33,11 @@ final case class ConsumerSettings(
   runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis),
   authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.recurs(5) && Schedule.spaced(500.millis)
 ) {
+  // Parse booleans in a way compatible with how Kafka does this in org.apache.kafka.common.config.ConfigDef.parseType:
+  require(
+    properties.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG).forall(_.toString.trim.equalsIgnoreCase("false")),
+    "Because zio-kafka does pre-fetching, auto commit is not supported"
+  )
 
   /**
    * Tunes the consumer for high throughput.
