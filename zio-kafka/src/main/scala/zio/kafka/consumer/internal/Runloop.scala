@@ -825,6 +825,7 @@ object Runloop {
     ): RebalanceEvent =
       copy(
         wasInvoked = true,
+        assignedTps = assignedTps -- revoked,
         revokedTps = revokedTps ++ revoked,
         endedStreams = this.endedStreams ++ endedStreams
       )
