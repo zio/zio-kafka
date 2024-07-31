@@ -100,7 +100,7 @@ object TransactionalProducer {
         Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
           settings.producerSettings.sendBufferSize
         )
-      live = new ProducerLive(rawProducer, sendQueue)
+      live = new ProducerLive(rawProducer, sendQueue, settings.producerSettings)
       _ <- live.sendFromQueue.forkScoped
     } yield new LiveTransactionalProducer(live, semaphore)
 }
