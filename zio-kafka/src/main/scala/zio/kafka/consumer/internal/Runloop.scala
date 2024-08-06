@@ -47,14 +47,16 @@ private[consumer] final class Runloop private (
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, maxPollInterval)
 
-  def isAlive: UIO[Boolean] = alive.get
+  def isAlive: UIO[Boolean] = ZIO.debug("isAlive in Runloop") *> alive.get
 
   def stopConsumption: UIO[Unit] =
     ZIO.logDebug("stopConsumption called") *>
+      alive.set(false) *>
       commandQueue.offer(RunloopCommand.StopAllStreams).unit
 
   private[consumer] def shutdown: UIO[Unit] =
     ZIO.logDebug(s"Shutting down runloop initiated") *>
+      alive.set(false) *>
       commandQueue
         .offerAll(
           Chunk(
@@ -63,7 +65,7 @@ private[consumer] final class Runloop private (
             RunloopCommand.StopRunloop
           )
         )
-        .unit <* alive.set(false)
+        .unit
 
   private[internal] def addSubscription(subscription: Subscription): IO[InvalidSubscriptionUnion, Unit] =
     for {
@@ -749,9 +751,12 @@ private[consumer] final class Runloop private (
           _ <- currentStateRef.set(updatedStateAfterPoll)
         } yield updatedStateAfterPoll
       }
-      .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause) <* alive.set(false))
+      .tapErrorCause(cause => alive.set(false) *> ZIO.logErrorCause("Error in Runloop, alive => false", cause))
       .onError(cause => partitionsHub.offer(Take.failCause(cause)))
-      .tapDefect(cause => ZIO.logErrorCause(s"Defect in Runloop", cause) <* alive.set(false)) <* alive.set(false)
+      .tapDefect(cause => alive.set(false) *> ZIO.logErrorCause(s"Defect in Runloop, alive => false", cause)) <* (ZIO
+      .logTrace(
+        "commandQueue finished, alive => false"
+      ) *> alive.set(false))
   }
 
   private def observeRunloopMetrics(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ZIO[Any, Nothing, Unit] = {
@@ -870,6 +875,7 @@ object Runloop {
       sameThreadRuntime   <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       executor            <- ZIO.executor
       alive               <- Ref.make[Boolean](true)
+      _                   <- ZIO.addFinalizer(ZIO.debug("finalizing runloop") *> alive.set(false))
       runloop = new Runloop(
                   settings = settings,
                   topLevelExecutor = executor,

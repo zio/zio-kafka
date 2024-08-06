@@ -43,9 +43,9 @@ private[consumer] final class RunloopAccess private (
     }
 
   def isAlive: UIO[Boolean] = runloopStateRef.get.flatMap {
-    case RunloopState.NotStarted       => ZIO.succeed(true)
-    case RunloopState.Started(runloop) => runloop.isAlive
-    case RunloopState.Finalized        => ZIO.succeed(false)
+    case RunloopState.NotStarted       => /* ZIO.debug("isAlive in RunLoopAccess 1") *> */ ZIO.succeed(true)
+    case RunloopState.Started(runloop) => /* ZIO.debug("isAlive in RunLoopAccess 2") *> */ runloop.isAlive
+    case RunloopState.Finalized        => ZIO.debug("isAlive in RunLoopAccess 3") *> ZIO.succeed(false)
   }
 
   /**

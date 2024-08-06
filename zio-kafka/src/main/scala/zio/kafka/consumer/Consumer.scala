@@ -438,7 +438,7 @@ private[consumer] final class ConsumerLive private[consumer] (
   import Consumer._
 
   override def isAlive: UIO[Boolean] =
-    runloopAccess.isAlive
+    ZIO.debug("isAlive in ConsumerLive") *> runloopAccess.isAlive
 
   override def assignment: Task[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
