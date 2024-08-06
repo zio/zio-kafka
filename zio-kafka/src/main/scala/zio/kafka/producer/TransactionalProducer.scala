@@ -1,7 +1,7 @@
 package zio.kafka.producer
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
-import org.apache.kafka.clients.producer.{ KafkaProducer, RecordMetadata }
+import org.apache.kafka.clients.producer.{ KafkaProducer, Producer => JProducer, RecordMetadata }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidGroupIdException
 import org.apache.kafka.common.serialization.ByteArraySerializer
@@ -83,6 +83,23 @@ object TransactionalProducer {
       } yield producer
     }
 
+  def fromJavaProducer(
+    rawProducer: JProducer[Array[Byte], Array[Byte]],
+    settings: TransactionalProducerSettings
+  ): ZIO[Scope, Throwable, TransactionalProducer] =
+    for {
+      _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
+      semaphore <- Semaphore.make(1)
+      alive     <- Ref.make(true)
+      sendQueue <-
+        Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
+          settings.producerSettings.sendBufferSize
+        )
+      live <- ZIO.acquireRelease(ZIO.attempt(new ProducerLive(rawProducer, sendQueue, alive)))(_ => alive.set(false))
+      _    <- live.sendFromQueue.forkScoped
+
+    } yield new LiveTransactionalProducer(live, semaphore)
+
   def make(settings: TransactionalProducerSettings): ZIO[Scope, Throwable, TransactionalProducer] =
     for {
       rawProducer <- ZIO.acquireRelease(
@@ -94,13 +111,6 @@ object TransactionalProducer {
                          )
                        )
                      )(p => ZIO.attemptBlocking(p.close(settings.producerSettings.closeTimeout)).orDie)
-      _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
-      semaphore <- Semaphore.make(1)
-      sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
-          settings.producerSettings.sendBufferSize
-        )
-      live = new ProducerLive(rawProducer, sendQueue)
-      _ <- live.sendFromQueue.forkScoped
-    } yield new LiveTransactionalProducer(live, semaphore)
+      liveTransactionalProducer <- fromJavaProducer(rawProducer, settings)
+    } yield liveTransactionalProducer
 }

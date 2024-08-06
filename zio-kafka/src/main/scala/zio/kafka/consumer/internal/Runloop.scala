@@ -33,7 +33,8 @@ private[consumer] final class Runloop private (
   diagnostics: Diagnostics,
   maxRebalanceDuration: Duration,
   currentStateRef: Ref[State],
-  committedOffsetsRef: Ref[CommitOffsets]
+  committedOffsetsRef: Ref[CommitOffsets],
+  alive: Ref[Boolean]
 ) {
   private val commitTimeout      = settings.commitTimeout
   private val commitTimeoutNanos = settings.commitTimeout.toNanos
@@ -46,12 +47,16 @@ private[consumer] final class Runloop private (
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, maxPollInterval)
 
+  def isAlive: UIO[Boolean] = ZIO.debug("isAlive in Runloop") *> alive.get
+
   def stopConsumption: UIO[Unit] =
     ZIO.logDebug("stopConsumption called") *>
+      alive.set(false) *>
       commandQueue.offer(RunloopCommand.StopAllStreams).unit
 
   private[consumer] def shutdown: UIO[Unit] =
     ZIO.logDebug(s"Shutting down runloop initiated") *>
+      alive.set(false) *>
       commandQueue
         .offerAll(
           Chunk(
@@ -746,8 +751,12 @@ private[consumer] final class Runloop private (
           _ <- currentStateRef.set(updatedStateAfterPoll)
         } yield updatedStateAfterPoll
       }
-      .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
+      .tapErrorCause(cause => alive.set(false) *> ZIO.logErrorCause("Error in Runloop, alive => false", cause))
       .onError(cause => partitionsHub.offer(Take.failCause(cause)))
+      .tapDefect(cause => alive.set(false) *> ZIO.logErrorCause(s"Defect in Runloop, alive => false", cause)) <* (ZIO
+      .logTrace(
+        "commandQueue finished, alive => false"
+      ) *> alive.set(false))
   }
 
   private def observeRunloopMetrics(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ZIO[Any, Nothing, Unit] = {
@@ -865,6 +874,8 @@ object Runloop {
       committedOffsetsRef <- Ref.make(CommitOffsets.empty)
       sameThreadRuntime   <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       executor            <- ZIO.executor
+      alive               <- Ref.make[Boolean](true)
+      _                   <- ZIO.addFinalizer(ZIO.debug("finalizing runloop") *> alive.set(false))
       runloop = new Runloop(
                   settings = settings,
                   topLevelExecutor = executor,
@@ -878,7 +889,8 @@ object Runloop {
                   diagnostics = diagnostics,
                   maxRebalanceDuration = maxRebalanceDuration,
                   currentStateRef = currentStateRef,
-                  committedOffsetsRef = committedOffsetsRef
+                  committedOffsetsRef = committedOffsetsRef,
+                  alive = alive
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
