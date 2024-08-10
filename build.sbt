@@ -42,6 +42,7 @@ inThisBuild(
       "com.github.vovapolu"                      %% "scaluzzi" % "0.1.23",
       "io.github.ghostbuster91.scalafix-unified" %% "unified"  % "0.0.9"
     ),
+    resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
     developers := List(
       Developer(
         "iravid",
