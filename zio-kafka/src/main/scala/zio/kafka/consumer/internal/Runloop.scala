@@ -509,14 +509,16 @@ private[consumer] final class Runloop private (
 
                               val currentAssigned = c.assignment().asScala.toSet
                               val endedTps        = endedStreams.map(_.tp).toSet
+                              // Some partitions might have been both assigned and revoked/lost.
+                              val actualAssigned = assignedTps -- revokedTps -- lostTps
                               for {
-                                ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
+                                ignoreRecordsForTps <- doSeekForNewPartitions(c, actualAssigned)
 
                                 // The topic partitions that need a new stream are:
                                 //  1. Those that are freshly assigned
                                 //  2. Those that are still assigned but were ended in the rebalance listener because
                                 //     of `restartStreamsOnRebalancing` being true
-                                startingTps = assignedTps ++ (currentAssigned intersect endedTps)
+                                startingTps = actualAssigned ++ (currentAssigned intersect endedTps)
 
                                 startingStreams <-
                                   ZIO.foreach(Chunk.fromIterable(startingTps))(newPartitionStream).tap { newStreams =>
