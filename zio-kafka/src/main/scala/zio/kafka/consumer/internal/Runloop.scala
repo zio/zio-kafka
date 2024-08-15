@@ -831,7 +831,11 @@ object Runloop {
       )
 
     def onLost(lost: Set[TopicPartition]): RebalanceEvent =
-      copy(wasInvoked = true, lostTps = lostTps ++ lost)
+      copy(
+        wasInvoked = true,
+        assignedTps = assignedTps -- lost,
+        lostTps = lostTps ++ lost
+      )
   }
 
   private object RebalanceEvent {
