@@ -20,6 +20,8 @@ object RunloopSpec extends ZIOSpecDefault {
   private type PartitionsHub      = Hub[Take[Throwable, PartitionAssignment]]
 
   private val tp10   = new TopicPartition("t1", 0)
+  private val tp11   = new TopicPartition("t1", 1)
+  private val tp12   = new TopicPartition("t1", 2)
   private val key123 = "123".getBytes
 
   private val consumerSettings = ConsumerSettings(List("bootstrap"))
@@ -49,6 +51,38 @@ object RunloopSpec extends ZIOSpecDefault {
                         .someOrFail(new AssertionError("Expected at least 1 record from the streams"))
           } yield assertTrue(
             record.key sameElements key123
+          )
+        }
+      },
+      test(
+        "runloop does not starts a new stream for partition which being revoked right after assignment within the same RebalanceEvent"
+      ) {
+        withRunloop { (mockConsumer, partitionsHub, runloop) =>
+          mockConsumer.schedulePollTask { () =>
+            mockConsumer.updateEndOffsets(Map(tp10 -> Long.box(0L), tp12 -> Long.box(0L)).asJava)
+            mockConsumer.rebalance(Seq(tp10, tp11).asJava)
+            mockConsumer.rebalance(Seq(tp10).asJava)
+          }
+          mockConsumer.schedulePollTask { () =>
+            mockConsumer.rebalance(Seq(tp10, tp12).asJava)
+            mockConsumer.addRecord(makeConsumerRecord(tp10, key123))
+            mockConsumer.addRecord(makeConsumerRecord(tp12, key123))
+          }
+          for {
+            streamStream <- ZStream.fromHubScoped(partitionsHub)
+            _            <- runloop.addSubscription(Subscription.Topics(Set(tp10, tp11, tp12).map(_.topic())))
+            assignedTps <- streamStream
+                             .map(_.exit)
+                             .flattenExitOption
+                             .flattenChunks
+                             .take(2)
+                             .mapZIO { case (tp, stream) =>
+                               stream.runHead.as(tp)
+                             }
+                             .runCollect
+          } yield assertTrue(
+            // does not contain tp11
+            assignedTps == Chunk(tp10, tp12)
           )
         }
       },
