@@ -5,7 +5,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException }
 import zio._
 import zio.kafka.consumer.{ ConsumerSettings, Subscription }
-import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.metrics.{ MetricState, Metrics }
 import zio.stream.{ Take, ZStream }
@@ -20,6 +20,7 @@ object RunloopSpec extends ZIOSpecDefault {
   private type PartitionsHub      = Hub[Take[Throwable, PartitionAssignment]]
 
   private val tp10   = new TopicPartition("t1", 0)
+  private val tp11   = new TopicPartition("t1", 1)
   private val key123 = "123".getBytes
 
   private val consumerSettings = ConsumerSettings(List("bootstrap"))
@@ -27,7 +28,7 @@ object RunloopSpec extends ZIOSpecDefault {
   override def spec: Spec[TestEnvironment with Scope, Any] =
     suite("RunloopSpec")(
       test("runloop creates a new partition stream and polls for new records") {
-        withRunloop { (mockConsumer, partitionsHub, runloop) =>
+        withRunloop() { (mockConsumer, partitionsHub, runloop) =>
           mockConsumer.schedulePollTask { () =>
             mockConsumer.updateEndOffsets(Map(tp10 -> Long.box(0L)).asJava)
             mockConsumer.rebalance(Seq(tp10).asJava)
@@ -52,8 +53,48 @@ object RunloopSpec extends ZIOSpecDefault {
           )
         }
       },
+      test(
+        "runloop does not starts a new stream for partition which being revoked right after assignment within the same RebalanceEvent"
+      ) {
+        Diagnostics.SlidingQueue.make(100).flatMap { diagnostics =>
+          withRunloop(diagnostics) { (mockConsumer, partitionsHub, runloop) =>
+            mockConsumer.schedulePollTask { () =>
+              mockConsumer.updateEndOffsets(Map(tp10 -> Long.box(0L), tp11 -> Long.box(0L)).asJava)
+              mockConsumer.rebalance(Seq(tp10, tp11).asJava)
+              mockConsumer.rebalance(Seq(tp10).asJava)
+              mockConsumer.addRecord(makeConsumerRecord(tp10, key123))
+            }
+            for {
+              streamStream <- ZStream.fromHubScoped(partitionsHub)
+              _            <- runloop.addSubscription(Subscription.Topics(Set(tp10, tp11).map(_.topic())))
+              _ <- streamStream
+                     .map(_.exit)
+                     .flattenExitOption
+                     .flattenChunks
+                     .take(1)
+                     .mapZIO { case (_, stream) =>
+                       stream.runHead
+                     }
+                     .runDrain
+              diagnosticEvents <- diagnostics.queue.takeAll
+              rebalanceEvents =
+                diagnosticEvents.collect { case rebalanceEvent: DiagnosticEvent.Rebalance =>
+                  rebalanceEvent
+                }
+            } yield assertTrue(
+              rebalanceEvents.length == 1,
+              rebalanceEvents.head == DiagnosticEvent.Rebalance(
+                revoked = Set(tp11),
+                assigned = Set(tp10),
+                lost = Set.empty,
+                ended = Set.empty
+              )
+            )
+          }
+        }
+      },
       test("runloop retries poll upon AuthorizationException and AuthenticationException") {
-        withRunloop { (mockConsumer, partitionsHub, runloop) =>
+        withRunloop() { (mockConsumer, partitionsHub, runloop) =>
           mockConsumer.schedulePollTask { () =>
             mockConsumer.updateEndOffsets(Map(tp10 -> Long.box(0L)).asJava)
             mockConsumer.rebalance(Seq(tp10).asJava)
@@ -90,7 +131,7 @@ object RunloopSpec extends ZIOSpecDefault {
       }
     ) @@ withLiveClock
 
-  private def withRunloop(
+  private def withRunloop(diagnostics: Diagnostics = Diagnostics.NoOp)(
     f: (BinaryMockConsumer, PartitionsHub, Runloop) => ZIO[Scope, Throwable, TestResult]
   ): ZIO[Scope, Throwable, TestResult] =
     ZIO.scoped {
@@ -105,7 +146,7 @@ object RunloopSpec extends ZIOSpecDefault {
                      consumerSettings,
                      100.millis,
                      100.millis,
-                     Diagnostics.NoOp,
+                     diagnostics,
                      consumerAccess,
                      partitionsHub
                    )
