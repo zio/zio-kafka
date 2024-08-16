@@ -42,6 +42,12 @@ private[consumer] final class RunloopAccess private (
       case RunloopState.Finalized        => ZIO.unit
     }
 
+  def isAlive: UIO[Boolean] = runloopStateRef.get.flatMap {
+    case RunloopState.NotStarted       => /* ZIO.debug("isAlive in RunLoopAccess 1") *> */ ZIO.succeed(true)
+    case RunloopState.Started(runloop) => /* ZIO.debug("isAlive in RunLoopAccess 2") *> */ runloop.isAlive
+    case RunloopState.Finalized        => ZIO.debug("isAlive in RunLoopAccess 3") *> ZIO.succeed(false)
+  }
+
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has not been started or has been stopped.
    */
