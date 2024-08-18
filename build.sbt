@@ -11,7 +11,7 @@ import MimaSettings.mimaSettings
  */
 lazy val binCompatVersionToCompare = None // Some("2.8.0")
 
-lazy val kafkaVersion         = "3.7.1"
+lazy val kafkaVersion         = "3.8.0"
 lazy val embeddedKafkaVersion = "3.7.1.1" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
