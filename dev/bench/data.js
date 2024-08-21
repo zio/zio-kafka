@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1724204083929,
+  "lastUpdate": 1724259450749,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -27112,6 +27112,66 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 920.0709410199999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "talashkoy@gmail.com",
+            "name": "Yurii Talashko",
+            "username": "ytalashko"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3393fbf4487bb3cc34962a304edf792dd832deee",
+          "message": "Revert back to 2.8.0 sendFromQueue implementation in producer (#1304)\n\nDuring running services with the new version of library 2.8.1, I noticed\r\nhuge increase in messages production time to kafka.\r\nSome quick rough tests shoving me around 40x-100x times increase in\r\namount of time taken to `produceChunk` on even 1-10 records chunks\r\ncomparing to version 2.8.0 (or also to version 2.8.1 with the changes in\r\nthis MR). Please, note, it is not a proper benchmarks. Also, to note, Im\r\nusing Scala version 3.3.1.\r\n\r\nThis MR just reverts two MRs updating `ProducersendFromQueue`\r\nimplementation:\r\n - https://github.com/zio/zio-kafka/pull/1272\r\n - https://github.com/zio/zio-kafka/pull/1285\r\n \r\nNot sure if it's possible to revert two MRs at a time (with a single one\r\nfor revert), so created this one.\r\n \r\nI haven't researched yet which exact change/changes are causing such\r\nperformance degradation.\r\n I would suggest the next steps:\r\n  - confirm the problem exists\r\n- reverting to the previous implementation (the one from 2.8.0/this MR)\r\n  - release fixed version (to allow users have a nicely working version)\r\n- investigate & fix problem from the\r\nhttps://github.com/zio/zio-kafka/pull/1272 and/or\r\nhttps://github.com/zio/zio-kafka/pull/1285\r\n\r\nIt is only suggestions on the approach, feel free to ignore them.\r\nAlso, feel free to modify/ignore this MR and treat it as an issue.",
+          "timestamp": "2024-08-21T18:44:17+02:00",
+          "tree_id": "d365d0277cdc4e715e235a0844c1fa0663fff2a2",
+          "url": "https://github.com/zio/zio-kafka/commit/3393fbf4487bb3cc34962a304edf792dd832deee"
+        },
+        "date": 1724259450321,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 538.23635432,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 538.1238064799999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 626.6432877000001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 620.6091796599999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1112.72722526,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 904.6855828399999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
