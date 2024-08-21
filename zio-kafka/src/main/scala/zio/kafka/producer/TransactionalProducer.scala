@@ -96,11 +96,12 @@ object TransactionalProducer {
                      )(p => ZIO.attemptBlocking(p.close(settings.producerSettings.closeTimeout)).orDie)
       _         <- ZIO.attemptBlocking(rawProducer.initTransactions())
       semaphore <- Semaphore.make(1)
+      runtime   <- ZIO.runtime[Any]
       sendQueue <-
         Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
           settings.producerSettings.sendBufferSize
         )
-      live = new ProducerLive(rawProducer, sendQueue)
-      _ <- live.sendFromQueue.forkScoped
+      live = new ProducerLive(rawProducer, runtime, sendQueue)
+      _ <- ZIO.blocking(live.sendFromQueue).forkScoped
     } yield new LiveTransactionalProducer(live, semaphore)
 }
