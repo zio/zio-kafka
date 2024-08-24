@@ -486,8 +486,8 @@ private[producer] final class ProducerLive(
   ): ZIO[Any, Nothing, Chunk[Either[Throwable, RecordMetadata]]] =
     for {
       promises <- ZIO.foreach(serializedRecords)(sendRecord(runtime))
-      results  <- ZIO.foreach(promises)(_.await.either)
-    } yield results
+      results  <- ZIO.foreach(promises.reverse)(_.await.either)
+    } yield results.reverse
 
   private def sendRecord(
     runtime: Runtime[Any]
