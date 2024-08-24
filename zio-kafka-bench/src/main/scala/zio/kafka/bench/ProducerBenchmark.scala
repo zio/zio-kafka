@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 class ProducerBenchmark extends ZioBenchmark[Kafka with Producer] {
   val topic1                      = "topic1"
   val nrPartitions                = 6
-  val nrMessages                  = 5000
+  val nrMessages                  = 500
   val kvs: List[(String, String)] = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
   val records                     = Chunk.fromIterable(kvs.map { case (k, v) => new ProducerRecord(topic1, k, v) })
 
