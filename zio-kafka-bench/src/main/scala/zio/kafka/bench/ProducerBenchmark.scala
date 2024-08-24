@@ -16,8 +16,9 @@ import java.util.concurrent.TimeUnit
 class ProducerBenchmark extends ZioBenchmark[Kafka with Producer] {
   val topic1                      = "topic1"
   val nrPartitions                = 6
-  val nrMessages                  = 50000
+  val nrMessages                  = 5000
   val kvs: List[(String, String)] = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
+  val records                     = Chunk.fromIterable(kvs.map { case (k, v) => new ProducerRecord(topic1, k, v) })
 
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka with Producer] =
     ZLayer.make[Kafka with Producer](Kafka.embedded, producer).orDie
@@ -31,14 +32,7 @@ class ProducerBenchmark extends ZioBenchmark[Kafka with Producer] {
   @BenchmarkMode(Array(Mode.AverageTime))
   def produceChunk(): Any = runZIO {
     for {
-      _ <- Producer
-             .produceChunk[Any, String, String](
-               Chunk.fromIterable(kvs.map { case (k, v) =>
-                 new ProducerRecord(topic1, k, v)
-               }),
-               Serde.string,
-               Serde.string
-             )
+      _ <- Producer.produceChunk(records, Serde.string, Serde.string).repeatN(100)
     } yield ()
   }
 
