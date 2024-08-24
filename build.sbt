@@ -157,7 +157,7 @@ lazy val zioKafkaTest =
       libraryDependencies ++= Seq(
         kafkaClients,
         logback    % Test,
-        "dev.zio" %% "zio-logging-slf4j" % "2.3.0" % Test
+        "dev.zio" %% "zio-logging-slf4j" % "2.3.1" % Test
       ) ++ `embedded-kafka`.value
     )
 
@@ -181,7 +181,7 @@ lazy val zioKafkaExample =
       libraryDependencies ++= Seq(
         "dev.zio"                 %% "zio"                % "2.1.7",
         "dev.zio"                 %% "zio-kafka"          % "2.8.0",
-        "dev.zio"                 %% "zio-logging-slf4j2" % "2.3.0",
+        "dev.zio"                 %% "zio-logging-slf4j2" % "2.3.1",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
         logback,
         "dev.zio" %% "zio-kafka-testkit" % "2.8.0" % Test,
