@@ -1,11 +1,13 @@
 package zio.kafka.bench
 
 import io.github.embeddedkafka.EmbeddedKafka
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.openjdk.jmh.annotations._
 import zio.kafka.producer.Producer
+import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
-import zio.kafka.testkit.KafkaTestUtils.{ produceMany, producer }
-import zio.{ ZIO, ZLayer }
+import zio.kafka.testkit.KafkaTestUtils.producer
+import zio.{ Chunk, ZIO, ZLayer }
 
 import java.util.concurrent.TimeUnit
 
@@ -27,9 +29,23 @@ class ProducerBenchmark extends ZioBenchmark[Kafka with Producer] {
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  def throughput(): Any = runZIO {
+  def produceChunk(): Any = runZIO {
     for {
-      _ <- produceMany(topic1, kvs)
+      _ <- Producer
+             .produceChunk[Any, String, String](
+               Chunk.fromIterable(kvs.map { case (k, v) =>
+                 new ProducerRecord(topic1, k, v)
+               }),
+               Serde.string,
+               Serde.string
+             )
     } yield ()
+  }
+
+  @Benchmark
+  @BenchmarkMode(Array(Mode.Throughput))
+  @OutputTimeUnit(TimeUnit.SECONDS)
+  def produceSingleRecord(): Any = runZIO {
+    Producer.produce(topic1, "key", "value", Serde.string, Serde.string)
   }
 }
