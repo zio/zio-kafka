@@ -8,7 +8,7 @@ import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
 import zio.stream.{ ZPipeline, ZStream }
 
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
@@ -460,7 +460,7 @@ private[producer] final class ProducerLive(
 
   /**
    * Calls to send may block when updating metadata or when communication with the broker is (temporarily) lost,
-   * therefore this stream is run on a the blocking thread pool
+   * therefore this stream is run on the blocking thread pool
    */
   val sendFromQueue: ZIO[Any, Nothing, Any] =
     ZStream
@@ -471,8 +471,8 @@ private[producer] final class ProducerLive(
             val it: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
             val res: Array[Either[Throwable, RecordMetadata]] =
               new Array[Either[Throwable, RecordMetadata]](serializedRecords.length)
-            val count: AtomicLong = new AtomicLong
-            val length            = serializedRecords.length
+            val count: AtomicInteger = new AtomicInteger
+            val length               = serializedRecords.length
 
             while (it.hasNext) {
               val (rec, idx): (ByteRecord, Int) = it.next()
