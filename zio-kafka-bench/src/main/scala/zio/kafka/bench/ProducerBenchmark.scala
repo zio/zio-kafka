@@ -7,7 +7,8 @@ import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
 import zio.kafka.testkit.KafkaTestUtils.producer
-import zio.{ Chunk, ZIO, ZLayer }
+import zio.stream.ZStream
+import zio.{Chunk, ZIO, ZLayer}
 
 import java.util.concurrent.TimeUnit
 
@@ -32,16 +33,41 @@ class ProducerBenchmark extends ZioBenchmark[Kafka with Producer] {
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  def produceChunk(): Any = runZIO {
-    for {
-      _ <- Producer.produceChunk(records, Serde.string, Serde.string).repeatN(100)
-    } yield ()
+  def produceChunkSeq(): Any = runZIO {
+    // Produce 30 chunks sequentially
+    Producer.produceChunk(records, Serde.string, Serde.string).repeatN(29)
+  }
+
+  @Benchmark
+  @BenchmarkMode(Array(Mode.AverageTime))
+  def produceChunkPar(): Any = runZIO {
+    // Produce 30 chunks of which 4 run in parallel
+    ZStream
+      .range(0, 30, 1)
+      .mapZIOParUnordered(4) { _ =>
+        Producer.produceChunk(records, Serde.string, Serde.string)
+      }
+      .runDrain
   }
 
   @Benchmark
   @BenchmarkMode(Array(Mode.Throughput))
   @OutputTimeUnit(TimeUnit.SECONDS)
-  def produceSingleRecord(): Any = runZIO {
-    Producer.produce(topic1, "key", "value", Serde.string, Serde.string)
+  def produceSingleRecordSeq(): Any = runZIO {
+    // Produce 50 records sequentially
+    Producer.produce(topic1, "key", "value", Serde.string, Serde.string).repeatN(99)
+  }
+
+  @Benchmark
+  @BenchmarkMode(Array(Mode.Throughput))
+  @OutputTimeUnit(TimeUnit.SECONDS)
+  def produceSingleRecordPar(): Any = runZIO {
+    // Produce 100 records of which 4 run in parallel
+    ZStream
+      .range(0, 100, 1)
+      .mapZIOParUnordered(4) { _ =>
+        Producer.produce(topic1, "key", "value", Serde.string, Serde.string)
+      }
+      .runDrain
   }
 }
