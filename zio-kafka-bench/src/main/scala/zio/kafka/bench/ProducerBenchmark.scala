@@ -18,7 +18,9 @@ class ProducerBenchmark extends ZioBenchmark[Kafka with Producer] {
   val nrPartitions                = 6
   val nrMessages                  = 500
   val kvs: List[(String, String)] = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
-  val records                     = Chunk.fromIterable(kvs.map { case (k, v) => new ProducerRecord(topic1, k, v) })
+  val records: Chunk[ProducerRecord[String, String]] = Chunk.fromIterable(kvs.map { case (k, v) =>
+    new ProducerRecord(topic1, k, v)
+  })
 
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka with Producer] =
     ZLayer.make[Kafka with Producer](Kafka.embedded, producer).orDie
