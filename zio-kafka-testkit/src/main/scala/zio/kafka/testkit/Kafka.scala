@@ -1,6 +1,5 @@
 package zio.kafka.testkit
 
-import _root_.kafka.server.KafkaConfig
 import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import zio._
 
@@ -78,23 +77,23 @@ object Kafka {
     embeddedWithBrokerProps(
       ports =>
         Map(
-          "group.min.session.timeout.ms"          -> "500",
-          "group.initial.rebalance.delay.ms"      -> "0",
-          "authorizer.class.name"                 -> "kafka.security.authorizer.AclAuthorizer",
-          "super.users"                           -> "User:ANONYMOUS",
-          "ssl.client.auth"                       -> "required",
-          "ssl.enabled.protocols"                 -> "TLSv1.2",
-          "ssl.truststore.type"                   -> "JKS",
-          "ssl.keystore.type"                     -> "JKS",
-          "ssl.truststore.location"               -> KafkaTestUtils.trustStoreFile.getAbsolutePath,
-          "ssl.truststore.password"               -> "123456",
-          "ssl.keystore.location"                 -> KafkaTestUtils.keyStoreFile.getAbsolutePath,
-          "ssl.keystore.password"                 -> "123456",
-          "ssl.key.password"                      -> "123456",
-          KafkaConfig.InterBrokerListenerNameProp -> "SSL",
-          KafkaConfig.ListenersProp               -> s"SSL://localhost:${ports.kafkaPort}",
-          KafkaConfig.AdvertisedListenersProp     -> s"SSL://localhost:${ports.kafkaPort}",
-          KafkaConfig.ZkConnectionTimeoutMsProp   -> s"${30.second.toMillis}"
+          "group.min.session.timeout.ms"     -> "500",
+          "group.initial.rebalance.delay.ms" -> "0",
+          "authorizer.class.name"            -> "kafka.security.authorizer.AclAuthorizer",
+          "super.users"                      -> "User:ANONYMOUS",
+          "ssl.client.auth"                  -> "required",
+          "ssl.enabled.protocols"            -> "TLSv1.2",
+          "ssl.truststore.type"              -> "JKS",
+          "ssl.keystore.type"                -> "JKS",
+          "ssl.truststore.location"          -> KafkaTestUtils.trustStoreFile.getAbsolutePath,
+          "ssl.truststore.password"          -> "123456",
+          "ssl.keystore.location"            -> KafkaTestUtils.keyStoreFile.getAbsolutePath,
+          "ssl.keystore.password"            -> "123456",
+          "ssl.key.password"                 -> "123456",
+          "inter.broker.listener.name"       -> "SSL",
+          "listeners"                        -> s"SSL://localhost:${ports.kafkaPort}",
+          "advertised.listeners"             -> s"SSL://localhost:${ports.kafkaPort}",
+          "zookeeper.connection.timeout.ms"  -> s"${30.second.toMillis}"
         ),
       customBrokerProps
     )
