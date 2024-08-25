@@ -1046,6 +1046,14 @@ object AdminClient {
       override def asJava: JConsumerGroupState = JConsumerGroupState.EMPTY
     }
 
+    case object Assigning extends ConsumerGroupState {
+      override def asJava: JConsumerGroupState = JConsumerGroupState.ASSIGNING
+    }
+
+    case object Reconciling extends ConsumerGroupState {
+      override def asJava: JConsumerGroupState = JConsumerGroupState.RECONCILING
+    }
+
     def apply(state: JConsumerGroupState): ConsumerGroupState =
       state match {
         case JConsumerGroupState.UNKNOWN              => ConsumerGroupState.Unknown
@@ -1054,6 +1062,8 @@ object AdminClient {
         case JConsumerGroupState.STABLE               => ConsumerGroupState.Stable
         case JConsumerGroupState.DEAD                 => ConsumerGroupState.Dead
         case JConsumerGroupState.EMPTY                => ConsumerGroupState.Empty
+        case JConsumerGroupState.ASSIGNING            => ConsumerGroupState.Assigning
+        case JConsumerGroupState.RECONCILING          => ConsumerGroupState.Reconciling
       }
   }
 
