@@ -8,7 +8,7 @@ import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
 import zio.kafka.testkit.KafkaTestUtils.producer
 import zio.stream.ZStream
-import zio.{Chunk, ZIO, ZLayer}
+import zio.{ Chunk, ZIO, ZLayer }
 
 import java.util.concurrent.TimeUnit
 
