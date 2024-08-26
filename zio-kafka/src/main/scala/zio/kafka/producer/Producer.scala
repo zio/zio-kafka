@@ -471,14 +471,12 @@ private[producer] final class ProducerLive(
       // Calls to 'send' may block when updating metadata or when communication with the broker is (temporarily) lost,
       // therefore this stream is run on the blocking thread pool.
       ZIO.blocking {
-        ZIO.scoped {
-          ZStream
-            .fromQueueWithShutdown(sendQueue)
-            .mapZIO { case (serializedRecords, done) =>
-              sendChunk(runtime, serializedRecords, done)
-            }
-            .runDrain
-        }
+        ZStream
+          .fromQueueWithShutdown(sendQueue)
+          .mapZIO { case (serializedRecords, done) =>
+            sendChunk(runtime, serializedRecords, done)
+          }
+          .runDrain
       }
     }
 
@@ -486,13 +484,10 @@ private[producer] final class ProducerLive(
     runtime: Runtime[Any],
     serializedRecords: Chunk[ByteRecord],
     done: Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
-  ): ZIO[Scope, Nothing, Unit] =
+  ): ZIO[Any, Nothing, Unit] =
     for {
       promises <- ZIO.foreach(serializedRecords)(sendRecord(runtime))
-      _ <- ZIO
-             .foreach(promises.reverse)(_.await.either)
-             .flatMap(results => done.succeed(results.reverse))
-             .forkScoped
+      _        <- done.completeWith(ZIO.foreach(promises.reverse)(_.await.either).map(_.reverse))
     } yield ()
 
   private def sendRecord(
