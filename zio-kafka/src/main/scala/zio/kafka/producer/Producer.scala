@@ -435,7 +435,6 @@ private[producer] final class ProducerLive(
       .foreach(records)(serialize(_, keySerializer, valueSerializer))
       .flatMap(produceChunkAsync)
 
-  // noinspection YieldingZIOEffectInspection
   override def produceChunkAsyncWithFailures(
     records: Chunk[ByteRecord]
   ): UIO[UIO[Chunk[Either[Throwable, RecordMetadata]]]] =
@@ -444,7 +443,9 @@ private[producer] final class ProducerLive(
       for {
         done <- Promise.make[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
         _    <- sendQueue.offer((records, done))
-      } yield done.await
+      } yield
+      // noinspection YieldingZIOEffectInspection
+      done.await
     }
 
   override def partitionsFor(topic: String): Task[Chunk[PartitionInfo]] =
@@ -470,24 +471,29 @@ private[producer] final class ProducerLive(
       // Calls to 'send' may block when updating metadata or when communication with the broker is (temporarily) lost,
       // therefore this stream is run on the blocking thread pool.
       ZIO.blocking {
-        ZStream
-          .fromQueueWithShutdown(sendQueue)
-          .mapZIO { case (serializedRecords, done) =>
-            sendChunk(runtime, serializedRecords)
-              .flatMap(done.succeed(_))
-          }
-          .runDrain
+        ZIO.scoped {
+          ZStream
+            .fromQueueWithShutdown(sendQueue)
+            .mapZIO { case (serializedRecords, done) =>
+              sendChunk(runtime, serializedRecords, done)
+            }
+            .runDrain
+        }
       }
     }
 
   private def sendChunk(
     runtime: Runtime[Any],
-    serializedRecords: Chunk[ByteRecord]
-  ): ZIO[Any, Nothing, Chunk[Either[Throwable, RecordMetadata]]] =
+    serializedRecords: Chunk[ByteRecord],
+    done: Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
+  ): ZIO[Scope, Nothing, Unit] =
     for {
       promises <- ZIO.foreach(serializedRecords)(sendRecord(runtime))
-      results  <- ZIO.foreach(promises.reverse)(_.await.either)
-    } yield results.reverse
+      _ <- ZIO
+             .foreach(promises.reverse)(_.await.either)
+             .flatMap(results => done.succeed(results.reverse))
+             .forkScoped
+    } yield ()
 
   private def sendRecord(
     runtime: Runtime[Any]
