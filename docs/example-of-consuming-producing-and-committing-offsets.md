@@ -3,7 +3,7 @@ id: example-of-consuming-producing-and-committing-offsets
 title: "Example of Consuming, Producing and Committing Offsets"
 ---
 
-This example shows how to consume messages from topic `topic_a` and produce transformed messages to `topic_b`, after which consumer offsets are committed. Processing is done in chunks using `ZStreamChunk` for more efficiency.
+This example shows how to consume messages from topic `topic_a` and produce transformed messages to `topic_b`, after which consumer offsets are committed. Processing is done in chunks using `ZStreamChunk` for more efficiency. Please note: ZIO consumer does not support automatic offset committing. As a result, it ignores the Kafka consumer setting `enable.auto.commit=true`. Developers should manually commit offsets using the provided commit methods, typically after processing messages or at appropriate points in their application logic.
 
 ```scala
 import zio.ZLayer
