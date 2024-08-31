@@ -8,9 +8,8 @@ import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
 import zio.stream.{ ZPipeline, ZStream }
 
-import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
-import scala.util.control.NonFatal
+import scala.util.control.{ NoStackTrace, NonFatal }
 
 trait Producer {
 
@@ -187,6 +186,10 @@ trait Producer {
 }
 
 object Producer {
+  case object SendOmittedDueToPreviousRecordSendCallFailureError
+      extends RuntimeException("Send omitted due to the previous record send call failure")
+      with NoStackTrace
+
   val live: RLayer[ProducerSettings, Producer] =
     ZLayer.scoped {
       for {
@@ -466,41 +469,72 @@ private[producer] final class ProducerLive(
     ZStream
       .fromQueueWithShutdown(sendQueue)
       .mapZIO { case (serializedRecords, done) =>
-        ZIO.succeed {
-          try {
-            val it: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
-            val res: Array[Either[Throwable, RecordMetadata]] =
-              new Array[Either[Throwable, RecordMetadata]](serializedRecords.length)
-            val count: AtomicInteger = new AtomicInteger
-            val length               = serializedRecords.length
+        ZIO.suspendSucceed {
+          val recordsLength                                = serializedRecords.length
+          val recordsIterator: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
+          val sentResults: Array[Either[Throwable, RecordMetadata]] =
+            new Array[Either[Throwable, RecordMetadata]](recordsLength)
 
-            while (it.hasNext) {
-              val (rec, idx): (ByteRecord, Int) = it.next()
-
-              val _ = p.send(
-                rec,
-                (metadata: RecordMetadata, err: Exception) =>
-                  Unsafe.unsafe { implicit u =>
-                    exec {
-                      if (err != null) res(idx) = Left(err)
-                      else res(idx) = Right(metadata)
-
-                      if (count.incrementAndGet == length) {
-                        exec {
-                          runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure()
-                        }
-                      }
-                    }
-                  }
-              )
-            }
-          } catch {
-            case NonFatal(e) =>
+          Ref.make(0).map { sentRecordsCountRef =>
+            @inline def safelyInsertSentResult(resultIndex: Int, sentResult: Either[Throwable, RecordMetadata]): Unit =
               Unsafe.unsafe { implicit u =>
                 exec {
-                  runtime.unsafe.run(done.succeed(Chunk.fill(serializedRecords.size)(Left(e)))).getOrThrowFiberFailure()
+                  runtime.unsafe.run(
+                    sentRecordsCountRef.update { sentRecordsCount =>
+                      // Updating sentResults[resultIndex] here is safe:
+                      //  - Ref.update guarantees sentResults.update executed atomically
+                      //  - Ref.update starts with volatile variable read and ends with volatile variable write,
+                      //    which guarantees sentResults.update executed on the latest updated version of sentResults
+                      //    and currently updated version of sentResults
+                      //    will be visible to the next sentResults read or update called within Ref.update
+                      sentResults.update(resultIndex, sentResult)
+
+                      val newSentRecordsCount = sentRecordsCount + 1
+                      if (newSentRecordsCount == recordsLength) {
+                        val sentResultsChunk = Chunk.fromArray(sentResults)
+
+                        exec {
+                          runtime.unsafe.run(done.succeed(sentResultsChunk))
+                        }
+                      }
+
+                      newSentRecordsCount
+                    }
+                  )
                 }
               }
+
+            var previousSendCallSucceed = true
+
+            while (recordsIterator.hasNext) {
+              val (record: ByteRecord, recordIndex: Int) = recordsIterator.next()
+
+              if (previousSendCallSucceed) {
+                try {
+                  val _ = p.send(
+                    record,
+                    (metadata: RecordMetadata, err: Exception) =>
+                      safelyInsertSentResult(
+                        recordIndex,
+                        if (err eq null) Right(metadata) else Left(err)
+                      )
+                  )
+                } catch {
+                  case NonFatal(err) =>
+                    previousSendCallSucceed = false
+
+                    safelyInsertSentResult(
+                      recordIndex,
+                      Left(err)
+                    )
+                }
+              } else {
+                safelyInsertSentResult(
+                  recordIndex,
+                  Left(Producer.SendOmittedDueToPreviousRecordSendCallFailureError)
+                )
+              }
+            }
           }
         }
       }
