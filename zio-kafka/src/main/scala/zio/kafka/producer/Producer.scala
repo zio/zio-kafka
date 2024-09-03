@@ -186,8 +186,8 @@ trait Producer {
 }
 
 object Producer {
-  case object SendOmittedDueToPreviousRecordSendCallFailureError
-      extends RuntimeException("Send omitted due to the previous record send call failure")
+  case object SendOmittedException
+      extends RuntimeException("Send omitted due to a send error for a previous record in the chunk")
       with NoStackTrace
 
   val live: RLayer[ProducerSettings, Producer] =
@@ -481,12 +481,11 @@ private[producer] final class ProducerLive(
                 exec {
                   runtime.unsafe.run(
                     sentRecordsCountRef.update { sentRecordsCount =>
-                      // Updating sentResults[resultIndex] here is safe:
-                      //  - Ref.update guarantees sentResults.update executed atomically
-                      //  - Ref.update starts with volatile variable read and ends with volatile variable write,
-                      //    which guarantees sentResults.update executed on the latest updated version of sentResults
-                      //    and currently updated version of sentResults
-                      //    will be visible to the next sentResults read or update called within Ref.update
+                      // Updating sentResults[resultIndex] here is safe,
+                      //  cause Ref.update starts with volatile variable read and ends with volatile variable write,
+                      //  which guarantees sentResults.update executed on the latest updated version of sentResults
+                      //  and currently updated version of sentResults
+                      //  will be visible to the next sentResults read or update called within Ref.update
                       sentResults.update(resultIndex, sentResult)
 
                       val newSentRecordsCount = sentRecordsCount + 1
@@ -504,12 +503,10 @@ private[producer] final class ProducerLive(
                 }
               }
 
-            var previousSendCallSucceed = true
+            var previousSendCallsSucceed = true
 
-            while (recordsIterator.hasNext) {
-              val (record: ByteRecord, recordIndex: Int) = recordsIterator.next()
-
-              if (previousSendCallSucceed) {
+            recordsIterator.foreach { case (record: ByteRecord, recordIndex: Int) =>
+              if (previousSendCallsSucceed) {
                 try {
                   val _ = p.send(
                     record,
@@ -521,7 +518,7 @@ private[producer] final class ProducerLive(
                   )
                 } catch {
                   case NonFatal(err) =>
-                    previousSendCallSucceed = false
+                    previousSendCallsSucceed = false
 
                     safelyInsertSentResult(
                       recordIndex,
@@ -531,7 +528,7 @@ private[producer] final class ProducerLive(
               } else {
                 safelyInsertSentResult(
                   recordIndex,
-                  Left(Producer.SendOmittedDueToPreviousRecordSendCallFailureError)
+                  Left(Producer.SendOmittedException)
                 )
               }
             }
