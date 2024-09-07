@@ -103,6 +103,9 @@ trait Producer {
   /**
    * Produces a chunk of records. See [[produceChunkAsync(records*]] for version that allows to avoid round-trip-time
    * penalty for each chunk.
+   *
+   * When publishing any of the records fails, the whole batch fails even though some records might have been published.
+   * Use [[produceChunkAsyncWithFailures]] to get results per record.
    */
   def produceChunk(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
@@ -111,6 +114,9 @@ trait Producer {
   /**
    * Produces a chunk of records. See [[produceChunkAsync(records*]] for version that allows to avoid round-trip-time
    * penalty for each chunk.
+   *
+   * When publishing any of the records fails, the whole batch fails even though some records might have been published.
+   * Use [[produceChunkAsyncWithFailures]] to get results per record.
    */
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -127,6 +133,9 @@ trait Producer {
    * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
    * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
    * entire chunk.
+   *
+   * When publishing any of the records fails, the whole batch fails even though some records might have been published.
+   * Use [[produceChunkAsyncWithFailures]] to get results per record.
    */
   def produceChunkAsync(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
@@ -141,6 +150,9 @@ trait Producer {
    * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
    * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
    * entire chunk.
+   *
+   * When publishing any of the records fails, the whole batch fails even though some records might have been published.
+   * Use [[produceChunkAsyncWithFailures]] to get results per record.
    */
   def produceChunkAsync[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -160,6 +172,9 @@ trait Producer {
    *
    * This variant of `produceChunkAsync` more accurately reflects that individual records within the Chunk can fail to
    * publish, rather than the failure being at the level of the Chunk.
+   *
+   * When attempt to send a record into buffer for publication fails, the following records in the chunk are not
+   * published. This is indicated with a [[Producer.PublishOmittedException]].
    *
    * This variant does not accept serializers as they may also fail independently of each record and this is not
    * reflected in the return type.
