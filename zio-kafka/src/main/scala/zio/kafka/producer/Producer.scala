@@ -186,8 +186,8 @@ trait Producer {
 }
 
 object Producer {
-  case object SendOmittedException
-      extends RuntimeException("Send omitted due to a send error for a previous record in the chunk")
+  case object PublishOmittedException
+      extends RuntimeException("Publish omitted due to a publish error for a previous record in the chunk")
       with NoStackTrace
 
   val live: RLayer[ProducerSettings, Producer] =
@@ -528,7 +528,7 @@ private[producer] final class ProducerLive(
               } else {
                 safelyInsertSentResult(
                   recordIndex,
-                  Left(Producer.SendOmittedException)
+                  Left(Producer.PublishOmittedException)
                 )
               }
             }
