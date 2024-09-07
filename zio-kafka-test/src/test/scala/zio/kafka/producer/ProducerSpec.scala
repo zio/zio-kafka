@@ -168,7 +168,7 @@ object ProducerSpec extends ZIOSpecDefault {
           }
         },
         test(
-          "omits sending further records in chunk and provides correct results in case second publication to broker fails along with middle send call fails"
+          "omits sending further records in chunk and provides correct results in case second publication to broker fails along with middle send call failure"
         ) {
           withProducer(autoCompleteProducerRequests = false) { (mockJavaProducer, producer) =>
             val recordsToSend = Chunk(
