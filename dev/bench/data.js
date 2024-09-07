@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1725673298177,
+  "lastUpdate": 1725706428446,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -23196,6 +23196,90 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 855.56380326,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "145262613+zio-scala-steward[bot]@users.noreply.github.com",
+            "name": "zio-scala-steward[bot]",
+            "username": "zio-scala-steward[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "03832dae9c415501bace3bbd54469183bcae0404",
+          "message": "Update logback-classic to 1.5.8 (#1322)\n\n## About this PR\r\n📦 Updates\r\n[ch.qos.logback:logback-classic](https://github.com/qos-ch/logback) from\r\n`1.5.7` to `1.5.8`\r\n\r\n## Usage\r\n✅ **Please merge!**\r\n\r\nI'll automatically update this PR to resolve conflicts as long as you\r\ndon't change it yourself.\r\n\r\nIf you'd like to skip this version, you can just close this PR. If you\r\nhave any feedback, just mention me in the comments below.\r\n\r\nConfigure Scala Steward for your repository with a\r\n[`.scala-steward.conf`](https://github.com/scala-steward-org/scala-steward/blob/767fcfecbfd53c507152f6cf15c846176bae561d/docs/repo-specific-configuration.md)\r\nfile.\r\n\r\n_Have a fantastic day writing Scala!_\r\n\r\n<details>\r\n<summary>⚙ Adjust future updates</summary>\r\n\r\nAdd this to your `.scala-steward.conf` file to ignore future updates of\r\nthis dependency:\r\n```\r\nupdates.ignore = [ { groupId = \"ch.qos.logback\", artifactId = \"logback-classic\" } ]\r\n```\r\nOr, add this to slow down future updates of this dependency:\r\n```\r\ndependencyOverrides = [{\r\n  pullRequests = { frequency = \"30 days\" },\r\n  dependency = { groupId = \"ch.qos.logback\", artifactId = \"logback-classic\" }\r\n}]\r\n```\r\n</details>\r\n\r\n<sup>\r\nlabels: library-update, early-semver-patch, semver-spec-patch,\r\ncommit-count:1\r\n</sup>\r\n\r\nCo-authored-by: zio-scala-steward[bot] <145262613+zio-scala-steward[bot]@users.noreply.github.com>",
+          "timestamp": "2024-09-07T12:35:55+02:00",
+          "tree_id": "a0f721ddba7005b17fd666b1b826aca4e30d1ed5",
+          "url": "https://github.com/zio/zio-kafka/commit/03832dae9c415501bace3bbd54469183bcae0404"
+        },
+        "date": 1725706427470,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordPar",
+            "value": 17.345953234682266,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordSeq",
+            "value": 13.979166371525155,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 535.1496586200001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 535.6265624,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkPar",
+            "value": 142.1806511521429,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkSeq",
+            "value": 355.97733826,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 624.3570466799999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 624.34608378,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1211.15888676,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 931.4876713000001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
