@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1725859989826,
+  "lastUpdate": 1726044050217,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -23440,6 +23440,90 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 879.8040308200002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "talashkoy@gmail.com",
+            "name": "Yurii Talashko",
+            "username": "ytalashko"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "023f11ef52d97abb940866cc211e658199ba2952",
+          "message": "More precise batch publish errors (#1321)\n\nThis increases the precision of the result of producer method\r\n`produceChunkAsyncWithFailures` for cases where something went wrong.\r\nThere are two changes compared to before:\r\n\r\n1. Each entry in the result of`produceChunkAsyncWithFailures` now\r\naccurately corresponds to each record in the input chunk. Previously, if\r\nsending fails directly (*) on any of the given records, the error would\r\nbe used for _all_ records in the batch, ignoring the send-outcome of the\r\nother records. An advantage of this change is that if sending some\r\nrecords failed, but some other records were actually sent, you can now\r\ncorrectly see all of that in the method's response.\r\n2. In addition, if sending fails directly for a record (*), we no longer\r\nattempt to send subsequent records from the input. The result contains a\r\n`PublishOmittedException` for each record that is not sent. When\r\nimplementing retries, this change makes it easier to publish records in\r\nthe original order.\r\n\r\nIn addition, we introduce unit-level tests for the producer.\r\n\r\n(*) By 'sending' we mean offering a record to the underlying java Kafka\r\nproducer. Sending can fail directly (when we call the method), or later\r\non (from a callback).",
+          "timestamp": "2024-09-11T10:22:08+02:00",
+          "tree_id": "4f3a022f577d0d9e93be58b184f412fb0061e7f7",
+          "url": "https://github.com/zio/zio-kafka/commit/023f11ef52d97abb940866cc211e658199ba2952"
+        },
+        "date": 1726044049181,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordPar",
+            "value": 17.13433186132887,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordSeq",
+            "value": 13.924870537399018,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 537.05473756,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 536.18449324,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkPar",
+            "value": 144.63028519214285,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkSeq",
+            "value": 395.8452982733334,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 631.3867277999999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 627.2404252800001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1186.7861485600004,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 858.88964376,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
