@@ -8,9 +8,8 @@ import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
 import zio.stream.{ ZPipeline, ZStream }
 
-import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
-import scala.util.control.NonFatal
+import scala.util.control.{ NoStackTrace, NonFatal }
 
 trait Producer {
 
@@ -104,6 +103,9 @@ trait Producer {
   /**
    * Produces a chunk of records. See [[produceChunkAsync(records*]] for version that allows to avoid round-trip-time
    * penalty for each chunk.
+   *
+   * When publishing any of the records fails, the whole batch fails even though some records might have been published.
+   * Use [[produceChunkAsyncWithFailures]] to get results per record.
    */
   def produceChunk(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
@@ -112,6 +114,9 @@ trait Producer {
   /**
    * Produces a chunk of records. See [[produceChunkAsync(records*]] for version that allows to avoid round-trip-time
    * penalty for each chunk.
+   *
+   * When publishing any of the records fails, the whole batch fails even though some records might have been published.
+   * Use [[produceChunkAsyncWithFailures]] to get results per record.
    */
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -128,6 +133,9 @@ trait Producer {
    * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
    * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
    * entire chunk.
+   *
+   * When publishing any of the records fails, the whole batch fails even though some records might have been published.
+   * Use [[produceChunkAsyncWithFailures]] to get results per record.
    */
   def produceChunkAsync(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
@@ -142,6 +150,9 @@ trait Producer {
    * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
    * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
    * entire chunk.
+   *
+   * When publishing any of the records fails, the whole batch fails even though some records might have been published.
+   * Use [[produceChunkAsyncWithFailures]] to get results per record.
    */
   def produceChunkAsync[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -161,6 +172,9 @@ trait Producer {
    *
    * This variant of `produceChunkAsync` more accurately reflects that individual records within the Chunk can fail to
    * publish, rather than the failure being at the level of the Chunk.
+   *
+   * When attempt to send a record into buffer for publication fails, the following records in the chunk are not
+   * published. This is indicated with a [[Producer.PublishOmittedException]].
    *
    * This variant does not accept serializers as they may also fail independently of each record and this is not
    * reflected in the return type.
@@ -187,6 +201,10 @@ trait Producer {
 }
 
 object Producer {
+  case object PublishOmittedException
+      extends RuntimeException("Publish omitted due to a publish error for a previous record in the chunk")
+      with NoStackTrace
+
   val live: RLayer[ProducerSettings, Producer] =
     ZLayer.scoped {
       for {
@@ -466,41 +484,69 @@ private[producer] final class ProducerLive(
     ZStream
       .fromQueueWithShutdown(sendQueue)
       .mapZIO { case (serializedRecords, done) =>
-        ZIO.succeed {
-          try {
-            val it: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
-            val res: Array[Either[Throwable, RecordMetadata]] =
-              new Array[Either[Throwable, RecordMetadata]](serializedRecords.length)
-            val count: AtomicInteger = new AtomicInteger
-            val length               = serializedRecords.length
+        ZIO.suspendSucceed {
+          val recordsLength                                = serializedRecords.length
+          val recordsIterator: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
+          val sentResults: Array[Either[Throwable, RecordMetadata]] =
+            new Array[Either[Throwable, RecordMetadata]](recordsLength)
 
-            while (it.hasNext) {
-              val (rec, idx): (ByteRecord, Int) = it.next()
-
-              val _ = p.send(
-                rec,
-                (metadata: RecordMetadata, err: Exception) =>
-                  Unsafe.unsafe { implicit u =>
-                    exec {
-                      if (err != null) res(idx) = Left(err)
-                      else res(idx) = Right(metadata)
-
-                      if (count.incrementAndGet == length) {
-                        exec {
-                          runtime.unsafe.run(done.succeed(Chunk.fromArray(res))).getOrThrowFiberFailure()
-                        }
-                      }
-                    }
-                  }
-              )
-            }
-          } catch {
-            case NonFatal(e) =>
+          Ref.make(0).map { sentRecordsCountRef =>
+            @inline def safelyInsertSentResult(resultIndex: Int, sentResult: Either[Throwable, RecordMetadata]): Unit =
               Unsafe.unsafe { implicit u =>
                 exec {
-                  runtime.unsafe.run(done.succeed(Chunk.fill(serializedRecords.size)(Left(e)))).getOrThrowFiberFailure()
+                  runtime.unsafe.run(
+                    sentRecordsCountRef.update { sentRecordsCount =>
+                      // Updating sentResults[resultIndex] here is safe,
+                      //  cause Ref.update starts with volatile variable read and ends with volatile variable write,
+                      //  which guarantees sentResults.update executed on the latest updated version of sentResults
+                      //  and currently updated version of sentResults
+                      //  will be visible to the next sentResults read or update called within Ref.update
+                      sentResults.update(resultIndex, sentResult)
+
+                      val newSentRecordsCount = sentRecordsCount + 1
+                      if (newSentRecordsCount == recordsLength) {
+                        val sentResultsChunk = Chunk.fromArray(sentResults)
+
+                        exec {
+                          runtime.unsafe.run(done.succeed(sentResultsChunk))
+                        }
+                      }
+
+                      newSentRecordsCount
+                    }
+                  )
                 }
               }
+
+            var previousSendCallsSucceed = true
+
+            recordsIterator.foreach { case (record: ByteRecord, recordIndex: Int) =>
+              if (previousSendCallsSucceed) {
+                try {
+                  val _ = p.send(
+                    record,
+                    (metadata: RecordMetadata, err: Exception) =>
+                      safelyInsertSentResult(
+                        recordIndex,
+                        if (err eq null) Right(metadata) else Left(err)
+                      )
+                  )
+                } catch {
+                  case NonFatal(err) =>
+                    previousSendCallsSucceed = false
+
+                    safelyInsertSentResult(
+                      recordIndex,
+                      Left(err)
+                    )
+                }
+              } else {
+                safelyInsertSentResult(
+                  recordIndex,
+                  Left(Producer.PublishOmittedException)
+                )
+              }
+            }
           }
         }
       }
