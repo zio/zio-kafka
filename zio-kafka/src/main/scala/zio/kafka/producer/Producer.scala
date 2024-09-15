@@ -493,30 +493,18 @@ private[producer] final class ProducerLive(
             new Array[Either[Throwable, RecordMetadata]](recordsLength)
 
           @inline def insertSentResult(resultIndex: Int, sentResult: Either[Throwable, RecordMetadata]): Unit = {
-            var notInserted = true
+            // Updating sentResults[resultIndex] here is safe,
+            //  because only a single update for every resultIndex of sentResults is performed
+            sentResults.update(resultIndex, sentResult)
 
-            while (notInserted) {
-              val sentRecordsCount = sentRecordsCounter.get()
+            // Reading from sentRecordsCounter guarantees fully updated version of sentResults
+            //  will be visible and used to complete done promise
+            if (sentRecordsCounter.incrementAndGet() == recordsLength) {
+              val sentResultsChunk = Chunk.fromArray(sentResults)
 
-              // Updating sentResults[resultIndex] here is safe,
-              //  because volatile variable read performed right before the update and volatile variable write after,
-              //  which guarantees sentResults.update executed on the latest updated version of sentResults
-              //  and currently updated version of sentResults
-              //  will be visible to the next sentResults read or update called after volatile variable read
-              sentResults.update(resultIndex, sentResult)
-
-              val newSentRecordsCount = sentRecordsCount + 1
-              if (newSentRecordsCount == recordsLength) {
-                val sentResultsChunk = Chunk.fromArray(sentResults)
-
-                Unsafe.unsafe { implicit u =>
-                  exec {
-                    runtime.unsafe.run(done.succeed(sentResultsChunk))
-                  }
-                }
+              Unsafe.unsafe { implicit u =>
+                val _ = runtime.unsafe.run(done.succeed(sentResultsChunk))
               }
-
-              notInserted = !sentRecordsCounter.compareAndSet(sentRecordsCount, newSentRecordsCount)
             }
           }
 
@@ -562,7 +550,4 @@ private[producer] final class ProducerLive(
       key   <- keySerializer.serialize(r.topic, r.headers, r.key())
       value <- valueSerializer.serialize(r.topic, r.headers, r.value())
     } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
-
-  /** Used to prevent warnings about not using the result of an expression. */
-  @inline private def exec[A](f: => A): Unit = { val _ = f }
 }
