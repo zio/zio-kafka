@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1726465110031,
+  "lastUpdate": 1726592903259,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -23684,6 +23684,90 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 867.2305405200002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "talashkoy@gmail.com",
+            "name": "Yurii Talashko",
+            "username": "ytalashko"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "956c2f3eee0dfe06b02f4da82f9cbaaa23c956a7",
+          "message": "Optimize Producer sendFromQueue implementation (#1326)\n\nFrom java's producer send method doc: `Note that callbacks will\r\ngenerally execute in the I/O thread of the producer and so should be\r\nreasonably fast or they will delay the sending of messages from other\r\nthreads`.\r\nI believe we should try to keep callback implementation fast, but with\r\nrecent changes we added to provide proper error responses, we make the\r\ncallback slower. In general we are talking approximately about 1-3\r\nmicroseconds (current master) instead of 0,1-0,2 microseconds (version\r\n2.8.2) for single callback execution time on my laptop. I believe it was\r\nreasonable, but at the same time wanted to keep implementation fast, and\r\nprovided the fastest version I come up with at that time.\r\nNow, I got with an idea of faster implementation (with keeping the same\r\nproper error semantics). With this implementation single callback\r\nexecution takes approximately 0,05-0,2 microseconds (even a bit faster\r\nthan version 2.8.2).",
+          "timestamp": "2024-09-17T18:49:58+02:00",
+          "tree_id": "fb8629bdb9510fee9a85d9791ce495847bb4483a",
+          "url": "https://github.com/zio/zio-kafka/commit/956c2f3eee0dfe06b02f4da82f9cbaaa23c956a7"
+        },
+        "date": 1726592902213,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordPar",
+            "value": 15.420746769103467,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordSeq",
+            "value": 11.449144902204758,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 536.8549608400001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 537.6647705,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkPar",
+            "value": 169.40162406838098,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkSeq",
+            "value": 457.47760698000013,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 627.39336594,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 623.4158606400001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1128.34899106,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 864.8286172,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
