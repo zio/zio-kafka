@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1726592903259,
+  "lastUpdate": 1726592956468,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -23768,6 +23768,90 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 864.8286172,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "49699333+dependabot[bot]@users.noreply.github.com",
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "26118a81d31c9834d24201236979766be40bd6e5",
+          "message": "Bump scala-steward-org/scala-steward-action from 2.65.0 to 2.69.0 (#1328)\n\nBumps\r\n[scala-steward-org/scala-steward-action](https://github.com/scala-steward-org/scala-steward-action)\r\nfrom 2.65.0 to 2.69.0.\r\n<details>\r\n<summary>Release notes</summary>\r\n<p><em>Sourced from <a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/releases\">scala-steward-org/scala-steward-action's\r\nreleases</a>.</em></p>\r\n<blockquote>\r\n<h2>v2.69.0</h2>\r\n<!-- raw HTML omitted -->\r\n<h2>What's Changed</h2>\r\n<h3>Other Changes</h3>\r\n<ul>\r\n<li>Cancel GitHub token refresh at the end by <a\r\nhref=\"https://github.com/EnviousSwan\"><code>@​EnviousSwan</code></a> in\r\n<a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/pull/635\">scala-steward-org/scala-steward-action#635</a></li>\r\n</ul>\r\n<p><strong>Full Changelog</strong>: <a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/compare/v2.68.0...v2.69.0\">https://github.com/scala-steward-org/scala-steward-action/compare/v2.68.0...v2.69.0</a></p>\r\n<h2>v2.68.0</h2>\r\n<!-- raw HTML omitted -->\r\n<h2>What's Changed</h2>\r\n<h3>Other Changes</h3>\r\n<ul>\r\n<li>Refresh token every 50 minutes by <a\r\nhref=\"https://github.com/EnviousSwan\"><code>@​EnviousSwan</code></a> in\r\n<a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/pull/633\">scala-steward-org/scala-steward-action#633</a></li>\r\n</ul>\r\n<p><strong>Full Changelog</strong>: <a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/compare/v2.67.0...v2.68.0\">https://github.com/scala-steward-org/scala-steward-action/compare/v2.67.0...v2.68.0</a></p>\r\n<h2>v2.67.0</h2>\r\n<!-- raw HTML omitted -->\r\n<h2>What's Changed</h2>\r\n<h3>Other Changes</h3>\r\n<ul>\r\n<li>Save workspace cache when run failed by <a\r\nhref=\"https://github.com/EnviousSwan\"><code>@​EnviousSwan</code></a> in\r\n<a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/pull/631\">scala-steward-org/scala-steward-action#631</a></li>\r\n</ul>\r\n<h2>New Contributors</h2>\r\n<ul>\r\n<li><a\r\nhref=\"https://github.com/EnviousSwan\"><code>@​EnviousSwan</code></a>\r\nmade their first contribution in <a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/pull/631\">scala-steward-org/scala-steward-action#631</a></li>\r\n</ul>\r\n<p><strong>Full Changelog</strong>: <a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/compare/v2.66.0...v2.67.0\">https://github.com/scala-steward-org/scala-steward-action/compare/v2.66.0...v2.67.0</a></p>\r\n<h2>v2.66.0</h2>\r\n<!-- raw HTML omitted -->\r\n<h2>What's Changed</h2>\r\n<h3>Other Changes</h3>\r\n<ul>\r\n<li>Update README.md by <a\r\nhref=\"https://github.com/counter2015\"><code>@​counter2015</code></a> in\r\n<a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/pull/580\">scala-steward-org/scala-steward-action#580</a></li>\r\n<li>Document JAVA_OPTS by <a\r\nhref=\"https://github.com/mdedetrich\"><code>@​mdedetrich</code></a> in <a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/pull/592\">scala-steward-org/scala-steward-action#592</a></li>\r\n<li>Clarify GitHub App workflow in README by <a\r\nhref=\"https://github.com/SpecialThing44\"><code>@​SpecialThing44</code></a>\r\nin <a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/pull/618\">scala-steward-org/scala-steward-action#618</a></li>\r\n</ul>\r\n<h2>New Contributors</h2>\r\n<ul>\r\n<li><a\r\nhref=\"https://github.com/counter2015\"><code>@​counter2015</code></a>\r\nmade their first contribution in <a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/pull/580\">scala-steward-org/scala-steward-action#580</a></li>\r\n<li><a\r\nhref=\"https://github.com/mdedetrich\"><code>@​mdedetrich</code></a> made\r\ntheir first contribution in <a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/pull/592\">scala-steward-org/scala-steward-action#592</a></li>\r\n<li><a\r\nhref=\"https://github.com/SpecialThing44\"><code>@​SpecialThing44</code></a>\r\nmade their first contribution in <a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/pull/618\">scala-steward-org/scala-steward-action#618</a></li>\r\n</ul>\r\n<p><strong>Full Changelog</strong>: <a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/compare/v2.65.0...v2.66.0\">https://github.com/scala-steward-org/scala-steward-action/compare/v2.65.0...v2.66.0</a></p>\r\n</blockquote>\r\n</details>\r\n<details>\r\n<summary>Commits</summary>\r\n<ul>\r\n<li><a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/commit/7d71624a38186e82b082a3583e14502cb4b77177\"><code>7d71624</code></a>\r\nRelease v2.69.0</li>\r\n<li><a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/commit/7292c0b7085eb26ad8f043fc79ce21f7cfb02ffe\"><code>7292c0b</code></a>\r\nMerge pull request <a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/issues/635\">#635</a>\r\nfrom EnviousSwan/cancel-token-refresh-at-the-end</li>\r\n<li><a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/commit/ba67ff8d62ee53380ac3ac4479d66765c540a6bb\"><code>ba67ff8</code></a>\r\nCancel GitHub token refresh at the end</li>\r\n<li><a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/commit/74a9a6721857590f393c53be6d1aa6461846a805\"><code>74a9a67</code></a>\r\nMerge pull request <a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/issues/633\">#633</a>\r\nfrom EnviousSwan/use-installation-octokit</li>\r\n<li><a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/commit/e2d6f01edcbbf17df47067be88e85122d2e5d7a2\"><code>e2d6f01</code></a>\r\nRefresh token every 50 minutes</li>\r\n<li><a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/commit/d9619bf92fdefed8b339f7ee929ed83ba55525d5\"><code>d9619bf</code></a>\r\nMerge pull request <a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/issues/631\">#631</a>\r\nfrom EnviousSwan/save-workspace-cache-when-failed</li>\r\n<li><a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/commit/f84b59a89e7b7621e8200f588ac5276a029b011f\"><code>f84b59a</code></a>\r\nSave workspace cache when run failed</li>\r\n<li><a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/commit/2763313e6149238002decdaa10ce630868ab2822\"><code>2763313</code></a>\r\nBump actions/upload-artifact from 4.3.4 to 4.4.0 (<a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/issues/627\">#627</a>)</li>\r\n<li><a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/commit/7ac15432ba517ba88f84922f35adce8c5c9cb462\"><code>7ac1543</code></a>\r\nBump <code>@​types/node</code> from 20.14.9 to 22.5.1 (<a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/issues/629\">#629</a>)</li>\r\n<li><a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/commit/880a26d6fa970fc89b760acc7fd98e0de91fd3ed\"><code>880a26d</code></a>\r\nBump ts-pattern from 5.2.0 to 5.3.1 (<a\r\nhref=\"https://redirect.github.com/scala-steward-org/scala-steward-action/issues/628\">#628</a>)</li>\r\n<li>Additional commits viewable in <a\r\nhref=\"https://github.com/scala-steward-org/scala-steward-action/compare/v2.65.0...v2.69.0\">compare\r\nview</a></li>\r\n</ul>\r\n</details>\r\n<br />\r\n\r\n\r\n[![Dependabot compatibility\r\nscore](https://dependabot-badges.githubapp.com/badges/compatibility_score?dependency-name=scala-steward-org/scala-steward-action&package-manager=github_actions&previous-version=2.65.0&new-version=2.69.0)](https://docs.github.com/en/github/managing-security-vulnerabilities/about-dependabot-security-updates#about-compatibility-scores)\r\n\r\nDependabot will resolve any conflicts with this PR as long as you don't\r\nalter it yourself. You can also trigger a rebase manually by commenting\r\n`@dependabot rebase`.\r\n\r\n[//]: # (dependabot-automerge-start)\r\n[//]: # (dependabot-automerge-end)\r\n\r\n---\r\n\r\n<details>\r\n<summary>Dependabot commands and options</summary>\r\n<br />\r\n\r\nYou can trigger Dependabot actions by commenting on this PR:\r\n- `@dependabot rebase` will rebase this PR\r\n- `@dependabot recreate` will recreate this PR, overwriting any edits\r\nthat have been made to it\r\n- `@dependabot merge` will merge this PR after your CI passes on it\r\n- `@dependabot squash and merge` will squash and merge this PR after\r\nyour CI passes on it\r\n- `@dependabot cancel merge` will cancel a previously requested merge\r\nand block automerging\r\n- `@dependabot reopen` will reopen this PR if it is closed\r\n- `@dependabot close` will close this PR and stop Dependabot recreating\r\nit. You can achieve the same result by closing it manually\r\n- `@dependabot show <dependency name> ignore conditions` will show all\r\nof the ignore conditions of the specified dependency\r\n- `@dependabot ignore this major version` will close this PR and stop\r\nDependabot creating any more for this major version (unless you reopen\r\nthe PR or upgrade to it yourself)\r\n- `@dependabot ignore this minor version` will close this PR and stop\r\nDependabot creating any more for this minor version (unless you reopen\r\nthe PR or upgrade to it yourself)\r\n- `@dependabot ignore this dependency` will close this PR and stop\r\nDependabot creating any more for this dependency (unless you reopen the\r\nPR or upgrade to it yourself)\r\n\r\n\r\n</details>\r\n\r\nSigned-off-by: dependabot[bot] <support@github.com>\r\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+          "timestamp": "2024-09-17T18:50:57+02:00",
+          "tree_id": "486e31323e63977e9169d67afbb05a159fe028db",
+          "url": "https://github.com/zio/zio-kafka/commit/26118a81d31c9834d24201236979766be40bd6e5"
+        },
+        "date": 1726592955462,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordPar",
+            "value": 15.234205255810664,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordSeq",
+            "value": 12.951484468107262,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 538.4615452400001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 537.3088175400001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkPar",
+            "value": 176.32026805714287,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkSeq",
+            "value": 426.96135387000004,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 622.4030289000001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 626.45419524,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1110.6847937199998,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 813.0477980799999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
