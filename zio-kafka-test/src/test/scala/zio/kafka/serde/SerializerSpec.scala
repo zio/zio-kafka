@@ -2,7 +2,7 @@ package zio.kafka.serde
 
 import org.apache.kafka.common.header.internals.RecordHeaders
 import zio.test.Assertion._
-import zio.test.{ test, _ }
+import zio.test._
 import zio.ZAny
 import zio.kafka.ZIOSpecDefaultSlf4j
 
