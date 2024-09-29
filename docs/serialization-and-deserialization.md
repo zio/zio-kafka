@@ -28,7 +28,7 @@ provided `Serdes.byteArray` and `Serdes.string`. Custom serdes should not fail o
 remote lookups that could fail.
 
 For cases where failure is possible, we recommend using `Serdes.byteArray`, put the deserialization code in the consumer
-stream, and do serialization before handing the data to zio-kafka. This way you can handle failure any way you want.<br>
+stream, and do serialization before handing the data to zio-kafka. This way you can handle failure any way you want.<br/>
 Another option is to make a serde that wraps data in a Try.
 
 These approaches are further discussed below.
