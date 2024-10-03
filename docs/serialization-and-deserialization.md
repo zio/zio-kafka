@@ -17,7 +17,6 @@ This document contains:
 - How to create a custom serde
 - How to create and use a custom serde that wraps invalid data
 - How to do deserialization in the consumer stream
-
 - A warning about using `mapZIO`
 
 ## Handling failures in a serde
