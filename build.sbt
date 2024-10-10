@@ -25,7 +25,7 @@ lazy val _scala3   = "3.3.4"
 inThisBuild(
   List(
     name         := "ZIO Kafka",
-    zioVersion   := "2.1.9",
+    zioVersion   := "2.1.10",
     scalaVersion := _scala213,
     // zio-sbt defines these 'scala213' and 'scala3' settings, but we need to define them here to override the defaults and better control them
     scala213 := _scala213,
@@ -42,6 +42,7 @@ inThisBuild(
       "com.github.vovapolu"                      %% "scaluzzi" % "0.1.23",
       "io.github.ghostbuster91.scalafix-unified" %% "unified"  % "0.0.9"
     ),
+    resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
     developers := List(
       Developer(
         "iravid",
