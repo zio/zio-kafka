@@ -58,7 +58,7 @@ jobs:
         #  - "-rf json": Format type for machine-readable results. JSON
         #  - "-foe true": Should JMH fail immediately if any benchmark had experienced an unrecoverable error?. True
         #  - "-to 60": 1 minute timeout per iteration
-        run: sbt "zioKafkaBench/Jmh/run -wi 5 -i 5 -r 1 -w 1 -t 1 -to 60 -rf json -foe true"
+        run: sbt "zioKafkaBench/Jmh/run -wi 5 -i 5 -r 1 -w 1 -t 1 -to 120 -rf json -foe true"
 
       - name: Download previous benchmark data
         uses: actions/cache@v3

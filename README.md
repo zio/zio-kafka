@@ -19,12 +19,18 @@ Kafka has a mature Java client for producing and consuming events, but it has a 
 In order to use this library, we need to add the following line in our `build.sbt` file:
 
 ```scala
-libraryDependencies += "dev.zio" %% "zio-kafka"         % "2.8.0"
-libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "2.8.0" % Test
+libraryDependencies += "dev.zio" %% "zio-kafka"         % "2.8.2"
+libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "2.8.2" % Test
 ```
 
 Snapshots are available on Sonatype's snapshot repository https://oss.sonatype.org/content/repositories/snapshots.
 [Browse here](https://oss.sonatype.org/content/repositories/snapshots/dev/zio/zio-kafka_3/) to find available versions.
+
+For `zio-kafka-testkit` together with Scala 3, you also need to add the following to your `build.sbt` file:
+
+```scala
+excludeDependencies += "org.scala-lang.modules" % "scala-collection-compat_2.13"
+```
 
 ## Example
 

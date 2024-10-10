@@ -8,7 +8,9 @@ import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
 import zio.stream.{ ZPipeline, ZStream }
 
+import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
+import scala.util.control.{ NoStackTrace, NonFatal }
 
 trait Producer {
 
@@ -102,6 +104,9 @@ trait Producer {
   /**
    * Produces a chunk of records. See [[produceChunkAsync(records*]] for version that allows to avoid round-trip-time
    * penalty for each chunk.
+   *
+   * When publishing any of the records fails, the whole batch fails even though some records might have been published.
+   * Use [[produceChunkAsyncWithFailures]] to get results per record.
    */
   def produceChunk(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
@@ -110,6 +115,9 @@ trait Producer {
   /**
    * Produces a chunk of records. See [[produceChunkAsync(records*]] for version that allows to avoid round-trip-time
    * penalty for each chunk.
+   *
+   * When publishing any of the records fails, the whole batch fails even though some records might have been published.
+   * Use [[produceChunkAsyncWithFailures]] to get results per record.
    */
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -126,6 +134,9 @@ trait Producer {
    * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
    * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
    * entire chunk.
+   *
+   * When publishing any of the records fails, the whole batch fails even though some records might have been published.
+   * Use [[produceChunkAsyncWithFailures]] to get results per record.
    */
   def produceChunkAsync(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
@@ -140,6 +151,9 @@ trait Producer {
    * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
    * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
    * entire chunk.
+   *
+   * When publishing any of the records fails, the whole batch fails even though some records might have been published.
+   * Use [[produceChunkAsyncWithFailures]] to get results per record.
    */
   def produceChunkAsync[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
@@ -159,6 +173,9 @@ trait Producer {
    *
    * This variant of `produceChunkAsync` more accurately reflects that individual records within the Chunk can fail to
    * publish, rather than the failure being at the level of the Chunk.
+   *
+   * When attempt to send a record into buffer for publication fails, the following records in the chunk are not
+   * published. This is indicated with a [[Producer.PublishOmittedException]].
    *
    * This variant does not accept serializers as they may also fail independently of each record and this is not
    * reflected in the return type.
@@ -185,6 +202,10 @@ trait Producer {
 }
 
 object Producer {
+  case object PublishOmittedException
+      extends RuntimeException("Publish omitted due to a publish error for a previous record in the chunk")
+      with NoStackTrace
+
   val live: RLayer[ProducerSettings, Producer] =
     ZLayer.scoped {
       for {
@@ -218,12 +239,13 @@ object Producer {
     settings: ProducerSettings
   ): ZIO[Scope, Throwable, Producer] =
     for {
+      runtime <- ZIO.runtime[Any]
       sendQueue <-
         Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
           settings.sendBufferSize
         )
-      producer = new ProducerLive(javaProducer, sendQueue)
-      _ <- producer.sendFromQueue.forkScoped
+      producer = new ProducerLive(javaProducer, runtime, sendQueue)
+      _ <- ZIO.blocking(producer.sendFromQueue).forkScoped
     } yield producer
 
   /**
@@ -359,6 +381,7 @@ object Producer {
 
 private[producer] final class ProducerLive(
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
+  runtime: Runtime[Any],
   sendQueue: Queue[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])]
 ) extends Producer {
 
@@ -455,63 +478,68 @@ private[producer] final class ProducerLive(
   override def metrics: Task[Map[MetricName, Metric]] = ZIO.attemptBlocking(p.metrics().asScala.toMap)
 
   /**
-   * Currently sending has the following characteristics:
-   *   - You can submit many chunks, they get buffered in the send queue.
-   *   - A chunk only gets send after the previous chunk completes (completes means that the callbacks for each record
-   *     was invoked).
-   *   - The records in a chunk are send in one go, in order. Records for the same partition have a high chance that
-   *     they land in the same batch (which is good for compression).
-   *   - Record ordering is retained and guaranteed between chunks.
-   *   - Record ordering is retained and guaranteed within a chunk (per partition) unless `retries` has been enabled
-   *     (see https://kafka.apache.org/documentation/#producerconfigs_retries).
+   * Calls to send may block when updating metadata or when communication with the broker is (temporarily) lost,
+   * therefore this stream is run on the blocking thread pool
    */
   val sendFromQueue: ZIO[Any, Nothing, Any] =
-    ZIO.runtime[Any].flatMap { runtime =>
-      // Calls to 'send' may block when updating metadata or when communication with the broker is (temporarily) lost,
-      // therefore this stream is run on the blocking thread pool.
-      ZIO.blocking {
-        ZStream
-          .fromQueueWithShutdown(sendQueue)
-          .mapZIO { case (serializedRecords, done) =>
-            sendChunk(runtime, serializedRecords)
-              .flatMap(done.succeed(_))
+    ZStream
+      .fromQueueWithShutdown(sendQueue)
+      .mapZIO { case (serializedRecords, done) =>
+        ZIO.succeed {
+          val recordsLength                                = serializedRecords.length
+          val sentRecordsCounter                           = new AtomicInteger(0)
+          val recordsIterator: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
+          val sentResults: Array[Either[Throwable, RecordMetadata]] =
+            new Array[Either[Throwable, RecordMetadata]](recordsLength)
+
+          @inline def insertSentResult(resultIndex: Int, sentResult: Either[Throwable, RecordMetadata]): Unit = {
+            // Updating sentResults[resultIndex] here is safe,
+            //  because only a single update for every resultIndex of sentResults is performed
+            sentResults.update(resultIndex, sentResult)
+
+            // Reading from sentRecordsCounter guarantees fully updated version of sentResults
+            //  will be visible and used to complete done promise
+            if (sentRecordsCounter.incrementAndGet() == recordsLength) {
+              val sentResultsChunk = Chunk.fromArray(sentResults)
+
+              Unsafe.unsafe { implicit u =>
+                val _ = runtime.unsafe.run(done.succeed(sentResultsChunk))
+              }
+            }
           }
-          .runDrain
+
+          var previousSendCallsSucceed = true
+
+          recordsIterator.foreach { case (record: ByteRecord, recordIndex: Int) =>
+            if (previousSendCallsSucceed) {
+              try {
+                val _ = p.send(
+                  record,
+                  (metadata: RecordMetadata, err: Exception) =>
+                    insertSentResult(
+                      recordIndex,
+                      if (err eq null) Right(metadata) else Left(err)
+                    )
+                )
+              } catch {
+                case NonFatal(err) =>
+                  previousSendCallsSucceed = false
+
+                  insertSentResult(
+                    recordIndex,
+                    Left(err)
+                  )
+              }
+            } else {
+              insertSentResult(
+                recordIndex,
+                Left(Producer.PublishOmittedException)
+              )
+            }
+          }
+        }
       }
-    }
-
-  private def sendChunk(
-    runtime: Runtime[Any],
-    serializedRecords: Chunk[ByteRecord]
-  ): ZIO[Any, Nothing, Chunk[Either[Throwable, RecordMetadata]]] =
-    for {
-      promises <- ZIO.foreach(serializedRecords)(sendRecord(runtime))
-      results  <- ZIO.foreach(promises)(_.await.either)
-    } yield results
-
-  private def sendRecord(
-    runtime: Runtime[Any]
-  )(record: ByteRecord): ZIO[Any, Nothing, Promise[Throwable, RecordMetadata]] = {
-    def unsafeRun(f: => ZIO[Any, Nothing, Any]): Unit = {
-      val _ = Unsafe.unsafe(implicit u => runtime.unsafe.run(f))
-    }
-
-    for {
-      done <- Promise.make[Throwable, RecordMetadata]
-      _ <- ZIO
-             .attempt[Any] {
-               p.send(
-                 record,
-                 (metadata: RecordMetadata, err: Exception) =>
-                   unsafeRun {
-                     if (err == null) done.succeed(metadata)
-                     else done.fail(err)
-                   }
-               )
-             }
-             .catchAll(err => done.fail(err))
-    } yield done
-  }
+      .runDrain
 
   private def serialize[R, K, V](
     r: ProducerRecord[K, V],
@@ -522,5 +550,4 @@ private[producer] final class ProducerLive(
       key   <- keySerializer.serialize(r.topic, r.headers, r.key())
       value <- valueSerializer.serialize(r.topic, r.headers, r.value())
     } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
-
 }

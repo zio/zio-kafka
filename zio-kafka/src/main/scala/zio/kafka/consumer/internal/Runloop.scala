@@ -847,12 +847,17 @@ object Runloop {
     ): RebalanceEvent =
       copy(
         wasInvoked = true,
+        assignedTps = assignedTps -- revoked,
         revokedTps = revokedTps ++ revoked,
         endedStreams = this.endedStreams ++ endedStreams
       )
 
     def onLost(lost: Set[TopicPartition]): RebalanceEvent =
-      copy(wasInvoked = true, lostTps = lostTps ++ lost)
+      copy(
+        wasInvoked = true,
+        assignedTps = assignedTps -- lost,
+        lostTps = lostTps ++ lost
+      )
   }
 
   private object RebalanceEvent {

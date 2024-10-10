@@ -11,16 +11,16 @@ import MimaSettings.mimaSettings
  */
 lazy val binCompatVersionToCompare = None // Some("2.8.0")
 
-lazy val kafkaVersion         = "3.7.1"
-lazy val embeddedKafkaVersion = "3.7.0" // Should be the same as kafkaVersion, except for the patch part
+lazy val kafkaVersion         = "3.8.0"
+lazy val embeddedKafkaVersion = "3.8.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
-lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.6"
+lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.9"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
-lazy val _scala213 = "2.13.14"
-lazy val _scala3   = "3.3.3"
+lazy val _scala213 = "2.13.15"
+lazy val _scala3   = "3.3.4"
 
 inThisBuild(
   List(
@@ -158,7 +158,7 @@ lazy val zioKafkaTest =
       libraryDependencies ++= Seq(
         kafkaClients,
         logback    % Test,
-        "dev.zio" %% "zio-logging-slf4j" % "2.3.0" % Test
+        "dev.zio" %% "zio-logging-slf4j" % "2.3.1" % Test
       ) ++ `embedded-kafka`.value
     )
 
@@ -180,13 +180,13 @@ lazy val zioKafkaExample =
     .settings(run / fork := false)
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                 %% "zio"                % "2.1.6",
-        "dev.zio"                 %% "zio-kafka"          % "2.8.0",
-        "dev.zio"                 %% "zio-logging-slf4j2" % "2.3.0",
+        "dev.zio"                 %% "zio"                % "2.1.9",
+        "dev.zio"                 %% "zio-kafka"          % "2.8.2",
+        "dev.zio"                 %% "zio-logging-slf4j2" % "2.3.1",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
         logback,
-        "dev.zio" %% "zio-kafka-testkit" % "2.8.0" % Test,
-        "dev.zio" %% "zio-test"          % "2.1.6" % Test
+        "dev.zio" %% "zio-kafka-testkit" % "2.8.2" % Test,
+        "dev.zio" %% "zio-test"          % "2.1.9" % Test
       ),
       // Scala 3 compiling fails with:
       // [error] Modules were resolved with conflicting cross-version suffixes in ProjectRef(uri("file:/home/runner/work/zio-kafka/zio-kafka/"), "zioKafkaExample"):
