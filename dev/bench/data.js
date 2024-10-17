@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1729130214286,
+  "lastUpdate": 1729130225752,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -25400,6 +25400,86 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 913.8298799,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "committer": {
+            "name": "zio",
+            "username": "zio"
+          },
+          "id": "c5d8a0d794c32aceadd6b688e0f546b687eb2599",
+          "message": "Update zio-logging-slf4j, ... to 2.3.2",
+          "timestamp": "2024-10-15T19:24:18Z",
+          "url": "https://github.com/zio/zio-kafka/pull/1343/commits/c5d8a0d794c32aceadd6b688e0f546b687eb2599"
+        },
+        "date": 1729130224937,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordPar",
+            "value": 16.030573134401873,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordSeq",
+            "value": 12.569001392486458,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 538.6165095600002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 539.08548512,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkPar",
+            "value": 155.43904545571428,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkSeq",
+            "value": 406.5044610666666,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 648.24715516,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 624.87840176,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1102.23594866,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 885.3943361800001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
