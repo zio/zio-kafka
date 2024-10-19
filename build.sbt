@@ -85,6 +85,7 @@ lazy val root = project
     zioKafka,
     zioKafkaTestkit,
     zioKafkaTest,
+    zioKafkaTracing,
     zioKafkaBench,
     zioKafkaExample,
     docs
@@ -158,6 +159,22 @@ lazy val zioKafkaTest =
         kafkaClients,
         logback    % Test,
         "dev.zio" %% "zio-logging-slf4j" % "2.3.2" % Test
+      ) ++ `embedded-kafka`.value
+    )
+
+lazy val zioKafkaTracing =
+  project
+    .in(file("zio-kafka-tracing"))
+    .dependsOn(zioKafka, zioKafkaTestkit)
+    .enablePlugins(BuildInfoPlugin)
+    .settings(stdSettings("zio-kafka-tracing"))
+    .settings(buildInfoSettings("zio.kafka"))
+    .settings(enableZIO(enableStreaming = true))
+    .settings(publish / skip := true)
+    .settings(
+      libraryDependencies ++= Seq(
+        "dev.zio"         %% "zio-opentracing"           % "3.0.0",
+        "io.opentelemetry" % "opentelemetry-sdk-testing" % "1.43.0" % Test
       ) ++ `embedded-kafka`.value
     )
 
