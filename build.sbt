@@ -71,8 +71,6 @@ inThisBuild(
   )
 )
 
-val excludeInferAny = { options: Seq[String] => options.filterNot(Set("-Xlint:infer-any")) }
-
 lazy val root = project
   .in(file("."))
   .settings(
@@ -173,8 +171,8 @@ lazy val zioKafkaTracing =
     .settings(publish / skip := true)
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"         %% "zio-opentracing"           % "3.0.0",
-        "io.opentelemetry" % "opentelemetry-sdk-testing" % "1.43.0" % Test
+        "dev.zio"          %% "zio-opentelemetry"         % "3.0.0",
+        "io.opentelemetry"  % "opentelemetry-sdk-testing" % "1.43.0" % Test
       ) ++ `embedded-kafka`.value
     )
 
