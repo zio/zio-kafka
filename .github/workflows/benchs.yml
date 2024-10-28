@@ -74,7 +74,7 @@ jobs:
           cat .jvmopts
 
       - name: Store benchmark result
-        uses: benchmark-action/github-action-benchmark@v1.20.3
+        uses: benchmark-action/github-action-benchmark@v1.20.4
         with:
           name: JMH Benchmark
           tool: 'jmh'
