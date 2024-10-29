@@ -567,9 +567,10 @@ private[consumer] final class Runloop private (
                                       s"Not all assigned partitions have a (single) stream or vice versa. Assigned: ${assignedTps.mkString(",")}, streams: ${updatedAssignedStreams.map(_.tp).mkString(",")}"
                                     )
                                     .when(
-                                      assignedTps != updatedAssignedStreams
-                                        .map(_.tp)
-                                        .toSet || assignedTps.size != updatedAssignedStreams.size
+                                      assignedTps.size != updatedAssignedStreams.size ||
+                                        assignedTps != updatedAssignedStreams
+                                          .map(_.tp)
+                                          .toSet
                                     )
                               } yield Runloop.PollResult(
                                 records = polledRecords,
