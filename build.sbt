@@ -1,5 +1,7 @@
 import sbt.Def
 import MimaSettings.mimaSettings
+import scala.sys.process._
+import scala.util.Try
 
 /**
  * As of zio-kafka version 2.8.0 releases are binary compatible. This is checked with Mima.
@@ -9,7 +11,21 @@ import MimaSettings.mimaSettings
  * Set this value to `None` when master is _not_ binary compatible with the latest minor release, the next release shall
  * increase the minor version.
  */
-lazy val binCompatVersionToCompare = None // Some("2.8.0")
+lazy val binCompatVersionToCompare =
+  // Note, "git describe --tags"
+  // either produces something like "v2.8.2-40-ge8a844a1" (not building from a release tag),
+  // or "v2.8.2" (building from a release tag),
+  Try("git describe --tags".!!)
+    .toOption
+    .map(_.strip())
+    // Only continue when we're building from a release tag
+    .filter(_.matches("v[0-9]+\\.[0-9]+\\.[0-9]+"))
+    .map { tag =>
+      // Remove `v` and set patch version to `0`
+      val compatVersion = tag.stripPrefix("v").split('.').take(2).mkString(".") + ".0"
+      println(s"Mima check compares against version $compatVersion")
+      compatVersion
+    }
 
 lazy val kafkaVersion         = "3.8.0"
 lazy val embeddedKafkaVersion = "3.8.0" // Should be the same as kafkaVersion, except for the patch part
