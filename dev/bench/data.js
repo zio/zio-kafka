@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1730228571870,
+  "lastUpdate": 1730230443630,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -27272,6 +27272,90 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 869.13472588,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@users.noreply.github.com",
+            "name": "svroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5e4b28715bb6301e0937080a9079fb0b268bed06",
+          "message": "Remove lost partitions from assigned streams (#1350)\n\nFixes #1288. See also #1233 and #1250.\r\n\r\nWhen all partitions are lost after some connection issue to the broker,\r\nthe streams for lost partitions are ended but polling stops, due to the\r\nconditions in `Runloop.State#shouldPoll`. This PR fixes this by removing\r\nthe lost partition streams from the `assignedStreams` in the state,\r\nthereby not disabling polling.\r\n\r\nAlso adds a warning that is logged whenever the assigned partitions\r\n(according to the apache kafka consumer) are different from the assigned\r\nstreams, which helps to identify other issues or any future regressions\r\nof this issue.\r\n\r\n~Still needs a good test, the `MockConsumer` used in other tests\r\nunfortunately does not allow simulating lost partitions, and the exact\r\nbehavior of the kafka client in this situation is hard to predict..~\r\nIncludes a test that fails when undoing the change to Runloop",
+          "timestamp": "2024-10-29T20:16:03+01:00",
+          "tree_id": "11f490e39cc62dee5fff60954b25fe765dc5fc05",
+          "url": "https://github.com/zio/zio-kafka/commit/5e4b28715bb6301e0937080a9079fb0b268bed06"
+        },
+        "date": 1730230442456,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordPar",
+            "value": 15.92051577065514,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordSeq",
+            "value": 12.59351484243552,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 538.98559206,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 539.79291292,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkPar",
+            "value": 161.61903602690478,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkSeq",
+            "value": 440.17385820666675,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 626.31520778,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 620.1776756599999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1180.0179408000001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 892.83292058,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
