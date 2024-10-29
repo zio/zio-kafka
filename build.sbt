@@ -16,7 +16,7 @@ lazy val binCompatVersionToCompare =
   Try("git describe --exact-match --tags".!!)
     .toOption
     .map { tag =>
-      val compatVersion = tag.strip().stripPrefix("v").split('.').take(2).mkString(".") + "0"
+      val compatVersion = tag.strip().stripPrefix("v").split('.').take(2).mkString(".") + ".0"
       println(s"Mima check compares against version $compatVersion")
       compatVersion
     }
