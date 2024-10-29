@@ -236,7 +236,7 @@ private[consumer] final class Runloop private (
           state          <- currentStateRef.get
           lostStreams = state.assignedStreams.filter(control => lostTps.contains(control.tp))
           _ <- ZIO.foreachDiscard(lostStreams)(_.lost)
-          _ <- lastRebalanceEvent.set(rebalanceEvent.onLost(lostTps))
+          _ <- lastRebalanceEvent.set(rebalanceEvent.onLost(lostTps, lostStreams))
           _ <- ZIO.logTrace(s"onLost done")
         } yield ()
     )
@@ -830,11 +830,12 @@ object Runloop {
         endedStreams = this.endedStreams ++ endedStreams
       )
 
-    def onLost(lost: Set[TopicPartition]): RebalanceEvent =
+    def onLost(lost: Set[TopicPartition], endedStreams: Chunk[PartitionStreamControl]): RebalanceEvent =
       copy(
         wasInvoked = true,
         assignedTps = assignedTps -- lost,
-        lostTps = lostTps ++ lost
+        lostTps = lostTps ++ lost,
+        endedStreams = this.endedStreams ++ endedStreams
       )
   }
 
