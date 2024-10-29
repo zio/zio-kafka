@@ -560,6 +560,13 @@ private[consumer] final class Runloop private (
                                          ended = endedStreams.map(_.tp).toSet
                                        )
                                      )
+                                // Ensure that all assigned partitions have a stream and no streams are present for unassigned streams
+                                _ <-
+                                  ZIO
+                                    .logWarning(
+                                      s"Not all assigned partitions have a stream or vice versa. Assigned: ${assignedTps.mkString(",")}, streams: ${state.assignedStreams.map(_.tp).mkString(",")}"
+                                    )
+                                    .when(assignedTps != state.assignedStreams.map(_.tp).toSet)
                               } yield Runloop.PollResult(
                                 records = polledRecords,
                                 ignoreRecordsForTps = ignoreRecordsForTps,
