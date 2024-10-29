@@ -106,7 +106,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
         Diagnostics.SlidingQueue.make(100).flatMap { diagnostics =>
           var rebalanceListener: ConsumerRebalanceListener = null
 
-          // Catches the rebalance listener so we can
+          // Catches the rebalance listener so we can use it
           val mockConsumer: BinaryMockConsumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {
             override def subscribe(
               topics: util.Collection[String],
