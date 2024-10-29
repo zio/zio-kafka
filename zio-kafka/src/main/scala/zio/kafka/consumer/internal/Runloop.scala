@@ -564,13 +564,12 @@ private[consumer] final class Runloop private (
                                 _ <-
                                   ZIO
                                     .logWarning(
-                                      s"Not all assigned partitions have a (single) stream or vice versa. Assigned: ${assignedTps.mkString(",")}, streams: ${updatedAssignedStreams.map(_.tp).mkString(",")}"
+                                      s"Not all assigned partitions have a (single) stream or vice versa. Assigned: ${currentAssigned.mkString(",")}, streams: ${updatedAssignedStreams.map(_.tp).mkString(",")}"
                                     )
                                     .when(
-                                      assignedTps.size != updatedAssignedStreams.size ||
-                                        assignedTps != updatedAssignedStreams
-                                          .map(_.tp)
-                                          .toSet
+                                      currentAssigned != updatedAssignedStreams
+                                        .map(_.tp)
+                                        .toSet || currentAssigned.size != updatedAssignedStreams.size
                                     )
                               } yield Runloop.PollResult(
                                 records = polledRecords,
