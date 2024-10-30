@@ -15,8 +15,7 @@ lazy val binCompatVersionToCompare =
   // Note, "git describe --tags"
   // either produces something like "v2.8.2-40-ge8a844a1" (not building from a release tag),
   // or "v2.8.2" (building from a release tag),
-  Try("git describe --tags".!!)
-    .toOption
+  Try("git describe --tags".!!).toOption
     .map(_.strip())
     // Only continue when we're building from a release tag
     .filter(_.matches("v[0-9]+\\.[0-9]+\\.[0-9]+"))
@@ -27,7 +26,7 @@ lazy val binCompatVersionToCompare =
       compatVersion
     }
 
-lazy val kafkaVersion         = "3.8.0"
+lazy val kafkaVersion         = "3.8.1"
 lazy val embeddedKafkaVersion = "3.8.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
