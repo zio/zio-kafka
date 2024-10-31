@@ -189,22 +189,26 @@ lazy val zioKafkaExample =
   project
     .in(file("zio-kafka-example"))
     .enablePlugins(JavaAppPackaging)
+    // The `dependsOn` pulls in:
+    //  "dev.zio" %% "zio-kafka"         % "version",
+    //  "dev.zio" %% "zio-kafka-testkit" % "version" % Test,
+    .dependsOn(zioKafka, zioKafkaTestkit % "test")
     .settings(stdSettings("zio-kafka-example"))
     .settings(publish / skip := true)
     .settings(run / fork := false)
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                 %% "zio"                % "2.1.11",
-        "dev.zio"                 %% "zio-kafka"          % "2.8.3",
+        "dev.zio"                 %% "zio"                % zioVersion.value,
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.3.2",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
         logback,
-        "dev.zio" %% "zio-kafka-testkit" % "2.8.3"  % Test,
-        "dev.zio" %% "zio-test"          % "2.1.11" % Test
+        "dev.zio" %% "zio-test" % zioVersion.value % Test
       ),
       // Scala 3 compiling fails with:
       // [error] Modules were resolved with conflicting cross-version suffixes in ProjectRef(uri("file:/home/runner/work/zio-kafka/zio-kafka/"), "zioKafkaExample"):
       // [error]    org.scala-lang.modules:scala-collection-compat _3, _2.13
+      // Prevent this error by excluding "scala-collection-compat" (see zio-kafka docs),
+      // or by skipping scala 3 completely.
       crossScalaVersions -= scala3.value
     )
 
