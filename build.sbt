@@ -15,8 +15,7 @@ lazy val binCompatVersionToCompare =
   // Note, "git describe --tags"
   // either produces something like "v2.8.2-40-ge8a844a1" (not building from a release tag),
   // or "v2.8.2" (building from a release tag),
-  Try("git describe --tags".!!)
-    .toOption
+  Try("git describe --tags".!!).toOption
     .map(_.strip())
     // Only continue when we're building from a release tag
     .filter(_.matches("v[0-9]+\\.[0-9]+\\.[0-9]+"))
@@ -196,11 +195,11 @@ lazy val zioKafkaExample =
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                 %% "zio"                % "2.1.11",
-        "dev.zio"                 %% "zio-kafka"          % "2.8.2",
+        "dev.zio"                 %% "zio-kafka"          % "2.8.3",
         "dev.zio"                 %% "zio-logging-slf4j2" % "2.3.2",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
         logback,
-        "dev.zio" %% "zio-kafka-testkit" % "2.8.2"  % Test,
+        "dev.zio" %% "zio-kafka-testkit" % "2.8.3"  % Test,
         "dev.zio" %% "zio-test"          % "2.1.11" % Test
       ),
       // Scala 3 compiling fails with:
