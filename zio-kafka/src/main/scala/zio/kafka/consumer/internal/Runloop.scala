@@ -75,6 +75,13 @@ private[consumer] final class Runloop private (
   private[internal] def removeSubscription(subscription: Subscription): UIO[Unit] =
     commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
 
+  private[internal] def endStreamsBySubscription(subscription: Subscription): UIO[Unit] =
+    for {
+      promise <- Promise.make[Nothing, Unit]
+      _       <- commandQueue.offer(RunloopCommand.EndStreamsBySubscription(subscription, promise)).unit
+      _       <- promise.await
+    } yield ()
+
   private def makeRebalanceListener: ConsumerRebalanceListener = {
     // All code in this block is called from the rebalance listener and therefore runs on the same-thread-runtime. This
     // is because the Java kafka client requires us to invoke the consumer from the same thread that invoked the
@@ -462,11 +469,12 @@ private[consumer] final class Runloop private (
 
   private def handlePoll(state: State): Task[State] = {
     for {
-      partitionsToFetch <- settings.fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
+      runningStreamsBeforePoll <- ZIO.filter(state.assignedStreams)(_.isRunning)
+      partitionsToFetch        <- settings.fetchStrategy.selectPartitionsToFetch(runningStreamsBeforePoll)
       _ <- ZIO.logDebug(
              s"Starting poll with ${state.pendingRequests.size} pending requests and" +
                s" ${state.pendingCommits.size} pending commits," +
-               s" resuming $partitionsToFetch partitions"
+               s" resuming ${partitionsToFetch.size} out of ${state.assignedStreams.size} partitions"
            )
       _ <- currentStateRef.set(state)
       pollResult <-
@@ -660,6 +668,20 @@ private[consumer] final class Runloop private (
                 cmd.succeed *> doChangeSubscription(newSubState)
             }
         }
+      case RunloopCommand.EndStreamsBySubscription(subscription, cont) =>
+        ZIO.foreachDiscard(
+          state.assignedStreams.filter(stream => Subscription.subscriptionMatches(subscription, stream.tp))
+        )(_.end) *> cont
+          .succeed(())
+          .as(
+            state.copy(
+              pendingRequests =
+                state.pendingRequests.filterNot(req => Subscription.subscriptionMatches(subscription, req.tp)),
+              assignedStreams =
+                state.assignedStreams.filterNot(stream => Subscription.subscriptionMatches(subscription, stream.tp))
+            )
+          )
+
       case RunloopCommand.RemoveSubscription(subscription) =>
         state.subscriptionState match {
           case SubscriptionState.NotSubscribed => ZIO.succeed(state)
