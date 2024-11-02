@@ -141,9 +141,10 @@ private[consumer] final class Runloop private (
           streamResults <-
             ZIO.foreach(streamsToEnd) { stream =>
               for {
-                isDone    <- stream.completedPromise.isDone
-                endOffset <- if (isDone) stream.completedPromise.await else ZIO.none
-              } yield (isDone, endOffset)
+                isDone           <- stream.completedPromise.isDone
+                lastPulledOffset <- stream.lastPulledOffset
+                endOffset        <- if (isDone) stream.completedPromise.await else ZIO.none
+              } yield (isDone || lastPulledOffset.isEmpty, endOffset)
             }
           committedOffsets <- committedOffsetsRef.get
         } yield {
