@@ -247,7 +247,7 @@ private[consumer] final class Runloop private (
           state          <- currentStateRef.get
           lostStreams = state.assignedStreams.filter(control => lostTps.contains(control.tp))
           _ <- ZIO.foreachDiscard(lostStreams)(_.lost)
-          _ <- lastRebalanceEvent.set(rebalanceEvent.onLost(lostTps))
+          _ <- lastRebalanceEvent.set(rebalanceEvent.onLost(lostTps, lostStreams))
           _ <- ZIO.logTrace(s"onLost done")
         } yield ()
     )
@@ -572,6 +572,17 @@ private[consumer] final class Runloop private (
                                          ended = endedStreams.map(_.tp).toSet
                                        )
                                      )
+                                // Ensure that all assigned partitions have a stream and no streams are present for unassigned streams
+                                _ <-
+                                  ZIO
+                                    .logWarning(
+                                      s"Not all assigned partitions have a (single) stream or vice versa. Assigned: ${currentAssigned.mkString(",")}, streams: ${updatedAssignedStreams.map(_.tp).mkString(",")}"
+                                    )
+                                    .when(
+                                      currentAssigned != updatedAssignedStreams
+                                        .map(_.tp)
+                                        .toSet || currentAssigned.size != updatedAssignedStreams.size
+                                    )
                               } yield Runloop.PollResult(
                                 records = polledRecords,
                                 ignoreRecordsForTps = ignoreRecordsForTps,
@@ -856,11 +867,12 @@ object Runloop {
         endedStreams = this.endedStreams ++ endedStreams
       )
 
-    def onLost(lost: Set[TopicPartition]): RebalanceEvent =
+    def onLost(lost: Set[TopicPartition], endedStreams: Chunk[PartitionStreamControl]): RebalanceEvent =
       copy(
         wasInvoked = true,
         assignedTps = assignedTps -- lost,
-        lostTps = lostTps ++ lost
+        lostTps = lostTps ++ lost,
+        endedStreams = this.endedStreams ++ endedStreams
       )
   }
 
