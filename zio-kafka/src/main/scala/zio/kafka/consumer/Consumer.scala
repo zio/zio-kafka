@@ -726,8 +726,7 @@ private[consumer] final class ConsumerLive private[consumer] (
       // Create a new scope for the stream control (subscription)
       // The effect that creates the stream control must not be tied directly to the scope in which fib.join is interrupted
       // When the outer scope is interrupted, we call stream control stop, then join the fiber
-      // Only then may we close the streamcontrol scope
-
+      // Only then may we close the stream control scope
       for {
         innerScope <- ZIO.scopeWith(_.fork)
         control    <- streamControl.provideEnvironment(ZEnvironment(innerScope))
@@ -738,17 +737,13 @@ private[consumer] final class ConsumerLive private[consumer] (
             .forkDaemon
         result <-
           fib.join.onInterrupt(
-            ZIO.logInfo("Starting control stop") *>
-              control.stop *>
-              ZIO.logInfo("Stopped control") *>
+            control.stop *>
               fib.join
                 .timeout(shutdownTimeout)
-                .tap(_ => ZIO.logInfo("Fiber has completed"))
                 .tapErrorCause(cause =>
                   ZIO.logErrorCause("Error joining withStream fiber in runWithGracefulShutdown", cause)
                 )
                 .ignore
-//                .ignore
           )
       } yield result
     }
