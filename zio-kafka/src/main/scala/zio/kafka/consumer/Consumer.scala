@@ -728,10 +728,8 @@ private[consumer] final class ConsumerLive private[consumer] (
         fib <-
           (withStream(control.stream)
             .onInterrupt(ZIO.logError("withStream in runWithGracefulShutdown was interrupted, this should not happen")))
-            .tapErrorCause(cause =>
-              ZIO.logErrorCause("Error in withStream fiber in runWithGracefulShutdown", cause) *> ZIO.getFiberRefs.debug
-            )
-            .forkDaemon // Does not work with forkScoped, this Fiber would then be interrupted unintended sometimes
+            .tapErrorCause(cause => ZIO.logErrorCause("Error in withStream fiber in runWithGracefulShutdown", cause))
+            .forkScoped // Does not work with forkScoped, this Fiber would then be interrupted unintended sometimes
         result <-
           fib.join.onInterrupt(
             control.stop *>
