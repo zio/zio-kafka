@@ -72,8 +72,12 @@ trait Consumer {
 
   /**
    * Like [[partitionedAssignmentStream]] but wraps the stream in a construct that ensures graceful shutdown
+   *
+   * When this effect is interrupted, all partition streams are closed upstream, allowing the stream created by
+   * `withStream` to complete gracefully all stream stages, thereby fully processing all buffered and/or in-flight
+   * messages.
    */
-  def partitionedAssignmentStreamWithGracefulShutdown[R, K, V](
+  def withPartitionedAssignmentStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
@@ -111,8 +115,12 @@ trait Consumer {
 
   /**
    * Like [[partitionedStream]] but wraps the stream in a construct that ensures graceful shutdown
+   *
+   * When this effect is interrupted, all partition streams are closed upstream, allowing the stream created by
+   * `withStream` to complete gracefully all stream stages, thereby fully processing all buffered and/or in-flight
+   * messages.
    */
-  def partitionedStreamWithGracefulShutdown[R, K, V](
+  def withPartitionedStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
@@ -153,8 +161,12 @@ trait Consumer {
 
   /**
    * Like [[plainStream]] but wraps the stream in a construct that ensures graceful shutdown
+   *
+   * When this effect is interrupted, all partition streams are closed upstream, allowing the stream created by
+   * `withStream` to complete gracefully all stream stages, thereby fully processing all buffered and/or in-flight
+   * messages.
    */
-  def plainStreamWithGracefulShutdown[R, K, V](
+  def withPlainStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
@@ -310,7 +322,7 @@ object Consumer {
   /**
    * Accessor method
    */
-  def partitionedAssignmentStreamWithGracefulShutdown[R, K, V](
+  def withPartitionedAssignmentStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
@@ -323,7 +335,7 @@ object Consumer {
     ]
   ): ZIO[R with Consumer, Throwable, Any] =
     ZIO.serviceWithZIO[Consumer](
-      _.partitionedAssignmentStreamWithGracefulShutdown(
+      _.withPartitionedAssignmentStream(
         subscription,
         keyDeserializer,
         valueDeserializer,
@@ -348,7 +360,7 @@ object Consumer {
   /**
    * Accessor method
    */
-  def partitionedStreamWithGracefulShutdown[R, K, V](
+  def withPartitionedStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
@@ -361,7 +373,7 @@ object Consumer {
     ]
   ): ZIO[R with Consumer, Throwable, Any] =
     ZIO.serviceWithZIO[Consumer](
-      _.partitionedStreamWithGracefulShutdown(subscription, keyDeserializer, valueDeserializer, shutdownTimeout)(
+      _.withPartitionedStream(subscription, keyDeserializer, valueDeserializer, shutdownTimeout)(
         withStream
       )
     )
@@ -382,7 +394,7 @@ object Consumer {
   /**
    * Accessor method
    */
-  def plainStreamWithGracefulShutdown[R, K, V](
+  def withPlainStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
@@ -392,7 +404,7 @@ object Consumer {
     withStream: ZStream[R, Throwable, CommittableRecord[K, V]] => ZIO[R, Throwable, Any]
   ): ZIO[R with Consumer, Throwable, Any] =
     ZIO.serviceWithZIO[Consumer](
-      _.plainStreamWithGracefulShutdown(subscription, keyDeserializer, valueDeserializer, bufferSize, shutdownTimeout)(
+      _.withPlainStream(subscription, keyDeserializer, valueDeserializer, bufferSize, shutdownTimeout)(
         withStream
       )
     )
@@ -631,7 +643,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     )
   }
 
-  override def partitionedAssignmentStreamWithGracefulShutdown[R, K, V](
+  override def withPartitionedAssignmentStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
@@ -664,7 +676,7 @@ private[consumer] final class ConsumerLive private[consumer] (
   ] =
     partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer).flattenChunks
 
-  override def partitionedStreamWithGracefulShutdown[R, K, V](
+  override def withPartitionedStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
@@ -676,9 +688,8 @@ private[consumer] final class ConsumerLive private[consumer] (
       Any
     ]
   ): ZIO[R, Throwable, Any] =
-    partitionedAssignmentStreamWithGracefulShutdown(subscription, keyDeserializer, valueDeserializer, shutdownTimeout) {
-      stream =>
-        withStream(stream.flattenChunks)
+    withPartitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer, shutdownTimeout) { stream =>
+      withStream(stream.flattenChunks)
     }
 
   override def plainStream[R, K, V](
@@ -692,7 +703,7 @@ private[consumer] final class ConsumerLive private[consumer] (
       bufferSize = bufferSize
     )(_._2)
 
-  override def plainStreamWithGracefulShutdown[R, K, V](
+  override def withPlainStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
@@ -701,11 +712,10 @@ private[consumer] final class ConsumerLive private[consumer] (
   )(
     withStream: ZStream[R, Throwable, CommittableRecord[K, V]] => ZIO[R, Throwable, Any]
   ): ZIO[R, Throwable, Any] =
-    partitionedStreamWithGracefulShutdown(subscription, keyDeserializer, valueDeserializer, shutdownTimeout) {
-      partitionedStream =>
-        withStream(
-          partitionedStream.flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(_._2)
-        )
+    withPartitionedStream(subscription, keyDeserializer, valueDeserializer, shutdownTimeout) { partitionedStream =>
+      withStream(
+        partitionedStream.flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(_._2)
+      )
     }
 
   /**
@@ -713,8 +723,7 @@ private[consumer] final class ConsumerLive private[consumer] (
    * interrupted, stops fetching records and gracefully waits for the ZIO workflow to complete.
    *
    * @param streamControl
-   *   Result of `plainStreamWithGracefulShutdown`, `partitionedStreamWithGracefulShutdown` or
-   *   `partitionedAssignmentStreamWithGracefulShutdown`
+   *   Result of `withPlainStream`, `withPartitionedStream` or `withPartitionedAssignmentStream`
    * @param shutdownTimeout
    *   Timeout for the workflow to complete after initiating the graceful shutdown
    * @param withStream
