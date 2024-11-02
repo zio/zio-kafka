@@ -52,6 +52,9 @@ private[consumer] final class RunloopAccess private (
    * there's no mistake possible for the caller.
    *
    * The external world (Consumer) doesn't need to know how we "subscribe", "unsubscribe", etc. internally.
+   *
+   * @returns
+   *   A SubscriptionStreamControl which allows graceful shutdown of all streams created from this subscription
    */
   def subscribe(
     subscription: Subscription
@@ -62,16 +65,12 @@ private[consumer] final class RunloopAccess private (
       // starts the Runloop if not already started
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             ZIO.logInfo("Subscribe finalizer") *>
-               withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).orDie) <*
+             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).orDie) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
     } yield SubscriptionStreamControl(
-      stream.merge(ZStream.fromZIO(end.await).as(Take.end)),
-      ZIO.logInfo("Subscribe SubscriptionStreamControl stop") *> withRunloopZIO(requireRunning = false)(
-        _.endStreamsBySubscription(subscription)
-      ) *>
-        end.succeed(()).ignore
+      stream = stream.merge(ZStream.fromZIO(end.await).as(Take.end)),
+      stop = withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription)) *> end.succeed(()).ignore
     )
 
 }
