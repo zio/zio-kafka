@@ -574,6 +574,34 @@ private[consumer] final class ConsumerLive private[consumer] (
   override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
     consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)
 
+  override def partitionedAssignmentStream[R, K, V](
+    subscription: Subscription,
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
+    val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
+
+    ZStream.unwrapScoped {
+      for {
+        streamControl <- runloopAccess.subscribe(subscription)
+        stream = streamControl.stream
+      } yield stream
+        .map(_.exit)
+        .flattenExitOption
+        .map {
+          _.collect {
+            case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
+              val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
+                if (onlyByteArraySerdes)
+                  partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
+                else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
+
+              tp -> stream
+          }
+        }
+    }
+  }
+
   private def partitionedAssignmentStreamWithControl[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
@@ -601,24 +629,6 @@ private[consumer] final class ConsumerLive private[consumer] (
         },
       streamControl.stop
     )
-  }
-
-  override def partitionedAssignmentStream[R, K, V](
-    subscription: Subscription,
-    keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V]
-  ): Stream[
-    Throwable,
-    Chunk[
-      (
-        TopicPartition,
-        ZStream[R, Throwable, CommittableRecord[K, V]]
-      )
-    ]
-  ] = ZStream.unwrapScoped {
-    for {
-      streamControl <- partitionedAssignmentStreamWithControl(subscription, keyDeserializer, valueDeserializer)
-    } yield streamControl.stream
   }
 
   override def partitionedAssignmentStreamWithGracefulShutdown[R, K, V](
@@ -651,11 +661,8 @@ private[consumer] final class ConsumerLive private[consumer] (
       TopicPartition,
       ZStream[R, Throwable, CommittableRecord[K, V]]
     )
-  ] = ZStream.unwrapScoped {
-    for {
-      streamControl <- partitionedAssignmentStreamWithControl(subscription, keyDeserializer, valueDeserializer)
-    } yield streamControl.stream.flattenChunks
-  }
+  ] =
+    partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer).flattenChunks
 
   override def partitionedStreamWithGracefulShutdown[R, K, V](
     subscription: Subscription,
@@ -680,11 +687,10 @@ private[consumer] final class ConsumerLive private[consumer] (
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
   ): ZStream[R, Throwable, CommittableRecord[K, V]] =
-    ZStream.unwrapScoped {
-      for {
-        streamControl <- partitionedAssignmentStreamWithControl(subscription, keyDeserializer, valueDeserializer)
-      } yield streamControl.stream.flattenChunks.flatMapPar(n = Int.MaxValue, bufferSize = bufferSize)(_._2)
-    }
+    partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
+      n = Int.MaxValue,
+      bufferSize = bufferSize
+    )(_._2)
 
   override def plainStreamWithGracefulShutdown[R, K, V](
     subscription: Subscription,
