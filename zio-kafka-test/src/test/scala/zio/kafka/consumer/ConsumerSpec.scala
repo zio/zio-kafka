@@ -398,10 +398,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       }.provideSomeLayer[Kafka with Producer](
                         consumer(
                           client,
-                          Some(group),
-                          diagnostics = new Diagnostics {
-                            override def emit(event: => DiagnosticEvent): UIO[Unit] = ZIO.logInfo(event.toString)
-                          }
+                          Some(group)
                         )
                       )
           } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
