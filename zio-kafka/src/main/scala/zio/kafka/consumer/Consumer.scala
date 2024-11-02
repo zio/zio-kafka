@@ -71,7 +71,7 @@ trait Consumer {
   ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
 
   /**
-   * Like [[partitionedAssignmentStream]] but wraps the stream in a construct that ensures graceful shutdown
+   * Like [[partitionedAssignmentStream]] but wraps the stream in a construct that ensures graceful shutdown.
    *
    * When this effect is interrupted, all partition streams are closed upstream, allowing the stream created by
    * `withStream` to complete gracefully all stream stages, thereby fully processing all buffered and/or in-flight
@@ -114,7 +114,7 @@ trait Consumer {
   ): Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
 
   /**
-   * Like [[partitionedStream]] but wraps the stream in a construct that ensures graceful shutdown
+   * Like [[partitionedStream]] but wraps the stream in a construct that ensures graceful shutdown.
    *
    * When this effect is interrupted, all partition streams are closed upstream, allowing the stream created by
    * `withStream` to complete gracefully all stream stages, thereby fully processing all buffered and/or in-flight
