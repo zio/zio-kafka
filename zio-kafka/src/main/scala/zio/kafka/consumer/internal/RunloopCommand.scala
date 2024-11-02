@@ -30,7 +30,7 @@ object RunloopCommand {
     @inline def succeed: UIO[Unit]                           = cont.succeed(()).unit
     @inline def fail(e: InvalidSubscriptionUnion): UIO[Unit] = cont.fail(e).unit
   }
-  final case class RemoveSubscription(subscription: Subscription) extends StreamCommand
+  final case class RemoveSubscription(subscription: Subscription, cont: Promise[Throwable, Unit]) extends StreamCommand
 
   final case class EndStreamsBySubscription(subscription: Subscription, cont: Promise[Nothing, Unit])
       extends StreamCommand {

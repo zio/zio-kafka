@@ -62,7 +62,7 @@ private[consumer] final class RunloopAccess private (
       // starts the Runloop if not already started
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription)) <*
+             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).orDie) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
     } yield SubscriptionStreamControl(

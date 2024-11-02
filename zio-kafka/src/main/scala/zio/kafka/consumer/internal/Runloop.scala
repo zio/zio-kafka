@@ -72,8 +72,12 @@ private[consumer] final class Runloop private (
       _       <- ZIO.logDebug(s"Done for subscription $subscription")
     } yield ()
 
-  private[internal] def removeSubscription(subscription: Subscription): UIO[Unit] =
-    commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
+  private[internal] def removeSubscription(subscription: Subscription): Task[Unit] =
+    for {
+      promise <- Promise.make[Throwable, Unit]
+      _       <- commandQueue.offer(RunloopCommand.RemoveSubscription(subscription, promise))
+      _       <- promise.await
+    } yield ()
 
   private[internal] def endStreamsBySubscription(subscription: Subscription): UIO[Unit] =
     for {
@@ -671,8 +675,8 @@ private[consumer] final class Runloop private (
             )
           )
 
-      case RunloopCommand.RemoveSubscription(subscription) =>
-        state.subscriptionState match {
+      case RunloopCommand.RemoveSubscription(subscription, cont) =>
+        (state.subscriptionState match {
           case SubscriptionState.NotSubscribed => ZIO.succeed(state)
           case SubscriptionState.Subscribed(existingSubscriptions, _) =>
             val newUnion: Option[(Subscription, NonEmptyChunk[Subscription])] =
@@ -689,7 +693,7 @@ private[consumer] final class Runloop private (
                 ZIO.logDebug(s"Unsubscribing kafka consumer") *>
                   doChangeSubscription(SubscriptionState.NotSubscribed)
             }
-        }
+        }).tapBoth(cont.fail, _ => cont.succeed(()).unit)
       case RunloopCommand.RemoveAllSubscriptions => doChangeSubscription(SubscriptionState.NotSubscribed)
       case RunloopCommand.StopAllStreams =>
         for {
