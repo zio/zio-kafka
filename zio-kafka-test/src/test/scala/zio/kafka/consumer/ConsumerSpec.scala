@@ -368,7 +368,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                           stop <- Promise.make[Nothing, Unit]
                           fib <-
                             Consumer
-                              .partitionedStreamWithGracefulShutdown[Any, String, String](
+                              .withPartitionedStream[Any, String, String](
                                 Subscription.topics(topic),
                                 Serde.string,
                                 Serde.string
@@ -383,7 +383,11 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                     }
                                   }
                                   .transduce(Consumer.offsetBatches)
-                                  .mapZIO(_.commit *> ZIO.logInfo("Commit done"))
+                                  .mapZIO(batch =>
+                                    ZIO.logInfo("Starting batch commit") *> batch.commit.tapErrorCause(
+                                      ZIO.logErrorCause(_)
+                                    ) *> ZIO.logInfo("Commit done")
+                                  )
                                   .runDrain
                               }
                               .forkScoped
@@ -391,7 +395,15 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                           _      <- stop.await *> fib.interrupt
                           offset <- Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
                         } yield offset
-                      }.provideSomeLayer[Kafka with Producer](consumer(client, Some(group)))
+                      }.provideSomeLayer[Kafka with Producer](
+                        consumer(
+                          client,
+                          Some(group),
+                          diagnostics = new Diagnostics {
+                            override def emit(event: => DiagnosticEvent): UIO[Unit] = ZIO.logInfo(event.toString)
+                          }
+                        )
+                      )
           } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
         } @@ nonFlaky(10),
         test(
@@ -416,7 +428,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                consumed <- Ref.make(0L)
                                fiber <-
                                  consumer
-                                   .plainStreamWithGracefulShutdown(
+                                   .withPlainStream(
                                      Subscription.manual(topic -> 0),
                                      Serde.string,
                                      Serde.string
@@ -478,7 +490,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                      stream1Interrupted <- Promise.make[Nothing, Unit]
                      stream1Fib <- ZIO.logAnnotate("stream", "1") {
                                      (Consumer
-                                       .plainStreamWithGracefulShutdown(
+                                       .withPlainStream(
                                          Subscription.topics(topic1),
                                          Serde.string,
                                          Serde.string
@@ -496,7 +508,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                      _ <- stream1Started.await
                      _ <- ZIO.logAnnotate("stream", "2") {
                             Consumer
-                              .plainStreamWithGracefulShutdown(
+                              .withPlainStream(
                                 Subscription.topics(topic2),
                                 Serde.string,
                                 Serde.string

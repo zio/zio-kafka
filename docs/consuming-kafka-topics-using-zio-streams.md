@@ -71,13 +71,13 @@ The examples above will keep processing records forever, or until the fiber is i
 
 zio-kafka also supports a _graceful shutdown_, where the fetching of records for the subscribed topics/partitions is stopped, the streams are ended and all downstream stages are completed, allowing in-flight records to be fully processed.
 
-Use the `*withGracefulShutdown` variants of `plainStream`, `partitionedStream` and `partitionedAssignmentStream` for this purpose. These methods accept a parameter that describes the execution of a stream, which is gracefully ended when the method is interrupted.
+Use the `with*Stream` variants of `plainStream`, `partitionedStream` and `partitionedAssignmentStream` for this purpose. These methods accept a parameter that describes the execution of a stream, which is gracefully ended when the method is interrupted.
 
 ```scala
 import zio.Console.printLine
 import zio.kafka.consumer._
 
-Consumer.partitionedStreamWithGracefulShutdown(Subscription.topics("topic150"), Serde.string, Serde.string) { stream =>
+Consumer.withPartitionedStream(Subscription.topics("topic150"), Serde.string, Serde.string) { stream =>
     stream.flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
         partitionStream
           .tap(record => printLine(s"key: ${record.key}, value: ${record.value}"))
