@@ -62,12 +62,15 @@ private[consumer] final class RunloopAccess private (
       // starts the Runloop if not already started
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).orDie) <*
+             ZIO.logInfo("Subscribe finalizer") *>
+               withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).orDie) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
     } yield SubscriptionStreamControl(
       stream.merge(ZStream.fromZIO(end.await).as(Take.end)),
-      withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription)) *>
+      ZIO.logInfo("Subscribe SubscriptionStreamControl stop") *> withRunloopZIO(requireRunning = false)(
+        _.endStreamsBySubscription(subscription)
+      ) *>
         end.succeed(()).ignore
     )
 
