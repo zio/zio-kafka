@@ -163,4 +163,3 @@ This library is heavily inspired and made possible by the research and implement
 [License](LICENSE)
 
 Copyright 2021-2024 Itamar Ravid and the zio-kafka contributors.
-
