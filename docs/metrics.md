@@ -92,3 +92,9 @@ These metrics are updated after every poll.
 | histogram | `ziokafka_consumer_commit_queue_size`  | The number of commits queued in the consumer.      |
 
 See [ConsumerMetrics.scala](https://github.com/zio/zio-kafka/blob/master/zio-kafka/src/main/scala/zio/kafka/consumer/internal/ConsumerMetrics.scala) for the exact details.
+
+## Example
+
+Here is an example dashboard that could be built with these metrics:
+
+![metrics-dashboard.png](metrics-dashboard.png)
