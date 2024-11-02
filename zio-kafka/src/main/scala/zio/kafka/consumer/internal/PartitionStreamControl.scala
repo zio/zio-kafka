@@ -65,6 +65,8 @@ final class PartitionStreamControl private (
 
   def queueSize: UIO[Int] = queueInfoRef.get.map(_.size)
 
+  def lastPulledOffset: UIO[Option[Offset]] = queueInfoRef.get.map(_.lastPulledOffset)
+
   /**
    * @return
    *   the number of polls there are records idling in the queue. It is increased on every poll (when the queue is
