@@ -56,8 +56,7 @@ private[consumer] final class Runloop private (
         .offerAll(
           Chunk(
             RunloopCommand.RemoveAllSubscriptions,
-            RunloopCommand.StopAllStreams,
-            RunloopCommand.StopRunloop
+            RunloopCommand.StopAllStreams
           )
         )
         .unit
@@ -621,6 +620,18 @@ private[consumer] final class Runloop private (
                          .tap(exceeded => if (exceeded) stream.halt else ZIO.unit)
                          .map(acc || _)
                      }
+      _ <- ZIO.foreachDiscard(streams) { stream =>
+             stream
+               .maxPollIntervalExceeded(now)
+               .tap(exceeded =>
+                 ZIO
+                   .logWarning(s"Stream for ${stream.tp} has not pulled from upstream during the max poll interval")
+                   .when(exceeded)
+               )
+           }
+      _ <- ZIO
+             .logWarning("Shutting down Runloop because one or more streams exceeded the max poll interval")
+             .when(anyExceeded)
       _ <- shutdown.when(anyExceeded)
     } yield ()
 
@@ -936,6 +947,7 @@ object Runloop {
       _ <- ZIO.addFinalizer(
              ZIO.logDebug("Shutting down Runloop") *>
                runloop.shutdown *>
+               commandQueue.offer(RunloopCommand.StopRunloop) *>
                waitForRunloopStop <*
                ZIO.logDebug("Shut down Runloop")
            )
