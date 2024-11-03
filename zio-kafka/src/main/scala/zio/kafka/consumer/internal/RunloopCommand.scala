@@ -2,7 +2,8 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
 import zio._
-import zio.kafka.consumer.{ InvalidSubscriptionUnion, Subscription }
+import zio.kafka.consumer.Consumer.InvalidSubscriptionUnion
+import zio.kafka.consumer.Subscription
 
 sealed trait RunloopCommand
 object RunloopCommand {

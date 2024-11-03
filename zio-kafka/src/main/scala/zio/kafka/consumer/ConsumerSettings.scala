@@ -2,7 +2,7 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio._
-import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.consumer.Consumer.{ ConsumerError, OffsetRetrieval }
 import zio.kafka.consumer.fetch.{ FetchStrategy, QueueSizeBasedFetchStrategy }
 import zio.kafka.security.KafkaCredentialStore
 import zio.metrics.MetricLabel
@@ -31,7 +31,7 @@ final case class ConsumerSettings(
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy(),
   metricLabels: Set[MetricLabel] = Set.empty,
   runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis),
-  authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.recurs(5) && Schedule.spaced(500.millis)
+  authErrorRetrySchedule: Schedule[Any, ConsumerError, Any] = Schedule.recurs(5) && Schedule.spaced(500.millis)
 ) {
   // Parse booleans in a way compatible with how Kafka does this in org.apache.kafka.common.config.ConfigDef.parseType:
   require(
@@ -316,7 +316,7 @@ final case class ConsumerSettings(
    *
    * The default is {{{Schedule.recurs(5) && Schedule.spaced(500.millis)}}} which is, to retry 5 times, spaced by 500ms.
    */
-  def withAuthErrorRetrySchedule(authErrorRetrySchedule: Schedule[Any, Throwable, Any]): ConsumerSettings =
+  def withAuthErrorRetrySchedule(authErrorRetrySchedule: Schedule[Any, ConsumerError, Any]): ConsumerSettings =
     copy(authErrorRetrySchedule = authErrorRetrySchedule)
 
 }

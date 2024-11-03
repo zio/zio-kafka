@@ -4,7 +4,7 @@ import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerRecord }
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio._
 import zio.kafka.admin._
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
+import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, ConsumerError, OffsetRetrieval }
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.producer._
@@ -192,7 +192,7 @@ object KafkaTestUtils {
    * Utility function to make a Consumer. It requires a ConsumerSettings layer.
    */
   @deprecated("Use [[KafkaTestUtils.minimalConsumer]] instead", "2.3.1")
-  def simpleConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
+  def simpleConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, ConsumerError, Consumer] =
     ZLayer.makeSome[ConsumerSettings, Consumer](
       ZLayer.succeed(diagnostics) >>> Consumer.live
     )
@@ -203,7 +203,7 @@ object KafkaTestUtils {
    * "minimal" because, unlike the other functions returning a `ZLayer[..., ..., Consumer]` of this file, you need to
    * provide the `ConsumerSettings` layer yourself.
    */
-  def minimalConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
+  def minimalConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, ConsumerError, Consumer] =
     ZLayer.makeSome[ConsumerSettings, Consumer](
       ZLayer.succeed(diagnostics) >>> Consumer.live
     )
@@ -223,7 +223,7 @@ object KafkaTestUtils {
     maxRebalanceDuration: Duration = 3.minutes,
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
     properties: Map[String, String] = Map.empty
-  ): ZLayer[Kafka, Throwable, Consumer] =
+  ): ZLayer[Kafka, ConsumerError, Consumer] =
     (ZLayer(
       consumerSettings(
         clientId = clientId,
@@ -253,7 +253,7 @@ object KafkaTestUtils {
     rebalanceSafeCommits: Boolean = false,
     properties: Map[String, String] = Map.empty,
     rebalanceListener: RebalanceListener = RebalanceListener.noop
-  ): ZLayer[Kafka, Throwable, Consumer] =
+  ): ZLayer[Kafka, ConsumerError, Consumer] =
     (ZLayer(
       transactionalConsumerSettings(
         groupId = groupId,
@@ -274,7 +274,7 @@ object KafkaTestUtils {
    */
   def consumeWithStrings(clientId: String, groupId: Option[String] = None, subscription: Subscription)(
     r: ConsumerRecord[String, String] => URIO[Any, Unit]
-  ): RIO[Kafka, Unit] =
+  ): ZIO[Kafka, ConsumerError, Unit] =
     consumerSettings(clientId, groupId, None).flatMap { settings =>
       Consumer.consumeWith[Any, Any, String, String](
         settings,

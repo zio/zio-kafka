@@ -2,10 +2,10 @@ package zio.kafka.serde
 
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Deserializer => KafkaDeserializer }
-import zio.{ RIO, Task, ZIO }
+import zio.kafka.consumer.Consumer.DeserializationError
+import zio.{ Task, ZIO }
 
 import scala.jdk.CollectionConverters._
-import scala.util.{ Failure, Success, Try }
 
 /**
  * Deserializer from byte array to a value of some type T
@@ -16,7 +16,7 @@ import scala.util.{ Failure, Success, Try }
  *   Value type
  */
 trait Deserializer[-R, +T] {
-  def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T]
+  def deserialize(topic: String, headers: Headers, data: Array[Byte]): ZIO[R, DeserializationError, T]
 
   /**
    * Returns a new deserializer that executes its deserialization function on the blocking threadpool.
@@ -32,7 +32,9 @@ trait Deserializer[-R, +T] {
   /**
    * Create a deserializer for a type U based on the deserializer for type T and an effectful mapping function
    */
-  def mapM[R1 <: R, U](f: T => RIO[R1, U]): Deserializer[R1, U] = Deserializer(deserialize(_, _, _).flatMap(f))
+  def mapM[R1 <: R, U](f: T => ZIO[R1, DeserializationError, U]): Deserializer[R1, U] = Deserializer(
+    deserialize(_, _, _).flatMap(f)
+  )
 
   /**
    * When this serializer fails, attempt to deserialize with the alternative
@@ -49,8 +51,8 @@ trait Deserializer[-R, +T] {
    *
    * This is useful for explicitly handling deserialization failures.
    */
-  def asTry: Deserializer[R, Try[T]] =
-    Deserializer(deserialize(_, _, _).fold(e => Failure(e), v => Success(v)))
+  def either: Deserializer[R, Either[DeserializationError, T]] =
+    Deserializer(deserialize(_, _, _).fold(e => Left(e), v => Right(v)))
 
   /**
    * Returns a new deserializer that deserializes values as Option values, mapping null data to None values.
@@ -64,7 +66,7 @@ object Deserializer extends Serdes {
   /**
    * Create a deserializer from a function
    */
-  def apply[R, T](deser: (String, Headers, Array[Byte]) => RIO[R, T]): Deserializer[R, T] =
+  def apply[R, T](deser: (String, Headers, Array[Byte]) => ZIO[R, DeserializationError, T]): Deserializer[R, T] =
     (topic: String, headers: Headers, data: Array[Byte]) => deser(topic, headers, data)
 
   /**
@@ -79,8 +81,11 @@ object Deserializer extends Serdes {
       .attempt(deserializer.configure(props.asJava, isKey))
       .as(
         new Deserializer[Any, T] {
-          override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Task[T] =
-            ZIO.attempt(deserializer.deserialize(topic, headers, data))
+          override def deserialize(topic: String, headers: Headers, data: Array[Byte])
+            : ZIO[Any, DeserializationError, T] =
+            ZIO
+              .attempt(deserializer.deserialize(topic, headers, data))
+              .mapError(e => DeserializationError(e.getMessage, Some(e)))
         }
       )
 }

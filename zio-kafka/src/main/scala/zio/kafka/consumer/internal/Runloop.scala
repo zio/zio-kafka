@@ -2,9 +2,25 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException, RebalanceInProgressException }
+import org.apache.kafka.common.errors.{
+  AuthenticationException,
+  AuthorizationException,
+  InterruptException,
+  RebalanceInProgressException,
+  WakeupException
+}
 import zio._
-import zio.kafka.consumer.Consumer.{ CommitTimeout, OffsetRetrieval }
+import zio.kafka.consumer.Consumer.CommitError.{ CommitTimeout, UnknownCommitException }
+import zio.kafka.consumer.Consumer.{
+  AuthenticationError,
+  AuthorizationError,
+  CommitError,
+  ConsumerError,
+  GetManualOffsetsError,
+  InvalidSubscriptionUnion,
+  OffsetRetrieval,
+  UnknownConsumerException
+}
 import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.{ Finalization, Rebalance }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
@@ -29,7 +45,7 @@ private[consumer] final class Runloop private (
   commitQueue: Queue[Commit],
   commandQueue: Queue[RunloopCommand],
   lastRebalanceEvent: Ref.Synchronized[Runloop.RebalanceEvent],
-  partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
+  partitionsHub: Hub[Take[ConsumerError, PartitionAssignment]],
   diagnostics: Diagnostics,
   maxRebalanceDuration: Duration,
   currentStateRef: Ref[State],
@@ -253,10 +269,10 @@ private[consumer] final class Runloop private (
   }
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
-  private val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] =
+  private val commit: Map[TopicPartition, OffsetAndMetadata] => IO[CommitError, Unit] =
     offsets =>
       for {
-        p <- Promise.make[Throwable, Unit]
+        p <- Promise.make[CommitError, Unit]
         startTime = java.lang.System.nanoTime()
         _ <- commitQueue.offer(Runloop.Commit(java.lang.System.nanoTime(), offsets, p))
         _ <- commandQueue.offer(RunloopCommand.CommitAvailable)
@@ -285,7 +301,7 @@ private[consumer] final class Runloop private (
     val offsetsWithMetaData = offsets.map { case (tp, offset) =>
       tp -> new OffsetAndMetadata(offset.offset + 1, offset.leaderEpoch, offset.metadata)
     }
-    val cont = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
+    val cont = (e: Exit[CommitError, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
     // We assume the commit is started immediately after returning from this method.
     val startTime = java.lang.System.nanoTime()
     val onSuccess = {
@@ -305,8 +321,12 @@ private[consumer] final class Runloop private (
           _ <- commitQueue.offerAll(commits)
           _ <- commandQueue.offer(RunloopCommand.CommitAvailable)
         } yield ()
-      case err: Throwable =>
-        cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsetsWithMetaData, err))
+      case e @ (_: WakeupException | _: InterruptException) =>
+        // This should not happen unless we made a programming error
+        cont(Exit.die(e))
+      case e: Throwable =>
+        val error = UnknownCommitException(e)
+        cont(Exit.fail(error)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsetsWithMetaData, error))
     }
     val callback =
       new OffsetCommitCallback {
@@ -415,17 +435,24 @@ private[consumer] final class Runloop private (
     else ZIO.none
 
   /** @return the topic-partitions for which received records should be ignored */
-  private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
+  private def doSeekForNewPartitions(
+    c: ByteArrayKafkaConsumer,
+    tps: Set[TopicPartition]
+  ): IO[GetManualOffsetsError, Set[TopicPartition]] =
     settings.offsetRetrieval match {
       case OffsetRetrieval.Auto(_) => ZIO.succeed(Set.empty)
       case OffsetRetrieval.Manual(getOffsets, _) =>
         if (tps.isEmpty) ZIO.succeed(Set.empty)
         else
-          getOffsets(tps).flatMap { offsets =>
-            ZIO
-              .attempt(offsets.foreach { case (tp, offset) => c.seek(tp, offset) })
-              .as(offsets.keySet)
-          }
+          getOffsets(tps)
+            .mapError(GetManualOffsetsError)
+            .map(userTps => userTps.view.filterKeys(tps.contains).toMap) // Only offsets for TPs we requested
+            .flatMap { offsets =>
+              ZIO
+                .attempt(offsets.foreach { case (tp, offset) => c.seek(tp, offset) })
+                .orDie // Any exceptions indicates zio-kafka programming errors, see seek() docs
+                .as(offsets.keySet)
+            }
     }
 
   /**
@@ -434,7 +461,7 @@ private[consumer] final class Runloop private (
   private def resumeAndPausePartitions(
     c: ByteArrayKafkaConsumer,
     requestedPartitions: Set[TopicPartition]
-  ): Task[(Int, Int)] = ZIO.attempt {
+  ): UIO[(Int, Int)] = ZIO.attempt {
     val assignment = c.assignment().asScala.toSet
     val toResume   = assignment intersect requestedPartitions
     val toPause    = assignment -- requestedPartitions
@@ -443,25 +470,37 @@ private[consumer] final class Runloop private (
     if (toPause.nonEmpty) c.pause(toPause.asJava)
 
     (toResume.size, toPause.size)
-  }
+  }.orDie // resume() and pause() throw IllegalStateExceptions when accessed concurrently or when partition is not currently assigned, which indicates a programming error on our side
 
-  private def doPoll(c: ByteArrayKafkaConsumer): Task[ConsumerRecords[Array[Byte], Array[Byte]]] =
+  private def doPoll(c: ByteArrayKafkaConsumer): IO[ConsumerError, ConsumerRecords[Array[Byte], Array[Byte]]] =
     ZIO.attempt {
       val recordsOrNull = c.poll(settings.pollTimeout)
       if (recordsOrNull eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]()
       else recordsOrNull
+    }.catchSome { case _: WakeupException =>
+      ZIO.interrupt
+    }.refineOrDie {
+      // These two exceptions would indicate zio-kafka programming errors
+      case e if !e.isInstanceOf[IllegalStateException] && !e.isInstanceOf[IllegalArgumentException] => e
+    }.mapError {
+      case e: AuthorizationException =>
+        AuthorizationError(e)
+      case e: AuthenticationException =>
+        AuthenticationError(e)
+      case e =>
+        UnknownConsumerException(e)
     }
       // Recover from spurious auth failures:
       .retry(
-        Schedule.recurWhileZIO[Any, Throwable] {
-          case _: AuthorizationException | _: AuthenticationException =>
+        Schedule.recurWhileZIO[Any, ConsumerError] {
+          case _: AuthorizationError | _: AuthenticationError =>
             consumerMetrics.observePollAuthError().as(true)
           case _ => ZIO.succeed(false)
         } &&
           settings.authErrorRetrySchedule
       )
 
-  private def handlePoll(state: State): Task[State] = {
+  private def handlePoll(state: State): IO[ConsumerError, State] = {
     for {
       partitionsToFetch <- settings.fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
       _ <- ZIO.logDebug(
@@ -545,7 +584,10 @@ private[consumer] final class Runloop private (
                                 // NOTE: the type annotation is needed to keep the IntelliJ compiler happy.
                                 _ <-
                                   committedOffsetsRef
-                                    .update(_.keepPartitions(updatedAssignedStreams.map(_.tp).toSet)): Task[Unit]
+                                    .update(_.keepPartitions(updatedAssignedStreams.map(_.tp).toSet)): IO[
+                                    ConsumerError,
+                                    Unit
+                                  ]
 
                                 _ <- consumerMetrics.observeRebalance(
                                        currentAssigned.size,
@@ -612,8 +654,8 @@ private[consumer] final class Runloop private (
       _ <- shutdown.when(anyExceeded)
     } yield ()
 
-  private def handleCommand(state: State, cmd: RunloopCommand.StreamCommand): Task[State] = {
-    def doChangeSubscription(newSubscriptionState: SubscriptionState): Task[State] =
+  private def handleCommand(state: State, cmd: RunloopCommand.StreamCommand): IO[ConsumerError, State] = {
+    def doChangeSubscription(newSubscriptionState: SubscriptionState): IO[ConsumerError, State] =
       applyNewSubscriptionState(newSubscriptionState).flatMap { newAssignedStreams =>
         val newState = state.copy(
           assignedStreams = state.assignedStreams ++ newAssignedStreams,
@@ -693,27 +735,45 @@ private[consumer] final class Runloop private (
 
   private def applyNewSubscriptionState(
     newSubscriptionState: SubscriptionState
-  ): Task[Chunk[PartitionStreamControl]] =
+  ): IO[ConsumerError, Chunk[PartitionStreamControl]] =
     consumer.runloopAccess { c =>
       newSubscriptionState match {
         case SubscriptionState.NotSubscribed =>
           ZIO
             .attempt(c.unsubscribe())
+            .refineOrDie { case e if !e.isInstanceOf[IllegalStateException] => e }
+            .mapError(UnknownConsumerException)
             .as(Chunk.empty)
         case SubscriptionState.Subscribed(_, Subscription.Pattern(pattern)) =>
           val rebalanceListener = makeRebalanceListener
           ZIO
             .attempt(c.subscribe(pattern.pattern, rebalanceListener))
+            .refineOrDie {
+              // This indicates zio-kafka programming errors, see subscribe() docs
+              case e if !e.isInstanceOf[IllegalStateException] && !e.isInstanceOf[IllegalArgumentException] => e
+            }
+            .mapError(UnknownConsumerException)
             .as(Chunk.empty)
         case SubscriptionState.Subscribed(_, Subscription.Topics(topics)) =>
           val rebalanceListener = makeRebalanceListener
           ZIO
             .attempt(c.subscribe(topics.asJava, rebalanceListener))
+            .refineOrDie {
+              // This indicates zio-kafka programming errors, see subscribe() docs
+              case e if !e.isInstanceOf[IllegalStateException] && !e.isInstanceOf[IllegalArgumentException] => e
+            }
+            .mapError(UnknownConsumerException)
             .as(Chunk.empty)
         case SubscriptionState.Subscribed(_, Subscription.Manual(topicPartitions)) =>
           // For manual subscriptions we have to do some manual work before starting the run loop
           for {
-            _                <- ZIO.attempt(c.assign(topicPartitions.asJava))
+            _ <- ZIO
+                   .attempt(c.assign(topicPartitions.asJava))
+                   .refineOrDie {
+                     // This indicates zio-kafka programming errors, see assign() docs
+                     case e if !e.isInstanceOf[IllegalStateException] => e
+                   }
+                   .mapError(UnknownConsumerException)
             _                <- doSeekForNewPartitions(c, topicPartitions)
             partitionStreams <- ZIO.foreach(Chunk.fromIterable(topicPartitions))(newPartitionStream)
             _                <- partitionsHub.publish(Take.chunk(partitionStreams.map(_.tpStream)))
@@ -733,7 +793,7 @@ private[consumer] final class Runloop private (
    *     - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *       initialization and rebalancing
    */
-  private def run(initialState: State): ZIO[Scope, Throwable, Any] = {
+  private def run(initialState: State): ZIO[Scope, Nothing, Any] = {
     import Runloop.StreamOps
 
     ZStream
@@ -760,6 +820,7 @@ private[consumer] final class Runloop private (
       }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitionsHub.offer(Take.failCause(cause)))
+      .ignore
   }
 
   private def observeRunloopMetrics(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ZIO[Any, Nothing, Unit] = {
@@ -859,7 +920,7 @@ object Runloop {
   private[internal] final case class Commit(
     createdAt: NanoTime,
     offsets: Map[TopicPartition, OffsetAndMetadata],
-    cont: Promise[Throwable, Unit]
+    cont: Promise[CommitError, Unit]
   ) {
     @inline def isDone: UIO[Boolean]    = cont.isDone
     @inline def isPending: UIO[Boolean] = isDone.negate
@@ -871,7 +932,7 @@ object Runloop {
     maxRebalanceDuration: Duration,
     diagnostics: Diagnostics,
     consumer: ConsumerAccess,
-    partitionsHub: Hub[Take[Throwable, PartitionAssignment]]
+    partitionsHub: Hub[Take[ConsumerError, PartitionAssignment]]
   ): URIO[Scope, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
@@ -905,7 +966,7 @@ object Runloop {
       // Run the entire loop on a dedicated thread to avoid executor shifts
       executor <- RunloopExecutor.newInstance
       fiber    <- ZIO.onExecutor(executor)(runloop.run(initialState)).forkScoped
-      waitForRunloopStop = fiber.join.orDie
+      waitForRunloopStop = fiber.join
 
       _ <- ZIO.addFinalizer(
              ZIO.logDebug("Shutting down Runloop") *>

@@ -2,6 +2,7 @@ package zio.kafka.example
 
 import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import zio._
+import zio.kafka.consumer.Consumer.ConsumerError
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.serde.Serde
@@ -49,7 +50,7 @@ object Main extends ZIOAppDefault {
       .withGroupId("test")
   }
 
-  private val runConsumerStream: ZIO[Consumer, Throwable, Unit] =
+  private val runConsumerStream: ZIO[Consumer, ConsumerError, Unit] =
     for {
       _ <- ZIO.logInfo("Consuming messages...")
       consumed <- Consumer
