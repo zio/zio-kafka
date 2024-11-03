@@ -67,7 +67,7 @@ When using partitionedStream with `flatMapPar(n)`, it is recommended to set n to
 
 ## Controlled shutdown
 
-The examples above will keep processing records forever, or until the fiber is interrupted, typically at application shutdown. When interrupted, some records may be 'in-flight', e.g. being processed by one of the stages of your consumer stream user code. Those records will not be processed fully and their offsets may not be committed. For fast shutdown in an at-least-once processing scenario this is fine. 
+The examples above will keep processing records forever, or until the fiber is interrupted, typically at application shutdown. When interrupted, some records may be 'in-flight', e.g. being processed by one of the stages of your consumer stream user code. Those records will be processed partly and their offsets may not be committed. For fast shutdown in an at-least-once processing scenario this is fine. 
 
 zio-kafka also supports a _graceful shutdown_, where the fetching of records for the subscribed topics/partitions is stopped, the streams are ended and all downstream stages are completed, allowing in-flight records to be fully processed.
 
