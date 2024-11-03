@@ -130,7 +130,7 @@ private[consumer] final class Runloop private (
       case object EndOffsetCommitPending extends EndOffsetCommitStatus
       case object EndOffsetCommitted     extends EndOffsetCommitStatus
 
-      case class StreamCompletionStatus(
+      final case class StreamCompletionStatus(
         tp: TopicPartition,
         isDone: Boolean,
         lastPulledOffset: Option[Long],
