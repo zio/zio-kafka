@@ -77,7 +77,11 @@ Use the `with*Stream` variants of `plainStream`, `partitionedStream` and `partit
 import zio.Console.printLine
 import zio.kafka.consumer._
 
-Consumer.withPartitionedStream(Subscription.topics("topic150"), Serde.string, Serde.string) { stream =>
+Consumer.withPartitionedStream(
+  Subscription.topics("topic150"), 
+  Serde.string, 
+  Serde.string
+) { stream =>
     stream.flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
         partitionStream
           .tap(record => printLine(s"key: ${record.key}, value: ${record.value}"))

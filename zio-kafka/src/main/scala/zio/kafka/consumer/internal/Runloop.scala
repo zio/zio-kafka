@@ -617,18 +617,15 @@ private[consumer] final class Runloop private (
       anyExceeded <- ZIO.foldLeft(streams)(false) { case (acc, stream) =>
                        stream
                          .maxPollIntervalExceeded(now)
-                         .tap(exceeded => if (exceeded) stream.halt else ZIO.unit)
+                         .tap { exceeded =>
+                           (ZIO
+                             .logWarning(
+                               s"Stream for ${stream.tp} has not pulled from upstream during the max poll interval"
+                             ) *> stream.halt)
+                             .when(exceeded)
+                         }
                          .map(acc || _)
                      }
-      _ <- ZIO.foreachDiscard(streams) { stream =>
-             stream
-               .maxPollIntervalExceeded(now)
-               .tap(exceeded =>
-                 ZIO
-                   .logWarning(s"Stream for ${stream.tp} has not pulled from upstream during the max poll interval")
-                   .when(exceeded)
-               )
-           }
       _ <- ZIO
              .logWarning("Shutting down Runloop because one or more streams exceeded the max poll interval")
              .when(anyExceeded)
@@ -724,7 +721,7 @@ private[consumer] final class Runloop private (
           _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end)
           _ <- partitionsHub.publish(Take.end)
           _ <- ZIO.logDebug("Stop all streams done")
-        } yield state.copy(pendingRequests = Chunk.empty)
+        } yield state.copy(pendingRequests = Chunk.empty, pendingCommits = Chunk.empty, assignedStreams = Chunk.empty)
     }
   }
 
