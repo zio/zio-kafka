@@ -769,7 +769,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                               clientId = clientId,
                               groupId = Some(groupId),
                               `max.poll.records` = 1,
-                              rebalanceSafeCommits = rebalanceSafeCommits
+                              rebalanceSafeCommits = rebalanceSafeCommits,
+                              maxRebalanceDuration = 30.seconds
                             )
                 consumer <- Consumer.make(settings)
               } yield consumer
@@ -863,7 +864,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           testForPartitionAssignmentStrategy[RangeAssignor],
           testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
-      }: _*),
+      }: _*) @@ TestAspect.sequential,
       test("partitions for topic doesn't fail if doesn't exist") {
         for {
           topic  <- randomTopic

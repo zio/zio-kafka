@@ -135,7 +135,10 @@ private[consumer] final class Runloop private (
         isDone: Boolean,
         lastPulledOffset: Option[Long],
         endOffsetCommitStatus: EndOffsetCommitStatus
-      )
+      ) {
+        override def toString: String =
+          s"${tp}: isDone=${isDone}, lastPulledOffset=${lastPulledOffset.getOrElse("none")}, endOffsetCommitStatus: ${endOffsetCommitStatus}"
+      }
 
       def getStreamCompletionStatuses(newCommits: Chunk[Commit]): ZIO[Any, Nothing, Chunk[StreamCompletionStatus]] =
         for {
@@ -162,11 +165,27 @@ private[consumer] final class Runloop private (
             }
         } yield streamResults
 
+      def logInitialStreamCompletionStatuses: ZIO[Any, Nothing, Unit] =
+        getStreamCompletionStatuses(newCommits = Chunk.empty).flatMap { completionStatuses =>
+          val statusStrings = completionStatuses.map(_.toString)
+          ZIO.logInfo(s"Waiting for ${streamsToEnd.size} streams to end: ${statusStrings.mkString("; ")}")
+        }
+
+      def logFinalStreamCompletionStatuses(newCommits: Chunk[Commit]): ZIO[Any, Nothing, Unit] =
+        getStreamCompletionStatuses(newCommits).flatMap { completionStatuses =>
+          val statusStrings = completionStatuses.map(_.toString)
+          ZIO
+            .logWarning(
+              s"Exceeded deadline waiting for streams to end, will continue with rebalance: ${statusStrings.mkString("; ")}"
+            )
+            .when(java.lang.System.nanoTime() >= deadline)
+        }.unit
+
       def endingStreamsCompletedAndCommitsExist(newCommits: Chunk[Commit]): Task[Boolean] =
         for {
           streamResults <- getStreamCompletionStatuses(newCommits)
         } yield streamResults.forall(status =>
-          (status.isDone || status.lastPulledOffset.isEmpty) && (status.endOffsetCommitStatus != EndOffsetNotCommitted)
+          status.lastPulledOffset.isEmpty || (status.isDone && status.endOffsetCommitStatus != EndOffsetNotCommitted)
         )
 
       def commitSync: Task[Unit] =
@@ -188,7 +207,7 @@ private[consumer] final class Runloop private (
       //
       // Note, we cannot use ZStream.fromQueue because that will emit nothing when the queue is empty.
       // Instead, we poll the queue in a loop.
-      ZIO.logDebug(s"Waiting for ${streamsToEnd.size} streams to end") *>
+      logInitialStreamCompletionStatuses *>
         ZStream
           .fromZIO(blockingSleep(commitQueuePollInterval) *> commitQueue.takeAll)
           .tap(commitAsync)
@@ -196,7 +215,9 @@ private[consumer] final class Runloop private (
           .takeWhile(_ => java.lang.System.nanoTime() <= deadline)
           .scan(Chunk.empty[Runloop.Commit])(_ ++ _)
           .takeUntilZIO(endingStreamsCompletedAndCommitsExist)
-          .runDrain *>
+          .runCollect
+          .map(_.flatten)
+          .flatMap(logFinalStreamCompletionStatuses) *>
         commitSync *>
         ZIO.logDebug(s"Done waiting for ${streamsToEnd.size} streams to end")
     }
