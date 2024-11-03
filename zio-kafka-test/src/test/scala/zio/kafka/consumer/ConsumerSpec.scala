@@ -770,7 +770,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                               groupId = Some(groupId),
                               `max.poll.records` = 1,
                               rebalanceSafeCommits = rebalanceSafeCommits,
-                              maxRebalanceDuration = 30.seconds
+                              maxRebalanceDuration = 60.seconds
                             )
                 consumer <- Consumer.make(settings)
               } yield consumer
