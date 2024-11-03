@@ -183,8 +183,10 @@ private[consumer] final class Runloop private (
 
       def endingStreamsCompletedAndCommitsExist(newCommits: Chunk[Commit]): Task[Boolean] =
         for {
-          streamResults <- getStreamCompletionStatuses(newCommits)
-        } yield streamResults.forall(status =>
+          completionStatuses <- getStreamCompletionStatuses(newCommits)
+          statusStrings = completionStatuses.map(_.toString)
+          _ <- ZIO.logDebug(s"Waiting for ${streamsToEnd.size} streams to end: ${statusStrings.mkString("; ")}")
+        } yield completionStatuses.forall(status =>
           status.lastPulledOffset.isEmpty || (status.isDone && status.endOffsetCommitStatus != EndOffsetNotCommitted)
         )
 
