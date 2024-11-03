@@ -125,35 +125,49 @@ private[consumer] final class Runloop private (
           ZIO.attempt(consumer.commitAsync(java.util.Collections.emptyMap(), null)).orDie
         }
 
-      def endingStreamsCompletedAndCommitsExist(newCommits: Chunk[Commit]): Task[Boolean] =
+      sealed trait EndOffsetCommitStatus
+      case object EndOffsetNotCommitted  extends EndOffsetCommitStatus
+      case object EndOffsetCommitPending extends EndOffsetCommitStatus
+      case object EndOffsetCommitted     extends EndOffsetCommitStatus
+
+      case class StreamCompletionStatus(
+        tp: TopicPartition,
+        isDone: Boolean,
+        lastPulledOffset: Option[Long],
+        endOffsetCommitStatus: EndOffsetCommitStatus
+      )
+
+      def getStreamCompletionStatuses(newCommits: Chunk[Commit]): ZIO[Any, Nothing, Chunk[StreamCompletionStatus]] =
         for {
+          committedOffsets <- committedOffsetsRef.get
+          allPendingCommitOffsets = (previousPendingCommits ++ commitsOfEndingStreams(newCommits)).flatMap(_.offsets)
           streamResults <-
             ZIO.foreach(streamsToEnd) { stream =>
               for {
                 isDone           <- stream.completedPromise.isDone
                 lastPulledOffset <- stream.lastPulledOffset
                 endOffset        <- if (isDone) stream.completedPromise.await else ZIO.none
-              } yield (isDone || lastPulledOffset.isEmpty, endOffset)
+
+                endOffsetCommitStatus = endOffset match {
+                                          case Some(endOffset)
+                                              if committedOffsets.contains(stream.tp, endOffset.offset) =>
+                                            EndOffsetCommitted
+                                          case Some(endOffset) if allPendingCommitOffsets.exists { case (tp, offset) =>
+                                                tp == stream.tp && offset.offset() >= endOffset.offset
+                                              } =>
+                                            EndOffsetCommitPending
+                                          case _ => EndOffsetNotCommitted
+                                        }
+              } yield StreamCompletionStatus(stream.tp, isDone, lastPulledOffset.map(_.offset), endOffsetCommitStatus)
             }
-          committedOffsets <- committedOffsetsRef.get
-        } yield {
-          val allStreamsCompleted = streamResults.forall(_._1)
-          allStreamsCompleted && {
-            val endOffsets: Chunk[Offset] = streamResults.flatMap(_._2)
-            val allPendingCommits         = previousPendingCommits ++ commitsOfEndingStreams(newCommits)
-            endOffsets.forall { endOffset =>
-              val tp                    = endOffset.topicPartition
-              val offset                = endOffset.offset
-              def endOffsetWasCommitted = committedOffsets.contains(tp, offset)
-              def endOffsetCommitIsPending = allPendingCommits.exists { pendingCommit =>
-                pendingCommit.offsets.get(tp).exists { pendingOffset =>
-                  pendingOffset.offset() >= offset
-                }
-              }
-              endOffsetWasCommitted || endOffsetCommitIsPending
-            }
-          }
-        }
+        } yield streamResults
+
+      def endingStreamsCompletedAndCommitsExist(newCommits: Chunk[Commit]): Task[Boolean] =
+        for {
+          streamResults <- getStreamCompletionStatuses(newCommits)
+        } yield streamResults.forall(status =>
+          (status.isDone || status.lastPulledOffset.isEmpty) && (status.endOffsetCommitStatus != EndOffsetNotCommitted)
+        )
 
       def commitSync: Task[Unit] =
         ZIO.attempt(consumer.commitSync(java.util.Collections.emptyMap(), commitTimeout))
