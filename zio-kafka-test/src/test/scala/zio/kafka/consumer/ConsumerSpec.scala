@@ -864,7 +864,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           testForPartitionAssignmentStrategy[RangeAssignor],
           testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
-      }: _*) @@ TestAspect.sequential,
+      }: _*),
       test("partitions for topic doesn't fail if doesn't exist") {
         for {
           topic  <- randomTopic
