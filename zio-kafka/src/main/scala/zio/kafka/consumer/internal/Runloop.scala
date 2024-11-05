@@ -171,17 +171,17 @@ private[consumer] final class Runloop private (
           ZIO.logInfo(s"Waiting for ${streamsToEnd.size} streams to end: ${statusStrings.mkString("; ")}")
         }
 
-      def logFinalStreamCompletionStatuses(newCommits: Chunk[Commit]): ZIO[Any, Nothing, Unit] =
+      def logFinalStreamCompletionStatuses(completed: Boolean, newCommits: Chunk[Commit]): ZIO[Any, Nothing, Unit] =
         getStreamCompletionStatuses(newCommits).flatMap { completionStatuses =>
-          val statusStrings = completionStatuses.map(_.toString)
           ZIO
             .logWarning(
-              s"Exceeded deadline waiting for streams to end, will continue with rebalance: ${statusStrings.mkString("; ")}"
+              s"Exceeded deadline waiting for streams to end, will continue with rebalance: ${completionStatuses.map(_.toString).mkString("; ")}"
             )
-            .when(java.lang.System.nanoTime() >= deadline)
-        }.unit
+        }
+          .unless(completed)
+          .unit
 
-      def endingStreamsCompletedAndCommitsExist(newCommits: Chunk[Commit]): Task[Boolean] =
+      def endingStreamsCompletedAndCommitsExist(newCommits: Chunk[Commit]): UIO[Boolean] =
         for {
           completionStatuses <- getStreamCompletionStatuses(newCommits)
           statusStrings = completionStatuses.map(_.toString)
@@ -216,10 +216,11 @@ private[consumer] final class Runloop private (
           .forever
           .takeWhile(_ => java.lang.System.nanoTime() <= deadline)
           .scan(Chunk.empty[Runloop.Commit])(_ ++ _)
-          .takeUntilZIO(endingStreamsCompletedAndCommitsExist)
-          .runCollect
-          .map(_.flatten)
-          .flatMap(logFinalStreamCompletionStatuses) *>
+          .mapZIO(commits => endingStreamsCompletedAndCommitsExist(commits).map((_, commits)))
+          .takeUntil { case (completed, commits @ _) => completed }
+          .runLast
+          .map(_.getOrElse((false, Chunk.empty)))
+          .flatMap { case (completed, commits) => logFinalStreamCompletionStatuses(completed, commits) } *>
         commitSync *>
         ZIO.logDebug(s"Done waiting for ${streamsToEnd.size} streams to end")
     }
