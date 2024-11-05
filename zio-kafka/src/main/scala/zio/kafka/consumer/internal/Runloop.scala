@@ -721,7 +721,7 @@ private[consumer] final class Runloop private (
           _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end)
           _ <- partitionsHub.publish(Take.end)
           _ <- ZIO.logDebug("Stop all streams done")
-        } yield state.copy(pendingRequests = Chunk.empty, pendingCommits = Chunk.empty, assignedStreams = Chunk.empty)
+        } yield state.copy(pendingRequests = Chunk.empty, assignedStreams = Chunk.empty)
     }
   }
 
