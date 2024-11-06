@@ -217,7 +217,7 @@ private[consumer] final class Runloop private (
           .takeWhile(_ => java.lang.System.nanoTime() <= deadline)
           .scan(Chunk.empty[Runloop.Commit])(_ ++ _)
           .mapZIO(commits => endingStreamsCompletedAndCommitsExist(commits).map((_, commits)))
-          .takeUntil { case (completed, commits @ _) => completed }
+          .takeUntil { case (completed, _) => completed }
           .runLast
           .map(_.getOrElse((false, Chunk.empty)))
           .flatMap { case (completed, commits) => logFinalStreamCompletionStatuses(completed, commits) } *>
