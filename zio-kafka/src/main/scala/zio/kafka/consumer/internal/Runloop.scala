@@ -175,7 +175,7 @@ private[consumer] final class Runloop private (
         getStreamCompletionStatuses(newCommits).flatMap { completionStatuses =>
           ZIO
             .logWarning(
-              s"Exceeded deadline waiting for streams to end, will continue with rebalance: ${completionStatuses.map(_.toString).mkString("; ")}"
+              s"Exceeded deadline waiting for streams to commit the offsets of the records they consumed; the rebalance will continue. This might cause another consumer to process some records again. ${completionStatuses.map(_.toString).mkString("; ")}"
             )
         }
           .unless(completed)
