@@ -186,9 +186,10 @@ private[consumer] final class Runloop private (
           completionStatuses <- getStreamCompletionStatuses(newCommits)
           statusStrings = completionStatuses.map(_.toString)
           _ <- ZIO.logDebug(s"Waiting for ${streamsToEnd.size} streams to end: ${statusStrings.mkString("; ")}")
-        } yield completionStatuses.forall(status =>
+        } yield completionStatuses.forall { status =>
+          // A stream is complete when it never got any records, or when it committed the offset of the last consumed record
           status.lastPulledOffset.isEmpty || (status.isDone && status.endOffsetCommitStatus != EndOffsetNotCommitted)
-        )
+        }
 
       def commitSync: Task[Unit] =
         ZIO.attempt(consumer.commitSync(java.util.Collections.emptyMap(), commitTimeout))
