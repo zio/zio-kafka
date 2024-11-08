@@ -2,13 +2,14 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
+import zio._
+import zio.kafka.consumer.Consumer.{ ConsumerError, InvalidSubscriptionUnion, PartitionStreamPullTimeout }
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription }
+import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
-import zio._
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -26,7 +27,7 @@ private[internal] object RunloopState {
  */
 private[consumer] final class RunloopAccess private (
   runloopStateRef: Ref.Synchronized[RunloopState],
-  partitionHub: Hub[Take[Throwable, PartitionAssignment]],
+  partitionHub: Hub[Take[ConsumerError, PartitionAssignment]],
   makeRunloop: UIO[Runloop],
   diagnostics: Diagnostics
 ) {
@@ -55,7 +56,7 @@ private[consumer] final class RunloopAccess private (
    */
   def subscribe(
     subscription: Subscription
-  ): ZIO[Scope, InvalidSubscriptionUnion, UStream[Take[Throwable, PartitionAssignment]]] =
+  ): ZIO[Scope, InvalidSubscriptionUnion, UStream[Take[ConsumerError, PartitionAssignment]]] =
     for {
       stream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
@@ -69,22 +70,22 @@ private[consumer] final class RunloopAccess private (
 }
 
 private[consumer] object RunloopAccess {
-  type PartitionAssignment = (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])
+  type PartitionAssignment = (TopicPartition, Stream[PartitionStreamPullTimeout, ByteArrayCommittableRecord])
 
   def make(
     settings: ConsumerSettings,
     consumerAccess: ConsumerAccess,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZIO[Scope, Throwable, RunloopAccess] =
+  ): ZIO[Scope, Nothing, RunloopAccess] =
     for {
-      maxPollInterval <- maxPollIntervalConfig(settings)
+      maxPollInterval <- ZIO.succeed(maxPollIntervalConfig(settings))
       // See scaladoc of [[ConsumerSettings.withMaxRebalanceDuration]]:
       maxRebalanceDuration = settings.maxRebalanceDuration.getOrElse(((maxPollInterval.toNanos / 5L) * 3L).nanos)
       // This scope allows us to link the lifecycle of the Runloop and of the Hub to the lifecycle of the Consumer
       // When the Consumer is shutdown, the Runloop and the Hub will be shutdown too (before the consumer)
       consumerScope <- ZIO.scope
       partitionsHub <- ZIO
-                         .acquireRelease(Hub.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
+                         .acquireRelease(Hub.unbounded[Take[ConsumerError, PartitionAssignment]])(_.shutdown)
                          .provide(ZLayer.succeed(consumerScope))
       runloopStateRef <- Ref.Synchronized.make[RunloopState](RunloopState.NotStarted)
       makeRunloop = Runloop
@@ -101,7 +102,7 @@ private[consumer] object RunloopAccess {
                       .provide(ZLayer.succeed(consumerScope))
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
 
-  private def maxPollIntervalConfig(settings: ConsumerSettings): Task[Duration] = ZIO.attempt {
+  private def maxPollIntervalConfig(settings: ConsumerSettings): Duration = {
     def defaultMaxPollInterval: Int = ConsumerConfig
       .configDef()
       .defaultValues()

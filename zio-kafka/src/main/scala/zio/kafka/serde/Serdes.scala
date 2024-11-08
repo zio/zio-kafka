@@ -3,6 +3,7 @@ package zio.kafka.serde
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Serde => KafkaSerde, Serdes => KafkaSerdes }
 import org.apache.kafka.common.utils.Bytes
+import zio.kafka.consumer.Consumer.DeserializationError
 import zio.{ RIO, ZIO }
 
 import java.nio.ByteBuffer
@@ -32,7 +33,11 @@ private[zio] trait Serdes {
       override final def serialize(topic: String, headers: Headers, value: Array[Byte]): RIO[Any, Array[Byte]] =
         ZIO.succeed(value)
 
-      override final def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[Any, Array[Byte]] =
+      override final def deserialize(
+        topic: String,
+        headers: Headers,
+        data: Array[Byte]
+      ): ZIO[Any, DeserializationError, Array[Byte]] =
         ZIO.succeed(data)
     }
 
@@ -41,8 +46,14 @@ private[zio] trait Serdes {
       private final val serializer   = serde.serializer()
       private final val deserializer = serde.deserializer()
 
-      override final def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[Any, T] =
-        ZIO.attempt(deserializer.deserialize(topic, headers, data))
+      override final def deserialize(
+        topic: String,
+        headers: Headers,
+        data: Array[Byte]
+      ): ZIO[Any, DeserializationError, T] =
+        ZIO
+          .attempt(deserializer.deserialize(topic, headers, data))
+          .mapError(e => DeserializationError(e.getMessage, Some(e)))
 
       override final def serialize(topic: String, headers: Headers, value: T): RIO[Any, Array[Byte]] =
         ZIO.attempt(serializer.serialize(topic, headers, value))

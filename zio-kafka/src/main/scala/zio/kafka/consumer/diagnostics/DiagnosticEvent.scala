@@ -2,6 +2,7 @@ package zio.kafka.consumer.diagnostics
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
+import zio.kafka.consumer.Consumer.CommitError
 
 sealed trait DiagnosticEvent
 object DiagnosticEvent {
@@ -17,7 +18,7 @@ object DiagnosticEvent {
   object Commit {
     final case class Started(offsets: Map[TopicPartition, OffsetAndMetadata])                   extends Commit
     final case class Success(offsets: Map[TopicPartition, OffsetAndMetadata])                   extends Commit
-    final case class Failure(offsets: Map[TopicPartition, OffsetAndMetadata], cause: Throwable) extends Commit
+    final case class Failure(offsets: Map[TopicPartition, OffsetAndMetadata], cause: CommitError) extends Commit
   }
 
   final case class Rebalance(

@@ -2,11 +2,12 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, OffsetAndMetadata }
 import org.apache.kafka.common.TopicPartition
-import zio.{ RIO, Schedule, Task, ZIO }
+import zio.kafka.consumer.Consumer.CommitError
+import zio.{ IO, Schedule, ZIO }
 
 sealed trait OffsetBatch {
   def offsets: Map[TopicPartition, OffsetAndMetadata]
-  def commit: Task[Unit]
+  def commit: IO[CommitError, Unit]
   def add(offset: Offset): OffsetBatch
   @deprecated("Use add(Offset) instead", "2.1.4")
   def merge(offset: Offset): OffsetBatch
@@ -17,7 +18,7 @@ sealed trait OffsetBatch {
    * Attempts to commit and retries according to the given policy when the commit fails with a
    * RetriableCommitFailedException
    */
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
+  def commitOrRetry[R](policy: Schedule[R, CommitError, Any]): ZIO[R, CommitError, Unit] =
     Offset.commitOrRetry(commit, policy)
 }
 
@@ -29,10 +30,10 @@ object OffsetBatch {
 
 private final case class OffsetBatchImpl(
   offsets: Map[TopicPartition, OffsetAndMetadata],
-  commitHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
+  commitHandle: Map[TopicPartition, OffsetAndMetadata] => IO[CommitError, Unit],
   consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) extends OffsetBatch {
-  override def commit: Task[Unit] = commitHandle(offsets)
+  override def commit: IO[CommitError, Unit] = commitHandle(offsets)
 
   override def add(offset: Offset): OffsetBatch = {
     val maxOffsetAndMetadata = offsets.get(offset.topicPartition) match {
@@ -64,7 +65,7 @@ private final case class OffsetBatchImpl(
 
 case object EmptyOffsetBatch extends OffsetBatch {
   override val offsets: Map[TopicPartition, OffsetAndMetadata]      = Map.empty
-  override val commit: Task[Unit]                                   = ZIO.unit
+  override val commit: IO[CommitError, Unit]                        = ZIO.unit
   override def add(offset: Offset): OffsetBatch                     = offset.batch
   override def merge(offset: Offset): OffsetBatch                   = add(offset)
   override def merge(offsets: OffsetBatch): OffsetBatch             = offsets

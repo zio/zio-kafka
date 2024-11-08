@@ -7,7 +7,9 @@ import org.apache.kafka.clients.consumer.{
   OffsetAndTimestamp
 }
 import org.apache.kafka.common._
+import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException }
 import zio._
+import zio.kafka.consumer.Consumer.{ CommitError, ConsumerError, PartitionStreamError }
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.diagnostics.Diagnostics.ConcurrentDiagnostics
@@ -17,7 +19,6 @@ import zio.kafka.utils.SslHelper
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
-import scala.util.control.NoStackTrace
 
 trait Consumer {
 
@@ -68,7 +69,7 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
+  ): Stream[ConsumerError, Chunk[(TopicPartition, ZStream[R, PartitionStreamError, CommittableRecord[K, V]])]]
 
   /**
    * Create a stream with messages on the subscribed topic-partitions by topic-partition
@@ -91,7 +92,7 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
+  ): Stream[ConsumerError, (TopicPartition, ZStream[R, PartitionStreamError, CommittableRecord[K, V]])]
 
   /**
    * Create a stream with all messages on the subscribed topic-partitions
@@ -116,7 +117,7 @@ trait Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
-  ): ZStream[R, Throwable, CommittableRecord[K, V]]
+  ): ZStream[R, ConsumerError, CommittableRecord[K, V]]
 
   /**
    * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
@@ -131,10 +132,10 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+    commitRetryPolicy: Schedule[Any, CommitError, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
   )(
     f: ConsumerRecord[K, V] => URIO[R1, Unit]
-  ): ZIO[R & R1, Throwable, Unit]
+  ): ZIO[R & R1, ConsumerError, Unit]
 
   /**
    * Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the earliest
@@ -161,12 +162,56 @@ trait Consumer {
 }
 
 object Consumer {
-  case object CommitTimeout extends RuntimeException("Commit timeout") with NoStackTrace
+  sealed trait ConsumerError {
+    def message: String
+  }
+
+  final case class AuthorizationError(cause: AuthorizationException) extends ConsumerError {
+    override def message: String = cause.getMessage
+  }
+
+  final case class AuthenticationError(cause: AuthenticationException) extends ConsumerError {
+    override def message: String = cause.getMessage
+  }
+
+  final case class SslValidationError(message: String) extends ConsumerError
+  final case class UnknownConsumerException(cause: Throwable) extends ConsumerError {
+    override def message: String = cause.getMessage
+  }
+  sealed trait SubscriptionError extends ConsumerError
+  final case class InvalidSubscriptionUnion(subscriptions: Chunk[Subscription]) extends SubscriptionError {
+    override def message: String = s"Unable to calculate union of subscriptions: ${subscriptions.mkString(",")}"
+  }
+  final case class InvalidTopic(topic: String, validationError: String) extends SubscriptionError {
+    override def message: String = s"Invalid topic '${topic}': ${validationError}"
+  }
+  final case class GetManualOffsetsError(cause: Throwable) extends ConsumerError {
+    override def message: String = s"Unable to retrieve manual offsets: ${cause.getMessage}"
+  }
+  sealed trait PartitionStreamError                                                       extends ConsumerError
+  final case class DeserializationError(message: String, cause: Option[Throwable] = None) extends PartitionStreamError
+  final case class PartitionStreamPullTimeout(topicPartition: TopicPartition, maxPollInterval: Duration)
+      extends PartitionStreamError {
+    override def message: String =
+      s"No records were polled for more than $maxPollInterval for topic partition $topicPartition. " +
+        "Use ConsumerSettings.withMaxPollInterval to set a longer interval if processing a batch of records " +
+        "needs more time."
+  }
+
+  sealed trait CommitError extends ConsumerError
+  object CommitError {
+    final case object CommitTimeout extends CommitError {
+      override def message: String = "Commit timed out"
+    }
+    final case class UnknownCommitException(cause: Throwable) extends CommitError {
+      override def message: String = cause.getMessage
+    }
+  }
 
   val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
 
-  def live: RLayer[ConsumerSettings & Diagnostics, Consumer] =
+  def live: ZLayer[ConsumerSettings & Diagnostics, ConsumerError, Consumer] =
     ZLayer.scoped {
       for {
         settings    <- ZIO.service[ConsumerSettings]
@@ -185,13 +230,15 @@ object Consumer {
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZIO[Scope, Throwable, Consumer] =
+  ): ZIO[Scope, SslValidationError, Consumer] =
     for {
       wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
       _                  <- ZIO.addFinalizer(wrappedDiagnostics.emit(Finalization.ConsumerFinalized))
-      _                  <- SslHelper.validateEndpoint(settings.driverSettings)
-      consumerAccess     <- ConsumerAccess.make(settings)
-      runloopAccess      <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
+      _ <- SslHelper
+             .validateEndpoint(settings.driverSettings)
+             .mapError(e => SslValidationError(e.getMessage))
+      consumerAccess <- ConsumerAccess.make(settings)
+      runloopAccess  <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**
@@ -203,7 +250,7 @@ object Consumer {
     javaConsumer: JConsumer[Array[Byte], Array[Byte]],
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
-  ): ZIO[Scope, Throwable, Consumer] =
+  ): ZIO[Scope, ConsumerError, Consumer] =
     for {
       _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
       consumerAccess <- ConsumerAccess.make(javaConsumer)
@@ -258,7 +305,9 @@ object Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): ZStream[Consumer, Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] =
+  ): ZStream[Consumer, ConsumerError, Chunk[
+    (TopicPartition, ZStream[R, PartitionStreamError, CommittableRecord[K, V]])
+  ]] =
     ZStream.serviceWithStream[Consumer](_.partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer))
 
   /**
@@ -270,8 +319,8 @@ object Consumer {
     valueDeserializer: Deserializer[R, V]
   ): ZStream[
     Consumer,
-    Throwable,
-    (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
+    ConsumerError,
+    (TopicPartition, ZStream[R, PartitionStreamError, CommittableRecord[K, V]])
   ] =
     ZStream.serviceWithStream[Consumer](_.partitionedStream(subscription, keyDeserializer, valueDeserializer))
 
@@ -283,7 +332,7 @@ object Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
-  ): ZStream[R & Consumer, Throwable, CommittableRecord[K, V]] =
+  ): ZStream[R & Consumer, ConsumerError, CommittableRecord[K, V]] =
     ZStream.serviceWithStream[Consumer](
       _.plainStream(subscription, keyDeserializer, valueDeserializer, bufferSize)
     )
@@ -354,7 +403,7 @@ object Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
-  )(f: ConsumerRecord[K, V] => URIO[R1, Unit]): RIO[R & R1, Unit] =
+  )(f: ConsumerRecord[K, V] => URIO[R1, Unit]): ZIO[R & R1, ConsumerError, Unit] =
     ZIO.scoped[R & R1] {
       Consumer
         .make(settings)
@@ -435,6 +484,7 @@ private[consumer] final class ConsumerLive private[consumer] (
   override def assignment: Task[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
 
+  // TODO should we change all of these too..?
   override def beginningOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
@@ -469,7 +519,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
+  ): Stream[ConsumerError, Chunk[(TopicPartition, ZStream[R, PartitionStreamError, CommittableRecord[K, V]])]] = {
     val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
 
     ZStream.unwrapScoped {
@@ -481,9 +531,9 @@ private[consumer] final class ConsumerLive private[consumer] (
         .map {
           _.collect {
             case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
-              val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
+              val stream: ZStream[R, PartitionStreamError, CommittableRecord[K, V]] =
                 if (onlyByteArraySerdes)
-                  partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
+                  partitionStream.asInstanceOf[ZStream[R, PartitionStreamError, CommittableRecord[K, V]]]
                 else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
 
               tp -> stream
@@ -496,7 +546,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): ZStream[Any, Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] =
+  ): ZStream[Any, ConsumerError, (TopicPartition, ZStream[R, PartitionStreamError, CommittableRecord[K, V]])] =
     partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer).flattenChunks
 
   override def plainStream[R, K, V](
@@ -504,7 +554,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int
-  ): ZStream[R, Throwable, CommittableRecord[K, V]] =
+  ): ZStream[R, ConsumerError, CommittableRecord[K, V]] =
     partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
       n = Int.MaxValue,
       bufferSize = bufferSize
@@ -518,10 +568,10 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
+    commitRetryPolicy: Schedule[Any, CommitError, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
   )(
     f: ConsumerRecord[K, V] => URIO[R1, Unit]
-  ): ZIO[R & R1, Throwable, Unit] =
+  ): ZIO[R & R1, ConsumerError, Unit] =
     for {
       r <- ZIO.environment[R & R1]
       _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)

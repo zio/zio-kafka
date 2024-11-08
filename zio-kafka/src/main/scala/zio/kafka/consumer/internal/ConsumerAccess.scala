@@ -48,7 +48,7 @@ private[consumer] final class ConsumerAccess(
 private[consumer] object ConsumerAccess {
   type ByteArrayKafkaConsumer = JConsumer[Array[Byte], Array[Byte]]
 
-  def make(settings: ConsumerSettings): ZIO[Scope, Throwable, ConsumerAccess] =
+  def make(settings: ConsumerSettings): ZIO[Scope, Nothing, ConsumerAccess] =
     for {
       consumer <- ZIO.acquireRelease {
                     ZIO.attemptBlocking {
@@ -57,14 +57,14 @@ private[consumer] object ConsumerAccess {
                         new ByteArrayDeserializer(),
                         new ByteArrayDeserializer()
                       )
-                    }
+                    }.orDie
                   } { consumer =>
                     ZIO.blocking(ZIO.attempt(consumer.close(settings.closeTimeout))).orDie
                   }
       result <- make(consumer)
     } yield result
 
-  def make(consumer: ByteArrayKafkaConsumer): ZIO[Scope, Throwable, ConsumerAccess] =
+  def make(consumer: ByteArrayKafkaConsumer): ZIO[Scope, Nothing, ConsumerAccess] =
     for {
       access <- Semaphore.make(1)
     } yield new ConsumerAccess(consumer, access)

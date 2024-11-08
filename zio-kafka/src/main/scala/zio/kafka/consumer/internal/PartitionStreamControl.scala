@@ -1,15 +1,13 @@
 package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
+import zio.kafka.consumer.Consumer.PartitionStreamPullTimeout
 import zio.kafka.consumer.Offset
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.PartitionStreamControl.QueueInfo
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.{ Take, ZStream }
 import zio.{ Chunk, Clock, Duration, LogAnnotation, Promise, Queue, Ref, UIO, ZIO }
-
-import java.util.concurrent.TimeoutException
-import scala.util.control.NoStackTrace
 
 abstract class PartitionStream {
   def tp: TopicPartition
@@ -36,9 +34,9 @@ abstract class PartitionStream {
  */
 final class PartitionStreamControl private (
   val tp: TopicPartition,
-  stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
-  dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
-  interruptionPromise: Promise[Throwable, Nothing],
+  stream: ZStream[Any, PartitionStreamPullTimeout, ByteArrayCommittableRecord],
+  dataQueue: Queue[Take[Nothing, ByteArrayCommittableRecord]],
+  interruptionPromise: Promise[PartitionStreamPullTimeout, Nothing],
   val completedPromise: Promise[Nothing, Option[Offset]],
   queueInfoRef: Ref[QueueInfo],
   maxPollInterval: Duration
@@ -85,13 +83,8 @@ final class PartitionStreamControl private (
     queueInfoRef.get.map(_.deadlineExceeded(now))
 
   /** To be invoked when the stream is no longer processing. */
-  private[internal] def halt: UIO[Boolean] = {
-    val timeOutMessage = s"No records were polled for more than $maxPollInterval for topic partition $tp. " +
-      "Use ConsumerSettings.withMaxPollInterval to set a longer interval if processing a batch of records " +
-      "needs more time."
-    val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
-    interruptionPromise.fail(consumeTimeout)
-  }
+  private[internal] def halt: UIO[Boolean] =
+    interruptionPromise.fail(PartitionStreamPullTimeout(tp, maxPollInterval))
 
   /** To be invoked when the partition was lost. It clears the queue and ends the stream. */
   private[internal] def lost: UIO[Unit] =
@@ -119,7 +112,8 @@ final class PartitionStreamControl private (
   private[internal] def isRunning: ZIO[Any, Nothing, Boolean] =
     isCompleted.negate
 
-  private[internal] val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
+  private[internal] val tpStream
+    : (TopicPartition, ZStream[Any, PartitionStreamPullTimeout, ByteArrayCommittableRecord]) =
     (tp, stream)
 }
 
@@ -142,12 +136,14 @@ object PartitionStreamControl {
 
     for {
       _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
-      interruptionPromise <- Promise.make[Throwable, Nothing]
+      interruptionPromise <- Promise.make[PartitionStreamPullTimeout, Nothing]
       completedPromise    <- Promise.make[Nothing, Option[Offset]]
-      dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
+      dataQueue           <- Queue.unbounded[Take[Nothing, ByteArrayCommittableRecord]]
       now                 <- Clock.nanoTime
       queueInfo           <- Ref.make(QueueInfo(now, 0, None, 0))
-      requestAndAwaitData =
+      requestAndAwaitData: ZIO[Any, PartitionStreamPullTimeout, Chunk[
+        Take[Nothing, ByteArrayCommittableRecord]
+      ]] =
         for {
           _ <- commandQueue.offer(RunloopCommand.Request(tp))
           _ <- diagnostics.emit(DiagnosticEvent.Request(tp))
@@ -174,7 +170,11 @@ object PartitionStreamControl {
                  }.flattenTake.chunksWith { s =>
                    s.tap(records => registerPull(queueInfo, records))
                      // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
-                     .mapZIO(chunk => interruptionPromise.await.whenZIO(interruptionPromise.isDone).as(chunk))
+                     .mapZIO(chunk =>
+                       interruptionPromise.await
+                         .whenZIO(interruptionPromise.isDone)
+                         .as(chunk)
+                     )
                  }
     } yield new PartitionStreamControl(
       tp,
