@@ -484,7 +484,8 @@ private[consumer] final class Runloop private (
       pollResult <-
         consumer.runloopAccess { c =>
           for {
-            _ <- verifyAssignedStreamsMatchesAssignment(state.assignedStreams, c.assignment().asScala.toSet)
+            assignment <- ZIO.attempt(c.assignment())
+            _          <- verifyAssignedStreamsMatchesAssignment(state.assignedStreams, assignment.asScala.toSet)
             resumeAndPauseCounts <- resumeAndPausePartitions(c, partitionsToFetch)
             (toResumeCount, toPauseCount) = resumeAndPauseCounts
 
