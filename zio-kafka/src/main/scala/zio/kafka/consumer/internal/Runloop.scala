@@ -143,7 +143,10 @@ private[consumer] final class Runloop private (
       def getStreamCompletionStatuses(newCommits: Chunk[Commit]): ZIO[Any, Nothing, Chunk[StreamCompletionStatus]] =
         for {
           committedOffsets <- committedOffsetsRef.get
-          allPendingCommitOffsets = (previousPendingCommits ++ commitsOfEndingStreams(newCommits)).flatMap(_.offsets)
+          allPendingCommitOffsets =
+            (previousPendingCommits ++ commitsOfEndingStreams(newCommits)).flatMap(_.offsets).map {
+              case (tp, offsetAndMetadata) => (tp, offsetAndMetadata.offset())
+            }
           streamResults <-
             ZIO.foreach(streamsToEnd) { stream =>
               for {
@@ -155,9 +158,8 @@ private[consumer] final class Runloop private (
                                           case Some(endOffset)
                                               if committedOffsets.contains(stream.tp, endOffset.offset) =>
                                             EndOffsetCommitted
-                                          case Some(endOffset) if allPendingCommitOffsets.exists { case (tp, offset) =>
-                                                tp == stream.tp && offset.offset() >= endOffset.offset
-                                              } =>
+                                          case Some(endOffset)
+                                              if allPendingCommitOffsets.contains((stream.tp, endOffset.offset)) =>
                                             EndOffsetCommitPending
                                           case _ => EndOffsetNotCommitted
                                         }
