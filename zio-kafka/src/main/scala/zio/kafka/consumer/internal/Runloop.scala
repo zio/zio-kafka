@@ -691,9 +691,7 @@ private[consumer] final class Runloop private (
           .as(
             state.copy(
               pendingRequests =
-                state.pendingRequests.filterNot(req => Subscription.subscriptionMatches(subscription, req.tp)),
-              assignedStreams =
-                state.assignedStreams.filterNot(stream => Subscription.subscriptionMatches(subscription, stream.tp))
+                state.pendingRequests.filterNot(req => Subscription.subscriptionMatches(subscription, req.tp))
             )
           )
 
