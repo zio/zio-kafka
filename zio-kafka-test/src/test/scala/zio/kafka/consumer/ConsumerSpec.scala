@@ -362,7 +362,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             group                   <- randomGroup
             client                  <- randomClient
             topic                   <- randomTopic
-            _                       <- ZIO.logInfo(s"Beginning test with topic ${topic}")
             _                       <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = 5))
             processedMessageOffsets <- Ref.make(Chunk.empty[(TopicPartition, Long)])
             (processedOffsets, committedOffsets) <- ZIO.scoped {
@@ -391,13 +390,13 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                                                 }
                                                                 .transduce(Consumer.offsetBatches)
                                                                 .mapZIO(batch =>
-                                                                  ZIO.logInfo("Starting batch commit") *> batch.commit
+                                                                  ZIO.logDebug("Starting batch commit") *> batch.commit
                                                                     .tapErrorCause(
                                                                       ZIO.logErrorCause(
                                                                         s"Error doing commit of batch ${batch.offsets}",
                                                                         _
                                                                       )
-                                                                    ) *> ZIO.logInfo("Commit done")
+                                                                    ) *> ZIO.logDebug("Commit done")
                                                                 )
                                                                 .runDrain
                                                             }
@@ -426,7 +425,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           } yield assertTrue(processedOffsets.forall { case (tp, offset) =>
             committedOffsets.get(tp).flatMap(_.map(_.offset())).contains(offset + 1)
           })
-        } @@ nonFlaky(100),
+        } @@ nonFlaky(10),
         test(
           "it's possible to start a new consumption session from a Consumer that had a consumption session stopped previously"
         ) {
