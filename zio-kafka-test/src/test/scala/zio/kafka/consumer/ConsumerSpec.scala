@@ -357,52 +357,76 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       } @@ TestAspect.nonFlaky(2),
       suite("streamWithGracefulShutdown")(
         test("runWithGracefulShutdown must end streams while still processing commits") {
-          val kvs   = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
-          val topic = "test-run-with-graceful-shutdown"
+          val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
           for {
-            group            <- randomGroup
-            client           <- randomClient
-            messagesReceived <- Ref.make[Int](0)
-            offset <- ZIO.scoped {
-                        for {
-                          stop <- Promise.make[Nothing, Unit]
-                          fib <-
-                            Consumer
-                              .withPartitionedStream[Any, String, String](
-                                Subscription.topics(topic),
-                                Serde.string,
-                                Serde.string
-                              ) { stream =>
-                                stream
-                                  .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
-                                    partitionStream.mapConcatZIO { record =>
-                                      for {
-                                        nr <- messagesReceived.updateAndGet(_ + 1)
-                                        _  <- stop.succeed(()).when(nr == 10)
-                                      } yield if (nr < 10) Seq(record.offset) else Seq.empty
-                                    }
-                                  }
-                                  .transduce(Consumer.offsetBatches)
-                                  .mapZIO(batch =>
-                                    ZIO.logInfo("Starting batch commit") *> batch.commit.tapErrorCause(
-                                      ZIO.logErrorCause(_)
-                                    ) *> ZIO.logInfo("Commit done")
-                                  )
-                                  .runDrain
-                              }
-                              .forkScoped
-                          _      <- produceMany(topic, kvs)
-                          _      <- stop.await *> fib.interrupt
-                          offset <- Consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
-                        } yield offset
-                      }.provideSomeLayer[Kafka with Producer](
-                        consumer(
-                          client,
-                          Some(group)
-                        )
-                      )
-          } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
-        } @@ nonFlaky(10),
+            group                   <- randomGroup
+            client                  <- randomClient
+            topic                   <- randomTopic
+            _                       <- ZIO.logInfo(s"Beginning test with topic ${topic}")
+            _                       <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = 5))
+            processedMessageOffsets <- Ref.make(Chunk.empty[(TopicPartition, Long)])
+            (processedOffsets, committedOffsets) <- ZIO.scoped {
+                                                      for {
+                                                        stop <- Promise.make[Nothing, Unit]
+                                                        fib <-
+                                                          Consumer
+                                                            .withPartitionedStream[Any, String, String](
+                                                              Subscription.topics(topic),
+                                                              Serde.string,
+                                                              Serde.string
+                                                            ) { stream =>
+                                                              stream
+                                                                .flatMapPar(Int.MaxValue) {
+                                                                  case (tp, partitionStream) =>
+                                                                    partitionStream.mapConcatZIO { record =>
+                                                                      for {
+                                                                        nr <- processedMessageOffsets
+                                                                                .updateAndGet(
+                                                                                  _ :+ (tp -> record.offset.offset)
+                                                                                )
+                                                                                .map(_.size)
+                                                                        _ <- stop.succeed(()).when(nr == 10)
+                                                                      } yield Seq(record.offset)
+                                                                    }
+                                                                }
+                                                                .transduce(Consumer.offsetBatches)
+                                                                .mapZIO(batch =>
+                                                                  ZIO.logInfo("Starting batch commit") *> batch.commit
+                                                                    .tapErrorCause(
+                                                                      ZIO.logErrorCause(
+                                                                        s"Error doing commit of batch ${batch.offsets}",
+                                                                        _
+                                                                      )
+                                                                    ) *> ZIO.logInfo("Commit done")
+                                                                )
+                                                                .runDrain
+                                                            }
+                                                            .forkScoped
+                                                        _ <- produceMany(topic, kvs)
+                                                        _ <- scheduledProduce(
+                                                               topic,
+                                                               Schedule.fixed(500.millis).jittered
+                                                             ).runDrain.forkScoped
+                                                        _                <- stop.await *> fib.interrupt
+                                                        processedOffsets <- processedMessageOffsets.get
+                                                        latestProcessedOffsets =
+                                                          processedOffsets.groupBy(_._1).map { case (tp, values) =>
+                                                            tp -> values.map(_._2).maxOption.getOrElse(0L)
+                                                          }
+                                                        tps = processedOffsets.map { case (tp, _) => tp }.toSet
+                                                        committedOffsets <- Consumer.committed(tps)
+                                                      } yield (latestProcessedOffsets, committedOffsets)
+                                                    }.provideSomeLayer[Kafka with Producer](
+                                                      consumer(
+                                                        client,
+                                                        Some(group),
+                                                        commitTimeout = 2.seconds // Detect issues with commits earlier
+                                                      )
+                                                    )
+          } yield assertTrue(processedOffsets.forall { case (tp, offset) =>
+            committedOffsets.get(tp).flatMap(_.map(_.offset())).contains(offset + 1)
+          })
+        } @@ nonFlaky(100),
         test(
           "it's possible to start a new consumption session from a Consumer that had a consumption session stopped previously"
         ) {
