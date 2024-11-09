@@ -580,7 +580,7 @@ private[consumer] final class Runloop private (
                               )
                           }
           } yield pollresult
-        }.uninterruptible // Make sure that calls to the consumer are completed, so that its single-thread access protection locks are released
+        }
       fulfillResult <- offerRecordsToStreams(
                          pollResult.assignedStreams,
                          pollResult.pendingRequests,
