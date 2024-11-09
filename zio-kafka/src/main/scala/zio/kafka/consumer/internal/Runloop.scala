@@ -956,7 +956,7 @@ object Runloop {
     pendingRequests: Chunk[RunloopCommand.Request],
     pendingCommits: Chunk[Runloop.Commit],
 
-    /**
+    /*
      * Streams for partitions that are currently assigned to this consumer.
      *
      * Before and after each rebalance, it should be consistent with the partitions that are assigned according to the
