@@ -745,16 +745,28 @@ private[consumer] final class ConsumerLive private[consumer] (
       for {
         innerScope <- ZIO.scopeWith(_.fork)
         control    <- streamControl.provideEnvironment(ZEnvironment(innerScope))
-        fib <-
-          (withStream(control.stream)
-            .onInterrupt(ZIO.logError("withStream in runWithGracefulShutdown was interrupted, this should not happen")))
-            .tapErrorCause(cause => ZIO.logErrorCause("Error in withStream fiber in runWithGracefulShutdown", cause))
-            .forkDaemon
+        fib <- ZIO.uninterruptibleMask { restore =>
+                 restore(withStream(control.stream))
+                   .onInterrupt(
+                     ZIO.logError("withStream in runWithGracefulShutdown was interrupted, this should not happen")
+                   )
+                   .tapErrorCause(cause =>
+                     ZIO.logErrorCause("Error in withStream fiber in runWithGracefulShutdown", cause)
+                   )
+                   .tap(_ => ZIO.logInfo("withStream in runWithGracefulShutdown is done"))
+               }.forkDaemon
         result <-
           fib.join.onInterrupt(
             control.stop *>
               fib.join
                 .timeout(shutdownTimeout)
+                .tapErrorCause(cause =>
+                  ZIO.logErrorCause("Error joining withStream fiber in runWithGracefulShutdown", cause)
+                )
+                .uninterruptible
+                // Without the forkDaemon.flatMap(_.join) the above tapErrorCause will be triggered sometimes with interrupted fiber errors. The exact cause of that is unknown.
+                .forkDaemon
+                .flatMap(_.join)
                 .tapErrorCause(cause =>
                   ZIO.logErrorCause("Error joining withStream fiber in runWithGracefulShutdown", cause)
                 )
