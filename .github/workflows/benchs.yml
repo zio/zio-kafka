@@ -94,6 +94,7 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         run: |
           echo "::group::Checkout gh-pages branch"
+          git config pull.rebase true
           git clean -fdx
           git checkout gh-pages
           git pull
