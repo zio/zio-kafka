@@ -760,7 +760,7 @@ private[consumer] final class ConsumerLive private[consumer] (
                 .tapErrorCause(cause =>
                   ZIO.logErrorCause("Error joining withStream fiber in runWithGracefulShutdown", cause)
                 )
-                // Without the forkDaemon.flatMap(_.join) the above tapErrorCause will sometimes be triggered with interrupted fiber errors. The exact cause of that is unknown.
+                // Workaround for https://github.com/zio/zio/issues/9288
                 .forkDaemon
                 .flatMap(_.join)
                 .tapErrorCause(cause =>
