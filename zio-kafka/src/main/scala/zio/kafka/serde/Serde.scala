@@ -40,6 +40,9 @@ trait Serde[-R, T] extends Deserializer[R, T] with Serializer[R, T] {
    */
   def inmapZIO[R1 <: R, U](f: T => RIO[R1, U])(g: U => RIO[R1, T]): Serde[R1, U] =
     Serde(mapZIO(f))(contramapZIO(g))
+
+  @deprecated("Use inmapZIO", since = "2.9.0")
+  def inmapM[R1 <: R, U](f: T => RIO[R1, U])(g: U => RIO[R1, T]): Serde[R1, U] = inmapZIO(f)(g)
 }
 
 object Serde extends Serdes {

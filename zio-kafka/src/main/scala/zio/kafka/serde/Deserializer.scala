@@ -34,6 +34,9 @@ trait Deserializer[-R, +T] {
    */
   def mapZIO[R1 <: R, U](f: T => RIO[R1, U]): Deserializer[R1, U] = Deserializer(deserialize(_, _, _).flatMap(f))
 
+  @deprecated("Use mapZIO", since = "2.9.0")
+  def mapM[R1 <: R, U](f: T => RIO[R1, U]): Deserializer[R1, U] = mapZIO(f)
+
   /**
    * When this serializer fails, attempt to deserialize with the alternative
    *
