@@ -6,8 +6,8 @@ sidebar_label: "Getting Started"
 
 [ZIO Kafka](https://github.com/zio/zio-kafka) is a Kafka client for ZIO. It provides a purely functional, streams-based interface to the Kafka client and integrates effortlessly with ZIO and ZIO Streams.
 
-Because ZIO Kafka does pre-fetching and concurrent processing of different partitions, ZIO-kafka has a _higher_
-throughput than using the Java Kafka client directly (see section [#performance] below).
+Because ZIO Kafka does pre-fetching and concurrent processing of different partitions, a ZIO-kafka consumer has a
+_higher_ throughput than using the Java Kafka client directly (see section [#performance] below).
 
 @PROJECT_BADGES@ [![Scala Steward badge](https://img.shields.io/badge/Scala_Steward-helping-blue.svg?style=flat&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAQCAMAAAARSr4IAAAAVFBMVEUAAACHjojlOy5NWlrKzcYRKjGFjIbp293YycuLa3pYY2LSqql4f3pCUFTgSjNodYRmcXUsPD/NTTbjRS+2jomhgnzNc223cGvZS0HaSD0XLjbaSjElhIr+AAAAAXRSTlMAQObYZgAAAHlJREFUCNdNyosOwyAIhWHAQS1Vt7a77/3fcxxdmv0xwmckutAR1nkm4ggbyEcg/wWmlGLDAA3oL50xi6fk5ffZ3E2E3QfZDCcCN2YtbEWZt+Drc6u6rlqv7Uk0LdKqqr5rk2UCRXOk0vmQKGfc94nOJyQjouF9H/wCc9gECEYfONoAAAAASUVORK5CYII=)](https://scala-steward.org)
 
@@ -140,8 +140,8 @@ Want to see your company here? [Submit a PR](https://github.com/zio/zio-kafka/ed
 
 ## Performance
 
-Because ZIO Kafka does pre-fetching and concurrent processing of different partitions, ZIO-kafka has a _higher_
-throughput than using the Java Kafka client directly. This is even true for ZIO Kafka's worse case situation
-—when processing is a no-op— like in our benchmark. On 2024-11-10, the throughput of ZIO Kafka was 15% higher than the
-throughput of the Java Kafka client (comparing benches `throughput` and `manualKafkaClients` on
+Because ZIO Kafka does pre-fetching and concurrent processing of different partitions, a ZIO-kafka consumer has a
+_higher_ throughput than using the Java Kafka client directly. This is even true for ZIO Kafka's worse case situation
+—when processing is a no-op— like in our benchmarks. On 2024-11-10, the throughput of ZIO Kafka was 15% higher than the
+throughput of the Java Kafka client (comparing benches `throughput` and `kafkaClients` on
 [benchmarks](https://zio.github.io/zio-kafka/dev/bench/)).
