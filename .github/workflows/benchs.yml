@@ -96,7 +96,8 @@ jobs:
           echo "::group::Checkout gh-pages branch"
           git clean -fdx
           git checkout gh-pages
-          git pull
+          git branch --set-upstream-to=origin/gh-pages gh-pages
+          git pull --rebase
           git config --global user.name "zio-kafka CI"
           git config --global user.email "ziokafkaci@users.noreply.github.com"
           echo "::endgroup::"
