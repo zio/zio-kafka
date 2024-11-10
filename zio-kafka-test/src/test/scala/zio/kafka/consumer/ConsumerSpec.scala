@@ -324,21 +324,20 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
       },
       test("process outstanding commits after a graceful shutdown with aggregateAsync using `maxRebalanceDuration`") {
-        val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
         for {
-          topic            <- randomTopic
-          group            <- randomGroup
-          client           <- randomClient
-          _                <- produceMany(topic, kvs)
-          messagesReceived <- Ref.make[Int](0)
+          topic               <- randomTopic
+          group               <- randomGroup
+          client              <- randomClient
+          _                   <- scheduledProduce(topic, Schedule.fixed(50.millis).jittered).runDrain.forkScoped
+          lastProcessedOffset <- Ref.make(0L)
           offset <- (
                       Consumer
                         .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
-                        .mapConcatZIO { record =>
+                        .mapZIO { record =>
                           for {
-                            nr <- messagesReceived.updateAndGet(_ + 1)
+                            nr <- lastProcessedOffset.updateAndGet(_ + 1)
                             _  <- Consumer.stopConsumption.when(nr == 10)
-                          } yield if (nr < 10) Seq(record.offset) else Seq.empty
+                          } yield record.offset
                         }
                         .aggregateAsync(Consumer.offsetBatches)
                         .mapZIO(_.commit)
@@ -354,7 +353,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                           maxRebalanceDuration = 6.seconds
                         )
                       )
-        } yield assertTrue(offset.map(_.offset).contains(9L))
+          lastOffset <- lastProcessedOffset.get
+        } yield assertTrue(offset.map(_.offset).contains(lastOffset))
       } @@ TestAspect.nonFlaky(2),
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
         // Setup of this test:
