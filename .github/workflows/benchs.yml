@@ -27,15 +27,16 @@ jobs:
     if: ${{ !github.event.pull_request.head.repo.fork }} # comes from https://github.com/orgs/community/discussions/25217#discussioncomment-3246904
     steps:
       - name: Checkout current branch
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Setup Java
-        uses: actions/setup-java@v4.2.1
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
           check-latest: true
+      - uses: VirtusLab/scala-cli-setup@main
       - name: Use CI sbt jvmopts
         shell: bash
         run: |
@@ -74,7 +75,7 @@ jobs:
           cat .jvmopts
 
       - name: Store benchmark result
-        uses: benchmark-action/github-action-benchmark@v1.20.4
+        uses: benchmark-action/github-action-benchmark@v1
         with:
           name: JMH Benchmark
           tool: 'jmh'
@@ -88,3 +89,17 @@ jobs:
           fail-on-alert: true
           # Mention these maintainers in the commit comment
           alert-comment-cc-users: '@svroonland,@guizmaii,@erikvanoosten'
+
+      - name: Prune benchmark history
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          echo "::group::Checkout gh-pages branch"
+          git clean -fdx
+          git checkout gh-pages
+          git pull
+          git config --global user.name "zio-kafka CI"
+          git config --global user.email "ziokafkaci@users.noreply.github.com"
+          echo "::endgroup::"
+          echo "Prune benchmark history"
+          scala-cli scripts/prune-benchmark-history.sc
+          git push
