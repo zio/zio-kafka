@@ -234,7 +234,7 @@ private[consumer] final class Runloop private (
       // Instead, we poll the queue in a loop.
       for {
         _ <- logInitialStreamCompletionStatuses
-        (completed, commits) <-
+        completedAndCommits <-
           ZStream
             .fromZIO(blockingSleep(commitQueuePollInterval) *> commitQueue.takeAll)
             .tap(commitAsync)
@@ -245,7 +245,7 @@ private[consumer] final class Runloop private (
             .takeUntil { case (completed, _) => completed }
             .runLast
             .map(_.getOrElse((false, Chunk.empty)))
-        _ <- logFinalStreamCompletionStatuses(completed, commits)
+        _ <- logFinalStreamCompletionStatuses(completedAndCommits._1, completedAndCommits._2)
         _ <- commitSync
         _ <- ZIO.logDebug(s"Done waiting for ${streamsToEnd.size} streams to end")
       } yield ()
