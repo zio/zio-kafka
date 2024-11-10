@@ -28,6 +28,7 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
+import java.util.concurrent.ExecutionException
 import scala.reflect.ClassTag
 
 //noinspection SimplifyAssertInspection
@@ -1377,9 +1378,13 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       }: _*) @@ TestAspect.nonFlaky(2),
       test("running streams don't stall after a poll timeout") {
         for {
-          topic      <- randomTopic
-          clientId   <- randomClient
-          _          <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic))
+          topic    <- randomTopic
+          clientId <- randomClient
+          _ <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic)).flatMap(ZIO.fromTry(_)).retryN(3).catchSome {
+                 case e: ExecutionException
+                     if e.getCause.isInstanceOf[org.apache.kafka.common.errors.TopicExistsException] =>
+                   ZIO.unit
+               }
           settings   <- consumerSettings(clientId)
           consumer   <- Consumer.make(settings.withPollTimeout(50.millis))
           recordsOut <- Queue.unbounded[Unit]
