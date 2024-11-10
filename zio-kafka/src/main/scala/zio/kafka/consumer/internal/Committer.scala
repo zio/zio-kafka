@@ -49,6 +49,8 @@ private[consumer] final class Committer(
    *
    * @param consumer
    *   Consumer with exclusive access
+   * @param executeOnEmpty
+   *   Execute commitAsync() even if there are no commits
    */
   def handleNewCommits(consumer: ByteArrayKafkaConsumer, executeOnEmpty: Boolean = false): Task[Unit] = for {
     commits <- commitQueue.takeAll
@@ -100,7 +102,7 @@ private[consumer] final class Committer(
         for {
           _ <- ZIO.logDebug(s"Rebalance in progress, commit for offsets $offsets will be retried")
           _ <- commitQueue.offerAll(commits)
-          _ <- onCommitAvailable //
+          _ <- onCommitAvailable
         } yield ()
       case err: Throwable =>
         cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsetsWithMetaData, err))
