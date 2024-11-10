@@ -6566,12 +6566,6 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecord",
-            "value": 836.9918283702766,
-            "unit": "ops/s",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
             "value": 538.7609206399998,
             "unit": "ms/op",
@@ -6580,12 +6574,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
             "value": 537.2937194799999,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceChunk",
-            "value": 1583.0633026000005,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
@@ -6638,12 +6626,6 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecord",
-            "value": 1034.1189216838677,
-            "unit": "ops/s",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
             "value": 539.61155154,
             "unit": "ms/op",
@@ -6652,12 +6634,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
             "value": 539.73865256,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceChunk",
-            "value": 1362.2028678800002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
@@ -6710,12 +6686,6 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecord",
-            "value": 989.2033979838758,
-            "unit": "ops/s",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
             "value": 537.24087234,
             "unit": "ms/op",
@@ -6724,12 +6694,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
             "value": 537.0023837599999,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceChunk",
-            "value": 1704.37356356,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
@@ -6782,12 +6746,6 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecord",
-            "value": 1104.6520228720394,
-            "unit": "ops/s",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
             "value": 536.3351296799999,
             "unit": "ms/op",
@@ -6796,12 +6754,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
             "value": 536.5726267800001,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceChunk",
-            "value": 1409.5920889600002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
@@ -6854,12 +6806,6 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecord",
-            "value": 1230.9566936495303,
-            "unit": "ops/s",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
             "value": 537.37914624,
             "unit": "ms/op",
@@ -6868,12 +6814,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
             "value": 537.99463692,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceChunk",
-            "value": 1213.85611752,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
@@ -6926,12 +6866,6 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecord",
-            "value": 1024.3044145913402,
-            "unit": "ops/s",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
             "value": 539.2284808999999,
             "unit": "ms/op",
@@ -6940,12 +6874,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
             "value": 538.69968092,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceChunk",
-            "value": 1530.6009787200005,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
@@ -6998,12 +6926,6 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecord",
-            "value": 928.9065302817829,
-            "unit": "ops/s",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
             "value": 537.33985352,
             "unit": "ms/op",
@@ -7012,12 +6934,6 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
             "value": 537.2424592799999,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.ProducerBenchmark.produceChunk",
-            "value": 2258.7187468,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
