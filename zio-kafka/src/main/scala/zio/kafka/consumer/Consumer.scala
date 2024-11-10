@@ -216,15 +216,17 @@ object Consumer {
    * Create a zio-kafka [[Consumer]] from an `org.apache.kafka KafkaConsumer`.
    *
    * You are responsible for all of the following:
-   *  - creating and closing the `KafkaConsumer`,
-   *  - making sure `auto.commit` is disabled,
-   *  - creating `access` as a fair semaphore with a single permit,
-   *  - acquire a permit from `access` before using the consumer, and release if afterwards,
-   *  - not using the following consumer methods: `subscribe`, `unsubscribe`, `assign`, `poll`, `commit*`, `seek`, `pause`, `resume`, and `enforceRebalance`.
+   *   - creating and closing the `KafkaConsumer`,
+   *   - making sure `auto.commit` is disabled,
+   *   - creating `access` as a fair semaphore with a single permit,
+   *   - acquire a permit from `access` before using the consumer, and release if afterwards,
+   *   - not using the following consumer methods: `subscribe`, `unsubscribe`, `assign`, `poll`, `commit*`, `seek`,
+   *     `pause`, `resume`, and `enforceRebalance`.
    *
    * Any deviation of these rules is likely to cause hard to track errors.
    *
-   * Semaphore `access` is shared between you and the zio-kafka consumer. Use it as short as possible; while you hold a permit the zio-kafka consumer is blocked.
+   * Semaphore `access` is shared between you and the zio-kafka consumer. Use it as short as possible; while you hold a
+   * permit the zio-kafka consumer is blocked.
    *
    * @param javaConsumer
    *   Consumer
