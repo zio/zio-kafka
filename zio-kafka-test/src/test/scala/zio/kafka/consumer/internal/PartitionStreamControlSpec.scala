@@ -2,12 +2,12 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
+import zio._
+import zio.kafka.consumer.CommittableRecord
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.test.Assertion._
 import zio.test._
-import zio._
-import zio.kafka.consumer.CommittableRecord
 
 import java.util.concurrent.TimeoutException
 
@@ -129,20 +129,28 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
       }
     ),
     suite("Offset Tracking")(
-      test("lastPulledOffset updates correctly") {
+      test("lastPulledOffset updates correctly after each pull") {
         for {
           control <- createTestControl
           records = createTestRecords(6)
-          _       <- control.offerRecords(records.take(3))
-          _       <- control.offerRecords(records.slice(3, 5))
-          _       <- control.stream.take(3).runCollect
-          offset1 <- control.lastPulledOffset
-          _       <- control.stream.take(3).runCollect
-          offset2 <- control.lastPulledOffset
-        } yield assertTrue(offset1.get.offset == 3L && offset2.get.offset == 6L)
+          _ <- control.offerRecords(records.take(3))
+          offerNextBatch = control.offerRecords(records.slice(3, 6))
+
+          offsetsAfterChunks <- Ref.make(Chunk.empty[Option[Long]])
+          _ <- {
+            def updateLastPulledOffsets =
+              control.lastPulledOffset.flatMap(offset => offsetsAfterChunks.update(_ :+ offset.map(_.offset)))
+
+            updateLastPulledOffsets *> control.stream
+              .mapChunksZIO(updateLastPulledOffsets *> offerNextBatch.as(_))
+              .take(6)
+              .runCollect
+          }
+          lastPulledOffsets <- offsetsAfterChunks.get
+        } yield assertTrue(lastPulledOffsets == Chunk(None, Some(3L), Some(6L)))
       }
     )
-  )
+  ) @@ TestAspect.withLiveClock @@ TestAspect.timeout(1.minute)
 
   private def createTestControl: ZIO[Any, Nothing, PartitionStreamControl] =
     createTestControlWithRequestData(ZIO.unit)
