@@ -31,8 +31,8 @@ abstract class PartitionStream {
  *   the last pulled offset (if any). The promise completes when the stream completed.
  * @param queueInfoRef
  *   used to track the stream's pull deadline, its queue size, and last pulled offset
- * @param maxPollInterval
- *   see [[zio.kafka.consumer.ConsumerSettings.withMaxPollInterval()]]
+ * @param streamHaltDetectionTimeout
+ *   see [[zio.kafka.consumer.ConsumerSettings.withStreamHaltDetectionTimeout()]]
  */
 final class PartitionStreamControl private (
   val tp: TopicPartition,
@@ -41,9 +41,9 @@ final class PartitionStreamControl private (
   interruptionPromise: Promise[Throwable, Nothing],
   val completedPromise: Promise[Nothing, Option[Offset]],
   queueInfoRef: Ref[QueueInfo],
-  maxPullInterval: Duration
+  streamHaltDetectionTimeout: Duration
 ) extends PartitionStream {
-  private val maxPullIntervalNanos = maxPullInterval.toNanos
+  private val maxPullIntervalNanos = streamHaltDetectionTimeout.toNanos
 
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),
@@ -81,12 +81,12 @@ final class PartitionStreamControl private (
    *   `true` when the stream has data available, but none has been pulled for more than `maxPollInterval` (since data
    *   became available), `false` otherwise
    */
-  private[internal] def maxPullIntervalExceeded(now: NanoTime): UIO[Boolean] =
+  private[internal] def streamHaltDetectionTimeoutExceeded(now: NanoTime): UIO[Boolean] =
     queueInfoRef.get.map(_.deadlineExceeded(now))
 
   /** To be invoked when the stream is no longer processing. */
   private[internal] def halt: UIO[Unit] = {
-    val timeOutMessage = s"No records were polled for more than $maxPullInterval for topic partition $tp. " +
+    val timeOutMessage = s"No records were polled for more than $streamHaltDetectionTimeout for topic partition $tp. " +
       "Use ConsumerSettings.withMaxPollInterval to set a longer interval if processing a batch of records " +
       "needs more time."
     val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace

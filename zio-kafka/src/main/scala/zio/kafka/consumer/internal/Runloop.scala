@@ -609,7 +609,7 @@ private[consumer] final class Runloop private (
       now <- Clock.nanoTime
       anyExceeded <- ZIO.foldLeft(streams)(false) { case (acc, stream) =>
                        stream
-                         .maxPullIntervalExceeded(now)
+                         .streamHaltDetectionTimeoutExceeded(now)
                          .tap(ZIO.when(_)(ZIO.logWarning(s"Stream for ${stream.tp} has exceeded ")))
                          .tap(exceeded => if (exceeded) stream.halt else ZIO.unit)
                          .map(acc || _)

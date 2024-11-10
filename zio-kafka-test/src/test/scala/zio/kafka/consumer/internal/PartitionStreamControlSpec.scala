@@ -114,7 +114,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
         for {
           control  <- createTestControl
           now      <- Clock.nanoTime
-          exceeded <- control.maxPullIntervalExceeded(now)
+          exceeded <- control.streamHaltDetectionTimeoutExceeded(now)
         } yield assertTrue(!exceeded)
       },
       test("maxPollIntervalExceeded returns true after timeout") {
@@ -123,7 +123,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           _       <- control.offerRecords(createTestRecords(1))
           now     <- Clock.nanoTime
           futureTime = now + Duration.fromSeconds(31).toNanos
-          exceeded <- control.maxPullIntervalExceeded(futureTime)
+          exceeded <- control.streamHaltDetectionTimeoutExceeded(futureTime)
         } yield assertTrue(exceeded)
       }
     ),
