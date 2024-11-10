@@ -25,7 +25,6 @@ private[consumer] final class Runloop private (
   topLevelExecutor: Executor,
   sameThreadRuntime: Runtime[Any],
   consumer: ConsumerAccess,
-  maxPollInterval: Duration,
   commitQueue: Queue[Commit],
   commandQueue: Queue[RunloopCommand],
   lastRebalanceEvent: Ref.Synchronized[Runloop.RebalanceEvent],
@@ -44,7 +43,7 @@ private[consumer] final class Runloop private (
   private val consumerMetrics = new ZioConsumerMetrics(settings.metricLabels)
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
-    PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, maxPollInterval)
+    PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, settings.streamHaltDetectionTimeout)
 
   def stopConsumption: UIO[Unit] =
     ZIO.logDebug("stopConsumption called") *>
@@ -597,15 +596,16 @@ private[consumer] final class Runloop private (
   }
 
   /**
-   * Check each stream to see if it exceeded its poll interval. If so, halt it. In addition, if any stream has exceeded
-   * its poll interval, shutdown the consumer.
+   * Check each stream to see if it exceeded its pull interval. If so, halt it. In addition, if any stream has exceeded
+   * its pull interval, shutdown the consumer.
    */
   private def checkStreamPollInterval(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Unit] =
     for {
       now <- Clock.nanoTime
       anyExceeded <- ZIO.foldLeft(streams)(false) { case (acc, stream) =>
                        stream
-                         .maxPollIntervalExceeded(now)
+                         .maxPullIntervalExceeded(now)
+                         .tap(ZIO.when(_)(ZIO.logWarning(s"Stream for ${stream.tp} has exceeded ")))
                          .tap(exceeded => if (exceeded) stream.halt else ZIO.unit)
                          .map(acc || _)
                      }
@@ -867,7 +867,6 @@ object Runloop {
 
   private[consumer] def make(
     settings: ConsumerSettings,
-    maxPollInterval: Duration,
     maxRebalanceDuration: Duration,
     diagnostics: Diagnostics,
     consumer: ConsumerAccess,
@@ -888,7 +887,6 @@ object Runloop {
                   topLevelExecutor = executor,
                   sameThreadRuntime = sameThreadRuntime,
                   consumer = consumer,
-                  maxPollInterval = maxPollInterval,
                   commitQueue = commitQueue,
                   commandQueue = commandQueue,
                   lastRebalanceEvent = lastRebalanceEvent,

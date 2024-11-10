@@ -41,9 +41,9 @@ final class PartitionStreamControl private (
   interruptionPromise: Promise[Throwable, Nothing],
   val completedPromise: Promise[Nothing, Option[Offset]],
   queueInfoRef: Ref[QueueInfo],
-  maxPollInterval: Duration
+  maxPullInterval: Duration
 ) extends PartitionStream {
-  private val maxPollIntervalNanos = maxPollInterval.toNanos
+  private val maxPullIntervalNanos = maxPullInterval.toNanos
 
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),
@@ -57,7 +57,7 @@ final class PartitionStreamControl private (
     } else {
       for {
         now <- Clock.nanoTime
-        newPullDeadline = now + maxPollIntervalNanos
+        newPullDeadline = now + maxPullIntervalNanos
         _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
         _ <- dataQueue.offer(Take.chunk(data))
       } yield ()
@@ -81,16 +81,16 @@ final class PartitionStreamControl private (
    *   `true` when the stream has data available, but none has been pulled for more than `maxPollInterval` (since data
    *   became available), `false` otherwise
    */
-  private[internal] def maxPollIntervalExceeded(now: NanoTime): UIO[Boolean] =
+  private[internal] def maxPullIntervalExceeded(now: NanoTime): UIO[Boolean] =
     queueInfoRef.get.map(_.deadlineExceeded(now))
 
   /** To be invoked when the stream is no longer processing. */
   private[internal] def halt: UIO[Boolean] = {
-    val timeOutMessage = s"No records were polled for more than $maxPollInterval for topic partition $tp. " +
+    val timeOutMessage = s"No records were polled for more than $maxPullInterval for topic partition $tp. " +
       "Use ConsumerSettings.withMaxPollInterval to set a longer interval if processing a batch of records " +
       "needs more time."
     val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
-    interruptionPromise.fail(consumeTimeout)
+    ZIO.logWarning(timeOutMessage) *> interruptionPromise.fail(consumeTimeout)
   }
 
   /** To be invoked when the partition was lost. It clears the queue and ends the stream. */
@@ -129,14 +129,14 @@ object PartitionStreamControl {
     tp: TopicPartition,
     commandQueue: Queue[RunloopCommand],
     diagnostics: Diagnostics,
-    maxPollInterval: Duration
+    streamHaltDetectionTimeout: Duration
   ): UIO[PartitionStreamControl] = {
-    val maxPollIntervalNanos = maxPollInterval.toNanos
+    val streamHaltDetectionTimeoutNanos = streamHaltDetectionTimeout.toNanos
 
     def registerPull(queueInfo: Ref[QueueInfo], records: Chunk[ByteArrayCommittableRecord]): UIO[Unit] =
       for {
         now <- Clock.nanoTime
-        newPullDeadline = now + maxPollIntervalNanos
+        newPullDeadline = now + streamHaltDetectionTimeoutNanos
         _ <- queueInfo.update(_.withPull(newPullDeadline, records))
       } yield ()
 
@@ -183,7 +183,7 @@ object PartitionStreamControl {
       interruptionPromise,
       completedPromise,
       queueInfo,
-      maxPollInterval
+      streamHaltDetectionTimeout
     )
   }
 

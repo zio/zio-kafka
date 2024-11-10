@@ -90,7 +90,6 @@ private[consumer] object RunloopAccess {
       makeRunloop = Runloop
                       .make(
                         settings = settings,
-                        maxPollInterval = maxPollInterval,
                         maxRebalanceDuration = maxRebalanceDuration,
                         diagnostics = diagnostics,
                         consumer = consumerAccess,
