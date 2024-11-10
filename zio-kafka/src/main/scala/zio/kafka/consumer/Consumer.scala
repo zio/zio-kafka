@@ -221,21 +221,21 @@ object Consumer {
    *   Consumer
    * @param settings
    *   Settings
-   * @param exclusiveAccessSemaphore
+   * @param permit
    *   A Semaphore with 1 permit, used to prevent concurrent access to the consumer. You must use this when making calls
    *   to `javaConsumer`.
    * @param diagnostics
    *   Optional diagnostics listener
    */
-  def fromJavaConsumer(
+  def fromJavaConsumerWithPermit(
     javaConsumer: JConsumer[Array[Byte], Array[Byte]],
     settings: ConsumerSettings,
-    exclusiveAccessSemaphore: Semaphore,
+    permit: Semaphore,
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
       _ <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
-      consumerAccess = new ConsumerAccess(javaConsumer, exclusiveAccessSemaphore)
+      consumerAccess = new ConsumerAccess(javaConsumer, permit)
       runloopAccess <- RunloopAccess.make(settings, consumerAccess, diagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
