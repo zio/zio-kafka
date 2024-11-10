@@ -733,7 +733,7 @@ private[consumer] final class Runloop private (
    *     - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *       initialization and rebalancing
    */
-  private def run(initialState: State): ZIO[Any, Throwable, Any] = {
+  private def run(initialState: State): ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
 
     ZStream
@@ -905,12 +905,12 @@ object Runloop {
       // Run the entire loop on a dedicated thread to avoid executor shifts
       executor <- RunloopExecutor.newInstance
       fiber    <- ZIO.onExecutor(executor)(runloop.run(initialState)).forkScoped
-      waitForRunloopStop = fiber.join
+      waitForRunloopStop = fiber.join.orDie
 
       _ <- ZIO.addFinalizer(
              ZIO.logDebug("Shutting down Runloop") *>
                runloop.shutdown *>
-               waitForRunloopStop.tapErrorCause(c => ZIO.logErrorCause("Error waiting for Runloop stop", c)).orDie <*
+               waitForRunloopStop <*
                ZIO.logDebug("Shut down Runloop")
            )
     } yield runloop

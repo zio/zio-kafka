@@ -60,10 +60,7 @@ private[consumer] object ConsumerAccess {
                       )
                     }
                   } { consumer =>
-                    ZIO
-                      .blocking(access.withPermit(ZIO.attempt(consumer.close(settings.closeTimeout))))
-                      .tapErrorCause(c => ZIO.logErrorCause("Error closing Runloop", c))
-                      .orDie
+                    ZIO.blocking(access.withPermit(ZIO.attempt(consumer.close(settings.closeTimeout)))).orDie
                   }
     } yield new ConsumerAccess(consumer, access)
 
