@@ -195,8 +195,8 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
   ): ZIO[Scope, Throwable, TestResult] =
     ZIO.scoped {
       for {
-        permit <- Semaphore.make(1)
-        consumerAccess = new ConsumerAccess(mockConsumer, permit)
+        access <- Semaphore.make(1)
+        consumerAccess = new ConsumerAccess(mockConsumer, access)
         consumerScope <- ZIO.scope
         partitionsHub <- ZIO
                            .acquireRelease(Hub.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
