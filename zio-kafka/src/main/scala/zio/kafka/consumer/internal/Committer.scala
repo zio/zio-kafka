@@ -33,7 +33,7 @@ private[consumer] final class Committer(
       for {
         p <- Promise.make[Throwable, Unit]
         startTime = java.lang.System.nanoTime()
-        _ <- commitQueue.offer(Commit(java.lang.System.nanoTime(), offsets, p))
+        _ <- commitQueue.offer(Commit(startTime, offsets, p))
         _ <- onCommitAvailable
         _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
