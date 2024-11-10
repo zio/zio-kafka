@@ -63,9 +63,4 @@ private[consumer] object ConsumerAccess {
                     ZIO.blocking(access.withPermit(ZIO.attempt(consumer.close(settings.closeTimeout)))).orDie
                   }
     } yield new ConsumerAccess(consumer, access)
-
-  def make(consumer: ByteArrayKafkaConsumer): ZIO[Scope, Throwable, ConsumerAccess] =
-    for {
-      access <- Semaphore.make(1)
-    } yield new ConsumerAccess(consumer, access)
 }
