@@ -44,7 +44,12 @@ private[consumer] final class Runloop private (
   private val consumerMetrics = new ZioConsumerMetrics(settings.metricLabels)
 
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
-    PartitionStreamControl.newPartitionStream(tp, commandQueue, diagnostics, maxPollInterval)
+    PartitionStreamControl.newPartitionStream(
+      tp,
+      commandQueue.offer(RunloopCommand.Request(tp)).unit,
+      diagnostics,
+      maxPollInterval
+    )
 
   def stopConsumption: UIO[Unit] =
     ZIO.logDebug("stopConsumption called") *>
