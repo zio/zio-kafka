@@ -195,7 +195,11 @@ private[internal] class RunloopRebalanceListener(
                          else Chunk.empty
           _ <- endStreams(streamsToEnd)
           _ <- ZIO.logTrace("onAssigned done")
-        } yield rebalanceEvent.onAssigned(assignedTps, endedStreams = streamsToEnd)
+        } yield rebalanceEvent.copy(
+          wasInvoked = true,
+          assignedTps = rebalanceEvent.assignedTps ++ assignedTps,
+          endedStreams = rebalanceEvent.endedStreams ++ streamsToEnd
+        )
       },
     onRevoked = revokedTps =>
       withLastRebalanceEvent { rebalanceEvent =>
@@ -209,7 +213,12 @@ private[internal] class RunloopRebalanceListener(
                          else assignedStreams.filter(control => revokedTps.contains(control.tp))
           _ <- endStreams(streamsToEnd)
           _ <- ZIO.logTrace("onRevoked done")
-        } yield rebalanceEvent.onRevoked(revokedTps, endedStreams = streamsToEnd)
+        } yield rebalanceEvent.copy(
+          wasInvoked = true,
+          assignedTps = rebalanceEvent.assignedTps -- revokedTps,
+          revokedTps = rebalanceEvent.revokedTps ++ revokedTps,
+          endedStreams = rebalanceEvent.endedStreams ++ streamsToEnd
+        )
       },
     onLost = lostTps =>
       withLastRebalanceEvent { rebalanceEvent =>
@@ -219,7 +228,12 @@ private[internal] class RunloopRebalanceListener(
           lostStreams = assignedStreams.filter(control => lostTps.contains(control.tp))
           _ <- ZIO.foreachDiscard(lostStreams)(_.lost)
           _ <- ZIO.logTrace(s"onLost done")
-        } yield rebalanceEvent.onLost(lostTps, lostStreams)
+        } yield rebalanceEvent.copy(
+          wasInvoked = true,
+          assignedTps = rebalanceEvent.assignedTps -- lostTps,
+          lostTps = rebalanceEvent.lostTps ++ lostTps,
+          endedStreams = rebalanceEvent.endedStreams ++ lostStreams
+        )
       }
   )
 
@@ -253,36 +267,7 @@ private[internal] object RunloopRebalanceListener {
     revokedTps: Set[TopicPartition],
     lostTps: Set[TopicPartition],
     endedStreams: Chunk[PartitionStreamControl]
-  ) {
-    def onAssigned(
-      assigned: Set[TopicPartition],
-      endedStreams: Chunk[PartitionStreamControl]
-    ): RebalanceEvent =
-      copy(
-        wasInvoked = true,
-        assignedTps = assignedTps ++ assigned,
-        endedStreams = this.endedStreams ++ endedStreams
-      )
-
-    def onRevoked(
-      revoked: Set[TopicPartition],
-      endedStreams: Chunk[PartitionStreamControl]
-    ): RebalanceEvent =
-      copy(
-        wasInvoked = true,
-        assignedTps = assignedTps -- revoked,
-        revokedTps = revokedTps ++ revoked,
-        endedStreams = this.endedStreams ++ endedStreams
-      )
-
-    def onLost(lost: Set[TopicPartition], endedStreams: Chunk[PartitionStreamControl]): RebalanceEvent =
-      copy(
-        wasInvoked = true,
-        assignedTps = assignedTps -- lost,
-        lostTps = lostTps ++ lost,
-        endedStreams = this.endedStreams ++ endedStreams
-      )
-  }
+  )
 
   object RebalanceEvent {
     val None: RebalanceEvent =
