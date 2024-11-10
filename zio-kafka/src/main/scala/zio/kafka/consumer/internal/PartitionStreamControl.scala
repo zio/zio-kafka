@@ -85,12 +85,12 @@ final class PartitionStreamControl private (
     queueInfoRef.get.map(_.deadlineExceeded(now))
 
   /** To be invoked when the stream is no longer processing. */
-  private[internal] def halt: UIO[Any] = {
+  private[internal] def halt: UIO[Unit] = {
     val timeOutMessage = s"No records were polled for more than $maxPollInterval for topic partition $tp. " +
       "Use ConsumerSettings.withMaxPollInterval to set a longer interval if processing a batch of records " +
       "needs more time."
     val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
-    interruptionPromise.fail(consumeTimeout)
+    interruptionPromise.fail(consumeTimeout).unit
   }
 
   /** To be invoked when the partition was lost. It clears the queue and ends the stream. */

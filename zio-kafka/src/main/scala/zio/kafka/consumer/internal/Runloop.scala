@@ -611,7 +611,7 @@ private[consumer] final class Runloop private (
       anyExceeded <- ZIO.foldLeft(streams)(false) { case (acc, stream) =>
                        stream
                          .maxPollIntervalExceeded(now)
-                         .tap(exceeded => if (exceeded) stream.halt.as(exceeded) else ZIO.unit)
+                         .tap(exceeded => if (exceeded) stream.halt else ZIO.unit)
                          .map(acc || _)
                      }
       _ <- shutdown.when(anyExceeded)

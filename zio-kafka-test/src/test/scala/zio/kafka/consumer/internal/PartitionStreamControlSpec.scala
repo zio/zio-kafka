@@ -6,7 +6,6 @@ import zio._
 import zio.kafka.consumer.CommittableRecord
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
-import zio.test.Assertion._
 import zio.test._
 
 import java.util.concurrent.TimeoutException
@@ -20,7 +19,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           records = createTestRecords(3)
           _    <- control.offerRecords(records)
           size <- control.queueSize
-        } yield assert(size)(equalTo(3))
+        } yield assertTrue(size == 3)
       },
       test("empty offerRecords updates outstandingPolls") {
         for {
@@ -28,7 +27,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           _       <- control.offerRecords(Chunk.empty)
           _       <- control.offerRecords(Chunk.empty)
           polls   <- control.outstandingPolls
-        } yield assert(polls)(equalTo(2))
+        } yield assertTrue(polls == 2)
       },
       test("multiple offers accumulate correctly") {
         for {
@@ -36,7 +35,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           _       <- control.offerRecords(createTestRecords(2))
           _       <- control.offerRecords(createTestRecords(3))
           size    <- control.queueSize
-        } yield assert(size)(equalTo(5))
+        } yield assertTrue(size == 5)
       }
     ),
     // Stream Control Tests
@@ -64,7 +63,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           control <- createTestControl
           _       <- control.halt
           result  <- control.stream.runCollect.exit
-        } yield assertTrue(result.isFailure && result.causeOrNull.squash.isInstanceOf[TimeoutException])
+        } yield assertTrue(result.isFailure, result.causeOrNull.squash.isInstanceOf[TimeoutException])
       },
       test("lost clears queue and ends stream") {
         for {
@@ -74,7 +73,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           _         <- control.stream.runCollect
           size      <- control.queueSize
           completed <- control.isCompleted
-        } yield assert(size)(equalTo(0)) && assert(completed)(isTrue)
+        } yield assertTrue(size == 0, completed)
       },
       test("finalizing the stream will set isCompleted") {
         for {
@@ -85,7 +84,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           _                <- control.end
           _                <- control.stream.runCollect
           finalIsCompleted <- control.isCompleted
-        } yield assertTrue(!initialIsCompleted && finalIsCompleted)
+        } yield assertTrue(!initialIsCompleted, finalIsCompleted)
       },
       test("pulling from the stream will request data") {
         ZIO.scoped {
@@ -116,7 +115,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           control  <- createTestControl
           now      <- Clock.nanoTime
           exceeded <- control.maxPollIntervalExceeded(now)
-        } yield assert(exceeded)(isFalse)
+        } yield assertTrue(!exceeded)
       },
       test("maxPollIntervalExceeded returns true after timeout") {
         for {
@@ -125,7 +124,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           now     <- Clock.nanoTime
           futureTime = now + Duration.fromSeconds(31).toNanos
           exceeded <- control.maxPollIntervalExceeded(futureTime)
-        } yield assert(exceeded)(isTrue)
+        } yield assertTrue(exceeded)
       }
     ),
     suite("Offset Tracking")(
