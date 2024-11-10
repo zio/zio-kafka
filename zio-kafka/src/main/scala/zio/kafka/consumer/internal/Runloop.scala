@@ -106,7 +106,7 @@ private[consumer] final class Runloop private (
     ): Task[Unit] = {
       val deadline = java.lang.System.nanoTime() + maxRebalanceDuration.toNanos - commitTimeoutNanos
 
-      def timeToDeadlineMillis(): Long = (java.lang.System.nanoTime() - deadline) / 1000000L
+      def timeToDeadlineMillis(): Long = (deadline - java.lang.System.nanoTime()) / 1000000L
 
       val endingTps = streamsToEnd.map(_.tp).toSet
 
