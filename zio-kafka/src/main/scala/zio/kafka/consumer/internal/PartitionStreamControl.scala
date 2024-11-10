@@ -43,7 +43,7 @@ final class PartitionStreamControl private (
   queueInfoRef: Ref[QueueInfo],
   streamHaltDetectionTimeout: Duration
 ) extends PartitionStream {
-  private val maxPullIntervalNanos = streamHaltDetectionTimeout.toNanos
+  private val streamHaltDetectionTimeoutNanos = streamHaltDetectionTimeout.toNanos
 
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),
@@ -57,7 +57,7 @@ final class PartitionStreamControl private (
     } else {
       for {
         now <- Clock.nanoTime
-        newPullDeadline = now + maxPullIntervalNanos
+        newPullDeadline = now + streamHaltDetectionTimeoutNanos
         _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
         _ <- dataQueue.offer(Take.chunk(data))
       } yield ()
