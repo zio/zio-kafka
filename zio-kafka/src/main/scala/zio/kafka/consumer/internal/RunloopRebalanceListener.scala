@@ -60,7 +60,7 @@ private[internal] class RunloopRebalanceListener(
   ): Task[Unit] = {
     val deadline = java.lang.System.nanoTime() + maxRebalanceDuration.toNanos - commitTimeoutNanos
 
-    def timeToDeadlineMillis(): Long = (java.lang.System.nanoTime() - deadline) / 1000000L
+    def timeToDeadlineMillis(): Long = (deadline - java.lang.System.nanoTime()) / 1000000L
 
     def completionStatusesAsString(completionStatuses: Chunk[StreamCompletionStatus]): String =
       "Revoked partitions: " + completionStatuses.map(_.toString).mkString("; ")
@@ -91,7 +91,7 @@ private[internal] class RunloopRebalanceListener(
     @inline
     def logStreamCompletionStatuses(completionStatuses: Chunk[StreamCompletionStatus]): UIO[Unit] = {
       val statusStrings = completionStatusesAsString(completionStatuses)
-      ZIO.logInfo(
+      ZIO.logDebug(
         s"Delaying rebalance until ${streamsToEnd.size} streams (of revoked partitions) have committed " +
           s"the offsets of the records they consumed. Deadline in ${timeToDeadlineMillis()}ms. $statusStrings"
       )
