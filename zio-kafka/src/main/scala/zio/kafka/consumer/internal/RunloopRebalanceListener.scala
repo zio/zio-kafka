@@ -182,47 +182,49 @@ private[internal] class RunloopRebalanceListener(
   // - ends streams that need to be ended
   // - updates `lastRebalanceEvent`
   //
-
   def toRebalanceListener: RebalanceListener = RebalanceListener(
     onAssigned = assignedTps =>
-      for {
-        rebalanceEvent <- lastRebalanceEvent.get
-        _ <- ZIO.logDebug {
-               val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
-               s"${assignedTps.size} partitions are assigned$sameRebalance"
-             }
-        assignedStreams <- getCurrentAssignedStreams
-        streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) assignedStreams
-                       else Chunk.empty
-        _ <- endStreams(streamsToEnd)
-        _ <- lastRebalanceEvent.set(rebalanceEvent.onAssigned(assignedTps, endedStreams = streamsToEnd))
-        _ <- ZIO.logTrace("onAssigned done")
-      } yield (),
+      withLastRebalanceEvent { rebalanceEvent =>
+        for {
+          _ <- ZIO.logDebug {
+                 val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
+                 s"${assignedTps.size} partitions are assigned$sameRebalance"
+               }
+          assignedStreams <- getCurrentAssignedStreams
+          streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) assignedStreams
+                         else Chunk.empty
+          _ <- endStreams(streamsToEnd)
+          _ <- ZIO.logTrace("onAssigned done")
+        } yield rebalanceEvent.onAssigned(assignedTps, endedStreams = streamsToEnd)
+      },
     onRevoked = revokedTps =>
-      for {
-        rebalanceEvent <- lastRebalanceEvent.get
-        _ <- ZIO.logDebug {
-               val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
-               s"${revokedTps.size} partitions are revoked$sameRebalance"
-             }
-        assignedStreams <- getCurrentAssignedStreams
-        streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) assignedStreams
-                       else assignedStreams.filter(control => revokedTps.contains(control.tp))
-        _ <- endStreams(streamsToEnd)
-        _ <- lastRebalanceEvent.set(rebalanceEvent.onRevoked(revokedTps, endedStreams = streamsToEnd))
-        _ <- ZIO.logTrace("onRevoked done")
-      } yield (),
+      withLastRebalanceEvent { rebalanceEvent =>
+        for {
+          _ <- ZIO.logDebug {
+                 val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
+                 s"${revokedTps.size} partitions are revoked$sameRebalance"
+               }
+          assignedStreams <- getCurrentAssignedStreams
+          streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) assignedStreams
+                         else assignedStreams.filter(control => revokedTps.contains(control.tp))
+          _ <- endStreams(streamsToEnd)
+          _ <- ZIO.logTrace("onRevoked done")
+        } yield rebalanceEvent.onRevoked(revokedTps, endedStreams = streamsToEnd)
+      },
     onLost = lostTps =>
-      for {
-        _               <- ZIO.logDebug(s"${lostTps.size} partitions are lost")
-        rebalanceEvent  <- lastRebalanceEvent.get
-        assignedStreams <- getCurrentAssignedStreams
-        lostStreams = assignedStreams.filter(control => lostTps.contains(control.tp))
-        _ <- ZIO.foreachDiscard(lostStreams)(_.lost)
-        _ <- lastRebalanceEvent.set(rebalanceEvent.onLost(lostTps, lostStreams))
-        _ <- ZIO.logTrace(s"onLost done")
-      } yield ()
+      withLastRebalanceEvent { rebalanceEvent =>
+        for {
+          _               <- ZIO.logDebug(s"${lostTps.size} partitions are lost")
+          assignedStreams <- getCurrentAssignedStreams
+          lostStreams = assignedStreams.filter(control => lostTps.contains(control.tp))
+          _ <- ZIO.foreachDiscard(lostStreams)(_.lost)
+          _ <- ZIO.logTrace(s"onLost done")
+        } yield rebalanceEvent.onLost(lostTps, lostStreams)
+      }
   )
+
+  private def withLastRebalanceEvent(f: RebalanceEvent => Task[RebalanceEvent]): Task[Unit] =
+    lastRebalanceEvent.get.flatMap(f).flatMap(lastRebalanceEvent.set)
 }
 
 private[internal] object RunloopRebalanceListener {
