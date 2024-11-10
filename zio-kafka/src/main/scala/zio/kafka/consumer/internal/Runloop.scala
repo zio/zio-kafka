@@ -106,6 +106,8 @@ private[consumer] final class Runloop private (
     ): Task[Unit] = {
       val deadline = java.lang.System.nanoTime() + maxRebalanceDuration.toNanos - commitTimeoutNanos
 
+      def timeToDeadlineMillis(): Long = (java.lang.System.nanoTime() - deadline) / 1000000L
+
       val endingTps = streamsToEnd.map(_.tp).toSet
 
       def commitsOfEndingStreams(commits: Chunk[Runloop.Commit]): Chunk[Runloop.Commit] =
@@ -126,21 +128,27 @@ private[consumer] final class Runloop private (
         }
 
       sealed trait EndOffsetCommitStatus
-      case object EndOffsetNotCommitted  extends EndOffsetCommitStatus
-      case object EndOffsetCommitPending extends EndOffsetCommitStatus
-      case object EndOffsetCommitted     extends EndOffsetCommitStatus
+      case object EndOffsetNotCommitted  extends EndOffsetCommitStatus { override def toString = "not committed"  }
+      case object EndOffsetCommitPending extends EndOffsetCommitStatus { override def toString = "commit pending" }
+      case object EndOffsetCommitted     extends EndOffsetCommitStatus { override def toString = "committed"      }
 
       final case class StreamCompletionStatus(
         tp: TopicPartition,
-        isDone: Boolean,
+        streamEnded: Boolean,
         lastPulledOffset: Option[Long],
         endOffsetCommitStatus: EndOffsetCommitStatus
       ) {
         override def toString: String =
-          s"${tp}: isDone=${isDone}, lastPulledOffset=${lastPulledOffset.getOrElse("none")}, endOffsetCommitStatus: ${endOffsetCommitStatus}"
+          s"${tp}: " +
+            s"${if (streamEnded) "stream ended" else "stream is running"}, " +
+            s"last pulled offset=${lastPulledOffset.getOrElse("none")}, " +
+            endOffsetCommitStatus
       }
 
-      def getStreamCompletionStatuses(newCommits: Chunk[Commit]): ZIO[Any, Nothing, Chunk[StreamCompletionStatus]] =
+      def completionStatusesAsString(completionStatuses: Chunk[StreamCompletionStatus]): String =
+        "Revoked partitions: " + completionStatuses.map(_.toString).mkString("; ")
+
+      def getStreamCompletionStatuses(newCommits: Chunk[Commit]): UIO[Chunk[StreamCompletionStatus]] =
         for {
           committedOffsets <- committedOffsetsRef.get
           allPendingCommitOffsets =
@@ -154,44 +162,56 @@ private[consumer] final class Runloop private (
                 lastPulledOffset <- stream.lastPulledOffset
                 endOffset        <- if (isDone) stream.completedPromise.await else ZIO.none
 
-                endOffsetCommitStatus = endOffset match {
-                                          case Some(endOffset)
-                                              if committedOffsets.contains(stream.tp, endOffset.offset) =>
-                                            EndOffsetCommitted
-                                          case Some(endOffset)
-                                              if allPendingCommitOffsets.contains((stream.tp, endOffset.offset)) =>
-                                            EndOffsetCommitPending
-                                          case _ => EndOffsetNotCommitted
-                                        }
+                endOffsetCommitStatus =
+                  endOffset match {
+                    case Some(endOffset) if committedOffsets.contains(stream.tp, endOffset.offset) =>
+                      EndOffsetCommitted
+                    case Some(endOffset) if allPendingCommitOffsets.contains((stream.tp, endOffset.offset)) =>
+                      EndOffsetCommitPending
+                    case _ => EndOffsetNotCommitted
+                  }
               } yield StreamCompletionStatus(stream.tp, isDone, lastPulledOffset.map(_.offset), endOffsetCommitStatus)
             }
         } yield streamResults
 
-      def logInitialStreamCompletionStatuses: ZIO[Any, Nothing, Unit] =
-        getStreamCompletionStatuses(newCommits = Chunk.empty).flatMap { completionStatuses =>
-          val statusStrings = completionStatuses.map(_.toString)
-          ZIO.logInfo(s"Waiting for ${streamsToEnd.size} streams to end: ${statusStrings.mkString("; ")}")
-        }
+      @inline
+      def logStreamCompletionStatuses(completionStatuses: Chunk[StreamCompletionStatus]): UIO[Unit] = {
+        val statusStrings = completionStatusesAsString(completionStatuses)
+        ZIO.logInfo(
+          s"Delaying rebalance until ${streamsToEnd.size} streams (of revoked partitions) have committed " +
+            s"the offsets of the records they consumed. Deadline in ${timeToDeadlineMillis()}ms. $statusStrings"
+        )
+      }
 
-      def logFinalStreamCompletionStatuses(completed: Boolean, newCommits: Chunk[Commit]): ZIO[Any, Nothing, Unit] =
-        getStreamCompletionStatuses(newCommits).flatMap { completionStatuses =>
-          ZIO
-            .logWarning(
-              s"Exceeded deadline waiting for streams to commit the offsets of the records they consumed; the rebalance will continue. This might cause another consumer to process some records again. ${completionStatuses.map(_.toString).mkString("; ")}"
-            )
-        }
-          .unless(completed)
-          .unit
+      def logInitialStreamCompletionStatuses: UIO[Unit] =
+        for {
+          completionStatuses <- getStreamCompletionStatuses(newCommits = Chunk.empty)
+          _                  <- logStreamCompletionStatuses(completionStatuses)
+        } yield ()
 
       def endingStreamsCompletedAndCommitsExist(newCommits: Chunk[Commit]): UIO[Boolean] =
         for {
           completionStatuses <- getStreamCompletionStatuses(newCommits)
-          statusStrings = completionStatuses.map(_.toString)
-          _ <- ZIO.logDebug(s"Waiting for ${streamsToEnd.size} streams to end: ${statusStrings.mkString("; ")}")
+          _                  <- logStreamCompletionStatuses(completionStatuses)
         } yield completionStatuses.forall { status =>
           // A stream is complete when it never got any records, or when it committed the offset of the last consumed record
-          status.lastPulledOffset.isEmpty || (status.isDone && status.endOffsetCommitStatus != EndOffsetNotCommitted)
+          status.lastPulledOffset.isEmpty || (status.streamEnded && status.endOffsetCommitStatus != EndOffsetNotCommitted)
         }
+
+      def logFinalStreamCompletionStatuses(completed: Boolean, newCommits: Chunk[Commit]): UIO[Unit] =
+        if (completed)
+          ZIO.logInfo("Continuing rebalance, all offsets of consumed records in the revoked partitions were committed.")
+        else
+          for {
+            completionStatuses <- getStreamCompletionStatuses(newCommits)
+            statusStrings = completionStatusesAsString(completionStatuses)
+            _ <-
+              ZIO.logWarning(
+                s"Exceeded deadline waiting for streams (of revoked partitions) to commit the offsets of " +
+                  s"the records they consumed; the rebalance will continue. " +
+                  s"This might cause another consumer to process some records again. $statusStrings"
+              )
+          } yield ()
 
       def commitSync: Task[Unit] =
         ZIO.attempt(consumer.commitSync(java.util.Collections.emptyMap(), commitTimeout))
@@ -212,20 +232,23 @@ private[consumer] final class Runloop private (
       //
       // Note, we cannot use ZStream.fromQueue because that will emit nothing when the queue is empty.
       // Instead, we poll the queue in a loop.
-      logInitialStreamCompletionStatuses *>
-        ZStream
-          .fromZIO(blockingSleep(commitQueuePollInterval) *> commitQueue.takeAll)
-          .tap(commitAsync)
-          .forever
-          .takeWhile(_ => java.lang.System.nanoTime() <= deadline)
-          .scan(Chunk.empty[Runloop.Commit])(_ ++ _)
-          .mapZIO(commits => endingStreamsCompletedAndCommitsExist(commits).map((_, commits)))
-          .takeUntil { case (completed, _) => completed }
-          .runLast
-          .map(_.getOrElse((false, Chunk.empty)))
-          .flatMap { case (completed, commits) => logFinalStreamCompletionStatuses(completed, commits) } *>
-        commitSync *>
-        ZIO.logDebug(s"Done waiting for ${streamsToEnd.size} streams to end")
+      for {
+        _ <- logInitialStreamCompletionStatuses
+        (completed, commits) <-
+          ZStream
+            .fromZIO(blockingSleep(commitQueuePollInterval) *> commitQueue.takeAll)
+            .tap(commitAsync)
+            .forever
+            .takeWhile(_ => java.lang.System.nanoTime() <= deadline)
+            .scan(Chunk.empty[Runloop.Commit])(_ ++ _)
+            .mapZIO(commits => endingStreamsCompletedAndCommitsExist(commits).map((_, commits)))
+            .takeUntil { case (completed, _) => completed }
+            .runLast
+            .map(_.getOrElse((false, Chunk.empty)))
+        _ <- logFinalStreamCompletionStatuses(completed, commits)
+        _ <- commitSync
+        _ <- ZIO.logDebug(s"Done waiting for ${streamsToEnd.size} streams to end")
+      } yield ()
     }
 
     // During a poll, the java kafka client might call each method of the rebalance listener 0 or 1 times.
