@@ -219,7 +219,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           def consumeAndCommit(count: Long) =
             Consumer
-              .partitionedStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
+              .partitionedStream[Any, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
               .flatMapPar(partitionCount)(_._2)
               .take(count)
               .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
@@ -293,7 +293,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
         def consumeAndCommit(count: Long, topic: String, groupId: String) =
           Consumer
-            .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
+            .plainStream[Any, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
             .take(count)
             .foreach(_.offset.commit)
             .provideSomeLayer[Kafka](consumer(topic, Some(groupId)))
@@ -336,7 +336,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
         def consumeAndCommit(count: Long, topic: String, groupId: String) =
           Consumer
-            .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
+            .plainStream[Any, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
             .take(count)
             .foreach(_.offset.commit)
             .provideSomeLayer[Kafka](consumer(topic, Some(groupId)))

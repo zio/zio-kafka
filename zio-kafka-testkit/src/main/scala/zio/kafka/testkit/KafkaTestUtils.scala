@@ -70,7 +70,7 @@ object KafkaTestUtils {
     key: String,
     message: String
   ): ZIO[Producer, Throwable, RecordMetadata] =
-    Producer.produce[Any, String, String](new ProducerRecord(topic, key, message), Serde.string, Serde.string)
+    Producer.produce[String, String](new ProducerRecord(topic, key, message), Serde.string, Serde.string)
 
   /**
    * Utility function to produce many messages in give Partition of a Topic.
@@ -81,7 +81,7 @@ object KafkaTestUtils {
     kvs: Iterable[(String, String)]
   ): ZIO[Producer, Throwable, Chunk[RecordMetadata]] =
     Producer
-      .produceChunk[Any, String, String](
+      .produceChunk[String, String](
         Chunk.fromIterable(kvs.map { case (k, v) =>
           new ProducerRecord(topic, partition, null, k, v)
         }),
@@ -97,7 +97,7 @@ object KafkaTestUtils {
     kvs: Iterable[(String, String)]
   ): ZIO[Producer, Throwable, Chunk[RecordMetadata]] =
     Producer
-      .produceChunk[Any, String, String](
+      .produceChunk[String, String](
         Chunk.fromIterable(kvs.map { case (k, v) =>
           new ProducerRecord(topic, k, v)
         }),

@@ -2,13 +2,12 @@ package zio.kafka.serde
 
 import org.apache.kafka.common.header.internals.RecordHeaders
 import zio._
+import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.test.Assertion._
 import zio.test._
-import zio.ZAny
-import zio.kafka.ZIOSpecDefaultSlf4j
 
 object DeserializerSpec extends ZIOSpecDefaultSlf4j {
-  override def spec: Spec[ZAny with Any, Throwable] = suite("Deserializer")(
+  override def spec: Spec[TestEnvironment with Scope, Any] = suite("Deserializer")(
     suite("asOption")(
       test("deserialize to None when value is null") {
         assertZIO(stringDeserializer.asOption.deserialize("topic1", new RecordHeaders, null))(isNone)

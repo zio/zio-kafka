@@ -25,7 +25,7 @@ object PopulateTopic extends ZIOAppDefault {
   override def run: ZIO[Any, Throwable, Unit] =
     dataStream(872000).map { case (k, v) =>
       new ProducerRecord("inputs-topic", null, null, k, v)
-    }.mapChunksZIO(Producer.produceChunkAsync[Any, String, String](_, Serde.string, Serde.string).map(Chunk(_)))
+    }.mapChunksZIO(Producer.produceChunkAsync[String, String](_, Serde.string, Serde.string).map(Chunk(_)))
       .mapZIOPar(5)(_.flatMap(chunk => Console.printLine(s"Wrote chunk of ${chunk.size}")))
       .runDrain
       .provide(
