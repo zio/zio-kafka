@@ -31,8 +31,8 @@ abstract class PartitionStream {
  *   the last pulled offset (if any). The promise completes when the stream completed.
  * @param queueInfoRef
  *   used to track the stream's pull deadline, its queue size, and last pulled offset
- * @param streamHaltDetectionTimeout
- *   see [[zio.kafka.consumer.ConsumerSettings.withStreamHaltDetectionTimeout()]]
+ * @param maxStreamPullInterval
+ *   see [[zio.kafka.consumer.ConsumerSettings.withMaxStreamPullInterval()]]
  */
 final class PartitionStreamControl private (
   val tp: TopicPartition,
@@ -41,9 +41,9 @@ final class PartitionStreamControl private (
   interruptionPromise: Promise[Throwable, Nothing],
   val completedPromise: Promise[Nothing, Option[Offset]],
   queueInfoRef: Ref[QueueInfo],
-  streamHaltDetectionTimeout: Duration
+  maxStreamPullInterval: Duration
 ) extends PartitionStream {
-  private val streamHaltDetectionTimeoutNanos = streamHaltDetectionTimeout.toNanos
+  private val maxStreamPullIntervalNanos = maxStreamPullInterval.toNanos
 
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),
@@ -57,7 +57,7 @@ final class PartitionStreamControl private (
     } else {
       for {
         now <- Clock.nanoTime
-        newPullDeadline = now + streamHaltDetectionTimeoutNanos
+        newPullDeadline = now + maxStreamPullIntervalNanos
         _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
         _ <- dataQueue.offer(Take.chunk(data))
       } yield ()
@@ -81,12 +81,12 @@ final class PartitionStreamControl private (
    *   `true` when the stream has data available, but none has been pulled for more than `maxPollInterval` (since data
    *   became available), `false` otherwise
    */
-  private[internal] def streamHaltDetectionTimeoutExceeded(now: NanoTime): UIO[Boolean] =
+  private[internal] def maxStreamPullIntervalExceeded(now: NanoTime): UIO[Boolean] =
     queueInfoRef.get.map(_.deadlineExceeded(now))
 
   /** To be invoked when the stream is no longer processing. */
   private[internal] def halt: UIO[Unit] = {
-    val timeOutMessage = s"No records were polled for more than $streamHaltDetectionTimeout for topic partition $tp. " +
+    val timeOutMessage = s"No records were polled for more than $maxStreamPullInterval for topic partition $tp. " +
       "Use ConsumerSettings.withMaxPollInterval to set a longer interval if processing a batch of records " +
       "needs more time."
     val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
@@ -130,14 +130,14 @@ object PartitionStreamControl {
     tp: TopicPartition,
     requestData: UIO[Unit],
     diagnostics: Diagnostics,
-    streamHaltDetectionTimeout: Duration
+    maxStreamPullInterval: Duration
   ): UIO[PartitionStreamControl] = {
-    val streamHaltDetectionTimeoutNanos = streamHaltDetectionTimeout.toNanos
+    val maxStreamPullIntervalNanos = maxStreamPullInterval.toNanos
 
     def registerPull(queueInfo: Ref[QueueInfo], records: Chunk[ByteArrayCommittableRecord]): UIO[Unit] =
       for {
         now <- Clock.nanoTime
-        newPullDeadline = now + streamHaltDetectionTimeoutNanos
+        newPullDeadline = now + maxStreamPullIntervalNanos
         _ <- queueInfo.update(_.withPull(newPullDeadline, records))
       } yield ()
 
@@ -184,7 +184,7 @@ object PartitionStreamControl {
       interruptionPromise,
       completedPromise,
       queueInfo,
-      streamHaltDetectionTimeout
+      maxStreamPullInterval
     )
   }
 

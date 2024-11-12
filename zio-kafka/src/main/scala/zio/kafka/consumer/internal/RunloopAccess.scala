@@ -10,6 +10,8 @@ import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscrip
 import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio._
 
+import scala.jdk.CollectionConverters._
+
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
   case object NotStarted                     extends RunloopState
@@ -78,6 +80,7 @@ private[consumer] object RunloopAccess {
   ): ZIO[Scope, Throwable, RunloopAccess] =
     for {
       maxPollInterval <- maxPollIntervalConfig(settings)
+      maxStreamPullInterval = settings.maxRebalanceDuration.getOrElse(maxPollInterval)
       // See scaladoc of [[ConsumerSettings.withMaxRebalanceDuration]]:
       maxRebalanceDuration = settings.maxRebalanceDuration.getOrElse(((maxPollInterval.toNanos / 5L) * 3L).nanos)
       // This scope allows us to link the lifecycle of the Runloop and of the Hub to the lifecycle of the Consumer
@@ -90,6 +93,7 @@ private[consumer] object RunloopAccess {
       makeRunloop = Runloop
                       .make(
                         settings = settings,
+                        maxStreamPullInterval = maxStreamPullInterval,
                         maxRebalanceDuration = maxRebalanceDuration,
                         diagnostics = diagnostics,
                         consumer = consumerAccess,
@@ -101,16 +105,8 @@ private[consumer] object RunloopAccess {
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
 
   private def maxPollIntervalConfig(settings: ConsumerSettings): Task[Duration] = ZIO.attempt {
-    def defaultMaxPollInterval: Int = ConsumerConfig
-      .configDef()
-      .defaultValues()
-      .get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)
-      .asInstanceOf[Integer]
-
-    settings.properties
-      .get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)
-      .flatMap(_.toString.toIntOption) // Ignore invalid
-      .getOrElse(defaultMaxPollInterval)
-      .millis
+    val consumerConfig = new ConsumerConfig(settings.properties.asJava)
+    Long.unbox(consumerConfig.getLong(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)).millis
   }
+
 }

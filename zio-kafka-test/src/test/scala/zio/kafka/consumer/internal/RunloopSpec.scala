@@ -204,6 +204,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
         runloop <- Runloop.make(
                      consumerSettings,
                      100.millis,
+                     100.millis,
                      diagnostics,
                      consumerAccess,
                      partitionsHub

@@ -221,7 +221,9 @@ object Consumer {
    *   - creating `access` as a fair semaphore with a single permit,
    *   - acquire a permit from `access` before using the consumer, and release if afterwards,
    *   - not using the following consumer methods: `subscribe`, `unsubscribe`, `assign`, `poll`, `commit*`, `seek`,
-   *     `pause`, `resume`, and `enforceRebalance`.
+   *     `pause`, `resume`, and `enforceRebalance`,
+   *   - keeping the consumer config given to the java consumer in sync with the properties in `settings` (for example
+   *     by constructing `settings` with `ConsumerSettings(bootstrapServers).withProperties(config)`).
    *
    * Any deviation of these rules is likely to cause hard to track errors.
    *

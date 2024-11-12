@@ -32,7 +32,7 @@ final case class ConsumerSettings(
   metricLabels: Set[MetricLabel] = Set.empty,
   runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis),
   authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.recurs(5) && Schedule.spaced(500.millis),
-  streamHaltDetectionTimeout: Duration = 5.minutes
+  maxStreamPullIntervalOption: Option[Duration] = None
 ) {
   // Parse booleans in a way compatible with how Kafka does this in org.apache.kafka.common.config.ConfigDef.parseType:
   require(
@@ -153,31 +153,35 @@ final case class ConsumerSettings(
   /**
    * Set Kafka's `max.poll.interval.ms` configuration. See
    * https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms for more information.
+   *
+   * The default is 5 minutes. Make sure that all records from a single poll can be processed in this interval. See also
+   * the [[withMaxPollRecords maxPollRecords]] configuration.
    */
   def withMaxPollInterval(maxPollInterval: Duration): ConsumerSettings =
     withProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, maxPollInterval.toMillis.toString)
 
   /**
-   * Zio-kafka uses this value to determine whether a stream stopped processing, to safeguard against alive consumers in
-   * the consumer group which hold partition assignments but make no progress. If no chunks are pulled by user code from
-   * a partition stream for this interval (while data is available) we consider the stream to be halted. When this
-   * happens we interrupt the stream with a failure. In addition the entire consumer is shutdown. In future versions of
-   * zio-kafka we may (instead of a shutdown) stop only the affected subscription.
+   * The maximum time a stream may run without pulling a chunk of records.
    *
-   * The default is 5 minutes. Make sure that all records from a single poll can be processed in this interval and take
-   * into account that this is divided over the partitions. Also prefetching will impact the
+   * Zio-kafka uses this value to determine whether a stream stopped processing. This is to safeguard against alive
+   * consumers in the consumer group which hold partition assignments but make no progress. If no chunks are pulled by
+   * user code from a partition stream for this interval (while data is available) we consider the stream to be halted.
+   * When this happens we interrupt the stream with a failure. In addition, the entire consumer is shutdown. In future
+   * versions of zio-kafka we may (instead of a shutdown) stop only the affected subscription.
    *
-   * The maximum number of records in a single poll is configured with the `max.poll.records` configuration (see
-   * https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records and [[withMaxPollRecords]]). The records
-   * are divided over the partition streams into chunks. The stream halt detection timeout needs to be larger than the
-   * time it takes your code to process one of these chunks.
+   * Make sure that all records from a single poll (see [[withMaxPollRecords maxPollRecords]]) can be processed in this
+   * interval, even when there is no concurrency because the records are all in the same partition.
+   *
+   * The default is equal to [[withMaxPollInterval maxPollInterval]]).
    */
-  def withStreamHaltDetectionTimeout(streamHaltDetectionTimeout: Duration): ConsumerSettings =
-    copy(streamHaltDetectionTimeout = streamHaltDetectionTimeout)
+  def withMaxStreamPullInterval(maxStreamPullInterval: Duration): ConsumerSettings =
+    copy(maxStreamPullIntervalOption = Some(maxStreamPullInterval))
 
   /**
    * Set Kafka's `max.poll.records` configuration. See
    * https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records for more information.
+   *
+   * The default is 500.
    */
   def withMaxPollRecords(maxPollRecords: Int): ConsumerSettings =
     withProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)

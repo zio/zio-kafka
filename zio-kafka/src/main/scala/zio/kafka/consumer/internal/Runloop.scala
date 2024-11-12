@@ -30,6 +30,7 @@ private[consumer] final class Runloop private (
   lastRebalanceEvent: Ref.Synchronized[Runloop.RebalanceEvent],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
   diagnostics: Diagnostics,
+  maxStreamPullInterval: Duration,
   maxRebalanceDuration: Duration,
   currentStateRef: Ref[State],
   committedOffsetsRef: Ref[CommitOffsets]
@@ -47,7 +48,7 @@ private[consumer] final class Runloop private (
       tp,
       commandQueue.offer(RunloopCommand.Request(tp)).unit,
       diagnostics,
-      settings.streamHaltDetectionTimeout
+      maxStreamPullInterval
     )
 
   def stopConsumption: UIO[Unit] =
@@ -673,7 +674,7 @@ private[consumer] final class Runloop private (
       now <- Clock.nanoTime
       anyExceeded <- ZIO.foldLeft(streams)(false) { case (acc, stream) =>
                        stream
-                         .streamHaltDetectionTimeoutExceeded(now)
+                         .maxStreamPullIntervalExceeded(now)
                          .tap(ZIO.when(_)(ZIO.logWarning(s"Stream for ${stream.tp} has exceeded ")))
                          .tap(exceeded => if (exceeded) stream.halt else ZIO.unit)
                          .map(acc || _)
@@ -936,6 +937,7 @@ object Runloop {
 
   private[consumer] def make(
     settings: ConsumerSettings,
+    maxStreamPullInterval: Duration,
     maxRebalanceDuration: Duration,
     diagnostics: Diagnostics,
     consumer: ConsumerAccess,
@@ -961,6 +963,7 @@ object Runloop {
                   lastRebalanceEvent = lastRebalanceEvent,
                   partitionsHub = partitionsHub,
                   diagnostics = diagnostics,
+                  maxStreamPullInterval = maxStreamPullInterval,
                   maxRebalanceDuration = maxRebalanceDuration,
                   currentStateRef = currentStateRef,
                   committedOffsetsRef = committedOffsetsRef

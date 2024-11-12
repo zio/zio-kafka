@@ -375,8 +375,11 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               groupId = Some(group),
               maxPollInterval = 2.seconds,
               `max.poll.records` = 2
-            )
-              .map(_.withoutPartitionPreFetching.withPollTimeout(100.millis).withStreamHaltDetectionTimeout(2.seconds))
+            ).map {
+              _.withoutPartitionPreFetching
+                .withPollTimeout(100.millis)
+                .withMaxStreamPullInterval(2.seconds)
+            }
           consumer <- Consumer.make(settings)
           _        <- scheduledProduce(topic1, Schedule.fixed(500.millis).jittered).runDrain.forkScoped
           _        <- scheduledProduce(topic2, Schedule.fixed(500.millis).jittered).runDrain.forkScoped
