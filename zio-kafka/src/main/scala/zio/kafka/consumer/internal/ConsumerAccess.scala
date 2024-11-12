@@ -50,6 +50,7 @@ private[consumer] object ConsumerAccess {
 
   def make(settings: ConsumerSettings): ZIO[Scope, Throwable, ConsumerAccess] =
     for {
+      access <- Semaphore.make(1)
       consumer <- ZIO.acquireRelease {
                     ZIO.attemptBlocking {
                       new KafkaConsumer[Array[Byte], Array[Byte]](
@@ -59,13 +60,7 @@ private[consumer] object ConsumerAccess {
                       )
                     }
                   } { consumer =>
-                    ZIO.blocking(ZIO.attempt(consumer.close(settings.closeTimeout))).orDie
+                    ZIO.blocking(access.withPermit(ZIO.attempt(consumer.close(settings.closeTimeout)))).orDie
                   }
-      result <- make(consumer)
-    } yield result
-
-  def make(consumer: ByteArrayKafkaConsumer): ZIO[Scope, Throwable, ConsumerAccess] =
-    for {
-      access <- Semaphore.make(1)
     } yield new ConsumerAccess(consumer, access)
 }
