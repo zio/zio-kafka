@@ -21,7 +21,7 @@ import zio.{ durationInt, Chunk, Duration, Ref, Task, UIO, ZIO }
  * continuing.
  */
 private[internal] class RunloopRebalanceListener(
-  lastRebalanceEvent: Ref.Synchronized[RebalanceEvent],
+  lastRebalanceEvent: Ref[RebalanceEvent],
   settings: ConsumerSettings,
   consumer: ConsumerAccess,
   maxRebalanceDuration: Duration,
@@ -43,6 +43,9 @@ private[internal] class RunloopRebalanceListener(
 
   // Time between polling the commit queue from the rebalance listener when `rebalanceSafeCommits` is enabled.
   private val commitQueuePollInterval = 100.millis
+
+  def getAndResetLastEvent: UIO[RebalanceEvent] =
+    lastRebalanceEvent.getAndSet(RebalanceEvent.None)
 
   // End streams from the rebalance listener.
   // When `rebalanceSafeCommits` is enabled, wait for consumed offsets to be committed.

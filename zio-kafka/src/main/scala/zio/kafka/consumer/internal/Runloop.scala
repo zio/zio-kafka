@@ -24,7 +24,6 @@ private[consumer] final class Runloop private (
   consumer: ConsumerAccess,
   maxPollInterval: Duration,
   commandQueue: Queue[RunloopCommand],
-  lastRebalanceEvent: Ref.Synchronized[RebalanceEvent],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
   diagnostics: Diagnostics,
   currentStateRef: Ref[State],
@@ -234,7 +233,7 @@ private[consumer] final class Runloop private (
                        tpWithoutData = requestedPartitions -- providedTps
                      )
                    }
-            pollresult <- lastRebalanceEvent.getAndSet(RebalanceEvent.None).flatMap {
+            pollresult <- runloopRebalanceListener.getAndResetLastEvent.flatMap {
                             case RebalanceEvent(false, _, _, _, _) =>
                               // The fast track, rebalance listener was not invoked:
                               //   no assignment changes, no new commits, only new records.
@@ -572,7 +571,7 @@ object Runloop {
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
-      lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
+      lastRebalanceEvent <- Ref.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
       currentStateRef   <- Ref.make(initialState)
       sameThreadRuntime <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
@@ -600,7 +599,6 @@ object Runloop {
                   consumer = consumer,
                   maxPollInterval = maxPollInterval,
                   commandQueue = commandQueue,
-                  lastRebalanceEvent = lastRebalanceEvent,
                   partitionsHub = partitionsHub,
                   diagnostics = diagnostics,
                   currentStateRef = currentStateRef,
