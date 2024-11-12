@@ -32,7 +32,10 @@ trait Deserializer[-R, +T] {
   /**
    * Create a deserializer for a type U based on the deserializer for type T and an effectful mapping function
    */
-  def mapM[R1 <: R, U](f: T => RIO[R1, U]): Deserializer[R1, U] = Deserializer(deserialize(_, _, _).flatMap(f))
+  def mapZIO[R1 <: R, U](f: T => RIO[R1, U]): Deserializer[R1, U] = Deserializer(deserialize(_, _, _).flatMap(f))
+
+  @deprecated("Use mapZIO", since = "2.9.0")
+  def mapM[R1 <: R, U](f: T => RIO[R1, U]): Deserializer[R1, U] = mapZIO(f)
 
   /**
    * When this serializer fails, attempt to deserialize with the alternative
