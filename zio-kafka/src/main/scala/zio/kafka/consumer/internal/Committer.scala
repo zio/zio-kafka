@@ -1,23 +1,22 @@
 package zio.kafka.consumer.internal
-import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallback }
+import org.apache.kafka.clients.consumer.{OffsetAndMetadata, OffsetCommitCallback}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.kafka.consumer.Consumer.CommitTimeout
-import zio.kafka.consumer.ConsumerSettings
-import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.consumer.internal.Committer.{ Commit, CommitOffsets }
+import zio.kafka.consumer.diagnostics.{DiagnosticEvent, Diagnostics}
+import zio.kafka.consumer.internal.Committer.{Commit, CommitOffsets}
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.{ durationLong, Chunk, Exit, Promise, Queue, Ref, Runtime, Scope, Task, UIO, Unsafe, ZIO }
+import zio.{Chunk, Duration, Exit, Promise, Queue, Ref, Runtime, Scope, Task, UIO, Unsafe, ZIO, durationLong}
 
 import java.lang.Math.max
 import java.util
-import java.util.{ Map => JavaMap }
+import java.util.{Map => JavaMap}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 private[consumer] final class Committer(
   commitQueue: Queue[Commit],
-  settings: ConsumerSettings,
+  commitTimeout: Duration,
   diagnostics: Diagnostics,
   consumerMetrics: ConsumerMetrics,
   onCommitAvailable: UIO[Unit],
@@ -25,7 +24,6 @@ private[consumer] final class Committer(
   sameThreadRuntime: Runtime[Any],
   pendingCommits: Ref[Chunk[Commit]] // TODO make Commit internal
 ) {
-  private val commitTimeout = settings.commitTimeout
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
   val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] =
@@ -138,7 +136,7 @@ private[consumer] final class Committer(
 
 private[internal] object Committer {
   def make(
-    settings: ConsumerSettings,
+    commitTimeout: Duration,
     diagnostics: Diagnostics,
     consumerMetrics: ConsumerMetrics,
     onCommitAvailable: UIO[Unit],
@@ -149,7 +147,7 @@ private[internal] object Committer {
     committedOffsetsRef <- Ref.make(CommitOffsets.empty)
   } yield new Committer(
     commitQueue,
-    settings,
+    commitTimeout,
     diagnostics,
     consumerMetrics,
     onCommitAvailable,

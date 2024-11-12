@@ -577,7 +577,7 @@ object Runloop {
       executor          <- ZIO.executor
       metrics = new ZioConsumerMetrics(settings.metricLabels)
       committer <- Committer.make(
-                     settings,
+                     settings.commitTimeout,
                      diagnostics,
                      metrics,
                      commandQueue.offer(RunloopCommand.CommitAvailable).unit,
