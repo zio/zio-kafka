@@ -657,7 +657,7 @@ private[consumer] final class Runloop private (
                          pollResult.records
                        )
       updatedPendingCommits <- ZIO.filter(state.pendingCommits)(_.isPending)
-      _                     <- checkStreamsHaveHalted(pollResult.assignedStreams)
+      _                     <- checkStreamPullInterval(pollResult.assignedStreams)
     } yield state.copy(
       pendingRequests = fulfillResult.pendingRequests,
       pendingCommits = updatedPendingCommits,
@@ -669,18 +669,24 @@ private[consumer] final class Runloop private (
    * Check each stream to see if it exceeded its pull interval. If so, halt it. In addition, if any stream has exceeded
    * its pull interval, shutdown the consumer.
    */
-  private def checkStreamsHaveHalted(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Unit] =
+  private def checkStreamPullInterval(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Unit] = {
+    def logShutdown(stream: PartitionStreamControl): ZIO[Any, Nothing, Unit] =
+      ZIO.logWarning(
+        s"Stream for ${stream.tp} has not pulled chunks for more than $maxStreamPullInterval, shutting down"
+      )
+
     for {
       now <- Clock.nanoTime
       anyExceeded <- ZIO.foldLeft(streams)(false) { case (acc, stream) =>
                        stream
                          .maxStreamPullIntervalExceeded(now)
-                         .tap(ZIO.when(_)(ZIO.logWarning(s"Stream for ${stream.tp} has exceeded ")))
+                         .tap(ZIO.when(_)(logShutdown(stream)))
                          .tap(exceeded => if (exceeded) stream.halt else ZIO.unit)
                          .map(acc || _)
                      }
       _ <- shutdown.when(anyExceeded)
     } yield ()
+  }
 
   private def handleCommand(state: State, cmd: RunloopCommand.StreamCommand): Task[State] = {
     def doChangeSubscription(newSubscriptionState: SubscriptionState): Task[State] =
