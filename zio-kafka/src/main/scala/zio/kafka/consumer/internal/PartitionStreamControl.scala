@@ -90,7 +90,7 @@ final class PartitionStreamControl private (
       "Use ConsumerSettings.withMaxPollInterval to set a longer interval if processing a batch of records " +
       "needs more time."
     val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
-    ZIO.logWarning(timeOutMessage) *> interruptionPromise.fail(consumeTimeout).unit
+    interruptionPromise.fail(consumeTimeout).unit
   }
 
   /** To be invoked when the partition was lost. It clears the queue and ends the stream. */
