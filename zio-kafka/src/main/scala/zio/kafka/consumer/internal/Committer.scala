@@ -1,16 +1,15 @@
 package zio.kafka.consumer.internal
-import org.apache.kafka.clients.consumer.{OffsetAndMetadata, OffsetCommitCallback}
+import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallback }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.kafka.consumer.Consumer.CommitTimeout
-import zio.kafka.consumer.diagnostics.{DiagnosticEvent, Diagnostics}
-import zio.kafka.consumer.internal.Committer.{Commit, CommitOffsets}
-import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.{Chunk, Duration, Exit, Promise, Queue, Ref, Runtime, Scope, Task, UIO, Unsafe, ZIO, durationLong}
+import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.internal.Committer.{ Commit, CommitOffsets }
+import zio.{ durationLong, Chunk, Duration, Exit, Promise, Queue, Ref, Runtime, Scope, Task, UIO, Unsafe, ZIO }
 
 import java.lang.Math.max
 import java.util
-import java.util.{Map => JavaMap}
+import java.util.{ Map => JavaMap }
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
@@ -22,7 +21,7 @@ private[consumer] final class Committer(
   onCommitAvailable: UIO[Unit],
   committedOffsetsRef: Ref[CommitOffsets],
   sameThreadRuntime: Runtime[Any],
-  pendingCommits: Ref[Chunk[Commit]] // TODO make Commit internal
+  pendingCommits: Ref[Chunk[Commit]]
 ) {
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
@@ -50,7 +49,10 @@ private[consumer] final class Committer(
    * @param executeOnEmpty
    *   Execute commitAsync() even if there are no commits
    */
-  def handleNewCommits(consumer: ByteArrayKafkaConsumer, executeOnEmpty: Boolean = false): Task[Unit] = for {
+  def handleNewCommits(
+    commitAsync: (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback) => Task[Unit],
+    executeOnEmpty: Boolean = false
+  ): Task[Unit] = for {
     commits <- commitQueue.takeAll
     _       <- ZIO.logDebug(s"Processing ${commits.size} commits")
     _ <- ZIO.unless(commits.isEmpty && !executeOnEmpty) {
@@ -58,8 +60,7 @@ private[consumer] final class Committer(
            pendingCommits.update(_ ++ commits) *>
              // We don't wait for the completion of the commit here, because it
              // will only complete once we poll again.
-             ZIO
-               .attempt(consumer.commitAsync(offsets, callback))
+             commitAsync(offsets, callback)
                .catchAll(onFailure)
          }
   } yield ()
@@ -118,9 +119,12 @@ private[consumer] final class Committer(
     (offsetsWithMetaData.asJava, callback, onFailure)
   }
 
+  def queueSize: UIO[Int] = commitQueue.size
+
   def pendingCommitCount: UIO[Int] = pendingCommits.get.map(_.size)
 
-  def queueSize: UIO[Int] = commitQueue.size
+  def getPendingCommits: UIO[CommitOffsets] =
+    pendingCommits.get.map(CommitOffsets.empty.addCommits(_)._2)
 
   def updatePendingCommitsAfterPoll: UIO[Unit] =
     pendingCommits.get.flatMap(ZIO.filter(_)(_.isPending)).flatMap(pendingCommits.set)
@@ -129,9 +133,6 @@ private[consumer] final class Committer(
     committedOffsetsRef.update(_.keepPartitions(assignedPartitions))
 
   def getCommittedOffsets: UIO[CommitOffsets] = committedOffsetsRef.get
-
-  def getPendingCommits: UIO[CommitOffsets] =
-    pendingCommits.get.map(CommitOffsets.empty.addCommits(_)._2)
 }
 
 private[internal] object Committer {

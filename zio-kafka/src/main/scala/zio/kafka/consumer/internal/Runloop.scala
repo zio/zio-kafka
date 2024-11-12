@@ -483,7 +483,9 @@ private[consumer] final class Runloop private (
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
           _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
-          _ <- consumer.runloopAccess(committer.handleNewCommits(_))
+          _ <- consumer.runloopAccess { consumer =>
+                 committer.handleNewCommits((offsets, callback) => ZIO.attempt(consumer.commitAsync(offsets, callback)))
+               }
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
           stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
 

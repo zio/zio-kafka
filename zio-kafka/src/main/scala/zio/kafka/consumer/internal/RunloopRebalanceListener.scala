@@ -156,7 +156,12 @@ private[internal] class RunloopRebalanceListener(
           // Even if there is nothing to commit, continue to drive communication with the broker
           // so that commits can complete and the streams can make progress, by setting
           // executeOnEmpty = true
-          .tap(_ => committer.handleNewCommits(consumer, executeOnEmpty = true))
+          .tap(_ =>
+            committer.handleNewCommits(
+              (offsets, callback) => ZIO.attempt(consumer.commitAsync(offsets, callback)),
+              executeOnEmpty = true
+            )
+          )
           .takeWhile(_ => java.lang.System.nanoTime() <= deadline)
           .mapZIO(_ => endingStreamsCompletedAndCommitsExist)
           .takeUntil(completed => completed)
