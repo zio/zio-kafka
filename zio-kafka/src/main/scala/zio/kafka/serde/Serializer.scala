@@ -25,8 +25,11 @@ trait Serializer[-R, -T] {
   /**
    * Create a serializer for a type U based on the serializer for type T and an effectful mapping function
    */
-  def contramapM[R1 <: R, U](f: U => RIO[R1, T]): Serializer[R1, U] =
+  def contramapZIO[R1 <: R, U](f: U => RIO[R1, T]): Serializer[R1, U] =
     Serializer((topic, headers, u) => f(u).flatMap(serialize(topic, headers, _)))
+
+  @deprecated("Use contramapZIO", since = "2.9.0")
+  def contramapM[R1 <: R, U](f: U => RIO[R1, T]): Serializer[R1, U] = contramapZIO(f)
 
   /**
    * Returns a new serializer that executes its serialization function on the blocking threadpool.

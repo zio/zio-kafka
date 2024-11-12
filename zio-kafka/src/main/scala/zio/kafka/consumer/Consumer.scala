@@ -199,7 +199,7 @@ object Consumer {
    *
    * You are responsible for creating and closing the KafkaConsumer. Make sure auto.commit is disabled.
    */
-  @deprecated("Use fromJavaConsumerWithPermit", since = "2.8.4")
+  @deprecated("Use fromJavaConsumerWithPermit", since = "2.9.0")
   def fromJavaConsumer(
     javaConsumer: JConsumer[Array[Byte], Array[Byte]],
     settings: ConsumerSettings,
