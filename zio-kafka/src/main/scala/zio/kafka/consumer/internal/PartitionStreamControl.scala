@@ -86,7 +86,7 @@ final class PartitionStreamControl private (
 
   /** To be invoked when the stream is no longer processing. */
   private[internal] def halt: UIO[Unit] = {
-    val timeOutMessage = s"No records were polled for more than $maxStreamPullInterval for topic partition $tp. " +
+    val timeOutMessage = s"No records were pulled for more than $maxStreamPullInterval for topic partition $tp. " +
       "Use ConsumerSettings.withMaxPollInterval to set a longer interval if processing a batch of records " +
       "needs more time."
     val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
