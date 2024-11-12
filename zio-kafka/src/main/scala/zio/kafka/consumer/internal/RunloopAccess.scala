@@ -10,8 +10,6 @@ import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscrip
 import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio._
 
-import scala.jdk.CollectionConverters._
-
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
   case object NotStarted                     extends RunloopState
@@ -105,8 +103,16 @@ private[consumer] object RunloopAccess {
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
 
   private def maxPollIntervalConfig(settings: ConsumerSettings): Task[Duration] = ZIO.attempt {
-    val consumerConfig = new ConsumerConfig(settings.properties.asJava)
-    Long.unbox(consumerConfig.getLong(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)).millis
-  }
+    def defaultMaxPollInterval: Int = ConsumerConfig
+      .configDef()
+      .defaultValues()
+      .get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)
+      .asInstanceOf[Integer]
 
+    settings.properties
+      .get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)
+      .flatMap(_.toString.toIntOption) // Ignore invalid
+      .getOrElse(defaultMaxPollInterval)
+      .millis
+  }
 }
