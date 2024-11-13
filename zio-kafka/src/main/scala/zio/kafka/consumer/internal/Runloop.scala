@@ -483,7 +483,7 @@ private[consumer] final class Runloop private (
         for {
           _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
           _ <- consumer.runloopAccess { consumer =>
-                 committer.handleNewCommits((offsets, callback) => ZIO.attempt(consumer.commitAsync(offsets, callback)))
+                 committer.processQueuedCommits((offsets, callback) => ZIO.attempt(consumer.commitAsync(offsets, callback)))
                }
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
           stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
@@ -577,13 +577,14 @@ object Runloop {
       sameThreadRuntime <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       executor          <- ZIO.executor
       metrics = new ZioConsumerMetrics(settings.metricLabels)
-      committer <- Committer.make(
-                     settings.commitTimeout,
-                     diagnostics,
-                     metrics,
-                     commandQueue.offer(RunloopCommand.CommitAvailable).unit,
-                     sameThreadRuntime
-                   )
+      committer <- LiveCommitter
+          .make(
+            settings.commitTimeout,
+            diagnostics,
+            metrics,
+            commandQueue.offer(RunloopCommand.CommitAvailable).unit,
+            sameThreadRuntime
+          )
       rebalanceListener = new RunloopRebalanceListener(
                             lastRebalanceEvent,
                             settings,

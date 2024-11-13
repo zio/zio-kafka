@@ -160,7 +160,7 @@ private[internal] class RunloopRebalanceListener(
           // so that commits can complete and the streams can make progress, by setting
           // executeOnEmpty = true
           .tap(_ =>
-            committer.handleNewCommits(
+            committer.processQueuedCommits(
               (offsets, callback) => ZIO.attempt(consumer.commitAsync(offsets, callback)),
               executeOnEmpty = true
             )

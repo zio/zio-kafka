@@ -48,13 +48,14 @@ object CommitterSpec extends ZIOSpecDefault {
       for {
         runtime         <- ZIO.runtime[Any]
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- Committer.make(
-                       10.seconds,
-                       Diagnostics.NoOp,
-                       mockMetrics,
-                       onCommitAvailable = commitAvailable.succeed(()).unit,
-                       sameThreadRuntime = runtime
-                     )
+        committer <- LiveCommitter
+                       .make(
+                         10.seconds,
+                         Diagnostics.NoOp,
+                         mockMetrics,
+                         onCommitAvailable = commitAvailable.succeed(()).unit,
+                         sameThreadRuntime = runtime
+                       )
         tp = new TopicPartition("topic", 0)
         _ <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _ <- commitAvailable.await
@@ -64,7 +65,7 @@ object CommitterSpec extends ZIOSpecDefault {
       for {
         runtime         <- ZIO.runtime[Any]
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- Committer.make(
+        committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        mockMetrics,
@@ -74,7 +75,7 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.await
-        _ <- committer.handleNewCommits((offsets, callback) => ZIO.attempt(callback.onComplete(offsets, null)))
+        _ <- committer.processQueuedCommits((offsets, callback) => ZIO.attempt(callback.onComplete(offsets, null)))
         _ <- commitFiber.join
       } yield assertCompletes
     },
@@ -82,7 +83,7 @@ object CommitterSpec extends ZIOSpecDefault {
       for {
         runtime         <- ZIO.runtime[Any]
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- Committer.make(
+        committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        mockMetrics,
@@ -92,7 +93,7 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.await
-        _ <- committer.handleNewCommits((offsets, callback) =>
+        _ <- committer.processQueuedCommits((offsets, callback) =>
                ZIO.attempt(callback.onComplete(offsets, new RuntimeException("Commit failed")))
              )
         result <- commitFiber.await
@@ -102,7 +103,7 @@ object CommitterSpec extends ZIOSpecDefault {
       for {
         runtime         <- ZIO.runtime[Any]
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- Committer.make(
+        committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        mockMetrics,
@@ -112,10 +113,10 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.await
-        _ <- committer.handleNewCommits((offsets, callback) =>
+        _ <- committer.processQueuedCommits((offsets, callback) =>
                ZIO.attempt(callback.onComplete(offsets, new RebalanceInProgressException("Rebalance in progress")))
              )
-        _      <- committer.handleNewCommits((offsets, callback) => ZIO.attempt(callback.onComplete(offsets, null)))
+        _      <- committer.processQueuedCommits((offsets, callback) => ZIO.attempt(callback.onComplete(offsets, null)))
         result <- commitFiber.await
       } yield assertTrue(result.isSuccess)
     },
@@ -123,7 +124,7 @@ object CommitterSpec extends ZIOSpecDefault {
       for {
         runtime         <- ZIO.runtime[Any]
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- Committer.make(
+        committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        mockMetrics,
@@ -134,7 +135,7 @@ object CommitterSpec extends ZIOSpecDefault {
         _                <- committer.commit(Map(tp -> new OffsetAndMetadata(1))).forkScoped
         _                <- commitAvailable.await
         committedOffsets <- Promise.make[Nothing, JavaMap[TopicPartition, OffsetAndMetadata]]
-        _ <- committer.handleNewCommits((offsets, callback) =>
+        _ <- committer.processQueuedCommits((offsets, callback) =>
                committedOffsets.succeed(offsets) *> ZIO.attempt(callback.onComplete(offsets, null))
              )
         offsetsCommitted <- committedOffsets.await
@@ -146,7 +147,7 @@ object CommitterSpec extends ZIOSpecDefault {
       for {
         runtime         <- ZIO.runtime[Any]
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- Committer.make(
+        committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        mockMetrics,
@@ -160,7 +161,7 @@ object CommitterSpec extends ZIOSpecDefault {
         commitFiber3     <- committer.commit(Map(tp2 -> new OffsetAndMetadata(3))).forkScoped
         _                <- commitAvailable.await
         committedOffsets <- Promise.make[Nothing, JavaMap[TopicPartition, OffsetAndMetadata]]
-        _ <- committer.handleNewCommits((offsets, callback) =>
+        _ <- committer.processQueuedCommits((offsets, callback) =>
                committedOffsets.succeed(offsets) *> ZIO.attempt(callback.onComplete(offsets, null))
              )
         _                <- commitFiber1.join zip commitFiber2.join zip commitFiber3.join
@@ -173,7 +174,7 @@ object CommitterSpec extends ZIOSpecDefault {
       for {
         runtime         <- ZIO.runtime[Any]
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- Committer.make(
+        committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        mockMetrics,
@@ -183,7 +184,7 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.await
-        _ <- committer.handleNewCommits((offsets, callback) => ZIO.attempt(callback.onComplete(offsets, null)))
+        _ <- committer.processQueuedCommits((offsets, callback) => ZIO.attempt(callback.onComplete(offsets, null)))
         pendingCommitsDuringCommit <- committer.pendingCommitCount
         _                          <- committer.updatePendingCommitsAfterPoll
         pendingCommitsAfterCommit  <- committer.pendingCommitCount
@@ -194,7 +195,7 @@ object CommitterSpec extends ZIOSpecDefault {
       for {
         runtime         <- ZIO.runtime[Any]
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- Committer.make(
+        committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        mockMetrics,
@@ -204,7 +205,7 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.await
-        _ <- committer.handleNewCommits((offsets, callback) => ZIO.attempt(callback.onComplete(offsets, null)))
+        _ <- committer.processQueuedCommits((offsets, callback) => ZIO.attempt(callback.onComplete(offsets, null)))
         committedOffsets <- committer.getCommittedOffsets
         _                <- commitFiber.join
       } yield assertTrue(committedOffsets.offsets == Map(tp -> 0L))
@@ -213,7 +214,7 @@ object CommitterSpec extends ZIOSpecDefault {
       for {
         runtime         <- ZIO.runtime[Any]
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- Committer.make(
+        committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        mockMetrics,
@@ -223,7 +224,7 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.await
-        _ <- committer.handleNewCommits((offsets, callback) => ZIO.attempt(callback.onComplete(offsets, null)))
+        _ <- committer.processQueuedCommits((offsets, callback) => ZIO.attempt(callback.onComplete(offsets, null)))
         _ <- committer.pruneCommittedOffsets(Set.empty)
         committedOffsets <- committer.getCommittedOffsets
         _                <- commitFiber.join
