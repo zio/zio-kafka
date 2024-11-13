@@ -19,6 +19,8 @@ lazy val binCompatVersionToCompare =
     .map(_.strip())
     // Only continue when we're building from a release tag
     .filter(_.matches("v[0-9]+\\.[0-9]+\\.[0-9]+"))
+    // Do not continue when this is a new minor version (when patch version is set to "0")
+    .filterNot(_.endsWith(".0"))
     .map { tag =>
       // Remove `v` and set patch version to `0`
       val compatVersion = tag.stripPrefix("v").split('.').take(2).mkString(".") + ".0"
