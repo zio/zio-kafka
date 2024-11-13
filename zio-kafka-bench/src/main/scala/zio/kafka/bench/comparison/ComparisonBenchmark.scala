@@ -21,7 +21,7 @@ trait ComparisonBenchmark extends ZioBenchmark[Env] {
   protected final val nrPartitions: Int = 6
   protected final val topicPartitions: List[TopicPartition] =
     (0 until nrPartitions).map(TopicPartition(topic1, _)).toList
-  protected final val numberOfMessages: Int           = 1000000
+  protected final val numberOfMessages: Int           = 50000
   protected final val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key$i", s"msg$i"))
 
   private val javaKafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
