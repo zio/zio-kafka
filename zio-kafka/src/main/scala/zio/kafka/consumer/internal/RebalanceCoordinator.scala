@@ -70,8 +70,8 @@ private[internal] class RebalanceCoordinator(
 
     def getStreamCompletionStatuses: UIO[Chunk[StreamCompletionStatus]] =
       for {
-        committedOffsets        <- committer.getCommittedOffsets
-        allPendingCommitOffsets <- committer.getPendingCommits.map(_.offsets.toSeq) // TODO toSeq efficient enough?
+        committedOffsets           <- committer.getCommittedOffsets
+        latestPendingCommitOffsets <- committer.getPendingCommits.map(_.offsets)
         streamResults <-
           ZIO.foreach(streamsToEnd) { stream =>
             for {
@@ -83,7 +83,7 @@ private[internal] class RebalanceCoordinator(
                 endOffset match {
                   case Some(endOffset) if committedOffsets.contains(stream.tp, endOffset.offset) =>
                     EndOffsetCommitted
-                  case Some(endOffset) if allPendingCommitOffsets.contains((stream.tp, endOffset.offset)) =>
+                  case Some(endOffset) if latestPendingCommitOffsets.get(stream.tp).contains(endOffset.offset) =>
                     EndOffsetCommitPending
                   case _ => EndOffsetNotCommitted
                 }
@@ -146,7 +146,6 @@ private[internal] class RebalanceCoordinator(
     // - Collect all these new (pending) commits.
     // - repeat the above until:
     //   - All streams that were ended have completed their work, and
-    // (TODO is the pending part still true? Code did not reflect that)
     //   - we have seen a completed or pending commit for all end-offsets.
     //     An end-offset of a stream is the offset of the last record given to that stream.
     // - Do a single sync commit without any offsets, this has the side-effect of blocking until all

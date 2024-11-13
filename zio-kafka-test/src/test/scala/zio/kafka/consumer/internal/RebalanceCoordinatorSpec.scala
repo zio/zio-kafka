@@ -11,16 +11,31 @@ import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
 import zio.test._
 import zio.{ durationInt, Chunk, Promise, Ref, Scope, Task, UIO, ZIO }
 
-/**
- * Runloop should:
- *   - Track the partitions that were assigned, revoked and lost in multiple invocations
- *   - rebalanceSafeCommits mode
- *     - Await stream completion and end offset commit
- *     - End streams when partitions are assigned
- */
+import java.util
 
 object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
   type BinaryMockConsumer = MockConsumer[Array[Byte], Array[Byte]]
+
+  private val mockMetrics = new ConsumerMetrics {
+    override def observePoll(resumedCount: Int, pausedCount: Int, latency: zio.Duration, pollSize: Int): UIO[Unit] =
+      ZIO.unit
+
+    override def observeCommit(latency: zio.Duration): UIO[Unit]                                 = ZIO.unit
+    override def observeAggregatedCommit(latency: zio.Duration, commitSize: NanoTime): UIO[Unit] = ZIO.unit
+    override def observeRebalance(
+      currentlyAssignedCount: Int,
+      assignedCount: Int,
+      revokedCount: Int,
+      lostCount: Int
+    ): UIO[Unit] = ZIO.unit
+    override def observeRunloopMetrics(
+      state: Runloop.State,
+      commandQueueSize: Int,
+      commitQueueSize: Int,
+      pendingCommits: Int
+    ): UIO[Unit] = ZIO.unit
+    override def observePollAuthError(): UIO[Unit] = ZIO.unit
+  }
 
   def spec = suite("RunloopRebalanceListener")(
     test("should track assigned, revoked and lost partitions") {
@@ -65,6 +80,64 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
       test("should wait for the last pulled offset to commit") {
         for {
           lastEvent <- Ref.make(RebalanceCoordinator.RebalanceEvent.None)
+          // Mock consumer that does not complete commit callbacks until commitSync is called
+          consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {
+                       var callback: OffsetCommitCallback                       = null
+                       var offsets: util.Map[TopicPartition, OffsetAndMetadata] = null
+
+                       override def commitAsync(
+                         offsets: util.Map[TopicPartition, OffsetAndMetadata],
+                         callback: OffsetCommitCallback
+                       ): Unit = {
+                         // Do nothing during rebalancing
+                         if (callback != null) callback.onComplete(offsets, null)
+                         if (!offsets.isEmpty) {
+                           this.callback = callback
+                           this.offsets = offsets
+                         }
+                       }
+
+                       override def commitSync(): Unit =
+                         callback.onComplete(offsets, null)
+                     }
+          tp = new TopicPartition("topic", 0)
+          streamControl <- makeStreamControl(tp)
+          records = createTestRecords(3)
+          recordsPulled <- Promise.make[Nothing, Unit]
+          _             <- streamControl.offerRecords(records)
+          runtime       <- ZIO.runtime[Any]
+          committer     <- LiveCommitter.make(10.seconds, Diagnostics.NoOp, mockMetrics, ZIO.unit, runtime)
+
+          streamDrain <-
+            streamControl.stream
+              .tap(_ => recordsPulled.succeed(()))
+              .tap(record =>
+                committer
+                  .commit(
+                    Map(
+                      new TopicPartition("topic", record.partition) -> new OffsetAndMetadata(record.offset.offset, null)
+                    )
+                  )
+                  .debug(s"Done commit for ${record.offset.offset}")
+              )
+              .runDrain
+              .forkScoped
+          listener <-
+            makeCoordinator(
+              lastEvent,
+              consumer,
+              assignedStreams = Chunk(streamControl),
+              rebalanceSafeCommits = true,
+              committer = committer
+            )
+          _ <- listener.toRebalanceListener.onRevoked(Set(tp))
+          _ <- streamDrain.join
+        } yield assertCompletes
+      },
+      // TODO something with driving commits during waiting
+      test("should continue if waiting for the stream to continue has timed out") {
+        for {
+          lastEvent <- Ref.make(RebalanceCoordinator.RebalanceEvent.None)
           consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {}
           tp       = new TopicPartition("topic", 0)
           streamControl <- makeStreamControl(tp)
@@ -83,13 +156,6 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
           streamDrain <-
             streamControl.stream
               .tap(_ => recordsPulled.succeed(()))
-              .tap(record =>
-                committer.commit(
-                  Map(
-                    new TopicPartition("topic", record.partition) -> new OffsetAndMetadata(record.offset.offset, null)
-                  )
-                )
-              )
               .runDrain
               .forkScoped
           listener <-
@@ -104,9 +170,8 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
           _ <- streamDrain.join
         } yield assertCompletes
       }
-//      TODO test("should wait until timeout")
-      // TODO something with driving commits during waiting
     )
+    // TODO something with driving commits during waiting
   ) @@ TestAspect.withLiveClock
 
   private def makeStreamControl(tp: TopicPartition): UIO[PartitionStreamControl] =
@@ -117,7 +182,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
     mockConsumer: BinaryMockConsumer,
     assignedStreams: Chunk[PartitionStreamControl] = Chunk.empty,
     committer: Committer = new MockCommitter {},
-    settings: ConsumerSettings = ConsumerSettings(List("")),
+    settings: ConsumerSettings = ConsumerSettings(List("")).withCommitTimeout(1.second),
     rebalanceSafeCommits: Boolean = false
   ): ZIO[Scope, Throwable, RebalanceCoordinator] =
     ConsumerAccess.make(mockConsumer).map { consumerAccess =>
@@ -125,7 +190,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
         lastEvent,
         settings.withRebalanceSafeCommits(rebalanceSafeCommits),
         consumerAccess,
-        60.seconds,
+        5.seconds,
         ZIO.succeed(assignedStreams),
         committer
       )
