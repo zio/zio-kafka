@@ -1,7 +1,6 @@
 package zio.kafka.bench
 
 import io.github.embeddedkafka.EmbeddedKafka
-import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.openjdk.jmh.annotations._
 import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.consumer.diagnostics.Diagnostics
@@ -36,7 +35,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
     consumerSettings(
       randomThing("client"),
       Some(randomThing("group")),
-      properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1000")
+      `max.poll.records` = 1000,
     ).map(_.withPartitionPreFetchBufferLimit(8192))
   ) ++ ZLayer.succeed(Diagnostics.NoOp)) >>> Consumer.live
 
