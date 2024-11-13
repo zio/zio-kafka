@@ -9,7 +9,7 @@ import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
 import zio.test._
-import zio.{ durationInt, Chunk, Promise, Ref, Scope, Task, UIO, ZIO }
+import zio.{ durationInt, Chunk, Promise, Ref, Scope, Semaphore, Task, UIO, ZIO }
 
 import java.util
 
@@ -185,7 +185,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
     settings: ConsumerSettings = ConsumerSettings(List("")).withCommitTimeout(1.second),
     rebalanceSafeCommits: Boolean = false
   ): ZIO[Scope, Throwable, RebalanceCoordinator] =
-    ConsumerAccess.make(mockConsumer).map { consumerAccess =>
+    Semaphore.make(1).map(new ConsumerAccess(mockConsumer, _)).map { consumerAccess =>
       new RebalanceCoordinator(
         lastEvent,
         settings.withRebalanceSafeCommits(rebalanceSafeCommits),

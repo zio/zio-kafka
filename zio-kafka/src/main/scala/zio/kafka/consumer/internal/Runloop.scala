@@ -22,10 +22,10 @@ private[consumer] final class Runloop private (
   topLevelExecutor: Executor,
   sameThreadRuntime: Runtime[Any],
   consumer: ConsumerAccess,
-  maxPollInterval: Duration,
   commandQueue: Queue[RunloopCommand],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
   diagnostics: Diagnostics,
+  maxStreamPullInterval: Duration,
   currentStateRef: Ref[State],
   rebalanceCoordinator: RebalanceCoordinator,
   consumerMetrics: ConsumerMetrics,
@@ -36,7 +36,7 @@ private[consumer] final class Runloop private (
       tp,
       commandQueue.offer(RunloopCommand.Request(tp)).unit,
       diagnostics,
-      maxPollInterval
+      maxStreamPullInterval
     )
 
   def stopConsumption: UIO[Unit] =
@@ -329,7 +329,7 @@ private[consumer] final class Runloop private (
                          pollResult.records
                        )
       _ <- committer.updatePendingCommitsAfterPoll
-      _ <- checkStreamPollInterval(pollResult.assignedStreams)
+      _ <- checkStreamPullInterval(pollResult.assignedStreams)
     } yield state.copy(
       pendingRequests = fulfillResult.pendingRequests,
       assignedStreams = pollResult.assignedStreams
@@ -337,20 +337,29 @@ private[consumer] final class Runloop private (
   }
 
   /**
-   * Check each stream to see if it exceeded its poll interval. If so, halt it. In addition, if any stream has exceeded
-   * its poll interval, shutdown the consumer.
+   * Check each stream to see if it exceeded its pull interval. If so, halt it. In addition, if any stream has exceeded
+   * its pull interval, shutdown the consumer.
    */
-  private def checkStreamPollInterval(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Unit] =
+  private def checkStreamPullInterval(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Unit] = {
+    def logShutdown(stream: PartitionStreamControl): ZIO[Any, Nothing, Unit] =
+      ZIO.logError(
+        s"Stream for ${stream.tp} has not pulled chunks for more than $maxStreamPullInterval, shutting down. " +
+          "Use ConsumerSettings.withMaxPollInterval or .withMaxStreamPullInterval to set a longer interval when " +
+          "processing a batch of records needs more time."
+      )
+
     for {
       now <- Clock.nanoTime
       anyExceeded <- ZIO.foldLeft(streams)(false) { case (acc, stream) =>
                        stream
-                         .maxPollIntervalExceeded(now)
+                         .maxStreamPullIntervalExceeded(now)
+                         .tap(ZIO.when(_)(logShutdown(stream)))
                          .tap(exceeded => if (exceeded) stream.halt else ZIO.unit)
                          .map(acc || _)
                      }
       _ <- shutdown.when(anyExceeded)
     } yield ()
+  }
 
   private def handleCommand(state: State, cmd: RunloopCommand.StreamCommand): Task[State] = {
     def doChangeSubscription(newSubscriptionState: SubscriptionState): Task[State] =
@@ -564,7 +573,7 @@ object Runloop {
 
   private[consumer] def make(
     settings: ConsumerSettings,
-    maxPollInterval: Duration,
+    maxStreamPullInterval: Duration,
     maxRebalanceDuration: Duration,
     diagnostics: Diagnostics,
     consumer: ConsumerAccess,
@@ -600,10 +609,10 @@ object Runloop {
                   topLevelExecutor = executor,
                   sameThreadRuntime = sameThreadRuntime,
                   consumer = consumer,
-                  maxPollInterval = maxPollInterval,
                   commandQueue = commandQueue,
                   partitionsHub = partitionsHub,
                   diagnostics = diagnostics,
+                  maxStreamPullInterval = maxStreamPullInterval,
                   currentStateRef = currentStateRef,
                   consumerMetrics = metrics,
                   rebalanceCoordinator = rebalanceCoordinator,
