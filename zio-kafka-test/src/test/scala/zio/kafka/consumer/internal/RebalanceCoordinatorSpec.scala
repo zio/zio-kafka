@@ -81,25 +81,15 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
       test("should wait for the last pulled offset to commit") {
         for {
           lastEvent <- Ref.make(RebalanceCoordinator.RebalanceEvent.None)
-          // Mock consumer that does not complete commit callbacks until commitSync is called
           consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {
-                       var callback: OffsetCommitCallback                       = null
-                       var offsets: util.Map[TopicPartition, OffsetAndMetadata] = null
-
                        override def commitAsync(
                          offsets: util.Map[TopicPartition, OffsetAndMetadata],
                          callback: OffsetCommitCallback
-                       ): Unit = {
+                       ): Unit =
                          // Do nothing during rebalancing
                          if (callback != null) callback.onComplete(offsets, null)
-                         if (!offsets.isEmpty) {
-                           this.callback = callback
-                           this.offsets = offsets
-                         }
-                       }
 
-                       override def commitSync(): Unit =
-                         callback.onComplete(offsets, null)
+                       override def commitSync(): Unit = ()
                      }
           tp = new TopicPartition("topic", 0)
           streamControl <- makeStreamControl(tp)
@@ -119,7 +109,6 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
                       new TopicPartition("topic", record.partition) -> new OffsetAndMetadata(record.offset.offset, null)
                     )
                   )
-                  .debug(s"Done commit for ${record.offset.offset}")
               )
               .runDrain
               .forkScoped
@@ -135,7 +124,6 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
           _ <- streamDrain.join
         } yield assertCompletes
       },
-      // TODO something with driving commits during waiting
       test("should continue if waiting for the stream to continue has timed out") {
         for {
           lastEvent <- Ref.make(RebalanceCoordinator.RebalanceEvent.None)
@@ -172,7 +160,6 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
         } yield assertCompletes
       }
     )
-    // TODO something with driving commits during waiting
   ) @@ TestAspect.withLiveClock
 
   private def makeStreamControl(tp: TopicPartition): UIO[PartitionStreamControl] =

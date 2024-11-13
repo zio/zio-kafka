@@ -41,10 +41,8 @@ private[internal] trait Committer {
   def getCommittedOffsets: UIO[CommitOffsets]
 }
 
-object Committer {
-
-  // package private for unit testing
-  private[internal] final case class CommitOffsets(offsets: Map[TopicPartition, Long]) {
+private[internal] object Committer {
+  final case class CommitOffsets(offsets: Map[TopicPartition, Long]) {
 
     /** Returns an estimate of the total offset increase, and a new `CommitOffsets` with the given offsets added. */
     def addCommits(c: Chunk[Commit]): (Long, CommitOffsets) = {

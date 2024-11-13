@@ -10,19 +10,8 @@ import zio.{ durationInt, Promise, UIO, ZIO }
 import java.util.{ Map => JavaMap }
 import scala.jdk.CollectionConverters.MapHasAsJava
 
-/**
- * Committer should:
- *   - execute a successful commit (+ 1)
- *   - communicate back a failed commit
- *   - automatically retry a commit when rebalancing
- *   - batch commits from multiple partitions and multiple offsets and confirm each one of them
- *   - keep track of pending commits (clear before and after)
- *   - keep track of committed offsets
- *   - clean committed offsets of no-longer assigned partitions
- *   - publish commit metrics
- */
 object CommitterSpec extends ZIOSpecDefault {
-  val mockMetrics = new ConsumerMetrics {
+  private val mockMetrics = new ConsumerMetrics {
     override def observePoll(resumedCount: Int, pausedCount: Int, latency: zio.Duration, pollSize: Int): UIO[Unit] =
       ZIO.unit
 
