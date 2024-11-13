@@ -369,17 +369,13 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           clientId <- randomClient
           _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic1, partitions = 1))
           _        <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic2))
-          settings <-
-            consumerSettings(
-              clientId = clientId,
-              groupId = Some(group),
-              maxPollInterval = 2.seconds,
-              `max.poll.records` = 2
-            ).map {
-              _.withoutPartitionPreFetching
-                .withPollTimeout(100.millis)
-                .withMaxStreamPullInterval(2.seconds)
-            }
+          settings <- consumerSettings(
+                        clientId = clientId,
+                        groupId = Some(group),
+                        maxPollInterval = 2.seconds,
+                        `max.poll.records` = 2
+                      )
+                        .map(_.withoutPartitionPreFetching.withPollTimeout(100.millis))
           consumer <- Consumer.make(settings)
           _        <- scheduledProduce(topic1, Schedule.fixed(500.millis).jittered).runDrain.forkScoped
           _        <- scheduledProduce(topic2, Schedule.fixed(500.millis).jittered).runDrain.forkScoped
