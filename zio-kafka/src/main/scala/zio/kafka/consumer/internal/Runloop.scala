@@ -671,8 +671,10 @@ private[consumer] final class Runloop private (
    */
   private def checkStreamPullInterval(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Unit] = {
     def logShutdown(stream: PartitionStreamControl): ZIO[Any, Nothing, Unit] =
-      ZIO.logWarning(
-        s"Stream for ${stream.tp} has not pulled chunks for more than $maxStreamPullInterval, shutting down"
+      ZIO.logError(
+        s"Stream for ${stream.tp} has not pulled chunks for more than $maxStreamPullInterval, shutting down. " +
+          "Use ConsumerSettings.withMaxPollInterval or .withMaxStreamPullInterval to set a longer interval when " +
+          "processing a batch of records needs more time."
       )
 
     for {
