@@ -35,7 +35,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
     consumerSettings(
       randomThing("client"),
       Some(randomThing("group")),
-      `max.poll.records` = 1000,
+      `max.poll.records` = 1000
     ).map(_.withPartitionPreFetchBufferLimit(8192))
   ) ++ ZLayer.succeed(Diagnostics.NoOp)) >>> Consumer.live
 
