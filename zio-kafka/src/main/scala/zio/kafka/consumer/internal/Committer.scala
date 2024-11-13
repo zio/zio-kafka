@@ -18,8 +18,9 @@ private[internal] trait Committer {
    *
    * If the queue is empty, nothing happens, unless executeOnEmpty is true.
    *
-   * @param consumer
-   *   Consumer with exclusive access
+   * @param commitAsync
+   *   Function 'commitAsync' on the KafkaConsumer. This is isolated from the whole KafkaConsumer for testing purposes.
+   *   The caller should ensure exclusive access to the KafkaConsumer.
    * @param executeOnEmpty
    *   Execute commitAsync() even if there are no commits
    */

@@ -1,15 +1,15 @@
 package zio.kafka.consumer.internal
-import org.apache.kafka.clients.consumer.{OffsetAndMetadata, OffsetCommitCallback}
+import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallback }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.kafka.consumer.Consumer.CommitTimeout
-import zio.kafka.consumer.diagnostics.{DiagnosticEvent, Diagnostics}
+import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.LiveCommitter.Commit
-import zio.{Chunk, Duration, Exit, Promise, Queue, Ref, Runtime, Scope, Task, UIO, Unsafe, ZIO, durationLong}
+import zio.{ durationLong, Chunk, Duration, Exit, Promise, Queue, Ref, Runtime, Scope, Task, UIO, Unsafe, ZIO }
 
 import java.util
-import java.util.{Map => JavaMap}
+import java.util.{ Map => JavaMap }
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
@@ -39,16 +39,6 @@ private[consumer] final class LiveCommitter(
         _ <- consumerMetrics.observeCommit(latency)
       } yield ()
 
-  /**
-   * Takes commits from the queue, commits them and adds them to pending commits
-   *
-   * If the queue is empty, nothing happens, unless executeOnEmpty is true.
-   *
-   * @param consumer
-   *   Consumer with exclusive access
-   * @param executeOnEmpty
-   *   Execute commitAsync() even if there are no commits
-   */
   override def processQueuedCommits(
     commitAsync: (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback) => Task[Unit],
     executeOnEmpty: Boolean = false
