@@ -1,7 +1,6 @@
 package zio.kafka.bench
 
 import io.github.embeddedkafka.EmbeddedKafka
-import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.openjdk.jmh.annotations._
 import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.consumer.diagnostics.Diagnostics
