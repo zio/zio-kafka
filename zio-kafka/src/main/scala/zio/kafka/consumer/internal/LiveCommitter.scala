@@ -199,6 +199,8 @@ private[internal] object LiveCommitter {
 
     def contains(tp: TopicPartition, offset: Long): Boolean =
       offsets.get(tp).exists(_ >= offset)
+
+    def get(tp: TopicPartition): Option[Long] = offsets.get(tp)
   }
 
   private[internal] object CommitOffsets {

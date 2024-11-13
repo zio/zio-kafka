@@ -87,7 +87,13 @@ private[internal] class RunloopRebalanceListener(
                     EndOffsetCommitPending
                   case _ => EndOffsetNotCommitted
                 }
-            } yield StreamCompletionStatus(stream.tp, isDone, lastPulledOffset.map(_.offset), endOffsetCommitStatus)
+            } yield StreamCompletionStatus(
+              stream.tp,
+              isDone,
+              lastPulledOffset.map(_.offset),
+              committedOffsets.get(stream.tp),
+              endOffsetCommitStatus
+            )
           }
       } yield streamResults
 
@@ -247,6 +253,7 @@ private[internal] class RunloopRebalanceListener(
 
   private def withLastRebalanceEvent(f: RebalanceEvent => Task[RebalanceEvent]): Task[Unit] =
     lastRebalanceEvent.get.flatMap(f).flatMap(lastRebalanceEvent.set)
+
 }
 
 private[internal] object RunloopRebalanceListener {
@@ -260,12 +267,14 @@ private[internal] object RunloopRebalanceListener {
     tp: TopicPartition,
     streamEnded: Boolean,
     lastPulledOffset: Option[Long],
+    lastCommittedOffset: Option[Long],
     endOffsetCommitStatus: EndOffsetCommitStatus
   ) {
     override def toString: String =
       s"$tp: " +
         s"${if (streamEnded) "stream ended" else "stream is running"}, " +
         s"last pulled offset=${lastPulledOffset.getOrElse("none")}, " +
+        s"last committed offset=${lastCommittedOffset.getOrElse("none")}, " +
         endOffsetCommitStatus
   }
 
