@@ -2,12 +2,15 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallback }
 import org.apache.kafka.common.TopicPartition
-import zio.kafka.consumer.internal.LiveCommitter.CommitOffsets
-import zio.{ Task, UIO }
+import zio.kafka.consumer.internal.Committer.CommitOffsets
+import zio.kafka.consumer.internal.LiveCommitter.Commit
+import zio.{ Chunk, Task, UIO }
 
+import java.lang.Math.max
 import java.util.{ Map => JavaMap }
+import scala.collection.mutable
 
-trait Committer {
+private[internal] trait Committer {
   val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]
 
   /**
@@ -36,4 +39,49 @@ trait Committer {
   def pruneCommittedOffsets(assignedPartitions: Set[TopicPartition]): UIO[Unit]
 
   def getCommittedOffsets: UIO[CommitOffsets]
+}
+
+object Committer {
+
+  // package private for unit testing
+  private[internal] final case class CommitOffsets(offsets: Map[TopicPartition, Long]) {
+
+    /** Returns an estimate of the total offset increase, and a new `CommitOffsets` with the given offsets added. */
+    def addCommits(c: Chunk[Commit]): (Long, CommitOffsets) = {
+      val updatedOffsets = mutable.Map.empty[TopicPartition, Long]
+      updatedOffsets.sizeHint(offsets.size)
+      updatedOffsets ++= offsets
+      var offsetIncrease = 0L
+      c.foreach { commit =>
+        commit.offsets.foreach { case (tp, offsetAndMeta) =>
+          val offset = offsetAndMeta.offset()
+          val maxOffset = updatedOffsets.get(tp) match {
+            case Some(existingOffset) =>
+              offsetIncrease += max(0L, offset - existingOffset)
+              max(existingOffset, offset)
+            case None =>
+              // This partition was not committed to from this consumer yet. Therefore we do not know the offset
+              // increase. A good estimate would be the poll size for this consumer, another okayish estimate is 0.
+              // Lets go with the simplest for now: ```offsetIncrease += 0```
+              offset
+          }
+          updatedOffsets += tp -> maxOffset
+        }
+      }
+      (offsetIncrease, CommitOffsets(offsets = updatedOffsets.toMap))
+    }
+
+    def keepPartitions(tps: Set[TopicPartition]): CommitOffsets =
+      CommitOffsets(offsets.filter { case (tp, _) => tps.contains(tp) })
+
+    def contains(tp: TopicPartition, offset: Long): Boolean =
+      offsets.get(tp).exists(_ >= offset)
+
+    def get(tp: TopicPartition): Option[Long] = offsets.get(tp)
+  }
+
+  private[internal] object CommitOffsets {
+    val empty: CommitOffsets = CommitOffsets(Map.empty)
+  }
+
 }

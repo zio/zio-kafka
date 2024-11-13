@@ -3,7 +3,8 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import zio._
-import zio.kafka.consumer.internal.LiveCommitter.{ Commit, CommitOffsets }
+import zio.kafka.consumer.internal.Committer.CommitOffsets
+import zio.kafka.consumer.internal.LiveCommitter.Commit
 import zio.test._
 
 object CommitOffsetsSpec extends ZIOSpecDefault {
