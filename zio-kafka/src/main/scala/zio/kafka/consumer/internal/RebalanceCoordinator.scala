@@ -1,7 +1,7 @@
 package zio.kafka.consumer.internal
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.RunloopRebalanceListener.{
+import zio.kafka.consumer.internal.RebalanceCoordinator.{
   EndOffsetCommitPending,
   EndOffsetCommitted,
   EndOffsetNotCommitted,
@@ -20,7 +20,7 @@ import zio.{ durationInt, Chunk, Duration, Ref, Task, UIO, ZIO }
  * When rebalanceSafeCommits is enabled, we await completion of all revoked partitions' streams and their commits before
  * continuing.
  */
-private[internal] class RunloopRebalanceListener(
+private[internal] class RebalanceCoordinator(
   lastRebalanceEvent: Ref[RebalanceEvent],
   settings: ConsumerSettings,
   consumer: ConsumerAccess,
@@ -256,7 +256,7 @@ private[internal] class RunloopRebalanceListener(
 
 }
 
-private[internal] object RunloopRebalanceListener {
+private[internal] object RebalanceCoordinator {
 
   sealed trait EndOffsetCommitStatus
   case object EndOffsetNotCommitted  extends EndOffsetCommitStatus { override def toString = "not committed"  }

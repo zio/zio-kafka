@@ -11,7 +11,7 @@ import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.internal.RunloopRebalanceListener.RebalanceEvent
+import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
@@ -27,7 +27,7 @@ private[consumer] final class Runloop private (
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
   diagnostics: Diagnostics,
   currentStateRef: Ref[State],
-  runloopRebalanceListener: RunloopRebalanceListener,
+  rebalanceCoordinator: RebalanceCoordinator,
   consumerMetrics: ConsumerMetrics,
   committer: Committer
 ) {
@@ -76,7 +76,7 @@ private[consumer] final class Runloop private (
         case _                      => settings.rebalanceListener.runOnExecutor(topLevelExecutor)
       }
 
-    RebalanceListener.toKafka(runloopRebalanceListener.toRebalanceListener ++ userRebalanceListener, sameThreadRuntime)
+    RebalanceListener.toKafka(rebalanceCoordinator.toRebalanceListener ++ userRebalanceListener, sameThreadRuntime)
   }
 
   /**
@@ -233,7 +233,7 @@ private[consumer] final class Runloop private (
                        tpWithoutData = requestedPartitions -- providedTps
                      )
                    }
-            pollresult <- runloopRebalanceListener.getAndResetLastEvent.flatMap {
+            pollresult <- rebalanceCoordinator.getAndResetLastEvent.flatMap {
                             case RebalanceEvent(false, _, _, _, _) =>
                               // The fast track, rebalance listener was not invoked:
                               //   no assignment changes, no new commits, only new records.
@@ -483,7 +483,9 @@ private[consumer] final class Runloop private (
         for {
           _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
           _ <- consumer.runloopAccess { consumer =>
-                 committer.processQueuedCommits((offsets, callback) => ZIO.attempt(consumer.commitAsync(offsets, callback)))
+                 committer.processQueuedCommits((offsets, callback) =>
+                   ZIO.attempt(consumer.commitAsync(offsets, callback))
+                 )
                }
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
           stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
@@ -578,21 +580,21 @@ object Runloop {
       executor          <- ZIO.executor
       metrics = new ZioConsumerMetrics(settings.metricLabels)
       committer <- LiveCommitter
-          .make(
-            settings.commitTimeout,
-            diagnostics,
-            metrics,
-            commandQueue.offer(RunloopCommand.CommitAvailable).unit,
-            sameThreadRuntime
-          )
-      rebalanceListener = new RunloopRebalanceListener(
-                            lastRebalanceEvent,
-                            settings,
-                            consumer,
-                            maxRebalanceDuration,
-                            currentStateRef.get.map(_.assignedStreams),
-                            committer
-                          )
+                     .make(
+                       settings.commitTimeout,
+                       diagnostics,
+                       metrics,
+                       commandQueue.offer(RunloopCommand.CommitAvailable).unit,
+                       sameThreadRuntime
+                     )
+      rebalanceCoordinator = new RebalanceCoordinator(
+                               lastRebalanceEvent,
+                               settings,
+                               consumer,
+                               maxRebalanceDuration,
+                               currentStateRef.get.map(_.assignedStreams),
+                               committer
+                             )
       runloop = new Runloop(
                   settings = settings,
                   topLevelExecutor = executor,
@@ -603,8 +605,8 @@ object Runloop {
                   partitionsHub = partitionsHub,
                   diagnostics = diagnostics,
                   currentStateRef = currentStateRef,
-                  runloopRebalanceListener = rebalanceListener,
                   consumerMetrics = metrics,
+                  rebalanceCoordinator = rebalanceCoordinator,
                   committer = committer
                 )
       _ <- ZIO.logDebug("Starting Runloop")

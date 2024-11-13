@@ -5,10 +5,11 @@ import org.apache.kafka.common.TopicPartition
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.LiveCommitter.{ Commit, CommitOffsets }
+import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
 import zio.test._
-import zio.{ durationInt, Chunk, Promise, Ref, Task, UIO, ZIO }
+import zio.{ durationInt, Chunk, Promise, Ref, Scope, Task, UIO, ZIO }
 
 /**
  * Runloop should:
@@ -18,19 +19,19 @@ import zio.{ durationInt, Chunk, Promise, Ref, Task, UIO, ZIO }
  *     - End streams when partitions are assigned
  */
 
-object RunloopRebalanceListenerSpec extends ZIOSpecDefaultSlf4j {
+object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
   type BinaryMockConsumer = MockConsumer[Array[Byte], Array[Byte]]
 
   def spec = suite("RunloopRebalanceListener")(
     test("should track assigned, revoked and lost partitions") {
       for {
-        lastEvent <- Ref.make(RunloopRebalanceListener.RebalanceEvent.None)
+        lastEvent <- Ref.make(RebalanceCoordinator.RebalanceEvent.None)
         consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {}
         tp       = new TopicPartition("topic", 0)
         tp2      = new TopicPartition("topic", 1)
         tp3      = new TopicPartition("topic", 2)
         tp4      = new TopicPartition("topic", 3)
-        listener <- makeListener(lastEvent, consumer)
+        listener <- makeCoordinator(lastEvent, consumer)
         _        <- listener.toRebalanceListener.onAssigned(Set(tp))
         _        <- listener.toRebalanceListener.onAssigned(Set(tp4))
         _        <- listener.toRebalanceListener.onRevoked(Set(tp2))
@@ -44,13 +45,13 @@ object RunloopRebalanceListenerSpec extends ZIOSpecDefaultSlf4j {
     },
     test("should end streams for revoked and lost partitions") {
       for {
-        lastEvent <- Ref.make(RunloopRebalanceListener.RebalanceEvent.None)
+        lastEvent <- Ref.make(RebalanceCoordinator.RebalanceEvent.None)
         consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {}
         tp       = new TopicPartition("topic", 0)
         tp2      = new TopicPartition("topic", 1)
         tp3      = new TopicPartition("topic", 2)
         assignedStreams <- ZIO.foreach(Chunk(tp, tp2, tp3))(makeStreamControl)
-        listener        <- makeListener(lastEvent, consumer, assignedStreams = assignedStreams)
+        listener        <- makeCoordinator(lastEvent, consumer, assignedStreams = assignedStreams)
         _               <- listener.toRebalanceListener.onAssigned(Set(tp))
         _               <- listener.toRebalanceListener.onRevoked(Set(tp2))
         _               <- listener.toRebalanceListener.onLost(Set(tp3))
@@ -63,7 +64,7 @@ object RunloopRebalanceListenerSpec extends ZIOSpecDefaultSlf4j {
     suite("rebalanceSafeCommits")(
       test("should wait for the last pulled offset to commit") {
         for {
-          lastEvent <- Ref.make(RunloopRebalanceListener.RebalanceEvent.None)
+          lastEvent <- Ref.make(RebalanceCoordinator.RebalanceEvent.None)
           consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {}
           tp       = new TopicPartition("topic", 0)
           streamControl <- makeStreamControl(tp)
@@ -92,7 +93,7 @@ object RunloopRebalanceListenerSpec extends ZIOSpecDefaultSlf4j {
               .runDrain
               .forkScoped
           listener <-
-            makeListener(
+            makeCoordinator(
               lastEvent,
               consumer,
               assignedStreams = Chunk(streamControl),
@@ -111,16 +112,16 @@ object RunloopRebalanceListenerSpec extends ZIOSpecDefaultSlf4j {
   private def makeStreamControl(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(tp, ZIO.unit, Diagnostics.NoOp, 30.seconds)
 
-  private def makeListener(
-    lastEvent: Ref[RunloopRebalanceListener.RebalanceEvent],
+  private def makeCoordinator(
+    lastEvent: Ref[RebalanceEvent],
     mockConsumer: BinaryMockConsumer,
     assignedStreams: Chunk[PartitionStreamControl] = Chunk.empty,
     committer: Committer = new MockCommitter {},
     settings: ConsumerSettings = ConsumerSettings(List("")),
     rebalanceSafeCommits: Boolean = false
-  ) =
+  ): ZIO[Scope, Throwable, RebalanceCoordinator] =
     ConsumerAccess.make(mockConsumer).map { consumerAccess =>
-      new RunloopRebalanceListener(
+      new RebalanceCoordinator(
         lastEvent,
         settings.withRebalanceSafeCommits(rebalanceSafeCommits),
         consumerAccess,
