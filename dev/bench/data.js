@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1731549374695,
+  "lastUpdate": 1731574045199,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -15642,6 +15642,90 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 889.55512714,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "145262613+zio-scala-steward[bot]@users.noreply.github.com",
+            "name": "zio-scala-steward[bot]",
+            "username": "zio-scala-steward[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b8a4e06547eb9a8372092d4f55a9b359329720f2",
+          "message": "Update zio-logging-slf4j, ... to 2.4.0 (#1387)\n\n## About this PR\r\n📦 Updates \r\n* [dev.zio:zio-logging-slf4j](https://github.com/zio/zio-logging)\r\n* [dev.zio:zio-logging-slf4j2](https://github.com/zio/zio-logging)\r\n\r\n from `2.3.2` to `2.4.0`\r\n\r\n📜 [GitHub Release\r\nNotes](https://github.com/zio/zio-logging/releases/tag/v2.4.0) -\r\n[Version\r\nDiff](https://github.com/zio/zio-logging/compare/v2.3.2...v2.4.0)\r\n\r\n## Usage\r\n✅ **Please merge!**\r\n\r\nI'll automatically update this PR to resolve conflicts as long as you\r\ndon't change it yourself.\r\n\r\nIf you'd like to skip this version, you can just close this PR. If you\r\nhave any feedback, just mention me in the comments below.\r\n\r\nConfigure Scala Steward for your repository with a\r\n[`.scala-steward.conf`](https://github.com/scala-steward-org/scala-steward/blob/f89466c2b9d28c5029de11ecd442329caf0f5b70/docs/repo-specific-configuration.md)\r\nfile.\r\n\r\n_Have a fantastic day writing Scala!_\r\n\r\n<details>\r\n<summary>⚙ Adjust future updates</summary>\r\n\r\nAdd this to your `.scala-steward.conf` file to ignore future updates of\r\nthis dependency:\r\n```\r\nupdates.ignore = [ { groupId = \"dev.zio\" } ]\r\n```\r\nOr, add this to slow down future updates of this dependency:\r\n```\r\ndependencyOverrides = [{\r\n  pullRequests = { frequency = \"30 days\" },\r\n  dependency = { groupId = \"dev.zio\" }\r\n}]\r\n```\r\n</details>\r\n\r\n<sup>\r\nlabels: library-update, early-semver-minor, semver-spec-minor,\r\ncommit-count:1\r\n</sup>\r\n\r\n<!-- scala-steward = {\r\n  \"Update\" : {\r\n    \"ForGroupId\" : {\r\n      \"forArtifactIds\" : [\r\n        {\r\n          \"ForArtifactId\" : {\r\n            \"crossDependency\" : [\r\n              {\r\n                \"groupId\" : \"dev.zio\",\r\n                \"artifactId\" : {\r\n                  \"name\" : \"zio-logging-slf4j\",\r\n                  \"maybeCrossName\" : \"zio-logging-slf4j_2.13\"\r\n                },\r\n                \"version\" : \"2.3.2\",\r\n                \"sbtVersion\" : null,\r\n                \"scalaVersion\" : null,\r\n                \"configurations\" : \"test\"\r\n              },\r\n              {\r\n                \"groupId\" : \"dev.zio\",\r\n                \"artifactId\" : {\r\n                  \"name\" : \"zio-logging-slf4j\",\r\n                  \"maybeCrossName\" : \"zio-logging-slf4j_3\"\r\n                },\r\n                \"version\" : \"2.3.2\",\r\n                \"sbtVersion\" : null,\r\n                \"scalaVersion\" : null,\r\n                \"configurations\" : \"test\"\r\n              }\r\n            ],\r\n            \"newerVersions\" : [\r\n              \"2.4.0\"\r\n            ],\r\n            \"newerGroupId\" : null,\r\n            \"newerArtifactId\" : null\r\n          }\r\n        },\r\n        {\r\n          \"ForArtifactId\" : {\r\n            \"crossDependency\" : [\r\n              {\r\n                \"groupId\" : \"dev.zio\",\r\n                \"artifactId\" : {\r\n                  \"name\" : \"zio-logging-slf4j2\",\r\n                  \"maybeCrossName\" : \"zio-logging-slf4j2_2.13\"\r\n                },\r\n                \"version\" : \"2.3.2\",\r\n                \"sbtVersion\" : null,\r\n                \"scalaVersion\" : null,\r\n                \"configurations\" : null\r\n              }\r\n            ],\r\n            \"newerVersions\" : [\r\n              \"2.4.0\"\r\n            ],\r\n            \"newerGroupId\" : null,\r\n            \"newerArtifactId\" : null\r\n          }\r\n        }\r\n      ]\r\n    }\r\n  },\r\n  \"Labels\" : [\r\n    \"library-update\",\r\n    \"early-semver-minor\",\r\n    \"semver-spec-minor\",\r\n    \"commit-count:1\"\r\n  ]\r\n} -->\r\n\r\nCo-authored-by: zio-scala-steward[bot] <145262613+zio-scala-steward[bot]@users.noreply.github.com>",
+          "timestamp": "2024-11-14T09:28:47+01:00",
+          "tree_id": "1c00609685e187fa507259adb935817be0230cb0",
+          "url": "https://github.com/zio/zio-kafka/commit/b8a4e06547eb9a8372092d4f55a9b359329720f2"
+        },
+        "date": 1731574043281,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordPar",
+            "value": 14.222158417655125,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordSeq",
+            "value": 11.318375189822234,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 539.21523178,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 540.77679598,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkPar",
+            "value": 184.36306651333334,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkSeq",
+            "value": 489.35459155999996,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 628.14539256,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 633.0862072000001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1208.6657192999999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 935.57287542,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
