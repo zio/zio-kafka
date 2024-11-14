@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
 class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
   val topic1                      = "topic1"
   val nrPartitions                = 6
-  val nrMessages                  = 50000
+  val nrMessages                  = 100000
   val kvs: List[(String, String)] = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
 
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka with Producer] =
