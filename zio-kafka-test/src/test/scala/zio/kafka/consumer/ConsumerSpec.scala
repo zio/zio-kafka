@@ -1496,6 +1496,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 // Starting a consumption session to start the Runloop.
                 fiber <- consumer
                            .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                           .tap(_ => ZIO.sleep(1.millisecond)) // sleep to avoid consuming all messages in under 200 millis
                            .take(numberOfMessages.toLong)
                            .runCount
                            .forkScoped
