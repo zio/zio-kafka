@@ -13,13 +13,14 @@ private[consumer] final class ConsumerAccess(
   private[consumer] val consumer: ByteArrayKafkaConsumer,
   access: Semaphore
 ) {
+
   def withConsumer[A](f: ByteArrayKafkaConsumer => A): Task[A] =
     withConsumerZIO[Any, A](c => ZIO.attempt(f(c)))
 
   def withConsumerZIO[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
     access.withPermit(withConsumerNoPermit(f))
 
-  private[consumer] def withConsumerNoPermit[R, A](
+  private def withConsumerNoPermit[R, A](
     f: ByteArrayKafkaConsumer => RIO[R, A]
   ): RIO[R, A] =
     ZIO
@@ -31,10 +32,17 @@ private[consumer] final class ConsumerAccess(
       .flatMap(fib => fib.join.onInterrupt(ZIO.succeed(consumer.wakeup()) *> fib.interrupt))
 
   /**
-   * Do not use this method outside of the Runloop
+   * Use this method only from Runloop.
    */
   private[internal] def runloopAccess[R, E, A](f: ByteArrayKafkaConsumer => ZIO[R, E, A]): ZIO[R, E, A] =
     access.withPermit(f(consumer))
+
+  /**
+   * Use this method ONLY from the rebalance listener.
+   */
+  private[internal] def rebalanceListenerAccess[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
+    withConsumerNoPermit(f)
+
 }
 
 private[consumer] object ConsumerAccess {
@@ -42,6 +50,7 @@ private[consumer] object ConsumerAccess {
 
   def make(settings: ConsumerSettings): ZIO[Scope, Throwable, ConsumerAccess] =
     for {
+      access <- Semaphore.make(1)
       consumer <- ZIO.acquireRelease {
                     ZIO.attemptBlocking {
                       new KafkaConsumer[Array[Byte], Array[Byte]](
@@ -51,13 +60,7 @@ private[consumer] object ConsumerAccess {
                       )
                     }
                   } { consumer =>
-                    ZIO.blocking(ZIO.attempt(consumer.close(settings.closeTimeout))).orDie
+                    ZIO.blocking(access.withPermit(ZIO.attempt(consumer.close(settings.closeTimeout)))).orDie
                   }
-      result <- make(consumer)
-    } yield result
-
-  def make(consumer: ByteArrayKafkaConsumer): ZIO[Scope, Throwable, ConsumerAccess] =
-    for {
-      access <- Semaphore.make(1)
     } yield new ConsumerAccess(consumer, access)
 }

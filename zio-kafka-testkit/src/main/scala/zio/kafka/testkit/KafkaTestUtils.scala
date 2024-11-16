@@ -34,19 +34,31 @@ object KafkaTestUtils {
     )
 
   /**
-   * Default transactional Producer settings you can use in your tests.
+   * Default transactional producer settings you can use in your tests.
+   *
+   * Note: to run multiple tests in parallel, you need to use different transactional ids via
+   * `transactionalProducerSettings(transactionalId)`.
    */
   val transactionalProducerSettings: ZIO[Kafka, Nothing, TransactionalProducerSettings] =
+    transactionalProducerSettings("test-transaction")
+
+  def transactionalProducerSettings(transactionalId: String): ZIO[Kafka, Nothing, TransactionalProducerSettings] =
     ZIO
       .serviceWith[Kafka](_.bootstrapServers)
-      .map(TransactionalProducerSettings(_, "test-transaction"))
+      .map(TransactionalProducerSettings(_, transactionalId))
 
   /**
-   * Transactional Producer instance you can use in your tests. It uses the default transactional Producer settings.
+   * Transactional producer instance you can use in your tests. It uses the default transactional producer settings.
+   *
+   * Note: to run multiple tests in parallel, you need to use different transactional ids via
+   * `transactionalProducer(transactionalId)`.
    */
   val transactionalProducer: ZLayer[Kafka, Throwable, TransactionalProducer] =
+    transactionalProducer("test-transaction")
+
+  def transactionalProducer(transactionalId: String): ZLayer[Kafka, Throwable, TransactionalProducer] =
     ZLayer.makeSome[Kafka, TransactionalProducer](
-      ZLayer(transactionalProducerSettings),
+      ZLayer(transactionalProducerSettings(transactionalId)),
       TransactionalProducer.live
     )
 
@@ -114,8 +126,10 @@ object KafkaTestUtils {
     groupId: Option[String] = None,
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
-    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     restartStreamOnRebalancing: Boolean = false,
+    rebalanceSafeCommits: Boolean = false,
+    maxRebalanceDuration: Duration = 3.minutes,
     maxPollInterval: Duration = 5.minutes,
     `max.poll.records`: Int = 100, // settings this higher can cause concurrency bugs to go unnoticed
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
@@ -130,7 +144,6 @@ object KafkaTestUtils {
         .withMaxPollRecords(`max.poll.records`)
         .withCommitTimeout(commitTimeout)
         .withProperties(
-          ConsumerConfig.AUTO_OFFSET_RESET_CONFIG        -> "earliest",
           ConsumerConfig.METADATA_MAX_AGE_CONFIG         -> "100",
           ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG       -> "3000",
           ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG    -> "1000",
@@ -138,6 +151,8 @@ object KafkaTestUtils {
         )
         .withOffsetRetrieval(offsetRetrieval)
         .withRestartStreamOnRebalancing(restartStreamOnRebalancing)
+        .withRebalanceSafeCommits(rebalanceSafeCommits)
+        .withMaxRebalanceDuration(maxRebalanceDuration)
         .withProperties(properties)
 
       val withClientInstanceId = clientInstanceId.fold(settings)(settings.withGroupInstanceId)
@@ -152,8 +167,9 @@ object KafkaTestUtils {
     clientId: String,
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
-    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     restartStreamOnRebalancing: Boolean = false,
+    rebalanceSafeCommits: Boolean = false,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     consumerSettings(
@@ -163,6 +179,7 @@ object KafkaTestUtils {
       allowAutoCreateTopics = allowAutoCreateTopics,
       offsetRetrieval = offsetRetrieval,
       restartStreamOnRebalancing = restartStreamOnRebalancing,
+      rebalanceSafeCommits = rebalanceSafeCommits,
       properties = properties
     )
       .map(
@@ -202,6 +219,8 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
+    rebalanceSafeCommits: Boolean = false,
+    maxRebalanceDuration: Duration = 3.minutes,
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
     properties: Map[String, String] = Map.empty
   ): ZLayer[Kafka, Throwable, Consumer] =
@@ -213,6 +232,8 @@ object KafkaTestUtils {
         allowAutoCreateTopics = allowAutoCreateTopics,
         offsetRetrieval = offsetRetrieval,
         restartStreamOnRebalancing = restartStreamOnRebalancing,
+        rebalanceSafeCommits = rebalanceSafeCommits,
+        maxRebalanceDuration = maxRebalanceDuration,
         properties = properties,
         commitTimeout = commitTimeout
       )
@@ -225,10 +246,11 @@ object KafkaTestUtils {
     clientId: String,
     groupId: String,
     clientInstanceId: Option[String] = None,
-    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
     restartStreamOnRebalancing: Boolean = false,
+    rebalanceSafeCommits: Boolean = false,
     properties: Map[String, String] = Map.empty,
     rebalanceListener: RebalanceListener = RebalanceListener.noop
   ): ZLayer[Kafka, Throwable, Consumer] =
@@ -240,6 +262,7 @@ object KafkaTestUtils {
         allowAutoCreateTopics = allowAutoCreateTopics,
         offsetRetrieval = offsetRetrieval,
         restartStreamOnRebalancing = restartStreamOnRebalancing,
+        rebalanceSafeCommits = rebalanceSafeCommits,
         properties = properties
       ).map(_.withRebalanceListener(rebalanceListener))
     ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live

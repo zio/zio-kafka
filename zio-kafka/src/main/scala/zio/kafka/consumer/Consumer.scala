@@ -11,6 +11,7 @@ import org.apache.kafka.common._
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.consumer.diagnostics.Diagnostics.ConcurrentDiagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
@@ -169,8 +170,7 @@ trait Consumer {
 }
 
 object Consumer {
-  case object RunloopTimeout extends RuntimeException("Timeout in Runloop") with NoStackTrace
-  case object CommitTimeout  extends RuntimeException("Commit timeout") with NoStackTrace
+  case object CommitTimeout extends RuntimeException("Commit timeout") with NoStackTrace
 
   val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
@@ -184,31 +184,80 @@ object Consumer {
       } yield consumer
     }
 
+  /**
+   * A new consumer.
+   *
+   * @param diagnostics
+   *   an optional callback for key events in the consumer life-cycle. The callbacks will be executed in a separate
+   *   fiber. Since the events are queued, failure to handle these events leads to out of memory errors
+   */
   def make(
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
-      _              <- SslHelper.validateEndpoint(settings.driverSettings)
-      consumerAccess <- ConsumerAccess.make(settings)
-      runloopAccess  <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+      wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
+      _                  <- ZIO.addFinalizer(wrappedDiagnostics.emit(Finalization.ConsumerFinalized))
+      _                  <- SslHelper.validateEndpoint(settings.driverSettings)
+      consumerAccess     <- ConsumerAccess.make(settings)
+      runloopAccess      <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**
    * Create a zio-kafka Consumer from an org.apache.kafka KafkaConsumer
    *
-   * You are responsible for creating and closing the KafkaConsumer
+   * You are responsible for creating and closing the KafkaConsumer. Make sure auto.commit is disabled.
    */
+  @deprecated("Use fromJavaConsumerWithPermit", since = "2.9.0")
   def fromJavaConsumer(
     javaConsumer: JConsumer[Array[Byte], Array[Byte]],
     settings: ConsumerSettings,
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _              <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
-      consumerAccess <- ConsumerAccess.make(javaConsumer)
-      runloopAccess  <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+      _      <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
+      access <- Semaphore.make(1)
+      consumerAccess = new ConsumerAccess(javaConsumer, access)
+      runloopAccess <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+    } yield new ConsumerLive(consumerAccess, runloopAccess)
+
+  /**
+   * Create a zio-kafka [[Consumer]] from an `org.apache.kafka KafkaConsumer`.
+   *
+   * You are responsible for all of the following:
+   *   - creating and closing the `KafkaConsumer`,
+   *   - making sure `auto.commit` is disabled,
+   *   - creating `access` as a fair semaphore with a single permit,
+   *   - acquire a permit from `access` before using the consumer, and release if afterwards,
+   *   - not using the following consumer methods: `subscribe`, `unsubscribe`, `assign`, `poll`, `commit*`, `seek`,
+   *     `pause`, `resume`, and `enforceRebalance`,
+   *   - keeping the consumer config given to the java consumer in sync with the properties in `settings` (for example
+   *     by constructing `settings` with `ConsumerSettings(bootstrapServers).withProperties(config)`).
+   *
+   * Any deviation of these rules is likely to cause hard to track errors.
+   *
+   * Semaphore `access` is shared between you and the zio-kafka consumer. Use it as short as possible; while you hold a
+   * permit the zio-kafka consumer is blocked.
+   *
+   * @param javaConsumer
+   *   Consumer
+   * @param settings
+   *   Settings
+   * @param access
+   *   A Semaphore with 1 permit.
+   * @param diagnostics
+   *   Optional diagnostics listener
+   */
+  def fromJavaConsumerWithPermit(
+    javaConsumer: JConsumer[Array[Byte], Array[Byte]],
+    settings: ConsumerSettings,
+    access: Semaphore,
+    diagnostics: Diagnostics = Diagnostics.NoOp
+  ): ZIO[Scope, Throwable, Consumer] =
+    for {
+      _ <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
+      consumerAccess = new ConsumerAccess(javaConsumer, access)
+      runloopAccess <- RunloopAccess.make(settings, consumerAccess, diagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**
@@ -416,10 +465,14 @@ object Consumer {
   ): ZIO[R with Consumer, Throwable, Unit] =
     ZIO.serviceWithZIO[Consumer](_.commitOrRetry[R](offset, policy))
 
+  /** See ConsumerSettings.withOffsetRetrieval. */
   sealed trait OffsetRetrieval
   object OffsetRetrieval {
-    final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest)                extends OffsetRetrieval
-    final case class Manual(getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]]) extends OffsetRetrieval
+    final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest) extends OffsetRetrieval
+    final case class Manual(
+      getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]],
+      defaultStrategy: AutoOffsetStrategy = AutoOffsetStrategy.Latest
+    ) extends OffsetRetrieval
   }
 
   sealed trait AutoOffsetStrategy { self =>
@@ -430,6 +483,7 @@ object Consumer {
     }
   }
 
+  /** See ConsumerSettings.withOffsetRetrieval. */
   object AutoOffsetStrategy {
     case object Earliest extends AutoOffsetStrategy
     case object Latest   extends AutoOffsetStrategy
@@ -581,6 +635,7 @@ private[consumer] final class ConsumerLive private[consumer] (
       .retry(
         Schedule.recurWhile[Throwable] {
           case _: RetriableCommitFailedException => true
+          case Consumer.CommitTimeout            => true
           case _                                 => false
         } && policy
       )

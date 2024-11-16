@@ -6,7 +6,7 @@ sidebar_label: "Getting Started"
 
 [ZIO Kafka](https://github.com/zio/zio-kafka) is a Kafka client for ZIO. It provides a purely functional, streams-based interface to the Kafka client and integrates effortlessly with ZIO and ZIO Streams.
 
-@PROJECT_BADGES@
+@PROJECT_BADGES@ [![Scala Steward badge](https://img.shields.io/badge/Scala_Steward-helping-blue.svg?style=flat&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAQCAMAAAARSr4IAAAAVFBMVEUAAACHjojlOy5NWlrKzcYRKjGFjIbp293YycuLa3pYY2LSqql4f3pCUFTgSjNodYRmcXUsPD/NTTbjRS+2jomhgnzNc223cGvZS0HaSD0XLjbaSjElhIr+AAAAAXRSTlMAQObYZgAAAHlJREFUCNdNyosOwyAIhWHAQS1Vt7a77/3fcxxdmv0xwmckutAR1nkm4ggbyEcg/wWmlGLDAA3oL50xi6fk5ffZ3E2E3QfZDCcCN2YtbEWZt+Drc6u6rlqv7Uk0LdKqqr5rk2UCRXOk0vmQKGfc94nOJyQjouF9H/wCc9gECEYfONoAAAAASUVORK5CYII=)](https://scala-steward.org)
 
 ## Introduction
 
@@ -21,6 +21,15 @@ In order to use this library, we need to add the following line in our `build.sb
 ```scala
 libraryDependencies += "dev.zio" %% "zio-kafka"         % "@VERSION@"
 libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "@VERSION@" % Test
+```
+
+Snapshots are available on Sonatype's snapshot repository https://oss.sonatype.org/content/repositories/snapshots.
+[Browse here](https://oss.sonatype.org/content/repositories/snapshots/dev/zio/zio-kafka_3/) to find available versions.
+
+For `zio-kafka-testkit` together with Scala 3, you also need to add the following to your `build.sbt` file:
+
+```scala
+excludeDependencies += "org.scala-lang.modules" % "scala-collection-compat_2.13"
 ```
 
 ## Example
@@ -110,7 +119,9 @@ object MainApp extends ZIOAppDefault {
 
 ## Resources
 
-- [An Introduction to ZIO Kafka](https://ziverge.com/blog/introduction-to-zio-kafka/)
+- [ZIO Kafka tutorial](https://zio.dev/guides/tutorials/producing-consuming-data-from-kafka-topics/)
+- [Making ZIO-Kafka Safer and Faster in 2023](https://www.youtube.com/watch?v=MJoRwEyyVxM) by Erik van Oosten (November 2023)
+- [ZIO Kafka with Scala: A Tutorial](https://www.youtube.com/watch?v=ExFjjczwwHs) by Rock the JVM (August 2021)
 - [Streaming microservices with ZIO and Kafka](https://scalac.io/streaming-microservices-with-zio-and-kafka/) by Aleksandar Skrbic (February 2021)
 - [ZIO WORLD - ZIO Kafka](https://www.youtube.com/watch?v=GECv1ONieLw) by Aleksandar Skrbic (March 2020) — Aleksandar Skrbic presented ZIO Kafka, a critical library for the modern Scala developer, which hides some of the complexities of Kafka.
 

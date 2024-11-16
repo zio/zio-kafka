@@ -39,78 +39,75 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
   override val kafkaPrefix: String = "adminspec"
 
-  private def listTopicsFiltered(client: AdminClient): ZIO[Any, Throwable, Map[String, AdminClient.TopicListing]] =
-    client.listTopics().map(_.filter { case (key, _) => key.startsWith("adminspec-") })
+  private def listTopicsFiltered(
+    client: AdminClient,
+    prefix: String
+  ): ZIO[Any, Throwable, Map[String, AdminClient.TopicListing]] =
+    client.listTopics().map(_.filter { case (key, _) => key.startsWith(prefix) })
 
   override def spec: Spec[TestEnvironment with Scope, Throwable] =
     suite("client admin test")(
       test("create, list, delete single topic") {
+        val prefix = "adminspec1"
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1 <- listTopicsFiltered(client)
-            _     <- client.createTopic(AdminClient.NewTopic("adminspec-topic1", 1, 1))
-            list2 <- listTopicsFiltered(client)
-            _     <- client.deleteTopic("adminspec-topic1")
-            list3 <- listTopicsFiltered(client)
-          } yield assert(list1.size)(equalTo(0)) &&
-            assert(list2.size)(equalTo(1)) &&
-            assert(list3.size)(equalTo(0))
-
+            list1 <- listTopicsFiltered(client, prefix)
+            _     <- client.createTopic(AdminClient.NewTopic(s"$prefix-topic1", 1, 1))
+            list2 <- listTopicsFiltered(client, prefix)
+            _     <- client.deleteTopic(s"$prefix-topic1")
+            list3 <- listTopicsFiltered(client, prefix)
+          } yield assertTrue(list1.isEmpty, list2.size == 1, list3.isEmpty)
         }
       },
       test("create, list, delete multiple topic") {
+        val prefix = "adminspec2"
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1 <- listTopicsFiltered(client)
+            list1 <- listTopicsFiltered(client, prefix)
             _ <- client.createTopics(
-                   List(AdminClient.NewTopic("adminspec-topic2", 1, 1), AdminClient.NewTopic("adminspec-topic3", 4, 1))
+                   List(AdminClient.NewTopic(s"$prefix-topic2", 1, 1), AdminClient.NewTopic(s"$prefix-topic3", 4, 1))
                  )
-            list2 <- listTopicsFiltered(client)
-            _     <- client.deleteTopic("adminspec-topic2")
-            list3 <- listTopicsFiltered(client)
-            _     <- client.deleteTopic("adminspec-topic3")
-            list4 <- listTopicsFiltered(client)
-          } yield assert(list1.size)(equalTo(0)) &&
-            assert(list2.size)(equalTo(2)) &&
-            assert(list3.size)(equalTo(1)) &&
-            assert(list4.size)(equalTo(0))
-
+            list2 <- listTopicsFiltered(client, prefix)
+            _     <- client.deleteTopic(s"$prefix-topic2")
+            list3 <- listTopicsFiltered(client, prefix)
+            _     <- client.deleteTopic(s"$prefix-topic3")
+            list4 <- listTopicsFiltered(client, prefix)
+          } yield assertTrue(list1.isEmpty, list2.size == 2, list3.size == 1, list4.isEmpty)
         }
       },
       test("just list") {
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1 <- listTopicsFiltered(client)
-          } yield assert(list1.size)(equalTo(0))
+            list1 <- listTopicsFiltered(client, "adminspec3")
+          } yield assertTrue(list1.isEmpty)
 
         }
       },
       test("create, describe, delete multiple topic") {
+        val prefix = "adminspec4"
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1 <- listTopicsFiltered(client)
+            list1 <- listTopicsFiltered(client, prefix)
             _ <- client.createTopics(
-                   List(AdminClient.NewTopic("adminspec-topic4", 1, 1), AdminClient.NewTopic("adminspec-topic5", 4, 1))
+                   List(AdminClient.NewTopic(s"$prefix-topic4", 1, 1), AdminClient.NewTopic(s"$prefix-topic5", 4, 1))
                  )
-            descriptions <- client.describeTopics(List("adminspec-topic4", "adminspec-topic5"))
-            _            <- client.deleteTopics(List("adminspec-topic4", "adminspec-topic5"))
-            list3        <- listTopicsFiltered(client)
-          } yield assert(list1.size)(equalTo(0)) &&
-            assert(descriptions.size)(equalTo(2)) &&
-            assert(list3.size)(equalTo(0))
-
+            descriptions <- client.describeTopics(List(s"$prefix-topic4", s"$prefix-topic5"))
+            _            <- client.deleteTopics(List(s"$prefix-topic4", s"$prefix-topic5"))
+            list3        <- listTopicsFiltered(client, prefix)
+          } yield assertTrue(list1.isEmpty, descriptions.size == 2, list3.isEmpty)
         }
       },
       test("create, describe topic config, delete multiple topic") {
+        val prefix = "adminspec5"
         KafkaTestUtils.withAdmin { client =>
           for {
-            list1 <- listTopicsFiltered(client)
+            list1 <- listTopicsFiltered(client, prefix)
             _ <- client.createTopics(
-                   List(AdminClient.NewTopic("adminspec-topic6", 1, 1), AdminClient.NewTopic("adminspec-topic7", 4, 1))
+                   List(AdminClient.NewTopic(s"$prefix-topic6", 1, 1), AdminClient.NewTopic(s"$prefix-topic7", 4, 1))
                  )
             configResources = List(
-                                ConfigResource(ConfigResourceType.Topic, "adminspec-topic6"),
-                                ConfigResource(ConfigResourceType.Topic, "adminspec-topic7")
+                                ConfigResource(ConfigResourceType.Topic, s"$prefix-topic6"),
+                                ConfigResource(ConfigResourceType.Topic, s"$prefix-topic7")
                               )
             configs <- client.describeConfigs(configResources) <&>
                          client.describeConfigsAsync(configResources).flatMap { configs =>
@@ -118,12 +115,9 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                              configTask.map(config => (resource, config))
                            }
                          }
-            _     <- client.deleteTopics(List("adminspec-topic6", "adminspec-topic7"))
-            list3 <- listTopicsFiltered(client)
-          } yield assert(list1.size)(equalTo(0)) &&
-            assert(configs._1.size)(equalTo(2)) &&
-            assert(configs._2.size)(equalTo(2)) &&
-            assert(list3.size)(equalTo(0))
+            _     <- client.deleteTopics(List(s"$prefix-topic6", s"$prefix-topic7"))
+            list3 <- listTopicsFiltered(client, prefix)
+          } yield assertTrue(list1.isEmpty, configs._1.size == 2, configs._2.size == 2, list3.isEmpty)
         }
       },
       test("list cluster nodes") {
@@ -638,7 +632,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
         }
       }
-    ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ sequential @@ timeout(2.minutes)
+    ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ timeout(2.minutes)
 
   private def consumeNoop(
     topicName: String,

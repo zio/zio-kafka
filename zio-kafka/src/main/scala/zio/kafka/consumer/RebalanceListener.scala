@@ -2,16 +2,17 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 import org.apache.kafka.common.TopicPartition
-import zio.{ Runtime, Task, Unsafe, ZIO }
+import zio.{ Executor, Runtime, Task, Unsafe, ZIO }
+
 import scala.jdk.CollectionConverters._
 
 /**
  * ZIO wrapper around Kafka's `ConsumerRebalanceListener` to work with Scala collection types and ZIO effects.
  */
 final case class RebalanceListener(
-  onAssigned: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
-  onRevoked: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
-  onLost: (Set[TopicPartition], RebalanceConsumer) => Task[Unit]
+  onAssigned: Set[TopicPartition] => Task[Unit],
+  onRevoked: Set[TopicPartition] => Task[Unit],
+  onLost: Set[TopicPartition] => Task[Unit]
 ) {
 
   /**
@@ -19,21 +20,42 @@ final case class RebalanceListener(
    */
   def ++(that: RebalanceListener): RebalanceListener =
     RebalanceListener(
-      (assigned, consumer) => onAssigned(assigned, consumer) *> that.onAssigned(assigned, consumer),
-      (revoked, consumer) => onRevoked(revoked, consumer) *> that.onRevoked(revoked, consumer),
-      (lost, consumer) => onLost(lost, consumer) *> that.onLost(lost, consumer)
+      assigned => onAssigned(assigned) *> that.onAssigned(assigned),
+      revoked => onRevoked(revoked) *> that.onRevoked(revoked),
+      lost => onLost(lost) *> that.onLost(lost)
     )
 
-  def toKafka(
-    runtime: Runtime[Any],
-    consumer: RebalanceConsumer
+  def runOnExecutor(executor: Executor): RebalanceListener = RebalanceListener(
+    assigned => onAssigned(assigned).onExecutor(executor),
+    revoked => onRevoked(revoked).onExecutor(executor),
+    lost => onLost(lost).onExecutor(executor)
+  )
+
+}
+
+object RebalanceListener {
+  def apply(
+    onAssigned: Set[TopicPartition] => Task[Unit],
+    onRevoked: Set[TopicPartition] => Task[Unit]
+  ): RebalanceListener =
+    RebalanceListener(onAssigned, onRevoked, onRevoked)
+
+  val noop: RebalanceListener = RebalanceListener(
+    _ => ZIO.unit,
+    _ => ZIO.unit,
+    _ => ZIO.unit
+  )
+
+  private[kafka] def toKafka(
+    rebalanceListener: RebalanceListener,
+    runtime: Runtime[Any]
   ): ConsumerRebalanceListener =
     new ConsumerRebalanceListener {
       override def onPartitionsRevoked(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe
-          .run(onRevoked(partitions.asScala.toSet, consumer))
+          .run(rebalanceListener.onRevoked(partitions.asScala.toSet))
           .getOrThrowFiberFailure()
         ()
       }
@@ -42,7 +64,7 @@ final case class RebalanceListener(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe
-          .run(onAssigned(partitions.asScala.toSet, consumer))
+          .run(rebalanceListener.onAssigned(partitions.asScala.toSet))
           .getOrThrowFiberFailure()
         ()
       }
@@ -51,24 +73,9 @@ final case class RebalanceListener(
         partitions: java.util.Collection[TopicPartition]
       ): Unit = Unsafe.unsafe { implicit u =>
         runtime.unsafe
-          .run(onLost(partitions.asScala.toSet, consumer))
+          .run(rebalanceListener.onLost(partitions.asScala.toSet))
           .getOrThrowFiberFailure()
         ()
       }
     }
-
-}
-
-object RebalanceListener {
-  def apply(
-    onAssigned: (Set[TopicPartition], RebalanceConsumer) => Task[Unit],
-    onRevoked: (Set[TopicPartition], RebalanceConsumer) => Task[Unit]
-  ): RebalanceListener =
-    RebalanceListener(onAssigned, onRevoked, onRevoked)
-
-  val noop: RebalanceListener = RebalanceListener(
-    (_, _) => ZIO.unit,
-    (_, _) => ZIO.unit,
-    (_, _) => ZIO.unit
-  )
 }

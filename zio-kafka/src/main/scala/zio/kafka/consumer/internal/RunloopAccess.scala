@@ -12,8 +12,6 @@ import zio.{ Hub, IO, Ref, Scope, Task, UIO, ZIO, ZLayer }
 import zio._
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 
-import scala.util.Try
-
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
   case object NotStarted                     extends RunloopState
@@ -85,6 +83,9 @@ private[consumer] object RunloopAccess {
   ): ZIO[Scope, Throwable, RunloopAccess] =
     for {
       maxPollInterval <- maxPollIntervalConfig(settings)
+      maxStreamPullInterval = settings.maxStreamPullIntervalOption.getOrElse(maxPollInterval)
+      // See scaladoc of [[ConsumerSettings.withMaxRebalanceDuration]]:
+      maxRebalanceDuration = settings.maxRebalanceDuration.getOrElse(((maxPollInterval.toNanos / 5L) * 3L).nanos)
       // This scope allows us to link the lifecycle of the Runloop and of the Hub to the lifecycle of the Consumer
       // When the Consumer is shutdown, the Runloop and the Hub will be shutdown too (before the consumer)
       consumerScope <- ZIO.scope
@@ -94,18 +95,14 @@ private[consumer] object RunloopAccess {
       runloopStateRef <- Ref.Synchronized.make[RunloopState](RunloopState.NotStarted)
       makeRunloop = Runloop
                       .make(
-                        hasGroupId = settings.hasGroupId,
-                        consumer = consumerAccess,
-                        pollTimeout = settings.pollTimeout,
-                        maxPollInterval = maxPollInterval,
-                        commitTimeout = settings.commitTimeout,
+                        settings = settings,
+                        maxStreamPullInterval = maxStreamPullInterval,
+                        maxRebalanceDuration = maxRebalanceDuration,
                         diagnostics = diagnostics,
-                        offsetRetrieval = settings.offsetRetrieval,
-                        userRebalanceListener = settings.rebalanceListener,
-                        restartStreamsOnRebalancing = settings.restartStreamOnRebalancing,
-                        partitionsHub = partitionsHub,
-                        fetchStrategy = settings.fetchStrategy
+                        consumer = consumerAccess,
+                        partitionsHub = partitionsHub
                       )
+                      .interruptible
                       .withFinalizer(_ => runloopStateRef.set(RunloopState.Finalized))
                       .provide(ZLayer.succeed(consumerScope))
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
@@ -119,7 +116,7 @@ private[consumer] object RunloopAccess {
 
     settings.properties
       .get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)
-      .flatMap(v => Try(v.toString.toInt).toOption) // Ignore invalid
+      .flatMap(_.toString.toIntOption) // Ignore invalid
       .getOrElse(defaultMaxPollInterval)
       .millis
   }

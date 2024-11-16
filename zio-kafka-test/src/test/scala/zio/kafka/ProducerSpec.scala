@@ -17,13 +17,14 @@ import zio.test.TestAspect._
 import zio.test._
 
 import java.nio.charset.StandardCharsets
+import java.util.UUID
 
 object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "producerspec"
 
   private def asString(v: Array[Byte]) = new String(v, StandardCharsets.UTF_8)
 
-  def withConsumerInt(
+  private def withConsumerInt(
     subscription: Subscription,
     settings: ConsumerSettings
   ): ZIO[Any with Scope, Throwable, Dequeue[Take[Throwable, CommittableRecord[String, Int]]]] =
@@ -246,13 +247,13 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                  consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
                                }
                              }
-        } yield assertTrue(outcome.length == 3) &&
-          assertTrue(outcome(0).isRight) &&
-          assertTrue(
-            outcome(1).swap.exists(_.getMessage.contains("Compacted topic cannot accept message without key"))
-          ) &&
-          assertTrue(outcome(2).isRight) &&
-          assertTrue(recordsConsumed.length == 2)
+        } yield assertTrue(
+          outcome.length == 3,
+          outcome(0).isRight,
+          outcome(1).swap.exists(_.getMessage.contains("Compacted topic cannot accept message without key")),
+          outcome(2).isRight,
+          recordsConsumed.length == 2
+        )
       },
       test("an empty chunk of records") {
         val chunks = Chunk.fromIterable(List.empty)
@@ -264,6 +265,12 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           metrics <- Producer.metrics
         } yield assertTrue(metrics.nonEmpty)
+      },
+      test("partitionsFor") {
+        for {
+          topic <- randomTopic
+          info  <- Producer.partitionsFor(topic).debug
+        } yield assertTrue(info.headOption.map(_.topic()) == Some(topic))
       },
       suite("transactions")(
         test("a simple transaction") {
@@ -646,11 +653,11 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       produceChunkSpec
     )
       .provideSome[Kafka](
-        (KafkaTestUtils.producer ++ transactionalProducer)
+        (KafkaTestUtils.producer ++ transactionalProducer(UUID.randomUUID().toString))
           .mapError(TestFailure.fail),
         KafkaTestUtils.consumer(clientId = "producer-spec-consumer", groupId = Some("group-0"))
       )
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ timeout(3.minutes) @@ sequential
+      ) @@ withLiveClock @@ timeout(3.minutes)
 }

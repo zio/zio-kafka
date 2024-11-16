@@ -18,19 +18,19 @@ object QueueSizeBasedFetchStrategySpec extends ZIOSpecDefaultSlf4j {
   override def spec: Spec[TestEnvironment with Scope, Any] =
     suite("QueueSizeBasedFetchStrategySpec")(
       test("stream with queue size above limit is paused") {
-        val streams = Chunk(newStream(tp10, currentQueueSize = 100))
+        val streams = Chunk(newStream(tp10, currentQueueSize = partitionPreFetchBufferLimit + 1))
         for {
           result <- fetchStrategy.selectPartitionsToFetch(streams)
         } yield assertTrue(result.isEmpty)
       },
-      test("stream with queue size equal to limit is paused") {
+      test("stream with queue size equal to limit may resume") {
         val streams = Chunk(newStream(tp10, currentQueueSize = partitionPreFetchBufferLimit))
         for {
           result <- fetchStrategy.selectPartitionsToFetch(streams)
-        } yield assertTrue(result.isEmpty)
+        } yield assertTrue(result == Set(tp10))
       },
       test("stream with queue size below limit may resume") {
-        val streams = Chunk(newStream(tp10, currentQueueSize = 10))
+        val streams = Chunk(newStream(tp10, currentQueueSize = partitionPreFetchBufferLimit - 1))
         for {
           result <- fetchStrategy.selectPartitionsToFetch(streams)
         } yield assertTrue(result == Set(tp10))
