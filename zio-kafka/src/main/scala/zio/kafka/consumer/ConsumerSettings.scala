@@ -284,9 +284,6 @@ final case class ConsumerSettings(
     withPartitionPreFetchBufferLimit(partitionPreFetchBufferLimit)
 
   /**
-   * WARNING: [[zio.kafka.consumer.fetch.FetchStrategy]] is an EXPERIMENTAL API and may change in an incompatible way
-   * without notice in any zio-kafka version.
-   *
    * @param fetchStrategy
    *   The fetch strategy which selects which partitions can fetch data in the next poll. The default is to use the
    *   [[zio.kafka.consumer.fetch.QueueSizeBasedFetchStrategy]] with a `partitionPreFetchBufferLimit` parameter of 1024,
