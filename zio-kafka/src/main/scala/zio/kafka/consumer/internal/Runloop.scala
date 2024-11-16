@@ -33,7 +33,8 @@ private[consumer] final class Runloop private (
   maxStreamPullInterval: Duration,
   maxRebalanceDuration: Duration,
   currentStateRef: Ref[State],
-  committedOffsetsRef: Ref[CommitOffsets]
+  committedOffsetsRef: Ref[CommitOffsets],
+  commitAvailable: Ref[Boolean]
 ) {
   private val commitTimeout      = settings.commitTimeout
   private val commitTimeoutNanos = settings.commitTimeout.toNanos
@@ -327,10 +328,11 @@ private[consumer] final class Runloop private (
       for {
         p <- Promise.make[Throwable, Unit]
         startTime = java.lang.System.nanoTime()
-        _ <- commitQueue.offer(Runloop.Commit(java.lang.System.nanoTime(), offsets, p))
-        _ <- commandQueue.offer(RunloopCommand.CommitAvailable)
-        _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
-        _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
+        _               <- commitQueue.offer(Runloop.Commit(java.lang.System.nanoTime(), offsets, p))
+        commitAvailable <- commitAvailable.getAndSet(true)
+        _               <- commandQueue.offer(RunloopCommand.CommitAvailable).unless(commitAvailable)
+        _               <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
+        _               <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
         endTime = java.lang.System.nanoTime()
         latency = (endTime - startTime).nanoseconds
         _ <- consumerMetrics.observeCommit(latency)
@@ -819,6 +821,7 @@ private[consumer] final class Runloop private (
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
+          _              <- commitAvailable.set(false)
           commitCommands <- commitQueue.takeAll
           _ <- ZIO.logDebug(
                  s"Processing ${commitCommands.size} commits," +
@@ -958,6 +961,7 @@ object Runloop {
       lastRebalanceEvent <- Ref.Synchronized.make[Runloop.RebalanceEvent](Runloop.RebalanceEvent.None)
       initialState = State.initial
       currentStateRef     <- Ref.make(initialState)
+      commitAvailable     <- Ref.make(false)
       committedOffsetsRef <- Ref.make(CommitOffsets.empty)
       sameThreadRuntime   <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       executor            <- ZIO.executor
@@ -974,7 +978,8 @@ object Runloop {
                   maxStreamPullInterval = maxStreamPullInterval,
                   maxRebalanceDuration = maxRebalanceDuration,
                   currentStateRef = currentStateRef,
-                  committedOffsetsRef = committedOffsetsRef
+                  committedOffsetsRef = committedOffsetsRef,
+                  commitAvailable = commitAvailable
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
