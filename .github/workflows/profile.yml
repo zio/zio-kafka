@@ -1,16 +1,15 @@
 # Copied from Flavio W. Brasil's work on Kyo: https://github.com/fwbrasil/kyo
 name: profile
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    types: [ opened, reopened, synchronize ]
-
-# Prevent multiple builds at the same time from the same branch (except for 'master').
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.run_id || github.ref }}
-  cancel-in-progress: true
+  release:
+    types: [ created ]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'The branch, tag or commit SHA to checkout for profiling. Leave empty for the default branch'
+        required: true
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -24,6 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.inputs.ref }}
           fetch-depth: 0
       - name: Setup Java
         uses: actions/setup-java@v4
