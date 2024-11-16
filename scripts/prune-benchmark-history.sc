@@ -12,7 +12,7 @@ if (branch != "gh-pages") {
   System.exit(1)
 }
 
-val masterCommitCutOfDateTime = ZonedDateTime.now.minusMonths(12)
+val masterCommitCutOfDateTime = ZonedDateTime.now.minusMonths(6)
 val prCommitCutOfDateTime = ZonedDateTime.now.minusDays(14)
 
 val dataPrefix = "window.BENCHMARK_DATA = "
