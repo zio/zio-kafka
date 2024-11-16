@@ -4,12 +4,6 @@ on:
   release:
     types: [ created ]
   workflow_dispatch:
-    inputs:
-      ref:
-        description: 'The branch, tag or commit SHA to checkout for profiling. Leave empty for the default branch'
-        required: true
-        type: string
-        default: ''
 
 permissions:
   contents: write
@@ -23,7 +17,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref }}
           fetch-depth: 0
       - name: Setup Java
         uses: actions/setup-java@v4
