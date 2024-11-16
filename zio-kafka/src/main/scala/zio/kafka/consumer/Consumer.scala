@@ -801,7 +801,7 @@ private[consumer] final class ConsumerLive private[consumer] (
                 .tapErrorCause(cause =>
                   ZIO.logErrorCause("Error joining withStream fiber in runWithGracefulShutdown", cause)
                 )
-                // Workaround for https://github.com/zio/zio/issues/9288
+                // The fork and join is a workaround for https://github.com/zio/zio/issues/9288 for ZIO <= 2.1.12
                 .forkDaemon
                 .flatMap(_.join)
                 .tapErrorCause(cause =>
