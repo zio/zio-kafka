@@ -261,14 +261,14 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
         _ <- produceMany(topic1, kvs)
 
-        recordsConsumed <- Ref.make(Chunk.empty[CommittableRecord[String, String]])
+        recordsConsumed <- Ref.make(Chunk.empty[ConsumerRecord[String, String]])
         _ <-
           Consumer
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
             .take(40)
             .transduce(
-              Consumer.offsetBatches.contramap[CommittableRecord[String, String]](_.offset) <&>
-                ZSink.collectAll[CommittableRecord[String, String]]
+              Consumer.offsetBatches.contramap[ConsumerRecord[String, String]](_.offset) <&>
+                ZSink.collectAll[ConsumerRecord[String, String]]
             )
             .mapZIO { case (offsetBatch, records) => Consumer.commit(offsetBatch).as(records) }
             .flattenChunks

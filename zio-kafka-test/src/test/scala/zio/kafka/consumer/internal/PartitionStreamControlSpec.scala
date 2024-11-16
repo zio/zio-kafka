@@ -1,9 +1,9 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.consumer.{ ConsumerRecord => JConsumerRecord }
 import org.apache.kafka.common.TopicPartition
 import zio._
-import zio.kafka.consumer.CommittableRecord
+import zio.kafka.consumer.ConsumerRecord
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.test._
@@ -168,8 +168,8 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
   private def createTestRecords(count: Int): Chunk[ByteArrayCommittableRecord] =
     Chunk.fromIterable(
       (1 to count).map(i =>
-        CommittableRecord(
-          record = new ConsumerRecord[Array[Byte], Array[Byte]](
+        ConsumerRecord(
+          record = new JConsumerRecord[Array[Byte], Array[Byte]](
             "test-topic",
             0,
             i.toLong,

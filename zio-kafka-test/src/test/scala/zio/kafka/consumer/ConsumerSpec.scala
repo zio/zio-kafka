@@ -191,7 +191,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                          .filter(_._1 == new TopicPartition(topic, 0))
                                          .flatMap(_._2)
                                          .take(5)
-                                         .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
+                                         .transduce(ZSink.collectAllN[ConsumerRecord[String, String]](5))
                                          .mapConcatZIO { committableRecords =>
                                            val records     = committableRecords.map(_.record)
                                            val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
@@ -209,7 +209,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                  .partitionedStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
                                  .flatMap(_._2)
                                  .take(5)
-                                 .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
+                                 .transduce(ZSink.collectAllN[ConsumerRecord[String, String]](20))
                                  .mapConcatZIO { committableRecords =>
                                    val records     = committableRecords.map(_.record)
                                    val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
@@ -627,7 +627,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                      Consumer
                        .plainStream(Subscription.manual(topic, partition), Serde.string, Serde.string)
                        .take(5)
-                       .transduce(ZSink.collectAllN[CommittableRecord[String, String]](5))
+                       .transduce(ZSink.collectAllN[ConsumerRecord[String, String]](5))
                        .mapConcatZIO { committableRecords =>
                          val records     = committableRecords.map(_.record)
                          val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
@@ -708,7 +708,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         ) =
           consumeWithStrings(client, Some(group), subscription)({ record =>
             for {
-              messagesSoFar <- messagesReceived.updateAndGet(_ :+ (record.key() -> record.value()))
+              messagesSoFar <- messagesReceived.updateAndGet(_ :+ (record.key -> record.value))
               _             <- ZIO.when(messagesSoFar.size == nrMessages)(done.succeed(()))
             } yield ()
           }).fork

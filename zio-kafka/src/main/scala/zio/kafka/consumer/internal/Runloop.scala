@@ -1,6 +1,12 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer._
+import org.apache.kafka.clients.consumer.{
+  ConsumerGroupMetadata,
+  ConsumerRebalanceListener,
+  ConsumerRecords,
+  OffsetAndMetadata,
+  OffsetCommitCallback
+}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException, RebalanceInProgressException }
 import zio._
@@ -439,7 +445,7 @@ private[consumer] final class Runloop private (
     ignoreRecordsForTps: Set[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
   ): UIO[Runloop.FulfillResult] = {
-    type Record = CommittableRecord[Array[Byte], Array[Byte]]
+    type Record = ConsumerRecord[Array[Byte], Array[Byte]]
 
     // The most efficient way to get the records from [[ConsumerRecords]] per
     // topic-partition, is by first getting the set of topic-partitions, and
@@ -464,7 +470,7 @@ private[consumer] final class Runloop private (
                  while (iterator.hasNext) {
                    val consumerRecord = iterator.next()
                    builder +=
-                     CommittableRecord[Array[Byte], Array[Byte]](
+                     ConsumerRecord[Array[Byte], Array[Byte]](
                        record = consumerRecord,
                        consumerGroupMetadata = consumerGroupMetadata
                      )
@@ -873,7 +879,7 @@ object Runloop {
     }
   }
 
-  type ByteArrayCommittableRecord = CommittableRecord[Array[Byte], Array[Byte]]
+  type ByteArrayCommittableRecord = ConsumerRecord[Array[Byte], Array[Byte]]
 
   private final case class PollResult(
     records: ConsumerRecords[Array[Byte], Array[Byte]],

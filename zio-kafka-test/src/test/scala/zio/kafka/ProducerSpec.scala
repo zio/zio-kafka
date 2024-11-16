@@ -27,7 +27,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   private def withConsumerInt(
     subscription: Subscription,
     settings: ConsumerSettings
-  ): ZIO[Any with Scope, Throwable, Dequeue[Take[Throwable, CommittableRecord[String, Int]]]] =
+  ): ZIO[Any with Scope, Throwable, Dequeue[Take[Throwable, ConsumerRecord[String, Int]]]] =
     Consumer.make(settings).flatMap { c =>
       c.plainStream(subscription, Serde.string, Serde.int).toQueue()
     }

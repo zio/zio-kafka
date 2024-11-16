@@ -2,7 +2,6 @@ package zio.kafka.admin
 
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin.{ ConfigEntry, RecordsToDelete }
-import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{ Node => JNode }
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
@@ -23,7 +22,7 @@ import zio.kafka.admin.AdminClient.{
 }
 import zio.kafka.admin.acl._
 import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
-import zio.kafka.consumer.{ CommittableRecord, Consumer, OffsetBatch, Subscription }
+import zio.kafka.consumer.{ Consumer, ConsumerRecord, OffsetBatch, Subscription }
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
 import zio.kafka.testkit._
@@ -222,9 +221,9 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               .partitionedStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
               .flatMapPar(partitionCount)(_._2)
               .take(count)
-              .transduce(ZSink.collectAllN[CommittableRecord[String, String]](20))
+              .transduce(ZSink.collectAllN[ConsumerRecord[String, String]](20))
               .mapConcatZIO { committableRecords =>
-                val records     = committableRecords.map(_.record)
+                val records     = committableRecords
                 val offsetBatch = OffsetBatch(committableRecords.map(_.offset))
 
                 Consumer.commit(offsetBatch).as(records)
@@ -234,7 +233,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           def toMap(records: Chunk[ConsumerRecord[String, String]]): Map[Int, List[(Long, String, String)]] =
             records.toList
-              .map(r => (r.partition(), (r.offset(), r.key(), r.value())))
+              .map(r => (r.partition, (r.offset.offset, r.key, r.value)))
               .groupBy(_._1)
               .map { case (k, vs) => (k, vs.map(_._2).sortBy(_._1)) }
 
