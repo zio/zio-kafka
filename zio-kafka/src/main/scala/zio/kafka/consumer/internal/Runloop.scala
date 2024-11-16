@@ -953,8 +953,8 @@ object Runloop {
   ): URIO[Scope, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
-      commitQueue        <- ZIO.acquireRelease(Queue.unbounded[Runloop.Commit])(_.shutdown)
-      commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
+      commitQueue        <- ZIO.acquireRelease(Queue.bounded[Runloop.Commit](settings.commitQueueSize))(_.shutdown)
+      commandQueue       <- ZIO.acquireRelease(Queue.bounded[RunloopCommand](settings.commandQueueSize))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[Runloop.RebalanceEvent](Runloop.RebalanceEvent.None)
       initialState = State.initial
       currentStateRef     <- Ref.make(initialState)
