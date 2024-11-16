@@ -6,8 +6,8 @@ import zio.{ ZLayer, _ }
 import java.util.UUID
 
 trait ConsumerZioBenchmark[Environment] extends ZioBenchmark[Environment] {
-  protected val messageCount: Int               = 100000
-  protected def messageData(i: Int): String     = i.toString + scala.util.Random.alphanumeric.take(1024).mkString
+  protected val messageCount: Int               = 50000
+  protected def messageData(i: Int): String     = i.toString + scala.util.Random.alphanumeric.take(512).mkString
   protected val kvs: Iterable[(String, String)] = Iterable.tabulate(messageCount)(i => (s"key$i", messageData(i)))
   protected val topic1                          = "topic1"
   protected val partitionCount                  = 6
