@@ -160,13 +160,13 @@ trait Consumer {
    */
   def metrics: Task[Map[MetricName, Metric]]
 
-  def commit(offset: CommittableOffset): Task[Unit]
+  def commit(offset: Committable): Task[Unit]
 
   /**
    * Attempts to commit and retries according to the given policy when the commit fails with a
    * RetriableCommitFailedException
    */
-  def commitOrRetry[R](offset: CommittableOffset, policy: Schedule[R, Throwable, Any]): RIO[R, Unit]
+  def commitOrRetry[R](offset: Committable, policy: Schedule[R, Throwable, Any]): RIO[R, Unit]
 }
 
 object Consumer {
@@ -453,15 +453,15 @@ object Consumer {
   /**
    * Accessor method
    */
-  def commit(offset: CommittableOffset): RIO[Consumer, Unit] =
+  def commit(offset: Committable): RIO[Consumer, Unit] =
     ZIO.serviceWithZIO(_.commit(offset))
 
   /**
    * Accessor method
    */
   def commitOrRetry[R](
-    offset: CommittableOffset,
-    policy: Schedule[R, Throwable, Any]
+                        offset: Committable,
+                        policy: Schedule[R, Throwable, Any]
   ): ZIO[R with Consumer, Throwable, Unit] =
     ZIO.serviceWithZIO[Consumer](_.commitOrRetry[R](offset, policy))
 
@@ -628,9 +628,9 @@ private[consumer] final class ConsumerLive private[consumer] (
   override def metrics: Task[Map[MetricName, Metric]] =
     consumer.withConsumer(_.metrics().asScala.toMap)
 
-  override def commit(offset: CommittableOffset): Task[Unit] = runloopAccess.commit(offset.offsetsAsMap)
+  override def commit(offset: Committable): Task[Unit] = runloopAccess.commit(offset.offsetsAsMap)
 
-  override def commitOrRetry[R](offset: CommittableOffset, policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
+  override def commitOrRetry[R](offset: Committable, policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
     commit(offset)
       .retry(
         Schedule.recurWhile[Throwable] {

@@ -6,13 +6,13 @@ import org.apache.kafka.common.TopicPartition
 /**
  * Supertype for a single offset or a batch of offsets for multiple topic-partitions
  */
-sealed trait CommittableOffset {
+sealed trait Committable {
   def offsetsAsMap: Map[TopicPartition, OffsetAndMetadata]
   def consumerGroupMetadata: Option[ConsumerGroupMetadata]
 }
 
-sealed trait OffsetBatch extends CommittableOffset {
-  def add(offset: CommittableOffset): OffsetBatch
+sealed trait OffsetBatch extends Committable {
+  def add(offset: Committable): OffsetBatch
 }
 
 object OffsetBatch {
@@ -25,7 +25,7 @@ private final case class OffsetBatchImpl(
   offsetsAsMap: Map[TopicPartition, OffsetAndMetadata],
   consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) extends OffsetBatch {
-  def add(offset: CommittableOffset): OffsetBatch =
+  def add(offset: Committable): OffsetBatch =
     offset match {
       case batch: OffsetBatch => merge(batch)
       case offset: Offset =>
@@ -57,7 +57,7 @@ private final case class OffsetBatchImpl(
 case object EmptyOffsetBatch extends OffsetBatch {
   override val offsetsAsMap: Map[TopicPartition, OffsetAndMetadata] = Map.empty
 
-  override def add(offset: CommittableOffset): OffsetBatch = offset match {
+  override def add(offset: Committable): OffsetBatch = offset match {
     case batch: OffsetBatch => batch
     case o: Offset => OffsetBatchImpl(Map(o.topicPartition -> o.asJavaOffsetAndMetadata), consumerGroupMetadata)
   }
@@ -65,7 +65,7 @@ case object EmptyOffsetBatch extends OffsetBatch {
   override def consumerGroupMetadata: Option[ConsumerGroupMetadata] = None
 }
 
-sealed trait Offset extends CommittableOffset {
+sealed trait Offset extends Committable {
   def topic: String
   def partition: Int
   def offset: Long
