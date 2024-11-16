@@ -4,7 +4,7 @@ import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio.kafka.admin.AdminClient.TopicPartition
-import zio.kafka.bench.ZioBenchmark
+import zio.kafka.bench.ConsumerZioBenchmark
 import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.bench.comparison.ComparisonBenchmark._
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
@@ -15,14 +15,10 @@ import zio.{ ULayer, ZIO, ZLayer }
 
 import scala.jdk.CollectionConverters._
 
-trait ComparisonBenchmark extends ZioBenchmark[Env] {
+trait ComparisonBenchmark extends ConsumerZioBenchmark[Env] {
 
-  protected final val topic1: String    = "topic1"
-  protected final val nrPartitions: Int = 6
   protected final val topicPartitions: List[TopicPartition] =
-    (0 until nrPartitions).map(TopicPartition(topic1, _)).toList
-  protected final val numberOfMessages: Int           = 100000
-  protected final val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key$i", s"msg$i"))
+    (0 until partitionCount).map(TopicPartition(topic1, _)).toList
 
   private val javaKafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
     ZLayer.scoped {
@@ -63,7 +59,7 @@ trait ComparisonBenchmark extends ZioBenchmark[Env] {
   override final def initialize: ZIO[Env, Throwable, Any] =
     for {
       _ <- ZIO.succeed(EmbeddedKafka.deleteTopics(List(topic1))).ignore
-      _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = nrPartitions))
+      _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = partitionCount))
       _ <- produceMany(topic1, kvs)
     } yield ()
 

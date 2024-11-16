@@ -17,9 +17,9 @@ class ZioKafkaBenchmarks extends ComparisonBenchmark {
     runZIO {
       Consumer
         .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
-        .take(numberOfMessages.toLong)
+        .take(messageCount.toLong)
         .runCount
-        .flatMap(r => zAssert(r == numberOfMessages, s"Consumed $r messages instead of $numberOfMessages"))
+        .flatMap(r => zAssert(r == messageCount, s"Consumed $r messages instead of $messageCount"))
     }
 
   @Benchmark
@@ -32,9 +32,9 @@ class ZioKafkaBenchmarks extends ComparisonBenchmark {
           Serde.byteArray,
           Serde.byteArray
         )
-        .take(numberOfMessages.toLong)
+        .take(messageCount.toLong)
         .runCount
-        .flatMap(r => zAssert(r == numberOfMessages, s"Consumed $r messages instead of $numberOfMessages"))
+        .flatMap(r => zAssert(r == messageCount, s"Consumed $r messages instead of $messageCount"))
     }
 
 }

@@ -16,18 +16,14 @@ import java.util.concurrent.TimeUnit
 
 @State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
-  val topic1                      = "topic1"
-  val nrPartitions                = 6
-  val nrMessages                  = 100000
-  val kvs: List[(String, String)] = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
+class ZioKafkaConsumerBenchmark extends ConsumerZioBenchmark[Kafka with Producer] {
 
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka with Producer] =
     ZLayer.make[Kafka with Producer](Kafka.embedded, producer).orDie
 
   override def initialize: ZIO[Kafka with Producer, Throwable, Any] = for {
     _ <- ZIO.succeed(EmbeddedKafka.deleteTopics(List(topic1))).ignore
-    _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = nrPartitions))
+    _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = partitionCount))
     _ <- produceMany(topic1, kvs)
   } yield ()
 
@@ -47,7 +43,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
       _ <- Consumer
              .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
              .tap { _ =>
-               counter.updateAndGet(_ + 1).flatMap(count => Consumer.stopConsumption.when(count == nrMessages))
+               counter.updateAndGet(_ + 1).flatMap(count => Consumer.stopConsumption.when(count == messageCount))
              }
              .runDrain
              .provideSome[Kafka](env)
@@ -67,7 +63,7 @@ class ConsumerBenchmark extends ZioBenchmark[Kafka with Producer] {
                .tap(batch => counter.update(_ + batch.size))
                .map(OffsetBatch.apply)
                .mapZIO(_.commit)
-               .takeUntilZIO(_ => counter.get.map(_ >= nrMessages))
+               .takeUntilZIO(_ => counter.get.map(_ >= messageCount))
                .runDrain
                .provideSome[Kafka](env)
            }

@@ -1,6 +1,16 @@
 # Comparison Benchmarks
 
-## How to run them
+## Results
+
+The benchmark are run from a GitHub action on every commit. The results are published on https://zio.github.io/zio-kafka/dev/bench/.
+
+The results are automatically pruned by [a scala script](https://github.com/zio/zio-kafka/blob/gh-pages/scripts/prune-benchmark-history.sc) on the `gh-pages` branch.
+
+## Interpreting the benchmarks
+
+To do!
+
+## How to run the benchmarks
 
 To run these "comparison" benchmarks, in a sbt console, run:
 ```scala
