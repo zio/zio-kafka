@@ -85,6 +85,7 @@ private[consumer] object RunloopAccess {
   ): ZIO[Scope, Throwable, RunloopAccess] =
     for {
       maxPollInterval <- maxPollIntervalConfig(settings)
+      maxStreamPullInterval = settings.maxStreamPullIntervalOption.getOrElse(maxPollInterval)
       // See scaladoc of [[ConsumerSettings.withMaxRebalanceDuration]]:
       maxRebalanceDuration = settings.maxRebalanceDuration.getOrElse(((maxPollInterval.toNanos / 5L) * 3L).nanos)
       // This scope allows us to link the lifecycle of the Runloop and of the Hub to the lifecycle of the Consumer
@@ -97,7 +98,7 @@ private[consumer] object RunloopAccess {
       makeRunloop = Runloop
                       .make(
                         settings = settings,
-                        maxPollInterval = maxPollInterval,
+                        maxStreamPullInterval = maxStreamPullInterval,
                         maxRebalanceDuration = maxRebalanceDuration,
                         diagnostics = diagnostics,
                         consumer = consumerAccess,

@@ -38,8 +38,11 @@ trait Serde[-R, T] extends Deserializer[R, T] with Serializer[R, T] {
   /**
    * Convert to a Serde of type U with effectful transformations
    */
-  def inmapM[R1 <: R, U](f: T => RIO[R1, U])(g: U => RIO[R1, T]): Serde[R1, U] =
-    Serde(mapM(f))(contramapM(g))
+  def inmapZIO[R1 <: R, U](f: T => RIO[R1, U])(g: U => RIO[R1, T]): Serde[R1, U] =
+    Serde(mapZIO(f))(contramapZIO(g))
+
+  @deprecated("Use inmapZIO", since = "2.9.0")
+  def inmapM[R1 <: R, U](f: T => RIO[R1, U])(g: U => RIO[R1, T]): Serde[R1, U] = inmapZIO(f)(g)
 }
 
 object Serde extends Serdes {

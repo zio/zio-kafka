@@ -31,19 +31,19 @@ abstract class PartitionStream {
  *   the last pulled offset (if any). The promise completes when the stream completed.
  * @param queueInfoRef
  *   used to track the stream's pull deadline, its queue size, and last pulled offset
- * @param maxPollInterval
- *   see [[zio.kafka.consumer.ConsumerSettings.withMaxPollInterval()]]
+ * @param maxStreamPullInterval
+ *   see [[zio.kafka.consumer.ConsumerSettings.withMaxStreamPullInterval()]]
  */
 final class PartitionStreamControl private (
   val tp: TopicPartition,
-  stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
+  val stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
   interruptionPromise: Promise[Throwable, Nothing],
   val completedPromise: Promise[Nothing, Option[Offset]],
   queueInfoRef: Ref[QueueInfo],
-  maxPollInterval: Duration
+  maxStreamPullInterval: Duration
 ) extends PartitionStream {
-  private val maxPollIntervalNanos = maxPollInterval.toNanos
+  private val maxStreamPullIntervalNanos = maxStreamPullInterval.toNanos
 
   private val logAnnotate = ZIO.logAnnotate(
     LogAnnotation("topic", tp.topic()),
@@ -52,20 +52,16 @@ final class PartitionStreamControl private (
 
   /** Offer new data for the stream to process. Should be called on every poll, also when `data.isEmpty` */
   private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
-    ZIO
-      .whenZIO(isRunning) {
-        if (data.isEmpty) {
-          queueInfoRef.update(_.withEmptyPoll)
-        } else {
-          for {
-            now <- Clock.nanoTime
-            newPullDeadline = now + maxPollIntervalNanos
-            _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
-            _ <- dataQueue.offer(Take.chunk(data))
-          } yield ()
-        }
-      }
-      .unit
+    if (data.isEmpty) {
+      queueInfoRef.update(_.withEmptyPoll)
+    } else {
+      for {
+        now <- Clock.nanoTime
+        newPullDeadline = now + maxStreamPullIntervalNanos
+        _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
+        _ <- dataQueue.offer(Take.chunk(data))
+      } yield ()
+    }
 
   def queueSize: UIO[Int] = queueInfoRef.get.map(_.size)
 
@@ -85,16 +81,14 @@ final class PartitionStreamControl private (
    *   `true` when the stream has data available, but none has been pulled for more than `maxPollInterval` (since data
    *   became available), `false` otherwise
    */
-  private[internal] def maxPollIntervalExceeded(now: NanoTime): UIO[Boolean] =
+  private[internal] def maxStreamPullIntervalExceeded(now: NanoTime): UIO[Boolean] =
     queueInfoRef.get.map(_.deadlineExceeded(now))
 
   /** To be invoked when the stream is no longer processing. */
-  private[internal] def halt: UIO[Boolean] = {
-    val timeOutMessage = s"No records were polled for more than $maxPollInterval for topic partition $tp. " +
-      "Use ConsumerSettings.withMaxPollInterval to set a longer interval if processing a batch of records " +
-      "needs more time."
+  private[internal] def halt: UIO[Unit] = {
+    val timeOutMessage = s"No records were pulled for more than $maxStreamPullInterval for topic partition $tp."
     val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
-    interruptionPromise.fail(consumeTimeout)
+    interruptionPromise.fail(consumeTimeout).unit
   }
 
   /** To be invoked when the partition was lost. It clears the queue and ends the stream. */
@@ -104,6 +98,7 @@ final class PartitionStreamControl private (
         _     <- ZIO.logDebug(s"Partition ${tp.toString} lost")
         taken <- dataQueue.takeAll.map(_.size)
         _     <- dataQueue.offer(Take.end)
+        _     <- queueInfoRef.update(_.withQueueClearedOnLost)
         _     <- ZIO.logDebug(s"Ignored ${taken} records on lost partition").when(taken != 0)
       } yield ()
     }
@@ -131,16 +126,16 @@ object PartitionStreamControl {
 
   private[internal] def newPartitionStream(
     tp: TopicPartition,
-    commandQueue: Queue[RunloopCommand],
+    requestData: UIO[Unit],
     diagnostics: Diagnostics,
-    maxPollInterval: Duration
+    maxStreamPullInterval: Duration
   ): UIO[PartitionStreamControl] = {
-    val maxPollIntervalNanos = maxPollInterval.toNanos
+    val maxStreamPullIntervalNanos = maxStreamPullInterval.toNanos
 
     def registerPull(queueInfo: Ref[QueueInfo], records: Chunk[ByteArrayCommittableRecord]): UIO[Unit] =
       for {
         now <- Clock.nanoTime
-        newPullDeadline = now + maxPollIntervalNanos
+        newPullDeadline = now + maxStreamPullIntervalNanos
         _ <- queueInfo.update(_.withPull(newPullDeadline, records))
       } yield ()
 
@@ -153,11 +148,11 @@ object PartitionStreamControl {
       queueInfo           <- Ref.make(QueueInfo(now, 0, None, 0))
       requestAndAwaitData =
         for {
-          _ <- commandQueue.offer(RunloopCommand.Request(tp))
+          _ <- requestData
           _ <- diagnostics.emit(DiagnosticEvent.Request(tp))
           taken <- dataQueue
                      .takeBetween(1, Int.MaxValue)
-                     .race(interruptionPromise.await)
+                     .raceFirst(interruptionPromise.await)
         } yield taken
 
       stream = ZStream.logAnnotate(
@@ -187,7 +182,7 @@ object PartitionStreamControl {
       interruptionPromise,
       completedPromise,
       queueInfo,
-      maxPollInterval
+      maxStreamPullInterval
     )
   }
 
@@ -219,6 +214,9 @@ object PartitionStreamControl {
         lastPulledOffset = records.lastOption.map(_.offset).orElse(lastPulledOffset),
         outstandingPolls = 0
       )
+
+    def withQueueClearedOnLost: QueueInfo =
+      copy(size = 0)
 
     def deadlineExceeded(now: NanoTime): Boolean =
       size > 0 && pullDeadline <= now
