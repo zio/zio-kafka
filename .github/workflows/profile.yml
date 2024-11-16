@@ -7,8 +7,9 @@ on:
     inputs:
       ref:
         description: 'The branch, tag or commit SHA to checkout for profiling. Leave empty for the default branch'
-        required: false
+        required: true
         type: string
+        default: ''
 
 permissions:
   contents: write
