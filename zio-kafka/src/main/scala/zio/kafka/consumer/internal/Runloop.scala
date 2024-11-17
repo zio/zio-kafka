@@ -363,8 +363,7 @@ private[consumer] final class Runloop private (
         if (computeMetric) {
           val endTime = java.lang.System.nanoTime()
           endTime - startTime.asInstanceOf[Long]
-        }
-        else null
+        } else null
 
       for {
         offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
