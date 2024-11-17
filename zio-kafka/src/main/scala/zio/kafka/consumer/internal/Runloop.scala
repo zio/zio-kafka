@@ -327,7 +327,7 @@ private[consumer] final class Runloop private (
       for {
         p <- Promise.make[Throwable, Unit]
         startTime = java.lang.System.nanoTime()
-        _ <- commitQueue.offer(Runloop.Commit(java.lang.System.nanoTime(), offsets, p))
+        _ <- commitQueue.offer(Runloop.Commit(startTime, offsets, p))
         _ <- commandQueue.offer(RunloopCommand.CommitAvailable)
         _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
