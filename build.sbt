@@ -1,32 +1,8 @@
 import sbt.Def
-import MimaSettings.mimaSettings
 import scala.sys.process._
 import scala.util.Try
-
-/**
- * As of zio-kafka version 2.8.0 releases are binary compatible. This is checked with Mima.
- *
- * Keep this value set to the oldest minor release (with patch version set to "0") that is still binary compatible.
- *
- * Set this value to `None` when master is _not_ binary compatible with the latest minor release, the next release shall
- * increase the minor version.
- */
-lazy val binCompatVersionToCompare =
-  // Note, "git describe --tags"
-  // either produces something like "v2.8.2-40-ge8a844a1" (not building from a release tag),
-  // or "v2.8.2" (building from a release tag),
-  Try("git describe --tags".!!).toOption
-    .map(_.strip())
-    // Only continue when we're building from a release tag
-    .filter(_.matches("v[0-9]+\\.[0-9]+\\.[0-9]+"))
-    // Do not continue when this is a new minor version (when patch version is set to "0")
-    .filterNot(_.endsWith(".0"))
-    .map { tag =>
-      // Remove `v` and set patch version to `0`
-      val compatVersion = tag.stripPrefix("v").split('.').take(2).mkString(".") + ".0"
-      println(s"Mima check compares against version $compatVersion")
-      compatVersion
-    }
+import com.typesafe.tools.mima.core.Problem
+import com.typesafe.tools.mima.core.ProblemFilters.exclude
 
 lazy val kafkaVersion         = "3.8.1"
 lazy val embeddedKafkaVersion = "3.8.1" // Should be the same as kafkaVersion, except for the patch part
@@ -58,6 +34,9 @@ inThisBuild(
     scalafixDependencies ++= List(
       "com.github.vovapolu"                      %% "scaluzzi" % "0.1.23",
       "io.github.ghostbuster91.scalafix-unified" %% "unified"  % "0.0.9"
+    ),
+    mimaBinaryIssueFilters ++= Seq(
+      exclude[Problem]("zio.kafka.consumer.internal.*")
     ),
     developers := List(
       Developer(
@@ -95,8 +74,7 @@ lazy val root = project
   .settings(
     name           := "zio-kafka",
     publish / skip := true,
-    crossScalaVersions := Nil, // https://www.scala-sbt.org/1.x/docs/Cross-Build.html#Cross+building+a+project+statefully,
-    commands += lint
+    crossScalaVersions := Nil // https://www.scala-sbt.org/1.x/docs/Cross-Build.html#Cross+building+a+project+statefully,
   )
   .aggregate(
     zioKafka,
@@ -132,7 +110,6 @@ lazy val zioKafka =
     .enablePlugins(BuildInfoPlugin)
     .settings(stdSettings("zio-kafka"))
     .settings(buildInfoSettings("zio.kafka"))
-    .settings(mimaSettings(binCompatVersionToCompare, failOnProblem = true))
     .settings(enableZIO(enableStreaming = true))
     .settings(
       libraryDependencies ++= Seq(kafkaClients)
@@ -152,7 +129,6 @@ lazy val zioKafkaTestkit =
     .dependsOn(zioKafka)
     .enablePlugins(BuildInfoPlugin)
     .settings(stdSettings("zio-kafka-testkit"))
-    .settings(mimaSettings(binCompatVersionToCompare, failOnProblem = false))
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio" %% "zio"      % zioVersion.value,
@@ -214,10 +190,6 @@ lazy val zioKafkaExample =
       crossScalaVersions -= scala3.value
     )
 
-addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
-addCommandAlias("check", "all scalafmtSbtCheck scalafmtCheck test:scalafmtCheck")
-addCommandAlias("mimaCheck", "+zioKafka/mimaReportBinaryIssues;+zioKafkaTestkit/mimaReportBinaryIssues")
-
 lazy val docs = project
   .in(file("zio-kafka-docs"))
   .settings(
@@ -236,9 +208,3 @@ lazy val docs = project
   )
   .enablePlugins(WebsitePlugin)
   .dependsOn(zioKafka, zioKafkaTestkit)
-
-// Extend 'lint' with mimaCheck
-lazy val lint = {
-  val defaultLint = zio.sbt.Commands.ComposableCommand.lint
-  defaultLint.copy(commandStrings = defaultLint.commandStrings :+ "mimaCheck").toCommand
-}
