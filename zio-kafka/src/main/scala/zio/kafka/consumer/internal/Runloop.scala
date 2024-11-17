@@ -332,14 +332,15 @@ private[consumer] final class Runloop private (
         _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
         endTime = java.lang.System.nanoTime()
-        latency = (endTime - startTime).nanoseconds
-        _ <- consumerMetrics.observeCommit(latency)
+        _ <- consumerMetrics.observeCommit(endTime - startTime)
       } yield ()
 
   /** Merge commits and prepare parameters for calling `consumer.commitAsync`. */
   private def asyncCommitParameters(
     commits: Chunk[Runloop.Commit]
   ): (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback, Throwable => UIO[Unit]) = {
+    val computeMetric: Boolean = commits.nonEmpty
+
     val offsets = commits
       .foldLeft(mutable.Map.empty[TopicPartition, OffsetAndMetadata]) { case (acc, commit) =>
         commit.offsets.foreach { case (tp, offset) =>
@@ -356,15 +357,21 @@ private[consumer] final class Runloop private (
     }
     val cont = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
     // We assume the commit is started immediately after returning from this method.
-    val startTime = java.lang.System.nanoTime()
+    val startTime = if (computeMetric) java.lang.System.nanoTime() else null
     val onSuccess = {
-      val endTime = java.lang.System.nanoTime()
-      val latency = (endTime - startTime).nanoseconds
+      val latency =
+        if (computeMetric) {
+          val endTime = java.lang.System.nanoTime()
+          endTime - startTime.asInstanceOf[Long]
+        }
+        else null
+
       for {
         offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
-        _              <- consumerMetrics.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
-        result         <- cont(Exit.unit)
-        _              <- diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
+        _ <- if (computeMetric) consumerMetrics.observeAggregatedCommit(latency.asInstanceOf[Long], offsetIncrease)
+             else ZIO.unit
+        result <- cont(Exit.unit)
+        _      <- diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
       } yield result
     }
     val onFailure: Throwable => UIO[Unit] = {
