@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1731809623140,
+  "lastUpdate": 1732012288989,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -12134,6 +12134,90 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 842.86508764,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "adrielcasellas@gmail.com",
+            "name": "Adriel Casellas",
+            "username": "AdrielC"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "78cfa03673b0bd4b8fe36487de9c06f915f9f2e0",
+          "message": "Fix timing issue in ConsumerSpec test by adding delay in consumer stream (#1388)\n\nThis PR addresses a timing issue in the ConsumerSpec test: \r\n\r\n`“it’s possible to start a new consumption session from a Consumer that\r\nhad a consumption session stopped previously”`\r\n\r\n# Issue:\r\n\r\nWhen running the entire test suite, this test occasionally fails with\r\nthe following assertion error:\r\n\r\n```\r\nAssertion failed:\r\n  ✗ 100000 was not less than 100000\r\n  consumed0 did not satisfy isGreaterThan(0L) && isLessThan(numberOfMessages.toLong)\r\n  consumed0 = 100000\r\n```\r\n\r\n# Cause:\r\n- The failure occurs because the first consumer sometimes consumes all\r\nmessages before consumer.stopConsumption is called.\r\n- This happens due to timing variations when the test suite is run in\r\nfull, possibly because of system performance or resource contention.\r\n- As a result, consumed0 equals numberOfMessages, causing the assertion\r\nconsumed0 < numberOfMessages.toLong to fail.\r\n\r\n# Solution:\r\n- Introduce a slight delay in the consumer stream to prevent it from\r\nconsuming all messages too quickly.\r\n- This ensures that consumer.stopConsumption is called before all\r\nmessages are consumed.\r\n- The test can now reliably check that the consumer can be stopped and\r\nrestarted.\r\n\r\n# Testing:\r\n- Ran the full test suite multiple times to confirm that the issue is\r\nresolved.\r\n- Verified that consumed0 is greater than 0 and less than\r\nnumberOfMessages, satisfying the original assertions.",
+          "timestamp": "2024-11-19T11:12:29+01:00",
+          "tree_id": "f6a79d0944bcf1e20c863748e09148bfd91c9b5e",
+          "url": "https://github.com/zio/zio-kafka/commit/78cfa03673b0bd4b8fe36487de9c06f915f9f2e0"
+        },
+        "date": 1732012286602,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordPar",
+            "value": 12.746712946685127,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordSeq",
+            "value": 10.590472084832241,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 537.4723211599999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 538.1085309,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkPar",
+            "value": 201.40254415200002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkSeq",
+            "value": 512.1650271866667,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 624.05246694,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 620.8092777599999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1085.21652864,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 958.4534902600001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
