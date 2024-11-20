@@ -29,7 +29,7 @@ lazy val binCompatVersionToCompare =
     }
 
 lazy val kafkaVersion         = "3.8.1"
-lazy val embeddedKafkaVersion = "3.8.1" // Should be the same as kafkaVersion, except for the patch part
+lazy val embeddedKafkaVersion = "3.9.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
 lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.12"
