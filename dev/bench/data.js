@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1732087473323,
+  "lastUpdate": 1732088107119,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -11418,6 +11418,90 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 969.1112135999999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "145262613+zio-scala-steward[bot]@users.noreply.github.com",
+            "name": "zio-scala-steward[bot]",
+            "username": "zio-scala-steward[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9f3e6dc1bdcd80e3e089f7bb727a3de6d3821a1f",
+          "message": "Update embedded-kafka to 3.9.0 (#1398)\n\n## About this PR\r\n📦 Updates\r\n[io.github.embeddedkafka:embedded-kafka](https://github.com/embeddedkafka/embedded-kafka)\r\nfrom `3.8.1` to `3.9.0`\r\n\r\n📜 [GitHub Release\r\nNotes](https://github.com/embeddedkafka/embedded-kafka/releases/tag/v3.9.0)\r\n- [Version\r\nDiff](https://github.com/embeddedkafka/embedded-kafka/compare/v3.8.1...v3.9.0)\r\n\r\n## Usage\r\n✅ **Please merge!**\r\n\r\nI'll automatically update this PR to resolve conflicts as long as you\r\ndon't change it yourself.\r\n\r\nIf you'd like to skip this version, you can just close this PR. If you\r\nhave any feedback, just mention me in the comments below.\r\n\r\nConfigure Scala Steward for your repository with a\r\n[`.scala-steward.conf`](https://github.com/scala-steward-org/scala-steward/blob/f89466c2b9d28c5029de11ecd442329caf0f5b70/docs/repo-specific-configuration.md)\r\nfile.\r\n\r\n_Have a fantastic day writing Scala!_\r\n\r\n<details>\r\n<summary>🔍 Files still referring to the old version number</summary>\r\n\r\nThe following files still refer to the old version number (3.8.1).\r\nYou might want to review and update them manually.\r\n```\r\nbuild.sbt\r\n```\r\n</details>\r\n<details>\r\n<summary>⚙ Adjust future updates</summary>\r\n\r\nAdd this to your `.scala-steward.conf` file to ignore future updates of\r\nthis dependency:\r\n```\r\nupdates.ignore = [ { groupId = \"io.github.embeddedkafka\", artifactId = \"embedded-kafka\" } ]\r\n```\r\nOr, add this to slow down future updates of this dependency:\r\n```\r\ndependencyOverrides = [{\r\n  pullRequests = { frequency = \"30 days\" },\r\n  dependency = { groupId = \"io.github.embeddedkafka\", artifactId = \"embedded-kafka\" }\r\n}]\r\n```\r\n</details>\r\n\r\n<sup>\r\nlabels: library-update, early-semver-minor, semver-spec-minor,\r\nversion-scheme:semver-spec, old-version-remains, commit-count:1\r\n</sup>\r\n\r\n<!-- scala-steward = {\r\n  \"Update\" : {\r\n    \"ForArtifactId\" : {\r\n      \"crossDependency\" : [\r\n        {\r\n          \"groupId\" : \"io.github.embeddedkafka\",\r\n          \"artifactId\" : {\r\n            \"name\" : \"embedded-kafka\",\r\n            \"maybeCrossName\" : \"embedded-kafka_2.13\"\r\n          },\r\n          \"version\" : \"3.8.1\",\r\n          \"sbtVersion\" : null,\r\n          \"scalaVersion\" : null,\r\n          \"configurations\" : null\r\n        }\r\n      ],\r\n      \"newerVersions\" : [\r\n        \"3.9.0\"\r\n      ],\r\n      \"newerGroupId\" : null,\r\n      \"newerArtifactId\" : null\r\n    }\r\n  },\r\n  \"Labels\" : [\r\n    \"library-update\",\r\n    \"early-semver-minor\",\r\n    \"semver-spec-minor\",\r\n    \"version-scheme:semver-spec\",\r\n    \"old-version-remains\",\r\n    \"commit-count:1\"\r\n  ]\r\n} -->\r\n\r\n---------\r\n\r\nCo-authored-by: zio-scala-steward[bot] <145262613+zio-scala-steward[bot]@users.noreply.github.com>\r\nCo-authored-by: svroonland <svroonland@users.noreply.github.com>",
+          "timestamp": "2024-11-20T08:16:45+01:00",
+          "tree_id": "30d8db12bb97d28c92f6e7e608d243a3618c7e60",
+          "url": "https://github.com/zio/zio-kafka/commit/9f3e6dc1bdcd80e3e089f7bb727a3de6d3821a1f"
+        },
+        "date": 1732088104981,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordPar",
+            "value": 18.705379517432654,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceSingleRecordSeq",
+            "value": 14.32059411016089,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughput",
+            "value": 536.7311060599999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ConsumerBenchmark.throughputWithCommits",
+            "value": 537.1409955,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkPar",
+            "value": 138.08583281603177,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ProducerBenchmark.produceChunkSeq",
+            "value": 376.10717549000003,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 622.68515978,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 622.35538766,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 1115.09186886,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 869.9030003199998,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
