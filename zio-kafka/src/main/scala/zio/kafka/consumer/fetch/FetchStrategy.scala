@@ -8,8 +8,6 @@ import scala.collection.mutable
 
 /**
  * A fetch strategy determined which stream are allowed to fetch data in the next poll.
- *
- * WARNING: this is an EXPERIMENTAL API and may change in an incompatible way without notice in any zio-kafka version.
  */
 trait FetchStrategy {
 
