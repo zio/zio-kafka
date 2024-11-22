@@ -43,7 +43,7 @@ class ZioKafkaConsumerBenchmark extends ConsumerZioBenchmark[Kafka with Producer
       _ <- Consumer
              .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
              .tap { _ =>
-               counter.updateAndGet(_ + 1).flatMap(count => Consumer.stopConsumption.when(count == messageCount))
+               counter.updateAndGet(_ + 1).flatMap(count => Consumer.stopConsumption.when(count == recordCount))
              }
              .runDrain
              .provideSome[Kafka](env)
@@ -63,7 +63,7 @@ class ZioKafkaConsumerBenchmark extends ConsumerZioBenchmark[Kafka with Producer
                .tap(batch => counter.update(_ + batch.size))
                .map(OffsetBatch.apply)
                .mapZIO(_.commit)
-               .takeUntilZIO(_ => counter.get.map(_ >= messageCount))
+               .takeUntilZIO(_ => counter.get.map(_ >= recordCount))
                .runDrain
                .provideSome[Kafka](env)
            }

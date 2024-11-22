@@ -23,14 +23,14 @@ class KafkaClientBenchmarks extends ComparisonBenchmark {
             consumer.subscribe(java.util.Arrays.asList(topic1))
 
             var count = 0L
-            while (count < messageCount) {
+            while (count < recordCount) {
               val records = consumer.poll(settings.pollTimeout)
               count += records.count()
             }
 
             consumer.unsubscribe()
             count
-          }.flatMap(r => zAssert(r == messageCount, s"Consumed $r messages instead of $messageCount"))
+          }.flatMap(r => zAssert(r == recordCount, s"Consumed $r records instead of $recordCount"))
         }
       }
     }
@@ -46,14 +46,14 @@ class KafkaClientBenchmarks extends ComparisonBenchmark {
               consumer.assign(topicPartitions.map(_.asJava).asJava)
 
               var count = 0L
-              while (count < messageCount) {
+              while (count < recordCount) {
                 val records = consumer.poll(settings.pollTimeout)
                 count += records.count()
               }
 
               consumer.unsubscribe()
               count
-            }.flatMap(r => zAssert(r == messageCount, s"Consumed $r messages instead of $messageCount"))
+            }.flatMap(r => zAssert(r == recordCount, s"Consumed $r records instead of $recordCount"))
           }
       }
     }
