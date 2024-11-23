@@ -2786,13 +2786,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 16.054540374031305,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.34200440900119,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -2810,13 +2810,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 158.67168565809527,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 381.91708952666676,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -2870,13 +2870,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 11.968528562121186,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 9.90182604390042,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -2894,13 +2894,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 207.4421896329524,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 518.9782645066666,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -2954,13 +2954,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.706038787436507,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.626890696422896,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -2978,13 +2978,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 160.98510526476193,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 372.1928821566666,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3038,13 +3038,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 19.033387849040206,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 15.464496338059002,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3062,13 +3062,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 119.12972916500001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 303.4522818879999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3122,13 +3122,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.345953234682266,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.979166371525155,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3146,13 +3146,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 142.1806511521429,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 355.97733826,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3206,13 +3206,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.13433186132887,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.924870537399018,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3230,13 +3230,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 144.63028519214285,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 395.8452982733334,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3290,13 +3290,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.420746769103467,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.449144902204758,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3314,13 +3314,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 169.40162406838098,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 457.47760698000013,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3374,13 +3374,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.234205255810664,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.951484468107262,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3398,13 +3398,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 176.32026805714287,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 426.96135387000004,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3458,13 +3458,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 11.00744860669301,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 9.529121059628018,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3482,13 +3482,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 240.24437155333334,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 536.8434998266666,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3542,13 +3542,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 16.25705111759862,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.661772806236108,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3566,13 +3566,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 148.4790146342857,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 374.8274649166667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3626,13 +3626,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.634238913204019,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.74645641237375,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3650,13 +3650,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 174.31416052952383,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 461.71848604666667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3710,13 +3710,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.480700584127728,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.7905577421133,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3734,13 +3734,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 212.36558617333333,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 477.0550631366668,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3794,13 +3794,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 11.275312064870668,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 8.58216588136407,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3818,13 +3818,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 252.19388451666669,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 582.7103290999999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3878,13 +3878,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 18.83999852821456,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 15.944494427357629,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3902,13 +3902,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 119.1094685362222,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 332.66632978333325,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3962,13 +3962,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 18.969860077496786,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 16.396903014562767,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -3986,13 +3986,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 115.49064666755558,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 321.9952571233334,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4046,13 +4046,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.930778251398149,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.333622359068132,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4070,13 +4070,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 150.51822007228571,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 472.44526651000007,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4130,13 +4130,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.300406418662016,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.361777684707297,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4154,13 +4154,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 174.2742802657143,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 381.3095119666666,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4214,13 +4214,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.809885447324255,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 8.604523375454185,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4238,13 +4238,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 191.9363601506667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 533.32006456,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4298,13 +4298,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 18.10919921056032,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 14.857980554053078,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4322,13 +4322,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 145.34746407028575,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 373.08770238,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4382,13 +4382,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 11.579604230056136,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 7.234282114208163,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4406,13 +4406,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 245.77621862933336,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 436.09759095000004,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4466,13 +4466,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.035693062465143,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 9.412816084798973,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4490,13 +4490,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 184.3772214199524,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 629.77467992,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4550,13 +4550,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 16.25467553985262,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.088898250273692,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4574,13 +4574,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 153.2041222647619,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 338.24033290333335,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4634,13 +4634,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 11.960004673951953,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.661436375156956,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4658,13 +4658,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 175.66739154323807,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 415.6621208333334,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4718,13 +4718,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.92051577065514,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.59351484243552,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4742,13 +4742,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 161.61903602690478,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 440.17385820666675,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4802,13 +4802,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.60114114631265,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.343804104335653,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4826,13 +4826,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 190.45533936885712,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 471.93016126000003,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4886,13 +4886,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 10.958079824924189,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 8.771132896956875,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4910,13 +4910,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 243.10440270104763,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 652.66719256,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4970,13 +4970,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 16.983742691308663,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 14.061428897838205,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -4994,13 +4994,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 148.79133642499994,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 378.1764428066667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5054,13 +5054,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.612189896362478,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.111904621926168,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5078,13 +5078,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 192.07826350533335,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 443.9432356199999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5138,13 +5138,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.252752584564142,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 14.158982278194236,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5162,13 +5162,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 140.91965291214282,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 377.68259388999996,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5222,13 +5222,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 19.707892789946737,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 16.72888110481531,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5246,13 +5246,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 109.98207068266667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 301.321077474,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5306,13 +5306,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.970548484134984,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 14.321166849040507,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5330,13 +5330,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 142.2105987114286,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 349.27477988666664,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5390,13 +5390,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.836996759953628,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.64058187332937,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5414,13 +5414,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 166.12433870761907,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 410.2014329533333,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5474,13 +5474,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 20.661145435976405,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 16.18506704424852,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5498,13 +5498,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 115.3989380382222,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 294.65829690733335,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5554,13 +5554,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 20.031479677068607,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 15.048652674165549,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5578,13 +5578,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 122.37846134433332,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 344.8716119466667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5634,13 +5634,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.177096663347152,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.443259277688076,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5658,13 +5658,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 229.75616097400004,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 508.21205360666664,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5714,13 +5714,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 11.071521132010087,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 7.8896704436517595,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5738,13 +5738,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 309.47239944,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 546.16283116,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5798,13 +5798,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.05057938981727,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.1608561949384,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5822,13 +5822,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 149.6481850226984,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 415.2959821033333,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5878,13 +5878,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 16.27744799939741,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.6023603382352,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5902,13 +5902,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 154.73040734738098,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 436.89607853666666,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5958,13 +5958,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 10.149333278065429,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 8.37383865165579,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -5982,13 +5982,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 255.77335407799998,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 587.7328970066666,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6042,13 +6042,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.037439163390525,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.309724006545686,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6066,13 +6066,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 185.90322979580952,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 462.9915408933333,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6122,13 +6122,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 20.17278510778133,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 15.068305944480544,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6146,13 +6146,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 125.36250035288889,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 346.47141472999994,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6206,13 +6206,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.70004360904564,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.638679214292706,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6230,13 +6230,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 202.81256358400003,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 537.5432667399999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6286,13 +6286,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.450573758676274,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.40873721796923,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6310,13 +6310,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 144.08641676142852,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 362.3735797613333,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6370,13 +6370,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.972747754615131,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.27306060719717,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6394,13 +6394,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 156.44116561238093,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 460.75815933333325,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6450,13 +6450,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 11.49334292654747,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 8.376746257165534,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6474,13 +6474,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 242.85363101809526,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 472.3906820933333,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6530,13 +6530,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 21.721706950139787,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 16.518578972801727,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6554,13 +6554,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 110.63063882311113,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 312.19883336466665,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6610,13 +6610,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.365503232904251,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.321198922173268,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6634,13 +6634,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 186.41443536290478,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 495.2000617699999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6690,13 +6690,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.124974721297825,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.262642674849655,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6714,13 +6714,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 145.6403618292857,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 423.03594150666663,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6770,13 +6770,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.287320132112061,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.370669665381637,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6794,13 +6794,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 208.32155386799997,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 492.9152378533332,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6854,13 +6854,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.841431485095292,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.915470295550211,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6878,13 +6878,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 181.6661929007619,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 477.7351269433333,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6934,13 +6934,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.894225205662783,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.764031476491837,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -6958,13 +6958,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 190.93947645409528,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 487.97690103333343,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7014,13 +7014,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 11.185988216838542,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.763460781307087,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7038,13 +7038,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 235.65021331057142,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 538.2725688466667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7098,13 +7098,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 19.034204590015367,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 14.128024400982545,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7122,13 +7122,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 143.94750778142856,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 361.40643403666667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7178,13 +7178,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 12.309364594349573,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 7.925550938037976,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7202,13 +7202,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 273.250775684,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 653.3228147466667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7258,13 +7258,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 20.640091444633516,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 14.782617374627605,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7282,13 +7282,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 122.9456802111111,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 356.41848317666665,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7342,13 +7342,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.05127958837682,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.642781412354738,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7366,13 +7366,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 190.69566814157145,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 422.6021594833333,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7422,13 +7422,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.19465984085843,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.148527532890357,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7446,13 +7446,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 205.27657967795236,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 520.23786056,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7506,13 +7506,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.013751568893083,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.953686150475106,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7530,13 +7530,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 197.16223076666668,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 512.4282124666667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7586,13 +7586,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 12.108441969644161,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 9.550056604680025,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7610,13 +7610,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 208.00908747295233,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 564.0028872533334,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7670,13 +7670,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.15381982580785,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.126427092873753,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7694,13 +7694,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 151.56930484857148,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 383.7870298666667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7750,13 +7750,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.89325012540831,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 14.43281464303278,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7774,13 +7774,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 175.66129096190477,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 498.3057863666667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7830,13 +7830,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.791584834928628,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.50011845591273,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7854,13 +7854,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 159.9463058121429,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 446.0507569200001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7910,13 +7910,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 20.050822040411337,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 15.240720173704881,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7934,13 +7934,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 121.65802917444444,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 343.86120122333335,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -7990,13 +7990,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.342036680178676,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.397481928501582,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8014,13 +8014,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 182.82604706266665,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 477.6546863,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8074,13 +8074,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.629001762570041,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.25857209158661,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8098,13 +8098,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 177.2645040485714,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 452.4624718533334,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8158,13 +8158,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 12.702520293539251,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.362977320167271,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8182,13 +8182,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 213.88533829199997,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 433.97005975333343,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8238,13 +8238,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 12.635409039175181,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.922596071580235,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8262,13 +8262,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 181.31568258323813,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 486.7926981666666,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8318,13 +8318,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.00754051050015,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.004962476588819,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8342,13 +8342,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 152.67174843914282,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 420.4374996066667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8398,13 +8398,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 19.61418140094142,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 14.339936170307562,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8422,13 +8422,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 124.01117169666666,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 356.6322013073334,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8482,13 +8482,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 19.45246502850548,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 14.376774013471836,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8506,13 +8506,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 129.23151329277778,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 345.43276771666666,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8562,13 +8562,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.64638793247844,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.932924357281825,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8586,13 +8586,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 171.60894934133336,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 428.8005793933333,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8646,13 +8646,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.865237094077585,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 14.16109289919045,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8670,13 +8670,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 135.4803442057143,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 384.49241470000015,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8726,13 +8726,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.762270837777278,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.275241761822292,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8750,13 +8750,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 182.39723210476185,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 498.8985196333334,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8806,13 +8806,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 12.874194986933537,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.229109871025699,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8830,13 +8830,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 235.5692432569524,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 492.7667318400001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8886,13 +8886,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.033971438775975,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.404397455527628,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8910,13 +8910,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 149.2855427452222,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 468.9285395733332,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8970,13 +8970,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.222158417655125,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.318375189822234,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -8994,13 +8994,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 184.36306651333334,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 489.35459155999996,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9050,13 +9050,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.433217969126288,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.281776306983446,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9074,13 +9074,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 189.73266722038096,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 513.65031028,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9130,13 +9130,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.66501407565104,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.158943708074869,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9154,13 +9154,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 190.06213269599996,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 458.50074323,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9210,13 +9210,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.570054568691694,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.170598735077848,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9234,13 +9234,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 187.86401846304764,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 506.61857874666674,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9290,13 +9290,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.367929020446162,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.601445511107695,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9314,13 +9314,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 161.20975916123808,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 463.3224406266667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9370,13 +9370,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.206208701149457,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.518722157411153,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9394,13 +9394,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 149.66875042619048,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 394.4184062999999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9450,13 +9450,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 16.148906760239488,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.625847851830509,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9474,13 +9474,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 165.3032352494603,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 465.1456951733334,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9614,13 +9614,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.151408928147482,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.35035997793795,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9638,13 +9638,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 192.77952377390477,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 498.46926606666653,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9774,13 +9774,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.323517237366074,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.851935484083235,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9798,13 +9798,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 183.6647631545714,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 518.9458305066667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9858,13 +9858,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.23212277186022,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.026513030720546,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9882,13 +9882,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 148.07074106190473,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 435.74269293666674,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9938,13 +9938,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 17.222122546261176,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 13.173915501552546,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -9962,13 +9962,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 155.5251808354762,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 388.38059747999995,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10018,13 +10018,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.472397263083035,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.433094557005598,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10042,13 +10042,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 188.309182582,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 541.6292619866667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10098,13 +10098,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 16.530756936628926,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.846017033317047,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10122,13 +10122,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 165.6687487047619,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 471.38303053999994,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10182,13 +10182,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 12.746712946685127,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.590472084832241,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10206,13 +10206,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 201.40254415200002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 512.1650271866667,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10262,13 +10262,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 12.670787350484465,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.404056440004345,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10286,13 +10286,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 205.24570732133333,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 566.9356119066666,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10342,13 +10342,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 16.260207880452416,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 12.032908995718664,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10366,13 +10366,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 169.35526327809524,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 419.4914527666668,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10426,13 +10426,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 18.705379517432654,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 14.32059411016089,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10450,13 +10450,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 138.08583281603177,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 376.10717549000003,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10506,13 +10506,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 12.803517802691513,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 10.612669063135527,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10530,13 +10530,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 162.2154400942857,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 449.34668056000004,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10590,13 +10590,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 15.831851994147137,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.750021901238583,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10614,13 +10614,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 177.48686702038097,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 459.88086215999994,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10670,13 +10670,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 13.308865976628935,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 9.87698369761147,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10694,13 +10694,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 221.84269622799994,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 550.6868385533332,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10834,13 +10834,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.546667862508764,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 11.254933290587722,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10858,13 +10858,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 181.45218063695236,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 468.74536913333327,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10918,13 +10918,13 @@ window.BENCHMARK_DATA = {
         "tool": "jmh",
         "benches": [
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
             "value": 14.060232978846546,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceSingleRecordSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
             "value": 8.310061492726287,
             "unit": "ops/s",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
@@ -10942,13 +10942,13 @@ window.BENCHMARK_DATA = {
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkPar",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
             "value": 239.90897964457145,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           },
           {
-            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark..produceChunkSeq",
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
             "value": 569.63812928,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
