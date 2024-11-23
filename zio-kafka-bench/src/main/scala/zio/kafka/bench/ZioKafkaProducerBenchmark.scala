@@ -14,11 +14,7 @@ import java.util.concurrent.TimeUnit
 
 @State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-class ProducerBenchmark extends ZioBenchmark[Kafka with Producer] {
-  val topic1                      = "topic1"
-  val nrPartitions                = 6
-  val nrMessages                  = 500
-  val kvs: List[(String, String)] = List.tabulate(nrMessages)(i => (s"key$i", s"msg$i"))
+class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer] {
   val records: Chunk[ProducerRecord[String, String]] = Chunk.fromIterable(kvs.map { case (k, v) =>
     new ProducerRecord(topic1, k, v)
   })
@@ -28,7 +24,7 @@ class ProducerBenchmark extends ZioBenchmark[Kafka with Producer] {
 
   override def initialize: ZIO[Kafka with Producer, Throwable, Any] = for {
     _ <- ZIO.succeed(EmbeddedKafka.deleteTopics(List(topic1))).ignore
-    _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = nrPartitions))
+    _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = partitionCount))
   } yield ()
 
   @Benchmark
