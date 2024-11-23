@@ -50,7 +50,7 @@ class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer
   @BenchmarkMode(Array(Mode.Throughput))
   @OutputTimeUnit(TimeUnit.SECONDS)
   def produceSingleRecordSeq(): Any = runZIO {
-    // Produce 50 records sequentially
+    // Produce 100 records sequentially
     Producer.produce(topic1, "key", "value", Serde.string, Serde.string).repeatN(99)
   }
 
