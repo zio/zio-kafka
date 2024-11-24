@@ -14,6 +14,7 @@ import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
 import zio.stream._
 
+import java.util.{ Map => JavaMap }
 import scala.jdk.CollectionConverters._
 
 //noinspection SimplifyWhenInspection,SimplifyUnlessInspection
@@ -493,9 +494,7 @@ private[consumer] final class Runloop private (
         for {
           _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
           _ <- consumer.runloopAccess { consumer =>
-                 committer.processQueuedCommits((offsets, callback) =>
-                   ZIO.attempt(consumer.commitAsync(offsets, callback))
-                 )
+                 committer.processQueuedCommits(commitAsyncZIO(consumer, _))
                }
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
           stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
@@ -513,6 +512,24 @@ private[consumer] final class Runloop private (
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitionsHub.offer(Take.failCause(cause)))
   }
+
+  private def commitAsyncZIO(
+    consumer: ByteArrayKafkaConsumer,
+    offsets: Map[TopicPartition, OffsetAndMetadata]
+  ): Task[Map[TopicPartition, OffsetAndMetadata]] =
+    ZIO
+      .async[Any, Throwable, Map[TopicPartition, OffsetAndMetadata]]({ onDone =>
+        print("Starting commitAsync")
+        consumer.commitAsync(
+          offsets.asJava,
+          (offsets: JavaMap[TopicPartition, OffsetAndMetadata], exception: Exception) => {
+            print("Ending commitAsync")
+            if (exception == null) onDone(ZIO.succeed(offsets.asScala.toMap))
+            else onDone(ZIO.fail(exception))
+          }
+        )
+      })
+  // TODO the async doesn't continue, probably because it's on the blocking runtime..?
 
   def shouldPoll(state: State): UIO[Boolean] =
     committer.pendingCommitCount.map { pendingCommitCount =>
@@ -594,8 +611,7 @@ object Runloop {
                        settings.commitTimeout,
                        diagnostics,
                        metrics,
-                       commandQueue.offer(RunloopCommand.CommitAvailable).unit,
-                       sameThreadRuntime
+                       commandQueue.offer(RunloopCommand.CommitAvailable).unit
                      )
       rebalanceCoordinator = new RebalanceCoordinator(
                                lastRebalanceEvent,
@@ -603,7 +619,8 @@ object Runloop {
                                consumer,
                                maxRebalanceDuration,
                                currentStateRef.get.map(_.assignedStreams),
-                               committer
+                               committer,
+                               sameThreadRuntime
                              )
       runloop = new Runloop(
                   settings = settings,

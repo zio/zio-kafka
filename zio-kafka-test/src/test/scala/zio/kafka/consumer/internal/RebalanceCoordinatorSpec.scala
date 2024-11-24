@@ -96,8 +96,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
           records = createTestRecords(3)
           recordsPulled <- Promise.make[Nothing, Unit]
           _             <- streamControl.offerRecords(records)
-          runtime       <- ZIO.runtime[Any]
-          committer     <- LiveCommitter.make(10.seconds, Diagnostics.NoOp, mockMetrics, ZIO.unit, runtime)
+          committer     <- LiveCommitter.make(10.seconds, Diagnostics.NoOp, mockMetrics, ZIO.unit)
 
           streamDrain <-
             streamControl.stream
@@ -173,16 +172,23 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
     settings: ConsumerSettings = ConsumerSettings(List("")).withCommitTimeout(1.second),
     rebalanceSafeCommits: Boolean = false
   ): ZIO[Scope, Throwable, RebalanceCoordinator] =
-    Semaphore.make(1).map(new ConsumerAccess(mockConsumer, _)).map { consumerAccess =>
-      new RebalanceCoordinator(
-        lastEvent,
-        settings.withRebalanceSafeCommits(rebalanceSafeCommits),
-        consumerAccess,
-        5.seconds,
-        ZIO.succeed(assignedStreams),
-        committer
-      )
-    }
+    Semaphore
+      .make(1)
+      .map(new ConsumerAccess(mockConsumer, _))
+      .flatMap { consumerAccess =>
+        ZIO.runtime[Any].map { sameThreadRuntime =>
+          new RebalanceCoordinator(
+            lastEvent,
+            settings.withRebalanceSafeCommits(rebalanceSafeCommits),
+            consumerAccess,
+            5.seconds,
+            ZIO.succeed(assignedStreams),
+            committer,
+            sameThreadRuntime = sameThreadRuntime
+          )
+        }
+      }
+      .provideLayer(SameThreadRuntimeLayer)
 
   private def createTestRecords(count: Int): Chunk[ByteArrayCommittableRecord] =
     Chunk.fromIterable(
@@ -206,7 +212,7 @@ abstract class MockCommitter extends Committer {
   override val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] = _ => ZIO.unit
 
   override def processQueuedCommits(
-    commitAsync: (java.util.Map[TopicPartition, OffsetAndMetadata], OffsetCommitCallback) => zio.Task[Unit],
+    commitAsync: Map[TopicPartition, OffsetAndMetadata] => Task[Map[TopicPartition, OffsetAndMetadata]],
     executeOnEmpty: Boolean
   ): zio.Task[Unit] = ZIO.unit
   override def queueSize: UIO[Int]                      = ZIO.succeed(0)

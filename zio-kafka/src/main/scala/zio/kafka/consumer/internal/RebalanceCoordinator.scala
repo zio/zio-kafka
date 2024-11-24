@@ -1,4 +1,5 @@
 package zio.kafka.consumer.internal
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator.{
@@ -10,7 +11,10 @@ import zio.kafka.consumer.internal.RebalanceCoordinator.{
 }
 import zio.kafka.consumer.{ ConsumerSettings, RebalanceListener }
 import zio.stream.ZStream
-import zio.{ durationInt, Chunk, Duration, Ref, Task, UIO, ZIO }
+import zio.{ durationInt, Chunk, Duration, Ref, Runtime, Task, UIO, ZIO }
+
+import java.util.{ Map => JavaMap }
+import scala.jdk.CollectionConverters._
 
 /**
  * The Runloop's RebalanceListener gets notified of partitions that are assigned, revoked and lost
@@ -26,7 +30,8 @@ private[internal] class RebalanceCoordinator(
   consumer: ConsumerAccess,
   maxRebalanceDuration: Duration,
   getCurrentAssignedStreams: UIO[Chunk[PartitionStreamControl]],
-  committer: Committer
+  committer: Committer,
+  sameThreadRuntime: Runtime[Any]
 ) {
   private val commitTimeoutNanos = settings.commitTimeout.toNanos
 
@@ -166,7 +171,7 @@ private[internal] class RebalanceCoordinator(
           // executeOnEmpty = true
           .tap(_ =>
             committer.processQueuedCommits(
-              (offsets, callback) => ZIO.attempt(consumer.commitAsync(offsets, callback)),
+              offsets => commitAsyncZIO(consumer, offsets),
               executeOnEmpty = true
             )
           )
@@ -180,6 +185,21 @@ private[internal] class RebalanceCoordinator(
       _ <- ZIO.logDebug(s"Done waiting for ${streamsToEnd.size} streams to end")
     } yield ()
   }
+
+  private def commitAsyncZIO(
+    consumer: ByteArrayKafkaConsumer,
+    offsets: Map[TopicPartition, OffsetAndMetadata]
+  ): Task[Map[TopicPartition, OffsetAndMetadata]] =
+    sameThreadRuntime.run {
+      ZIO.async[Any, Throwable, Map[TopicPartition, OffsetAndMetadata]]({ onDone =>
+        consumer.commitAsync(
+          offsets.asJava,
+          (offsets: JavaMap[TopicPartition, OffsetAndMetadata], exception: Exception) =>
+            if (exception == null) onDone(ZIO.succeed(offsets.asScala.toMap))
+            else onDone(ZIO.fail(exception))
+        )
+      })
+    }
 
   // During a poll, the java kafka client might call each method of the rebalance listener 0 or 1 times.
   // We do not know the order in which the call-back methods are invoked.

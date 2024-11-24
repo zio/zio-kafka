@@ -1,13 +1,12 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallback }
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.LiveCommitter.Commit
 import zio.{ Chunk, Task, UIO }
 
 import java.lang.Math.max
-import java.util.{ Map => JavaMap }
 import scala.collection.mutable
 
 private[internal] trait Committer {
@@ -25,7 +24,7 @@ private[internal] trait Committer {
    *   Execute commitAsync() even if there are no commits
    */
   def processQueuedCommits(
-    commitAsync: (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback) => Task[Unit],
+    commitAsync: Map[TopicPartition, OffsetAndMetadata] => Task[Map[TopicPartition, OffsetAndMetadata]],
     executeOnEmpty: Boolean = false
   ): Task[Unit]
 

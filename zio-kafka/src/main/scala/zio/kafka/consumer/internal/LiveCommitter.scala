@@ -1,17 +1,14 @@
 package zio.kafka.consumer.internal
-import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallback }
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.kafka.consumer.Consumer.CommitTimeout
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.LiveCommitter.Commit
-import zio.{ durationLong, Chunk, Duration, Exit, Promise, Queue, Ref, Runtime, Scope, Task, UIO, Unsafe, ZIO }
+import zio.{ durationLong, Cause, Chunk, Duration, Exit, Promise, Queue, Ref, Scope, Task, UIO, ZIO }
 
-import java.util
-import java.util.{ Map => JavaMap }
 import scala.collection.mutable
-import scala.jdk.CollectionConverters._
 
 private[consumer] final class LiveCommitter(
   commitQueue: Queue[Commit],
@@ -20,7 +17,6 @@ private[consumer] final class LiveCommitter(
   consumerMetrics: ConsumerMetrics,
   onCommitAvailable: UIO[Unit],
   committedOffsetsRef: Ref[CommitOffsets],
-  sameThreadRuntime: Runtime[Any],
   pendingCommits: Ref[Chunk[Commit]]
 ) extends Committer {
 
@@ -40,74 +36,52 @@ private[consumer] final class LiveCommitter(
       } yield ()
 
   override def processQueuedCommits(
-    commitAsync: (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback) => Task[Unit],
+    commitAsyncZIO: Map[TopicPartition, OffsetAndMetadata] => Task[Map[TopicPartition, OffsetAndMetadata]],
     executeOnEmpty: Boolean = false
   ): Task[Unit] = for {
     commits <- commitQueue.takeAll
     _       <- ZIO.logDebug(s"Processing ${commits.size} commits")
     _ <- ZIO.unless(commits.isEmpty && !executeOnEmpty) {
-           val (offsets, callback, onFailure) = asyncCommitParameters(commits)
+           val offsets = commits
+             .foldLeft(mutable.Map.empty[TopicPartition, OffsetAndMetadata]) { case (acc, commit) =>
+               commit.offsets.foreach { case (tp, offset) =>
+                 acc += (tp -> acc
+                   .get(tp)
+                   .map(current => if (current.offset() > offset.offset()) current else offset)
+                   .getOrElse(offset))
+               }
+               acc
+             }
+             .toMap
+           val offsetsWithMetaData = offsets.map { case (tp, offset) =>
+             tp -> new OffsetAndMetadata(offset.offset + 1, offset.leaderEpoch, offset.metadata)
+           }
+
            pendingCommits.update(_ ++ commits) *>
-             // We don't wait for the completion of the commit here, because it
-             // will only complete once we poll again.
-             commitAsync(offsets, callback)
-               .catchAll(onFailure)
+             ZIO.debug("Here!") *>
+             commitAsyncZIO(offsetsWithMetaData).timed.debug.flatMap { case (latency, offsetsWithMetaData) =>
+               for {
+                 offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
+                 _      <- consumerMetrics.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
+                 result <- ZIO.foreachDiscard(commits)(_.cont.done(Exit.unit))
+                 _      <- diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
+               } yield result
+             }.catchAllCause {
+               case Cause.Fail(_: RebalanceInProgressException, _) =>
+                 for {
+                   _ <- ZIO.logDebug(s"Rebalance in progress, commit for offsets $offsets will be retried")
+                   _ <- commitQueue.offerAll(commits)
+                   _ <- onCommitAvailable
+                 } yield ()
+               case c =>
+                 ZIO.foreachDiscard(commits)(_.cont.done(Exit.fail(c.squash))) <* diagnostics.emit(
+                   DiagnosticEvent.Commit.Failure(offsets, c.squash)
+                 )
+             }.debug
+           // We don't wait for the completion of the commit here, because it
+           // will only complete once we poll again.
          }
   } yield ()
-
-  /** Merge commits and prepare parameters for calling `consumer.commitAsync`. */
-  private def asyncCommitParameters(
-    commits: Chunk[Commit]
-  ): (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback, Throwable => UIO[Unit]) = {
-    val offsets = commits
-      .foldLeft(mutable.Map.empty[TopicPartition, OffsetAndMetadata]) { case (acc, commit) =>
-        commit.offsets.foreach { case (tp, offset) =>
-          acc += (tp -> acc
-            .get(tp)
-            .map(current => if (current.offset() > offset.offset()) current else offset)
-            .getOrElse(offset))
-        }
-        acc
-      }
-      .toMap
-    val offsetsWithMetaData = offsets.map { case (tp, offset) =>
-      tp -> new OffsetAndMetadata(offset.offset + 1, offset.leaderEpoch, offset.metadata)
-    }
-    val cont = (e: Exit[Throwable, Unit]) => ZIO.foreachDiscard(commits)(_.cont.done(e))
-    // We assume the commit is started immediately after returning from this method.
-    val startTime = java.lang.System.nanoTime()
-    val onSuccess = {
-      val endTime = java.lang.System.nanoTime()
-      val latency = (endTime - startTime).nanoseconds
-      for {
-        offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
-        _              <- consumerMetrics.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
-        result         <- cont(Exit.unit)
-        _              <- diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
-      } yield result
-    }
-    val onFailure: Throwable => UIO[Unit] = {
-      case _: RebalanceInProgressException =>
-        for {
-          _ <- ZIO.logDebug(s"Rebalance in progress, commit for offsets $offsets will be retried")
-          _ <- commitQueue.offerAll(commits)
-          _ <- onCommitAvailable
-        } yield ()
-      case err: Throwable =>
-        cont(Exit.fail(err)) <* diagnostics.emit(DiagnosticEvent.Commit.Failure(offsetsWithMetaData, err))
-    }
-    val callback =
-      new OffsetCommitCallback {
-        override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
-          Unsafe.unsafe { implicit u =>
-            sameThreadRuntime.unsafe.run {
-              if (exception eq null) onSuccess else onFailure(exception)
-            }
-              .getOrThrowFiberFailure()
-          }
-      }
-    (offsetsWithMetaData.asJava, callback, onFailure)
-  }
 
   override def queueSize: UIO[Int] = commitQueue.size
 
@@ -130,8 +104,7 @@ private[internal] object LiveCommitter {
     commitTimeout: Duration,
     diagnostics: Diagnostics,
     consumerMetrics: ConsumerMetrics,
-    onCommitAvailable: UIO[Unit],
-    sameThreadRuntime: Runtime[Any]
+    onCommitAvailable: UIO[Unit]
   ): ZIO[Scope, Nothing, LiveCommitter] = for {
     pendingCommits      <- Ref.make(Chunk.empty[Commit])
     commitQueue         <- ZIO.acquireRelease(Queue.unbounded[Commit])(_.shutdown)
@@ -143,7 +116,6 @@ private[internal] object LiveCommitter {
     consumerMetrics,
     onCommitAvailable,
     committedOffsetsRef,
-    sameThreadRuntime,
     pendingCommits
   )
 
