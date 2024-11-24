@@ -41,7 +41,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
   def spec = suite("RunloopRebalanceListener")(
     test("should track assigned, revoked and lost partitions") {
       for {
-        lastEvent <- Ref.make(RebalanceCoordinator.RebalanceEvent.None)
+        lastEvent <- Ref.Synchronized.make(RebalanceCoordinator.RebalanceEvent.None)
         consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {}
         tp       = new TopicPartition("topic", 0)
         tp2      = new TopicPartition("topic", 1)
@@ -61,7 +61,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
     },
     test("should end streams for revoked and lost partitions") {
       for {
-        lastEvent <- Ref.make(RebalanceCoordinator.RebalanceEvent.None)
+        lastEvent <- Ref.Synchronized.make(RebalanceCoordinator.RebalanceEvent.None)
         consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {}
         tp       = new TopicPartition("topic", 0)
         tp2      = new TopicPartition("topic", 1)
@@ -80,7 +80,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
     suite("rebalanceSafeCommits")(
       test("should wait for the last pulled offset to commit") {
         for {
-          lastEvent <- Ref.make(RebalanceCoordinator.RebalanceEvent.None)
+          lastEvent <- Ref.Synchronized.make(RebalanceCoordinator.RebalanceEvent.None)
           consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {
                        override def commitAsync(
                          offsets: util.Map[TopicPartition, OffsetAndMetadata],
@@ -126,7 +126,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
       },
       test("should continue if waiting for the stream to continue has timed out") {
         for {
-          lastEvent <- Ref.make(RebalanceCoordinator.RebalanceEvent.None)
+          lastEvent <- Ref.Synchronized.make(RebalanceCoordinator.RebalanceEvent.None)
           consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {}
           tp       = new TopicPartition("topic", 0)
           streamControl <- makeStreamControl(tp)
@@ -166,7 +166,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
     PartitionStreamControl.newPartitionStream(tp, ZIO.unit, Diagnostics.NoOp, 30.seconds)
 
   private def makeCoordinator(
-    lastEvent: Ref[RebalanceEvent],
+    lastEvent: Ref.Synchronized[RebalanceEvent],
     mockConsumer: BinaryMockConsumer,
     assignedStreams: Chunk[PartitionStreamControl] = Chunk.empty,
     committer: Committer = new MockCommitter {},
@@ -209,10 +209,10 @@ abstract class MockCommitter extends Committer {
     commitAsync: (java.util.Map[TopicPartition, OffsetAndMetadata], OffsetCommitCallback) => zio.Task[Unit],
     executeOnEmpty: Boolean
   ): zio.Task[Unit] = ZIO.unit
-  override def queueSize: UIO[Int]                      = ZIO.succeed(0)
-  override def pendingCommitCount: UIO[Int]             = ZIO.succeed(0)
-  override def getPendingCommits: UIO[CommitOffsets]    = ZIO.succeed(CommitOffsets.empty)
-  override def updatePendingCommitsAfterPoll: UIO[Unit] = ZIO.unit
-  override def pruneCommittedOffsets(assignedPartitions: Set[TopicPartition]): UIO[Unit] = ZIO.unit
+  override def queueSize: UIO[Int]                   = ZIO.succeed(0)
+  override def pendingCommitCount: UIO[Int]          = ZIO.succeed(0)
+  override def getPendingCommits: UIO[CommitOffsets] = ZIO.succeed(CommitOffsets.empty)
+  override def cleanupPendingCommits: UIO[Unit]      = ZIO.unit
+  override def keepCommitsForPartitions(assignedPartitions: Set[TopicPartition]): UIO[Unit] = ZIO.unit
   override def getCommittedOffsets: UIO[CommitOffsets] = ZIO.succeed(CommitOffsets.empty)
 }

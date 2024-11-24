@@ -21,7 +21,7 @@ private[consumer] final class LiveCommitter(
   onCommitAvailable: UIO[Unit],
   committedOffsetsRef: Ref[CommitOffsets],
   sameThreadRuntime: Runtime[Any],
-  pendingCommits: Ref[Chunk[Commit]]
+  pendingCommits: Ref.Synchronized[Chunk[Commit]]
 ) extends Committer {
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
@@ -39,6 +39,10 @@ private[consumer] final class LiveCommitter(
         _ <- consumerMetrics.observeCommit(latency)
       } yield ()
 
+  /**
+   * WARNING: this method is used during a rebalance from the same-thread-runtime. This restricts what ZIO operations
+   * may be used. Please see [[RebalanceCoordinator]] for more information.
+   */
   override def processQueuedCommits(
     commitAsync: (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback) => Task[Unit],
     executeOnEmpty: Boolean = false
@@ -55,7 +59,12 @@ private[consumer] final class LiveCommitter(
          }
   } yield ()
 
-  /** Merge commits and prepare parameters for calling `consumer.commitAsync`. */
+  /**
+   * Merge commits and prepare parameters for calling `consumer.commitAsync`.
+   *
+   * WARNING: this method is used during a rebalance from the same-thread-runtime. This restricts what ZIO operations
+   * may be used. Please see [[RebalanceCoordinator]] for more information.
+   */
   private def asyncCommitParameters(
     commits: Chunk[Commit]
   ): (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback, Throwable => UIO[Unit]) = {
@@ -116,10 +125,10 @@ private[consumer] final class LiveCommitter(
   override def getPendingCommits: UIO[CommitOffsets] =
     pendingCommits.get.map(CommitOffsets.empty.addCommits(_)._2)
 
-  override def updatePendingCommitsAfterPoll: UIO[Unit] =
-    pendingCommits.get.flatMap(ZIO.filter(_)(_.isPending)).flatMap(pendingCommits.set)
+  override def cleanupPendingCommits: UIO[Unit] =
+    pendingCommits.updateZIO(_.filterZIO(_.isPending))
 
-  override def pruneCommittedOffsets(assignedPartitions: Set[TopicPartition]): UIO[Unit] =
+  override def keepCommitsForPartitions(assignedPartitions: Set[TopicPartition]): UIO[Unit] =
     committedOffsetsRef.update(_.keepPartitions(assignedPartitions))
 
   override def getCommittedOffsets: UIO[CommitOffsets] = committedOffsetsRef.get
@@ -133,7 +142,7 @@ private[internal] object LiveCommitter {
     onCommitAvailable: UIO[Unit],
     sameThreadRuntime: Runtime[Any]
   ): ZIO[Scope, Nothing, LiveCommitter] = for {
-    pendingCommits      <- Ref.make(Chunk.empty[Commit])
+    pendingCommits      <- Ref.Synchronized.make(Chunk.empty[Commit])
     commitQueue         <- ZIO.acquireRelease(Queue.unbounded[Commit])(_.shutdown)
     committedOffsetsRef <- Ref.make(CommitOffsets.empty)
   } yield new LiveCommitter(
@@ -152,8 +161,7 @@ private[internal] object LiveCommitter {
     offsets: Map[TopicPartition, OffsetAndMetadata],
     cont: Promise[Throwable, Unit]
   ) {
-    @inline def isDone: UIO[Boolean]    = cont.isDone
-    @inline def isPending: UIO[Boolean] = isDone.negate
+    @inline def isPending: UIO[Boolean] = cont.isDone.negate
   }
 
 }

@@ -175,7 +175,7 @@ object CommitterSpec extends ZIOSpecDefault {
         _           <- commitAvailable.await
         _ <- committer.processQueuedCommits((offsets, callback) => ZIO.attempt(callback.onComplete(offsets, null)))
         pendingCommitsDuringCommit <- committer.pendingCommitCount
-        _                          <- committer.updatePendingCommitsAfterPoll
+        _                          <- committer.cleanupPendingCommits
         pendingCommitsAfterCommit  <- committer.pendingCommitCount
         _                          <- commitFiber.join
       } yield assertTrue(pendingCommitsDuringCommit == 1 && pendingCommitsAfterCommit == 0)
@@ -214,7 +214,7 @@ object CommitterSpec extends ZIOSpecDefault {
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.await
         _ <- committer.processQueuedCommits((offsets, callback) => ZIO.attempt(callback.onComplete(offsets, null)))
-        _ <- committer.pruneCommittedOffsets(Set.empty)
+        _ <- committer.keepCommitsForPartitions(Set.empty)
         committedOffsets <- committer.getCommittedOffsets
         _                <- commitFiber.join
       } yield assertTrue(committedOffsets.offsets.isEmpty)

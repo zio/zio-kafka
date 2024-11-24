@@ -286,7 +286,8 @@ private[consumer] final class Runloop private (
 
                                 // Remove committed offsets for partitions that are no longer assigned:
                                 // NOTE: the type annotation is needed to keep the IntelliJ compiler happy.
-                                _ <- committer.pruneCommittedOffsets(updatedAssignedStreams.map(_.tp).toSet): Task[Unit]
+                                _ <-
+                                  committer.keepCommitsForPartitions(updatedAssignedStreams.map(_.tp).toSet): Task[Unit]
 
                                 _ <- consumerMetrics.observeRebalance(
                                        currentAssigned.size,
@@ -328,7 +329,7 @@ private[consumer] final class Runloop private (
                          pollResult.ignoreRecordsForTps,
                          pollResult.records
                        )
-      _ <- committer.updatePendingCommitsAfterPoll
+      _ <- committer.cleanupPendingCommits
       _ <- checkStreamPullInterval(pollResult.assignedStreams)
     } yield state.copy(
       pendingRequests = fulfillResult.pendingRequests,
@@ -520,12 +521,12 @@ private[consumer] final class Runloop private (
 
   private def observeRunloopMetrics(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ZIO[Any, Nothing, Unit] = {
     val observe = for {
-      currentState     <- currentStateRef.get
-      commandQueueSize <- commandQueue.size
-      commitQueueSize  <- committer.queueSize
-      pendingCommits   <- committer.pendingCommitCount
+      currentState       <- currentStateRef.get
+      commandQueueSize   <- commandQueue.size
+      commitQueueSize    <- committer.queueSize
+      pendingCommitCount <- committer.pendingCommitCount
       _ <- consumerMetrics
-             .observeRunloopMetrics(currentState, commandQueueSize, commitQueueSize, pendingCommits)
+             .observeRunloopMetrics(currentState, commandQueueSize, commitQueueSize, pendingCommitCount)
     } yield ()
 
     observe
@@ -582,7 +583,7 @@ object Runloop {
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
-      lastRebalanceEvent <- Ref.make[RebalanceEvent](RebalanceEvent.None)
+      lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
       currentStateRef   <- Ref.make(initialState)
       sameThreadRuntime <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
