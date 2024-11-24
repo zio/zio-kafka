@@ -2,16 +2,10 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallback }
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.RebalanceCoordinator.{
-  EndOffsetCommitPending,
-  EndOffsetCommitted,
-  EndOffsetNotCommitted,
-  RebalanceEvent,
-  StreamCompletionStatus
-}
+import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.{ ConsumerSettings, RebalanceListener }
 import zio.stream.ZStream
-import zio.{ durationInt, Chunk, Duration, Promise, Ref, Runtime, Task, UIO, Unsafe, ZIO }
+import zio.{ durationInt, Chunk, Duration, Promise, Ref, Task, UIO, Unsafe, ZIO }
 
 import java.util.{ Map => JavaMap }
 import scala.jdk.CollectionConverters._
@@ -30,8 +24,7 @@ private[internal] class RebalanceCoordinator(
   consumer: ConsumerAccess,
   maxRebalanceDuration: Duration,
   getCurrentAssignedStreams: UIO[Chunk[PartitionStreamControl]],
-  committer: Committer,
-  sameThreadRuntime: Runtime[Any]
+  committer: Committer
 ) {
   private val commitTimeoutNanos = settings.commitTimeout.toNanos
 
@@ -192,6 +185,9 @@ private[internal] class RebalanceCoordinator(
   ): Task[Task[Map[TopicPartition, OffsetAndMetadata]]] =
     for {
       result <- Promise.make[Throwable, Map[TopicPartition, OffsetAndMetadata]]
+      runtime <- ZIO.runtime[
+                   Any
+                 ] // RebalanceListener callbacks are executed on the same-thread runtime, see RebalanceListener.toKafka
       _ <- ZIO.attempt {
              consumer.commitAsync(
                offsets.asJava,
@@ -201,7 +197,7 @@ private[internal] class RebalanceCoordinator(
                    exception: Exception
                  ): Unit =
                    Unsafe.unsafe { implicit unsafe =>
-                     sameThreadRuntime.unsafe.run {
+                     runtime.unsafe.run {
                        if (exception == null) result.succeed(offsets.asScala.toMap)
                        else result.fail(exception)
                      }: Unit

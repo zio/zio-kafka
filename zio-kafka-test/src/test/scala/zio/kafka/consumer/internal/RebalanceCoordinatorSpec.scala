@@ -175,20 +175,16 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
     Semaphore
       .make(1)
       .map(new ConsumerAccess(mockConsumer, _))
-      .flatMap { consumerAccess =>
-        ZIO.runtime[Any].map { sameThreadRuntime =>
-          new RebalanceCoordinator(
-            lastEvent,
-            settings.withRebalanceSafeCommits(rebalanceSafeCommits),
-            consumerAccess,
-            5.seconds,
-            ZIO.succeed(assignedStreams),
-            committer,
-            sameThreadRuntime = sameThreadRuntime
-          )
-        }
+      .map { consumerAccess =>
+        new RebalanceCoordinator(
+          lastEvent,
+          settings.withRebalanceSafeCommits(rebalanceSafeCommits),
+          consumerAccess,
+          5.seconds,
+          ZIO.succeed(assignedStreams),
+          committer
+        )
       }
-      .provideLayer(SameThreadRuntimeLayer)
 
   private def createTestRecords(count: Int): Chunk[ByteArrayCommittableRecord] =
     Chunk.fromIterable(

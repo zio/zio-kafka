@@ -70,10 +70,10 @@ private[consumer] final class LiveCommitter(
                       endTime <- ZIO.clockWith(_.nanoTime)
                       latency = (endTime - startTime).nanoseconds
                       offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
-                      _      <- consumerMetrics.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
-                      result <- ZIO.foreachDiscard(commits)(_.cont.done(Exit.unit))
-                      _      <- diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
-                    } yield result
+                      _ <- consumerMetrics.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
+                      _ <- ZIO.foreachDiscard(commits)(_.cont.done(Exit.unit))
+                      _ <- diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
+                    } yield ()
                   }.catchAllCause {
                     case Cause.Fail(_: RebalanceInProgressException, _) =>
                       for {

@@ -484,6 +484,8 @@ private[consumer] final class Runloop private (
    *     - Poll continuously when there are (still) unfulfilled requests or pending commits
    *     - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *       initialization and rebalancing
+   *
+   * Note that this method is executed on a dedicated single-thread blocking exector
    */
   private def run(initialState: State, commitExecutor: Executor): ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
@@ -494,9 +496,12 @@ private[consumer] final class Runloop private (
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
           _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
-          _ <- committer
-                 .processQueuedCommits(commitAsyncZIO)
-                 .onExecutor(commitExecutor)
+          _ <-
+            committer
+              .processQueuedCommits(commitAsyncZIO)
+              .onExecutor(
+                commitExecutor
+              ) // processQueuedCommits does a fork to await the commit callback, which is not supported by the single-thread executor
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
           stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
 
@@ -639,8 +644,7 @@ object Runloop {
                                consumer,
                                maxRebalanceDuration,
                                currentStateRef.get.map(_.assignedStreams),
-                               committer,
-                               sameThreadRuntime
+                               committer
                              )
       runloop = new Runloop(
                   settings = settings,
