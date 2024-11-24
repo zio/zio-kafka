@@ -140,9 +140,9 @@ object CommitterSpec extends ZIOSpecDefault {
         _                          <- commitAvailable.await
         _                          <- committer.processQueuedCommits(offsets => ZIO.succeed(ZIO.succeed(offsets)))
         pendingCommitsDuringCommit <- committer.pendingCommitCount
+        _                          <- commitFiber.join
         _                          <- committer.cleanupPendingCommits
         pendingCommitsAfterCommit  <- committer.pendingCommitCount
-        _                          <- commitFiber.join
       } yield assertTrue(pendingCommitsDuringCommit == 1 && pendingCommitsAfterCommit == 0)
     },
     test("keep track of committed offsets") {
@@ -158,8 +158,8 @@ object CommitterSpec extends ZIOSpecDefault {
         commitFiber      <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _                <- commitAvailable.await
         _                <- committer.processQueuedCommits(offsets => ZIO.succeed(ZIO.succeed(offsets)))
-        committedOffsets <- committer.getCommittedOffsets
         _                <- commitFiber.join
+        committedOffsets <- committer.getCommittedOffsets
       } yield assertTrue(committedOffsets.offsets == Map(tp -> 0L))
     },
     test("clean committed offsets of no-longer assigned partitions") {
