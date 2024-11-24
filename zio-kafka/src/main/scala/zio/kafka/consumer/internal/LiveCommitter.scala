@@ -85,7 +85,7 @@ private[consumer] final class LiveCommitter(
                       ZIO.foreachDiscard(commits)(_.cont.done(Exit.fail(c.squash))) <* diagnostics.emit(
                         DiagnosticEvent.Commit.Failure(offsets, c.squash)
                       )
-                  }.forkDaemon
+                  }.forkDaemon // We don't await the completion of commits
 
            } yield ()
 

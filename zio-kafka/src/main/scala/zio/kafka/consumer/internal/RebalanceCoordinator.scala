@@ -185,9 +185,8 @@ private[internal] class RebalanceCoordinator(
   ): Task[Task[Map[TopicPartition, OffsetAndMetadata]]] =
     for {
       result <- Promise.make[Throwable, Map[TopicPartition, OffsetAndMetadata]]
-      runtime <- ZIO.runtime[
-                   Any
-                 ] // RebalanceListener callbacks are executed on the same-thread runtime, see RebalanceListener.toKafka
+      // RebalanceListener callbacks are executed on the same-thread runtime, see RebalanceListener.toKafka
+      runtime <- ZIO.runtime[Any]
       _ <- ZIO.attempt {
              consumer.commitAsync(
                offsets.asJava,
