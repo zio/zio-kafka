@@ -206,10 +206,11 @@ private[consumer] final class Runloop private (
 
   private def handlePoll(state: State): Task[State] = {
     for {
-      partitionsToFetch <- settings.fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
+      partitionsToFetch  <- settings.fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
+      pendingCommitCount <- committer.pendingCommitCount
       _ <- ZIO.logDebug(
              s"Starting poll with ${state.pendingRequests.size} pending requests and" +
-               s" ${committer.pendingCommitCount} pending commits," +
+               s" ${pendingCommitCount} pending commits," +
                s" resuming $partitionsToFetch partitions"
            )
       _ <- currentStateRef.set(state)
