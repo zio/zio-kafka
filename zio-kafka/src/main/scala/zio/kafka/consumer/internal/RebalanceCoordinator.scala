@@ -162,12 +162,12 @@ private[internal] class RebalanceCoordinator(
           // Even if there is nothing to commit, continue to drive communication with the broker
           // so that commits can complete and the streams can make progress, by setting
           // executeOnEmpty = true
-          .tap(_ =>
+          .tap { _ =>
             committer.processQueuedCommits(
               offsets => commitAsyncZIO(consumer, offsets),
               executeOnEmpty = true
             )
-          )
+          }
           .takeWhile(_ => java.lang.System.nanoTime() <= deadline)
           .mapZIO(_ => endingStreamsCompletedAndCommitsExist)
           .takeUntil(completed => completed)
