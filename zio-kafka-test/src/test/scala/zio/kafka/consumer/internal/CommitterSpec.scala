@@ -5,33 +5,12 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.test._
-import zio.{ durationInt, Promise, UIO, ZIO }
+import zio.{ durationInt, Promise, ZIO }
 
 import java.util.{ Map => JavaMap }
 import scala.jdk.CollectionConverters.MapHasAsJava
 
 object CommitterSpec extends ZIOSpecDefault {
-  private val mockMetrics = new ConsumerMetrics {
-    override def observePoll(resumedCount: Int, pausedCount: Int, latency: zio.Duration, pollSize: Int): UIO[Unit] =
-      ZIO.unit
-
-    override def observeCommit(latency: zio.Duration): UIO[Unit]                                 = ZIO.unit
-    override def observeAggregatedCommit(latency: zio.Duration, commitSize: NanoTime): UIO[Unit] = ZIO.unit
-    override def observeRebalance(
-      currentlyAssignedCount: Int,
-      assignedCount: Int,
-      revokedCount: Int,
-      lostCount: Int
-    ): UIO[Unit] = ZIO.unit
-    override def observeRunloopMetrics(
-      state: Runloop.State,
-      commandQueueSize: Int,
-      commitQueueSize: Int,
-      pendingCommits: Int
-    ): UIO[Unit] = ZIO.unit
-    override def observePollAuthError(): UIO[Unit] = ZIO.unit
-  }
-
   override def spec = suite("Committer")(
     test("signals that a new commit is available") {
       for {
@@ -41,7 +20,7 @@ object CommitterSpec extends ZIOSpecDefault {
                        .make(
                          10.seconds,
                          Diagnostics.NoOp,
-                         mockMetrics,
+                         new DummyMetrics,
                          onCommitAvailable = commitAvailable.succeed(()).unit,
                          sameThreadRuntime = runtime
                        )
@@ -57,7 +36,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit,
                        sameThreadRuntime = runtime
                      )
@@ -75,7 +54,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit,
                        sameThreadRuntime = runtime
                      )
@@ -95,7 +74,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit,
                        sameThreadRuntime = runtime
                      )
@@ -116,7 +95,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit,
                        sameThreadRuntime = runtime
                      )
@@ -139,7 +118,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit,
                        sameThreadRuntime = runtime
                      )
@@ -166,7 +145,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit,
                        sameThreadRuntime = runtime
                      )
@@ -187,7 +166,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit,
                        sameThreadRuntime = runtime
                      )
@@ -206,7 +185,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit,
                        sameThreadRuntime = runtime
                      )
