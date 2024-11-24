@@ -5,7 +5,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.test._
-import zio.{ durationInt, Promise, ZIO }
+import zio.{ durationInt, Promise, Ref, ZIO }
 
 import java.util.{ Map => JavaMap }
 import scala.jdk.CollectionConverters.MapHasAsJava
@@ -113,13 +113,15 @@ object CommitterSpec extends ZIOSpecDefault {
     },
     test("batches commits from multiple partitions and offsets") {
       for {
-        runtime         <- ZIO.runtime[Any]
-        commitAvailable <- Promise.make[Nothing, Unit]
+        runtime          <- ZIO.runtime[Any]
+        commitsAvailable <- Promise.make[Nothing, Unit]
+        nrCommitsDone    <- Ref.make(0)
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        new DummyMetrics,
-                       onCommitAvailable = commitAvailable.succeed(()).unit,
+                       onCommitAvailable =
+                         ZIO.whenZIO(nrCommitsDone.updateAndGet(_ + 1).map(_ == 3))(commitsAvailable.succeed(())).unit,
                        sameThreadRuntime = runtime
                      )
         tp  = new TopicPartition("topic", 0)
@@ -127,7 +129,7 @@ object CommitterSpec extends ZIOSpecDefault {
         commitFiber1     <- committer.commit(Map(tp -> new OffsetAndMetadata(1))).forkScoped
         commitFiber2     <- committer.commit(Map(tp -> new OffsetAndMetadata(2))).forkScoped
         commitFiber3     <- committer.commit(Map(tp2 -> new OffsetAndMetadata(3))).forkScoped
-        _                <- commitAvailable.await
+        _                <- commitsAvailable.await
         committedOffsets <- Promise.make[Nothing, JavaMap[TopicPartition, OffsetAndMetadata]]
         _ <- committer.processQueuedCommits((offsets, callback) =>
                committedOffsets.succeed(offsets) *> ZIO.attempt(callback.onComplete(offsets, null))
@@ -198,5 +200,5 @@ object CommitterSpec extends ZIOSpecDefault {
         _                <- commitFiber.join
       } yield assertTrue(committedOffsets.offsets.isEmpty)
     }
-  ) @@ TestAspect.withLiveClock
+  ) @@ TestAspect.withLiveClock @@ TestAspect.nonFlaky(100)
 }
