@@ -197,10 +197,9 @@ private[internal] class RebalanceCoordinator(
                  ): Unit =
                    Unsafe.unsafe { implicit unsafe =>
                      runtime.unsafe.run {
-                       if (exception == null) result.succeed(offsets.asScala.toMap)
-                       else result.fail(exception)
-                     }
-                     ()
+                       if (exception == null) result.succeed(offsets.asScala.toMap).unit
+                       else result.fail(exception).unit
+                     }.getOrThrowFiberFailure()
                    }
                }
              )
