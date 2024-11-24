@@ -199,7 +199,8 @@ private[internal] class RebalanceCoordinator(
                      runtime.unsafe.run {
                        if (exception == null) result.succeed(offsets.asScala.toMap)
                        else result.fail(exception)
-                     }: Unit
+                     }
+                     ()
                    }
                }
              )
