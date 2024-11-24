@@ -5,33 +5,12 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.test._
-import zio.{ durationInt, Promise, Queue, UIO, ZIO }
+import zio.{ durationInt, Promise, Queue, ZIO }
 
 import java.util.{ Map => JavaMap }
 import scala.jdk.CollectionConverters.MapHasAsJava
 
 object CommitterSpec extends ZIOSpecDefault {
-  private val mockMetrics = new ConsumerMetrics {
-    override def observePoll(resumedCount: Int, pausedCount: Int, latency: zio.Duration, pollSize: Int): UIO[Unit] =
-      ZIO.unit
-
-    override def observeCommit(latency: zio.Duration): UIO[Unit]                                 = ZIO.unit
-    override def observeAggregatedCommit(latency: zio.Duration, commitSize: NanoTime): UIO[Unit] = ZIO.unit
-    override def observeRebalance(
-      currentlyAssignedCount: Int,
-      assignedCount: Int,
-      revokedCount: Int,
-      lostCount: Int
-    ): UIO[Unit] = ZIO.unit
-    override def observeRunloopMetrics(
-      state: Runloop.State,
-      commandQueueSize: Int,
-      commitQueueSize: Int,
-      pendingCommits: Int
-    ): UIO[Unit] = ZIO.unit
-    override def observePollAuthError(): UIO[Unit] = ZIO.unit
-  }
-
   override def spec = suite("Committer")(
     test("signals that a new commit is available") {
       for {
@@ -40,7 +19,7 @@ object CommitterSpec extends ZIOSpecDefault {
                        .make(
                          10.seconds,
                          Diagnostics.NoOp,
-                         mockMetrics,
+                         new DummyMetrics,
                          onCommitAvailable = commitAvailable.succeed(()).unit
                        )
         tp = new TopicPartition("topic", 0)
@@ -54,7 +33,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp = new TopicPartition("topic", 0)
@@ -70,7 +49,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp = new TopicPartition("topic", 0)
@@ -86,7 +65,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.offer(()).unit
                      )
         tp = new TopicPartition("topic", 0)
@@ -105,7 +84,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp = new TopicPartition("topic", 0)
@@ -124,7 +103,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp  = new TopicPartition("topic", 0)
@@ -147,7 +126,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp = new TopicPartition("topic", 0)
@@ -155,7 +134,7 @@ object CommitterSpec extends ZIOSpecDefault {
         _                          <- commitAvailable.await
         _                          <- committer.processQueuedCommits(ZIO.succeed(_))
         pendingCommitsDuringCommit <- committer.pendingCommitCount
-        _                          <- committer.updatePendingCommitsAfterPoll
+        _                          <- committer.cleanupPendingCommits
         pendingCommitsAfterCommit  <- committer.pendingCommitCount
         _                          <- commitFiber.join
       } yield assertTrue(pendingCommitsDuringCommit == 1 && pendingCommitsAfterCommit == 0)
@@ -166,7 +145,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp = new TopicPartition("topic", 0)
@@ -183,14 +162,14 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       mockMetrics,
+                       new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp = new TopicPartition("topic", 0)
         commitFiber      <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _                <- commitAvailable.await
         _                <- committer.processQueuedCommits(ZIO.succeed(_))
-        _                <- committer.pruneCommittedOffsets(Set.empty)
+        _                <- committer.keepCommitsForPartitions(Set.empty)
         committedOffsets <- committer.getCommittedOffsets
         _                <- commitFiber.join
       } yield assertTrue(committedOffsets.offsets.isEmpty)

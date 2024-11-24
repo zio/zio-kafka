@@ -25,7 +25,7 @@ import scala.jdk.CollectionConverters._
  * continuing.
  */
 private[internal] class RebalanceCoordinator(
-  lastRebalanceEvent: Ref[RebalanceEvent],
+  lastRebalanceEvent: Ref.Synchronized[RebalanceEvent],
   settings: ConsumerSettings,
   consumer: ConsumerAccess,
   maxRebalanceDuration: Duration,
@@ -217,7 +217,7 @@ private[internal] class RebalanceCoordinator(
   //
   def toRebalanceListener: RebalanceListener = RebalanceListener(
     onAssigned = assignedTps =>
-      withLastRebalanceEvent { rebalanceEvent =>
+      lastRebalanceEvent.updateZIO { rebalanceEvent =>
         for {
           _ <- ZIO.logDebug {
                  val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
@@ -235,7 +235,7 @@ private[internal] class RebalanceCoordinator(
         )
       },
     onRevoked = revokedTps =>
-      withLastRebalanceEvent { rebalanceEvent =>
+      lastRebalanceEvent.updateZIO { rebalanceEvent =>
         for {
           _ <- ZIO.logDebug {
                  val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
@@ -254,7 +254,7 @@ private[internal] class RebalanceCoordinator(
         )
       },
     onLost = lostTps =>
-      withLastRebalanceEvent { rebalanceEvent =>
+      lastRebalanceEvent.updateZIO { rebalanceEvent =>
         for {
           _               <- ZIO.logDebug(s"${lostTps.size} partitions are lost")
           assignedStreams <- getCurrentAssignedStreams
@@ -269,10 +269,6 @@ private[internal] class RebalanceCoordinator(
         )
       }
   )
-
-  private def withLastRebalanceEvent(f: RebalanceEvent => Task[RebalanceEvent]): Task[Unit] =
-    lastRebalanceEvent.get.flatMap(f).flatMap(lastRebalanceEvent.set)
-
 }
 
 private[internal] object RebalanceCoordinator {

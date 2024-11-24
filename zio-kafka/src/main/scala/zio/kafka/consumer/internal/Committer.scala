@@ -17,6 +17,9 @@ private[internal] trait Committer {
    *
    * If the queue is empty, nothing happens, unless executeOnEmpty is true.
    *
+   * WARNING: this method is used during a rebalance from the same-thread-runtime. This restricts what ZIO operations
+   * may be used. Please see [[RebalanceCoordinator]] for more information.
+   *
    * @param commitAsync
    *   Function 'commitAsync' on the KafkaConsumer. This is isolated from the whole KafkaConsumer for testing purposes.
    *   The caller should ensure exclusive access to the KafkaConsumer.
@@ -34,9 +37,10 @@ private[internal] trait Committer {
 
   def getPendingCommits: UIO[CommitOffsets]
 
-  def updatePendingCommitsAfterPoll: UIO[Unit]
+  /** Removes all completed commits from `pendingCommits`. */
+  def cleanupPendingCommits: UIO[Unit]
 
-  def pruneCommittedOffsets(assignedPartitions: Set[TopicPartition]): UIO[Unit]
+  def keepCommitsForPartitions(assignedPartitions: Set[TopicPartition]): UIO[Unit]
 
   def getCommittedOffsets: UIO[CommitOffsets]
 }
@@ -60,7 +64,7 @@ private[internal] object Committer {
             case None =>
               // This partition was not committed to from this consumer yet. Therefore we do not know the offset
               // increase. A good estimate would be the poll size for this consumer, another okayish estimate is 0.
-              // Lets go with the simplest for now: ```offsetIncrease += 0```
+              // Let's go with the simplest for now: ```offsetIncrease += 0```
               offset
           }
           updatedOffsets += tp -> maxOffset
