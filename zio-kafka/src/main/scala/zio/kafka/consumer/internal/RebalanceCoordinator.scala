@@ -1,5 +1,5 @@
 package zio.kafka.consumer.internal
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallback }
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator.{
@@ -11,7 +11,7 @@ import zio.kafka.consumer.internal.RebalanceCoordinator.{
 }
 import zio.kafka.consumer.{ ConsumerSettings, RebalanceListener }
 import zio.stream.ZStream
-import zio.{ durationInt, Chunk, Duration, Ref, Runtime, Task, UIO, ZIO }
+import zio.{ durationInt, Chunk, Duration, Promise, Ref, Runtime, Task, UIO, Unsafe, ZIO }
 
 import java.util.{ Map => JavaMap }
 import scala.jdk.CollectionConverters._
@@ -189,17 +189,27 @@ private[internal] class RebalanceCoordinator(
   private def commitAsyncZIO(
     consumer: ByteArrayKafkaConsumer,
     offsets: Map[TopicPartition, OffsetAndMetadata]
-  ): Task[Map[TopicPartition, OffsetAndMetadata]] =
-    sameThreadRuntime.run {
-      ZIO.async[Any, Throwable, Map[TopicPartition, OffsetAndMetadata]]({ onDone =>
-        consumer.commitAsync(
-          offsets.asJava,
-          (offsets: JavaMap[TopicPartition, OffsetAndMetadata], exception: Exception) =>
-            if (exception == null) onDone(ZIO.succeed(offsets.asScala.toMap))
-            else onDone(ZIO.fail(exception))
-        )
-      })
-    }
+  ): Task[Task[Map[TopicPartition, OffsetAndMetadata]]] =
+    for {
+      result <- Promise.make[Throwable, Map[TopicPartition, OffsetAndMetadata]]
+      _ <- ZIO.attempt {
+             consumer.commitAsync(
+               offsets.asJava,
+               new OffsetCommitCallback {
+                 override def onComplete(
+                   offsets: JavaMap[TopicPartition, OffsetAndMetadata],
+                   exception: Exception
+                 ): Unit =
+                   Unsafe.unsafe { implicit unsafe =>
+                     sameThreadRuntime.unsafe.run {
+                       if (exception == null) result.succeed(offsets.asScala.toMap)
+                       else result.fail(exception)
+                     }: Unit
+                   }
+               }
+             )
+           }
+    } yield result.await
 
   // During a poll, the java kafka client might call each method of the rebalance listener 0 or 1 times.
   // We do not know the order in which the call-back methods are invoked.

@@ -39,7 +39,7 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.await
-        _           <- committer.processQueuedCommits(offsets => ZIO.succeed(offsets))
+        _           <- committer.processQueuedCommits(offsets => ZIO.succeed(ZIO.succeed(offsets)))
         _           <- commitFiber.join
       } yield assertCompletes
     },
@@ -55,7 +55,7 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.await
-        _           <- committer.processQueuedCommits(_ => ZIO.fail(new RuntimeException("Commit failed")))
+        _           <- committer.processQueuedCommits(_ => ZIO.succeed(ZIO.fail(new RuntimeException("Commit failed"))))
         result      <- commitFiber.await
       } yield assertTrue(result.isFailure)
     },
@@ -72,9 +72,11 @@ object CommitterSpec extends ZIOSpecDefault {
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.take
         _ <-
-          committer.processQueuedCommits(_ => ZIO.fail(new RebalanceInProgressException("Rebalance in progress")))
+          committer.processQueuedCommits(_ =>
+            ZIO.succeed(ZIO.fail(new RebalanceInProgressException("Rebalance in progress")))
+          )
         _ <- commitAvailable.take
-        _ <- committer.processQueuedCommits(offsets => ZIO.succeed(offsets))
+        _ <- committer.processQueuedCommits(offsets => ZIO.succeed(ZIO.succeed(offsets)))
         _ <- commitFiber.join
       } yield assertCompletes
     },
@@ -91,7 +93,8 @@ object CommitterSpec extends ZIOSpecDefault {
         _                <- committer.commit(Map(tp -> new OffsetAndMetadata(1))).forkScoped
         _                <- commitAvailable.await
         committedOffsets <- Promise.make[Nothing, JavaMap[TopicPartition, OffsetAndMetadata]]
-        _ <- committer.processQueuedCommits(offsets => committedOffsets.succeed(offsets.asJava).as(offsets))
+        _ <-
+          committer.processQueuedCommits(offsets => ZIO.succeed(committedOffsets.succeed(offsets.asJava).as(offsets)))
         offsetsCommitted <- committedOffsets.await
       } yield assertTrue(
         offsetsCommitted == Map(tp -> new OffsetAndMetadata(2)).asJava
@@ -113,8 +116,9 @@ object CommitterSpec extends ZIOSpecDefault {
         commitFiber3     <- committer.commit(Map(tp2 -> new OffsetAndMetadata(3))).forkScoped
         _                <- commitAvailable.await
         committedOffsets <- Promise.make[Nothing, JavaMap[TopicPartition, OffsetAndMetadata]]
-        _ <- committer.processQueuedCommits(offsets => committedOffsets.succeed(offsets.asJava).as(offsets))
-        _ <- commitFiber1.join zip commitFiber2.join zip commitFiber3.join
+        _ <-
+          committer.processQueuedCommits(offsets => ZIO.succeed(committedOffsets.succeed(offsets.asJava).as(offsets)))
+        _                <- commitFiber1.join zip commitFiber2.join zip commitFiber3.join
         offsetsCommitted <- committedOffsets.await
       } yield assertTrue(
         offsetsCommitted == Map(tp -> new OffsetAndMetadata(3), tp2 -> new OffsetAndMetadata(4)).asJava
@@ -132,7 +136,7 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber                <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _                          <- commitAvailable.await
-        _                          <- committer.processQueuedCommits(ZIO.succeed(_))
+        _                          <- committer.processQueuedCommits(offsets => ZIO.succeed(ZIO.succeed(offsets)))
         pendingCommitsDuringCommit <- committer.pendingCommitCount
         _                          <- committer.cleanupPendingCommits
         pendingCommitsAfterCommit  <- committer.pendingCommitCount
@@ -151,7 +155,7 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber      <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _                <- commitAvailable.await
-        _                <- committer.processQueuedCommits(ZIO.succeed(_))
+        _                <- committer.processQueuedCommits(offsets => ZIO.succeed(ZIO.succeed(offsets)))
         committedOffsets <- committer.getCommittedOffsets
         _                <- commitFiber.join
       } yield assertTrue(committedOffsets.offsets == Map(tp -> 0L))
@@ -168,7 +172,7 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber      <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _                <- commitAvailable.await
-        _                <- committer.processQueuedCommits(ZIO.succeed(_))
+        _                <- committer.processQueuedCommits(offsets => ZIO.succeed(ZIO.succeed(offsets)))
         _                <- committer.keepCommitsForPartitions(Set.empty)
         committedOffsets <- committer.getCommittedOffsets
         _                <- commitFiber.join

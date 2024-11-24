@@ -9,9 +9,9 @@ import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.{ Finalization, Rebalance }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
+import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
 import zio.stream._
 
 import java.util.{ Map => JavaMap }
@@ -485,7 +485,7 @@ private[consumer] final class Runloop private (
    *     - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *       initialization and rebalancing
    */
-  private def run(initialState: State): ZIO[Scope, Throwable, Any] = {
+  private def run(initialState: State, commitExecutor: Executor): ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
 
     ZStream
@@ -494,9 +494,9 @@ private[consumer] final class Runloop private (
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
           _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
-          _ <- consumer.runloopAccess { consumer =>
-                 committer.processQueuedCommits(commitAsyncZIO(consumer, _))
-               }
+          _ <- committer
+                 .processQueuedCommits(commitAsyncZIO)
+                 .onExecutor(commitExecutor)
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
           stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
 
@@ -514,23 +514,42 @@ private[consumer] final class Runloop private (
       .onError(cause => partitionsHub.offer(Take.failCause(cause)))
   }
 
+  /**
+   * Wrapper that converts KafkaConsumer#commitAsync to ZIO
+   *
+   * @param offsets
+   *   Offsets to commit
+   * @return
+   *   Task whose completion indicates completion of the commitAsync call. The inner task completes when the callback is
+   *   executed and represents the callback results.
+   */
   private def commitAsyncZIO(
-    consumer: ByteArrayKafkaConsumer,
     offsets: Map[TopicPartition, OffsetAndMetadata]
-  ): Task[Map[TopicPartition, OffsetAndMetadata]] =
-    ZIO
-      .async[Any, Throwable, Map[TopicPartition, OffsetAndMetadata]]({ onDone =>
-        print("Starting commitAsync")
-        consumer.commitAsync(
-          offsets.asJava,
-          (offsets: JavaMap[TopicPartition, OffsetAndMetadata], exception: Exception) => {
-            print("Ending commitAsync")
-            if (exception == null) onDone(ZIO.succeed(offsets.asScala.toMap))
-            else onDone(ZIO.fail(exception))
-          }
-        )
-      })
-  // TODO the async doesn't continue, probably because it's on the blocking runtime..?
+  ): Task[Task[Map[TopicPartition, OffsetAndMetadata]]] =
+    for {
+      runtime <- ZIO.runtime[Any]
+      result  <- Promise.make[Throwable, Map[TopicPartition, OffsetAndMetadata]]
+      // commitAsync does not need to be called from a special thread here, as long as we have exclusive access
+      _ <- consumer.runloopAccess { consumer =>
+             ZIO.attempt {
+               consumer.commitAsync(
+                 offsets.asJava,
+                 new OffsetCommitCallback {
+                   override def onComplete(
+                     offsets: JavaMap[TopicPartition, OffsetAndMetadata],
+                     exception: Exception
+                   ): Unit =
+                     Unsafe.unsafe { implicit unsafe =>
+                       runtime.unsafe.run {
+                         if (exception == null) result.succeed(offsets.asScala.toMap)
+                         else result.fail(exception)
+                       }: Unit
+                     }
+                 }
+               )
+             }
+           }
+    } yield result.await
 
   def shouldPoll(state: State): UIO[Boolean] =
     committer.pendingCommitCount.map { pendingCommitCount =>
@@ -642,8 +661,10 @@ object Runloop {
       _ <- runloop.observeRunloopMetrics(settings.runloopMetricsSchedule).forkScoped
 
       // Run the entire loop on a dedicated thread to avoid executor shifts
-      executor <- RunloopExecutor.newInstance
-      fiber    <- ZIO.onExecutor(executor)(runloop.run(initialState)).forkScoped
+
+      executor       <- RunloopExecutor.newInstance
+      commitExecutor <- ZIO.executor
+      fiber          <- ZIO.onExecutor(executor)(runloop.run(initialState, commitExecutor)).forkScoped
       waitForRunloopStop = fiber.join.orDie
 
       _ <- ZIO.addFinalizer(

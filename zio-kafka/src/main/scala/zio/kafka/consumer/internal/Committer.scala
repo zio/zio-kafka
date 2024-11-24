@@ -22,12 +22,13 @@ private[internal] trait Committer {
    *
    * @param commitAsync
    *   Function 'commitAsync' on the KafkaConsumer. This is isolated from the whole KafkaConsumer for testing purposes.
-   *   The caller should ensure exclusive access to the KafkaConsumer.
+   *   The caller should ensure exclusive access to the KafkaConsumer. The outer task represents the finishing of the
+   *   commitAsync call, the inner task represents the callback results.
    * @param executeOnEmpty
    *   Execute commitAsync() even if there are no commits
    */
   def processQueuedCommits(
-    commitAsync: Map[TopicPartition, OffsetAndMetadata] => Task[Map[TopicPartition, OffsetAndMetadata]],
+    commitAsync: Map[TopicPartition, OffsetAndMetadata] => Task[Task[Map[TopicPartition, OffsetAndMetadata]]],
     executeOnEmpty: Boolean = false
   ): Task[Unit]
 

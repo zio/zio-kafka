@@ -212,7 +212,7 @@ abstract class MockCommitter extends Committer {
   override val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] = _ => ZIO.unit
 
   override def processQueuedCommits(
-    commitAsync: Map[TopicPartition, OffsetAndMetadata] => Task[Map[TopicPartition, OffsetAndMetadata]],
+    commitAsync: Map[TopicPartition, OffsetAndMetadata] => Task[Task[Map[TopicPartition, OffsetAndMetadata]]],
     executeOnEmpty: Boolean
   ): zio.Task[Unit] = ZIO.unit
   override def queueSize: UIO[Int]                   = ZIO.succeed(0)
