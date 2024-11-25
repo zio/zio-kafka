@@ -46,17 +46,7 @@ private[consumer] final class LiveCommitter(
     commits <- commitQueue.takeAll
     _       <- ZIO.logDebug(s"Processing ${commits.size} commits")
     _ <- ZIO.unless(commits.isEmpty && !executeOnEmpty) {
-           val offsets = commits
-             .foldLeft(mutable.Map.empty[TopicPartition, OffsetAndMetadata]) { case (acc, commit) =>
-               commit.offsets.foreach { case (tp, offset) =>
-                 acc += (tp -> acc
-                   .get(tp)
-                   .map(current => if (current.offset() > offset.offset()) current else offset)
-                   .getOrElse(offset))
-               }
-               acc
-             }
-             .toMap
+           val offsets = mergeCommitOffsets(commits)
            val offsetsWithMetaData = offsets.map { case (tp, offset) =>
              tp -> new OffsetAndMetadata(offset.offset + 1, offset.leaderEpoch, offset.metadata)
            }
@@ -65,34 +55,48 @@ private[consumer] final class LiveCommitter(
              _                <- pendingCommits.update(_ ++ commits)
              startTime        <- ZIO.clockWith(_.nanoTime)
              getCommitResults <- commitAsync(offsetsWithMetaData)
-             _ <- getCommitResults.flatMap { offsetsWithMetaData =>
-                    for {
-                      endTime <- ZIO.clockWith(_.nanoTime)
-                      latency = (endTime - startTime).nanoseconds
-                      offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
-                      _ <- consumerMetrics.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
-                      _ <- ZIO.foreachDiscard(commits)(_.cont.done(Exit.unit))
-                      _ <- diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData))
-                    } yield ()
-                  }.catchAllCause {
-                    case Cause.Fail(_: RebalanceInProgressException, _) =>
+             _ <- getCommitResults
+                    .zipLeft(ZIO.foreachDiscard(commits)(_.cont.done(Exit.unit)))
+                    .zipLeft(
                       for {
-                        _ <- ZIO.logDebug(s"Rebalance in progress, commit for offsets $offsets will be retried")
-                        _ <- commitQueue.offerAll(commits)
-                        _ <- onCommitAvailable
+                        endTime <- ZIO.clockWith(_.nanoTime)
+                        latency = (endTime - startTime).nanoseconds
+                        offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
+                        _ <- consumerMetrics.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
                       } yield ()
-                    case c =>
-                      ZIO.foreachDiscard(commits)(_.cont.done(Exit.fail(c.squash))) <* diagnostics.emit(
-                        DiagnosticEvent.Commit.Failure(offsets, c.squash)
-                      )
-                  }.forkDaemon // We don't await the completion of commits
-
+                    )
+                    .tap(offsetsWithMetaData => diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData)))
+                    .catchAllCause {
+                      case Cause.Fail(_: RebalanceInProgressException, _) =>
+                        for {
+                          _ <- ZIO.logDebug(s"Rebalance in progress, commit for offsets $offsets will be retried")
+                          _ <- commitQueue.offerAll(commits)
+                          _ <- onCommitAvailable
+                        } yield ()
+                      case c =>
+                        ZIO.foreachDiscard(commits)(_.cont.done(Exit.fail(c.squash))) <* diagnostics.emit(
+                          DiagnosticEvent.Commit.Failure(offsets, c.squash)
+                        )
+                    }
+                    // We don't wait for the completion of the commit here, because it
+                    // will only complete once we poll again.
+                    .forkDaemon
            } yield ()
-
-           // We don't wait for the completion of the commit here, because it
-           // will only complete once we poll again.
          }
   } yield ()
+
+  private def mergeCommitOffsets(commits: Chunk[Commit]): Map[TopicPartition, OffsetAndMetadata] =
+    commits
+      .foldLeft(mutable.Map.empty[TopicPartition, OffsetAndMetadata]) { case (acc, commit) =>
+        commit.offsets.foreach { case (tp, offset) =>
+          acc += (tp -> acc
+            .get(tp)
+            .map(current => if (current.offset() > offset.offset()) current else offset)
+            .getOrElse(offset))
+        }
+        acc
+      }
+      .toMap
 
   override def queueSize: UIO[Int] = commitQueue.size
 
