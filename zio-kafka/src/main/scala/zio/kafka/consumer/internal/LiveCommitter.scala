@@ -56,7 +56,6 @@ private[consumer] final class LiveCommitter(
              startTime        <- ZIO.clockWith(_.nanoTime)
              getCommitResults <- commitAsync(offsetsWithMetaData)
              _ <- getCommitResults
-                    .zipLeft(ZIO.foreachDiscard(commits)(_.cont.done(Exit.unit)))
                     .zipLeft(
                       for {
                         endTime <- ZIO.clockWith(_.nanoTime)
@@ -65,6 +64,7 @@ private[consumer] final class LiveCommitter(
                         _ <- consumerMetrics.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
                       } yield ()
                     )
+                    .zipLeft(ZIO.foreachDiscard(commits)(_.cont.done(Exit.unit)))
                     .tap(offsetsWithMetaData => diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData)))
                     .catchAllCause {
                       case Cause.Fail(_: RebalanceInProgressException, _) =>
