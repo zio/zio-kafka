@@ -58,35 +58,47 @@ private[consumer] final class LiveCommitter(
              _                <- pendingCommits.update(_ ++ commits)
              startTime        <- ZIO.clockWith(_.nanoTime)
              getCommitResults <- commitAsyncZIO(consumer, offsetsWithMetaData)
-             _ <- getCommitResults
-                    .zipLeft(
-                      for {
-                        endTime <- ZIO.clockWith(_.nanoTime)
-                        latency = (endTime - startTime).nanoseconds
-                        offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
-                        _ <- consumerMetrics.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
-                      } yield ()
-                    )
-                    .zipLeft(ZIO.foreachDiscard(commits)(_.cont.done(Exit.unit)))
-                    .tap(offsetsWithMetaData => diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData)))
-                    .catchAllCause {
-                      case Cause.Fail(_: RebalanceInProgressException, _) =>
-                        for {
-                          _ <- ZIO.logDebug(s"Rebalance in progress, commit for offsets $offsets will be retried")
-                          _ <- commitQueue.offerAll(commits)
-                          _ <- onCommitAvailable
-                        } yield ()
-                      case c =>
-                        ZIO.foreachDiscard(commits)(_.cont.done(Exit.fail(c.squash))) <* diagnostics.emit(
-                          DiagnosticEvent.Commit.Failure(offsets, c.squash)
-                        )
-                    }
+             _ <- getCommitResults.exit
+                    .flatMap(handleCommitCompletion(commits, offsetsWithMetaData, startTime, _))
                     // We don't wait for the completion of the commit here, because it
                     // will only complete once we poll again.
                     .forkDaemon
            } yield ()
          }
   } yield ()
+
+  private def handleCommitCompletion(
+    commits: Chunk[Commit],
+    offsets: Map[TopicPartition, OffsetAndMetadata],
+    startTime: NanoTime,
+    commitResults: Exit[Throwable, Map[TopicPartition, OffsetAndMetadata]]
+  ): Task[Unit] =
+    ZIO
+      .from(commitResults)
+      .unexit
+      .zipLeft(
+        for {
+          endTime <- ZIO.clockWith(_.nanoTime)
+          latency = (endTime - startTime).nanoseconds
+          offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
+          _              <- consumerMetrics.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
+        } yield ()
+      )
+      .zipLeft(ZIO.foreachDiscard(commits)(_.cont.done(Exit.unit)))
+      .tap(offsetsWithMetaData => diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData)))
+      .catchAllCause {
+        case Cause.Fail(_: RebalanceInProgressException, _) =>
+          for {
+            _ <- ZIO.logDebug(s"Rebalance in progress, commit for offsets $offsets will be retried")
+            _ <- commitQueue.offerAll(commits)
+            _ <- onCommitAvailable
+          } yield ()
+        case c =>
+          ZIO.foreachDiscard(commits)(_.cont.done(Exit.fail(c.squash))) <* diagnostics.emit(
+            DiagnosticEvent.Commit.Failure(offsets, c.squash)
+          )
+      }
+      .unit
 
   private def mergeCommitOffsets(commits: Chunk[Commit]): Map[TopicPartition, OffsetAndMetadata] =
     commits

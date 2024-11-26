@@ -188,9 +188,9 @@ object CommitterSpec extends ZIOSpecDefault {
         _                <- commitAvailable.await
         consumer         <- createMockConsumer(offsets => ZIO.succeed(offsets))
         _                <- committer.processQueuedCommits(consumer)
+        _                <- commitFiber.join
         _                <- committer.keepCommitsForPartitions(Set.empty)
         committedOffsets <- committer.getCommittedOffsets
-        _                <- commitFiber.join
       } yield assertTrue(committedOffsets.offsets.isEmpty)
     }
   ) @@ TestAspect.withLiveClock @@ TestAspect.nonFlaky(100)

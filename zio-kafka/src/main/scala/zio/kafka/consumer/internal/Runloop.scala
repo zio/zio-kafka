@@ -484,7 +484,7 @@ private[consumer] final class Runloop private (
    *     - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *       initialization and rebalancing
    *
-   * Note that this method is executed on a dedicated single-thread blocking exector
+   * Note that this method is executed on a dedicated single-thread Executor
    */
   private def run(initialState: State, commitExecutor: Executor): ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
