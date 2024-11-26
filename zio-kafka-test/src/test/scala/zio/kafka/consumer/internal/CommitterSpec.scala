@@ -1,14 +1,14 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.clients.consumer.{ MockConsumer, OffsetAndMetadata, OffsetCommitCallback, OffsetResetStrategy }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.test._
-import zio.{ durationInt, Promise, Queue, Ref, ZIO }
+import zio.{ durationInt, Promise, Queue, Ref, Task, Unsafe, ZIO }
 
 import java.util.{ Map => JavaMap }
-import scala.jdk.CollectionConverters.MapHasAsJava
+import scala.jdk.CollectionConverters.{ MapHasAsJava, MapHasAsScala }
 
 object CommitterSpec extends ZIOSpecDefault {
   override def spec = suite("Committer")(
@@ -39,7 +39,8 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.await
-        _           <- committer.processQueuedCommits(offsets => ZIO.succeed(ZIO.succeed(offsets)))
+        consumer    <- createMockConsumer(offsets => ZIO.succeed(offsets))
+        _           <- committer.processQueuedCommits(consumer)
         _           <- commitFiber.join
       } yield assertCompletes
     },
@@ -55,7 +56,8 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.await
-        _           <- committer.processQueuedCommits(_ => ZIO.succeed(ZIO.fail(new RuntimeException("Commit failed"))))
+        consumer    <- createMockConsumer(_ => ZIO.fail(new RuntimeException("Commit failed")))
+        _           <- committer.processQueuedCommits(consumer)
         result      <- commitFiber.await
       } yield assertTrue(result.isFailure)
     },
@@ -71,12 +73,20 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.take
-        _ <-
-          committer.processQueuedCommits(_ =>
-            ZIO.succeed(ZIO.fail(new RebalanceInProgressException("Rebalance in progress")))
-          )
+        callCount   <- Ref.make(0)
+        consumer <-
+          createMockConsumer { offsets =>
+            callCount.updateAndGet(_ + 1).flatMap { count =>
+              if (count == 1) {
+                ZIO.fail(new RebalanceInProgressException("Rebalance in progress"))
+              } else {
+                ZIO.succeed(offsets)
+              }
+            }
+          }
+        _ <- committer.processQueuedCommits(consumer)
         _ <- commitAvailable.take
-        _ <- committer.processQueuedCommits(offsets => ZIO.succeed(ZIO.succeed(offsets)))
+        _ <- committer.processQueuedCommits(consumer)
         _ <- commitFiber.join
       } yield assertCompletes
     },
@@ -93,8 +103,8 @@ object CommitterSpec extends ZIOSpecDefault {
         _                <- committer.commit(Map(tp -> new OffsetAndMetadata(1))).forkScoped
         _                <- commitAvailable.await
         committedOffsets <- Promise.make[Nothing, JavaMap[TopicPartition, OffsetAndMetadata]]
-        _ <-
-          committer.processQueuedCommits(offsets => ZIO.succeed(committedOffsets.succeed(offsets.asJava).as(offsets)))
+        consumer         <- createMockConsumer(offsets => committedOffsets.succeed(offsets.asJava).as(offsets))
+        _                <- committer.processQueuedCommits(consumer)
         offsetsCommitted <- committedOffsets.await
       } yield assertTrue(
         offsetsCommitted == Map(tp -> new OffsetAndMetadata(2)).asJava
@@ -118,8 +128,8 @@ object CommitterSpec extends ZIOSpecDefault {
         commitFiber3     <- committer.commit(Map(tp2 -> new OffsetAndMetadata(3))).forkScoped
         _                <- commitsAvailable.await
         committedOffsets <- Promise.make[Nothing, JavaMap[TopicPartition, OffsetAndMetadata]]
-        _ <-
-          committer.processQueuedCommits(offsets => ZIO.succeed(committedOffsets.succeed(offsets.asJava).as(offsets)))
+        consumer         <- createMockConsumer(offsets => committedOffsets.succeed(offsets.asJava).as(offsets))
+        _                <- committer.processQueuedCommits(consumer)
         _                <- commitFiber1.join zip commitFiber2.join zip commitFiber3.join
         offsetsCommitted <- committedOffsets.await
       } yield assertTrue(
@@ -138,7 +148,8 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber                <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _                          <- commitAvailable.await
-        _                          <- committer.processQueuedCommits(offsets => ZIO.succeed(ZIO.succeed(offsets)))
+        consumer                   <- createMockConsumer(offsets => ZIO.succeed(offsets))
+        _                          <- committer.processQueuedCommits(consumer)
         pendingCommitsDuringCommit <- committer.pendingCommitCount
         _                          <- commitFiber.join
         _                          <- committer.cleanupPendingCommits
@@ -157,7 +168,8 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber      <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _                <- commitAvailable.await
-        _                <- committer.processQueuedCommits(offsets => ZIO.succeed(ZIO.succeed(offsets)))
+        consumer         <- createMockConsumer(offsets => ZIO.succeed(offsets))
+        _                <- committer.processQueuedCommits(consumer)
         _                <- commitFiber.join
         committedOffsets <- committer.getCommittedOffsets
       } yield assertTrue(committedOffsets.offsets == Map(tp -> 0L))
@@ -174,11 +186,37 @@ object CommitterSpec extends ZIOSpecDefault {
         tp = new TopicPartition("topic", 0)
         commitFiber      <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _                <- commitAvailable.await
-        _                <- committer.processQueuedCommits(offsets => ZIO.succeed(ZIO.succeed(offsets)))
+        consumer         <- createMockConsumer(offsets => ZIO.succeed(offsets))
+        _                <- committer.processQueuedCommits(consumer)
         _                <- committer.keepCommitsForPartitions(Set.empty)
         committedOffsets <- committer.getCommittedOffsets
         _                <- commitFiber.join
       } yield assertTrue(committedOffsets.offsets.isEmpty)
     }
   ) @@ TestAspect.withLiveClock @@ TestAspect.nonFlaky(100)
+
+  private def createMockConsumer(
+    onCommitAsync: Map[TopicPartition, OffsetAndMetadata] => Task[Map[TopicPartition, OffsetAndMetadata]]
+  ): ZIO[Any, Nothing, MockConsumer[Array[Byte], Array[Byte]]] =
+    ZIO.runtime[Any].map { runtime =>
+      new MockConsumer[Array[Byte], Array[Byte]](OffsetResetStrategy.LATEST) {
+        override def commitAsync(
+          offsets: JavaMap[TopicPartition, OffsetAndMetadata],
+          callback: OffsetCommitCallback
+        ): Unit =
+          Unsafe.unsafe { implicit unsafe =>
+            runtime.unsafe
+              .run(
+                onCommitAsync(offsets.asScala.toMap)
+                  .tapBoth(
+                    e => ZIO.attempt(callback.onComplete(offsets, e.asInstanceOf[Exception])),
+                    offsets => ZIO.attempt(callback.onComplete(offsets.asJava, null))
+                  )
+                  .ignore
+              )
+              .getOrThrowFiberFailure()
+          }
+
+      }
+    }
 }

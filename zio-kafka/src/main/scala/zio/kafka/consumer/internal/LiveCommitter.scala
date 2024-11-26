@@ -1,14 +1,17 @@
 package zio.kafka.consumer.internal
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallback }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.kafka.consumer.Consumer.CommitTimeout
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Committer.CommitOffsets
+import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
-import zio.{ durationLong, Cause, Chunk, Duration, Exit, Promise, Queue, Ref, Scope, Task, UIO, ZIO }
+import zio.{ durationLong, Cause, Chunk, Duration, Exit, Promise, Queue, Ref, Scope, Task, UIO, Unsafe, ZIO }
 
+import java.util.{ Map => JavaMap }
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 private[consumer] final class LiveCommitter(
   commitQueue: Queue[Commit],
@@ -40,7 +43,7 @@ private[consumer] final class LiveCommitter(
    * may be used. Please see [[RebalanceCoordinator]] for more information.
    */
   override def processQueuedCommits(
-    commitAsync: Map[TopicPartition, OffsetAndMetadata] => Task[Task[Map[TopicPartition, OffsetAndMetadata]]],
+    consumer: ByteArrayKafkaConsumer,
     executeOnEmpty: Boolean = false
   ): Task[Unit] = for {
     commits <- commitQueue.takeAll
@@ -54,7 +57,7 @@ private[consumer] final class LiveCommitter(
            for {
              _                <- pendingCommits.update(_ ++ commits)
              startTime        <- ZIO.clockWith(_.nanoTime)
-             getCommitResults <- commitAsync(offsetsWithMetaData)
+             getCommitResults <- commitAsyncZIO(consumer, offsetsWithMetaData)
              _ <- getCommitResults
                     .zipLeft(
                       for {
@@ -97,6 +100,39 @@ private[consumer] final class LiveCommitter(
         acc
       }
       .toMap
+
+  /**
+   * Wrapper that converts KafkaConsumer#commitAsync to ZIO
+   *
+   * @return
+   *   Task whose completion indicates completion of the commitAsync call. The inner task completes when the callback is
+   *   executed and represents the callback results.
+   */
+  private def commitAsyncZIO(
+    consumer: ByteArrayKafkaConsumer,
+    offsets: Map[TopicPartition, OffsetAndMetadata]
+  ): Task[Task[Map[TopicPartition, OffsetAndMetadata]]] =
+    for {
+      runtime <- ZIO.runtime[Any]
+      result  <- Promise.make[Throwable, Map[TopicPartition, OffsetAndMetadata]]
+      _ <- ZIO.attempt {
+             consumer.commitAsync(
+               offsets.asJava,
+               new OffsetCommitCallback {
+                 override def onComplete(
+                   offsets: JavaMap[TopicPartition, OffsetAndMetadata],
+                   exception: Exception
+                 ): Unit =
+                   Unsafe.unsafe { implicit unsafe =>
+                     runtime.unsafe.run {
+                       if (exception == null) result.succeed(offsets.asScala.toMap).unit
+                       else result.fail(exception).unit
+                     }.getOrThrowFiberFailure()
+                   }
+               }
+             )
+           }
+    } yield result.await
 
   override def queueSize: UIO[Int] = commitQueue.size
 

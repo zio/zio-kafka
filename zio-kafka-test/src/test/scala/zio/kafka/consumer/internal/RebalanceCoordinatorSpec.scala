@@ -5,6 +5,7 @@ import org.apache.kafka.common.TopicPartition
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Committer.CommitOffsets
+import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
 import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
@@ -207,10 +208,8 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
 abstract class MockCommitter extends Committer {
   override val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] = _ => ZIO.unit
 
-  override def processQueuedCommits(
-    commitAsync: Map[TopicPartition, OffsetAndMetadata] => Task[Task[Map[TopicPartition, OffsetAndMetadata]]],
-    executeOnEmpty: Boolean
-  ): zio.Task[Unit] = ZIO.unit
+  override def processQueuedCommits(consumer: ByteArrayKafkaConsumer, executeOnEmpty: Boolean): Task[Unit] = ZIO.unit
+
   override def queueSize: UIO[Int]                   = ZIO.succeed(0)
   override def pendingCommitCount: UIO[Int]          = ZIO.succeed(0)
   override def getPendingCommits: UIO[CommitOffsets] = ZIO.succeed(CommitOffsets.empty)

@@ -3,6 +3,7 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.internal.Committer.CommitOffsets
+import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
 import zio.{ Chunk, Task, UIO }
 
@@ -20,15 +21,13 @@ private[internal] trait Committer {
    * WARNING: this method is used during a rebalance from the same-thread-runtime. This restricts what ZIO operations
    * may be used. Please see [[RebalanceCoordinator]] for more information.
    *
-   * @param commitAsync
-   *   Function 'commitAsync' on the KafkaConsumer. This is isolated from the whole KafkaConsumer for testing purposes.
-   *   The caller should ensure exclusive access to the KafkaConsumer. The outer task represents the finishing of the
-   *   commitAsync call, the inner task represents the callback results.
+   * @param consumer
+   *   KafkaConsumer to use. The caller is responsible or guaranteeing exclusive access.
    * @param executeOnEmpty
    *   Execute commitAsync() even if there are no commits
    */
   def processQueuedCommits(
-    commitAsync: Map[TopicPartition, OffsetAndMetadata] => Task[Task[Map[TopicPartition, OffsetAndMetadata]]],
+    consumer: ByteArrayKafkaConsumer,
     executeOnEmpty: Boolean = false
   ): Task[Unit]
 

@@ -14,7 +14,6 @@ import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.stream._
 
-import java.util.{ Map => JavaMap }
 import scala.jdk.CollectionConverters._
 
 //noinspection SimplifyWhenInspection,SimplifyUnlessInspection
@@ -497,11 +496,13 @@ private[consumer] final class Runloop private (
         for {
           _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
           _ <-
-            committer
-              .processQueuedCommits(commitAsyncZIO)
-              .onExecutor(
-                commitExecutor
-              ) // processQueuedCommits does a fork to await the commit callback, which is not supported by the single-thread executor
+            consumer.runloopAccess { consumer =>
+              committer
+                .processQueuedCommits(consumer)
+                .onExecutor(
+                  commitExecutor
+                ) // processQueuedCommits does a fork to await the commit callback, which is not supported by the single-thread executor
+            }
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
           stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
 
@@ -518,43 +519,6 @@ private[consumer] final class Runloop private (
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       .onError(cause => partitionsHub.offer(Take.failCause(cause)))
   }
-
-  /**
-   * Wrapper that converts KafkaConsumer#commitAsync to ZIO
-   *
-   * @param offsets
-   *   Offsets to commit
-   * @return
-   *   Task whose completion indicates completion of the commitAsync call. The inner task completes when the callback is
-   *   executed and represents the callback results.
-   */
-  private def commitAsyncZIO(
-    offsets: Map[TopicPartition, OffsetAndMetadata]
-  ): Task[Task[Map[TopicPartition, OffsetAndMetadata]]] =
-    for {
-      runtime <- ZIO.runtime[Any]
-      result  <- Promise.make[Throwable, Map[TopicPartition, OffsetAndMetadata]]
-      // commitAsync does not need to be called from a special thread here, as long as we have exclusive access
-      _ <- consumer.runloopAccess { consumer =>
-             ZIO.attempt {
-               consumer.commitAsync(
-                 offsets.asJava,
-                 new OffsetCommitCallback {
-                   override def onComplete(
-                     offsets: JavaMap[TopicPartition, OffsetAndMetadata],
-                     exception: Exception
-                   ): Unit =
-                     Unsafe.unsafe { implicit unsafe =>
-                       runtime.unsafe.run {
-                         if (exception == null) result.succeed(offsets.asScala.toMap).unit
-                         else result.fail(exception).unit
-                       }.getOrThrowFiberFailure()
-                     }
-                 }
-               )
-             }
-           }
-    } yield result.await
 
   def shouldPoll(state: State): UIO[Boolean] =
     committer.pendingCommitCount.map { pendingCommitCount =>
