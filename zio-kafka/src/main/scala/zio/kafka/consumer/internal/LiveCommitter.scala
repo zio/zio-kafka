@@ -67,6 +67,19 @@ private[consumer] final class LiveCommitter(
          }
   } yield ()
 
+  private def mergeCommitOffsets(commits: Chunk[Commit]): Map[TopicPartition, OffsetAndMetadata] =
+    commits
+      .foldLeft(mutable.Map.empty[TopicPartition, OffsetAndMetadata]) { case (acc, commit) =>
+        commit.offsets.foreach { case (tp, offset) =>
+          acc += (tp -> acc
+            .get(tp)
+            .map(current => if (current.offset() > offset.offset()) current else offset)
+            .getOrElse(offset))
+        }
+        acc
+      }
+      .toMap
+
   private def handleCommitCompletion(
     commits: Chunk[Commit],
     offsets: Map[TopicPartition, OffsetAndMetadata],
@@ -99,19 +112,6 @@ private[consumer] final class LiveCommitter(
           )
       }
       .unit
-
-  private def mergeCommitOffsets(commits: Chunk[Commit]): Map[TopicPartition, OffsetAndMetadata] =
-    commits
-      .foldLeft(mutable.Map.empty[TopicPartition, OffsetAndMetadata]) { case (acc, commit) =>
-        commit.offsets.foreach { case (tp, offset) =>
-          acc += (tp -> acc
-            .get(tp)
-            .map(current => if (current.offset() > offset.offset()) current else offset)
-            .getOrElse(offset))
-        }
-        acc
-      }
-      .toMap
 
   /**
    * Wrapper that converts KafkaConsumer#commitAsync to ZIO
