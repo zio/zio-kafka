@@ -32,7 +32,9 @@ final case class ConsumerSettings(
   metricLabels: Set[MetricLabel] = Set.empty,
   runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis),
   authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.recurs(5) && Schedule.spaced(500.millis),
-  maxStreamPullIntervalOption: Option[Duration] = None
+  maxStreamPullIntervalOption: Option[Duration] = None,
+  commandQueueSize: Int = 1024, // Internal setting, should not be necessary to tune
+  commitQueueSize: Int = 1024   // Internal setting, should not be necessary to tune
 ) {
   // Parse booleans in a way compatible with how Kafka does this in org.apache.kafka.common.config.ConfigDef.parseType:
   require(
