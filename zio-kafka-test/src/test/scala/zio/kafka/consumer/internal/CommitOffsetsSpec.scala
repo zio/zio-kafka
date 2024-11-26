@@ -1,11 +1,13 @@
 package zio.kafka.consumer.internal
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import zio._
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import zio.kafka.consumer.internal.Committer.CommitOffsets
+import zio.kafka.consumer.internal.LiveCommitter.Commit
 import zio.test._
 
-object RunloopCommitOffsetsSpec extends ZIOSpecDefault {
+object CommitOffsetsSpec extends ZIOSpecDefault {
 
   private val tp10 = new TopicPartition("t1", 0)
   private val tp11 = new TopicPartition("t1", 1)
@@ -14,9 +16,9 @@ object RunloopCommitOffsetsSpec extends ZIOSpecDefault {
   private val tp22 = new TopicPartition("t2", 2)
 
   override def spec: Spec[TestEnvironment with Scope, Any] =
-    suite("Runloop.CommitOffsets spec")(
+    suite("CommitOffsets spec")(
       test("addCommits adds to empty CommitOffsets") {
-        val s1        = Runloop.CommitOffsets(Map.empty)
+        val s1        = CommitOffsets(Map.empty)
         val (inc, s2) = s1.addCommits(Chunk(makeCommit(Map(tp10 -> 10))))
         assertTrue(
           inc == 0,
@@ -24,7 +26,7 @@ object RunloopCommitOffsetsSpec extends ZIOSpecDefault {
         )
       },
       test("addCommits updates offset when it is higher") {
-        val s1        = Runloop.CommitOffsets(Map(tp10 -> 4L))
+        val s1        = CommitOffsets(Map(tp10 -> 4L))
         val (inc, s2) = s1.addCommits(Chunk(makeCommit(Map(tp10 -> 10))))
         assertTrue(
           inc == 10 - 4,
@@ -32,7 +34,7 @@ object RunloopCommitOffsetsSpec extends ZIOSpecDefault {
         )
       },
       test("addCommits ignores an offset when it is lower") {
-        val s1        = Runloop.CommitOffsets(Map(tp10 -> 10L))
+        val s1        = CommitOffsets(Map(tp10 -> 10L))
         val (inc, s2) = s1.addCommits(Chunk(makeCommit(Map(tp10 -> 5))))
         assertTrue(
           inc == 0,
@@ -40,7 +42,7 @@ object RunloopCommitOffsetsSpec extends ZIOSpecDefault {
         )
       },
       test("addCommits keeps unrelated partitions") {
-        val s1        = Runloop.CommitOffsets(Map(tp10 -> 10L))
+        val s1        = CommitOffsets(Map(tp10 -> 10L))
         val (inc, s2) = s1.addCommits(Chunk(makeCommit(Map(tp11 -> 11))))
         assertTrue(
           inc == 0,
@@ -48,7 +50,7 @@ object RunloopCommitOffsetsSpec extends ZIOSpecDefault {
         )
       },
       test("addCommits does it all at once") {
-        val s1        = Runloop.CommitOffsets(Map(tp10 -> 10L, tp20 -> 205L, tp21 -> 210L, tp22 -> 220L))
+        val s1        = CommitOffsets(Map(tp10 -> 10L, tp20 -> 205L, tp21 -> 210L, tp22 -> 220L))
         val (inc, s2) = s1.addCommits(Chunk(makeCommit(Map(tp11 -> 11, tp20 -> 206L, tp21 -> 209L, tp22 -> 220L))))
         assertTrue(
           inc == /* tp10 */ 0 + /* tp11 */ 0 + /* tp20 */ 1 + /* tp21 */ 0 + /* tp22 */ 0,
@@ -56,7 +58,7 @@ object RunloopCommitOffsetsSpec extends ZIOSpecDefault {
         )
       },
       test("addCommits adds multiple commits") {
-        val s1 = Runloop.CommitOffsets(Map(tp10 -> 10L, tp20 -> 200L, tp21 -> 210L, tp22 -> 220L))
+        val s1 = CommitOffsets(Map(tp10 -> 10L, tp20 -> 200L, tp21 -> 210L, tp22 -> 220L))
         val (inc, s2) = s1.addCommits(
           Chunk(
             makeCommit(Map(tp11 -> 11, tp20 -> 199L, tp21 -> 211L, tp22 -> 219L)),
@@ -69,35 +71,35 @@ object RunloopCommitOffsetsSpec extends ZIOSpecDefault {
         )
       },
       test("keepPartitions removes some partitions") {
-        val s1 = Runloop.CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
+        val s1 = CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
         val s2 = s1.keepPartitions(Set(tp10))
         assertTrue(s2.offsets == Map(tp10 -> 10L))
       },
       test("does not 'contain' offset when tp is not present") {
-        val s1     = Runloop.CommitOffsets(Map(tp10 -> 10L))
+        val s1     = CommitOffsets(Map(tp10 -> 10L))
         val result = s1.contains(tp20, 10)
         assertTrue(!result)
       },
       test("does not 'contain' a higher offset") {
-        val s1     = Runloop.CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
+        val s1     = CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
         val result = s1.contains(tp10, 11)
         assertTrue(!result)
       },
       test("does 'contain' equal offset") {
-        val s1     = Runloop.CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
+        val s1     = CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
         val result = s1.contains(tp10, 10)
         assertTrue(result)
       },
       test("does 'contain' lower offset") {
-        val s1     = Runloop.CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
+        val s1     = CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
         val result = s1.contains(tp20, 19)
         assertTrue(result)
       }
     )
 
-  private def makeCommit(offsets: Map[TopicPartition, Long]): Runloop.Commit = {
+  private def makeCommit(offsets: Map[TopicPartition, Long]): Commit = {
     val o = offsets.map { case (tp, offset) => tp -> new OffsetAndMetadata(offset) }
     val p = Unsafe.unsafe(implicit unsafe => Promise.unsafe.make[Throwable, Unit](FiberId.None))
-    Runloop.Commit(0L, o, p)
+    Commit(0L, o, p)
   }
 }
