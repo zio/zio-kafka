@@ -16,7 +16,12 @@ private[internal] trait ConsumerMetrics {
   def observeCommit(latency: Duration): UIO[Unit]
   def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit]
   def observeRebalance(currentlyAssignedCount: Int, assignedCount: Int, revokedCount: Int, lostCount: Int): UIO[Unit]
-  def observeRunloopMetrics(state: Runloop.State, commandQueueSize: Int, commitQueueSize: Int): UIO[Unit]
+  def observeRunloopMetrics(
+    state: Runloop.State,
+    commandQueueSize: Int,
+    commitQueueSize: Int,
+    pendingCommits: Int
+  ): UIO[Unit]
   def observePollAuthError(): UIO[Unit]
 }
 
@@ -330,14 +335,19 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  override def observeRunloopMetrics(state: Runloop.State, commandQueueSize: Int, commitQueueSize: Int): UIO[Unit] =
+  override def observeRunloopMetrics(
+    state: Runloop.State,
+    commandQueueSize: Int,
+    commitQueueSize: Int,
+    pendingCommits: Int
+  ): UIO[Unit] =
     for {
       _          <- ZIO.foreachDiscard(state.assignedStreams)(_.outstandingPolls @@ queuePollsHistogram)
       queueSizes <- ZIO.foreach(state.assignedStreams)(_.queueSize)
       _          <- ZIO.foreachDiscard(queueSizes)(qs => queueSizeHistogram.update(qs))
       _          <- allQueueSizeHistogram.update(queueSizes.sum)
       _          <- pendingRequestsHistogram.update(state.pendingRequests.size)
-      _          <- pendingCommitsHistogram.update(state.pendingCommits.size)
+      _          <- pendingCommitsHistogram.update(pendingCommits)
       _          <- subscriptionStateGauge.update(state.subscriptionState)
       _          <- commandQueueSizeHistogram.update(commandQueueSize)
       _          <- commitQueueSizeHistogram.update(commitQueueSize)
