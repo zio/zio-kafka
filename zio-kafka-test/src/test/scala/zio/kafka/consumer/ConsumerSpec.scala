@@ -355,6 +355,203 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       )
         } yield assertTrue(offset.map(_.offset).contains(9L))
       } @@ TestAspect.nonFlaky(2),
+      suite("streamWithGracefulShutdown")(
+        test("runWithGracefulShutdown must end streams while still processing commits") {
+          val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+          for {
+            group                   <- randomGroup
+            client                  <- randomClient
+            topic                   <- randomTopic
+            _                       <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = 5))
+            processedMessageOffsets <- Ref.make(Chunk.empty[(TopicPartition, Long)])
+            results <- ZIO.scoped {
+                         for {
+                           stop <- Promise.make[Nothing, Unit]
+                           fib <-
+                             Consumer
+                               .withPartitionedStream[Any, String, String](
+                                 Subscription.topics(topic),
+                                 Serde.string,
+                                 Serde.string
+                               ) { stream =>
+                                 stream
+                                   .flatMapPar(Int.MaxValue) { case (tp, partitionStream) =>
+                                     partitionStream.mapConcatZIO { record =>
+                                       for {
+                                         nr <- processedMessageOffsets
+                                                 .updateAndGet(
+                                                   _ :+ (tp -> record.offset.offset)
+                                                 )
+                                                 .map(_.size)
+                                         _ <- stop.succeed(()).when(nr == 10)
+                                       } yield Seq(record.offset)
+                                     }
+                                   }
+                                   .transduce(Consumer.offsetBatches)
+                                   .mapZIO(batch =>
+                                     ZIO.logDebug("Starting batch commit") *> batch.commit
+                                       .tapErrorCause(
+                                         ZIO.logErrorCause(
+                                           s"Error doing commit of batch ${batch.offsets}",
+                                           _
+                                         )
+                                       ) *> ZIO.logDebug("Commit done")
+                                   )
+                                   .runDrain
+                               }
+                               .forkScoped
+                           _ <- produceMany(topic, kvs)
+                           _ <- scheduledProduce(
+                                  topic,
+                                  Schedule.fixed(500.millis).jittered
+                                ).runDrain.forkScoped
+                           _                <- stop.await *> fib.interrupt
+                           processedOffsets <- processedMessageOffsets.get
+                           latestProcessedOffsets =
+                             processedOffsets.groupBy(_._1).map { case (tp, values) =>
+                               tp -> values.map(_._2).maxOption.getOrElse(0L)
+                             }
+                           tps = processedOffsets.map { case (tp, _) => tp }.toSet
+                           committedOffsets <- Consumer.committed(tps)
+                         } yield (latestProcessedOffsets, committedOffsets)
+                       }.provideSomeLayer[Kafka with Producer](
+                         consumer(
+                           client,
+                           Some(group),
+                           commitTimeout = 2.seconds // Detect issues with commits earlier
+                         )
+                       )
+            (processedOffsets, committedOffsets) = results
+          } yield assertTrue(processedOffsets.forall { case (tp, offset) =>
+            committedOffsets.get(tp).flatMap(_.map(_.offset())).contains(offset + 1)
+          })
+        } @@ nonFlaky(10),
+        test(
+          "it's possible to start a new consumption session from a Consumer that had a consumption session stopped previously"
+        ) {
+          // NOTE:
+          // When this test fails with the message `100000 was not less than 100000`, it's because
+          // your computer is so fast that the first consumer already consumed all 100000 messages.
+          val numberOfMessages: Int           = 100000
+          val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key-$i", s"msg-$i"))
+
+          def test(diagnostics: Diagnostics): ZIO[Producer & Scope & Kafka, Throwable, TestResult] =
+            for {
+              clientId <- randomClient
+              topic    <- randomTopic
+              settings <- consumerSettings(clientId = clientId)
+              consumer <- Consumer.make(settings, diagnostics = diagnostics)
+              _        <- produceMany(topic, kvs)
+              // Starting a consumption session to start the Runloop
+              consumed0 <- ZIO.scoped {
+                             for {
+                               consumed <- Ref.make(0L)
+                               fiber <-
+                                 consumer
+                                   .withPlainStream(
+                                     Subscription.manual(topic -> 0),
+                                     Serde.string,
+                                     Serde.string
+                                   ) { stream =>
+                                     stream
+                                       .tap(_ => consumed.update(_ + 1))
+                                       .runDrain
+                                   }
+                                   .forkScoped
+                               _         <- ZIO.sleep(200.millis)
+                               _         <- fiber.interrupt
+                               consumed0 <- consumed.get
+                               _         <- ZIO.logDebug(s"consumed0: $consumed0")
+                             } yield consumed0
+                           }
+
+              _ <- ZIO.logDebug("About to sleep 5 seconds")
+              _ <- ZIO.sleep(5.seconds)
+              _ <- ZIO.logDebug("Slept 5 seconds")
+              consumed1 <- consumer
+                             .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                             .take(numberOfMessages.toLong)
+                             .runCount
+            } yield assert(consumed0)(isGreaterThan(0L) && isLessThan(numberOfMessages.toLong)) &&
+              assert(consumed1)(equalTo(numberOfMessages.toLong))
+
+          for {
+            diagnostics <- Diagnostics.SlidingQueue.make(1000)
+            testResult <- ZIO.scoped {
+                            test(diagnostics)
+                          }
+            finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
+          } yield testResult && assert(finalizationEvents)(
+            // The order is very important.
+            // The subscription must be finalized before the runloop, otherwise it creates a deadlock.
+            equalTo(
+              Chunk(
+                SubscriptionFinalized,
+                RunloopFinalized,
+                ConsumerFinalized
+              )
+            )
+          )
+        },
+        test("can stop one stream while keeping another one running") {
+          val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+          for {
+            topic1 <- randomTopic
+            topic2 <- randomTopic
+            client <- randomClient
+            group  <- randomGroup
+
+            _ <- produceMany(topic1, kvs)
+            _ <- produceMany(topic2, kvs)
+            _ <- ZIO.scoped {
+                   for {
+                     stream1Started     <- Promise.make[Nothing, Unit]
+                     stream1Done        <- Promise.make[Nothing, Unit]
+                     stream1Interrupted <- Promise.make[Nothing, Unit]
+                     stream1Fib <- ZIO.logAnnotate("stream", "1") {
+                                     (Consumer
+                                       .withPlainStream(
+                                         Subscription.topics(topic1),
+                                         Serde.string,
+                                         Serde.string
+                                       ) { stream =>
+                                         stream
+                                           .tap(_ => stream1Started.succeed(()))
+                                           .zipWithIndex
+                                           .map(_._2)
+                                           .runDrain
+                                       }
+                                       .tapErrorCause(c => ZIO.logErrorCause("Stream 1 failed", c))
+                                       .ensuring(stream1Done.succeed(())))
+                                       .forkScoped
+                                   }
+                     _ <- stream1Started.await
+                     _ <- ZIO.logAnnotate("stream", "2") {
+                            Consumer
+                              .withPlainStream(
+                                Subscription.topics(topic2),
+                                Serde.string,
+                                Serde.string
+                              ) { stream =>
+                                stream.zipWithIndex
+                                  .map(_._2)
+                                  .tap(count =>
+                                    (stream1Fib.interrupt <* stream1Interrupted.succeed(())).when(count == 4)
+                                  )
+                                  .runDrain
+                              }
+                              .tapErrorCause(c => ZIO.logErrorCause("Stream 2 failed", c))
+                              .forkScoped
+                          }
+                     _ <- stream1Interrupted.await
+                     _ <- produceMany(topic1, kvs)
+                     _ <- stream1Done.await
+                            .tapErrorCause(c => ZIO.logErrorCause("Stream 1 await failed", c))
+                   } yield ()
+                 }.provideSomeLayer[Kafka with Scope with Producer](consumer(client, Some(group)))
+          } yield assertCompletes
+        } @@ nonFlaky(10)
+      ),
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
         // Setup of this test:
         // - Set the max poll interval very low: a couple of seconds.
@@ -1586,6 +1783,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       .provideSome[Scope & Kafka](producer)
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ timeout(2.minutes)
+      ) @@ withLiveClock @@ timeout(10.minutes)
 
 }

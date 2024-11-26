@@ -61,8 +61,7 @@ private[consumer] final class Runloop private (
         .offerAll(
           Chunk(
             RunloopCommand.RemoveAllSubscriptions,
-            RunloopCommand.StopAllStreams,
-            RunloopCommand.StopRunloop
+            RunloopCommand.StopAllStreams
           )
         )
         .unit
@@ -77,8 +76,19 @@ private[consumer] final class Runloop private (
       _       <- ZIO.logDebug(s"Done for subscription $subscription")
     } yield ()
 
-  private[internal] def removeSubscription(subscription: Subscription): UIO[Unit] =
-    commandQueue.offer(RunloopCommand.RemoveSubscription(subscription)).unit
+  private[internal] def removeSubscription(subscription: Subscription): Task[Unit] =
+    for {
+      promise <- Promise.make[Throwable, Unit]
+      _       <- commandQueue.offer(RunloopCommand.RemoveSubscription(subscription, promise))
+      _       <- promise.await
+    } yield ()
+
+  private[internal] def endStreamsBySubscription(subscription: Subscription): UIO[Unit] =
+    for {
+      promise <- Promise.make[Nothing, Unit]
+      _       <- commandQueue.offer(RunloopCommand.EndStreamsBySubscription(subscription, promise)).unit
+      _       <- promise.await
+    } yield ()
 
   private def makeRebalanceListener: ConsumerRebalanceListener = {
     // All code in this block is called from the rebalance listener and therefore runs on the same-thread-runtime. This
@@ -532,16 +542,19 @@ private[consumer] final class Runloop private (
 
   private def handlePoll(state: State): Task[State] = {
     for {
-      partitionsToFetch <- settings.fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
+      runningStreamsBeforePoll <- ZIO.filter(state.assignedStreams)(_.isRunning)
+      partitionsToFetch        <- settings.fetchStrategy.selectPartitionsToFetch(runningStreamsBeforePoll)
       _ <- ZIO.logDebug(
              s"Starting poll with ${state.pendingRequests.size} pending requests and" +
                s" ${state.pendingCommits.size} pending commits," +
-               s" resuming $partitionsToFetch partitions"
+               s" resuming ${partitionsToFetch.size} out of ${state.assignedStreams.size} partitions"
            )
       _ <- currentStateRef.set(state)
       pollResult <-
         consumer.runloopAccess { c =>
           for {
+            assignment <- ZIO.attempt(c.assignment())
+            _          <- verifyAssignedStreamsMatchesAssignment(state.assignedStreams, assignment.asScala.toSet)
             resumeAndPauseCounts <- resumeAndPausePartitions(c, partitionsToFetch)
             (toResumeCount, toPauseCount) = resumeAndPauseCounts
 
@@ -665,6 +678,16 @@ private[consumer] final class Runloop private (
     )
   }
 
+  private def verifyAssignedStreamsMatchesAssignment(
+    assignedStreams: Chunk[PartitionStreamControl],
+    currentAssigned: Set[TopicPartition]
+  ) =
+    ZIO
+      .logWarning(
+        s"Not all assigned partitions have a (single) stream or vice versa. Assigned: ${currentAssigned.mkString(",")}, streams: ${assignedStreams.map(_.tp).mkString(",")}"
+      )
+      .when(currentAssigned != assignedStreams.map(_.tp).toSet || currentAssigned.size != assignedStreams.size)
+
   /**
    * Check each stream to see if it exceeded its pull interval. If so, halt it. In addition, if any stream has exceeded
    * its pull interval, shutdown the consumer.
@@ -739,8 +762,20 @@ private[consumer] final class Runloop private (
                 cmd.succeed *> doChangeSubscription(newSubState)
             }
         }
-      case RunloopCommand.RemoveSubscription(subscription) =>
-        state.subscriptionState match {
+      case RunloopCommand.EndStreamsBySubscription(subscription, cont) =>
+        ZIO.foreachDiscard(
+          state.assignedStreams.filter(stream => Subscription.subscriptionMatches(subscription, stream.tp))
+        )(_.end) *> cont
+          .succeed(())
+          .as(
+            state.copy(
+              pendingRequests =
+                state.pendingRequests.filterNot(req => Subscription.subscriptionMatches(subscription, req.tp))
+            )
+          )
+
+      case RunloopCommand.RemoveSubscription(subscription, cont) =>
+        (state.subscriptionState match {
           case SubscriptionState.NotSubscribed => ZIO.succeed(state)
           case SubscriptionState.Subscribed(existingSubscriptions, _) =>
             val newUnion: Option[(Subscription, NonEmptyChunk[Subscription])] =
@@ -757,9 +792,11 @@ private[consumer] final class Runloop private (
                 ZIO.logDebug(s"Unsubscribing kafka consumer") *>
                   doChangeSubscription(SubscriptionState.NotSubscribed)
             }
-        }
+        }).tapBoth(cont.fail, _ => cont.succeed(()).unit)
       case RunloopCommand.RemoveAllSubscriptions => doChangeSubscription(SubscriptionState.NotSubscribed)
-      case RunloopCommand.StopAllStreams =>
+      case RunloopCommand.StopAllStreams         =>
+        // End all partition streams and any pending requests. Keep the runloop running so that commits for in-flight
+        // records can still be processed. Keep assigned streams as is to be consistent with consumer assignment
         for {
           _ <- ZIO.logDebug("Stop all streams initiated")
           _ <- ZIO.foreachDiscard(state.assignedStreams)(_.end)
@@ -988,6 +1025,7 @@ object Runloop {
       _ <- ZIO.addFinalizer(
              ZIO.logDebug("Shutting down Runloop") *>
                runloop.shutdown *>
+               commandQueue.offer(RunloopCommand.StopRunloop) *>
                waitForRunloopStop <*
                ZIO.logDebug("Shut down Runloop")
            )
@@ -996,6 +1034,13 @@ object Runloop {
   private[internal] final case class State(
     pendingRequests: Chunk[RunloopCommand.Request],
     pendingCommits: Chunk[Runloop.Commit],
+
+    /*
+     * Streams for partitions that are currently assigned to this consumer.
+     *
+     * Before and after each rebalance, it should be consistent with the partitions that are assigned according to the
+     * underlying KafkaConsumer.
+     */
     assignedStreams: Chunk[PartitionStreamControl],
     subscriptionState: SubscriptionState
   ) {

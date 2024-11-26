@@ -6,7 +6,7 @@ import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription }
+import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription, SubscriptionStreamControl }
 import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio._
 
@@ -52,19 +52,26 @@ private[consumer] final class RunloopAccess private (
    * there's no mistake possible for the caller.
    *
    * The external world (Consumer) doesn't need to know how we "subscribe", "unsubscribe", etc. internally.
+   *
+   * @returns
+   *   A SubscriptionStreamControl which allows graceful shutdown of all streams created from this subscription
    */
   def subscribe(
     subscription: Subscription
-  ): ZIO[Scope, InvalidSubscriptionUnion, UStream[Take[Throwable, PartitionAssignment]]] =
+  ): ZIO[Scope, InvalidSubscriptionUnion, SubscriptionStreamControl[UStream[Take[Throwable, PartitionAssignment]]]] =
     for {
+      end    <- Promise.make[Nothing, Unit]
       stream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription)) <*
+             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).orDie) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
-    } yield stream
+    } yield SubscriptionStreamControl(
+      stream = stream.merge(ZStream.fromZIO(end.await).as(Take.end)),
+      stop = withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription)) *> end.succeed(()).ignore
+    )
 
 }
 
