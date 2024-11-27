@@ -55,14 +55,14 @@ private[consumer] final class LiveCommitter(
            }
 
            for {
-             _                <- pendingCommits.update(_ ++ commits)
-             startTime        <- ZIO.clockWith(_.nanoTime)
-             getCommitResults <- commitAsyncZIO(consumer, offsetsWithMetaData)
-             _ <- getCommitResults.exit
-                    .flatMap(handleCommitCompletion(commits, offsetsWithMetaData, startTime, _))
-                    // We don't wait for the completion of the commit here, because it
-                    // will only complete once we poll again.
-                    .forkDaemon
+             _         <- pendingCommits.update(_ ++ commits)
+             startTime <- ZIO.clockWith(_.nanoTime)
+             _ <- commitAsyncZIO(
+                    consumer,
+                    offsetsWithMetaData,
+                    doOnComplete = handleCommitCompletion(commits, offsetsWithMetaData, startTime, _)
+                  )
+             // We don't wait for the completion of the commit here, because it will only complete once we poll again.
            } yield ()
          }
   } yield ()
@@ -84,11 +84,10 @@ private[consumer] final class LiveCommitter(
     commits: Chunk[Commit],
     offsets: Map[TopicPartition, OffsetAndMetadata],
     startTime: NanoTime,
-    commitResults: Exit[Throwable, Map[TopicPartition, OffsetAndMetadata]]
-  ): Task[Unit] =
+    commitResults: Either[Exception, Map[TopicPartition, OffsetAndMetadata]]
+  ): UIO[Unit] =
     ZIO
       .from(commitResults)
-      .unexit
       .zipLeft(
         for {
           endTime <- ZIO.clockWith(_.nanoTime)
@@ -111,7 +110,7 @@ private[consumer] final class LiveCommitter(
             DiagnosticEvent.Commit.Failure(offsets, c.squash)
           )
       }
-      .unit
+      .ignore
 
   /**
    * Wrapper that converts KafkaConsumer#commitAsync to ZIO
@@ -122,11 +121,11 @@ private[consumer] final class LiveCommitter(
    */
   private def commitAsyncZIO(
     consumer: ByteArrayKafkaConsumer,
-    offsets: Map[TopicPartition, OffsetAndMetadata]
-  ): Task[Task[Map[TopicPartition, OffsetAndMetadata]]] =
+    offsets: Map[TopicPartition, OffsetAndMetadata],
+    doOnComplete: Either[Exception, Map[TopicPartition, OffsetAndMetadata]] => UIO[Unit]
+  ): Task[Unit] =
     for {
       runtime <- ZIO.runtime[Any]
-      result  <- Promise.make[Throwable, Map[TopicPartition, OffsetAndMetadata]]
       _ <- ZIO.attempt {
              consumer.commitAsync(
                offsets.asJava,
@@ -137,14 +136,14 @@ private[consumer] final class LiveCommitter(
                  ): Unit =
                    Unsafe.unsafe { implicit unsafe =>
                      runtime.unsafe.run {
-                       if (exception == null) result.succeed(offsets.asScala.toMap).unit
-                       else result.fail(exception).unit
+                       if (exception == null) doOnComplete(Right(offsets.asScala.toMap))
+                       else doOnComplete(Left(exception))
                      }.getOrThrowFiberFailure()
                    }
                }
              )
            }
-    } yield result.await
+    } yield ()
 
   override def queueSize: UIO[Int] = commitQueue.size
 
@@ -189,5 +188,4 @@ private[internal] object LiveCommitter {
   ) {
     @inline def isPending: UIO[Boolean] = cont.isDone.negate
   }
-
 }
