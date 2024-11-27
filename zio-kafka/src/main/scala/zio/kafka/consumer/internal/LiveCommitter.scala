@@ -48,7 +48,7 @@ private[consumer] final class LiveCommitter(
   ): Task[Unit] = for {
     commits <- commitQueue.takeAll
     _       <- ZIO.logDebug(s"Processing ${commits.size} commits")
-    _ <- ZIO.unless(commits.isEmpty && !executeOnEmpty) {
+    _ <- ZIO.when(commits.nonEmpty || executeOnEmpty) {
            val offsets = mergeCommitOffsets(commits)
            val offsetsWithMetaData = offsets.map { case (tp, offset) =>
              tp -> new OffsetAndMetadata(offset.offset + 1, offset.leaderEpoch, offset.metadata)
