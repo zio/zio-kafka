@@ -497,11 +497,10 @@ private[consumer] final class Runloop private (
           _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
           _ <-
             consumer.runloopAccess { consumer =>
+              // processQueuedCommits does forks to await commit callbacks, move those to another executor to keep the runloop executor clear for the runloop
               committer
                 .processQueuedCommits(consumer)
-                .onExecutor(
-                  commitExecutor
-                ) // processQueuedCommits does a fork to await the commit callback, which is not supported by the single-thread executor
+                .onExecutor(commitExecutor)
             }
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
           stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
