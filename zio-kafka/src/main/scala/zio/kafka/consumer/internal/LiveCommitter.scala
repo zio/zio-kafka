@@ -116,8 +116,7 @@ private[consumer] final class LiveCommitter(
    * Wrapper that converts KafkaConsumer#commitAsync to ZIO
    *
    * @return
-   *   Task whose completion indicates completion of the commitAsync call. The inner task completes when the callback is
-   *   executed and represents the callback results.
+   *   Task whose completion indicates completion of the commitAsync call.
    */
   private def commitAsyncZIO(
     consumer: ByteArrayKafkaConsumer,

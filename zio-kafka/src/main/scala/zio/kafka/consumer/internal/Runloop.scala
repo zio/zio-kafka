@@ -486,7 +486,7 @@ private[consumer] final class Runloop private (
    *
    * Note that this method is executed on a dedicated single-thread Executor
    */
-  private def run(initialState: State, commitExecutor: Executor): ZIO[Scope, Throwable, Any] = {
+  private def run(initialState: State): ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
 
     ZStream
@@ -495,13 +495,7 @@ private[consumer] final class Runloop private (
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
           _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
-          _ <-
-            consumer.runloopAccess { consumer =>
-              // processQueuedCommits does forks to await commit callbacks, move those to another executor to keep the runloop executor clear for the runloop
-              committer
-                .processQueuedCommits(consumer)
-                .onExecutor(commitExecutor)
-            }
+          _ <- consumer.runloopAccess(committer.processQueuedCommits(_))
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
           stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
 
@@ -629,9 +623,8 @@ object Runloop {
 
       // Run the entire loop on a dedicated thread to avoid executor shifts
 
-      executor       <- RunloopExecutor.newInstance
-      commitExecutor <- ZIO.executor
-      fiber          <- ZIO.onExecutor(executor)(runloop.run(initialState, commitExecutor)).forkScoped
+      executor <- RunloopExecutor.newInstance
+      fiber    <- ZIO.onExecutor(executor)(runloop.run(initialState)).forkScoped
       waitForRunloopStop = fiber.join.orDie
 
       _ <- ZIO.addFinalizer(
