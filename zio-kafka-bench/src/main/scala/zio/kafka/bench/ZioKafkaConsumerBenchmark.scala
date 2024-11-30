@@ -46,7 +46,7 @@ class ZioKafkaConsumerBenchmark extends ConsumerZioBenchmark[Kafka with Producer
              .tap { batch =>
                counter
                  .updateAndGet(_ + batch.size)
-                 .flatMap(count => Consumer.stopConsumption.when(count == recordCount))
+                 .flatMap(count => Consumer.stopConsumption.when(count >= recordCount))
              }
              .runDrain
              .provideSome[Kafka](env)
