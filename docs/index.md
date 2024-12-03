@@ -4,7 +4,9 @@ title: "Getting Started with ZIO Kafka"
 sidebar_label: "Getting Started"
 ---
 
-[ZIO Kafka](https://github.com/zio/zio-kafka) is a Kafka client for ZIO. It provides a purely functional, streams-based interface to the Kafka client and integrates effortlessly with ZIO and ZIO Streams.
+[ZIO Kafka](https://github.com/zio/zio-kafka) is a Kafka client for ZIO. It provides a purely functional, streams-based interface to the Kafka
+client and integrates effortlessly with ZIO and ZIO Streams. Often zio-kafka programs have a _higher_ throughput than
+programs that use the Java Kafka client directly (see section [Performance](#performance) below).
 
 @PROJECT_BADGES@ [![Scala Steward badge](https://img.shields.io/badge/Scala_Steward-helping-blue.svg?style=flat&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAQCAMAAAARSr4IAAAAVFBMVEUAAACHjojlOy5NWlrKzcYRKjGFjIbp293YycuLa3pYY2LSqql4f3pCUFTgSjNodYRmcXUsPD/NTTbjRS+2jomhgnzNc223cGvZS0HaSD0XLjbaSjElhIr+AAAAAXRSTlMAQObYZgAAAHlJREFUCNdNyosOwyAIhWHAQS1Vt7a77/3fcxxdmv0xwmckutAR1nkm4ggbyEcg/wWmlGLDAA3oL50xi6fk5ffZ3E2E3QfZDCcCN2YtbEWZt+Drc6u6rlqv7Uk0LdKqqr5rk2UCRXOk0vmQKGfc94nOJyQjouF9H/wCc9gECEYfONoAAAAASUVORK5CYII=)](https://scala-steward.org)
 
@@ -135,3 +137,14 @@ Want to see your company here? [Submit a PR](https://github.com/zio/zio-kafka/ed
 * [KelkooGroup](https://www.kelkoogroup.com)
 * [Rocker](https://rocker.com)
 
+## Performance
+
+By default, zio-kafka programs process partitions in parallel. The default java-kafka client does not provide parallel
+processing. Of course, there is some overhead in buffering records and distributing them to the fibers that need them.
+On 2024-11-23, we estimated that zio-kafka consumes faster than the java-kafka client when processing takes more than
+~1.2ms per 1000 records. The precise time depends on many factors. Please
+see [this article](https://day-to-day-stuff.blogspot.com/2024/12/zio-kafka-faster-than-java-kafka.html) for more
+details.
+
+If you do not care for the convenient ZStream based API that zio-kafka brings, and latency is of absolute importance,
+using the java based Kafka client directly is still the better choice.
