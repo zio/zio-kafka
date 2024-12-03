@@ -129,26 +129,28 @@ private[consumer] final class Runloop private (
     else {
       for {
         consumerGroupMetadata <- getConsumerGroupMetadataIfAny
-        _ <- ZIO.foreachParDiscard(streams) { streamControl =>
-               val tp      = streamControl.tp
-               val records = polledRecords.records(tp)
-               if (records.isEmpty) {
-                 streamControl.offerRecords(Chunk.empty)
-               } else {
-                 val builder  = ChunkBuilder.make[Record](records.size())
-                 val iterator = records.iterator()
-                 while (iterator.hasNext) {
-                   val consumerRecord = iterator.next()
-                   builder +=
-                     CommittableRecord[Array[Byte], Array[Byte]](
-                       record = consumerRecord,
-                       commitHandle = committer.commit,
-                       consumerGroupMetadata = consumerGroupMetadata
-                     )
+        _ <- ZIO
+               .foreachParDiscard(streams) { streamControl =>
+                 val tp      = streamControl.tp
+                 val records = polledRecords.records(tp)
+                 if (records.isEmpty) {
+                   streamControl.offerRecords(Chunk.empty)
+                 } else {
+                   val builder  = ChunkBuilder.make[Record](records.size())
+                   val iterator = records.iterator()
+                   while (iterator.hasNext) {
+                     val consumerRecord = iterator.next()
+                     builder +=
+                       CommittableRecord[Array[Byte], Array[Byte]](
+                         record = consumerRecord,
+                         commitHandle = committer.commit,
+                         consumerGroupMetadata = consumerGroupMetadata
+                       )
+                   }
+                   streamControl.offerRecords(builder.result())
                  }
-                 streamControl.offerRecords(builder.result())
                }
-             }
+               .fork
       } yield fulfillResult
     }
   }
