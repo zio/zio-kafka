@@ -150,7 +150,8 @@ private[consumer] final class Runloop private (
                    streamControl.offerRecords(builder.result())
                  }
                }
-               .fork
+              .fork
+              .onExecutor(topLevelExecutor)
       } yield fulfillResult
     }
   }
