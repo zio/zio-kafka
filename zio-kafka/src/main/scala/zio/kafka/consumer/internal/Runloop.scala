@@ -592,7 +592,7 @@ object Runloop {
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
-      pollDataQueue      <- ZIO.acquireRelease(Queue.bounded(2)[PollData])(_.shutdown)
+      pollDataQueue      <- ZIO.acquireRelease(Queue.bounded[PollData](2))(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
       currentStateRef   <- Ref.make(initialState)
