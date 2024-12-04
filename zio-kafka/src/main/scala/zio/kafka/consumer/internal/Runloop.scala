@@ -130,7 +130,7 @@ private[consumer] final class Runloop private (
       for {
         consumerGroupMetadata <- getConsumerGroupMetadataIfAny
         _ <- ZIO
-               .foreachParDiscard(streams) { streamControl =>
+               .foreachDiscard(streams) { streamControl =>
                  val tp      = streamControl.tp
                  val records = polledRecords.records(tp)
                  if (records.isEmpty) {
@@ -150,8 +150,6 @@ private[consumer] final class Runloop private (
                    streamControl.offerRecords(builder.result())
                  }
                }
-              .fork
-              .onExecutor(topLevelExecutor)
       } yield fulfillResult
     }
   }
