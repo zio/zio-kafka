@@ -1,12 +1,12 @@
-val zioSbtVersion = "0.4.0-alpha.28"
+val zioSbtVersion = "0.0.0+529-d9aba4fa-SNAPSHOT"
 
-addSbtPlugin("dev.zio" % "zio-sbt-ecosystem" % zioSbtVersion)
-addSbtPlugin("dev.zio" % "zio-sbt-website"   % zioSbtVersion)
-addSbtPlugin("dev.zio" % "zio-sbt-ci"        % zioSbtVersion)
+addSbtPlugin("nl.thijsbroersen" % "zio-sbt-ecosystem" % zioSbtVersion)
+addSbtPlugin("nl.thijsbroersen" % "zio-sbt-website"   % zioSbtVersion)
+addSbtPlugin("nl.thijsbroersen" % "zio-sbt-ci"        % zioSbtVersion)
 
-addSbtPlugin("ch.epfl.scala"  % "sbt-scalafix"        % "0.13.0")
 addSbtPlugin("org.typelevel"  % "sbt-tpolecat"        % "0.5.2")
 addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.10.4")
-addSbtPlugin("com.typesafe"   % "sbt-mima-plugin"     % "1.1.4")
+
+addSbtPlugin("pl.project13.scala" % "sbt-jmh" % "0.4.7")
 
 resolvers ++= Resolver.sonatypeOssRepos("public")
