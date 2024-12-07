@@ -121,11 +121,34 @@ object MainApp extends ZIOAppDefault {
 
 ## Resources
 
-- [ZIO Kafka tutorial](https://zio.dev/guides/tutorials/producing-consuming-data-from-kafka-topics/)
+### Articles
+
+- [ZIO Kafka tutorial](https://zio.dev/guides/tutorials/producing-consuming-data-from-kafka-topics/) by the ZIO-kafka team
+- [ZIO Kafka faster than Java Kafka](https://day-to-day-stuff.blogspot.com/2024/12/zio-kafka-faster-than-java-kafka.html) by Erik van Oosten (December 2024)
+- [Introduction to zio-kafka](https://www.baeldung.com/scala/zio-kafka-intro) by Stefanos Georgakis, Baeldung (January 2023)
+- [How to implement streaming microservices with ZIO 2 and Kafka](https://scalac.io/blog/streaming-microservices-with-zio-and-kafka/) by Jorge Vasquez, Scalac (June 2023)
+- [Zio Kafka](https://medium.com/@knoldus/zio-kafka-d865fc20174a) by Knoldus Inc (January 2022)
+- [Writing a Simple Producer and Consumer Using ZIO Workflows](https://pramodshehan.medium.com/writing-a-simple-producer-and-consumer-using-zio-workflows-a57def08210c) by Pramod Shehan (December 2022)
+- [ZIO Kafka with transactions - a debugging story](https://www.ziverge.com/post/zio-kafka-with-transactions---a-debugging-story/) by Daniel Vigovszky, Ziverge (June 2022)
+- [Introduction to Zio-Kafka](https://blog.knoldus.com/introduction-to-zio-kafka/) by Akash Kumar (March 2022)
+- [Introduction to Zio-Kafka](https://blog.nashtechglobal.com/introduction-to-zio-kafka/) by Khalid Ahmed, Nash Tech (March 2022)
+- [ZIO Kafka: A Practical Streaming Tutorial](https://rockthejvm.com/articles/zio-kafka/) by Riccardo Cardin, Rock the JVM (August 2021)
+- [Using ZIO Kafka with offset storage in Postgres for transactional processing](https://functional.works-hub.com/learn/using-zio-kafka-with-offset-storage-in-postgres-for-transactional-processing-be4a2) by Marek Kadek (March 2021)
+- [Streaming microservices with ZIO and Kafka](https://scalac.io/streaming-microservices-with-zio-and-kafka/) by Aleksandar Skrbic (February 2021)
+- [An Introduction to ZIO Kafka](https://www.ziverge.com/post/an-introduction-to-zio-kafka/) by Ziverge (April 2020)
+
+### Video
+
 - [Making ZIO-Kafka Safer and Faster in 2023](https://www.youtube.com/watch?v=MJoRwEyyVxM) by Erik van Oosten (November 2023)
 - [ZIO Kafka with Scala: A Tutorial](https://www.youtube.com/watch?v=ExFjjczwwHs) by Rock the JVM (August 2021)
-- [Streaming microservices with ZIO and Kafka](https://scalac.io/streaming-microservices-with-zio-and-kafka/) by Aleksandar Skrbic (February 2021)
 - [ZIO WORLD - ZIO Kafka](https://www.youtube.com/watch?v=GECv1ONieLw) by Aleksandar Skrbic (March 2020) — Aleksandar Skrbic presented ZIO Kafka, a critical library for the modern Scala developer, which hides some of the complexities of Kafka.
+
+### Example projects
+
+- [Kafka BigQuery Express](https://github.com/adevinta/kafka-bigquery-express/) by Adevinta (November 2024) A production system to copy data from Kafka to BigQuery, safely and cost-effectively.
+- [zio-kafka-showcase](https://github.com/ScalaConsultants/zio-kafka-showcase) by Jorge Vásquez, Example project that demonstrates how to build Kafka based microservices with Scala and ZIO
+- [zio-kafka-demo1](https://github.com/pramodShehan5/zio-kafka-demo1) (December 2022), example consumer and producer using zio-kafka 2.0.5
+- [zio-kafka-example-app](https://github.com/zivergetech/zio-kafka-example-app) by Ziverge (December 2020), example application using zio-kafka 0.8.0
 
 ## Adopters
 
