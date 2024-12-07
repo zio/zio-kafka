@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1733509636577,
+  "lastUpdate": 1733564224509,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -10314,6 +10314,90 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 568.06317282,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@users.noreply.github.com",
+            "name": "svroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4a0176f9b42cdfda81449195fdc195da809f435a",
+          "message": "Convert commitAsync callback handling to ZIO sooner (#1404)\n\nKafkaConsumer's `commitAsync` takes a callback, which we program against\r\nwith complicated followup code. This PR attempts to convert everything\r\nto ZIO's earlier on, making chaining followup effects easier to reason\r\nabout.\r\n\r\nAs this changes some functionality around locking and same / single\r\nthreads, here's a summary of what do we need to ensure:\r\n* We have an exclusive lock on the consumer when calling `commitAsync`.\r\nIn `Runloop.run` this is done using `ConsumerAccess`. In the rebalance\r\ncoordinator (while rebalancing) we already have the lock as we're\r\ncalling `poll()` so no need for extra locking.\r\n* The consumer is not used from more than one thread at the same time.\r\nFor use in `Runloop.run` we get this for free by guaranteeing exclusive\r\naccess. In the rebalance coordinator a `poll()` call is in the middle of\r\nbeing executed and we need to call `commitAsync` on the same thread as\r\nthe rebalance listener is invoked.\r\n\r\nAnything that is not calling commitAsync is free to run on any thread as\r\nexecuted by the default ZIO runtime.\r\n\r\n---------\r\n\r\nCo-authored-by: Erik van Oosten <e.vanoosten@grons.nl>",
+          "timestamp": "2024-12-07T10:19:07+01:00",
+          "tree_id": "d38fd8d6303fe5e1606ab16cc839b22ad0f5841c",
+          "url": "https://github.com/zio/zio-kafka/commit/4a0176f9b42cdfda81449195fdc195da809f435a"
+        },
+        "date": 1733564222522,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
+            "value": 17.518005565529254,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
+            "value": 13.378731001023699,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 588.6155519000002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 590.46289604,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 145.70628543714287,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 385.85365128000007,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 541.82316086,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 535.8322105,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 559.98366222,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 566.9750527199999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
