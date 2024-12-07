@@ -1,13 +1,7 @@
 package zio.kafka.consumer.internal
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.RebalanceCoordinator.{
-  EndOffsetCommitPending,
-  EndOffsetCommitted,
-  EndOffsetNotCommitted,
-  RebalanceEvent,
-  StreamCompletionStatus
-}
+import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.{ ConsumerSettings, RebalanceListener }
 import zio.stream.ZStream
 import zio.{ durationInt, Chunk, Duration, Ref, Task, UIO, ZIO }
@@ -164,12 +158,7 @@ private[internal] class RebalanceCoordinator(
           // Even if there is nothing to commit, continue to drive communication with the broker
           // so that commits can complete and the streams can make progress, by setting
           // executeOnEmpty = true
-          .tap { _ =>
-            committer.processQueuedCommits(
-              (offsets, callback) => ZIO.attempt(consumer.commitAsync(offsets, callback)),
-              executeOnEmpty = true
-            )
-          }
+          .tap(_ => committer.processQueuedCommits(consumer, executeOnEmpty = true))
           .takeWhile(_ => java.lang.System.nanoTime() <= deadline)
           .mapZIO(_ => endingStreamsCompletedAndCommitsExist)
           .takeUntil(completed => completed)

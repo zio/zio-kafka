@@ -9,9 +9,9 @@ import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.{ Finalization, Rebalance }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
+import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
@@ -206,10 +206,11 @@ private[consumer] final class Runloop private (
 
   private def handlePoll(state: State): Task[State] = {
     for {
-      partitionsToFetch <- settings.fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
+      partitionsToFetch  <- settings.fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
+      pendingCommitCount <- committer.pendingCommitCount
       _ <- ZIO.logDebug(
              s"Starting poll with ${state.pendingRequests.size} pending requests and" +
-               s" ${committer.pendingCommitCount} pending commits," +
+               s" ${pendingCommitCount} pending commits," +
                s" resuming $partitionsToFetch partitions"
            )
       _ <- currentStateRef.set(state)
@@ -482,6 +483,8 @@ private[consumer] final class Runloop private (
    *     - Poll continuously when there are (still) unfulfilled requests or pending commits
    *     - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *       initialization and rebalancing
+   *
+   * Note that this method is executed on a dedicated single-thread Executor
    */
   private def run(initialState: State): ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
@@ -492,11 +495,7 @@ private[consumer] final class Runloop private (
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
           _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
-          _ <- consumer.runloopAccess { consumer =>
-                 committer.processQueuedCommits((offsets, callback) =>
-                   ZIO.attempt(consumer.commitAsync(offsets, callback))
-                 )
-               }
+          _ <- consumer.runloopAccess(committer.processQueuedCommits(_))
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
           stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
 
@@ -594,8 +593,7 @@ object Runloop {
                        settings.commitTimeout,
                        diagnostics,
                        metrics,
-                       commandQueue.offer(RunloopCommand.CommitAvailable).unit,
-                       sameThreadRuntime
+                       commandQueue.offer(RunloopCommand.CommitAvailable).unit
                      )
       rebalanceCoordinator = new RebalanceCoordinator(
                                lastRebalanceEvent,
@@ -624,6 +622,7 @@ object Runloop {
       _ <- runloop.observeRunloopMetrics(settings.runloopMetricsSchedule).forkScoped
 
       // Run the entire loop on a dedicated thread to avoid executor shifts
+
       executor <- RunloopExecutor.newInstance
       fiber    <- ZIO.onExecutor(executor)(runloop.run(initialState)).forkScoped
       waitForRunloopStop = fiber.join.orDie

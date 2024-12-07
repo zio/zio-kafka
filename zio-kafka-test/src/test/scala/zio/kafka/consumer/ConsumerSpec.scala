@@ -1591,6 +1591,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       .provideSome[Scope & Kafka](producer)
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ timeout(2.minutes)
+      ) @@ withLiveClock @@ timeout(2.minutes) @@ TestAspect.timed
 
 }
