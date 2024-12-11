@@ -139,13 +139,14 @@ object MainApp extends ZIOAppDefault {
 
 ### Video
 
+- [Optimizing Data Transfer Kafka to BQ: let's use Scala to make it custom](https://www.youtube.com/watch?v=McnC2UU-RIE) by Dario Amorosi, Adevinta (November 2024)
 - [Making ZIO-Kafka Safer and Faster in 2023](https://www.youtube.com/watch?v=MJoRwEyyVxM) by Erik van Oosten (November 2023)
 - [ZIO Kafka with Scala: A Tutorial](https://www.youtube.com/watch?v=ExFjjczwwHs) by Rock the JVM (August 2021)
 - [ZIO WORLD - ZIO Kafka](https://www.youtube.com/watch?v=GECv1ONieLw) by Aleksandar Skrbic (March 2020) — Aleksandar Skrbic presented ZIO Kafka, a critical library for the modern Scala developer, which hides some of the complexities of Kafka.
 
 ### Example projects
 
-- [Kafka BigQuery Express](https://github.com/adevinta/kafka-bigquery-express/) by Adevinta (November 2024) A production system to copy data from Kafka to BigQuery, safely and cost-effectively.
+- [Kafka BigQuery Express](https://github.com/adevinta/kafka-bigquery-express/) by Adevinta (November 2024) A production system to copy data from Kafka to BigQuery, safely and cost-effectively. (See also the video "Optimizing Data Transfer...".)
 - [zio-kafka-showcase](https://github.com/ScalaConsultants/zio-kafka-showcase) by Jorge Vásquez, Example project that demonstrates how to build Kafka based microservices with Scala and ZIO
 - [zio-kafka-demo1](https://github.com/pramodShehan5/zio-kafka-demo1) (December 2022), example consumer and producer using zio-kafka 2.0.5
 - [zio-kafka-example-app](https://github.com/zivergetech/zio-kafka-example-app) by Ziverge (December 2020), example application using zio-kafka 0.8.0
