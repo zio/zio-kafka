@@ -192,7 +192,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           record1 <- ZIO.scoped {
                        withConsumer(Topics(Set(topic1)), settings).flatMap { consumer =>
                          for {
-                           messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
+                           messages <- consumer.take.flatMap(_.exit).mapError(_.getOrElse(new NoSuchElementException))
                            record = messages
                                       .filter(rec => rec.record.key == key1 && rec.record.value == value1)
                          } yield record
@@ -201,7 +201,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           record2 <- ZIO.scoped {
                        withConsumer(Topics(Set(topic2)), settings).flatMap { consumer =>
                          for {
-                           messages <- consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
+                           messages <- consumer.take.flatMap(_.exit).mapError(_.getOrElse(new NoSuchElementException))
                            record = messages.filter(rec => rec.record.key == key2 && rec.record.value == value2)
                          } yield record
                        }
@@ -244,7 +244,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           settings <- consumerSettings(client, Some(group))
           recordsConsumed <- ZIO.scoped {
                                withConsumer(Topics(Set(standardTopic)), settings).flatMap { consumer =>
-                                 consumer.take.flatMap(_.done).mapError(_.getOrElse(new NoSuchElementException))
+                                 consumer.take.flatMap(_.exit).mapError(_.getOrElse(new NoSuchElementException))
                                }
                              }
         } yield assertTrue(
@@ -294,7 +294,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                              withConsumerInt(Topics(Set(topic)), settings).flatMap { consumer =>
                                for {
                                  messages <- consumer.take
-                                               .flatMap(_.done)
+                                               .flatMap(_.exit)
                                                .mapError(_.getOrElse(new NoSuchElementException))
                                  record = messages.filter(rec => rec.record.key == "bob")
                                } yield record
@@ -334,7 +334,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                              withConsumerInt(Topics(Set(topic)), settings).flatMap { consumer =>
                                for {
                                  messages <- consumer.take
-                                               .flatMap(_.done)
+                                               .flatMap(_.exit)
                                                .mapError(_.getOrElse(new NoSuchElementException))
                                  record = messages.filter(rec => rec.record.key == "bob")
                                } yield record
@@ -369,7 +369,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                              withConsumerInt(Topics(Set(topic)), settings).flatMap { consumer =>
                                for {
                                  messages <- consumer.take
-                                               .flatMap(_.done)
+                                               .flatMap(_.exit)
                                                .mapError(_.getOrElse(new NoSuchElementException))
                                } yield messages
                              }
@@ -422,7 +422,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                                 withConsumerInt(Topics(Set(topic)), settings).flatMap { consumer =>
                                                   for {
                                                     messages <- consumer.take
-                                                                  .flatMap(_.done)
+                                                                  .flatMap(_.exit)
                                                                   .mapError(_.getOrElse(new NoSuchElementException))
                                                     record = messages.filter(rec => rec.record.key == "no one")
                                                   } yield record
@@ -463,7 +463,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                                 withConsumerInt(Topics(Set(topic)), settings).flatMap { consumer =>
                                                   for {
                                                     messages <- consumer.take
-                                                                  .flatMap(_.done)
+                                                                  .flatMap(_.exit)
                                                                   .mapError(_.getOrElse(new NoSuchElementException))
                                                     record = messages.filter(rec => rec.record.key == "no one")
                                                   } yield record
@@ -509,7 +509,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                              withConsumerInt(Topics(Set(topic)), settings).flatMap { consumer =>
                                for {
                                  messages <- consumer.take
-                                               .flatMap(_.done)
+                                               .flatMap(_.exit)
                                                .mapError(_.getOrElse(new NoSuchElementException))
                                  record = messages.filter(rec => rec.record.key == "no one")
                                } yield record
@@ -540,7 +540,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       .flatMap { q =>
                         val readAliceAccount = for {
                           messages <- q.take
-                                        .flatMap(_.done)
+                                        .flatMap(_.exit)
                                         .mapError(_.getOrElse(new NoSuchElementException))
                         } yield messages.head
                         for {
@@ -587,7 +587,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                      .flatMap { q =>
                                        val readAliceAccount = for {
                                          messages <- q.take
-                                                       .flatMap(_.done)
+                                                       .flatMap(_.exit)
                                                        .mapError(_.getOrElse(new NoSuchElementException))
                                        } yield messages.head
                                        for {
