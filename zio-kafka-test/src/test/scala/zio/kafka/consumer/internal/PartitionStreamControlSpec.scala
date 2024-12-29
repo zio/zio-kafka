@@ -177,6 +177,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
             Array[Byte]()
           ),
           commitHandle = _ => ZIO.unit,
+          markCommittedInTransactionHandle = _ => ZIO.unit,
           consumerGroupMetadata = None
         )
       )

@@ -1234,19 +1234,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             val allMessages                                       = (1 to messageCount).map(i => s"$i" -> f"msg$i%06d")
             val (messagesBeforeRebalance, messagesAfterRebalance) = allMessages.splitAt(messageCount / 2)
 
-            def transactionalRebalanceListener(streamCompleteOnRebalanceRef: Ref[Option[Promise[Nothing, Unit]]]) =
-              RebalanceListener(
-                onAssigned = _ => ZIO.unit,
-                onRevoked = _ =>
-                  streamCompleteOnRebalanceRef.get.flatMap {
-                    case Some(p) =>
-                      ZIO.logDebug("onRevoked, awaiting stream completion") *>
-                        p.await.timeoutFail(new InterruptedException("Timed out waiting stream to complete"))(1.minute)
-                    case None => ZIO.unit
-                  },
-                onLost = _ => ZIO.logDebug("Lost some partitions")
-              )
-
             def makeCopyingTransactionalConsumer(
               name: String,
               consumerGroupId: String,
@@ -1263,14 +1250,11 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                          .flatMap(consumed => ZIO.logDebug(s"Consumed so far: $consumed"))
                          .repeat(Schedule.fixed(1.second))
                          .fork
-                  streamCompleteOnRebalanceRef <- Ref.make[Option[Promise[Nothing, Unit]]](None)
                   tConsumer <-
                     Consumer
                       .partitionedAssignmentStream(Subscription.topics(fromTopic), Serde.string, Serde.string)
                       .mapZIO { assignedPartitions =>
                         for {
-                          p <- Promise.make[Nothing, Unit]
-                          _ <- streamCompleteOnRebalanceRef.set(Some(p))
                           _ <- ZIO.logDebug(s"${assignedPartitions.size} partitions assigned")
                           _ <- consumerCreated.succeed(())
                           partitionStreams = assignedPartitions.map(_._2)
@@ -1293,8 +1277,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                  .runDrain
                                  .ensuring {
                                    for {
-                                     _ <- streamCompleteOnRebalanceRef.set(None)
-                                     _ <- p.succeed(())
                                      c <- consumedMessagesCounter.get
                                      _ <- ZIO.logDebug(s"Consumed $c messages")
                                    } yield ()
@@ -1306,13 +1288,12 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         transactionalConsumer(
                           clientId,
                           consumerGroupId,
-                          restartStreamOnRebalancing = true,
+                          rebalanceSafeCommits = true,
                           properties = Map(
                             ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG ->
                               implicitly[ClassTag[T]].runtimeClass.getName,
                             ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200"
-                          ),
-                          rebalanceListener = transactionalRebalanceListener(streamCompleteOnRebalanceRef)
+                          )
                         )
                       )
                       .tapError(e => ZIO.logError(s"Error: $e")) <* ZIO.logDebug("Done")

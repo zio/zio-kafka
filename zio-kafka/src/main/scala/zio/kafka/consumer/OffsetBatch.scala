@@ -7,6 +7,7 @@ import zio.{ RIO, Schedule, Task, ZIO }
 sealed trait OffsetBatch {
   def offsets: Map[TopicPartition, OffsetAndMetadata]
   def commit: Task[Unit]
+  private[kafka] def markCommittedInTransaction: Task[Unit]
   def add(offset: Offset): OffsetBatch
   @deprecated("Use add(Offset) instead", "2.1.4")
   def merge(offset: Offset): OffsetBatch
@@ -30,9 +31,11 @@ object OffsetBatch {
 private final case class OffsetBatchImpl(
   offsets: Map[TopicPartition, OffsetAndMetadata],
   commitHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
+  markCommittedInTransactionHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
   consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) extends OffsetBatch {
-  override def commit: Task[Unit] = commitHandle(offsets)
+  override def commit: Task[Unit]                        = commitHandle(offsets)
+  override private[kafka] def markCommittedInTransaction = markCommittedInTransactionHandle(offsets)
 
   override def add(offset: Offset): OffsetBatch = {
     val maxOffsetAndMetadata = offsets.get(offset.topicPartition) match {
@@ -65,6 +68,7 @@ private final case class OffsetBatchImpl(
 case object EmptyOffsetBatch extends OffsetBatch {
   override val offsets: Map[TopicPartition, OffsetAndMetadata]      = Map.empty
   override val commit: Task[Unit]                                   = ZIO.unit
+  override val markCommittedInTransaction: Task[Unit]               = ZIO.unit
   override def add(offset: Offset): OffsetBatch                     = offset.batch
   override def merge(offset: Offset): OffsetBatch                   = add(offset)
   override def merge(offsets: OffsetBatch): OffsetBatch             = offsets

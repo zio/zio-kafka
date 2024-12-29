@@ -48,7 +48,9 @@ object TransactionalProducer {
           }
         }
 
-      sendOffsetsToTransaction.when(offsetBatch.offsets.nonEmpty) *> ZIO.attemptBlocking(live.p.commitTransaction())
+      sendOffsetsToTransaction.when(offsetBatch.offsets.nonEmpty) *>
+        ZIO.attemptBlocking(live.p.commitTransaction()) *>
+        offsetBatch.markCommittedInTransaction
     }
 
     private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): UIO[Unit] =

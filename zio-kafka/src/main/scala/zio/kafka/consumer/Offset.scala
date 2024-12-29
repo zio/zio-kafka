@@ -46,6 +46,7 @@ private final case class OffsetImpl(
   partition: Int,
   offset: Long,
   commitHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
+  markCommittedInTransactionHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
   consumerGroupMetadata: Option[ConsumerGroupMetadata],
   metadata: Option[String] = None
 ) extends Offset {
@@ -53,6 +54,7 @@ private final case class OffsetImpl(
   def batch: OffsetBatch = OffsetBatchImpl(
     Map(topicPartition -> asJavaOffsetAndMetadata),
     commitHandle,
+    markCommittedInTransactionHandle,
     consumerGroupMetadata
   )
   def withMetadata(metadata: String): OffsetImpl = copy(metadata = Some(metadata))

@@ -12,6 +12,7 @@ import scala.collection.mutable
 
 private[internal] trait Committer {
   val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]
+  val markCommittedInTransaction: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]
 
   /**
    * Takes commits from the queue, commits them and adds them to pending commits

@@ -199,6 +199,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
             Array[Byte]()
           ),
           commitHandle = _ => ZIO.unit,
+          markCommittedInTransactionHandle = _ => ZIO.unit,
           consumerGroupMetadata = None
         )
       )
@@ -206,7 +207,8 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
 }
 
 abstract class MockCommitter extends Committer {
-  override val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] = _ => ZIO.unit
+  override val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]                     = _ => ZIO.unit
+  override val markCommittedInTransaction: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] = _ => ZIO.unit
 
   override def processQueuedCommits(consumer: ByteArrayKafkaConsumer, executeOnEmpty: Boolean): Task[Unit] = ZIO.unit
 
