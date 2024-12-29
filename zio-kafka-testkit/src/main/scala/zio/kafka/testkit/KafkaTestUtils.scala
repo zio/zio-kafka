@@ -78,6 +78,8 @@ object KafkaTestUtils {
   def makeTransactionalProducer(transactionalId: String): ZIO[Scope & Kafka, Throwable, TransactionalProducer] =
     transactionalProducerSettings(transactionalId).flatMap(TransactionalProducer.make)
 
+  def FIX_METHOD: []**
+
   /**
    * `TransactionalProducer` layer for use in tests.
    *
@@ -87,7 +89,7 @@ object KafkaTestUtils {
    * ℹ️ Instead of using a layer, consider using [[KafkaTestUtils.makeTransactionalProducer]] to directly get a
    * producer.
    */
-  val transactionalProducer: ZLayer[Kafka, Throwable, TransactionalProducer] =
+  val transactionalProducer: ZLayer[Kafka with Consumer, Throwable, TransactionalProducer] =
     transactionalProducer("test-transaction")
 
   /**
@@ -96,7 +98,7 @@ object KafkaTestUtils {
    * ℹ️ Instead of using a layer, consider using [[KafkaTestUtils.makeTransactionalProducer]] to directly get a
    * producer.
    */
-  def transactionalProducer(transactionalId: String): ZLayer[Kafka, Throwable, TransactionalProducer] =
+  def transactionalProducer(transactionalId: String): ZLayer[Kafka with Consumer, Throwable, TransactionalProducer] =
     ZLayer.scoped(makeTransactionalProducer(transactionalId))
 
   // -----------------------------------------------------------------------------------------

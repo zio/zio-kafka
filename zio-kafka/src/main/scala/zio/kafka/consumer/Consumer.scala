@@ -164,6 +164,9 @@ trait Consumer {
    * This method is useful when you want to use rebalance-safe-commits, but you are not committing to the Kafka brokers,
    * but to some external system, for example a relational database.
    *
+   * When this consumer is used in combination with a [[zio.kafka.producer.TransactionalProducer]], the transactional
+   * producer calls this method when the transaction is committed.
+   *
    * See also [[zio.kafka.consumer.ConsumerSettings.withRebalanceSafeCommits]].
    */
   def registerExternalCommits(offsetBatch: OffsetBatch): Task[Unit]
