@@ -53,11 +53,11 @@ object KafkaTestUtils {
    * Note: to run multiple tests in parallel, you need to use different transactional ids via
    * `transactionalProducer(transactionalId)`.
    */
-  val transactionalProducer: ZLayer[Kafka, Throwable, TransactionalProducer] =
+  val transactionalProducer: ZLayer[Kafka with Consumer, Throwable, TransactionalProducer] =
     transactionalProducer("test-transaction")
 
-  def transactionalProducer(transactionalId: String): ZLayer[Kafka, Throwable, TransactionalProducer] =
-    ZLayer.makeSome[Kafka, TransactionalProducer](
+  def transactionalProducer(transactionalId: String): ZLayer[Kafka with Consumer, Throwable, TransactionalProducer] =
+    ZLayer.makeSome[Kafka with Consumer, TransactionalProducer](
       ZLayer(transactionalProducerSettings(transactionalId)),
       TransactionalProducer.live
     )
