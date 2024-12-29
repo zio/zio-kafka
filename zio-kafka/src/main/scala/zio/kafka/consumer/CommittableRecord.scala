@@ -8,6 +8,7 @@ import zio.{ RIO, Task }
 final case class CommittableRecord[K, V](
   record: ConsumerRecord[K, V],
   private val commitHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
+  private val markCommittedInTransactionHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
   private val consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) {
   def deserializeWith[R, K1, V1](
@@ -44,6 +45,7 @@ final case class CommittableRecord[K, V](
       partition = record.partition(),
       offset = record.offset(),
       commitHandle = commitHandle,
+      markCommittedInTransactionHandle = markCommittedInTransactionHandle,
       consumerGroupMetadata = consumerGroupMetadata,
       metadata = None
     )
@@ -53,11 +55,13 @@ object CommittableRecord {
   def apply[K, V](
     record: ConsumerRecord[K, V],
     commitHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
+    markCommittedInTransactionHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
     consumerGroupMetadata: Option[ConsumerGroupMetadata]
   ): CommittableRecord[K, V] =
     new CommittableRecord(
       record = record,
       commitHandle = commitHandle,
+      markCommittedInTransactionHandle = markCommittedInTransactionHandle,
       consumerGroupMetadata = consumerGroupMetadata
     )
 }
