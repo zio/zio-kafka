@@ -7,13 +7,13 @@ import org.apache.kafka.common.errors.InvalidGroupIdException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio._
-import zio.kafka.consumer.OffsetBatch
+import zio.kafka.consumer.{ Consumer, OffsetBatch }
 
 import java.util
 import scala.jdk.CollectionConverters._
 
 trait TransactionalProducer {
-  def createTransaction: ZIO[Scope, Throwable, Transaction]
+  def createTransaction: ZIO[Scope with Consumer, Throwable, Transaction]
 }
 
 object TransactionalProducer {
@@ -26,7 +26,7 @@ object TransactionalProducer {
   ) extends TransactionalProducer {
     private val abortTransaction: Task[Unit] = ZIO.attemptBlocking(live.p.abortTransaction())
 
-    private def commitTransactionWithOffsets(offsetBatch: OffsetBatch): Task[Unit] = {
+    private def commitTransactionWithOffsets(offsetBatch: OffsetBatch): ZIO[Consumer, Throwable, Unit] = {
       val sendOffsetsToTransaction: Task[Unit] =
         ZIO.suspend {
           @inline def invalidGroupIdException: IO[InvalidGroupIdException, Nothing] =
@@ -50,10 +50,10 @@ object TransactionalProducer {
 
       sendOffsetsToTransaction.when(offsetBatch.offsets.nonEmpty) *>
         ZIO.attemptBlocking(live.p.commitTransaction()) *>
-        offsetBatch.markCommittedInTransaction
+        ZIO.serviceWithZIO[Consumer](_.registerOffsetsCommittedInTransaction(offsetBatch)).unit
     }
 
-    private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): UIO[Unit] =
+    private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): ZIO[Consumer, Nothing, Unit] =
       exit match {
         case Exit.Success(_) =>
           transaction.offsetBatchRef.get
@@ -62,7 +62,7 @@ object TransactionalProducer {
         case Exit.Failure(_)                           => abortTransaction.retryN(5).orDie
       }
 
-    override def createTransaction: ZIO[Scope, Throwable, Transaction] =
+    override def createTransaction: ZIO[Scope with Consumer, Throwable, Transaction] =
       semaphore.withPermitScoped *> {
         ZIO.acquireReleaseExit {
           for {
@@ -74,7 +74,7 @@ object TransactionalProducer {
       }
   }
 
-  def createTransaction: ZIO[TransactionalProducer & Scope, Throwable, Transaction] =
+  def createTransaction: ZIO[TransactionalProducer & Scope & Consumer, Throwable, Transaction] =
     ZIO.service[TransactionalProducer].flatMap(_.createTransaction)
 
   val live: RLayer[TransactionalProducerSettings, TransactionalProducer] =
