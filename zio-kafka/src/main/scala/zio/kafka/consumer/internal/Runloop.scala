@@ -143,7 +143,6 @@ private[consumer] final class Runloop private (
                      CommittableRecord[Array[Byte], Array[Byte]](
                        record = consumerRecord,
                        commitHandle = committer.commit,
-                       markCommittedInTransactionHandle = committer.markCommittedInTransaction,
                        consumerGroupMetadata = consumerGroupMetadata
                      )
                  }

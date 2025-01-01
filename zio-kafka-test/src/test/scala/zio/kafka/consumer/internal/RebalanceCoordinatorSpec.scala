@@ -199,7 +199,6 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
             Array[Byte]()
           ),
           commitHandle = _ => ZIO.unit,
-          markCommittedInTransactionHandle = _ => ZIO.unit,
           consumerGroupMetadata = None
         )
       )
