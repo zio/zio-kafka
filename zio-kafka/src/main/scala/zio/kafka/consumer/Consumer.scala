@@ -158,6 +158,11 @@ trait Consumer {
    * Expose internal consumer metrics
    */
   def metrics: Task[Map[MetricName, Metric]]
+
+  /**
+   * Used internally by the [[zio.kafka.producer.TransactionalProducer]]
+   */
+  def registerOffsetsCommittedInTransaction(offsetBatch: OffsetBatch): Task[Unit]
 }
 
 object Consumer {
@@ -603,5 +608,9 @@ private[consumer] final class ConsumerLive private[consumer] (
 
   override def metrics: Task[Map[MetricName, Metric]] =
     consumer.withConsumer(_.metrics().asScala.toMap)
+
+  override def registerOffsetsCommittedInTransaction(
+    offsetBatch: OffsetBatch
+  ): Task[Unit] = runloopAccess.withRunloopZIO(true)(runloop => runloop.registerOffsetsCommittedInTransaction(offsetBatch))
 
 }

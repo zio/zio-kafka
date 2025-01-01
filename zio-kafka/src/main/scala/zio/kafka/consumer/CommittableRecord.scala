@@ -45,7 +45,6 @@ final case class CommittableRecord[K, V](
       partition = record.partition(),
       offset = record.offset(),
       commitHandle = commitHandle,
-      markCommittedInTransactionHandle = markCommittedInTransactionHandle,
       consumerGroupMetadata = consumerGroupMetadata,
       metadata = None
     )
