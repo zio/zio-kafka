@@ -1252,36 +1252,23 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                          .fork
                   tConsumer <-
                     Consumer
-                      .partitionedAssignmentStream(Subscription.topics(fromTopic), Serde.string, Serde.string)
-                      .mapZIO { assignedPartitions =>
-                        for {
-                          _ <- ZIO.logDebug(s"${assignedPartitions.size} partitions assigned")
-                          _ <- consumerCreated.succeed(())
-                          partitionStreams = assignedPartitions.map(_._2)
-                          s <- ZStream
-                                 .mergeAllUnbounded(64)(partitionStreams: _*)
-                                 .mapChunksZIO { records =>
-                                   ZIO.scoped {
-                                     for {
-                                       t <- tProducer.createTransaction
-                                       _ <- t.produceChunkBatch(
-                                              records.map(r => new ProducerRecord(toTopic, r.key, r.value)),
-                                              Serde.string,
-                                              Serde.string,
-                                              OffsetBatch(records.map(_.offset))
-                                            )
-                                       _ <- consumedMessagesCounter.update(_ + records.size)
-                                     } yield Chunk.empty
-                                   }.uninterruptible
-                                 }
-                                 .runDrain
-                                 .ensuring {
-                                   for {
-                                     c <- consumedMessagesCounter.get
-                                     _ <- ZIO.logDebug(s"Consumed $c messages")
-                                   } yield ()
-                                 }
-                        } yield s
+                      .partitionedStream(Subscription.topics(fromTopic), Serde.string, Serde.string)
+                      .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
+                        ZStream.fromZIO(consumerCreated.succeed(())) *>
+                          partitionStream.mapChunksZIO { records =>
+                            ZIO.scoped {
+                              for {
+                                t <- tProducer.createTransaction
+                                _ <- t.produceChunkBatch(
+                                       records.map(r => new ProducerRecord(toTopic, r.key, r.value)),
+                                       Serde.string,
+                                       Serde.string,
+                                       OffsetBatch(records.map(_.offset))
+                                     )
+                                _ <- consumedMessagesCounter.update(_ + records.size)
+                              } yield Chunk.empty
+                            }
+                          }
                       }
                       .runDrain
                       .provideSome[Kafka](
