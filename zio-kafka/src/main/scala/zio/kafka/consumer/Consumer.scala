@@ -611,6 +611,7 @@ private[consumer] final class ConsumerLive private[consumer] (
 
   override def registerOffsetsCommittedInTransaction(
     offsetBatch: OffsetBatch
-  ): Task[Unit] = runloopAccess.withRunloopZIO(true)(runloop => runloop.registerOffsetsCommittedInTransaction(offsetBatch))
+  ): Task[Unit] =
+    runloopAccess.withRunloopZIO(true)(runloop => runloop.registerOffsetsCommittedInTransaction(offsetBatch))
 
 }
