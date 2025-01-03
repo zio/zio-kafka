@@ -31,7 +31,7 @@ private[consumer] final class RunloopAccess private (
   diagnostics: Diagnostics
 ) {
 
-  private def withRunloopZIO[E](
+  def withRunloopZIO[E](
     requireRunning: Boolean
   )(whenRunning: Runloop => IO[E, Unit]): IO[E, Unit] =
     runloopStateRef.updateSomeAndGetZIO {

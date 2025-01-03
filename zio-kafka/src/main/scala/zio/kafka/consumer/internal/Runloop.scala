@@ -532,6 +532,9 @@ private[consumer] final class Runloop private (
       .repeat(runloopMetricsSchedule)
       .unit
   }
+
+  def registerOffsetsCommittedInTransaction(offsetBatch: OffsetBatch): Task[Unit] =
+    committer.markCommittedInTransaction(offsetBatch.offsets)
 }
 
 object Runloop {
