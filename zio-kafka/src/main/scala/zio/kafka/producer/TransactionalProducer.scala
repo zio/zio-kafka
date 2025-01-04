@@ -13,7 +13,7 @@ import java.util
 import scala.jdk.CollectionConverters._
 
 trait TransactionalProducer {
-  def createTransaction: ZIO[Scope with Consumer, Throwable, Transaction]
+  def createTransaction: ZIO[Scope, Throwable, Transaction]
 }
 
 object TransactionalProducer {
@@ -22,11 +22,12 @@ object TransactionalProducer {
 
   private final class LiveTransactionalProducer(
     live: ProducerLive,
-    semaphore: Semaphore
+    semaphore: Semaphore,
+    consumer: Consumer
   ) extends TransactionalProducer {
     private val abortTransaction: Task[Unit] = ZIO.attemptBlocking(live.p.abortTransaction())
 
-    private def commitTransactionWithOffsets(offsetBatch: OffsetBatch): ZIO[Consumer, Throwable, Unit] = {
+    private def commitTransactionWithOffsets(offsetBatch: OffsetBatch): ZIO[Any, Throwable, Unit] = {
       val sendOffsetsToTransaction: Task[Unit] =
         ZIO.suspend {
           @inline def invalidGroupIdException: IO[InvalidGroupIdException, Nothing] =
@@ -50,10 +51,10 @@ object TransactionalProducer {
 
       sendOffsetsToTransaction.when(offsetBatch.offsets.nonEmpty) *>
         ZIO.attemptBlocking(live.p.commitTransaction()) *>
-        ZIO.serviceWithZIO[Consumer](_.registerOffsetsCommittedInTransaction(offsetBatch)).unit
+        consumer.registerOffsetsCommittedInTransaction(offsetBatch).unit
     }
 
-    private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): ZIO[Consumer, Nothing, Unit] =
+    private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): ZIO[Any, Nothing, Unit] =
       exit match {
         case Exit.Success(_) =>
           transaction.offsetBatchRef.get
@@ -62,7 +63,7 @@ object TransactionalProducer {
         case Exit.Failure(_)                           => abortTransaction.retryN(5).orDie
       }
 
-    override def createTransaction: ZIO[Scope with Consumer, Throwable, Transaction] =
+    override def createTransaction: ZIO[Scope, Throwable, Transaction] =
       semaphore.withPermitScoped *> {
         ZIO.acquireReleaseExit {
           for {
@@ -74,10 +75,10 @@ object TransactionalProducer {
       }
   }
 
-  def createTransaction: ZIO[TransactionalProducer & Scope & Consumer, Throwable, Transaction] =
+  def createTransaction: ZIO[TransactionalProducer & Scope, Throwable, Transaction] =
     ZIO.service[TransactionalProducer].flatMap(_.createTransaction)
 
-  val live: RLayer[TransactionalProducerSettings, TransactionalProducer] =
+  val live: RLayer[TransactionalProducerSettings with Consumer, TransactionalProducer] =
     ZLayer.scoped {
       for {
         settings <- ZIO.service[TransactionalProducerSettings]
@@ -85,7 +86,7 @@ object TransactionalProducer {
       } yield producer
     }
 
-  def make(settings: TransactionalProducerSettings): ZIO[Scope, Throwable, TransactionalProducer] =
+  def make(settings: TransactionalProducerSettings): ZIO[Scope with Consumer, Throwable, TransactionalProducer] =
     for {
       rawProducer <- ZIO.acquireRelease(
                        ZIO.attempt(
@@ -104,6 +105,7 @@ object TransactionalProducer {
           settings.producerSettings.sendBufferSize
         )
       live = new ProducerLive(rawProducer, runtime, sendQueue)
-      _ <- ZIO.blocking(live.sendFromQueue).forkScoped
-    } yield new LiveTransactionalProducer(live, semaphore)
+      _        <- ZIO.blocking(live.sendFromQueue).forkScoped
+      consumer <- ZIO.service[Consumer]
+    } yield new LiveTransactionalProducer(live, semaphore, consumer)
 }

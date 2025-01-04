@@ -19,7 +19,7 @@ import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization.{
   SubscriptionFinalized
 }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.producer.{ Producer, TransactionalProducer }
+import zio.kafka.producer.{ Producer, TransactionalProducer, TransactionalProducerSettings }
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
 import zio.kafka.testkit.{ Kafka, KafkaRandom }
@@ -1240,62 +1240,66 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               clientId: String,
               fromTopic: String,
               toTopic: String,
-              tProducer: TransactionalProducer,
+              tProducerSettings: TransactionalProducerSettings,
               consumerCreated: Promise[Nothing, Unit]
             ): ZIO[Kafka, Throwable, Unit] =
               ZIO.logAnnotate("consumer", name) {
-                for {
-                  consumedMessagesCounter <- Ref.make(0)
-                  _ <- consumedMessagesCounter.get
-                         .flatMap(consumed => ZIO.logDebug(s"Consumed so far: $consumed"))
-                         .repeat(Schedule.fixed(1.second))
-                         .fork
-                  tConsumer <-
-                    Consumer
-                      .partitionedStream(Subscription.topics(fromTopic), Serde.string, Serde.string)
-                      .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
-                        ZStream.fromZIO(consumerCreated.succeed(())) *>
-                          partitionStream.mapChunksZIO { records =>
-                            ZIO.scoped {
-                              for {
-                                t <- tProducer.createTransaction
-                                _ <- t.produceChunkBatch(
-                                       records.map(r => new ProducerRecord(toTopic, r.key, r.value)),
-                                       Serde.string,
-                                       Serde.string,
-                                       OffsetBatch(records.map(_.offset))
-                                     )
-                                _ <- consumedMessagesCounter.update(_ + records.size)
-                              } yield Chunk.empty
+                ZIO.scoped {
+                  (for {
+                    consumedMessagesCounter <- Ref.make(0)
+                    _ <- consumedMessagesCounter.get
+                           .flatMap(consumed => ZIO.logDebug(s"Consumed so far: $consumed"))
+                           .repeat(Schedule.fixed(1.second))
+                           .fork
+
+                    tProducer <-
+                      TransactionalProducer.make(tProducerSettings)
+
+                    tConsumer <-
+                      Consumer
+                        .partitionedStream(Subscription.topics(fromTopic), Serde.string, Serde.string)
+                        .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
+                          ZStream.fromZIO(consumerCreated.succeed(())) *>
+                            partitionStream.mapChunksZIO { records =>
+                              ZIO.scoped {
+                                for {
+                                  t <- tProducer.createTransaction
+                                  _ <- t.produceChunkBatch(
+                                         records.map(r => new ProducerRecord(toTopic, r.key, r.value)),
+                                         Serde.string,
+                                         Serde.string,
+                                         OffsetBatch(records.map(_.offset))
+                                       )
+                                  _ <- consumedMessagesCounter.update(_ + records.size)
+                                } yield Chunk.empty
+                              }
                             }
-                          }
-                      }
-                      .runDrain
-                      .provideSome[Kafka](
-                        transactionalConsumer(
-                          clientId,
-                          consumerGroupId,
-                          rebalanceSafeCommits = true,
-                          properties = Map(
-                            ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG ->
-                              implicitly[ClassTag[T]].runtimeClass.getName,
-                            ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200"
-                          )
+                        }
+                        .runDrain
+                        .tapError(e => ZIO.logError(s"Error: $e")) <* ZIO.logDebug("Done")
+                  } yield tConsumer)
+                    .provideSome[Kafka & Scope](
+                      transactionalConsumer(
+                        clientId,
+                        consumerGroupId,
+                        rebalanceSafeCommits = true,
+                        properties = Map(
+                          ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG ->
+                            implicitly[ClassTag[T]].runtimeClass.getName,
+                          ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200"
                         )
                       )
-                      .tapError(e => ZIO.logError(s"Error: $e")) <* ZIO.logDebug("Done")
-                } yield tConsumer
+                    )
+                }
               }
 
             for {
               transactionalId   <- randomThing("transactional")
               tProducerSettings <- transactionalProducerSettings(transactionalId)
-              tProducer         <- TransactionalProducer.make(tProducerSettings)
-
-              topicA <- randomTopic
-              topicB <- randomTopic
-              _      <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topicA, partitions = partitionCount))
-              _      <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topicB, partitions = partitionCount))
+              topicA            <- randomTopic
+              topicB            <- randomTopic
+              _                 <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topicA, partitions = partitionCount))
+              _                 <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topicB, partitions = partitionCount))
 
               _ <- produceMany(topicA, messagesBeforeRebalance)
 
@@ -1310,7 +1314,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                            copier1ClientId,
                            topicA,
                            topicB,
-                           tProducer,
+                           tProducerSettings,
                            copier1Created
                          ).fork
               _ <- copier1Created.await
@@ -1324,7 +1328,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                            copier2ClientId,
                            topicA,
                            topicB,
-                           tProducer,
+                           tProducerSettings,
                            copier2Created
                          ).fork
               _ <- ZIO.logDebug("Waiting for copier 2 to start")
