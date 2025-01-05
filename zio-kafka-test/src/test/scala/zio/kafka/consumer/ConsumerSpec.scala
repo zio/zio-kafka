@@ -19,7 +19,7 @@ import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization.{
   SubscriptionFinalized
 }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
-import zio.kafka.producer.{ Producer, TransactionalProducer, TransactionalProducerSettings }
+import zio.kafka.producer.{ Producer, TransactionalProducer }
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
 import zio.kafka.testkit.{ Kafka, KafkaRandom }
@@ -1240,8 +1240,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               clientId: String,
               fromTopic: String,
               toTopic: String,
-              tProducerSettings: TransactionalProducerSettings,
-              consumerCreated: Promise[Nothing, Unit]
+              consumerCreated: Promise[Throwable, Unit]
             ): ZIO[Kafka, Throwable, Unit] =
               ZIO.logAnnotate("consumer", name) {
                 ZIO.scoped {
@@ -1252,6 +1251,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                            .repeat(Schedule.fixed(1.second))
                            .fork
 
+                    transactionalId   <- randomThing("transactional")
+                    tProducerSettings <- transactionalProducerSettings(transactionalId)
                     tProducer <-
                       TransactionalProducer.make(tProducerSettings)
 
@@ -1276,7 +1277,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                             }
                         }
                         .runDrain
-                        .tapError(e => ZIO.logError(s"Error: $e")) <* ZIO.logDebug("Done")
+                        .tapError(e => ZIO.logError(s"Error: $e") *> consumerCreated.fail(e)) <* ZIO.logDebug("Done")
                   } yield tConsumer)
                     .provideSome[Kafka & Scope](
                       transactionalConsumer(
@@ -1294,12 +1295,10 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               }
 
             for {
-              transactionalId   <- randomThing("transactional")
-              tProducerSettings <- transactionalProducerSettings(transactionalId)
-              topicA            <- randomTopic
-              topicB            <- randomTopic
-              _                 <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topicA, partitions = partitionCount))
-              _                 <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topicB, partitions = partitionCount))
+              topicA <- randomTopic
+              topicB <- randomTopic
+              _      <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topicA, partitions = partitionCount))
+              _      <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topicB, partitions = partitionCount))
 
               _ <- produceMany(topicA, messagesBeforeRebalance)
 
@@ -1307,28 +1306,26 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
               _ <- ZIO.logDebug("Starting copier 1")
               copier1ClientId = copyingGroup + "-1"
-              copier1Created <- Promise.make[Nothing, Unit]
+              copier1Created <- Promise.make[Throwable, Unit]
               copier1 <- makeCopyingTransactionalConsumer(
                            "1",
                            copyingGroup,
                            copier1ClientId,
                            topicA,
                            topicB,
-                           tProducerSettings,
                            copier1Created
                          ).fork
               _ <- copier1Created.await
 
               _ <- ZIO.logDebug("Starting copier 2")
               copier2ClientId = copyingGroup + "-2"
-              copier2Created <- Promise.make[Nothing, Unit]
+              copier2Created <- Promise.make[Throwable, Unit]
               copier2 <- makeCopyingTransactionalConsumer(
                            "2",
                            copyingGroup,
                            copier2ClientId,
                            topicA,
                            topicB,
-                           tProducerSettings,
                            copier2Created
                          ).fork
               _ <- ZIO.logDebug("Waiting for copier 2 to start")
