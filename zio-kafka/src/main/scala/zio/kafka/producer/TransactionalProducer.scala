@@ -100,7 +100,7 @@ object TransactionalProducer {
         Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
           settings.producerSettings.sendBufferSize
         )
-      live = new ProducerLive(rawProducer, runtime, sendQueue)
+      live = new ProducerLive(settings.producerSettings, rawProducer, runtime, sendQueue)
       _ <- ZIO.blocking(live.sendFromQueue).forkScoped
     } yield new LiveTransactionalProducer(live, semaphore)
 }
