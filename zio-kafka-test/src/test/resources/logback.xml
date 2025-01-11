@@ -16,6 +16,7 @@
 
     <!-- Some useful loggers to configure while debugging tests: -->
     <logger name="zio.kafka" level="INFO" />
+    <logger name="zio.kafka.consumer.internal.Runloop" level="INFO" />
     <logger name="zio.kafka.consumer.ConsumerSpec" level="INFO" />
 
     <root level="INFO">

@@ -28,6 +28,8 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.ExecutionException
 import scala.reflect.ClassTag
 
@@ -888,6 +890,116 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
       }: _*),
+      test("external commits are used when rebalanceSafeCommits is enabled") {
+
+        /*
+         * Outline of this test
+         *   - A producer generates some messages on every partition of a topic (2 partitions),
+         *   - Consumer 1 starts reading from the topic. It is the only consumer so it handles all partitions. This
+         *     consumer has `rebalanceSafeCommits` enabled. It does not commit offsets, but it does register external
+         *     commits (it does not actually commit anywhere). In addition we set `maxRebalanceDuration` to 20 seconds.
+         *   - After a few messages consumer 2 is started and a rebalance starts.
+         *   - We measure how long the rebalance takes.
+         *
+         * When the rebalance finishes immediately, we know that the external commits were used. If it finishes in 20
+         * seconds, we know that the external commits were not used.
+         */
+        val partitionCount = 2
+
+        def makeConsumer(
+          clientId: String,
+          groupId: String,
+          rebalanceSafeCommits: Boolean,
+          diagnostics: Diagnostics
+        ): ZIO[Scope with Kafka, Throwable, Consumer] =
+          for {
+            settings <- consumerSettings(
+                          clientId = clientId,
+                          groupId = Some(groupId),
+                          `max.poll.records` = 1,
+                          rebalanceSafeCommits = rebalanceSafeCommits,
+                          maxRebalanceDuration = 20.seconds,
+                          commitTimeout = 1.second
+                        )
+            consumer <- Consumer.make(settings, diagnostics)
+          } yield consumer
+
+        for {
+          topic <- randomTopic
+          subscription = Subscription.topics(topic)
+          clientId1 <- randomClient
+          clientId2 <- randomClient
+          groupId   <- randomGroup
+          _         <- ZIO.attempt(EmbeddedKafka.createCustomTopic(topic, partitions = partitionCount))
+          // Produce one message to all partitions, every 500 ms
+          _ <- ZStream
+                 .fromSchedule(Schedule.fixed(500.millis))
+                 .mapZIO { i =>
+                   ZIO.foreachDiscard(0 until partitionCount) { p =>
+                     produceMany(topic, p, Seq((s"key-$p-$i", s"msg-$p-$i")))
+                   }
+                 }
+                 .runDrain
+                 .fork
+          _                       <- ZIO.logDebug("Starting consumer 1")
+          rebalanceEndTimePromise <- Promise.make[Nothing, Instant]
+          c1Diagnostics = new Diagnostics {
+                            override def emit(event: => DiagnosticEvent): UIO[Unit] = event match {
+                              case r: DiagnosticEvent.Rebalance if r.assigned.size == 1 =>
+                                Clock.instant.flatMap(rebalanceEndTimePromise.succeed).unit
+                              case _ => ZIO.unit
+                            }
+                          }
+          c1        <- makeConsumer(clientId1, groupId, rebalanceSafeCommits = true, c1Diagnostics)
+          c1Started <- Promise.make[Nothing, Unit]
+          c1Offsets <- Ref.make(Chunk.empty[Offset])
+          _ <-
+            ZIO
+              .logAnnotate("consumer", "1") {
+                // When the stream ends, the topic subscription ends as well. Because of that the consumer
+                // shuts down and commits are no longer possible. Therefore, we signal the second consumer in
+                // such a way that it doesn't close the stream.
+                c1
+                  .plainStream(subscription, Serde.string, Serde.string)
+                  .tap { record =>
+                    for {
+                      _ <-
+                        ZIO.logDebug(
+                          s"Received record with offset ${record.partition}:${record.offset.offset} and key ${record.key}"
+                        )
+                      // Signal that consumer 2 can start when a record was seen for every partition.
+                      offsets <- c1Offsets.updateAndGet(_ :+ record.offset)
+                      _       <- c1Started.succeed(()).when(offsets.map(_.partition).toSet.size == partitionCount)
+                      // Register an external commit (which we're not actually doing 😀)
+                      _ <- c1.registerExternalCommits(OffsetBatch(record.offset)).unit
+                    } yield ()
+                  }
+                  .runDrain
+              }
+              .fork
+          _                  <- c1Started.await
+          _                  <- ZIO.logDebug("Starting consumer 2")
+          c2                 <- makeConsumer(clientId2, groupId, rebalanceSafeCommits = false, Diagnostics.NoOp)
+          rebalanceStartTime <- Clock.instant
+          _ <- ZIO
+                 .logAnnotate("consumer", "2") {
+                   c2
+                     .plainStream(subscription, Serde.string, Serde.string)
+                     .tap(msg => ZIO.logDebug(s"Received ${msg.key}"))
+                     .runDrain
+                 }
+                 .fork
+          _                <- ZIO.logDebug("Waiting for rebalance to end")
+          rebalanceEndTime <- rebalanceEndTimePromise.await
+          _                <- c1.stopConsumption *> c2.stopConsumption
+          rebalanceDuration = Duration
+                                .fromInterval(rebalanceStartTime, rebalanceEndTime)
+                                .truncatedTo(ChronoUnit.SECONDS)
+                                .getSeconds
+                                .toInt
+          _ <- ZIO.logError(s"Rebalance took $rebalanceDuration seconds")
+        } yield assertTrue(rebalanceDuration <= 2)
+      },
       test("partitions for topic doesn't fail if doesn't exist") {
         for {
           topic  <- randomTopic
