@@ -6,7 +6,7 @@ import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, Subscription }
+import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, OffsetBatch, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio._
 
@@ -31,7 +31,7 @@ private[consumer] final class RunloopAccess private (
   diagnostics: Diagnostics
 ) {
 
-  def withRunloopZIO[E](
+  private def withRunloopZIO[E](
     requireRunning: Boolean
   )(whenRunning: Runloop => IO[E, Unit]): IO[E, Unit] =
     runloopStateRef.updateSomeAndGetZIO {
@@ -65,6 +65,9 @@ private[consumer] final class RunloopAccess private (
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
     } yield stream
+
+  def registerExternalCommits(externallyCommittedOffsets: OffsetBatch): Task[Unit] =
+    withRunloopZIO(requireRunning = true)(_.registerExternalCommits(externallyCommittedOffsets))
 
 }
 

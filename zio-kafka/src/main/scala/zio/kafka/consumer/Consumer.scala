@@ -160,9 +160,14 @@ trait Consumer {
   def metrics: Task[Map[MetricName, Metric]]
 
   /**
-   * Used internally by the [[zio.kafka.producer.TransactionalProducer]]
+   * Register a commit that was done externally, that is, not by this consumer.
+   *
+   * This method is useful when you want to use rebalance-safe-commits, but you are not committing to the Kafka brokers,
+   * but to some external system, for example a relational database.
+   *
+   * See also [[zio.kafka.consumer.ConsumerSettings.withRebalanceSafeCommits]].
    */
-  def registerOffsetsCommittedInTransaction(offsetBatch: OffsetBatch): Task[Unit]
+  def registerExternalCommits(offsetBatch: OffsetBatch): Task[Unit]
 }
 
 object Consumer {
@@ -609,9 +614,7 @@ private[consumer] final class ConsumerLive private[consumer] (
   override def metrics: Task[Map[MetricName, Metric]] =
     consumer.withConsumer(_.metrics().asScala.toMap)
 
-  override def registerOffsetsCommittedInTransaction(
-    offsetBatch: OffsetBatch
-  ): Task[Unit] =
-    runloopAccess.withRunloopZIO(true)(runloop => runloop.registerOffsetsCommittedInTransaction(offsetBatch))
+  override def registerExternalCommits(externallyCommittedOffsets: OffsetBatch): Task[Unit] =
+    runloopAccess.registerExternalCommits(externallyCommittedOffsets)
 
 }

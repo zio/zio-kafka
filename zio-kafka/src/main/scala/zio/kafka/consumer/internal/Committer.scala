@@ -11,8 +11,12 @@ import java.lang.Math.max
 import scala.collection.mutable
 
 private[internal] trait Committer {
+
+  /** A function to commit offsets. */
   val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]
-  val markCommittedInTransaction: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]
+
+  /** A function to register offsets that have been committed externally. */
+  val registerExternalCommits: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]
 
   /**
    * Takes commits from the queue, commits them and adds them to pending commits

@@ -23,11 +23,14 @@ private[consumer] final class LiveCommitter(
   pendingCommits: Ref.Synchronized[Chunk[Commit]]
 ) extends Committer {
 
-  override val markCommittedInTransaction: Map[
+  override val registerExternalCommits: Map[
     TopicPartition,
     OffsetAndMetadata
   ] => Task[Unit] = offsets =>
-    committedOffsetsRef.modify(_.addCommits(Chunk(Commit(java.lang.System.nanoTime(), offsets, null)))).unit
+    committedOffsetsRef.modify {
+      // The continuation promise can be `null` because this commit is not actually handled by the consumer.
+      _.addCommits(Chunk(Commit(java.lang.System.nanoTime(), offsets, null)))
+    }.unit
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
   override val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] =
