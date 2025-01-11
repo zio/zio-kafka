@@ -1,6 +1,7 @@
 package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.common.IsolationLevel
 import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.fetch.{ FetchStrategy, QueueSizeBasedFetchStrategy }
@@ -329,6 +330,21 @@ final case class ConsumerSettings(
    */
   def withAuthErrorRetrySchedule(authErrorRetrySchedule: Schedule[Any, Throwable, Any]): ConsumerSettings =
     copy(authErrorRetrySchedule = authErrorRetrySchedule)
+
+  /**
+   * Controls how to consume records produced transactionally.
+   *
+   * @param readCommitted
+   *   when `true`, only consume records which have been committed, when `false`, consume all records, even records
+   *   which are part of an aborted transaction. Non-transactional records will be consumed unconditionally in either
+   *   mode.
+   *
+   * Note that Kafka's default is to read all records (`readCommitted = false`).
+   */
+  def withReadCommitted(readCommitted: Boolean = true): ConsumerSettings = {
+    val isolationLevel = if (readCommitted) IsolationLevel.READ_COMMITTED else IsolationLevel.READ_UNCOMMITTED
+    withProperty(ConsumerConfig.ISOLATION_LEVEL_CONFIG, isolationLevel.toString)
+  }
 
 }
 
