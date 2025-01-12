@@ -946,7 +946,10 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           c1Diagnostics = new Diagnostics {
                             override def emit(event: => DiagnosticEvent): UIO[Unit] = event match {
                               case r: DiagnosticEvent.Rebalance if r.assigned.size == 1 =>
-                                Clock.instant.flatMap(rebalanceEndTimePromise.succeed).unit
+                                ZIO.logDebug(s"Rebalance finished: $r") *>
+                                  Clock.instant.flatMap(rebalanceEndTimePromise.succeed).unit
+                              case r: DiagnosticEvent.Rebalance =>
+                                ZIO.logDebug(s"Rebalance finished: $r")
                               case _ => ZIO.unit
                             }
                           }
@@ -997,7 +1000,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                 .truncatedTo(ChronoUnit.SECONDS)
                                 .getSeconds
                                 .toInt
-          _ <- ZIO.logError(s"Rebalance took $rebalanceDuration seconds")
+          _ <- ZIO.logDebug(s"Rebalance took $rebalanceDuration seconds")
         } yield assertTrue(rebalanceDuration <= 2)
       },
       test("partitions for topic doesn't fail if doesn't exist") {
