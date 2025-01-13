@@ -731,12 +731,12 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           messagesReceived: Ref[List[(String, String)]],
           done: Promise[Nothing, Unit]
         ) =
-          consumeWithStrings(client, Some(group), subscription)({ record =>
+          consumeWithStrings(client, Some(group), subscription)(record =>
             for {
               messagesSoFar <- messagesReceived.updateAndGet(_ :+ (record.key() -> record.value()))
               _             <- ZIO.when(messagesSoFar.size == nrMessages)(done.succeed(()))
             } yield ()
-          }).fork
+          ).fork
 
         for {
           topic  <- randomTopic
