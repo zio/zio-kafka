@@ -34,7 +34,7 @@ However, there are more options: external commits and transactional producing.
 
 When you commit to an external system (e.g. by writing to a relational database) the zio-kafka consumer needs to know
 about those commits before it can work in rebalance-safe-commits mode. Inform zio-kafka about external commits by
-invoking method `Consumer.registerExternalCommits(offsetBatch: OffsetBatch)` (available since zio-kafka 2.9.2).
+invoking method `Consumer.registerExternalCommits(offsetBatch: OffsetBatch)` (available since zio-kafka 2.10.0).
 
 Here is what this could look like:
 
