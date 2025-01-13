@@ -532,6 +532,9 @@ private[consumer] final class Runloop private (
       .repeat(runloopMetricsSchedule)
       .unit
   }
+
+  def registerExternalCommits(offsetBatch: OffsetBatch): Task[Unit] =
+    committer.registerExternalCommits(offsetBatch.offsets)
 }
 
 object Runloop {
