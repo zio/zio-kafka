@@ -61,7 +61,7 @@ object TransactionalProducer {
       }
 
     override def createTransaction: ZIO[Scope, Throwable, Transaction] =
-      semaphore.withPermitScoped *> {
+      semaphore.withPermitScoped *>
         ZIO.acquireReleaseExit {
           for {
             offsetBatchRef <- Ref.make(OffsetBatch.empty)
@@ -69,7 +69,6 @@ object TransactionalProducer {
             _              <- ZIO.attemptBlocking(live.p.beginTransaction())
           } yield new TransactionImpl(producer = live, offsetBatchRef = offsetBatchRef, closed = closedRef)
         } { case (transaction: TransactionImpl, exit) => transaction.markAsClosed *> commitOrAbort(transaction, exit) }
-      }
   }
 
   def createTransaction: ZIO[TransactionalProducer & Scope, Throwable, Transaction] =
