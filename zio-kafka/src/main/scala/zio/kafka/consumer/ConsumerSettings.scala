@@ -206,7 +206,7 @@ final case class ConsumerSettings(
    *
    * @deprecated
    *   starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
-   *   contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs if for
+   *   contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
    *   that.
    */
   @deprecated("`restartStreamOnRebalancing` will be removed in zio-kafka 3.0", "2.10.0")
