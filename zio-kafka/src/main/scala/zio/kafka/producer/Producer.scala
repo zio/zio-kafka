@@ -247,7 +247,7 @@ object Producer {
     for {
       runtime <- ZIO.runtime[Any]
       sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
+        Queue.bounded[(Chunk[ByteRecord], Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.sendBufferSize
         )
       producer = new ProducerLive(settings, javaProducer, runtime, sendQueue)
@@ -389,7 +389,7 @@ private[producer] final class ProducerLive(
   settings: ProducerSettings,
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
   runtime: Runtime[Any],
-  sendQueue: Queue[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])]
+  sendQueue: Queue[(Chunk[ByteRecord], Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])]
 ) extends Producer {
 
   private val leftPublishOmitted = Left(Producer.PublishOmittedException)
@@ -418,37 +418,33 @@ private[producer] final class ProducerLive(
   // noinspection YieldingZIOEffectInspection
   override def produceAsync(record: ProducerRecord[Array[Byte], Array[Byte]]): Task[Task[RecordMetadata]] =
     ZIO.suspendSucceed {
-      val retrySchedule: Schedule[Any, Throwable, Any] = Schedule.recurWhile[Throwable] {
-        case _: AuthorizationException | _: AuthenticationException => true
-        case _                                                      => false
-      } && settings.authErrorRetrySchedule
-
       def loop(
-        finalDone: Promise[Throwable, RecordMetadata],
+        done: Promise[Throwable, RecordMetadata],
         driver: Schedule.Driver[Any, Any, Throwable, Any]
       ): ZIO[Any, Nothing, Any] =
-        for {
-          attemptDone <- Promise.make[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
-          _           <- sendQueue.offer((Chunk.single(record), attemptDone))
-        } yield attemptDone.await.flatMap { results =>
-          // Since we're sending only 1 record, we know `results` has 1 item
-          results.head match {
-            case Right(recordMetaData) =>
-              finalDone.succeed(recordMetaData)
-            case Left(error) =>
-              driver
-                .next(error)
-                .foldZIO(
-                  _ => finalDone.fail(error),
-                  _ => loop(finalDone, driver)
-                )
+        sendQueue.offer(
+          Chunk.single(record) -> { results =>
+            // Since we're sending only 1 record, we know `results` has 1 item
+            results.head match {
+              case Right(recordMetaData) =>
+                done.succeed(recordMetaData).unit
+              case Left(error @ (_: AuthorizationException | _: AuthenticationException)) =>
+                driver
+                  .next(retryAfterAuthException)
+                  .foldZIO(
+                    _ => done.fail(error).unit,  // schedule say "no"
+                    _ => loop(done, driver).unit // start retry
+                  )
+              case Left(error) =>
+                done.fail(error).unit
+            }
           }
-        }
+        )
 
       for {
-        finalDone <- Promise.make[Throwable, RecordMetadata]
-        _         <- retrySchedule.driver.flatMap(d => loop(finalDone, d))
-      } yield finalDone.await
+        done <- Promise.make[Throwable, RecordMetadata]
+        _    <- settings.authErrorRetrySchedule.driver.flatMap(d => loop(done, d))
+      } yield done.await
     }
 
   override def produceAsync[R, K, V](
@@ -504,64 +500,76 @@ private[producer] final class ProducerLive(
   ): UIO[UIO[Chunk[Either[Throwable, RecordMetadata]]]] =
     if (records.isEmpty) ZIO.succeed(ZIO.succeed(Chunk.empty))
     else {
-      val finalResults: Array[Either[Throwable, RecordMetadata]] = Array.fill(records.size)(leftPublishOmitted)
+      lazy val finalResults: Array[Either[Throwable, RecordMetadata]] = Array.fill(records.size)(leftPublishOmitted)
 
-      def complete(finalDone: Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]]): UIO[Unit] =
-        finalDone.succeed(Chunk.fromArray(finalResults)).unit
+      def storeResults(recordIndices: Seq[Int], results: Chunk[Either[Throwable, RecordMetadata]]): Unit =
+        (recordIndices lazyZip results).foreach { case (index, result) => finalResults(index) = result }
+
+      def complete(done: Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]]): UIO[Unit] =
+        done.succeed(Chunk.fromArray(finalResults)).unit
 
       ZIO.suspendSucceed {
         def loop(
           recordIndices: Seq[Int],
           records: Chunk[ByteRecord],
-          finalDone: Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]],
+          done: Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]],
           driver: Schedule.Driver[Any, Any, Throwable, Any]
         ): ZIO[Any, Nothing, Any] =
-          for {
-            attemptDone <- Promise.make[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
-            _           <- sendQueue.offer((records, attemptDone))
-          } yield attemptDone.await.flatMap { results =>
-            // Copy results of this attempt to the final results
-            (recordIndices lazyZip results).foreach { case (index, result) => finalResults(index) = result }
-            if (results.forall(_.isRight)) {
-              // All records were successfully published, we're done
-              complete(finalDone)
-            } else {
-              // There are some failures, let's see if we can retry.
-              // We only retry after an auth error. Any other error and we give up.
-              val hasFatalError = results.exists {
-                case Right(_) |
-                    Left(_: AuthorizationException | _: AuthenticationException | Producer.PublishOmittedException) =>
-                  false
-                case _ => true
-              }
-              if (hasFatalError) {
-                complete(finalDone)
+          sendQueue.offer(
+            records -> { results =>
+              if (results.forall(_.isRight)) {
+                // All records were successfully published, we're done
+                if (recordIndices.size == records.size) {
+                  // Optimization (not allocating `finalResults`) for when everything goes well first time
+                  done.succeed(results).unit
+                } else {
+                  // Copy results of this attempt to the final results
+                  storeResults(recordIndices, results)
+                  complete(done)
+                }
               } else {
-                // Ask the schedule if we should retry
-                driver
-                  .next(retryAfterAuthException)
-                  .foldZIO(
-                    _ => // Schedule says no
-                      complete(finalDone),
-                    _ => {
-                      // Schedule allows retry, select the records to retry.
-                      // Note that if we get here, all Left's can be retried. Also, we know there is at least 1 Left.
-                      val toRetry: Seq[(Int, ByteRecord)] = (recordIndices lazyZip records lazyZip results).flatMap {
-                        case (_, _, Right(_))     => Seq.empty
-                        case (i, record, Left(_)) => Seq((i, record))
+                // Copy results of this attempt to the final results
+                storeResults(recordIndices, results)
+                // There are some failures, let's see if we can retry some records.
+                // We only retry after an auth error. Any other error and we give up.
+                val hasFatalError = results.exists {
+                  case Right(_) |
+                      Left(_: AuthorizationException | _: AuthenticationException | Producer.PublishOmittedException) =>
+                    false
+                  case _ => true
+                }
+                if (hasFatalError) {
+                  complete(done)
+                } else {
+                  // Ask the schedule if we should retry
+                  driver
+                    .next(retryAfterAuthException)
+                    .foldZIO(
+                      _ => // Schedule says no
+                        complete(done),
+                      _ => {
+                        // Schedule allows retry, select the records to retry.
+                        // Note that if we get here, all Left's can be retried. Also, we know there is at least 1 Left.
+                        val toRetry: Seq[(Int, ByteRecord)] = (recordIndices lazyZip records lazyZip results).flatMap {
+                          case (_, _, Right(_))     => Seq.empty
+                          case (i, record, Left(_)) => Seq((i, record))
+                        }
+                        val (retryIndices, retryRecords) = toRetry.unzip
+                        ZIO.logInfo(
+                          s"Retrying publish ${retryRecords.size} (of ${records.size}) records after AuthorizationException/AuthenticationException"
+                        ) *>
+                          loop(retryIndices, Chunk.from(retryRecords), done, driver).unit
                       }
-                      val (retryIndices, retryRecords) = toRetry.unzip
-                      loop(retryIndices, Chunk.from(retryRecords), finalDone, driver)
-                    }
-                  )
+                    )
+                }
               }
             }
-          }
+          )
 
         for {
-          finalDone <- Promise.make[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
-          _         <- settings.authErrorRetrySchedule.driver.flatMap(d => loop(records.indices, records, finalDone, d))
-        } yield finalDone.await
+          done <- Promise.make[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
+          _    <- settings.authErrorRetrySchedule.driver.flatMap(d => loop(records.indices, records, done, d))
+        } yield done.await
       }
     }
 
@@ -579,7 +587,7 @@ private[producer] final class ProducerLive(
   val sendFromQueue: ZIO[Any, Nothing, Any] =
     ZStream
       .fromQueueWithShutdown(sendQueue)
-      .mapZIO { case (serializedRecords, done) =>
+      .mapZIO { case (serializedRecords, continuation) =>
         ZIO.succeed {
           val recordsLength                                = serializedRecords.length
           val sentRecordsCounter                           = new AtomicInteger(0)
@@ -598,7 +606,7 @@ private[producer] final class ProducerLive(
               val sentResultsChunk = Chunk.fromArray(sentResults)
 
               Unsafe.unsafe { implicit u =>
-                val _ = runtime.unsafe.run(done.succeed(sentResultsChunk))
+                val _ = runtime.unsafe.run(continuation(sentResultsChunk))
               }
             }
           }

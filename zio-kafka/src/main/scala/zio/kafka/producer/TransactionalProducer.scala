@@ -97,7 +97,7 @@ object TransactionalProducer {
       semaphore <- Semaphore.make(1)
       runtime   <- ZIO.runtime[Any]
       sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
+        Queue.bounded[(Chunk[ByteRecord], Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.producerSettings.sendBufferSize
         )
       live = new ProducerLive(settings.producerSettings, rawProducer, runtime, sendQueue)
