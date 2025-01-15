@@ -500,7 +500,10 @@ private[producer] final class ProducerLive(
   ): UIO[UIO[Chunk[Either[Throwable, RecordMetadata]]]] =
     if (records.isEmpty) ZIO.succeed(ZIO.succeed(Chunk.empty))
     else {
-      lazy val finalResults: Array[Either[Throwable, RecordMetadata]] = Array.fill(records.size)(leftPublishOmitted)
+      val totalRecordCount = records.size
+
+      lazy val finalResults: Array[Either[Throwable, RecordMetadata]] =
+        Array.fill(totalRecordCount)(leftPublishOmitted)
 
       def storeResults(recordIndices: Seq[Int], results: Chunk[Either[Throwable, RecordMetadata]]): Unit =
         (recordIndices lazyZip results).foreach { case (index, result) => finalResults(index) = result }
@@ -519,7 +522,7 @@ private[producer] final class ProducerLive(
             records -> { results =>
               if (results.forall(_.isRight)) {
                 // All records were successfully published, we're done
-                if (recordIndices.size == records.size) {
+                if (recordIndices.size == totalRecordCount) {
                   // Optimization (not allocating `finalResults`) for when everything goes well first time
                   done.succeed(results).unit
                 } else {
