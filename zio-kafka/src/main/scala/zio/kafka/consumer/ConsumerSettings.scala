@@ -203,7 +203,13 @@ final case class ConsumerSettings(
    * @param value
    *   When `true` _all_ streams are restarted during a rebalance, including those streams that are not revoked. The
    *   default is `false`.
+   *
+   * @deprecated
+   *   starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
+   *   contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
+   *   that.
    */
+  @deprecated("`restartStreamOnRebalancing` will be removed in zio-kafka 3.0", "2.10.0")
   def withRestartStreamOnRebalancing(value: Boolean): ConsumerSettings =
     copy(restartStreamOnRebalancing = value)
 
