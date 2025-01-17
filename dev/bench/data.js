@@ -16,66 +16,6 @@ window.BENCHMARK_DATA = {
             "username": "web-flow"
           },
           "distinct": true,
-          "id": "7452812c5410c61b03c8cda5614f69067c075ed6",
-          "message": "Add alternative fetch strategy for many partitions (#1281)\n\nWhen many hundreds of partitions need to be consumed, an excessive\r\namount of heap can be used for pre-fetching. The\r\n`ManyPartitionsQueueSizeBasedFetchStrategy` works similarly as the\r\ndefault `QueueSizeBasedFetchStrategy` but limits total memory usage.",
-          "timestamp": "2024-07-16T19:15:59+02:00",
-          "tree_id": "e148608e0e464c0cf343e869dfea5923570ce5a2",
-          "url": "https://github.com/zio/zio-kafka/commit/7452812c5410c61b03c8cda5614f69067c075ed6"
-        },
-        "date": 1721150927838,
-        "tool": "jmh",
-        "benches": [
-          {
-            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
-            "value": 603.0446847245438,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
-            "value": 592.6038282640225,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
-            "value": 547.3497861523078,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
-            "value": 534.0946336294871,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
-            "value": 647.729057759027,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          },
-          {
-            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
-            "value": 578.4607693223271,
-            "unit": "ms/op",
-            "extra": "iterations: 5\nforks: 5\nthreads: 1"
-          }
-        ]
-      },
-      {
-        "commit": {
-          "author": {
-            "email": "e.vanoosten@grons.nl",
-            "name": "Erik van Oosten",
-            "username": "erikvanoosten"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
           "id": "fd40816423b1b0ae81ee5487ab69e6f7a3cd5c27",
           "message": "Alternative producer implementation (#1285)\n\nRefactoring of the producer so that it handles errors per record.",
           "timestamp": "2024-07-18T10:42:50+02:00",
