@@ -617,6 +617,8 @@ private[producer] final class ProducerLive(
             }
           }
 
+          // Must be volatile so that reads in this thread always see the latest value, even when the callback sets it
+          // from another thread.
           @volatile var previousSendCallsSucceed = true
 
           recordsIterator.foreach { case (record: ByteRecord, recordIndex: Int) =>
