@@ -421,25 +421,26 @@ private[producer] final class ProducerLive(
       def loop(
         done: Promise[Throwable, RecordMetadata],
         driver: Schedule.Driver[Any, Any, Throwable, Any]
-      ): ZIO[Any, Nothing, Any] =
-        sendQueue.offer(
-          Chunk.single(record) -> { results =>
-            // Since we're sending only 1 record, we know `results` has 1 item
-            results.head match {
-              case Right(recordMetaData) =>
-                done.succeed(recordMetaData).unit
-              case Left(error @ (_: AuthorizationException | _: AuthenticationException)) =>
-                driver
-                  .next(retryAfterAuthException)
-                  .foldZIO(
-                    _ => done.fail(error).unit,  // schedule say "no"
-                    _ => loop(done, driver).unit // start retry
-                  )
-              case Left(error) =>
-                done.fail(error).unit
-            }
+      ): ZIO[Any, Nothing, Any] = {
+        val continuation: Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit] = { results =>
+          // Since we're sending only 1 record, we know `results` has 1 item
+          results.head match {
+            case Right(recordMetaData) =>
+              done.succeed(recordMetaData).unit
+            case Left(error @ (_: AuthorizationException | _: AuthenticationException)) =>
+              driver
+                .next(retryAfterAuthException)
+                .foldZIO(
+                  _ => done.fail(error).unit,  // schedule say "no"
+                  _ => loop(done, driver).unit // start retry
+                )
+            case Left(error) =>
+              done.fail(error).unit
           }
-        )
+        }
+
+        sendQueue.offer(Chunk.single(record) -> continuation)
+      }
 
       for {
         done <- Promise.make[Throwable, RecordMetadata]
@@ -518,7 +519,7 @@ private[producer] final class ProducerLive(
           done: Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]],
           driver: Schedule.Driver[Any, Any, Throwable, Any]
         ): ZIO[Any, Nothing, Any] = {
-          def retryFailedRecords(results: Chunk[Either[Throwable, RecordMetadata]]) = {
+          def retryFailedRecords(results: Chunk[Either[Throwable, RecordMetadata]]): UIO[Unit] = {
             // Note that if we get here, all Left's can be retried. Also, we know there is at least 1 Left.
             val toRetry: Seq[(RuntimeFlags, ByteRecord)] =
               (recordIndices lazyZip records lazyZip results).flatMap {
@@ -549,9 +550,8 @@ private[producer] final class ProducerLive(
               // There are some failures, let's see if we can retry some records.
               // We only retry after an auth error. Any other error and we give up.
               val hasFatalError = results.exists {
-                case Right(_) | Left(
-                      _: AuthorizationException | _: AuthenticationException | Producer.PublishOmittedException
-                    ) =>
+                case Right(_) |
+                    Left(_: AuthorizationException | _: AuthenticationException | Producer.PublishOmittedException) =>
                   false
                 case _ => true
               }
@@ -562,10 +562,8 @@ private[producer] final class ProducerLive(
                 driver
                   .next(retryAfterAuthException)
                   .foldZIO(
-                    _ => // Schedule says no
-                      complete(done),
-                    _ => // Schedule allows retry, select the records to retry.
-                      retryFailedRecords(results)
+                    _ => complete(done), // Schedule says no
+                    _ => retryFailedRecords(results)
                   )
               }
             }
