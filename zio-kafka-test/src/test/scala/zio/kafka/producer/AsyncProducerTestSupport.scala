@@ -88,12 +88,12 @@ object AsyncProducerTestSupport {
   }
 
   private sealed trait MockBehavior
-  private case class SendSucceed(n: Int) extends MockBehavior
-  private case class SendFail(e: Throwable) extends MockBehavior {
+  private final case class SendSucceed(n: Int) extends MockBehavior
+  private final case class SendFail(e: Throwable) extends MockBehavior {
     override def toString: String = s"SendFail(${e.getClass.getSimpleName})"
   }
-  private case class CallbackSucceed(n: Int) extends MockBehavior
-  private case class CallbackFail(n: Int, e: Exception) extends MockBehavior {
+  private final case class CallbackSucceed(n: Int) extends MockBehavior
+  private final case class CallbackFail(n: Int, e: Exception) extends MockBehavior {
     override def toString: String = s"CallbackFail($n, ${e.getClass.getSimpleName})"
   }
 
@@ -145,7 +145,7 @@ object AsyncProducerTestSupport {
         throw new AssertionError(s"Missing ${callbacksAvailable.size} callback mock behaviors")
       }
 
-      case class SendExpectation(
+      final case class SendExpectation(
         mockBehavior: MockBehavior, // For scala 3 change to: `SendSucceed | SendFail`
         startPromise: Promise[Nothing, Unit],
         callbackPromise: Promise[Nothing, Callback]
