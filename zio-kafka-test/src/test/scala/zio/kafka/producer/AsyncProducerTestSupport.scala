@@ -200,31 +200,34 @@ object AsyncProducerTestSupport {
                          }
                        }
         sei = sendExpectations.iterator
-        handleBehaviors = ZIO.foreach(behaviors) {
-                            case mb @ (SendSucceed(_) | SendFail(_)) =>
-                              for {
-                                sendOperation <- fromOptionOrDie(sei.nextOption())
-                                _             <- sendOperation.startPromise.succeed(())
-                                _ <- ZIO.raceFirst(
-                                       sendOperation.callbackPromise.await,
-                                       Seq(ZIO.logInfo(s"Still expecting mock behavior $mb").delay(3.seconds).forever)
-                                     )
-                              } yield ()
-                            case CallbackSucceed(n) =>
-                              for {
-                                callbackPromise <- fromOptionOrDie(callbackPromiseForN(sendExpectations, n))
-                                callback        <- callbackPromise.await
-                                // return dummy metadata
-                                metadata = new RecordMetadata(new TopicPartition("", 0), 0, 0, 0, 0, 0)
-                                _ <- ZIO.attempt(callback.onCompletion(metadata, null))
-                              } yield ()
-                            case CallbackFail(n, e) =>
-                              for {
-                                callbackPromise <- fromOptionOrDie(callbackPromiseForN(sendExpectations, n))
-                                callback        <- callbackPromise.await
-                                _               <- ZIO.attempt(callback.onCompletion(null, e))
-                              } yield ()
-                          }
+        handleBehaviors =
+          ZIO.foreach(behaviors) {
+            case mb @ (SendSucceed(_) | SendFail(_)) =>
+              for {
+                sendOperation <- fromOptionOrDie(sei.nextOption())
+                _             <- sendOperation.startPromise.succeed(())
+                _ <- ZIO
+                       .raceFirst(
+                         sendOperation.callbackPromise.await,
+                         Seq(ZIO.logInfo(s"Still expecting mock behavior $mb").delay(3.seconds).forever)
+                       )
+                       .timeoutFail(new AssertionError("Timed out waiting for mock behavior $mb"))(1.minute)
+              } yield ()
+            case CallbackSucceed(n) =>
+              for {
+                callbackPromise <- fromOptionOrDie(callbackPromiseForN(sendExpectations, n))
+                callback        <- callbackPromise.await
+                // return dummy metadata
+                metadata = new RecordMetadata(new TopicPartition("", 0), 0, 0, 0, 0, 0)
+                _ <- ZIO.attempt(callback.onCompletion(metadata, null))
+              } yield ()
+            case CallbackFail(n, e) =>
+              for {
+                callbackPromise <- fromOptionOrDie(callbackPromiseForN(sendExpectations, n))
+                callback        <- callbackPromise.await
+                _               <- ZIO.attempt(callback.onCompletion(null, e))
+              } yield ()
+          }
         result <- handleBehaviors &> testCode(mockProducer)
       } yield result
     }
