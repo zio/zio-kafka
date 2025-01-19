@@ -1,6 +1,7 @@
 package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.{ KafkaProducer, Producer => JProducer, ProducerRecord, RecordMetadata }
+import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException }
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo }
 import zio._
@@ -15,16 +16,18 @@ import scala.util.control.{ NoStackTrace, NonFatal }
 trait Producer {
 
   /**
-   * Produces a single record and await broker acknowledgement. See [[produceAsync[R,K,V](topic:String*]] for version
-   * that allows to avoid round-trip-time penalty for each record.
+   * Produces a single record and await broker acknowledgement.
+   *
+   * Use `produceAsync` to avoid the round-trip-time penalty for each record.
    */
   def produce(
     record: ProducerRecord[Array[Byte], Array[Byte]]
   ): Task[RecordMetadata]
 
   /**
-   * Produces a single record and await broker acknowledgement. See [[produceAsync[R,K,V](topic:String*]] for version
-   * that allows to avoid round-trip-time penalty for each record.
+   * Produces a single record and await broker acknowledgement.
+   *
+   * Use `produceAsync` to avoid the round-trip-time penalty for each record.
    */
   def produce[R, K, V](
     record: ProducerRecord[K, V],
@@ -33,8 +36,9 @@ trait Producer {
   ): RIO[R, RecordMetadata]
 
   /**
-   * Produces a single record and await broker acknowledgement. See [[produceAsync[R,K,V](topic:String*]] for version
-   * that allows to avoid round-trip-time penalty for each record.
+   * Produces a single record and await broker acknowledgement.
+   *
+   * Use `produceAsync` to avoid the round-trip-time penalty for each record.
    */
   def produce[R, K, V](
     topic: String,
@@ -61,7 +65,7 @@ trait Producer {
    *
    * It is usually recommended to not await the inner layer of every individual record, but enqueue a batch of records
    * and await all of their acknowledgements at once. That amortizes the cost of sending requests to Kafka and increases
-   * throughput. See [[produce[R,K,V](record*]] for version that awaits broker acknowledgement.
+   * throughput.
    */
   def produceAsync(
     record: ProducerRecord[Array[Byte], Array[Byte]]
@@ -75,7 +79,7 @@ trait Producer {
    *
    * It is usually recommended to not await the inner layer of every individual record, but enqueue a batch of records
    * and await all of their acknowledgements at once. That amortizes the cost of sending requests to Kafka and increases
-   * throughput. See [[produce[R,K,V](record*]] for version that awaits broker acknowledgement.
+   * throughput.
    */
   def produceAsync[R, K, V](
     record: ProducerRecord[K, V],
@@ -91,7 +95,7 @@ trait Producer {
    *
    * It is usually recommended to not await the inner layer of every individual record, but enqueue a batch of records
    * and await all of their acknowledgements at once. That amortizes the cost of sending requests to Kafka and increases
-   * throughput. See [[produce[R,K,V](topic*]] for version that awaits broker acknowledgement.
+   * throughput.
    */
   def produceAsync[R, K, V](
     topic: String,
@@ -102,8 +106,9 @@ trait Producer {
   ): RIO[R, Task[RecordMetadata]]
 
   /**
-   * Produces a chunk of records. See [[produceChunkAsync(records*]] for version that allows to avoid round-trip-time
-   * penalty for each chunk.
+   * Produces a chunk of records.
+   *
+   * Use `produceChunkAsync` to avoid the round-trip-time penalty for each record.
    *
    * When publishing any of the records fails, the whole batch fails even though some records might have been published.
    * Use [[produceChunkAsyncWithFailures]] to get results per record.
@@ -113,8 +118,9 @@ trait Producer {
   ): Task[Chunk[RecordMetadata]]
 
   /**
-   * Produces a chunk of records. See [[produceChunkAsync(records*]] for version that allows to avoid round-trip-time
-   * penalty for each chunk.
+   * Produces a chunk of records.
+   *
+   * Use `produceChunkAsync` to avoid the round-trip-time penalty for each record.
    *
    * When publishing any of the records fails, the whole batch fails even though some records might have been published.
    * Use [[produceChunkAsyncWithFailures]] to get results per record.
@@ -241,10 +247,10 @@ object Producer {
     for {
       runtime <- ZIO.runtime[Any]
       sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
+        Queue.bounded[(Chunk[ByteRecord], Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.sendBufferSize
         )
-      producer = new ProducerLive(javaProducer, runtime, sendQueue)
+      producer = new ProducerLive(settings, javaProducer, runtime, sendQueue)
       _ <- ZIO.blocking(producer.sendFromQueue).forkScoped
     } yield producer
 
@@ -380,10 +386,15 @@ object Producer {
 }
 
 private[producer] final class ProducerLive(
+  settings: ProducerSettings,
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
   runtime: Runtime[Any],
-  sendQueue: Queue[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])]
+  sendQueue: Queue[(Chunk[ByteRecord], Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])]
 ) extends Producer {
+
+  private val leftPublishOmitted = Left(Producer.PublishOmittedException)
+  private val retryAfterAuthException: Throwable =
+    new RuntimeException("Authentication error, retry?") with NoStackTrace
 
   override def produce(record: ProducerRecord[Array[Byte], Array[Byte]]): Task[RecordMetadata] =
     produceAsync(record).flatten
@@ -406,10 +417,36 @@ private[producer] final class ProducerLive(
 
   // noinspection YieldingZIOEffectInspection
   override def produceAsync(record: ProducerRecord[Array[Byte], Array[Byte]]): Task[Task[RecordMetadata]] =
-    for {
-      done <- Promise.make[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
-      _    <- sendQueue.offer((Chunk.single(record), done))
-    } yield done.await.flatMap(result => ZIO.fromEither(result.head))
+    ZIO.suspendSucceed {
+      def loop(
+        done: Promise[Throwable, RecordMetadata],
+        driver: Schedule.Driver[Any, Any, Throwable, Any]
+      ): ZIO[Any, Nothing, Any] = {
+        val continuation: Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit] = { results =>
+          // Since we're sending only 1 record, we know `results` has 1 item
+          results.head match {
+            case Right(recordMetaData) =>
+              done.succeed(recordMetaData).unit
+            case Left(error @ (_: AuthorizationException | _: AuthenticationException)) =>
+              driver
+                .next(retryAfterAuthException)
+                .foldZIO(
+                  _ => done.fail(error).unit,  // schedule say "no"
+                  _ => loop(done, driver).unit // start retry
+                )
+            case Left(error) =>
+              done.fail(error).unit
+          }
+        }
+
+        sendQueue.offer(Chunk.single(record) -> continuation)
+      }
+
+      for {
+        done <- Promise.make[Throwable, RecordMetadata]
+        _    <- settings.authErrorRetrySchedule.driver.flatMap(d => loop(done, d))
+      } yield done.await
+    }
 
   override def produceAsync[R, K, V](
     record: ProducerRecord[K, V],
@@ -464,10 +501,82 @@ private[producer] final class ProducerLive(
   ): UIO[UIO[Chunk[Either[Throwable, RecordMetadata]]]] =
     if (records.isEmpty) ZIO.succeed(ZIO.succeed(Chunk.empty))
     else {
-      for {
-        done <- Promise.make[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
-        _    <- sendQueue.offer((records, done))
-      } yield done.await
+      val totalRecordCount = records.size
+
+      lazy val finalResults: Array[Either[Throwable, RecordMetadata]] =
+        Array.fill(totalRecordCount)(leftPublishOmitted)
+
+      def storeResults(recordIndices: Seq[Int], results: Chunk[Either[Throwable, RecordMetadata]]): Unit =
+        (recordIndices lazyZip results).foreach { case (index, result) => finalResults(index) = result }
+
+      def complete(done: Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]]): UIO[Unit] =
+        done.succeed(Chunk.fromArray(finalResults)).unit
+
+      ZIO.suspendSucceed {
+        def loop(
+          recordIndices: Seq[Int],
+          records: Chunk[ByteRecord],
+          done: Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]],
+          driver: Schedule.Driver[Any, Any, Throwable, Any]
+        ): ZIO[Any, Nothing, Any] = {
+          def retryFailedRecords(results: Chunk[Either[Throwable, RecordMetadata]]): UIO[Unit] = {
+            // Note that if we get here, all Left's can be retried. Also, we know there is at least 1 Left.
+            val toRetry: Seq[(RuntimeFlags, ByteRecord)] =
+              (recordIndices lazyZip records lazyZip results).flatMap {
+                case (_, _, Right(_))     => Seq.empty
+                case (i, record, Left(_)) => Seq((i, record))
+              }
+            val (retryIndices, retryRecords) = toRetry.unzip
+            ZIO.logInfo(
+              s"Retrying publish ${retryRecords.size} (of ${records.size}) records after AuthorizationException/AuthenticationException"
+            ) *>
+              loop(retryIndices, Chunk.from(retryRecords), done, driver).unit
+          }
+
+          val continuation: Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit] = { results =>
+            if (results.forall(_.isRight)) {
+              // All records were successfully published, we're done
+              if (recordIndices.size == totalRecordCount) {
+                // Optimization (not allocating `finalResults`) for when everything goes well first time
+                done.succeed(results).unit
+              } else {
+                // Copy results of this attempt to the final results
+                storeResults(recordIndices, results)
+                complete(done)
+              }
+            } else {
+              // Copy results of this attempt to the final results
+              storeResults(recordIndices, results)
+              // There are some failures, let's see if we can retry some records.
+              // We only retry after an auth error. Any other error and we give up.
+              val hasFatalError = results.exists {
+                case Right(_) |
+                    Left(_: AuthorizationException | _: AuthenticationException | Producer.PublishOmittedException) =>
+                  false
+                case _ => true
+              }
+              if (hasFatalError) {
+                complete(done)
+              } else {
+                // Ask the schedule if we should retry
+                driver
+                  .next(retryAfterAuthException)
+                  .foldZIO(
+                    _ => complete(done), // Schedule says no
+                    _ => retryFailedRecords(results)
+                  )
+              }
+            }
+          }
+
+          sendQueue.offer(records -> continuation)
+        }
+
+        for {
+          done <- Promise.make[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
+          _    <- settings.authErrorRetrySchedule.driver.flatMap(d => loop(records.indices, records, done, d))
+        } yield done.await
+      }
     }
 
   override def partitionsFor(topic: String): Task[Chunk[PartitionInfo]] =
@@ -484,7 +593,7 @@ private[producer] final class ProducerLive(
   val sendFromQueue: ZIO[Any, Nothing, Any] =
     ZStream
       .fromQueueWithShutdown(sendQueue)
-      .mapZIO { case (serializedRecords, done) =>
+      .mapZIO { case (serializedRecords, continuation) =>
         ZIO.succeed {
           val recordsLength                                = serializedRecords.length
           val sentRecordsCounter                           = new AtomicInteger(0)
@@ -503,23 +612,29 @@ private[producer] final class ProducerLive(
               val sentResultsChunk = Chunk.fromArray(sentResults)
 
               Unsafe.unsafe { implicit u =>
-                val _ = runtime.unsafe.run(done.succeed(sentResultsChunk))
+                val _ = runtime.unsafe.run(continuation(sentResultsChunk))
               }
             }
           }
 
-          var previousSendCallsSucceed = true
+          // Must be volatile so that reads in this thread always see the latest value, even when the callback sets it
+          // from another thread.
+          @volatile var previousSendCallsSucceed = true
 
           recordsIterator.foreach { case (record: ByteRecord, recordIndex: Int) =>
             if (previousSendCallsSucceed) {
               try {
                 val _ = p.send(
                   record,
-                  (metadata: RecordMetadata, err: Exception) =>
-                    insertSentResult(
-                      recordIndex,
-                      if (err eq null) Right(metadata) else Left(err)
-                    )
+                  (metadata: RecordMetadata, err: Exception) => {
+                    val sendResult = if (err eq null) {
+                      Right(metadata)
+                    } else {
+                      previousSendCallsSucceed = false
+                      Left(err)
+                    }
+                    insertSentResult(recordIndex, sendResult)
+                  }
                 )
               } catch {
                 case NonFatal(err) =>
