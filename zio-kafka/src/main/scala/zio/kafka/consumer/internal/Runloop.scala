@@ -600,8 +600,7 @@ object Runloop {
                        settings.commitTimeout,
                        diagnostics,
                        metrics,
-                       commitAvailable.offer(true).unit,
-                       sameThreadRuntime
+                       commitAvailable.offer(true).unit
                      )
       rebalanceCoordinator = new RebalanceCoordinator(
                                lastRebalanceEvent,
