@@ -24,6 +24,8 @@ sealed trait OffsetBatch {
 object OffsetBatch {
   val empty: OffsetBatch = EmptyOffsetBatch
 
+  def apply(offset: Offset): OffsetBatch = empty.add(offset)
+
   def apply(offsets: Iterable[Offset]): OffsetBatch = offsets.foldLeft(empty)(_ add _)
 }
 

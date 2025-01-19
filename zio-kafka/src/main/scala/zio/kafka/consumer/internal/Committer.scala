@@ -1,17 +1,22 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallback }
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.internal.Committer.CommitOffsets
+import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
 import zio.{ Chunk, Task, UIO }
 
 import java.lang.Math.max
-import java.util.{ Map => JavaMap }
 import scala.collection.mutable
 
 private[internal] trait Committer {
+
+  /** A function to commit offsets. */
   val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]
+
+  /** A function to register offsets that have been committed externally. */
+  val registerExternalCommits: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]
 
   /**
    * Takes commits from the queue, commits them and adds them to pending commits
@@ -21,14 +26,13 @@ private[internal] trait Committer {
    * WARNING: this method is used during a rebalance from the same-thread-runtime. This restricts what ZIO operations
    * may be used. Please see [[RebalanceCoordinator]] for more information.
    *
-   * @param commitAsync
-   *   Function 'commitAsync' on the KafkaConsumer. This is isolated from the whole KafkaConsumer for testing purposes.
-   *   The caller should ensure exclusive access to the KafkaConsumer.
+   * @param consumer
+   *   KafkaConsumer to use. The caller is responsible or guaranteeing exclusive access.
    * @param executeOnEmpty
    *   Execute commitAsync() even if there are no commits
    */
   def processQueuedCommits(
-    commitAsync: (JavaMap[TopicPartition, OffsetAndMetadata], OffsetCommitCallback) => Task[Unit],
+    consumer: ByteArrayKafkaConsumer,
     executeOnEmpty: Boolean = false
   ): Task[Unit]
 

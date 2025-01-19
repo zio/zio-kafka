@@ -13,6 +13,7 @@ import zio.stream.ZStream
 
 import java.io.File
 import java.nio.file.{ Files, StandardCopyOption }
+import scala.annotation.nowarn
 
 object KafkaTestUtils {
 
@@ -127,6 +128,10 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
+    // @deprecated
+    // starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
+    // contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
+    // that.
     restartStreamOnRebalancing: Boolean = false,
     rebalanceSafeCommits: Boolean = false,
     maxRebalanceDuration: Duration = 3.minutes,
@@ -136,6 +141,7 @@ object KafkaTestUtils {
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
+      @nowarn("msg=deprecated")
       val settings = ConsumerSettings(kafka.bootstrapServers)
         .withClientId(clientId)
         .withCloseTimeout(5.seconds)

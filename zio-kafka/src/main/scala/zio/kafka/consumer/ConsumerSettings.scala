@@ -1,6 +1,7 @@
 package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.common.IsolationLevel
 import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.fetch.{ FetchStrategy, QueueSizeBasedFetchStrategy }
@@ -202,7 +203,13 @@ final case class ConsumerSettings(
    * @param value
    *   When `true` _all_ streams are restarted during a rebalance, including those streams that are not revoked. The
    *   default is `false`.
+   *
+   * @deprecated
+   *   starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
+   *   contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
+   *   that.
    */
+  @deprecated("`restartStreamOnRebalancing` will be removed in zio-kafka 3.0", "2.10.0")
   def withRestartStreamOnRebalancing(value: Boolean): ConsumerSettings =
     copy(restartStreamOnRebalancing = value)
 
@@ -229,6 +236,9 @@ final case class ConsumerSettings(
    *
    * Rebalances are held up for at most 3/5 of `maxPollInterval` (see [[withMaxPollInterval]]), by default this
    * calculates to 3 minutes. See [[#withMaxRebalanceDuration]] to change the default.
+   *
+   * External commits (that is, commits to an external system, e.g. a relational database) must be registered to the
+   * consumer with [[Consumer.registerExternalCommits]].
    *
    * When `false`, streams for revoked partitions may continue to run even though the rebalance is not held up. Any
    * offset commits from these streams have a high chance of being delayed (commits are not possible during some phases
@@ -329,6 +339,21 @@ final case class ConsumerSettings(
    */
   def withAuthErrorRetrySchedule(authErrorRetrySchedule: Schedule[Any, Throwable, Any]): ConsumerSettings =
     copy(authErrorRetrySchedule = authErrorRetrySchedule)
+
+  /**
+   * Controls how to consume records produced transactionally.
+   *
+   * @param readCommitted
+   *   when `true`, only consume records which have been committed, when `false`, consume all records, even records
+   *   which are part of an aborted transaction. Non-transactional records will be consumed unconditionally in either
+   *   mode.
+   *
+   * Note that Kafka's default is to read all records (`readCommitted = false`).
+   */
+  def withReadCommitted(readCommitted: Boolean = true): ConsumerSettings = {
+    val isolationLevel = if (readCommitted) IsolationLevel.READ_COMMITTED else IsolationLevel.READ_UNCOMMITTED
+    withProperty(ConsumerConfig.ISOLATION_LEVEL_CONFIG, isolationLevel.toString)
+  }
 
 }
 

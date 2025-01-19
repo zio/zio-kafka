@@ -5,6 +5,7 @@ import org.apache.kafka.common.TopicPartition
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Committer.CommitOffsets
+import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
 import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
@@ -96,8 +97,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
           records = createTestRecords(3)
           recordsPulled <- Promise.make[Nothing, Unit]
           _             <- streamControl.offerRecords(records)
-          runtime       <- ZIO.runtime[Any]
-          committer     <- LiveCommitter.make(10.seconds, Diagnostics.NoOp, mockMetrics, ZIO.unit, runtime)
+          committer     <- LiveCommitter.make(10.seconds, Diagnostics.NoOp, mockMetrics, ZIO.unit)
 
           streamDrain <-
             streamControl.stream
@@ -173,16 +173,19 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
     settings: ConsumerSettings = ConsumerSettings(List("")).withCommitTimeout(1.second),
     rebalanceSafeCommits: Boolean = false
   ): ZIO[Scope, Throwable, RebalanceCoordinator] =
-    Semaphore.make(1).map(new ConsumerAccess(mockConsumer, _)).map { consumerAccess =>
-      new RebalanceCoordinator(
-        lastEvent,
-        settings.withRebalanceSafeCommits(rebalanceSafeCommits),
-        consumerAccess,
-        5.seconds,
-        ZIO.succeed(assignedStreams),
-        committer
-      )
-    }
+    Semaphore
+      .make(1)
+      .map(new ConsumerAccess(mockConsumer, _))
+      .map { consumerAccess =>
+        new RebalanceCoordinator(
+          lastEvent,
+          settings.withRebalanceSafeCommits(rebalanceSafeCommits),
+          consumerAccess,
+          5.seconds,
+          ZIO.succeed(assignedStreams),
+          committer
+        )
+      }
 
   private def createTestRecords(count: Int): Chunk[ByteArrayCommittableRecord] =
     Chunk.fromIterable(
@@ -203,12 +206,11 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
 }
 
 abstract class MockCommitter extends Committer {
-  override val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] = _ => ZIO.unit
+  override val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]                  = _ => ZIO.unit
+  override val registerExternalCommits: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] = _ => ZIO.unit
 
-  override def processQueuedCommits(
-    commitAsync: (java.util.Map[TopicPartition, OffsetAndMetadata], OffsetCommitCallback) => zio.Task[Unit],
-    executeOnEmpty: Boolean
-  ): zio.Task[Unit] = ZIO.unit
+  override def processQueuedCommits(consumer: ByteArrayKafkaConsumer, executeOnEmpty: Boolean): Task[Unit] = ZIO.unit
+
   override def queueSize: UIO[Int]                   = ZIO.succeed(0)
   override def pendingCommitCount: UIO[Int]          = ZIO.succeed(0)
   override def getPendingCommits: UIO[CommitOffsets] = ZIO.succeed(CommitOffsets.empty)
