@@ -23,7 +23,7 @@ private[consumer] final class Runloop private (
   sameThreadRuntime: Runtime[Any],
   consumer: ConsumerAccess,
   commandQueue: Queue[RunloopCommand],
-  commitAvailable: Queue[Boolean],
+  commitAvailableQueue: Queue[Boolean],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
   diagnostics: Diagnostics,
   maxStreamPullInterval: Duration,
@@ -492,7 +492,7 @@ private[consumer] final class Runloop private (
 
     ZStream
       .fromQueue(commandQueue)
-      .merge(ZStream.fromQueue(commitAvailable).as(RunloopCommand.CommitAvailable))
+      .merge(ZStream.fromQueue(commitAvailableQueue).as(RunloopCommand.CommitAvailable))
       .takeWhile(_ != RunloopCommand.StopRunloop)
       .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
         for {
@@ -588,8 +588,8 @@ object Runloop {
       _            <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
       commandQueue <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
       // A one-element dropping queue used to signal between two fibers that new commits are pending and we should poll
-      commitAvailable    <- ZIO.acquireRelease(Queue.dropping[Boolean](1))(_.shutdown)
-      lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
+      commitAvailableQueue <- ZIO.acquireRelease(Queue.dropping[Boolean](1))(_.shutdown)
+      lastRebalanceEvent   <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
       currentStateRef   <- Ref.make(initialState)
       sameThreadRuntime <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
@@ -600,7 +600,7 @@ object Runloop {
                        settings.commitTimeout,
                        diagnostics,
                        metrics,
-                       commitAvailable.offer(true).unit
+                       commitAvailableQueue.offer(true).unit
                      )
       rebalanceCoordinator = new RebalanceCoordinator(
                                lastRebalanceEvent,
@@ -616,7 +616,7 @@ object Runloop {
                   sameThreadRuntime = sameThreadRuntime,
                   consumer = consumer,
                   commandQueue = commandQueue,
-                  commitAvailable = commitAvailable,
+                  commitAvailableQueue = commitAvailableQueue,
                   partitionsHub = partitionsHub,
                   diagnostics = diagnostics,
                   maxStreamPullInterval = maxStreamPullInterval,
