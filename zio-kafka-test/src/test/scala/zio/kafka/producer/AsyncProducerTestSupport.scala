@@ -211,7 +211,7 @@ object AsyncProducerTestSupport {
                          sendOperation.callbackPromise.await,
                          Seq(ZIO.logInfo(s"Still expecting mock behavior $mb").delay(3.seconds).forever)
                        )
-                       .timeoutFail(new AssertionError("Timed out waiting for mock behavior $mb"))(1.minute)
+                       .timeoutFail(new AssertionError(s"Timed out waiting for mock behavior $mb"))(1.minute)
               } yield ()
             case CallbackSucceed(n) =>
               for {
