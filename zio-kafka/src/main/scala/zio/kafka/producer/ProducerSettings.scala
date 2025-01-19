@@ -17,8 +17,8 @@ import zio.kafka.security.KafkaCredentialStore
 final case class ProducerSettings(
   closeTimeout: Duration = 30.seconds,
   sendBufferSize: Int = 4096,
-  properties: Map[String, AnyRef] = Map.empty,
-  authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.stop
+  authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.stop,
+  properties: Map[String, AnyRef] = Map.empty
 ) {
   def driverSettings: Map[String, AnyRef] = properties
 

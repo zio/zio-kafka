@@ -13,11 +13,8 @@ object TransactionalProducerSettings {
 
   def apply(bootstrapServers: List[String], transactionalId: String): TransactionalProducerSettings =
     TransactionalProducerSettings(
-      ProducerSettings(
-        30.seconds,
-        4096,
-        Map(ProducerConfig.TRANSACTIONAL_ID_CONFIG -> transactionalId)
-      ).withBootstrapServers(bootstrapServers)
+      ProducerSettings(bootstrapServers)
+        .withProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
     )
 
   def apply(
@@ -28,10 +25,10 @@ object TransactionalProducerSettings {
     sendBufferSize: Int
   ): TransactionalProducerSettings =
     TransactionalProducerSettings(
-      ProducerSettings(
-        closeTimeout,
-        sendBufferSize,
-        properties.updated(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
-      ).withBootstrapServers(bootstrapServers)
+      ProducerSettings(bootstrapServers)
+        .withCloseTimeout(closeTimeout)
+        .withSendBufferSize(sendBufferSize)
+        .withProperties(properties)
+        .withProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
     )
 }
