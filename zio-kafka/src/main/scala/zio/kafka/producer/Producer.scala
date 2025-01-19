@@ -614,18 +614,22 @@ private[producer] final class ProducerLive(
             }
           }
 
-          var previousSendCallsSucceed = true
+          @volatile var previousSendCallsSucceed = true
 
           recordsIterator.foreach { case (record: ByteRecord, recordIndex: Int) =>
             if (previousSendCallsSucceed) {
               try {
                 val _ = p.send(
                   record,
-                  (metadata: RecordMetadata, err: Exception) =>
-                    insertSentResult(
-                      recordIndex,
-                      if (err eq null) Right(metadata) else Left(err)
-                    )
+                  (metadata: RecordMetadata, err: Exception) => {
+                    val sendResult = if (err eq null) {
+                      Right(metadata)
+                    } else {
+                      previousSendCallsSucceed = false
+                      Left(err)
+                    }
+                    insertSentResult(recordIndex, sendResult)
+                  }
                 )
               } catch {
                 case NonFatal(err) =>

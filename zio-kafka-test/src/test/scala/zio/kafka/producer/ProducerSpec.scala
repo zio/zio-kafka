@@ -3,7 +3,7 @@ package zio.kafka.producer
 import org.apache.kafka.clients.producer.{ Producer => KafkaProducer, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.errors.AuthenticationException
 import zio._
-import zio.test.TestAspect.withLiveClock
+import zio.test.TestAspect.{ flaky, withLiveClock }
 import zio.test._
 
 object ProducerSpec extends ZIOSpecDefault {
@@ -68,7 +68,7 @@ object ProducerSpec extends ZIOSpecDefault {
             )
           }
         },
-        test("omits sending further records in chunk when send call fails") {
+        test("omits sending further records after failure from send") {
           val mockBehavior = AsyncProducerTestSupport
             .newMockBehavior[Array[Byte], Array[Byte]]()
             .sendSucceed()
@@ -87,6 +87,33 @@ object ProducerSpec extends ZIOSpecDefault {
             )
           }
         },
+        test("omits sending further records after exception from callback") {
+          // This test is flaky because there is a race between the producer reading and the callback setting the
+          // `previousSendCallsSucceed` flag. Most often the producer is faster and is therefore already sending the
+          // next record. In this test we assume the producer is faster, hence we expect one more record after the
+          // callback failure.
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendSucceed()
+            .sendSucceed()
+            .callbackFail(authException)
+            .sendSucceed()
+            .callbackSucceed()
+            .callbackSucceed()
+          for {
+            results <- runTest(mockBehavior, recordsToSend)
+          } yield {
+            val history = mockBehavior.history
+            assertTrue(
+              results.length == recordsToSend.length,
+              results(0).left.forall(_.getMessage == testAuthenticationExceptionMessage),
+              results(1).isRight,
+              results(2).isRight,
+              results.drop(3).forall(_ == Left(Producer.PublishOmittedException)),
+              history.size == 3
+            )
+          }
+        } @@ flaky(3),
         test("retries send after an AuthenticationException from send") {
           val mockBehavior = AsyncProducerTestSupport
             .newMockBehavior[Array[Byte], Array[Byte]]()
