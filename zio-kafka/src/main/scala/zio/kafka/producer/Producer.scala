@@ -517,57 +517,62 @@ private[producer] final class ProducerLive(
           records: Chunk[ByteRecord],
           done: Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]],
           driver: Schedule.Driver[Any, Any, Throwable, Any]
-        ): ZIO[Any, Nothing, Any] =
-          sendQueue.offer(
-            records -> { results =>
-              if (results.forall(_.isRight)) {
-                // All records were successfully published, we're done
-                if (recordIndices.size == totalRecordCount) {
-                  // Optimization (not allocating `finalResults`) for when everything goes well first time
-                  done.succeed(results).unit
-                } else {
-                  // Copy results of this attempt to the final results
-                  storeResults(recordIndices, results)
-                  complete(done)
-                }
+        ): ZIO[Any, Nothing, Any] = {
+          def retryFailedRecords(results: Chunk[Either[Throwable, RecordMetadata]]) = {
+            // Note that if we get here, all Left's can be retried. Also, we know there is at least 1 Left.
+            val toRetry: Seq[(RuntimeFlags, ByteRecord)] =
+              (recordIndices lazyZip records lazyZip results).flatMap {
+                case (_, _, Right(_))     => Seq.empty
+                case (i, record, Left(_)) => Seq((i, record))
+              }
+            val (retryIndices, retryRecords) = toRetry.unzip
+            ZIO.logInfo(
+              s"Retrying publish ${retryRecords.size} (of ${records.size}) records after AuthorizationException/AuthenticationException"
+            ) *>
+              loop(retryIndices, Chunk.from(retryRecords), done, driver).unit
+          }
+
+          val continuation: Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit] = { results =>
+            if (results.forall(_.isRight)) {
+              // All records were successfully published, we're done
+              if (recordIndices.size == totalRecordCount) {
+                // Optimization (not allocating `finalResults`) for when everything goes well first time
+                done.succeed(results).unit
               } else {
                 // Copy results of this attempt to the final results
                 storeResults(recordIndices, results)
-                // There are some failures, let's see if we can retry some records.
-                // We only retry after an auth error. Any other error and we give up.
-                val hasFatalError = results.exists {
-                  case Right(_) |
-                      Left(_: AuthorizationException | _: AuthenticationException | Producer.PublishOmittedException) =>
-                    false
-                  case _ => true
-                }
-                if (hasFatalError) {
-                  complete(done)
-                } else {
-                  // Ask the schedule if we should retry
-                  driver
-                    .next(retryAfterAuthException)
-                    .foldZIO(
-                      _ => // Schedule says no
-                        complete(done),
-                      _ => {
-                        // Schedule allows retry, select the records to retry.
-                        // Note that if we get here, all Left's can be retried. Also, we know there is at least 1 Left.
-                        val toRetry: Seq[(Int, ByteRecord)] = (recordIndices lazyZip records lazyZip results).flatMap {
-                          case (_, _, Right(_))     => Seq.empty
-                          case (i, record, Left(_)) => Seq((i, record))
-                        }
-                        val (retryIndices, retryRecords) = toRetry.unzip
-                        ZIO.logInfo(
-                          s"Retrying publish ${retryRecords.size} (of ${records.size}) records after AuthorizationException/AuthenticationException"
-                        ) *>
-                          loop(retryIndices, Chunk.from(retryRecords), done, driver).unit
-                      }
-                    )
-                }
+                complete(done)
+              }
+            } else {
+              // Copy results of this attempt to the final results
+              storeResults(recordIndices, results)
+              // There are some failures, let's see if we can retry some records.
+              // We only retry after an auth error. Any other error and we give up.
+              val hasFatalError = results.exists {
+                case Right(_) | Left(
+                      _: AuthorizationException | _: AuthenticationException | Producer.PublishOmittedException
+                    ) =>
+                  false
+                case _ => true
+              }
+              if (hasFatalError) {
+                complete(done)
+              } else {
+                // Ask the schedule if we should retry
+                driver
+                  .next(retryAfterAuthException)
+                  .foldZIO(
+                    _ => // Schedule says no
+                      complete(done),
+                    _ => // Schedule allows retry, select the records to retry.
+                      retryFailedRecords(results)
+                  )
               }
             }
-          )
+          }
+
+          sendQueue.offer(records -> continuation)
+        }
 
         for {
           done <- Promise.make[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
