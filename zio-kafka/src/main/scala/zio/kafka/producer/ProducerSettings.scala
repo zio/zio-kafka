@@ -10,7 +10,8 @@ import zio.kafka.security.KafkaCredentialStore
  * To stay source compatible with future releases, you are recommended to construct the settings as follows:
  * {{{
  *   ProducerSettings(bootstrapServers)
- *     .withCloseTimeout(30.seconds)
+ *     .withLinger(500.millis)
+ *     .withCompression(ProducerCompression.Zstd(3))
  *     .... etc.
  * }}}
  */
@@ -42,6 +43,24 @@ final case class ProducerSettings(
 
   def withCredentials(credentialsStore: KafkaCredentialStore): ProducerSettings =
     withProperties(credentialsStore.properties)
+
+  /**
+   * @param lingerDuration
+   *   The maximum amount of time a record is allowed to linger in the producer's internal buffer. Higher values allow
+   *   for better batching (especially important when compression is used), lower values reduce latency and memory
+   *   usage.
+   */
+  def withLinger(lingerDuration: Duration): ProducerSettings =
+    withProperty(ProducerConfig.LINGER_MS_CONFIG, lingerDuration.toMillis.toString)
+
+  /**
+   * @param compression
+   *   The compression codec to use when publishing records. Compression is of full batches of data, so the efficacy of
+   *   batching will also impact the compression ratio (more batching means better compression). See also
+   *   [[withLinger]].
+   */
+  def withCompression(compression: ProducerCompression): ProducerSettings =
+    withProperties(compression.properties)
 
   /**
    * @param sendBufferSize
