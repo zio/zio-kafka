@@ -65,9 +65,8 @@ final case class ProducerSettings(
   /**
    * @param sendBufferSize
    *   The maximum number of record chunks that can queue up while waiting for the underlying producer to become
-   *   available.
-   *   Performance critical users that publish a lot of records one by one (instead of in chunks), should consider
-   *   increasing this value, for example to `10240`.
+   *   available. Performance critical users that publish a lot of records one by one (instead of in chunks), should
+   *   consider increasing this value, for example to `10240`.
    */
   def withSendBufferSize(sendBufferSize: Int): ProducerSettings =
     copy(sendBufferSize = sendBufferSize)
