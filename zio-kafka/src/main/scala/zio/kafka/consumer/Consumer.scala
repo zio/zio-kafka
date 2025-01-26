@@ -8,7 +8,6 @@ import org.apache.kafka.clients.consumer.{
 }
 import org.apache.kafka.common._
 import zio._
-import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.diagnostics.Diagnostics.ConcurrentDiagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
@@ -198,7 +197,6 @@ object Consumer {
   ): ZIO[Scope, Throwable, Consumer] =
     for {
       wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
-      _                  <- ZIO.addFinalizer(wrappedDiagnostics.emit(Finalization.ConsumerFinalized))
       _                  <- SslHelper.validateEndpoint(settings.driverSettings)
       consumerAccess     <- ConsumerAccess.make(settings)
       runloopAccess      <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
@@ -216,10 +214,10 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _      <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
-      access <- Semaphore.make(1)
+      wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
+      access             <- Semaphore.make(1)
       consumerAccess = new ConsumerAccess(javaConsumer, access)
-      runloopAccess <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+      runloopAccess <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**
@@ -256,9 +254,9 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _ <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
+      wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
       consumerAccess = new ConsumerAccess(javaConsumer, access)
-      runloopAccess <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+      runloopAccess <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**
