@@ -227,7 +227,7 @@ object Consumer {
    *   - creating and closing the `KafkaConsumer`,
    *   - making sure `auto.commit` is disabled,
    *   - creating `access` as a fair semaphore with a single permit,
-   *   - acquire a permit from `access` before using the consumer, and release if afterwards,
+   *   - acquire a permit from `access` before using the consumer, and release it afterward,
    *   - not using the following consumer methods: `subscribe`, `unsubscribe`, `assign`, `poll`, `commit*`, `seek`,
    *     `pause`, `resume`, and `enforceRebalance`,
    *   - keeping the consumer config given to the java consumer in sync with the properties in `settings` (for example
@@ -245,7 +245,8 @@ object Consumer {
    * @param access
    *   A Semaphore with 1 permit.
    * @param diagnostics
-   *   Optional diagnostics listener
+   *   an optional callback for key events in the consumer life-cycle. The callbacks will be executed in a separate
+   *   fiber. Since the events are queued, failure to handle these events leads to out of memory errors
    */
   def fromJavaConsumerWithPermit(
     javaConsumer: JConsumer[Array[Byte], Array[Byte]],
