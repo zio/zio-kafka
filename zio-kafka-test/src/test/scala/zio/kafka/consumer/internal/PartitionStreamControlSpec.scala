@@ -3,8 +3,7 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
-import zio.kafka.consumer.CommittableRecord
-import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.consumer.{ CommittableRecord, Consumer }
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.test._
 
@@ -156,7 +155,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
 
   private def createTestControlWithRequestData(requestData: UIO[Any]): ZIO[Any, Nothing, PartitionStreamControl] = {
     val tp          = new TopicPartition("test-topic", 0)
-    val diagnostics = Diagnostics.NoOp
+    val diagnostics = Consumer.NoDiagnostics
     PartitionStreamControl.newPartitionStream(
       tp,
       requestData.unit,

@@ -10,14 +10,9 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, CommitTimeout, OffsetRetrieval }
-import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
-import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization.{
-  ConsumerFinalized,
-  RunloopFinalized,
-  SubscriptionFinalized
-}
-import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, CommitTimeout, ConsumerDiagnostics, OffsetRetrieval }
+import zio.kafka.consumer.ConsumerDiagnosticEvent.{ ConsumerFinalized, RunloopFinalized, SubscriptionFinalized }
+import zio.kafka.diagnostics.SlidingDiagnostics
 import zio.kafka.producer.{ Producer, TransactionalProducer }
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
@@ -571,63 +566,61 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         val partitionCount = 6
 
         ZIO.scoped {
-          Diagnostics.SlidingQueue
-            .make()
-            .flatMap { diagnostics =>
-              for {
-                // Produce messages on several partitions
-                topic   <- randomTopic
-                group   <- randomGroup
-                client1 <- randomClient
-                client2 <- randomClient
+          SlidingDiagnostics.make[ConsumerDiagnosticEvent]().flatMap { diagnostics =>
+            for {
+              // Produce messages on several partitions
+              topic   <- randomTopic
+              group   <- randomGroup
+              client1 <- randomClient
+              client2 <- randomClient
 
-                _ <- KafkaTestUtils.createCustomTopic(topic, partitionCount)
-                _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
-                       produceMany(topic, partition = i % partitionCount, kvs = List(s"key$i" -> s"msg$i"))
-                     }
+              _ <- KafkaTestUtils.createCustomTopic(topic, partitionCount)
+              _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
+                     produceMany(topic, partition = i % partitionCount, kvs = List(s"key$i" -> s"msg$i"))
+                   }
 
-                // Consume messages
-                subscription = Subscription.topics(topic)
-                consumer1Ready        <- Promise.make[Nothing, Unit]
-                assignedPartitionsRef <- Ref.make(Set.empty[Int]) // Set of partition numbers
-                consumer1 <- Consumer
-                               .partitionedStream(subscription, Serde.string, Serde.string)
-                               .flatMapPar(partitionCount) { case (tp, partition) =>
-                                 ZStream
-                                   .fromZIO(
-                                     consumer1Ready
-                                       .succeed(())
-                                       .whenZIO(
-                                         assignedPartitionsRef
-                                           .updateAndGet(_ + tp.partition())
-                                           .map(_.size >= (partitionCount / 2))
-                                       ) *>
-                                       partition.runDrain
-                                   )
-                                   .as(tp)
-                               }
-                               .take(partitionCount.toLong / 2)
-                               .runDrain
-                               .provideSomeLayer[Kafka](
-                                 consumer(client1, Some(group), diagnostics = diagnostics)
-                               )
-                               .fork
-                diagnosticStream <- ZStream
-                                      .fromQueue(diagnostics.queue)
-                                      .collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
-                                      .runCollect
-                                      .fork
-                _ <- consumer1Ready.await
-                consumer2 <- Consumer
-                               .partitionedStream(subscription, Serde.string, Serde.string)
-                               .take(partitionCount.toLong / 2)
-                               .runDrain
-                               .provideSomeLayer[Kafka](consumer(client2, Some(group)))
-                               .fork
-                _ <- consumer1.join
-                _ <- consumer2.join
-              } yield diagnosticStream.join
-            }
+              // Consume messages
+              subscription = Subscription.topics(topic)
+              consumer1Ready        <- Promise.make[Nothing, Unit]
+              assignedPartitionsRef <- Ref.make(Set.empty[Int]) // Set of partition numbers
+              consumer1 <- Consumer
+                             .partitionedStream(subscription, Serde.string, Serde.string)
+                             .flatMapPar(partitionCount) { case (tp, partition) =>
+                               ZStream
+                                 .fromZIO(
+                                   consumer1Ready
+                                     .succeed(())
+                                     .whenZIO(
+                                       assignedPartitionsRef
+                                         .updateAndGet(_ + tp.partition())
+                                         .map(_.size >= (partitionCount / 2))
+                                     ) *>
+                                     partition.runDrain
+                                 )
+                                 .as(tp)
+                             }
+                             .take(partitionCount.toLong / 2)
+                             .runDrain
+                             .provideSomeLayer[Kafka](
+                               consumer(client1, Some(group), diagnostics = diagnostics)
+                             )
+                             .fork
+              diagnosticStream <- ZStream
+                                    .fromQueue(diagnostics.queue)
+                                    .collect { case rebalance: ConsumerDiagnosticEvent.Rebalance => rebalance }
+                                    .runCollect
+                                    .fork
+              _ <- consumer1Ready.await
+              consumer2 <- Consumer
+                             .partitionedStream(subscription, Serde.string, Serde.string)
+                             .take(partitionCount.toLong / 2)
+                             .runDrain
+                             .provideSomeLayer[Kafka](consumer(client2, Some(group)))
+                             .fork
+              _ <- consumer1.join
+              _ <- consumer2.join
+            } yield diagnosticStream.join
+          }
         }.flatten
           .map(diagnosticEvents => assert(diagnosticEvents.size)(isGreaterThanEqualTo(2)))
       },
@@ -909,7 +902,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           clientId: String,
           groupId: String,
           rebalanceSafeCommits: Boolean,
-          diagnostics: Diagnostics
+          diagnostics: ConsumerDiagnostics
         ): ZIO[Scope with Kafka, Throwable, Consumer] =
           for {
             settings <- consumerSettings(
@@ -942,12 +935,12 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                  .fork
           _                       <- ZIO.logDebug("Starting consumer 1")
           rebalanceEndTimePromise <- Promise.make[Nothing, Instant]
-          c1Diagnostics = new Diagnostics {
-                            override def emit(event: => DiagnosticEvent): UIO[Unit] = event match {
-                              case r: DiagnosticEvent.Rebalance if r.assigned.size == 1 =>
+          c1Diagnostics = new ConsumerDiagnostics {
+                            override def emit(event: => ConsumerDiagnosticEvent): UIO[Unit] = event match {
+                              case r: ConsumerDiagnosticEvent.Rebalance if r.assigned.size == 1 =>
                                 ZIO.logDebug(s"Rebalance finished: $r") *>
                                   Clock.instant.flatMap(rebalanceEndTimePromise.succeed).unit
-                              case r: DiagnosticEvent.Rebalance =>
+                              case r: ConsumerDiagnosticEvent.Rebalance =>
                                 ZIO.logDebug(s"Rebalance finished: $r")
                               case _ => ZIO.unit
                             }
@@ -981,7 +974,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               .fork
           _                  <- c1Started.await
           _                  <- ZIO.logDebug("Starting consumer 2")
-          c2                 <- makeConsumer(clientId2, groupId, rebalanceSafeCommits = false, Diagnostics.NoOp)
+          c2                 <- makeConsumer(clientId2, groupId, rebalanceSafeCommits = false, Consumer.NoDiagnostics)
           rebalanceStartTime <- Clock.instant
           _ <- ZIO
                  .logAnnotate("consumer", "2") {
@@ -1252,7 +1245,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               )
                 .withPollTimeout(500.millis)
             )
-          ) ++ ZLayer.succeed(Diagnostics.NoOp) >>> Consumer.live
+          ) ++ ZLayer.succeed(Consumer.NoDiagnostics) >>> Consumer.live
 
         for {
           // Produce messages on several partitions
@@ -1536,7 +1529,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         test(
           "Booting a Consumer to do something else than consuming should not fail with a timeout exception"
         ) {
-          def test(diagnostics: Diagnostics) =
+          def test(diagnostics: ConsumerDiagnostics) =
             for {
               clientId <- randomClient
               settings <- consumerSettings(
@@ -1548,18 +1541,18 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             } yield assertCompletes
 
           for {
-            diagnostics <- Diagnostics.SlidingQueue.make(1000)
+            diagnostics <- SlidingDiagnostics.make[ConsumerDiagnosticEvent](1000)
             testResult <- ZIO.scoped {
                             test(diagnostics)
                           }
-            finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
+            finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isFinalizationEvent))
           } yield testResult && assert(finalizationEvents)(hasSameElements(Chunk(ConsumerFinalized)))
         },
         suite(
           "Ordering of finalizers matters. If subscriptions are finalized after the runloop, it creates a deadlock"
         )(
           test("When not consuming, the Runloop is not started so only the Consumer is finalized") {
-            def test(diagnostics: Diagnostics): ZIO[Scope & Kafka, Throwable, TestResult] =
+            def test(diagnostics: ConsumerDiagnostics): ZIO[Scope & Kafka, Throwable, TestResult] =
               for {
                 clientId <- randomClient
                 settings <- consumerSettings(clientId = clientId)
@@ -1567,17 +1560,17 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               } yield assertCompletes
 
             for {
-              diagnostics <- Diagnostics.SlidingQueue.make(1000)
+              diagnostics <- SlidingDiagnostics.make[ConsumerDiagnosticEvent](1000)
               testResult <- ZIO.scoped {
                               test(diagnostics)
                             }
-              finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
+              finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isFinalizationEvent))
             } yield testResult && assert(finalizationEvents)(hasSameElements(Chunk(ConsumerFinalized)))
           },
           test("When consuming, the Runloop is started. The finalization orders matters to avoid a deadlock") {
             // This test ensures that we're not inadvertently introducing a deadlock by changing the order of finalizers.
 
-            def test(diagnostics: Diagnostics): ZIO[Producer & Scope & Kafka, Throwable, TestResult] =
+            def test(diagnostics: ConsumerDiagnostics): ZIO[Producer & Scope & Kafka, Throwable, TestResult] =
               for {
                 clientId <- randomClient
                 topic    <- randomTopic
@@ -1596,11 +1589,11 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               } yield assert(consumed0)(equalTo(1L)) && assert(consumed1)(equalTo(1L))
 
             for {
-              diagnostics <- Diagnostics.SlidingQueue.make(1000)
+              diagnostics <- SlidingDiagnostics.make[ConsumerDiagnosticEvent](1000)
               testResult <- ZIO.scoped {
                               test(diagnostics)
                             }
-              finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
+              finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isFinalizationEvent))
             } yield testResult && assert(finalizationEvents)(
               // The order is very important.
               // The subscription must be finalized before the runloop, otherwise it creates a deadlock.
@@ -1621,7 +1614,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             val messagesToConsumeBeforeStop     = 1000 // Adjust this threshold as needed
             val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key-$i", s"msg-$i"))
 
-            def test(diagnostics: Diagnostics): ZIO[Producer & Scope & Kafka, Throwable, TestResult] =
+            def test(diagnostics: ConsumerDiagnostics): ZIO[Producer & Scope & Kafka, Throwable, TestResult] =
               for {
                 clientId <- randomClient
                 topic    <- randomTopic
@@ -1658,11 +1651,11 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 assert(consumed1)(equalTo(numberOfMessages.toLong))
 
             for {
-              diagnostics <- Diagnostics.SlidingQueue.make(1000)
+              diagnostics <- SlidingDiagnostics.make[ConsumerDiagnosticEvent](1000)
               testResult <- ZIO.scoped {
                               test(diagnostics)
                             }
-              finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
+              finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isFinalizationEvent))
             } yield testResult && assert(finalizationEvents)(
               // The order is very important.
               // The subscription must be finalized before the runloop, otherwise it creates a deadlock.
@@ -1702,5 +1695,14 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       .provideSomeShared[Scope](
         Kafka.embedded
       ) @@ withLiveClock @@ timeout(2.minutes) @@ TestAspect.timed
+
+  private final implicit class ConsumerDiagnosticsOps(private val event: ConsumerDiagnosticEvent) extends AnyVal {
+    def isFinalizationEvent: Boolean = event match {
+      case SubscriptionFinalized => true
+      case RunloopFinalized      => true
+      case ConsumerFinalized     => true
+      case _                     => false
+    }
+  }
 
 }
