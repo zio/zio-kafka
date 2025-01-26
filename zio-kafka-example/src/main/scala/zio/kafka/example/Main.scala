@@ -2,7 +2,6 @@ package zio.kafka.example
 
 import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import zio._
-import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.{ Consumer, ConsumerSettings, Subscription }
 import zio.kafka.serde.Serde
 import zio.logging.backend.SLF4J
@@ -67,7 +66,7 @@ object Main extends ZIOAppDefault {
       runConsumerStream
         .provide(
           consumerSettings,
-          ZLayer.succeed(Diagnostics.NoOp),
+          ZLayer.succeed(Consumer.NoDiagnostics),
           Consumer.live,
           MyKafka.embedded
         )
