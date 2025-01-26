@@ -4,8 +4,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.consumer.CommittableRecord
-import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
+import zio.kafka.diagnostics.Diagnostics
 import zio.test._
 
 import java.util.concurrent.TimeoutException

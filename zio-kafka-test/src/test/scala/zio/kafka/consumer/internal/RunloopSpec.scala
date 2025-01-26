@@ -10,9 +10,11 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException }
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.Consumer.ConsumerDiagnostics
+import zio.kafka.consumer.diagnostics.DiagnosticEvent
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.kafka.consumer.{ ConsumerSettings, Subscription }
+import zio.kafka.diagnostics.{ Diagnostics, SlidingDiagnostics }
 import zio.metrics.{ MetricState, Metrics }
 import zio.stream.{ Take, ZStream }
 import zio.test.TestAspect.withLiveClock
@@ -63,7 +65,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
       test(
         "runloop does not starts a new stream for partition which being revoked right after assignment within the same RebalanceEvent"
       ) {
-        Diagnostics.SlidingQueue.make(100).flatMap { diagnostics =>
+        SlidingDiagnostics.make[DiagnosticEvent](100).flatMap { diagnostics =>
           withRunloop(diagnostics) { (mockConsumer, partitionsHub, runloop) =>
             mockConsumer.schedulePollTask { () =>
               mockConsumer.updateEndOffsets(Map(tp10 -> Long.box(0L), tp11 -> Long.box(0L)).asJava)
@@ -103,7 +105,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
       test(
         "runloop continues polling after a lost partition"
       ) {
-        Diagnostics.SlidingQueue.make(100).flatMap { diagnostics =>
+        SlidingDiagnostics.make[DiagnosticEvent](100).flatMap { diagnostics =>
           var rebalanceListener: ConsumerRebalanceListener = null
 
           // Catches the rebalance listener so we can use it
@@ -188,7 +190,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
     ) @@ withLiveClock
 
   private def withRunloop(
-    diagnostics: Diagnostics = Diagnostics.NoOp,
+    diagnostics: ConsumerDiagnostics = Diagnostics.NoOp,
     mockConsumer: BinaryMockConsumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST)
   )(
     f: (BinaryMockConsumer, PartitionsHub, Runloop) => ZIO[Scope, Throwable, TestResult]
