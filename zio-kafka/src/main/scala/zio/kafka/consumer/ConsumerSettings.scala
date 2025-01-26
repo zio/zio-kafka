@@ -240,6 +240,8 @@ final case class ConsumerSettings(
    * External commits (that is, commits to an external system, e.g. a relational database) must be registered to the
    * consumer with [[Consumer.registerExternalCommits]].
    *
+   * When this consumer is coupled to a TransactionalProducer, `rebalanceSafeCommits` must be enabled.
+   *
    * When `false`, streams for revoked partitions may continue to run even though the rebalance is not held up. Any
    * offset commits from these streams have a high chance of being delayed (commits are not possible during some phases
    * of a rebalance). The consumer that takes over the partition will likely not see these delayed commits and will
