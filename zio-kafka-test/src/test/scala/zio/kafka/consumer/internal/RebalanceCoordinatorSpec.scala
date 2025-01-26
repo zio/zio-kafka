@@ -3,7 +3,7 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.consumer.Consumer.NoDiagnostics
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator._
@@ -224,7 +224,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
     ) @@ TestAspect.withLiveClock
 
   private def makeStreamControl(tp: TopicPartition): UIO[PartitionStreamControl] =
-    PartitionStreamControl.newPartitionStream(tp, ZIO.unit, Diagnostics.NoOp, 30.seconds)
+    PartitionStreamControl.newPartitionStream(tp, ZIO.unit, NoDiagnostics, 30.seconds)
 
   private def makeCoordinator(
     lastEvent: Ref.Synchronized[RebalanceEvent],

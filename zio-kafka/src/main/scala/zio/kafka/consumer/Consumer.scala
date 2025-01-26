@@ -8,9 +8,9 @@ import org.apache.kafka.clients.consumer.{
 }
 import org.apache.kafka.common._
 import zio._
-import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.diagnostics.Diagnostics.ConcurrentDiagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
+import zio.kafka.diagnostics.Diagnostics
+import zio.kafka.diagnostics.internal.ConcurrentDiagnostics
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
 import zio.stream._
@@ -178,16 +178,23 @@ trait Consumer {
 }
 
 object Consumer {
+
+  type ConsumerDiagnostics = Diagnostics[ConsumerDiagnosticEvent]
+
+  case object NoDiagnostics extends ConsumerDiagnostics {
+    override def emit(event: => ConsumerDiagnosticEvent): UIO[Unit] = ZIO.unit
+  }
+
   case object CommitTimeout extends RuntimeException("Commit timeout") with NoStackTrace
 
   val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
 
-  def live: RLayer[ConsumerSettings & Diagnostics, Consumer] =
+  def live: RLayer[ConsumerSettings & ConsumerDiagnostics, Consumer] =
     ZLayer.scoped {
       for {
         settings    <- ZIO.service[ConsumerSettings]
-        diagnostics <- ZIO.service[Diagnostics]
+        diagnostics <- ZIO.service[ConsumerDiagnostics]
         consumer    <- make(settings, diagnostics)
       } yield consumer
     }
@@ -201,10 +208,10 @@ object Consumer {
    */
   def make(
     settings: ConsumerSettings,
-    diagnostics: Diagnostics = Diagnostics.NoOp
+    diagnostics: ConsumerDiagnostics = NoDiagnostics
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
+      wrappedDiagnostics <- makeConcurrentDiagnostics(diagnostics)
       _                  <- SslHelper.validateEndpoint(settings.driverSettings)
       consumerAccess     <- ConsumerAccess.make(settings)
       runloopAccess      <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
@@ -242,10 +249,10 @@ object Consumer {
     javaConsumer: JConsumer[Array[Byte], Array[Byte]],
     settings: ConsumerSettings,
     access: Semaphore,
-    diagnostics: Diagnostics = Diagnostics.NoOp
+    diagnostics: ConsumerDiagnostics = NoDiagnostics
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
+      wrappedDiagnostics <- makeConcurrentDiagnostics(diagnostics)
       consumerAccess = new ConsumerAccess(javaConsumer, access)
       runloopAccess <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
     } yield new ConsumerLive(consumerAccess, settings, runloopAccess)
@@ -341,6 +348,11 @@ object Consumer {
     case object Latest   extends AutoOffsetStrategy
     case object None     extends AutoOffsetStrategy
   }
+
+  private def makeConcurrentDiagnostics(diagnostics: ConsumerDiagnostics): ZIO[Scope, Nothing, ConsumerDiagnostics] =
+    if (diagnostics == NoDiagnostics) ZIO.succeed(diagnostics)
+    else ConcurrentDiagnostics.make(diagnostics, ConsumerDiagnosticEvent.ConsumerFinalized)
+
 }
 
 private[consumer] final class ConsumerLive private[consumer] (

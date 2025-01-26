@@ -4,9 +4,8 @@ import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerRecord }
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio._
 import zio.kafka.admin._
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
+import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, ConsumerDiagnostics, NoDiagnostics, OffsetRetrieval }
 import zio.kafka.consumer._
-import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.producer._
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.stream.ZStream
@@ -237,7 +236,7 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
-    diagnostics: Diagnostics = Diagnostics.NoOp,
+    diagnostics: ConsumerDiagnostics = NoDiagnostics,
     rebalanceSafeCommits: Boolean = false,
     maxRebalanceDuration: Duration = 3.minutes,
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
@@ -266,7 +265,7 @@ object KafkaTestUtils {
    *
    * ℹ️ Instead of using a layer, consider using [[KafkaTestUtils.makeConsumer]] to directly get a consumer.
    */
-  def minimalConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
+  def minimalConsumer(diagnostics: ConsumerDiagnostics = NoDiagnostics): ZLayer[ConsumerSettings, Throwable, Consumer] =
     ZLayer.makeSome[ConsumerSettings, Consumer](
       ZLayer.succeed(diagnostics) >>> Consumer.live
     )
@@ -282,7 +281,7 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
-    diagnostics: Diagnostics = Diagnostics.NoOp,
+    diagnostics: ConsumerDiagnostics = NoDiagnostics,
     rebalanceSafeCommits: Boolean = false,
     maxRebalanceDuration: Duration = 3.minutes,
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
@@ -341,7 +340,7 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
-    diagnostics: Diagnostics = Diagnostics.NoOp,
+    diagnostics: ConsumerDiagnostics = NoDiagnostics,
     rebalanceSafeCommits: Boolean = false,
     properties: Map[String, String] = Map.empty,
     rebalanceListener: RebalanceListener = RebalanceListener.noop
@@ -371,7 +370,7 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
-    diagnostics: Diagnostics = Diagnostics.NoOp,
+    diagnostics: ConsumerDiagnostics = NoDiagnostics,
     rebalanceSafeCommits: Boolean = false,
     properties: Map[String, String] = Map.empty,
     rebalanceListener: RebalanceListener = RebalanceListener.noop
