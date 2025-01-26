@@ -8,7 +8,6 @@ import org.apache.kafka.clients.consumer.{
 }
 import org.apache.kafka.common._
 import zio._
-import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.diagnostics.Diagnostics.ConcurrentDiagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
@@ -198,7 +197,6 @@ object Consumer {
   ): ZIO[Scope, Throwable, Consumer] =
     for {
       wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
-      _                  <- ZIO.addFinalizer(wrappedDiagnostics.emit(Finalization.ConsumerFinalized))
       _                  <- SslHelper.validateEndpoint(settings.driverSettings)
       consumerAccess     <- ConsumerAccess.make(settings)
       runloopAccess      <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
@@ -216,10 +214,10 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _      <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
-      access <- Semaphore.make(1)
+      wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
+      access             <- Semaphore.make(1)
       consumerAccess = new ConsumerAccess(javaConsumer, access)
-      runloopAccess <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+      runloopAccess <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**
@@ -229,7 +227,7 @@ object Consumer {
    *   - creating and closing the `KafkaConsumer`,
    *   - making sure `auto.commit` is disabled,
    *   - creating `access` as a fair semaphore with a single permit,
-   *   - acquire a permit from `access` before using the consumer, and release if afterwards,
+   *   - acquire a permit from `access` before using the consumer, and release it afterward,
    *   - not using the following consumer methods: `subscribe`, `unsubscribe`, `assign`, `poll`, `commit*`, `seek`,
    *     `pause`, `resume`, and `enforceRebalance`,
    *   - keeping the consumer config given to the java consumer in sync with the properties in `settings` (for example
@@ -247,7 +245,8 @@ object Consumer {
    * @param access
    *   A Semaphore with 1 permit.
    * @param diagnostics
-   *   Optional diagnostics listener
+   *   an optional callback for key events in the consumer life-cycle. The callbacks will be executed in a separate
+   *   fiber. Since the events are queued, failure to handle these events leads to out of memory errors
    */
   def fromJavaConsumerWithPermit(
     javaConsumer: JConsumer[Array[Byte], Array[Byte]],
@@ -256,9 +255,9 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _ <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
+      wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
       consumerAccess = new ConsumerAccess(javaConsumer, access)
-      runloopAccess <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+      runloopAccess <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**
