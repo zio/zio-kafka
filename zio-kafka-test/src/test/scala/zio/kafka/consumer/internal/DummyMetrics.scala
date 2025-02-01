@@ -1,5 +1,5 @@
 package zio.kafka.consumer.internal
-import zio.{ UIO, ZIO }
+import zio._
 
 private[internal] class DummyMetrics extends ConsumerMetrics {
   override def observePoll(resumedCount: Int, pausedCount: Int, latency: zio.Duration, pollSize: Int): UIO[Unit] =

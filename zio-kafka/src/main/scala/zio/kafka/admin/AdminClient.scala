@@ -59,6 +59,9 @@ import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 import scala.util.{ Failure, Success, Try }
 
+/**
+ * Admin client, can be used to create, list, delete topics, consumer groups, etc.
+ */
 trait AdminClient {
 
   import AdminClient._

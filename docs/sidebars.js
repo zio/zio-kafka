@@ -14,7 +14,8 @@ const sidebars = {
         "preventing-duplicates",
         "sharing-consumer",
         "serialization-and-deserialization",
-        "writing-tests"
+        "writing-tests",
+        "migrating-to-2.11"
       ]
     }
   ]
