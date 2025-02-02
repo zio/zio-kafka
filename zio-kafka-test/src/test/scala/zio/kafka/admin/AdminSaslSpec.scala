@@ -1,6 +1,7 @@
-package zio.kafka
+package zio.kafka.admin
 
 import zio._
+import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.admin.acl._
 import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 import zio.kafka.testkit._

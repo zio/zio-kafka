@@ -1,13 +1,12 @@
 package zio.kafka.consumer
 
-import io.github.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils._
-import zio.kafka.testkit.{ Kafka, KafkaRandom }
+import zio.kafka.testkit.{ Kafka, KafkaRandom, KafkaTestUtils }
 import zio.stream.{ ZSink, ZStream }
 import zio.test.Assertion._
 import zio.test.TestAspect._
@@ -257,7 +256,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         client <- randomClient
         group  <- randomGroup
 
-        _ <- ZIO.succeed(EmbeddedKafka.createCustomTopic(topic1, partitions = 48)) // Large number of partitions
+        _ <- KafkaTestUtils.createCustomTopic(topic1, partitionCount = 48) // Large number of partitions
 
         _ <- produceMany(topic1, kvs)
 
