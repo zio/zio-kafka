@@ -361,6 +361,9 @@ object KafkaTestUtils {
       fRes     <- withAdminClient(settings)(f)
     } yield fRes
 
+  def createCustomTopic(topic: String, partitionCount: Int = 1): ZIO[Kafka, Throwable, Unit] =
+    withAdmin(_.createTopic(AdminClient.NewTopic(topic, partitionCount, 1)))
+
   private def withAdminClient[R, T](settings: AdminClientSettings)(f: AdminClient => RIO[R, T]): ZIO[R, Throwable, T] =
     ZIO.scoped[R] {
       AdminClient.make(settings).flatMap(f)
