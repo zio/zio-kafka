@@ -16,13 +16,15 @@ val indexPath = flameDir / "index.html"
 val indexContent = os.read(indexPath)
 
 val liPattern: Regex = """^ *<li>(\d{4}-\d{2}-\d{2}).*href="([0-9a-f]+)".*$""".r
-val oneMonthAgo = LocalDate.now.minusMonths(1)
+
+// Flame graphs from before this date are removed.
+val flameGraphCutoffDate = LocalDate.now.minusMonths(6)
 
 val (newIndexContentBuilder, removeDirsBuilder) = indexContent
   .linesIterator
   .foldLeft((Seq.newBuilder[String], Seq.newBuilder[String])) { case ((out, removed), line) =>
     line match {
-      case liPattern(date, dir) if (LocalDate.parse(date) < oneMonthAgo) =>
+      case liPattern(date, dir) if (LocalDate.parse(date) < flameGraphCutoffDate) =>
         (out, removed += dir)
       case _ =>
         (out += line, removed)
