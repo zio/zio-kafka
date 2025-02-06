@@ -65,31 +65,29 @@ import zio.kafka.consumer._
 import zio.kafka.serde._
 import scala.util.{Try, Success, Failure}
 
-val consumer = ZLayer.scoped(Consumer.make(consumerSettings))
-
 val keySerde = Serdes.string
 val valueSerde = Serdes.string.asTry   // <-- using `.asTry`
-val stream = Consumer
-  .plainStream(Subscription.topics("topic150"), keySerde, valueSerde)
 
-stream 
-  .mapZIO { record => // ⚠️ see section about `mapZIO` below!
-    val tryValue: Try[String] = record.record.value()
-    val offset: Offset = record.offset
-  
-    tryValue match {
-      case Success(value) =>
-        // Action for successful deserialization
-        someEffect(value).as(offset)
-      case Failure(exception) =>
-        // Possibly log the exception or take alternative action
-        ZIO.succeed(offset)
+Consumer.make(consumerSettings).flatMap { consumer =>
+  consumer
+    .plainStream(Subscription.topics("topic150"), keySerde, valueSerde)
+    .mapZIO { record => // ⚠️ see section about `mapZIO` below!
+      val tryValue: Try[String] = record.record.value()
+      val offset: Offset = record.offset
+
+      tryValue match {
+        case Success(value) =>
+          // Action for successful deserialization
+          someEffect(value).as(offset)
+        case Failure(exception) =>
+          // Possibly log the exception or take alternative action
+          ZIO.succeed(offset)
+      }
     }
-  }
-  .aggregateAsync(Consumer.offsetBatches)
-  .mapZIO(_.commit)
-  .runDrain
-  .provideSomeLayer(consumer)
+    .aggregateAsync(Consumer.offsetBatches)
+    .mapZIO(_.commit)
+    .runDrain
+}
 ```
 
 ## Deserialization in the consumer stream
@@ -106,28 +104,25 @@ Here is an example:
 import zio._, stream._
 import zio.kafka.consumer._
 
-val consumer = ZLayer.scoped(Consumer.make(consumerSettings))
-
-val stream = Consumer
-  .plainStream(Subscription.topics("topic150"), Serde.byteArray, Serde.byteArray)
-
 def deserialize(value: Array[Byte]): ZIO[Any, Throwable, Message] = ???
 
-stream 
-  .mapZIO { record => // ⚠️ see section about `mapZIO` below!
-    val value: Array[Byte] = record.record.value()
-    val offset: Offset = record.offset
+Consumer.make(consumerSettings).flatMap { consumer =>
+  consumer
+    .plainStream(Subscription.topics("topic150"), Serde.byteArray, Serde.byteArray)
+    .mapZIO { record => // ⚠️ see section about `mapZIO` below!
+      val value: Array[Byte] = record.record.value()
+      val offset: Offset = record.offset
 
-    deserialize(value)
-      // possible action to take if deserialization fails:
-      .recoverWith(_ => someEffect(value))
-      .flatMap(processMessage)
-      .as(offset)
-  }
-  .aggregateAsync(Consumer.offsetBatches)
-  .mapZIO(_.commit)
-  .runDrain
-  .provideSomeLayer(consumer)
+      deserialize(value)
+        // possible action to take if deserialization fails:
+        .recoverWith(_ => someEffect(value))
+        .flatMap(processMessage)
+        .as(offset)
+    }
+    .aggregateAsync(Consumer.offsetBatches)
+    .mapZIO(_.commit)
+    .runDrain
+}
 ```
 
 ## A warning about `mapZIO`
