@@ -3,7 +3,7 @@ package zio.kafka.bench
 import io.github.embeddedkafka.EmbeddedKafka
 import org.openjdk.jmh.annotations._
 import zio.kafka.bench.ZioBenchmark.randomThing
-import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.consumer.Consumer.NoDiagnostics
 import zio.kafka.consumer.{ Consumer, Offset, OffsetBatch, Subscription }
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
@@ -33,7 +33,7 @@ class ZioKafkaConsumerBenchmark extends ConsumerZioBenchmark[Kafka with Producer
       Some(randomThing("group")),
       `max.poll.records` = 1000
     ).map(_.withPartitionPreFetchBufferLimit(8192))
-  ) ++ ZLayer.succeed(Diagnostics.NoOp)) >>> Consumer.live
+  ) ++ ZLayer.succeed(NoDiagnostics)) >>> Consumer.live
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))

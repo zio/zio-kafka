@@ -1,19 +1,21 @@
-package zio.kafka.consumer.diagnostics
+package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 
-sealed trait DiagnosticEvent
-object DiagnosticEvent {
+sealed trait ConsumerDiagnosticEvent
+
+object ConsumerDiagnosticEvent {
 
   final case class Poll(
     tpRequested: Set[TopicPartition],
     tpWithData: Set[TopicPartition],
     tpWithoutData: Set[TopicPartition]
-  ) extends DiagnosticEvent
-  final case class Request(partition: TopicPartition) extends DiagnosticEvent
+  ) extends ConsumerDiagnosticEvent
 
-  sealed trait Commit extends DiagnosticEvent
+  final case class Request(partition: TopicPartition) extends ConsumerDiagnosticEvent
+
+  sealed abstract class Commit extends ConsumerDiagnosticEvent
   object Commit {
     final case class Started(offsets: Map[TopicPartition, OffsetAndMetadata])                   extends Commit
     final case class Success(offsets: Map[TopicPartition, OffsetAndMetadata])                   extends Commit
@@ -25,13 +27,10 @@ object DiagnosticEvent {
     assigned: Set[TopicPartition],
     lost: Set[TopicPartition],
     ended: Set[TopicPartition]
-  ) extends DiagnosticEvent
+  ) extends ConsumerDiagnosticEvent
 
-  sealed trait Finalization extends DiagnosticEvent
-  object Finalization {
-    case object SubscriptionFinalized extends Finalization
-    case object RunloopFinalized      extends Finalization
-    case object ConsumerFinalized     extends Finalization
-  }
+  case object SubscriptionFinalized extends ConsumerDiagnosticEvent
+  case object RunloopFinalized      extends ConsumerDiagnosticEvent
+  case object ConsumerFinalized     extends ConsumerDiagnosticEvent
 
 }

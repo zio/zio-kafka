@@ -3,7 +3,7 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.clients.consumer.{ MockConsumer, OffsetAndMetadata, OffsetCommitCallback, OffsetResetStrategy }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
-import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.consumer.Consumer.NoDiagnostics
 import zio.test._
 import zio.{ durationInt, Promise, Queue, Ref, Task, Unsafe, ZIO }
 
@@ -18,7 +18,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter
                        .make(
                          10.seconds,
-                         Diagnostics.NoOp,
+                         NoDiagnostics,
                          new DummyMetrics,
                          onCommitAvailable = commitAvailable.succeed(()).unit
                        )
@@ -32,7 +32,7 @@ object CommitterSpec extends ZIOSpecDefault {
         commitAvailable <- Promise.make[Nothing, Unit]
         committer <- LiveCommitter.make(
                        10.seconds,
-                       Diagnostics.NoOp,
+                       NoDiagnostics,
                        new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
@@ -49,7 +49,7 @@ object CommitterSpec extends ZIOSpecDefault {
         commitAvailable <- Promise.make[Nothing, Unit]
         committer <- LiveCommitter.make(
                        10.seconds,
-                       Diagnostics.NoOp,
+                       NoDiagnostics,
                        new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
@@ -66,7 +66,7 @@ object CommitterSpec extends ZIOSpecDefault {
         commitAvailable <- Queue.bounded[Unit](1)
         committer <- LiveCommitter.make(
                        10.seconds,
-                       Diagnostics.NoOp,
+                       NoDiagnostics,
                        new DummyMetrics,
                        onCommitAvailable = commitAvailable.offer(()).unit
                      )
@@ -95,7 +95,7 @@ object CommitterSpec extends ZIOSpecDefault {
         commitAvailable <- Promise.make[Nothing, Unit]
         committer <- LiveCommitter.make(
                        10.seconds,
-                       Diagnostics.NoOp,
+                       NoDiagnostics,
                        new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
@@ -116,7 +116,7 @@ object CommitterSpec extends ZIOSpecDefault {
         nrCommitsDone    <- Ref.make(0)
         committer <- LiveCommitter.make(
                        10.seconds,
-                       Diagnostics.NoOp,
+                       NoDiagnostics,
                        new DummyMetrics,
                        onCommitAvailable =
                          ZIO.whenZIO(nrCommitsDone.updateAndGet(_ + 1).map(_ == 3))(commitsAvailable.succeed(())).unit
@@ -141,7 +141,7 @@ object CommitterSpec extends ZIOSpecDefault {
         commitAvailable <- Promise.make[Nothing, Unit]
         committer <- LiveCommitter.make(
                        10.seconds,
-                       Diagnostics.NoOp,
+                       NoDiagnostics,
                        new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
@@ -161,7 +161,7 @@ object CommitterSpec extends ZIOSpecDefault {
         commitAvailable <- Promise.make[Nothing, Unit]
         committer <- LiveCommitter.make(
                        10.seconds,
-                       Diagnostics.NoOp,
+                       NoDiagnostics,
                        new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
@@ -179,7 +179,7 @@ object CommitterSpec extends ZIOSpecDefault {
         commitAvailable <- Promise.make[Nothing, Unit]
         committer <- LiveCommitter.make(
                        10.seconds,
-                       Diagnostics.NoOp,
+                       NoDiagnostics,
                        new DummyMetrics,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )

@@ -2,8 +2,8 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallback }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
-import zio.kafka.consumer.Consumer.CommitTimeout
-import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.Consumer.{ CommitTimeout, ConsumerDiagnostics }
+import zio.kafka.consumer.ConsumerDiagnosticEvent
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
@@ -16,7 +16,7 @@ import scala.jdk.CollectionConverters._
 private[consumer] final class LiveCommitter(
   commitQueue: Queue[Commit],
   commitTimeout: Duration,
-  diagnostics: Diagnostics,
+  diagnostics: ConsumerDiagnostics,
   consumerMetrics: ConsumerMetrics,
   onCommitAvailable: UIO[Unit],
   committedOffsetsRef: Ref[CommitOffsets],
@@ -40,7 +40,7 @@ private[consumer] final class LiveCommitter(
         startTime = java.lang.System.nanoTime()
         _ <- commitQueue.offer(Commit(startTime, offsets, p))
         _ <- onCommitAvailable
-        _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
+        _ <- diagnostics.emit(ConsumerDiagnosticEvent.Commit.Started(offsets))
         _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
         endTime = java.lang.System.nanoTime()
         latency = (endTime - startTime).nanoseconds
@@ -106,7 +106,7 @@ private[consumer] final class LiveCommitter(
         } yield ()
       )
       .zipLeft(ZIO.foreachDiscard(commits)(_.cont.done(Exit.unit)))
-      .tap(offsetsWithMetaData => diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData)))
+      .tap(offsetsWithMetaData => diagnostics.emit(ConsumerDiagnosticEvent.Commit.Success(offsetsWithMetaData)))
       .catchAllCause {
         case Cause.Fail(_: RebalanceInProgressException, _) =>
           for {
@@ -116,7 +116,7 @@ private[consumer] final class LiveCommitter(
           } yield ()
         case c =>
           ZIO.foreachDiscard(commits)(_.cont.done(Exit.fail(c.squash))) <* diagnostics.emit(
-            DiagnosticEvent.Commit.Failure(offsets, c.squash)
+            ConsumerDiagnosticEvent.Commit.Failure(offsets, c.squash)
           )
       }
       .ignore
@@ -172,7 +172,7 @@ private[consumer] final class LiveCommitter(
 private[internal] object LiveCommitter {
   def make(
     commitTimeout: Duration,
-    diagnostics: Diagnostics,
+    diagnostics: ConsumerDiagnostics,
     consumerMetrics: ConsumerMetrics,
     onCommitAvailable: UIO[Unit]
   ): ZIO[Scope, Nothing, LiveCommitter] = for {
