@@ -1,6 +1,6 @@
 package zio.kafka.consumer.internal
 
-import zio.{ Executor, Scope, URIO, ZIO }
+import zio._
 
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong

@@ -7,7 +7,7 @@ import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
-import zio.{ durationLong, Cause, Chunk, Duration, Exit, Promise, Queue, Ref, Scope, Task, UIO, Unsafe, ZIO }
+import zio._
 
 import java.util.{ Map => JavaMap }
 import scala.collection.mutable

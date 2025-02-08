@@ -5,7 +5,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.test._
-import zio.{ durationInt, Promise, Queue, Ref, Task, Unsafe, ZIO }
+import zio._
 
 import java.util.{ Map => JavaMap }
 import scala.jdk.CollectionConverters.{ MapHasAsJava, MapHasAsScala }

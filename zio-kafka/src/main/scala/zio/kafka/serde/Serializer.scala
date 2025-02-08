@@ -2,7 +2,7 @@ package zio.kafka.serde
 
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Serializer => KafkaSerializer }
-import zio.{ RIO, Task, ZIO }
+import zio._
 
 import scala.jdk.CollectionConverters._
 

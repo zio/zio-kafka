@@ -3,6 +3,18 @@ package zio.kafka.producer
 import org.apache.kafka.clients.producer.ProducerConfig
 import zio._
 
+/**
+ * Settings for a transactional producer.
+ *
+ * To stay source compatible with future releases, you are recommended to construct the settings as follows:
+ * {{{
+ *   val producerSettings = ProducerSettings(bootstrapServers)
+ *     .withLinger(500.millis)
+ *     .withCompression(ProducerCompression.Zstd(3))
+ *     .... etc.
+ *   TransactionalProducerSettings(producerSettings, transactionalId)
+ * }}}
+ */
 final case class TransactionalProducerSettings private (producerSettings: ProducerSettings)
 
 object TransactionalProducerSettings {

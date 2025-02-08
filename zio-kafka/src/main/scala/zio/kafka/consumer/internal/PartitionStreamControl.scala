@@ -6,7 +6,7 @@ import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.PartitionStreamControl.QueueInfo
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.{ Take, ZStream }
-import zio.{ Chunk, Clock, Duration, LogAnnotation, Promise, Queue, Ref, UIO, ZIO }
+import zio._
 
 import java.util.concurrent.TimeoutException
 import scala.util.control.NoStackTrace

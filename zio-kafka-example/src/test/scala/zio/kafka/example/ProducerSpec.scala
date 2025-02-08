@@ -2,11 +2,10 @@ package zio.kafka.example
 
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio._
-import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
-import zio.kafka.testkit.KafkaTestUtils._
-import zio.test.TestAspect.timeout
+import zio.kafka.testkit.KafkaTestUtils
+import zio.test.TestAspect.{ timeout, withLiveClock }
 import zio.test._
 
 /**
@@ -18,12 +17,12 @@ object ProducerSpec extends ZIOSpecDefault {
       suite("Producer test suite")(
         test("minimal example") {
           for {
-            _ <- Producer.produce(new ProducerRecord("topic", "boo", "baa"), Serde.string, Serde.string)
+            producer <- KafkaTestUtils.makeProducer
+            _        <- producer.produce(new ProducerRecord("topic", "boo", "baa"), Serde.string, Serde.string)
           } yield assertCompletes
         }
         // ... more tests ...
       )
-        .provideSome[Kafka](producer)             // Here, we provide a new instance of Producer per test
-        .provideSomeShared[Scope](Kafka.embedded) // Here, we provide an instance of Kafka for the entire suite
-    ) @@ timeout(2.minutes)
+        .provideSomeShared[Scope](Kafka.embedded) // Provide an instance of Kafka for the entire suite
+    ) @@ withLiveClock @@ timeout(2.minutes)
 }

@@ -263,12 +263,20 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def assignment: RIO[Consumer, Set[TopicPartition]] =
     ZIO.serviceWithZIO(_.assignment)
 
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def beginningOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
@@ -278,6 +286,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def committed(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
@@ -287,6 +299,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def endOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
@@ -296,6 +312,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def listTopics(
     timeout: Duration = Duration.Infinity
   ): RIO[Consumer, Map[String, List[PartitionInfo]]] =
@@ -304,6 +324,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def partitionedAssignmentStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
@@ -314,6 +338,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def partitionedStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
@@ -328,6 +356,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def plainStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
@@ -341,6 +373,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def stopConsumption: RIO[Consumer, Unit] =
     ZIO.serviceWithZIO(_.stopConsumption)
 
@@ -414,6 +450,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
     timeout: Duration = Duration.Infinity
@@ -423,6 +463,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def partitionsFor(
     topic: String,
     timeout: Duration = Duration.Infinity
@@ -432,6 +476,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def position(
     partition: TopicPartition,
     timeout: Duration = Duration.Infinity
@@ -441,12 +489,20 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def subscription: RIO[Consumer, Set[String]] =
     ZIO.serviceWithZIO(_.subscription)
 
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def metrics: RIO[Consumer, Map[MetricName, Metric]] =
     ZIO.serviceWithZIO(_.metrics)
 

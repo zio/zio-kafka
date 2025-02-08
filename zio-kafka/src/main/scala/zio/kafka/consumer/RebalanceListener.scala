@@ -2,7 +2,7 @@ package zio.kafka.consumer
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 import org.apache.kafka.common.TopicPartition
-import zio.{ Executor, Runtime, Task, Unsafe, ZIO }
+import zio._
 
 import scala.jdk.CollectionConverters._
 

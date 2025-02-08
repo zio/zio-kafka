@@ -12,6 +12,9 @@ import zio.kafka.consumer.OffsetBatch
 import java.util
 import scala.jdk.CollectionConverters._
 
+/**
+ * A producer that produces records transactionally.
+ */
 trait TransactionalProducer {
   def createTransaction: ZIO[Scope, Throwable, Transaction]
 }
@@ -71,6 +74,13 @@ object TransactionalProducer {
         } { case (transaction: TransactionImpl, exit) => transaction.markAsClosed *> commitOrAbort(transaction, exit) }
   }
 
+  /**
+   * Accessor method
+   */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def createTransaction: ZIO[TransactionalProducer & Scope, Throwable, Transaction] =
     ZIO.service[TransactionalProducer].flatMap(_.createTransaction)
 
