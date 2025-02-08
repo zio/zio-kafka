@@ -5,7 +5,6 @@ import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.admin.acl._
 import zio.kafka.admin.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 import zio.kafka.testkit._
-import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
@@ -18,40 +17,41 @@ object AdminSaslSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override def spec: Spec[TestEnvironment with Scope, Any] =
     suite("client sasl admin test")(
       test("ACLs") {
-        KafkaTestUtils.withSaslAdmin() { client =>
-          for {
-            topic <- randomTopic
-            bindings =
-              Set(
-                AclBinding(
-                  ResourcePattern(ResourceType.Topic, name = topic, patternType = PatternType.Literal),
-                  AccessControlEntry(
-                    principal = "User:*",
-                    host = "*",
-                    operation = AclOperation.Write,
-                    permissionType = AclPermissionType.Allow
-                  )
+        for {
+          topic <- randomTopic
+          bindings =
+            Set(
+              AclBinding(
+                ResourcePattern(ResourceType.Topic, name = topic, patternType = PatternType.Literal),
+                AccessControlEntry(
+                  principal = "User:*",
+                  host = "*",
+                  operation = AclOperation.Write,
+                  permissionType = AclPermissionType.Allow
                 )
               )
-            _ <- client.createAcls(bindings)
-            createdAcls <-
-              client
-                .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
-                .repeatWhile(_.isEmpty) // because the createAcls is executed async by the broker
-                .timeoutFail(new TimeoutException())(100.millis)
-            deletedAcls <-
-              client
-                .deleteAcls(Set(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any)))
-            remainingAcls <-
-              client
-                .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
-                .repeatWhile(_.nonEmpty) // because the deleteAcls is executed async by the broker
-                .timeoutFail(new TimeoutException())(100.millis)
+            )
+          client <- KafkaTestUtils.makeSaslAdminClient()
+          _      <- client.createAcls(bindings)
+          createdAcls <-
+            client
+              .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
+              .repeatWhile(_.isEmpty) // because the createAcls is executed async by the broker
+              .timeoutFail(new TimeoutException())(200.millis)
+          deletedAcls <-
+            client
+              .deleteAcls(Set(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any)))
+          remainingAcls <-
+            client
+              .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
+              .repeatWhile(_.nonEmpty) // because the deleteAcls is executed async by the broker
+              .timeoutFail(new TimeoutException())(200.millis)
 
-          } yield assert(createdAcls)(equalTo(bindings)) &&
-            assert(deletedAcls)(equalTo(bindings)) &&
-            assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
-        }
+        } yield assertTrue(
+          createdAcls == bindings,
+          deletedAcls == bindings,
+          remainingAcls.isEmpty
+        )
       }
     ).provideSomeShared[Scope](Kafka.saslEmbedded) @@ withLiveClock
 

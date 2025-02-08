@@ -4,7 +4,7 @@ import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.{ ConsumerSettings, RebalanceListener }
 import zio.stream.ZStream
-import zio.{ durationInt, Chunk, Duration, Ref, Task, UIO, ZIO }
+import zio._
 
 /**
  * The Runloop's RebalanceListener gets notified of partitions that are assigned, revoked and lost

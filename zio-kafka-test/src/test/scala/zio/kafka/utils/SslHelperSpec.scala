@@ -6,15 +6,13 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.admin.AdminClientSettings
-import zio.kafka.consumer.{ Consumer, Subscription }
-import zio.kafka.producer.Producer
+import zio.kafka.consumer.Subscription
 import zio.kafka.serde.Serde
-import zio.kafka.testkit.KafkaTestUtils.adminSettings
 import zio.kafka.testkit.{ Kafka, KafkaRandom, KafkaTestUtils }
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-import zio.{ durationInt, Scope, Task, ZIO }
+import zio._
 
 import java.nio.channels.SocketChannel
 
@@ -32,10 +30,11 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           result <- (
                       for {
-                        topic <- randomTopic
-                        _     <- Producer.produce(new ProducerRecord(topic, "boo", "baa"), Serde.string, Serde.string)
+                        topic    <- randomTopic
+                        producer <- KafkaTestUtils.makeProducer
+                        _ <- producer.produce(new ProducerRecord(topic, "boo", "baa"), Serde.string, Serde.string)
                       } yield ()
-                    ).provideSomeLayer(KafkaTestUtils.producer).exit
+                    ).exit
         } yield assert(result)(
           fails(
             isSubtype[KafkaException](
@@ -61,16 +60,15 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           result <- (
                       for {
-                        topic <- randomTopic
-                        _ <- ZIO.serviceWithZIO[Consumer](
-                               _.consumeWith(
-                                 Subscription.Topics(Set(topic)),
-                                 Serde.byteArray,
-                                 Serde.byteArray
-                               )(_ => ZIO.unit)
-                             )
+                        topic    <- randomTopic
+                        consumer <- KafkaTestUtils.makeConsumer(clientId = "test", groupId = Some("test"))
+                        _ <- consumer.consumeWith(
+                               Subscription.Topics(Set(topic)),
+                               Serde.byteArray,
+                               Serde.byteArray
+                             )(_ => ZIO.unit)
                       } yield ()
-                    ).provideSomeLayer(KafkaTestUtils.consumer(clientId = "test", groupId = Some("test"))).exit
+                    ).exit
         } yield assert(result)(
           fails(
             isSubtype[KafkaException](
@@ -93,7 +91,9 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         )
       },
       test("Admin client should fail due to ssl check") {
-        assertZIO(KafkaTestUtils.withAdmin(_.listTopics()).exit)(
+        for {
+          result <- KafkaTestUtils.makeAdminClient.flatMap(_.listTopics()).exit
+        } yield assert(result)(
           fails(
             isSubtype[KafkaException](
               hasField[KafkaException, String](
@@ -114,7 +114,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           )
         )
       }
-    ).provideLayerShared(Kafka.sslEmbedded)
+    ).provideSomeLayerShared[Scope](Kafka.sslEmbedded)
 
   private val unitTests =
     suite("Unit tests")(
@@ -137,7 +137,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           val result: Task[Unit] =
             (
               for {
-                settings <- adminSettings // Non-SSL settings used with a non-SSL cluster
+                settings <- KafkaTestUtils.adminSettings // Non-SSL settings used with a non-SSL cluster
                 server0              = settings.bootstrapServers.head
                 address0             = Utils.getHost(server0)
                 port0                = Utils.getPort(server0)
@@ -159,7 +159,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           val result: Task[Unit] =
             (
               for {
-                settings <- adminSettings // Non-SSL settings used with an SSL-configured cluster
+                settings <- KafkaTestUtils.adminSettings // Non-SSL settings used with an SSL-configured cluster
                 server0              = settings.bootstrapServers.head
                 address0             = Utils.getHost(server0)
                 port0                = Utils.getPort(server0)
@@ -305,7 +305,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       unitTests
     ) @@ withLiveClock
 
-  implicit class SettingsHelper(adminClientSettings: AdminClientSettings) {
+  private implicit class SettingsHelper(adminClientSettings: AdminClientSettings) {
     def bootstrapServers: List[String] = adminClientSettings.driverSettings
       .getOrElse(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "")
       .toString

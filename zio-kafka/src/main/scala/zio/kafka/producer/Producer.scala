@@ -257,6 +257,10 @@ object Producer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def produce(
     record: ProducerRecord[Array[Byte], Array[Byte]]
   ): RIO[Producer, RecordMetadata] =
@@ -265,6 +269,10 @@ object Producer {
   /**
    * Accessor method for [[Producer!.produce[R,K,V](record*]]
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def produce[R, K, V](
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
@@ -275,6 +283,10 @@ object Producer {
   /**
    * Accessor method for [[Producer!.produce[R,K,V](topic*]]
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def produce[R, K, V](
     topic: String,
     key: K,
@@ -287,6 +299,10 @@ object Producer {
   /**
    * A stream pipeline that produces all records from the stream.
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def produceAll[R, K, V](
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
@@ -296,6 +312,10 @@ object Producer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def produceAsync(
     record: ProducerRecord[Array[Byte], Array[Byte]]
   ): RIO[Producer, Task[RecordMetadata]] =
@@ -304,6 +324,10 @@ object Producer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def produceAsync[R, K, V](
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
@@ -314,6 +338,10 @@ object Producer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def produceAsync[R, K, V](
     topic: String,
     key: K,
@@ -326,6 +354,10 @@ object Producer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def produceChunkAsync(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
   ): RIO[Producer, Task[Chunk[RecordMetadata]]] =
@@ -334,6 +366,10 @@ object Producer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def produceChunkAsync[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
@@ -344,6 +380,10 @@ object Producer {
   /**
    * Accessor method for [[Producer.produceChunkAsyncWithFailures]]]
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def produceChunkAsyncWithFailures(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
   ): RIO[Producer, UIO[Chunk[Either[Throwable, RecordMetadata]]]] =
@@ -352,6 +392,10 @@ object Producer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def produceChunk(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
   ): RIO[Producer, Chunk[RecordMetadata]] =
@@ -360,6 +404,10 @@ object Producer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
@@ -370,17 +418,29 @@ object Producer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def partitionsFor(topic: String): RIO[Producer, Chunk[PartitionInfo]] =
     ZIO.serviceWithZIO(_.partitionsFor(topic))
 
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   val flush: RIO[Producer, Unit] = ZIO.serviceWithZIO(_.flush)
 
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   val metrics: RIO[Producer, Map[MetricName, Metric]] = ZIO.serviceWithZIO(_.metrics)
 
 }

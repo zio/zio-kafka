@@ -11,7 +11,7 @@ import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
 import zio.test._
-import zio.{ durationInt, Chunk, Promise, Ref, Scope, Semaphore, Task, UIO, ZIO }
+import zio._
 
 import java.util
 
