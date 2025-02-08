@@ -24,6 +24,12 @@ topic-partitions (see [subscriptions](partition-assignment-and-offset-retrieval.
 (2) The `plainStream` method returns a stream of `CommittableRecord` objects. In this line, we access the key
 and value from the `CommittableRecord` and print them to the console.
 
+:::caution
+Some stream operators (like `tap` and `mapZIO`) break the chunking structure of the stream which heavily reduces
+throughput. See [a warning about mapZIO](serialization-and-deserialization.md#a-warning-about-mapzio) for more
+information and alternatives.
+:::
+
 (3) Here we get the offset of the record, so we now have a stream of offsets.
 
 (4) The offsets are aggregated into an `OffsetBatch`. The offset batch keeps the highest seen offset per partition.
