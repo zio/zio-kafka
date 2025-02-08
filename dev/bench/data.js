@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1739017967409,
+  "lastUpdate": 1739021759560,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -9458,6 +9458,90 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 561.9160514,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9c72bffd470c3a71130684449b66186f3c40d26d",
+          "message": "Deprecate accessor methods (#1449)\n\nAccessor methods are [deprecated by the ZIO\r\ncommunity](https://zio.dev/reference/service-pattern/accessor-methods).\r\nTherefore, all accessor methods for `Consumer`, `Producer` and\r\n`TransactionalProducer` have been deprecated so that they can be removed\r\nin zio-kafka 3.0.0.\r\n\r\nAccessor methods were heavily used in the zio-kafka unit tests.\r\nTherefore, all tests and benchmarks have been rewritten to use services\r\ndirectly. `KafkaTestUtils` has been extended with several methods to\r\nmake this easier. To nudge users of the zio-kafka-test-kit, anything\r\nthat promotes accessor methods is also deprecated.\r\n\r\nThe unit tests now have less layer trickery and are easier to\r\nunderstand.\r\n\r\nThe documentation has been extended with a migration guide:\r\nhttps://github.com/zio/zio-kafka/blob/accessors/docs/migrating-to-2.11.md",
+          "timestamp": "2025-02-08T14:15:56+01:00",
+          "tree_id": "0d5c4cfc6279b489078a369ffced5ba261fc3c36",
+          "url": "https://github.com/zio/zio-kafka/commit/9c72bffd470c3a71130684449b66186f3c40d26d"
+        },
+        "date": 1739021759286,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
+            "value": 12.656950563079704,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
+            "value": 9.920718042450973,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 587.09147912,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 590.526631,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 228.92139804600006,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 559.8543951933333,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 538.94679062,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 531.6712505999999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 557.2623250000001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 563.1844018799999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
