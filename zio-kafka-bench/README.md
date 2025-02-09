@@ -1,11 +1,20 @@
-# Comparison Benchmarks
+# Benchmarks and Flame graphs
 
-## Results
+## Benchmark results
 
-The benchmark are run from a GitHub action on every commit. The results are published
+The benchmarks are run from a GitHub action on every commit. The results are published
 on https://zio.github.io/zio-kafka/dev/bench/.
 
 The results are automatically pruned by [a scala script](https://github.com/zio/zio-kafka/blob/gh-pages/scripts/prune-benchmark-history.sc) on the `gh-pages` branch.
+
+## Flame graphs results
+
+Flame graphs are created by the `profile` GitHub action which runs on every release (it can also be started manually).
+The results are published on https://zio.github.io/zio-kafka/dev/profile/.
+
+The results are automatically pruned by [a scala script](https://github.com/zio/zio-kafka/blob/gh-pages/scripts/prune-flame-graph.sc) on the `gh-pages` branch.
+
+# Benchmark descriptions
 
 ## The consumer benchmarks
 
@@ -59,7 +68,7 @@ Sequentially produces 100 small records.
 
 Produces 100 small records from 4 fibers.
 
-## How to run the benchmarks
+# How to run the benchmarks
 
 To run these "comparison" benchmarks, in a sbt console, run:
 
@@ -72,7 +81,7 @@ zioKafkaBench/Jmh/run -wi 10 -i 10 -r 1 -w 1 -t 1 -f 5 -foe true .*comparison.*
 The `.*comparison.*` part is the selector telling to JMH which benchmarks to run.
 Here, we're only selecting the ones living in the `comparison` package.
 
-## Tuning JMH runs
+# Tuning JMH runs
 
 To list all possible options and understand these configurations, see run `sbt "zioKafkaBench/Jmh/run -h"`
 
