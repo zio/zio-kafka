@@ -165,6 +165,9 @@ Want to see your company here? [Submit a PR](https://github.com/zio/zio-kafka/ed
 
 ## Performance
 
+Often, _zio-kafka programs consume with a higher throughput_ than programs that use the java-kafka client directly.
+Read on for the details.
+
 By default, zio-kafka programs process partitions in parallel. The default java-kafka client does not provide parallel
 processing. Of course, there is some overhead in buffering records and distributing them to the fibers that need them.
 On 2024-11-23, we estimated that zio-kafka consumes faster than the java-kafka client when processing takes more than
@@ -174,6 +177,10 @@ details.
 
 If you do not care for the convenient ZStream based API that zio-kafka brings, and latency is of absolute importance,
 using the java based Kafka client directly is still the better choice.
+
+## Developers
+
+* [Benchmarks and Flame graphs](https://github.com/zio/zio-kafka/blob/master/zio-kafka-bench/README.md)
 
 ## Documentation
 
