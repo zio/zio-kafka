@@ -113,7 +113,8 @@ private[consumer] final class Runloop private (
     partitionStreams: Chunk[PartitionStreamControl],
     pendingRequests: Chunk[RunloopCommand.Request],
     ignoreRecordsForTps: Set[TopicPartition],
-    polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
+    polledRecords: ConsumerRecords[Array[Byte], Array[Byte]],
+    consumerGroupMetadata: Option[ConsumerGroupMetadata]
   ): UIO[Runloop.FulfillResult] = {
     type Record = CommittableRecord[Array[Byte], Array[Byte]]
 
@@ -128,7 +129,6 @@ private[consumer] final class Runloop private (
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
       for {
-        consumerGroupMetadata <- getConsumerGroupMetadataIfAny
         _ <- ZIO.foreachParDiscard(streams) { streamControl =>
                val tp      = streamControl.tp
                val records = polledRecords.records(tp)
@@ -243,7 +243,8 @@ private[consumer] final class Runloop private (
                                   records = polledRecords,
                                   ignoreRecordsForTps = Set.empty,
                                   pendingRequests = state.pendingRequests,
-                                  assignedStreams = state.assignedStreams
+                                  assignedStreams = state.assignedStreams,
+                                  consumerGroupMetadata = None
                                 )
                               )
 
@@ -255,7 +256,8 @@ private[consumer] final class Runloop private (
                               val currentAssigned = c.assignment().asScala.toSet
                               val endedTps        = endedStreams.map(_.tp).toSet
                               for {
-                                ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
+                                ignoreRecordsForTps   <- doSeekForNewPartitions(c, assignedTps)
+                                consumerGroupMetadata <- getConsumerGroupMetadataIfAny
 
                                 // The topic partitions that need a new stream are:
                                 //  1. Those that are freshly assigned
@@ -319,7 +321,8 @@ private[consumer] final class Runloop private (
                                 records = polledRecords,
                                 ignoreRecordsForTps = ignoreRecordsForTps,
                                 pendingRequests = updatedPendingRequests,
-                                assignedStreams = updatedAssignedStreams
+                                assignedStreams = updatedAssignedStreams,
+                                consumerGroupMetadata = consumerGroupMetadata
                               )
                           }
           } yield pollresult
@@ -328,7 +331,8 @@ private[consumer] final class Runloop private (
                          pollResult.assignedStreams,
                          pollResult.pendingRequests,
                          pollResult.ignoreRecordsForTps,
-                         pollResult.records
+                         pollResult.records,
+                         pollResult.consumerGroupMetadata
                        )
       _ <- committer.cleanupPendingCommits
       _ <- checkStreamPullInterval(pollResult.assignedStreams)
@@ -564,7 +568,8 @@ object Runloop {
     records: ConsumerRecords[Array[Byte], Array[Byte]],
     ignoreRecordsForTps: Set[TopicPartition],
     pendingRequests: Chunk[RunloopCommand.Request],
-    assignedStreams: Chunk[PartitionStreamControl]
+    assignedStreams: Chunk[PartitionStreamControl],
+    consumerGroupMetadata: Option[ConsumerGroupMetadata]
   )
   private final case class RevokeResult(
     pendingRequests: Chunk[RunloopCommand.Request],
