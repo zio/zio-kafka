@@ -15,7 +15,7 @@ object ReadmeExample extends ZIOAppDefault {
       for {
         producer <-
           Producer.make(
-            ProducerSettings(List("localhost:29092"))
+            ProducerSettings(List("localhost:9092"))
           )
         _ <- ZStream
           .fromSchedule(Schedule.fixed(2.seconds))
@@ -38,7 +38,7 @@ object ReadmeExample extends ZIOAppDefault {
       for {
         consumer <-
           Consumer.make(
-            ConsumerSettings(List("localhost:29092"))
+            ConsumerSettings(List("localhost:9092"))
               .withGroupId("group")
           )
         _ <- consumer
