@@ -153,9 +153,9 @@ private[consumer] final class Runloop private (
     }
   }
 
-  private val getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
+  private def getConsumerGroupMetadataIfAny(c: ByteArrayKafkaConsumer): UIO[Option[ConsumerGroupMetadata]] =
     if (settings.hasGroupId)
-      consumer.rebalanceListenerAccess(c => ZIO.attempt(c.groupMetadata())).fold(_ => None, Some(_))
+      ZIO.attempt(c.groupMetadata()).fold(_ => None, Option.apply)
     else ZIO.none
 
   /** @return the topic-partitions for which received records should be ignored */
@@ -254,11 +254,11 @@ private[consumer] final class Runloop private (
                               //   some partitions were assigned, revoked or lost,
                               //   some streams have ended.
 
-                              val currentAssigned = c.assignment().asScala.toSet
-                              val endedTps        = endedStreams.map(_.tp).toSet
                               for {
-                                ignoreRecordsForTps   <- doSeekForNewPartitions(c, assignedTps)
-                                consumerGroupMetadata <- getConsumerGroupMetadataIfAny
+                                consumerGroupMetadata <- getConsumerGroupMetadataIfAny(c)
+                                currentAssigned = c.assignment().asScala.toSet
+                                endedTps        = endedStreams.map(_.tp).toSet
+                                ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
 
                                 // The topic partitions that need a new stream are:
                                 //  1. Those that are freshly assigned
