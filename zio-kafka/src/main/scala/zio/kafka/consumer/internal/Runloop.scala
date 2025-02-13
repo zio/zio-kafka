@@ -205,7 +205,7 @@ private[consumer] final class Runloop private (
           settings.authErrorRetrySchedule
       )
 
-  private def handlePoll(state: State): Task[State] = {
+  private def handlePoll(state: State, initialConsumerGroupMetadata: Option[ConsumerGroupMetadata]): Task[State] = {
     for {
       partitionsToFetch  <- settings.fetchStrategy.selectPartitionsToFetch(state.assignedStreams)
       pendingCommitCount <- committer.pendingCommitCount
@@ -214,8 +214,7 @@ private[consumer] final class Runloop private (
                s" ${pendingCommitCount} pending commits," +
                s" resuming $partitionsToFetch partitions"
            )
-      _                            <- currentStateRef.set(state)
-      initialConsumerGroupMetadata <- consumer.withConsumerZIO(c => getConsumerGroupMetadataIfAny(c))
+      _ <- currentStateRef.set(state)
       pollResult <-
         consumer.runloopAccess { c =>
           for {
@@ -503,10 +502,11 @@ private[consumer] final class Runloop private (
           _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
           _ <- consumer.runloopAccess(committer.processQueuedCommits(_))
           streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
-          stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
+          stateAfterCommands           <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
+          initialConsumerGroupMetadata <- consumer.withConsumerZIO(c => getConsumerGroupMetadataIfAny(c))
 
           updatedStateAfterPoll <- shouldPoll(stateAfterCommands).flatMap {
-                                     case true  => handlePoll(stateAfterCommands)
+                                     case true  => handlePoll(stateAfterCommands, initialConsumerGroupMetadata)
                                      case false => ZIO.succeed(stateAfterCommands)
                                    }
           // Immediately poll again, after processing all new queued commands
