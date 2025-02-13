@@ -44,6 +44,7 @@ Kafka has a mature Java client for producing and consuming events, but it has a 
 - Test kit with embedded kafka broker
 - Well documented
 - Community support via [Discord](https://discord.com/channels/629491597070827530/629497941719121960)
+- Commercial support via [Ziverge](https://www.ziverge.com)
 
 ## Getting started
 
