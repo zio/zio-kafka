@@ -1549,7 +1549,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                       .plainStream(Subscription.topics(topicB), Serde.string, Serde.string)
                                       .mapChunks(_.map(_.value))
                                       .take(messageCount.toLong)
-                                      .timeout(20.seconds)
+                                      .timeout(10.seconds)
                                       .runCollect
                                       .tapError(e => ZIO.logError(s"Error: $e")) <* ZIO.logDebug("Done")
                                   }
