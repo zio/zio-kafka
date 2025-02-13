@@ -1425,7 +1425,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                            .fork
 
                     transactionalId   <- randomThing("transactional")
-                    tProducerSettings <- transactionalProducerSettings(transactionalId)
+                    tProducerSettings <- KafkaTestUtils.transactionalProducerSettings(transactionalId)
                     tProducer <-
                       TransactionalProducer.make(tProducerSettings, consumer)
 
@@ -1453,7 +1453,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .tapError(e => ZIO.logError(s"Error: $e") *> consumerCreated.fail(e)) <* ZIO.logDebug("Done")
                   } yield tConsumer)
                     .provideSome[Kafka & Scope](
-                      transactionalConsumer(
+                      KafkaTestUtils.transactionalConsumer(
                         clientId,
                         consumerGroupId,
                         rebalanceSafeCommits = true,
@@ -1468,10 +1468,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               }
 
             for {
-              transactionalId   <- randomThing("transactional")
-              tProducerSettings <- KafkaTestUtils.transactionalProducerSettings(transactionalId)
-              tProducer         <- TransactionalProducer.make(tProducerSettings)
-
               topicA <- randomTopic
               topicB <- randomTopic
               _      <- KafkaTestUtils.createCustomTopic(topicA, partitionCount)
