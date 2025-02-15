@@ -30,7 +30,7 @@ private[consumer] final class Runloop private (
   rebalanceCoordinator: RebalanceCoordinator,
   consumerMetrics: ConsumerMetrics,
   committer: Committer,
-  consumerMetaDataRef: Ref[Option[ConsumerGroupMetadata]]
+  consumerMetadataRef: Ref[Option[ConsumerGroupMetadata]]
 ) {
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(
@@ -129,7 +129,7 @@ private[consumer] final class Runloop private (
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
       for {
-        consumerGroupMetadata <- consumerMetaDataRef.get.flatMap {
+        consumerGroupMetadata <- consumerMetadataRef.get.flatMap {
                                    case None     => getConsumerGroupMetadataIfAny
                                    case metadata => ZIO.succeed(metadata)
                                  }
@@ -262,7 +262,7 @@ private[consumer] final class Runloop private (
                                 ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
 
                                 // invalidate current consumer group metadata
-                                _ <- consumerMetaDataRef.set(None)
+                                _ <- consumerMetadataRef.set(None)
 
                                 // The topic partitions that need a new stream are:
                                 //  1. Those that are freshly assigned
@@ -595,7 +595,7 @@ object Runloop {
       lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
       currentStateRef     <- Ref.make(initialState)
-      consumerMetaDataRef <- Ref.make[Option[ConsumerGroupMetadata]](None)
+      consumerMetadataRef <- Ref.make[Option[ConsumerGroupMetadata]](None)
       sameThreadRuntime   <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       executor            <- ZIO.executor
       metrics = new ZioConsumerMetrics(settings.metricLabels)
@@ -627,7 +627,7 @@ object Runloop {
                   consumerMetrics = metrics,
                   rebalanceCoordinator = rebalanceCoordinator,
                   committer = committer,
-                  consumerMetaDataRef = consumerMetaDataRef
+                  consumerMetadataRef = consumerMetadataRef
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
