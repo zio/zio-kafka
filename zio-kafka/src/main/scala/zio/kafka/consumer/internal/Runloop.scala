@@ -154,8 +154,7 @@ private[consumer] final class Runloop private (
   }
 
   private val getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
-    if (settings.hasGroupId)
-      consumer.rebalanceListenerAccess(c => ZIO.attempt(c.groupMetadata())).fold(_ => None, Some(_))
+    if (settings.hasGroupId) consumer.runloopAccess(c => ZIO.attempt(c.groupMetadata())).fold(_ => None, Some(_))
     else ZIO.none
 
   /** @return the topic-partitions for which received records should be ignored */
