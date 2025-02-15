@@ -214,8 +214,7 @@ private[consumer] final class Runloop private (
                s" ${pendingCommitCount} pending commits," +
                s" resuming $partitionsToFetch partitions"
            )
-      _                            <- currentStateRef.set(state)
-      initialConsumerGroupMetadata <- consumer.withConsumerZIO(c => getConsumerGroupMetadataIfAny(c))
+      _ <- currentStateRef.set(state)
       pollResult <-
         consumer.runloopAccess { c =>
           for {
@@ -246,7 +245,7 @@ private[consumer] final class Runloop private (
                                   ignoreRecordsForTps = Set.empty,
                                   pendingRequests = state.pendingRequests,
                                   assignedStreams = state.assignedStreams,
-                                  consumerGroupMetadata = initialConsumerGroupMetadata
+                                  consumerGroupMetadata = None
                                 )
                               )
 
