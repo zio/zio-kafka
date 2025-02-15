@@ -59,19 +59,19 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
         event.rebalanceCallbacks.size == 4,
         event.rebalanceCallbacks(0) match {
           case AssignedRebalanceCallback(a, _) if a == Set(tp) => true
-          case _ => false
+          case _                                               => false
         },
         event.rebalanceCallbacks(1) match {
           case AssignedRebalanceCallback(a, _) if a == Set(tp4) => true
-          case _ => false
+          case _                                                => false
         },
         event.rebalanceCallbacks(2) match {
           case RevokedRebalanceCallback(r, _) if r == Set(tp2) => true
-          case _ => false
+          case _                                               => false
         },
         event.rebalanceCallbacks(3) match {
           case LostRebalanceCallback(l, _) if l == Set(tp3) => true
-          case _ => false
+          case _                                            => false
         }
       )
     },
