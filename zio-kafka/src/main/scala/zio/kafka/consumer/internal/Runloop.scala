@@ -29,7 +29,8 @@ private[consumer] final class Runloop private (
   currentStateRef: Ref[State],
   rebalanceCoordinator: RebalanceCoordinator,
   consumerMetrics: ConsumerMetrics,
-  committer: Committer
+  committer: Committer,
+  consumerMetaDataRef: Ref[Option[ConsumerGroupMetadata]]
 ) {
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(
@@ -128,7 +129,10 @@ private[consumer] final class Runloop private (
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
       for {
-        consumerGroupMetadata <- getConsumerGroupMetadataIfAny
+        consumerGroupMetadata <- consumerMetaDataRef.get.flatMap {
+                                   case None     => getConsumerGroupMetadataIfAny
+                                   case metadata => ZIO.succeed(metadata)
+                                 }
         _ <- ZIO.foreachParDiscard(streams) { streamControl =>
                val tp      = streamControl.tp
                val records = polledRecords.records(tp)
@@ -256,6 +260,9 @@ private[consumer] final class Runloop private (
                               val endedTps        = endedStreams.map(_.tp).toSet
                               for {
                                 ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
+
+                                // invalidate current consumer group metadata
+                                _ <- consumerMetaDataRef.set(None)
 
                                 // The topic partitions that need a new stream are:
                                 //  1. Those that are freshly assigned
@@ -587,9 +594,10 @@ object Runloop {
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
-      currentStateRef   <- Ref.make(initialState)
-      sameThreadRuntime <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
-      executor          <- ZIO.executor
+      currentStateRef     <- Ref.make(initialState)
+      consumerMetaDataRef <- Ref.make[Option[ConsumerGroupMetadata]](None)
+      sameThreadRuntime   <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
+      executor            <- ZIO.executor
       metrics = new ZioConsumerMetrics(settings.metricLabels)
       committer <- LiveCommitter
                      .make(
@@ -618,7 +626,8 @@ object Runloop {
                   currentStateRef = currentStateRef,
                   consumerMetrics = metrics,
                   rebalanceCoordinator = rebalanceCoordinator,
-                  committer = committer
+                  committer = committer,
+                  consumerMetaDataRef = consumerMetaDataRef
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
