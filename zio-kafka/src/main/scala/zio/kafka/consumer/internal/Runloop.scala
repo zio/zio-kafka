@@ -129,10 +129,7 @@ private[consumer] final class Runloop private (
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
       for {
-        consumerGroupMetadata <- consumerMetadataRef.get.flatMap {
-                                   case None     => getConsumerGroupMetadataIfAny
-                                   case metadata => ZIO.succeed(metadata)
-                                 }
+        consumerGroupMetadata <- getConsumerGroupMetadataIfAny
         _ <- ZIO.foreachParDiscard(streams) { streamControl =>
                val tp      = streamControl.tp
                val records = polledRecords.records(tp)
@@ -157,9 +154,22 @@ private[consumer] final class Runloop private (
     }
   }
 
-  private val getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
-    if (settings.hasGroupId) consumer.runloopAccess(c => ZIO.attempt(c.groupMetadata())).fold(_ => None, Some(_))
-    else ZIO.none
+  /**
+   * @return
+   *   optionally consumer group metadata, first we try get it from consumerMetadataRef, or fetch it from consumer if
+   *   not present. If the group id is not set, we return None.
+   */
+  private def getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
+    consumerMetadataRef.get.flatMap {
+      case None if settings.hasGroupId =>
+        consumer
+          .runloopAccess(c => ZIO.attempt(c.groupMetadata()))
+          .fold(_ => None, Some(_))
+          .tap(metadata => consumerMetadataRef.set(metadata))
+
+      // If consumer group metadata is already present, or if the group id is not set, we don't need to re-fetch it.
+      case metadata => ZIO.succeed(metadata)
+    }
 
   /** @return the topic-partitions for which received records should be ignored */
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
