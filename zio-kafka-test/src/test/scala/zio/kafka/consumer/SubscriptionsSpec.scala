@@ -129,12 +129,11 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         finalizersRef    <- Ref.make(Chunk.empty[String])
 
         consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-        consumer0IsRunning <- Promise.make[Nothing, Unit]
+
         c1Fib <- consumer
                    .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
                    // Here we delay each message to be sure that `consumer1` will fail while `consumer0` is still running
                    .mapZIO { r =>
-                     consumer0IsRunning.succeed(()) *> // Notify that `consumer0` is running
                      firstMessagesRef.updateSome { case ("", v) => ("First consumer0 message", v) } *>
                        ZIO
                          .logDebug(s"Consumed ${counter.getAndIncrement()} records")
@@ -147,7 +146,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                    .zipLeft(finalizersRef.update(_ :+ "consumer0 finalized"))
                    .fork
 
-        _ <- consumer0IsRunning.await // Wait to be sure that `consumer0` is running
+        _ <- ZIO.sleep(100.millis) // Wait to be sure that `consumer0` is running
 
         c2Fib <- consumer
                    .plainStream(
