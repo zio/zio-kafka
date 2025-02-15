@@ -1534,8 +1534,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
         // Test for both default partition assignment strategies
         Seq(
-          testForPartitionAssignmentStrategy[RangeAssignor]
-//          testForPartitionAssignmentStrategy[CooperativeStickyAssignor] // TODO not yet supported
+          testForPartitionAssignmentStrategy[RangeAssignor],
+          testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
 
       }: _*) @@ TestAspect.nonFlaky(2),
