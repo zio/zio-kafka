@@ -197,11 +197,7 @@ private[internal] class RebalanceCoordinator(
                          else Chunk.empty
           _ <- endStreams(streamsToEnd)
           _ <- ZIO.logTrace("onAssigned done")
-        } yield rebalanceEvent.copy(
-          wasInvoked = true,
-          assignedTps = rebalanceEvent.assignedTps ++ assignedTps,
-          endedStreams = rebalanceEvent.endedStreams ++ streamsToEnd
-        )
+        } yield rebalanceEvent.addCallback(AssignedRebalanceCallback(assignedTps, streamsToEnd))
       },
     onRevoked = revokedTps =>
       lastRebalanceEvent.updateZIO { rebalanceEvent =>
@@ -215,12 +211,7 @@ private[internal] class RebalanceCoordinator(
                          else assignedStreams.filter(control => revokedTps.contains(control.tp))
           _ <- endStreams(streamsToEnd)
           _ <- ZIO.logTrace("onRevoked done")
-        } yield rebalanceEvent.copy(
-          wasInvoked = true,
-          assignedTps = rebalanceEvent.assignedTps -- revokedTps,
-          revokedTps = rebalanceEvent.revokedTps ++ revokedTps,
-          endedStreams = rebalanceEvent.endedStreams ++ streamsToEnd
-        )
+        } yield rebalanceEvent.addCallback(RevokedRebalanceCallback(revokedTps, streamsToEnd))
       },
     onLost = lostTps =>
       lastRebalanceEvent.updateZIO { rebalanceEvent =>
@@ -230,12 +221,7 @@ private[internal] class RebalanceCoordinator(
           lostStreams = assignedStreams.filter(control => lostTps.contains(control.tp))
           _ <- ZIO.foreachDiscard(lostStreams)(_.lost)
           _ <- ZIO.logTrace(s"onLost done")
-        } yield rebalanceEvent.copy(
-          wasInvoked = true,
-          assignedTps = rebalanceEvent.assignedTps -- lostTps,
-          lostTps = rebalanceEvent.lostTps ++ lostTps,
-          endedStreams = rebalanceEvent.endedStreams ++ lostStreams
-        )
+        } yield rebalanceEvent.addCallback(LostRebalanceCallback(lostTps, lostStreams))
       }
   )
 }
@@ -243,11 +229,11 @@ private[internal] class RebalanceCoordinator(
 private[internal] object RebalanceCoordinator {
 
   sealed trait EndOffsetCommitStatus
-  case object EndOffsetNotCommitted  extends EndOffsetCommitStatus { override def toString = "not committed"  }
-  case object EndOffsetCommitPending extends EndOffsetCommitStatus { override def toString = "commit pending" }
-  case object EndOffsetCommitted     extends EndOffsetCommitStatus { override def toString = "committed"      }
+  private case object EndOffsetNotCommitted  extends EndOffsetCommitStatus { override def toString = "not committed"  }
+  private case object EndOffsetCommitPending extends EndOffsetCommitStatus { override def toString = "commit pending" }
+  private case object EndOffsetCommitted     extends EndOffsetCommitStatus { override def toString = "committed"      }
 
-  final case class StreamCompletionStatus(
+  private final case class StreamCompletionStatus(
     tp: TopicPartition,
     streamEnded: Boolean,
     lastPulledOffset: Option[Long],
@@ -262,16 +248,34 @@ private[internal] object RebalanceCoordinator {
         endOffsetCommitStatus
   }
 
-  final case class RebalanceEvent(
-    wasInvoked: Boolean,
+  sealed trait RebalanceCallback {
+    def endedStreams: Chunk[PartitionStreamControl]
+  }
+
+  final case class AssignedRebalanceCallback(
     assignedTps: Set[TopicPartition],
+    endedStreams: Chunk[PartitionStreamControl]
+  ) extends RebalanceCallback
+
+  final case class RevokedRebalanceCallback(
     revokedTps: Set[TopicPartition],
+    endedStreams: Chunk[PartitionStreamControl]
+  ) extends RebalanceCallback
+
+  final case class LostRebalanceCallback(
     lostTps: Set[TopicPartition],
     endedStreams: Chunk[PartitionStreamControl]
-  )
+  ) extends RebalanceCallback
+
+  final case class RebalanceEvent(rebalanceCallbacks: Chunk[RebalanceCallback]) {
+    def wasInvoked: Boolean = rebalanceCallbacks.nonEmpty
+
+    def addCallback(callback: RebalanceCallback): RebalanceEvent =
+      copy(rebalanceCallbacks :+ callback)
+  }
 
   object RebalanceEvent {
     val None: RebalanceEvent =
-      RebalanceEvent(wasInvoked = false, Set.empty, Set.empty, Set.empty, Chunk.empty)
+      RebalanceEvent(Chunk.empty)
   }
 }

@@ -9,7 +9,7 @@ import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.{ Finalization, Rebalance }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
+import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.stream._
@@ -235,7 +235,7 @@ private[consumer] final class Runloop private (
                      )
                    }
             pollresult <- rebalanceCoordinator.getAndResetLastEvent.flatMap {
-                            case RebalanceEvent(false, _, _, _, _) =>
+                            case RebalanceEvent(rebalanceCallbacks) if rebalanceCallbacks.isEmpty =>
                               // The fast track, rebalance listener was not invoked:
                               //   no assignment changes, no new commits, only new records.
                               ZIO.succeed(
@@ -247,10 +247,27 @@ private[consumer] final class Runloop private (
                                 )
                               )
 
-                            case RebalanceEvent(true, assignedTps, revokedTps, lostTps, endedStreams) =>
+                            case RebalanceEvent(rebalanceCallbacks) =>
                               // The slow track, the rebalance listener was invoked:
                               //   some partitions were assigned, revoked or lost,
                               //   some streams have ended.
+
+                              val (assignedTps, revokedTps, lostTps, endedStreams) = rebalanceCallbacks
+                                .foldLeft(
+                                  (
+                                    Set.empty[TopicPartition],
+                                    Set.empty[TopicPartition],
+                                    Set.empty[TopicPartition],
+                                    Chunk.empty[PartitionStreamControl]
+                                  )
+                                ) {
+                                  case ((a, r, l, e), AssignedRebalanceCallback(assignedTps, endedStreams)) =>
+                                    (a ++ assignedTps, r, l, e ++ endedStreams)
+                                  case ((a, r, l, e), RevokedRebalanceCallback(revokedTps, endedStreams)) =>
+                                    (a -- revokedTps, r ++ revokedTps, l, e ++ endedStreams)
+                                  case ((a, r, l, e), LostRebalanceCallback(lostTps, endedStreams)) =>
+                                    (a -- lostTps, r, l ++ lostTps, e ++ endedStreams)
+                                }
 
                               val currentAssigned = c.assignment().asScala.toSet
                               val endedTps        = endedStreams.map(_.tp).toSet

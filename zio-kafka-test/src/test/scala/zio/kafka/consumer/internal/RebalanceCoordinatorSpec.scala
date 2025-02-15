@@ -7,7 +7,7 @@ import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
-import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
+import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
 import zio.test._
@@ -55,9 +55,24 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
         _        <- listener.toRebalanceListener.onLost(Set(tp3))
         event    <- lastEvent.get
       } yield assertTrue(
-        event.wasInvoked && event.assignedTps == Set(tp, tp4) && event.revokedTps == Set(tp2) && event.lostTps == Set(
-          tp3
-        )
+        event.wasInvoked,
+        event.rebalanceCallbacks.size == 4,
+        event.rebalanceCallbacks(0) match {
+          case AssignedRebalanceCallback(a, _) if a == Set(tp) => true
+          case _ => false
+        },
+        event.rebalanceCallbacks(1) match {
+          case AssignedRebalanceCallback(a, _) if a == Set(tp4) => true
+          case _ => false
+        },
+        event.rebalanceCallbacks(2) match {
+          case RevokedRebalanceCallback(r, _) if r == Set(tp2) => true
+          case _ => false
+        },
+        event.rebalanceCallbacks(3) match {
+          case LostRebalanceCallback(l, _) if l == Set(tp3) => true
+          case _ => false
+        }
       )
     },
     test("should end streams for revoked and lost partitions") {
@@ -76,7 +91,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
         // Lost and end partition's stream should be ended
         _ <- assignedStreams(1).stream.runDrain
         _ <- assignedStreams(2).stream.runDrain
-      } yield assertTrue(event.endedStreams.map(_.tp).toSet == Set(tp2, tp3))
+      } yield assertTrue(event.rebalanceCallbacks.flatMap(_.endedStreams).map(_.tp).toSet == Set(tp2, tp3))
     },
     suite("rebalanceSafeCommits")(
       test("should wait for the last pulled offset to commit") {
