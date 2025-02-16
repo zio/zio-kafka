@@ -4,7 +4,7 @@ import org.apache.kafka.common.TopicPartition
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.internal.PartitionStream
 import zio.test.{ assertTrue, Spec, TestEnvironment }
-import zio.{ Chunk, Scope, UIO, ZIO }
+import zio._
 
 object ManyPartitionsQueueSizeBasedFetchStrategySpec extends ZIOSpecDefaultSlf4j {
 

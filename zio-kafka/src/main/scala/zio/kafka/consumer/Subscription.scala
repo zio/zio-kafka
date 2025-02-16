@@ -1,6 +1,6 @@
 package zio.kafka.consumer
 
-import zio.{ NonEmptyChunk, Task, ZIO }
+import zio._
 
 import scala.util.matching.Regex
 import java.util.regex.{ Pattern => JPattern }

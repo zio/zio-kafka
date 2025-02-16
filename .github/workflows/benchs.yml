@@ -36,6 +36,8 @@ jobs:
           distribution: temurin
           java-version: 21
           check-latest: true
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
       - uses: VirtusLab/scala-cli-setup@main
       - name: Use CI sbt jvmopts
         shell: bash

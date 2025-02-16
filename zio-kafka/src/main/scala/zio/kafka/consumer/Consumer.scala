@@ -8,7 +8,6 @@ import org.apache.kafka.clients.consumer.{
 }
 import org.apache.kafka.common._
 import zio._
-import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.diagnostics.Diagnostics.ConcurrentDiagnostics
 import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
@@ -216,6 +215,16 @@ trait Consumer {
    * Expose internal consumer metrics
    */
   def metrics: Task[Map[MetricName, Metric]]
+
+  /**
+   * Register a commit that was done externally, that is, not by this consumer.
+   *
+   * This method is useful when you want to use rebalance-safe-commits, but you are not committing to the Kafka brokers,
+   * but to some external system, for example a relational database.
+   *
+   * See also [[zio.kafka.consumer.ConsumerSettings.withRebalanceSafeCommits]].
+   */
+  def registerExternalCommits(offsetBatch: OffsetBatch): Task[Unit]
 }
 
 object Consumer {
@@ -246,7 +255,6 @@ object Consumer {
   ): ZIO[Scope, Throwable, Consumer] =
     for {
       wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
-      _                  <- ZIO.addFinalizer(wrappedDiagnostics.emit(Finalization.ConsumerFinalized))
       _                  <- SslHelper.validateEndpoint(settings.driverSettings)
       consumerAccess     <- ConsumerAccess.make(settings)
       runloopAccess      <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
@@ -264,10 +272,10 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _      <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
-      access <- Semaphore.make(1)
+      wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
+      access             <- Semaphore.make(1)
       consumerAccess = new ConsumerAccess(javaConsumer, access)
-      runloopAccess <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+      runloopAccess <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**
@@ -277,7 +285,7 @@ object Consumer {
    *   - creating and closing the `KafkaConsumer`,
    *   - making sure `auto.commit` is disabled,
    *   - creating `access` as a fair semaphore with a single permit,
-   *   - acquire a permit from `access` before using the consumer, and release if afterwards,
+   *   - acquire a permit from `access` before using the consumer, and release it afterward,
    *   - not using the following consumer methods: `subscribe`, `unsubscribe`, `assign`, `poll`, `commit*`, `seek`,
    *     `pause`, `resume`, and `enforceRebalance`,
    *   - keeping the consumer config given to the java consumer in sync with the properties in `settings` (for example
@@ -295,7 +303,8 @@ object Consumer {
    * @param access
    *   A Semaphore with 1 permit.
    * @param diagnostics
-   *   Optional diagnostics listener
+   *   an optional callback for key events in the consumer life-cycle. The callbacks will be executed in a separate
+   *   fiber. Since the events are queued, failure to handle these events leads to out of memory errors
    */
   def fromJavaConsumerWithPermit(
     javaConsumer: JConsumer[Array[Byte], Array[Byte]],
@@ -304,20 +313,28 @@ object Consumer {
     diagnostics: Diagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      _ <- ZIO.addFinalizer(diagnostics.emit(Finalization.ConsumerFinalized))
+      wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
       consumerAccess = new ConsumerAccess(javaConsumer, access)
-      runloopAccess <- RunloopAccess.make(settings, consumerAccess, diagnostics)
+      runloopAccess <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
     } yield new ConsumerLive(consumerAccess, runloopAccess)
 
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def assignment: RIO[Consumer, Set[TopicPartition]] =
     ZIO.serviceWithZIO(_.assignment)
 
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def beginningOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
@@ -327,6 +344,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def committed(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
@@ -336,6 +357,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def endOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
@@ -345,6 +370,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def listTopics(
     timeout: Duration = Duration.Infinity
   ): RIO[Consumer, Map[String, List[PartitionInfo]]] =
@@ -353,6 +382,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def partitionedAssignmentStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
@@ -360,33 +393,10 @@ object Consumer {
   ): ZStream[Consumer, Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] =
     ZStream.serviceWithStream[Consumer](_.partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer))
 
-  /**
-   * Accessor method
-   */
-  def withPartitionedAssignmentStream[R, K, V](
-    subscription: Subscription,
-    keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V],
-    shutdownTimeout: Duration = 15.seconds
-  )(
-    withStream: Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] => ZIO[
-      R,
-      Throwable,
-      Any
-    ]
-  ): ZIO[R with Consumer, Throwable, Any] =
-    ZIO.serviceWithZIO[Consumer](
-      _.withPartitionedAssignmentStream(
-        subscription,
-        keyDeserializer,
-        valueDeserializer,
-        shutdownTimeout
-      )(withStream)
-    )
-
-  /**
-   * Accessor method
-   */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def partitionedStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
@@ -401,27 +411,10 @@ object Consumer {
   /**
    * Accessor method
    */
-  def withPartitionedStream[R, K, V](
-    subscription: Subscription,
-    keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V],
-    shutdownTimeout: Duration = 15.seconds
-  )(
-    withStream: Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] => ZIO[
-      R,
-      Throwable,
-      Any
-    ]
-  ): ZIO[R with Consumer, Throwable, Any] =
-    ZIO.serviceWithZIO[Consumer](
-      _.withPartitionedStream(subscription, keyDeserializer, valueDeserializer, shutdownTimeout)(
-        withStream
-      )
-    )
-
-  /**
-   * Accessor method
-   */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def plainStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
@@ -435,24 +428,10 @@ object Consumer {
   /**
    * Accessor method
    */
-  def withPlainStream[R, K, V](
-    subscription: Subscription,
-    keyDeserializer: Deserializer[R, K],
-    valueDeserializer: Deserializer[R, V],
-    bufferSize: Int = 4,
-    shutdownTimeout: Duration = 15.seconds
-  )(
-    withStream: ZStream[R, Throwable, CommittableRecord[K, V]] => ZIO[R, Throwable, Any]
-  ): ZIO[R with Consumer, Throwable, Any] =
-    ZIO.serviceWithZIO[Consumer](
-      _.withPlainStream(subscription, keyDeserializer, valueDeserializer, bufferSize, shutdownTimeout)(
-        withStream
-      )
-    )
-
-  /**
-   * Accessor method
-   */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def stopConsumption: RIO[Consumer, Unit] =
     ZIO.serviceWithZIO(_.stopConsumption)
 
@@ -526,6 +505,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
     timeout: Duration = Duration.Infinity
@@ -535,6 +518,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def partitionsFor(
     topic: String,
     timeout: Duration = Duration.Infinity
@@ -544,6 +531,10 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def position(
     partition: TopicPartition,
     timeout: Duration = Duration.Infinity
@@ -553,12 +544,20 @@ object Consumer {
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def subscription: RIO[Consumer, Set[String]] =
     ZIO.serviceWithZIO(_.subscription)
 
   /**
    * Accessor method
    */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def metrics: RIO[Consumer, Map[MetricName, Metric]] =
     ZIO.serviceWithZIO(_.metrics)
 
@@ -864,5 +863,8 @@ private[consumer] final class ConsumerLive private[consumer] (
 
   override def metrics: Task[Map[MetricName, Metric]] =
     consumer.withConsumer(_.metrics().asScala.toMap)
+
+  override def registerExternalCommits(externallyCommittedOffsets: OffsetBatch): Task[Unit] =
+    runloopAccess.registerExternalCommits(externallyCommittedOffsets)
 
 }

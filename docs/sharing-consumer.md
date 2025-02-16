@@ -17,19 +17,23 @@ val consumerSettings: ConsumerSettings = ConsumerSettings(List("localhost:9092")
 val consumer: ZLayer[Any, Throwable, Consumer] = ZLayer.scoped(Consumer.make(consumerSettings))
 
 // Define two streams, each for a different topic and key-value types
-val stream1 = Consumer.plainStream(Subscription.topics("topic1"), Serde.string, Serde.string)
-  .tap(cr => printLine(s"For topic1, got key: ${cr.record.key}, value: ${cr.record.value}"))
-  .map(_.offset)
-  .aggregateAsync(Consumer.offsetBatches)
-  .mapZIO(_.commit)
-  .runDrain
+val stream1 = ZIO.serviceWithZIO[Consumer] { consumer =>
+  consumer.plainStream(Subscription.topics("topic1"), Serde.string, Serde.string)
+    .tap(cr => printLine(s"For topic1, got key: ${cr.record.key}, value: ${cr.record.value}"))
+    .map(_.offset)
+    .aggregateAsync(Consumer.offsetBatches)
+    .mapZIO(_.commit)
+    .runDrain
+}
 
-val stream2 = Consumer.plainStream(Subscription.topics("topic2"), Serde.uuid, Serde.int)
-  .tap(cr => printLine(s"For topic2, got key: ${cr.record.key}, value: ${cr.record.value}"))
-  .map(_.offset)
-  .aggregateAsync(Consumer.offsetBatches)
-  .mapZIO(_.commit)
-  .runDrain
+val stream2 = ZIO.serviceWithZIO[Consumer] { consumer =>
+  consumer.plainStream(Subscription.topics("topic2"), Serde.uuid, Serde.int)
+    .tap(cr => printLine(s"For topic2, got key: ${cr.record.key}, value: ${cr.record.value}"))
+    .map(_.offset)
+    .aggregateAsync(Consumer.offsetBatches)
+    .mapZIO(_.commit)
+    .runDrain
+}
 
 // Run both streams with the same consumer instance
 (stream1 zipPar stream2).provideSomeLayer(consumer)
@@ -41,4 +45,6 @@ Consumer sharing is only possible when using the same type of `Subscription`: `T
 
 If your subscriptions overlap, eg `Subscription.topics("topic1", "topic2")` and `Subscription.topics("topic2", "topic3")`, which stream will get the partitions of `topic2` is not deterministic.
 
-Note that upon starting or ending subscriptions, Kafka will also reassign all partitions of the _other_ subscriptions. Record fetching will resume from the last committed offset, so records may be processed twice when not all offsets are committed yet. This works the same as for for regular rebalancing. To minimize this issue, commit frequently.
+:::note
+Upon starting or ending subscriptions, Kafka will also reassign all partitions of the _other_ subscriptions. Record fetching will resume from the last committed offset, so records may be processed twice when not all offsets are committed yet. This works the same as for regular rebalancing. To minimize this issue, commit frequently or enable [rebalance safe commits](preventing-duplicates.md).
+:::

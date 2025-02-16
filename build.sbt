@@ -28,21 +28,21 @@ lazy val binCompatVersionToCompare =
       compatVersion
     }
 
-lazy val kafkaVersion         = "3.8.1"
-lazy val embeddedKafkaVersion = "3.8.1" // Should be the same as kafkaVersion, except for the patch part
+lazy val kafkaVersion         = "3.9.0"
+lazy val embeddedKafkaVersion = "3.9.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
-lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.12"
+lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.16"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
-lazy val _scala213 = "2.13.15"
-lazy val _scala3   = "3.3.4"
+lazy val _scala213 = "2.13.16"
+lazy val _scala3   = "3.3.5"
 
 inThisBuild(
   List(
     name         := "ZIO Kafka",
-    zioVersion   := "2.1.12",
+    zioVersion   := "2.1.15",
     scalaVersion := _scala213,
     // zio-sbt defines these 'scala213' and 'scala3' settings, but we need to define them here to override the defaults and better control them
     scala213 := _scala213,

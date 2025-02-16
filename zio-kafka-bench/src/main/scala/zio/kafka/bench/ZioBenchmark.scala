@@ -1,12 +1,29 @@
 package zio.kafka.bench
 import org.openjdk.jmh.annotations.{ Setup, TearDown }
 import zio.kafka.bench.ZioBenchmark.logger
-import zio.{ ZLayer, _ }
+import zio._
 
 import java.util.UUID
 
+trait ConsumerZioBenchmark[Environment] extends ZioBenchmark[Environment] {
+  private val recordDataSize            = 512
+  private def genString(i: Int): String = i.toString + scala.util.Random.alphanumeric.take(recordDataSize).mkString
+
+  protected val recordCount: Int                = 50000
+  protected val kvs: Iterable[(String, String)] = Iterable.tabulate(recordCount)(i => (s"key$i", genString(i)))
+  protected val topic1                          = "topic1"
+  protected val partitionCount                  = 6
+}
+
+trait ProducerZioBenchmark[Environment] extends ZioBenchmark[Environment] {
+  protected val recordCount                 = 500
+  protected val kvs: List[(String, String)] = List.tabulate(recordCount)(i => (s"key$i", s"msg$i"))
+  protected val topic1                      = "topic1"
+  protected val partitionCount              = 6
+}
+
 trait ZioBenchmark[Environment] {
-  var runtime: Runtime.Scoped[Environment] = _
+  private var runtime: Runtime.Scoped[Environment] = _
 
   protected val enableLogging: Boolean = true
 
@@ -14,14 +31,14 @@ trait ZioBenchmark[Environment] {
 
   @Setup
   def setup(): Unit =
-    runtime = Unsafe.unsafe(implicit unsafe =>
+    runtime = Unsafe.unsafe { implicit unsafe =>
       zio.Runtime.unsafe.fromLayer(
         bootstrap >+>
           (Runtime.removeDefaultLoggers >+>
             (if (enableLogging) Runtime.addLogger(logger) else ZLayer.empty)) >+>
           ZLayer.fromZIO(initialize)
       )
-    )
+    }
 
   @TearDown
   def tearDown(): Unit =
@@ -31,15 +48,16 @@ trait ZioBenchmark[Environment] {
 
   protected def initialize: ZIO[Environment, Throwable, Any] = ZIO.unit
 
-  protected def runZIO(program: ZIO[Environment, Throwable, Any]): Any =
+  protected def runZIO(program: ZIO[Scope & Environment, Throwable, Any]): Any =
     Unsafe.unsafe(implicit unsafe =>
-      runtime.unsafe
-        .run(
-          program
-            .tapErrorCause(e => ZIO.debug("Error in benchmark run: " + e.prettyPrint))
-            .timeoutFail(new RuntimeException("Benchmark run timed out"))(timeout)
-            .tapError(_ => Fiber.dumpAll)
-        )
+      runtime.unsafe.run {
+        ZIO
+          .scoped[Environment](program)
+          .tapErrorCause(e => ZIO.debug("Error in benchmark run: " + e.prettyPrint))
+          .timeoutFail(new RuntimeException("Benchmark run timed out"))(timeout)
+          .tapError(_ => Fiber.dumpAll)
+          .unit
+      }
         .getOrThrow()
     )
 }

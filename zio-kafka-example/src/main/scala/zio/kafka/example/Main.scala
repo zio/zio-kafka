@@ -51,8 +51,9 @@ object Main extends ZIOAppDefault {
 
   private val runConsumerStream: ZIO[Consumer, Throwable, Unit] =
     for {
-      _ <- ZIO.logInfo("Consuming messages...")
-      consumed <- Consumer
+      _        <- ZIO.logInfo("Consuming messages...")
+      consumer <- ZIO.service[Consumer]
+      consumed <- consumer
                     .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                     .take(1000)
                     .tap(r => ZIO.logInfo(s"Consumed record $r"))

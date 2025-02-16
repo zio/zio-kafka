@@ -23,20 +23,26 @@ object PopulateTopic extends ZIOAppDefault {
       .rechunk(500)
 
   override def run: ZIO[Any, Throwable, Unit] =
-    dataStream(872000).map { case (k, v) =>
-      new ProducerRecord("inputs-topic", null, null, k, v)
-    }.mapChunksZIO(Producer.produceChunkAsync[Any, String, String](_, Serde.string, Serde.string).map(Chunk(_)))
-      .mapZIOPar(5)(_.flatMap(chunk => Console.printLine(s"Wrote chunk of ${chunk.size}")))
-      .runDrain
-      .provide(
-        ZLayer.scoped(
-          Producer.make(
-            ProducerSettings(List("localhost:9092"))
-              .withProperty(ProducerConfig.ACKS_CONFIG, "1")
-              .withProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4")
-          )
-        )
-      )
+    ZIO.scoped {
+      for {
+        producer <- Producer.make(
+                      ProducerSettings(List("localhost:9092"))
+                        .withProperty(ProducerConfig.ACKS_CONFIG, "1")
+                        .withProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4")
+                    )
+        _ <- dataStream(872000).map { case (k, v) =>
+               new ProducerRecord("inputs-topic", null, null, k, v)
+             }.mapChunksZIO { chunk =>
+               producer
+                 .produceChunkAsync[Any, String, String](chunk, Serde.string, Serde.string)
+                 .map(Chunk(_))
+             }
+               .mapZIOPar(5) { produceTasks =>
+                 produceTasks.flatMap(chunk => Console.printLine(s"Wrote chunk of ${chunk.size}"))
+               }
+               .runDrain
+      } yield ()
+    }
 }
 
 object Plain {
@@ -79,7 +85,7 @@ object Plain {
 object ZIOKafka extends ZIOAppDefault {
   import zio.kafka.consumer._
 
-  override def run = {
+  override def run: ZIO[Any with ZIOAppArgs with Scope, Throwable, Unit] = {
     val expectedCount = 1000000
     val settings = ConsumerSettings(List("localhost:9092"))
       .withGroupId(s"zio-kafka-${scala.util.Random.nextInt()}")
@@ -87,29 +93,27 @@ object ZIOKafka extends ZIOAppDefault {
       .withProperty("fetch.min.bytes", "128000")
       .withPollTimeout(50.millis)
 
-    (Console.readLine *>
-      Clock
-        .currentTime(TimeUnit.MILLISECONDS)
-        .flatMap { startTime =>
-          Consumer
-            .plainStream(Subscription.topics("inputs-topic"), Serde.string, Serde.string)
-            .take(expectedCount.toLong)
-            .mapChunks { recordChunk =>
-              val messageCount = recordChunk.size
-              println(s"Got chunk of $messageCount")
-              val lengthCount = recordChunk.foldLeft(0)(_ + _.value.length)
+    for {
+      _         <- Console.readLine
+      startTime <- Clock.currentTime(TimeUnit.MILLISECONDS)
+      consumer  <- Consumer.make(settings)
+      _ <- consumer
+             .plainStream(Subscription.topics("inputs-topic"), Serde.string, Serde.string)
+             .take(expectedCount.toLong)
+             .mapChunks { recordChunk =>
+               val messageCount = recordChunk.size
+               println(s"Got chunk of $messageCount")
+               val lengthCount = recordChunk.foldLeft(0)(_ + _.value.length)
 
-              Chunk(messageCount -> lengthCount)
-            }
-            .runDrain *>
-            Clock.currentTime(TimeUnit.MILLISECONDS).flatMap { endTime =>
-              val duration = endTime - startTime
-              Console.printLine(
-                s"Done in $duration ms; rate = ${(expectedCount / duration) * 1000} messages/s or ${((expectedCount * 144) / duration) * 1000} bytes/s"
-              )
-            }
-        })
-      .provideLayer(ZLayer.scoped(Consumer.make(settings)))
-
+               Chunk(messageCount -> lengthCount)
+             }
+             .runDrain
+      endTime <- Clock.currentTime(TimeUnit.MILLISECONDS)
+      duration = endTime - startTime
+      _ <-
+        Console.printLine(
+          s"Done in $duration ms; rate = ${(expectedCount / duration) * 1000} messages/s or ${((expectedCount * 144) / duration) * 1000} bytes/s"
+        )
+    } yield ()
   }
 }

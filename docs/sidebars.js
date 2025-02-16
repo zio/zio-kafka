@@ -6,6 +6,7 @@ const sidebars = {
       collapsed: false,
       link: { type: "doc", id: "index" },
       items: [
+        "creating-a-consumer",
         "consuming-kafka-topics-using-zio-streams",
         "example-of-consuming-producing-and-committing-offsets",
         "partition-assignment-and-offset-retrieval",
@@ -14,7 +15,8 @@ const sidebars = {
         "preventing-duplicates",
         "sharing-consumer",
         "serialization-and-deserialization",
-        "writing-tests"
+        "writing-tests",
+        "migrating-to-2.11"
       ]
     }
   ]

@@ -12,6 +12,9 @@ import zio.kafka.consumer.OffsetBatch
 import java.util
 import scala.jdk.CollectionConverters._
 
+/**
+ * A producer that produces records transactionally.
+ */
 trait TransactionalProducer {
   def createTransaction: ZIO[Scope, Throwable, Transaction]
 }
@@ -61,7 +64,7 @@ object TransactionalProducer {
       }
 
     override def createTransaction: ZIO[Scope, Throwable, Transaction] =
-      semaphore.withPermitScoped *> {
+      semaphore.withPermitScoped *>
         ZIO.acquireReleaseExit {
           for {
             offsetBatchRef <- Ref.make(OffsetBatch.empty)
@@ -69,9 +72,15 @@ object TransactionalProducer {
             _              <- ZIO.attemptBlocking(live.p.beginTransaction())
           } yield new TransactionImpl(producer = live, offsetBatchRef = offsetBatchRef, closed = closedRef)
         } { case (transaction: TransactionImpl, exit) => transaction.markAsClosed *> commitOrAbort(transaction, exit) }
-      }
   }
 
+  /**
+   * Accessor method
+   */
+  @deprecated(
+    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
+    since = "2.11.0"
+  )
   def createTransaction: ZIO[TransactionalProducer & Scope, Throwable, Transaction] =
     ZIO.service[TransactionalProducer].flatMap(_.createTransaction)
 
@@ -98,10 +107,10 @@ object TransactionalProducer {
       semaphore <- Semaphore.make(1)
       runtime   <- ZIO.runtime[Any]
       sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]])](
+        Queue.bounded[(Chunk[ByteRecord], Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.producerSettings.sendBufferSize
         )
-      live = new ProducerLive(rawProducer, runtime, sendQueue)
+      live = new ProducerLive(settings.producerSettings, rawProducer, runtime, sendQueue)
       _ <- ZIO.blocking(live.sendFromQueue).forkScoped
     } yield new LiveTransactionalProducer(live, semaphore)
 }

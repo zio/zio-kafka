@@ -13,11 +13,18 @@ import zio.stream.ZStream
 
 import java.io.File
 import java.nio.file.{ Files, StandardCopyOption }
+import scala.annotation.nowarn
 
 object KafkaTestUtils {
 
+  // -----------------------------------------------------------------------------------------
+  //
+  // Producer construction
+  //
+  // -----------------------------------------------------------------------------------------
+
   /**
-   * Default Producer settings you can use in your tests
+   * Makes `ProducerSettings` for use in tests.
    */
   val producerSettings: ZIO[Kafka, Nothing, ProducerSettings] =
     ZIO
@@ -25,16 +32,37 @@ object KafkaTestUtils {
       .map(ProducerSettings(_))
 
   /**
-   * Producer instance you can use in your tests. It uses the default Producer settings.
+   * Makes a `Producer` for use in tests.
    */
-  val producer: ZLayer[Kafka, Throwable, Producer] =
-    ZLayer.makeSome[Kafka, Producer](
-      ZLayer(producerSettings),
-      Producer.live
-    )
+  val makeProducer: ZIO[Scope & Kafka, Throwable, Producer] =
+    producerSettings.flatMap(settings => Producer.make(settings))
 
   /**
-   * Default transactional producer settings you can use in your tests.
+   * `Producer` layer for use in tests.
+   *
+   * ℹ️ Instead of using a layer, consider using [[KafkaTestUtils.makeProducer]] to directly get a producer.
+   */
+  val producer: ZLayer[Kafka, Throwable, Producer] =
+    ZLayer.scoped(makeProducer)
+
+  // -----------------------------------------------------------------------------------------
+  //
+  // Transactional producer construction
+  //
+  // -----------------------------------------------------------------------------------------
+
+  /**
+   * Makes `TransactionalProducerSettings` for use in tests.
+   *
+   * Note: to run multiple tests in parallel, each producer needs a different transactional id.
+   */
+  def transactionalProducerSettings(transactionalId: String): ZIO[Kafka, Nothing, TransactionalProducerSettings] =
+    ZIO
+      .serviceWith[Kafka](_.bootstrapServers)
+      .map(TransactionalProducerSettings(_, transactionalId))
+
+  /**
+   * Makes `TransactionalProducerSettings` for use in tests.
    *
    * Note: to run multiple tests in parallel, you need to use different transactional ids via
    * `transactionalProducerSettings(transactionalId)`.
@@ -42,84 +70,169 @@ object KafkaTestUtils {
   val transactionalProducerSettings: ZIO[Kafka, Nothing, TransactionalProducerSettings] =
     transactionalProducerSettings("test-transaction")
 
-  def transactionalProducerSettings(transactionalId: String): ZIO[Kafka, Nothing, TransactionalProducerSettings] =
-    ZIO
-      .serviceWith[Kafka](_.bootstrapServers)
-      .map(TransactionalProducerSettings(_, transactionalId))
+  /**
+   * Makes a `TransactionalProducer` for use in tests.
+   *
+   * Note: to run multiple tests in parallel, every test needs a different transactional id.
+   */
+  def makeTransactionalProducer(transactionalId: String): ZIO[Scope & Kafka, Throwable, TransactionalProducer] =
+    transactionalProducerSettings(transactionalId).flatMap(TransactionalProducer.make)
 
   /**
-   * Transactional producer instance you can use in your tests. It uses the default transactional producer settings.
+   * `TransactionalProducer` layer for use in tests.
    *
    * Note: to run multiple tests in parallel, you need to use different transactional ids via
    * `transactionalProducer(transactionalId)`.
+   *
+   * ℹ️ Instead of using a layer, consider using [[KafkaTestUtils.makeTransactionalProducer]] to directly get a
+   * producer.
    */
   val transactionalProducer: ZLayer[Kafka, Throwable, TransactionalProducer] =
     transactionalProducer("test-transaction")
 
+  /**
+   * `TransactionalProducer` layer for use in tests.
+   *
+   * ℹ️ Instead of using a layer, consider using [[KafkaTestUtils.makeTransactionalProducer]] to directly get a
+   * producer.
+   */
   def transactionalProducer(transactionalId: String): ZLayer[Kafka, Throwable, TransactionalProducer] =
-    ZLayer.makeSome[Kafka, TransactionalProducer](
-      ZLayer(transactionalProducerSettings(transactionalId)),
-      TransactionalProducer.live
-    )
+    ZLayer.scoped(makeTransactionalProducer(transactionalId))
+
+  // -----------------------------------------------------------------------------------------
+  //
+  // Producer helpers
+  //
+  // -----------------------------------------------------------------------------------------
 
   /**
-   * Utility function to produce a single message in a Topic.
+   * Produce a single message to a topic.
    */
+  def produceOne(
+    producer: Producer,
+    topic: String,
+    key: String,
+    message: String
+  ): ZIO[Any, Throwable, RecordMetadata] =
+    producer.produce[Any, String, String](new ProducerRecord(topic, key, message), Serde.string, Serde.string)
+
+  /**
+   * Produce a single message to a topic.
+   *
+   * @deprecated
+   *   instead of using layers, use [[KafkaTestUtils.makeProducer]] to directly get a producer OR use
+   *   `ZIO.service[Producer]` to get the producer from the environment. Then use the [[KafkaTestUtils.produceOne]]
+   *   variant that accepts the `Producer` as a parameter.
+   */
+  @deprecated("Use method variant that accepts the Producer as parameter", since = "2.11.0")
   def produceOne(
     topic: String,
     key: String,
     message: String
   ): ZIO[Producer, Throwable, RecordMetadata] =
-    Producer.produce[Any, String, String](new ProducerRecord(topic, key, message), Serde.string, Serde.string)
+    ZIO.serviceWithZIO[Producer](produceOne(_, topic, key, message))
 
   /**
-   * Utility function to produce many messages in give Partition of a Topic.
+   * Produce many messages to the given partition of a topic.
    */
+  def produceMany(
+    producer: Producer,
+    topic: String,
+    partition: Int,
+    kvs: Iterable[(String, String)]
+  ): ZIO[Any, Throwable, Chunk[RecordMetadata]] =
+    producer.produceChunk[Any, String, String](
+      Chunk.fromIterable(kvs.map { case (k, v) =>
+        new ProducerRecord(topic, partition, null, k, v)
+      }),
+      Serde.string,
+      Serde.string
+    )
+
+  /**
+   * Produce many messages to the given partition of a topic.
+   *
+   * @deprecated
+   *   instead of using layers, use [[KafkaTestUtils.makeProducer]] to directly get a producer OR use
+   *   `ZIO.service[Producer]` to get the producer from the environment. Then use the [[KafkaTestUtils.produceMany]]
+   *   variant that accepts the `Producer` as a parameter.
+   */
+  @deprecated("Use method variant that accepts the Producer as parameter", since = "2.11.0")
   def produceMany(
     topic: String,
     partition: Int,
     kvs: Iterable[(String, String)]
   ): ZIO[Producer, Throwable, Chunk[RecordMetadata]] =
-    Producer
-      .produceChunk[Any, String, String](
-        Chunk.fromIterable(kvs.map { case (k, v) =>
-          new ProducerRecord(topic, partition, null, k, v)
-        }),
-        Serde.string,
-        Serde.string
-      )
+    ZIO.serviceWithZIO[Producer](produceMany(_, topic, partition, kvs))
 
   /**
-   * Utility function to produce many messages in a Topic.
+   * Produce many messages to a topic.
    */
+  def produceMany(
+    producer: Producer,
+    topic: String,
+    kvs: Iterable[(String, String)]
+  ): ZIO[Any, Throwable, Chunk[RecordMetadata]] =
+    producer.produceChunk[Any, String, String](
+      Chunk.fromIterable(kvs.map { case (k, v) =>
+        new ProducerRecord(topic, k, v)
+      }),
+      Serde.string,
+      Serde.string
+    )
+
+  /**
+   * Produce many messages to a topic.
+   *
+   * @deprecated
+   *   instead of using layers, use [[KafkaTestUtils.makeProducer]] to directly get a producer OR use
+   *   `ZIO.service[Producer]` to get the producer from the environment. Then use the [[KafkaTestUtils.produceMany]]
+   *   variant that accepts the `Producer` as a parameter.
+   */
+  @deprecated("Use method variant that accepts the Producer as parameter", since = "2.11.0")
   def produceMany(
     topic: String,
     kvs: Iterable[(String, String)]
   ): ZIO[Producer, Throwable, Chunk[RecordMetadata]] =
-    Producer
-      .produceChunk[Any, String, String](
-        Chunk.fromIterable(kvs.map { case (k, v) =>
-          new ProducerRecord(topic, k, v)
-        }),
-        Serde.string,
-        Serde.string
-      )
+    ZIO.serviceWithZIO[Producer](produceMany(_, topic, kvs))
 
   /**
-   * A stream that produces messages to a Topic on a schedule for as long as it is running.
+   * A stream that produces messages to a topic on a schedule for as long as it is running.
    */
+  def scheduledProduce[R](
+    producer: Producer,
+    topic: String,
+    schedule: Schedule[R, Any, Long]
+  ): ZStream[R, Throwable, RecordMetadata] =
+    ZStream
+      .fromSchedule(schedule)
+      .mapZIO { i =>
+        produceOne(producer, topic, s"key$i", s"msg$i")
+      }
+
+  /**
+   * A stream that produces messages to a topic on a schedule for as long as it is running.
+   *
+   * @deprecated
+   *   instead of using layers, use [[KafkaTestUtils.makeProducer]] to directly get a producer OR use
+   *   `ZIO.service[Producer]` to get the producer from the environment. Then use the
+   *   [[KafkaTestUtils.scheduledProduce]] variant that accepts the `Producer` as a parameter.
+   */
+  @deprecated("Use method variant that accepts the Producer as parameter", since = "2.11.0")
   def scheduledProduce[R](
     topic: String,
     schedule: Schedule[R, Any, Long]
   ): ZStream[R with Producer, Throwable, RecordMetadata] =
-    ZStream
-      .fromSchedule(schedule)
-      .mapZIO { i =>
-        produceOne(topic, s"key$i", s"msg$i")
-      }
+    ZStream.serviceWithStream[Producer](scheduledProduce(_, topic, schedule))
+
+  // -----------------------------------------------------------------------------------------
+  //
+  // Consumer construction
+  //
+  // -----------------------------------------------------------------------------------------
 
   /**
-   * Utility function to make a Consumer settings set.
+   * Makes `ConsumerSettings` for use in tests.
    */
   def consumerSettings(
     clientId: String,
@@ -127,6 +240,10 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
+    // @deprecated
+    // starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
+    // contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
+    // that.
     restartStreamOnRebalancing: Boolean = false,
     rebalanceSafeCommits: Boolean = false,
     maxRebalanceDuration: Duration = 3.minutes,
@@ -136,6 +253,7 @@ object KafkaTestUtils {
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
+      @nowarn("msg=deprecated")
       val settings = ConsumerSettings(kafka.bootstrapServers)
         .withClientId(clientId)
         .withCloseTimeout(5.seconds)
@@ -160,7 +278,104 @@ object KafkaTestUtils {
     }
 
   /**
-   * Utility function to make a transactional Consumer settings set.
+   * Makes a `Consumer` for use in tests.
+   */
+  def makeConsumer(
+    clientId: String,
+    groupId: Option[String] = None,
+    clientInstanceId: Option[String] = None,
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
+    allowAutoCreateTopics: Boolean = true,
+    diagnostics: Diagnostics = Diagnostics.NoOp,
+    // @deprecated
+    // starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
+    // contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
+    // that.
+    restartStreamOnRebalancing: Boolean = false,
+    rebalanceSafeCommits: Boolean = false,
+    maxRebalanceDuration: Duration = 3.minutes,
+    commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
+    properties: Map[String, String] = Map.empty
+  ): ZIO[Scope & Kafka, Throwable, Consumer] =
+    for {
+      settings <- consumerSettings(
+                    clientId = clientId,
+                    groupId = groupId,
+                    clientInstanceId = clientInstanceId,
+                    allowAutoCreateTopics = allowAutoCreateTopics,
+                    offsetRetrieval = offsetRetrieval,
+                    restartStreamOnRebalancing = restartStreamOnRebalancing,
+                    rebalanceSafeCommits = rebalanceSafeCommits,
+                    maxRebalanceDuration = maxRebalanceDuration,
+                    properties = properties,
+                    commitTimeout = commitTimeout
+                  )
+      c <- Consumer.make(settings, diagnostics)
+    } yield c
+
+  /**
+   * `Consumer` layer for use in tests, requires a `ConsumerSettings` layer.
+   *
+   * "minimal" because, unlike the other functions returning a `ZLayer[..., ..., Consumer]` of this file, you need to
+   * provide the `ConsumerSettings` layer yourself.
+   *
+   * ℹ️ Instead of using a layer, consider using [[KafkaTestUtils.makeConsumer]] to directly get a consumer.
+   */
+  def minimalConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
+    ZLayer.makeSome[ConsumerSettings, Consumer](
+      ZLayer.succeed(diagnostics) >>> Consumer.live
+    )
+
+  @deprecated("Use [[KafkaTestUtils.minimalConsumer]] instead", "2.3.1")
+  def simpleConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
+    minimalConsumer(diagnostics)
+
+  /**
+   * `Consumer` layer for use in tests.
+   *
+   * ℹ️ Instead of using a layer, consider using [[makeConsumer]] to directly get a consumer.
+   */
+  def consumer(
+    clientId: String,
+    groupId: Option[String] = None,
+    clientInstanceId: Option[String] = None,
+    offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
+    allowAutoCreateTopics: Boolean = true,
+    diagnostics: Diagnostics = Diagnostics.NoOp,
+    // @deprecated
+    // starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
+    // contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
+    // that.
+    restartStreamOnRebalancing: Boolean = false,
+    rebalanceSafeCommits: Boolean = false,
+    maxRebalanceDuration: Duration = 3.minutes,
+    commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
+    properties: Map[String, String] = Map.empty
+  ): ZLayer[Kafka, Throwable, Consumer] =
+    ZLayer.scoped {
+      makeConsumer(
+        clientId,
+        groupId,
+        clientInstanceId,
+        offsetRetrieval,
+        allowAutoCreateTopics,
+        diagnostics,
+        restartStreamOnRebalancing,
+        rebalanceSafeCommits,
+        maxRebalanceDuration,
+        commitTimeout,
+        properties
+      )
+    }
+
+  // -----------------------------------------------------------------------------------------
+  //
+  // Transactional consumer construction
+  //
+  // -----------------------------------------------------------------------------------------
+
+  /**
+   * Makes `ConsumerSettings` for a transactional consumer, use in tests.
    */
   def transactionalConsumerSettings(
     groupId: String,
@@ -168,6 +383,10 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
+    // @deprecated
+    // starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
+    // contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
+    // that.
     restartStreamOnRebalancing: Boolean = false,
     rebalanceSafeCommits: Boolean = false,
     properties: Map[String, String] = Map.empty
@@ -182,65 +401,46 @@ object KafkaTestUtils {
       rebalanceSafeCommits = rebalanceSafeCommits,
       properties = properties
     )
-      .map(
-        _.withProperties(
-          ConsumerConfig.ISOLATION_LEVEL_CONFIG -> "read_committed"
-        )
-      )
+      .map(_.withProperties(ConsumerConfig.ISOLATION_LEVEL_CONFIG -> "read_committed"))
 
   /**
-   * Utility function to make a Consumer. It requires a ConsumerSettings layer.
+   * Makes a transactional `Consumer` for use in tests.
    */
-  @deprecated("Use [[KafkaTestUtils.minimalConsumer]] instead", "2.3.1")
-  def simpleConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
-    ZLayer.makeSome[ConsumerSettings, Consumer](
-      ZLayer.succeed(diagnostics) >>> Consumer.live
-    )
-
-  /**
-   * Utility function to make a Consumer. It requires a ConsumerSettings layer.
-   *
-   * "minimal" because, unlike the other functions returning a `ZLayer[..., ..., Consumer]` of this file, you need to
-   * provide the `ConsumerSettings` layer yourself.
-   */
-  def minimalConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
-    ZLayer.makeSome[ConsumerSettings, Consumer](
-      ZLayer.succeed(diagnostics) >>> Consumer.live
-    )
-
-  /**
-   * Utility function to make a Consumer.
-   */
-  def consumer(
+  def makeTransactionalConsumer(
     clientId: String,
-    groupId: Option[String] = None,
+    groupId: String,
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
+    // @deprecated
+    // starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
+    // contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
+    // that.
     restartStreamOnRebalancing: Boolean = false,
     rebalanceSafeCommits: Boolean = false,
-    maxRebalanceDuration: Duration = 3.minutes,
-    commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
-    properties: Map[String, String] = Map.empty
-  ): ZLayer[Kafka, Throwable, Consumer] =
-    (ZLayer(
-      consumerSettings(
-        clientId = clientId,
-        groupId = groupId,
-        clientInstanceId = clientInstanceId,
-        allowAutoCreateTopics = allowAutoCreateTopics,
-        offsetRetrieval = offsetRetrieval,
-        restartStreamOnRebalancing = restartStreamOnRebalancing,
-        rebalanceSafeCommits = rebalanceSafeCommits,
-        maxRebalanceDuration = maxRebalanceDuration,
-        properties = properties,
-        commitTimeout = commitTimeout
-      )
-    ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
+    properties: Map[String, String] = Map.empty,
+    rebalanceListener: RebalanceListener = RebalanceListener.noop
+  ): ZIO[Scope & Kafka, Throwable, Consumer] =
+    for {
+      settings <- transactionalConsumerSettings(
+                    groupId = groupId,
+                    clientId = clientId,
+                    clientInstanceId = clientInstanceId,
+                    allowAutoCreateTopics = allowAutoCreateTopics,
+                    offsetRetrieval = offsetRetrieval,
+                    restartStreamOnRebalancing = restartStreamOnRebalancing,
+                    rebalanceSafeCommits = rebalanceSafeCommits,
+                    properties = properties
+                  ).map(_.withRebalanceListener(rebalanceListener))
+      consumer <- Consumer.make(settings, diagnostics)
+    } yield consumer
 
   /**
-   * Utility function to make a transactional Consumer.
+   * A transactional `Consumer` layer for use in tests.
+   *
+   * ℹ️ Instead of using a layer, consider using [[KafkaTestUtils.makeTransactionalConsumer]] to directly get a
+   * consumer.
    */
   def transactionalConsumer(
     clientId: String,
@@ -249,26 +449,38 @@ object KafkaTestUtils {
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
+    // @deprecated
+    // starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
+    // contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
+    // that.
     restartStreamOnRebalancing: Boolean = false,
     rebalanceSafeCommits: Boolean = false,
     properties: Map[String, String] = Map.empty,
     rebalanceListener: RebalanceListener = RebalanceListener.noop
   ): ZLayer[Kafka, Throwable, Consumer] =
-    (ZLayer(
-      transactionalConsumerSettings(
-        groupId = groupId,
-        clientId = clientId,
-        clientInstanceId = clientInstanceId,
-        allowAutoCreateTopics = allowAutoCreateTopics,
-        offsetRetrieval = offsetRetrieval,
-        restartStreamOnRebalancing = restartStreamOnRebalancing,
-        rebalanceSafeCommits = rebalanceSafeCommits,
-        properties = properties
-      ).map(_.withRebalanceListener(rebalanceListener))
-    ) ++ ZLayer.succeed(diagnostics)) >>> Consumer.live
+    ZLayer.scoped {
+      makeTransactionalConsumer(
+        clientId,
+        groupId,
+        clientInstanceId,
+        offsetRetrieval,
+        allowAutoCreateTopics,
+        diagnostics,
+        restartStreamOnRebalancing,
+        rebalanceSafeCommits,
+        properties,
+        rebalanceListener
+      )
+    }
+
+  // -----------------------------------------------------------------------------------------
+  //
+  // Consumer helpers
+  //
+  // -----------------------------------------------------------------------------------------
 
   /**
-   * Utility function consume a stream of ConsumerRecords.
+   * Consumes a stream of `ConsumerRecord`s for topics that have `String` keys and `String` values.
    *
    * For each consumed record, the provided `r` function will be called.
    */
@@ -284,34 +496,40 @@ object KafkaTestUtils {
       )(r)
     }
 
-  /**
-   * Default AdminClient settings.
-   */
-  val adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
-    ZIO.serviceWith[Kafka](_.bootstrapServers).map(AdminClientSettings(_))
+  // -----------------------------------------------------------------------------------------
+  //
+  // Admin client construction
+  //
+  // -----------------------------------------------------------------------------------------
 
   /**
-   * Utility function to make an AdminClient settings set using SASL_PLAINTEXT security protocol.
+   * Makes `AdminClientSettings` for use in tests.
+   */
+  val adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
+    ZIO.serviceWith[Kafka](_.bootstrapServers).map(bootstrapServers => AdminClientSettings(bootstrapServers))
+
+  /**
+   * Makes `AdminClientSettings` for use in tests, using SASL_PLAINTEXT security protocol.
    */
   def saslAdminSettings(username: String, password: String): ZIO[Kafka.Sasl, Nothing, AdminClientSettings] =
     ZIO
       .serviceWith[Kafka.Sasl](_.value.bootstrapServers)
-      .map(
-        AdminClientSettings(_).withProperties(
+      .map { bootstrapServers =>
+        AdminClientSettings(bootstrapServers).withProperties(
           "sasl.mechanism"    -> "PLAIN",
           "security.protocol" -> "SASL_PLAINTEXT",
           "sasl.jaas.config" -> s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="$username" password="$password";"""
         )
-      )
+      }
 
   /**
-   * Default AdminClient settings using SSL security protocol.
+   * Makes `AdminClientSettings` for use in tests, using SSL security protocol.
    */
   val sslAdminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO
       .serviceWith[Kafka](_.bootstrapServers)
-      .map(bootstrap =>
-        AdminClientSettings(bootstrap).withProperties(
+      .map { bootstrapServers =>
+        AdminClientSettings(bootstrapServers).withProperties(
           "security.protocol"       -> "SSL",
           "ssl.truststore.location" -> trustStoreFile.getAbsolutePath,
           "ssl.truststore.password" -> "123456",
@@ -322,42 +540,95 @@ object KafkaTestUtils {
           "ssl.truststore.type"     -> "JKS",
           "ssl.keystore.type"       -> "JKS"
         )
-      )
+      }
 
   /**
-   * Utility function to execute something with an `AdminClient` instance configure with the default settings.
+   * Makes a `AdminClient` for use in tests.
    */
-  def withAdmin[T](f: AdminClient => RIO[Kafka, T]): ZIO[Kafka, Throwable, T] =
-    for {
-      settings <- adminSettings
-      fRes     <- withAdminClient(settings)(f)
-    } yield fRes
+  def makeAdminClient: ZIO[Scope & Kafka, Throwable, AdminClient] =
+    adminSettings.flatMap(AdminClient.make)
 
   /**
-   * Utility function to execute something with an `AdminClient` instance configured to use the SASL_PLAINTEXT security
-   * protocol.
+   * Makes a `AdminClient` for use in tests, using the `SASL_PLAINTEXT` security protocol.
    */
-  def withSaslAdmin[T](
+  def makeSaslAdminClient(
     username: String = "admin",
     password: String = "admin-secret"
-  )(f: AdminClient => RIO[Kafka.Sasl, T]): ZIO[Kafka.Sasl, Throwable, T] =
-    for {
-      settings <- saslAdminSettings(username, password)
-      fRes     <- withAdminClient(settings)(f)
-    } yield fRes
+  ): ZIO[Scope & Kafka.Sasl, Throwable, AdminClient] =
+    saslAdminSettings(username, password).flatMap(AdminClient.make)
 
   /**
-   * Utility function to execute something with an `AdminClient` instance configured to use the SSL security protocol.
+   * Makes a `AdminClient` for use in tests, using the `SSL` security protocol.
    */
-  def withSslAdmin[T](f: AdminClient => RIO[Kafka, T]): ZIO[Kafka, Throwable, T] =
-    for {
-      settings <- sslAdminSettings
-      fRes     <- withAdminClient(settings)(f)
-    } yield fRes
+  def makeSslAdminClient: ZIO[Scope & Kafka, Throwable, AdminClient] =
+    sslAdminSettings.flatMap(AdminClient.make)
 
-  private def withAdminClient[R, T](settings: AdminClientSettings)(f: AdminClient => RIO[R, T]): ZIO[R, Throwable, T] =
-    ZIO.scoped[R] {
-      AdminClient.make(settings).flatMap(f)
+  /**
+   * Run `f` with an `AdminClient`.
+   *
+   * @deprecated
+   *   use [[KafkaTestUtils.makeAdminClient]] directly, for example:
+   *   {{{
+   *   for {
+   *     adminClient <- KafkaTestUtils.makeAdminClient
+   *     _           <- adminClient.createTopic(topic1, 1, 1)
+   *   } yield ()
+   *   }}}
+   */
+  @deprecated("Use KafkaTestUtils.makeAdminClient instead", since = "2.11.0")
+  def withAdmin[A](f: AdminClient => UIO[A]): ZIO[Scope & Kafka, Throwable, A] =
+    makeAdminClient.flatMap(f)
+
+  /**
+   * Run `f` with an `AdminClient`, using the SASL_PLAINTEXT security protocol.
+   *
+   * @deprecated
+   *   use [[KafkaTestUtils.makeSaslAdminClient]] directly, for example:
+   *   {{{
+   *   for {
+   *     adminClient <- KafkaTestUtils.makeSaslAdminClient
+   *     _           <- adminClient.createTopic(topic1, 1, 1)
+   *   } yield ()
+   *   }}}
+   */
+  @deprecated("Use KafkaTestUtils.makeSaslAdminClient instead", since = "2.11.0")
+  def withSaslAdmin[A](
+    username: String = "admin",
+    password: String = "admin-secret"
+  )(f: AdminClient => UIO[A]): ZIO[Scope & Kafka.Sasl, Throwable, A] =
+    makeSaslAdminClient(username, password).flatMap(f)
+
+  /**
+   * Run `f` with an `AdminClient`, using the `SSL` security protocol.
+   *
+   * @deprecated
+   *   use [[KafkaTestUtils.makeSslAdminClient]] directly, for example:
+   *   {{{
+   *   for {
+   *     adminClient <- KafkaTestUtils.makeSslAdminClient
+   *     _           <- adminClient.createTopic(topic1, 1, 1)
+   *   } yield ()
+   *   }}}
+   */
+  @deprecated("Use KafkaTestUtils.makeSslAdminClient instead", since = "2.11.0")
+  def withSslAdmin[A](f: AdminClient => UIO[A]): ZIO[Scope & Kafka, Throwable, A] =
+    makeSslAdminClient.flatMap(f)
+
+  // -----------------------------------------------------------------------------------------
+  //
+  // Admin client helpers
+  //
+  // -----------------------------------------------------------------------------------------
+
+  /**
+   * Create a topic.
+   */
+  def createCustomTopic(topic: String, partitionCount: Int = 1): ZIO[Kafka, Throwable, Unit] =
+    ZIO.scoped {
+      for {
+        adminClient <- makeAdminClient
+        _           <- adminClient.createTopic(AdminClient.NewTopic(topic, partitionCount, replicationFactor = 1))
+      } yield ()
     }
 
   private def readResourceFile(file: String, tmpFileName: String, tmpFileSuffix: String): File =
