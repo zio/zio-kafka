@@ -29,6 +29,7 @@ import zio.test._
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.concurrent.TimeoutException
 import scala.reflect.ClassTag
 
 //noinspection SimplifyAssertInspection
@@ -395,10 +396,12 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         test("runWithGracefulShutdown must end streams while still processing commits") {
           val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
           for {
-            group                   <- randomGroup
-            client                  <- randomClient
-            topic                   <- randomTopic
-            _                       <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = 5))
+            group  <- randomGroup
+            client <- randomClient
+            topic  <- randomTopic
+            _ <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = 5)).retryWhile {
+                   case _: TimeoutException => true; case _ => false
+                 }
             processedMessageOffsets <- Ref.make(Chunk.empty[(TopicPartition, Long)])
             results <- ZIO.scoped {
                          for {
