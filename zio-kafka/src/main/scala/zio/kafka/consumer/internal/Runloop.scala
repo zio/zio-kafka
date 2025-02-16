@@ -30,7 +30,7 @@ private[consumer] final class Runloop private (
   rebalanceCoordinator: RebalanceCoordinator,
   consumerMetrics: ConsumerMetrics,
   committer: Committer,
-  consumerMetadataRef: Ref[Option[ConsumerGroupMetadata]]
+  groupMetadataRef: Ref[Option[ConsumerGroupMetadata]]
 ) {
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(
@@ -159,17 +159,18 @@ private[consumer] final class Runloop private (
    *   optionally consumer group metadata, first we try get it from consumerMetadataRef, or fetch it from consumer if
    *   not present. If the group id is not set, we return None.
    */
-  private def getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
-    consumerMetadataRef.get.flatMap {
-      case None if settings.hasGroupId =>
-        consumer
-          .runloopAccess(c => ZIO.attempt(c.groupMetadata()))
-          .fold(_ => None, Some(_))
-          .tap(metadata => consumerMetadataRef.set(metadata))
+  private val getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
+    if (settings.hasGroupId) {
+      groupMetadataRef.get.flatMap {
+        case None =>
+          consumer
+            .runloopAccess(c => ZIO.attempt(c.groupMetadata()))
+            .fold(_ => None, Some(_))
+            .tap(metadata => groupMetadataRef.set(metadata))
 
-      // If consumer group metadata is already present, or if the group id is not set, we don't need to re-fetch it.
-      case metadata => ZIO.succeed(metadata)
-    }
+        case metadata => ZIO.succeed(metadata)
+      }
+    } else ZIO.succeed(None)
 
   /** @return the topic-partitions for which received records should be ignored */
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
@@ -269,10 +270,10 @@ private[consumer] final class Runloop private (
                               val currentAssigned = c.assignment().asScala.toSet
                               val endedTps        = endedStreams.map(_.tp).toSet
                               for {
-                                ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
-
                                 // invalidate current consumer group metadata
-                                _ <- consumerMetadataRef.set(None)
+                                _ <- groupMetadataRef.set(None)
+
+                                ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
 
                                 // The topic partitions that need a new stream are:
                                 //  1. Those that are freshly assigned
@@ -604,10 +605,10 @@ object Runloop {
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
-      currentStateRef     <- Ref.make(initialState)
-      consumerMetadataRef <- Ref.make[Option[ConsumerGroupMetadata]](None)
-      sameThreadRuntime   <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
-      executor            <- ZIO.executor
+      currentStateRef   <- Ref.make(initialState)
+      groupMetadataRef  <- Ref.make[Option[ConsumerGroupMetadata]](None)
+      sameThreadRuntime <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
+      executor          <- ZIO.executor
       metrics = new ZioConsumerMetrics(settings.metricLabels)
       committer <- LiveCommitter
                      .make(
@@ -637,7 +638,7 @@ object Runloop {
                   consumerMetrics = metrics,
                   rebalanceCoordinator = rebalanceCoordinator,
                   committer = committer,
-                  consumerMetadataRef = consumerMetadataRef
+                  groupMetadataRef = groupMetadataRef
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
