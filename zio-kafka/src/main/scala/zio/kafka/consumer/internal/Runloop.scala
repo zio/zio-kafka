@@ -159,13 +159,16 @@ private[consumer] final class Runloop private (
    *   optionally consumer group metadata, first we try get it from consumerMetadataRef, or fetch it from consumer if
    *   not present. If the group id is not set, we return None.
    */
-  private def getConsumerGroupMetadataIfAny(invalidateCurrentMetadata: Boolean): UIO[Option[ConsumerGroupMetadata]] =
+  private def getConsumerGroupMetadataIfAny(
+    consumer: ByteArrayKafkaConsumer,
+    invalidateCurrentMetadata: Boolean
+  ): UIO[Option[ConsumerGroupMetadata]] =
     if (settings.hasGroupId) {
       ZIO.when(invalidateCurrentMetadata)(groupMetadataRef.set(None)) *>
         groupMetadataRef.get.flatMap {
           case None =>
-            consumer
-              .runloopAccess(c => ZIO.attempt(c.groupMetadata()))
+            ZIO
+              .attempt(consumer.groupMetadata())
               .fold(_ => None, Some(_))
               .tap { metadata =>
                 groupMetadataRef.set(metadata)
@@ -256,7 +259,7 @@ private[consumer] final class Runloop private (
                             case RebalanceEvent(false, _, _, _, _) =>
                               // The fast track, rebalance listener was not invoked:
                               //   no assignment changes, no new commits, only new records.
-                              getConsumerGroupMetadataIfAny(invalidateCurrentMetadata = false).map { groupMetadata =>
+                              getConsumerGroupMetadataIfAny(c, invalidateCurrentMetadata = false).map { groupMetadata =>
                                 PollResult(
                                   records = polledRecords,
                                   ignoreRecordsForTps = Set.empty,
@@ -275,7 +278,7 @@ private[consumer] final class Runloop private (
                               val endedTps        = endedStreams.map(_.tp).toSet
                               for {
                                 // current consumer group metadata is probably outdated upon re-balance, so we invalidate it
-                                groupMetadata <- getConsumerGroupMetadataIfAny(invalidateCurrentMetadata = true)
+                                groupMetadata <- getConsumerGroupMetadataIfAny(c, invalidateCurrentMetadata = true)
 
                                 ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
 
