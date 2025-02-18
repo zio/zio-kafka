@@ -170,9 +170,7 @@ private[consumer] final class Runloop private (
             ZIO
               .attempt(consumer.groupMetadata())
               .fold(_ => None, Some(_))
-              .tap { metadata =>
-                groupMetadataRef.set(metadata)
-              }
+              .tap(groupMetadataRef.set)
 
           case metadata => ZIO.succeed(metadata)
         }
