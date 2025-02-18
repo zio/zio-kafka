@@ -159,9 +159,9 @@ private[consumer] final class Runloop private (
    *   optionally consumer group metadata, first we try get it from consumerMetadataRef, or fetch it from consumer if
    *   not present. If the group id is not set, we return None.
    */
-  private val getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
+  private def getConsumerGroupMetadataIfAny(invalidateCurrentMetadata: Boolean): UIO[Option[ConsumerGroupMetadata]] =
     if (settings.hasGroupId) {
-      groupMetadataRef.set(None) *>
+      ZIO.when(invalidateCurrentMetadata)(groupMetadataRef.set(None)) *>
         groupMetadataRef.get.flatMap {
           case None =>
             consumer
@@ -256,7 +256,7 @@ private[consumer] final class Runloop private (
                             case RebalanceEvent(false, _, _, _, _) =>
                               // The fast track, rebalance listener was not invoked:
                               //   no assignment changes, no new commits, only new records.
-                              getConsumerGroupMetadataIfAny.map { groupMetadata =>
+                              getConsumerGroupMetadataIfAny(invalidateCurrentMetadata = false).map { groupMetadata =>
                                 PollResult(
                                   records = polledRecords,
                                   ignoreRecordsForTps = Set.empty,
@@ -275,7 +275,7 @@ private[consumer] final class Runloop private (
                               val endedTps        = endedStreams.map(_.tp).toSet
                               for {
                                 // current consumer group metadata is probably outdated upon re-balance, so we invalidate it
-                                groupMetadata <- getConsumerGroupMetadataIfAny
+                                groupMetadata <- getConsumerGroupMetadataIfAny(invalidateCurrentMetadata = true)
 
                                 ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
 
