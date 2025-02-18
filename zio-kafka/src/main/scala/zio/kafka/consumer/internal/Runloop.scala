@@ -114,7 +114,8 @@ private[consumer] final class Runloop private (
     partitionStreams: Chunk[PartitionStreamControl],
     pendingRequests: Chunk[RunloopCommand.Request],
     ignoreRecordsForTps: Set[TopicPartition],
-    polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
+    polledRecords: ConsumerRecords[Array[Byte], Array[Byte]],
+    consumerGroupMetadata: Option[ConsumerGroupMetadata]
   ): UIO[Runloop.FulfillResult] = {
     type Record = CommittableRecord[Array[Byte], Array[Byte]]
 
@@ -129,7 +130,6 @@ private[consumer] final class Runloop private (
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
       for {
-        consumerGroupMetadata <- getConsumerGroupMetadataIfAny
         _ <- ZIO.foreachParDiscard(streams) { streamControl =>
                val tp      = streamControl.tp
                val records = polledRecords.records(tp)
@@ -161,15 +161,18 @@ private[consumer] final class Runloop private (
    */
   private val getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
     if (settings.hasGroupId) {
-      groupMetadataRef.get.flatMap {
-        case None =>
-          consumer
-            .runloopAccess(c => ZIO.attempt(c.groupMetadata()))
-            .fold(_ => None, Some(_))
-            .tap(metadata => groupMetadataRef.set(metadata))
+      groupMetadataRef.set(None) *>
+        groupMetadataRef.get.flatMap {
+          case None =>
+            consumer
+              .runloopAccess(c => ZIO.attempt(c.groupMetadata()))
+              .fold(_ => None, Some(_))
+              .tap { metadata =>
+                groupMetadataRef.set(metadata)
+              }
 
-        case metadata => ZIO.succeed(metadata)
-      }
+          case metadata => ZIO.succeed(metadata)
+        }
     } else ZIO.succeed(None)
 
   /** @return the topic-partitions for which received records should be ignored */
@@ -253,14 +256,15 @@ private[consumer] final class Runloop private (
                             case RebalanceEvent(false, _, _, _, _) =>
                               // The fast track, rebalance listener was not invoked:
                               //   no assignment changes, no new commits, only new records.
-                              ZIO.succeed(
+                              getConsumerGroupMetadataIfAny.map { groupMetadata =>
                                 PollResult(
                                   records = polledRecords,
                                   ignoreRecordsForTps = Set.empty,
                                   pendingRequests = state.pendingRequests,
-                                  assignedStreams = state.assignedStreams
+                                  assignedStreams = state.assignedStreams,
+                                  consumerGroupMetadata = groupMetadata
                                 )
-                              )
+                              }
 
                             case RebalanceEvent(true, assignedTps, revokedTps, lostTps, endedStreams) =>
                               // The slow track, the rebalance listener was invoked:
@@ -270,8 +274,8 @@ private[consumer] final class Runloop private (
                               val currentAssigned = c.assignment().asScala.toSet
                               val endedTps        = endedStreams.map(_.tp).toSet
                               for {
-                                // invalidate current consumer group metadata
-                                _ <- groupMetadataRef.set(None)
+                                // current consumer group metadata is probably outdated upon re-balance, so we invalidate it
+                                groupMetadata <- getConsumerGroupMetadataIfAny
 
                                 ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
 
@@ -337,7 +341,8 @@ private[consumer] final class Runloop private (
                                 records = polledRecords,
                                 ignoreRecordsForTps = ignoreRecordsForTps,
                                 pendingRequests = updatedPendingRequests,
-                                assignedStreams = updatedAssignedStreams
+                                assignedStreams = updatedAssignedStreams,
+                                consumerGroupMetadata = groupMetadata
                               )
                           }
           } yield pollresult
@@ -346,7 +351,8 @@ private[consumer] final class Runloop private (
                          pollResult.assignedStreams,
                          pollResult.pendingRequests,
                          pollResult.ignoreRecordsForTps,
-                         pollResult.records
+                         pollResult.records,
+                         pollResult.consumerGroupMetadata
                        )
       _ <- committer.cleanupPendingCommits
       _ <- checkStreamPullInterval(pollResult.assignedStreams)
@@ -582,7 +588,8 @@ object Runloop {
     records: ConsumerRecords[Array[Byte], Array[Byte]],
     ignoreRecordsForTps: Set[TopicPartition],
     pendingRequests: Chunk[RunloopCommand.Request],
-    assignedStreams: Chunk[PartitionStreamControl]
+    assignedStreams: Chunk[PartitionStreamControl],
+    consumerGroupMetadata: Option[ConsumerGroupMetadata]
   )
   private final case class RevokeResult(
     pendingRequests: Chunk[RunloopCommand.Request],
