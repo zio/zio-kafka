@@ -17,7 +17,7 @@ const sidebars = {
         "serialization-and-deserialization",
         "transactions",
         "writing-tests",
-        "migrating-to-2.11"
+        "migrating-to-zio-kafka-3"
       ]
     }
   ]

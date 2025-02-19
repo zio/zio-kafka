@@ -75,8 +75,11 @@ object KafkaTestUtils {
    *
    * Note: to run multiple tests in parallel, every test needs a different transactional id.
    */
-  def makeTransactionalProducer(transactionalId: String): ZIO[Scope & Kafka, Throwable, TransactionalProducer] =
-    transactionalProducerSettings(transactionalId).flatMap(TransactionalProducer.make)
+  def makeTransactionalProducer(
+    transactionalId: String,
+    consumer: Consumer
+  ): ZIO[Scope & Kafka, Throwable, TransactionalProducer] =
+    transactionalProducerSettings(transactionalId).flatMap(TransactionalProducer.make(_, consumer))
 
   /**
    * `TransactionalProducer` layer for use in tests.
@@ -87,7 +90,7 @@ object KafkaTestUtils {
    * ℹ️ Instead of using a layer, consider using [[KafkaTestUtils.makeTransactionalProducer]] to directly get a
    * producer.
    */
-  val transactionalProducer: ZLayer[Kafka, Throwable, TransactionalProducer] =
+  val transactionalProducer: ZLayer[Kafka with Consumer, Throwable, TransactionalProducer] =
     transactionalProducer("test-transaction")
 
   /**
@@ -96,8 +99,10 @@ object KafkaTestUtils {
    * ℹ️ Instead of using a layer, consider using [[KafkaTestUtils.makeTransactionalProducer]] to directly get a
    * producer.
    */
-  def transactionalProducer(transactionalId: String): ZLayer[Kafka, Throwable, TransactionalProducer] =
-    ZLayer.scoped(makeTransactionalProducer(transactionalId))
+  def transactionalProducer(transactionalId: String): ZLayer[Kafka with Consumer, Throwable, TransactionalProducer] =
+    ZLayer.scoped {
+      ZIO.serviceWithZIO[Consumer](makeTransactionalProducer(transactionalId, _))
+    }
 
   // -----------------------------------------------------------------------------------------
   //

@@ -5,7 +5,7 @@ sidebar_label: "Getting Started"
 ---
 
 [ZIO Kafka](https://github.com/zio/zio-kafka) is a Kafka client for ZIO. It provides a purely functional, streams-based interface to the Kafka
-client and integrates effortlessly with ZIO and ZIO Streams. Often zio-kafka programs have a _higher_ throughput than
+client and integrates effortlessly with ZIO and zio-streams. Often zio-kafka programs have a _higher_ throughput than
 programs that use the Java Kafka client directly (see section [Performance](#performance) below).
 
 @PROJECT_BADGES@ [![Scala Steward badge](https://img.shields.io/badge/Scala_Steward-helping-blue.svg?style=flat&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAQCAMAAAARSr4IAAAAVFBMVEUAAACHjojlOy5NWlrKzcYRKjGFjIbp293YycuLa3pYY2LSqql4f3pCUFTgSjNodYRmcXUsPD/NTTbjRS+2jomhgnzNc223cGvZS0HaSD0XLjbaSjElhIr+AAAAAXRSTlMAQObYZgAAAHlJREFUCNdNyosOwyAIhWHAQS1Vt7a77/3fcxxdmv0xwmckutAR1nkm4ggbyEcg/wWmlGLDAA3oL50xi6fk5ffZ3E2E3QfZDCcCN2YtbEWZt+Drc6u6rlqv7Uk0LdKqqr5rk2UCRXOk0vmQKGfc94nOJyQjouF9H/wCc9gECEYfONoAAAAASUVORK5CYII=)](https://scala-steward.org)
@@ -14,9 +14,41 @@ programs that use the Java Kafka client directly (see section [Performance](#per
 
 Apache Kafka is a distributed event streaming platform that acts as a distributed publish-subscribe messaging system. It enables us to build distributed streaming data pipelines and event-driven applications.
 
-Kafka has a mature Java client for producing and consuming events, but it has a low-level API. ZIO Kafka is a ZIO native client for Apache Kafka. It has a high-level streaming API on top of the Java client. So we can produce and consume events using the declarative concurrency model of ZIO Streams.
+Kafka has a mature Java client for producing and consuming events, but it has a low-level API. Zio-kafka is a ZIO native client for Apache Kafka. It has a high-level streaming API on top of the Java client. So we can produce and consume events using the declarative concurrency model of zio-streams. In addition, zio-kafka supports an even higher level API where you only write the processing part and the rest is handled by zio-kafka.
 
-## Installation
+## Features
+
+- Exposes the Java Kafka consumer, producer and admin clients with a ZIO based interface.
+- Consuming:
+  - 2 APIs: streaming and ZIO workflow based
+  - supports custom deserialization
+  - process each partition in parallel for highest throughput
+  - allows batched processing for highest throughput
+  - configurable per partition pre-fetching (with back-pressure)
+  - the only async Kafka consumer [without duplicates](https://zio.dev/zio-kafka/preventing-duplicates) after a rebalance (as far as we know)
+  - very configurable
+  - automatic or manual starting offset
+  - supports external commits
+  - retries after authentication/authorization errors
+  - exposes metrics
+  - diagnostics API
+- Producing:
+  - 2 APIs: streaming and ZIO workflow based
+  - supports custom serialization
+  - allows for batches for highest throughput
+  - optionally await broker acknowledgements
+  - optional retries after authentication/authorization errors
+- Admin API:
+  - exposes all the admin client methods with a ZIO based interface
+- Proper errors when broker expects SSL (no [OOM crashes](https://issues.apache.org/jira/browse/KAFKA-4090))
+- Test kit with embedded kafka broker
+- Well documented
+- Community support via [Discord](https://discord.com/channels/629491597070827530/629497941719121960)
+- Commercial support via [Ziverge](https://www.ziverge.com)
+
+## Getting started
+
+See the [zio-kafka tutorial](https://zio.dev/guides/tutorials/producing-consuming-data-from-kafka-topics/) for a grand tour of the different ways you can use zio-kafka.
 
 In order to use this library, we need to add the following line in our `build.sbt` file:
 
@@ -36,32 +68,29 @@ excludeDependencies += "org.scala-lang.modules" % "scala-collection-compat_2.13"
 
 ## Example
 
-Let's write a simple Kafka producer and consumer using ZIO Kafka with ZIO Streams. Before everything, we need a running instance of Kafka. We can do that by saving the following docker-compose script in the `docker-compose.yml` file and run `docker-compose up`:
+Let's write a simple Kafka producer and consumer using zio-kafka with zio-streams. Before everything, we need a running instance of Kafka. We can do that by saving the following docker-compose script in the `docker-compose.yml` file and run `docker compose up`:
 
-```yaml
-version: '2'
+```docker-compose
 services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:latest
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
+  broker:
+    image: apache/kafka:3.9.0
+    container_name: broker
     ports:
-      - 22181:2181
-  
-  kafka:
-    image: confluentinc/cp-kafka:latest
-    depends_on:
-      - zookeeper
-    ports:
-      - 29092:29092
+      - "9092:9092"
     environment:
+      KAFKA_NODE_ID: 1
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:29093
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
 ```
 
 Now, we can run our ZIO Kafka Streaming application:
@@ -80,7 +109,7 @@ object ReadmeExample extends ZIOAppDefault {
       for {
         producer <-
           Producer.make(
-            ProducerSettings(List("localhost:29092"))
+            ProducerSettings(List("localhost:9092"))
           )
         _ <- ZStream
           .fromSchedule(Schedule.fixed(2.seconds))
@@ -103,7 +132,7 @@ object ReadmeExample extends ZIOAppDefault {
       for {
         consumer <-
           Consumer.make(
-            ConsumerSettings(List("localhost:29092"))
+            ConsumerSettings(List("localhost:9092"))
               .withGroupId("group")
           )
         _ <- consumer
@@ -125,7 +154,7 @@ object ReadmeExample extends ZIOAppDefault {
 
 ### Articles
 
-- [ZIO Kafka tutorial](https://zio.dev/guides/tutorials/producing-consuming-data-from-kafka-topics/) by the ZIO-kafka team
+- [ZIO Kafka tutorial](https://zio.dev/guides/tutorials/producing-consuming-data-from-kafka-topics/) by the zio-kafka team
 - [ZIO Kafka faster than Java Kafka](https://day-to-day-stuff.blogspot.com/2024/12/zio-kafka-faster-than-java-kafka.html) by Erik van Oosten (December 2024)
 - [Introduction to zio-kafka](https://www.baeldung.com/scala/zio-kafka-intro) by Stefanos Georgakis, Baeldung (January 2023)
 - [How to implement streaming microservices with ZIO 2 and Kafka](https://scalac.io/blog/streaming-microservices-with-zio-and-kafka/) by Jorge Vasquez, Scalac (June 2023)

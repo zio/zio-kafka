@@ -4,6 +4,17 @@ import org.apache.kafka.clients.admin.AdminClientConfig
 import zio._
 import zio.kafka.security.KafkaCredentialStore
 
+/**
+ * Settings for the admin client.
+ *
+ * To stay source compatible with future releases, you are recommended to construct the settings as follows:
+ * {{{
+ *   AdminClientSettings(bootstrapServers)
+ *     .withCredentials(...)
+ *     .withProperty(...)
+ *     .... etc.
+ * }}}
+ */
 final case class AdminClientSettings(
   closeTimeout: Duration,
   properties: Map[String, AnyRef]
