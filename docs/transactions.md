@@ -33,39 +33,55 @@ val settings = ConsumerSettings(bootstrapServers)
 In order to produce records transactionally, we need a `Consumer` and a `TransactionalProducer` that will work together
 to safely commit transactions.
 
-First we create layers for the `ConsumerSettings` and the `Consumer`.
+On this page we assume you're using [ZIO service pattern](https://zio.dev/reference/service-pattern/) and that the
+`Consumer` and `TransactionalProducer` are created as a layer.
+
+First we create the `Consumer` layer.
 Note that rebalance-safe-commits must be enabled (see the background section below for more information).
 Since the default `maxRebalanceDuration` is quite high, you may also consider setting it to a lower duration, one in
 which you are sure all records of a poll can be processed.
 
 ```scala
 val bootstrapBrokers = List("localhost:9092")
-val consumerSettings = ZLayer.succeed {
-  ConsumerSettings(bootstrapBrokers)
+
+val consumerLayer: ZLayer[Any, Throwable, Consumer] = ZLayer {
+  val consumerSettings = ConsumerSettings(bootstrapBrokers)
     .withGroupId("somegroupid")
     .withRebalanceSafeCommits(true) // required!
     .withMaxRebalanceDuration(30.seconds)
+  Consumer.make(consumerSettings)
 }
-val consumer = Consumer.live
 ```
 
-Now we can create layers for the `ProducerSettings` and the `TransactionalProducer`.
+Now we can create the `TransactionalProducer` layer.
 Note that the producer connects (and must connect) to the same brokers as the consumer.
 
-DEVELOPER NOTE: here we assume that we no longer have `TransactionalProducerSettings`. TODO: check this assertion
-
 ```scala
-val producerSettings = ZLayer.succeed {
-  ProducerSettings(bootstrapServers = bootstrapBrokers)
-}
-val producer: ZLayer[TransactionalProducerSettings with Consumer, Throwable, TransactionalProducer] =
-  TransactionalProducer.live
+val producerLayer: ZLayer[Consumer, Throwable, TransactionalProducer] =
+  ZLayer {
+    // See text below for a better transactionalId
+    val transactionalId = UUID.randomUUID().toString
+    val producerSettings = ProducerSettings(bootstrapBrokers)
+    val transactionalProducerSettings = TransactionalProducerSettings(producerSettings, transactionalId)
+
+    for {
+      consumer <- ZIO.service[Consumer]
+      tp       <- TransactionalProducer.make(transactionalProducerSettings, consumer)
+    } yield tp
+  }
 ```
 
-Notice that the `producer` layer also requires a `Consumer`. The producer coordinates with the consumer to make sure
+Notice that the `producerLayer` requires a `Consumer`. The producer coordinates with the consumer to make sure
 that transactions are accepted by the brokers. The consumer does this by holding up rebalances until all records
 consumed before the rebalance are committed by the producer. (Again, see the background section below for more
 information.)
+
+The `transactionalId` uniquely identifies a producer and is (ideally) retained across restarts. It allows the Kafka
+brokers to identify zombies, producers that are accidentally still running. Records produced by a zombie are rejected.
+For a more complete description see [Kafka’s transactional.id – your first guess is probably wrong. It’s actually all about zombies](https://community.ibm.com/community/user/integration/blogs/kim-clark1/2024/06/19/kafka-transactionalid).
+
+Ideally, the `transactionalId` is stable and is provided by the environment. For example, the first producer uses a
+`transactionalId` that ends with `0`, the second producer uses a `transactionalId` that ends with `1` and so on.
 
 With these in place we can look at the application logic of consuming and producing. In this example we use the
 `plainStream` method to consume records with a `Long` value and an `Int` key.
@@ -97,7 +113,7 @@ Typically, to optimize throughput, we want to produce records in batches. The un
 consumer stream is ideal for that because zio-kafka guarantees that each chunk in the stream corresponds to the records
 that were fetched together. However, we need to be careful to retain the chunking structure. For example, we should
 not use `.mapZIO` because it results in a stream where each chunk contains only a single item. Therefore, we use
-`.mapChunksZIO` instead.
+`.mapChunksZIO` instead (see also [a warning about mapZIO](serialization-and-deserialization.md#a-warning-about-mapzio)).
 
 These new records can now be produced. Let's build it up slowly.
 
@@ -178,7 +194,7 @@ object Transactional extends ZIOAppDefault {
   val producerSettings = ZLayer.succeed {
     TransactionalProducerSettings(
       bootstrapServers = bootstrapBrokers,
-      transactionalId = UUID.randomUUID().toString // TODO: do we still need this?
+      transactionalId = UUID.randomUUID().toString
     )
   }
 
