@@ -366,6 +366,9 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           } yield assertTrue(recordChunk.map(_.value).last == 0)
         },
         test("serialize concurrent transactions") {
+          // Warning: on fast machines this test is flaky.
+          // The problem is that when the consumer is reading from the topic, sometimes it only sees
+          // one of the 2 produced records since the second is still in transit.
           import Subscription._
 
           for {
