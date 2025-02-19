@@ -103,6 +103,7 @@ override def spec: Spec[TestEnvironment, Any] =
     }
   )
     .provideSome[Kafka](KafkaTestUtils.producer)
+    .provideShared(Kafka.embedded)
 
 // New
 // Added `Scope`:
@@ -116,7 +117,9 @@ override def spec: Spec[TestEnvironment & Scope, Any] =
         _ <- KafkaTestUtils.produceOne(producer, "topic", "key", "message")
       } yield assertCompletes
     }
-    // No more layer magic!
+    // Producer layer removed.
+    .provideSomeShared[Scope](Kafka.embedded)
+    // Using `provideSomeShared[Scope]` instead of `provideShared`
   )
 ```
 
