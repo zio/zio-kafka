@@ -254,7 +254,10 @@ private[consumer] final class Runloop private (
                               for {
                                 // On re-balance, old metadata in groupMetadataRef might be invalid, so we need to fetch it again.
                                 _ <- ZIO.when(settings.hasGroupId) {
-                                       ZIO.attempt(c.groupMetadata()).fold(_ => None, Some(_)).map(groupMetadataRef.set)
+                                       ZIO
+                                         .attempt(c.groupMetadata())
+                                         .fold(_ => None, Some(_))
+                                         .flatMap(groupMetadataRef.set)
                                      }
 
                                 ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
