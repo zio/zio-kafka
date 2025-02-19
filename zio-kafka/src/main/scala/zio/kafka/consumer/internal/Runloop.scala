@@ -129,7 +129,7 @@ private[consumer] final class Runloop private (
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
       for {
-        consumerGroupMetadata <- getConsumerGroupMetadataIfAny
+        consumerGroupMetadata <- groupMetadataRef.get
         _ <- ZIO.foreachParDiscard(streams) { streamControl =>
                val tp      = streamControl.tp
                val records = polledRecords.records(tp)
@@ -153,24 +153,6 @@ private[consumer] final class Runloop private (
       } yield fulfillResult
     }
   }
-
-  /**
-   * @return
-   *   optionally consumer group metadata, first we try get it from consumerMetadataRef, or fetch it from consumer if
-   *   not present. If the group id is not set, we return None.
-   */
-  private val getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
-    if (settings.hasGroupId) {
-      groupMetadataRef.get.flatMap {
-        case None =>
-          consumer
-            .runloopAccess(c => ZIO.attempt(c.groupMetadata()))
-            .fold(_ => None, Some(_))
-            .tap(metadata => groupMetadataRef.set(metadata))
-
-        case metadata => ZIO.succeed(metadata)
-      }
-    } else ZIO.succeed(None)
 
   /** @return the topic-partitions for which received records should be ignored */
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
@@ -270,8 +252,10 @@ private[consumer] final class Runloop private (
                               val currentAssigned = c.assignment().asScala.toSet
                               val endedTps        = endedStreams.map(_.tp).toSet
                               for {
-                                // invalidate current consumer group metadata
-                                _ <- groupMetadataRef.set(None)
+                                // On re-balance, old metadata in groupMetadataRef might be invalid, so we need to fetch it again.
+                                _ <- ZIO.when(settings.hasGroupId) {
+                                       ZIO.attempt(c.groupMetadata()).fold(_ => None, Some(_)).map(groupMetadataRef.set)
+                                     }
 
                                 ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
 
