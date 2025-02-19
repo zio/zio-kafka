@@ -77,16 +77,6 @@ object TransactionalProducer {
         } { case (transaction: TransactionImpl, exit) => transaction.markAsClosed *> commitOrAbort(transaction, exit) }
   }
 
-  /**
-   * Accessor method
-   */
-  @deprecated(
-    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
-    since = "2.11.0"
-  )
-  def createTransaction: ZIO[TransactionalProducer & Scope, Throwable, Transaction] =
-    ZIO.service[TransactionalProducer].flatMap(_.createTransaction)
-
   val live: RLayer[TransactionalProducerSettings with Consumer, TransactionalProducer] =
     ZLayer.scoped {
       for {

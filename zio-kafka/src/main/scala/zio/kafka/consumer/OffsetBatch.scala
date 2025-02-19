@@ -8,8 +8,6 @@ sealed trait OffsetBatch {
   def offsets: Map[TopicPartition, OffsetAndMetadata]
   def commit: Task[Unit]
   def add(offset: Offset): OffsetBatch
-  @deprecated("Use add(Offset) instead", "2.1.4")
-  def merge(offset: Offset): OffsetBatch
   def merge(offsets: OffsetBatch): OffsetBatch
   def consumerGroupMetadata: Option[ConsumerGroupMetadata]
 
@@ -47,8 +45,6 @@ private final case class OffsetBatchImpl(
     )
   }
 
-  override def merge(offset: Offset): OffsetBatch = add(offset)
-
   override def merge(otherOffsets: OffsetBatch): OffsetBatch = {
     val newOffsets = Map.newBuilder[TopicPartition, OffsetAndMetadata]
     newOffsets ++= offsets
@@ -68,7 +64,6 @@ case object EmptyOffsetBatch extends OffsetBatch {
   override val offsets: Map[TopicPartition, OffsetAndMetadata]      = Map.empty
   override val commit: Task[Unit]                                   = ZIO.unit
   override def add(offset: Offset): OffsetBatch                     = offset.batch
-  override def merge(offset: Offset): OffsetBatch                   = add(offset)
   override def merge(offsets: OffsetBatch): OffsetBatch             = offsets
   override def consumerGroupMetadata: Option[ConsumerGroupMetadata] = None
 }
