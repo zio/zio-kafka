@@ -24,9 +24,8 @@ private[internal] class RebalanceCoordinator(
 ) {
   private val commitTimeoutNanos = settings.commitTimeout.toNanos
 
-  private val restartStreamsOnRebalancing = settings.restartStreamOnRebalancing
-  private val rebalanceSafeCommits        = settings.rebalanceSafeCommits
-  private val commitTimeout               = settings.commitTimeout
+  private val rebalanceSafeCommits = settings.rebalanceSafeCommits
+  private val commitTimeout        = settings.commitTimeout
 
   // All code in this block is called from the rebalance listener and therefore runs on the same-thread-runtime. This
   // is because the Java kafka client requires us to invoke the consumer from the same thread that invoked the
@@ -187,17 +186,12 @@ private[internal] class RebalanceCoordinator(
   def toRebalanceListener: RebalanceListener = RebalanceListener(
     onAssigned = assignedTps =>
       lastRebalanceEvent.updateZIO { rebalanceEvent =>
-        for {
-          _ <- ZIO.logDebug {
-                 val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
-                 s"${assignedTps.size} partitions are assigned$sameRebalance"
-               }
-          assignedStreams <- getCurrentAssignedStreams
-          streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) assignedStreams
-                         else Chunk.empty
-          _ <- endStreams(streamsToEnd)
-          _ <- ZIO.logTrace("onAssigned done")
-        } yield rebalanceEvent.addCallback(RebalanceCallback(assignedTps, Set.empty, Set.empty, streamsToEnd))
+        ZIO.logDebug {
+          val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
+          s"${assignedTps.size} partitions are assigned$sameRebalance"
+        }.as {
+          rebalanceEvent.addCallback(RebalanceCallback(assignedTps, Set.empty, Set.empty, Chunk.empty))
+        }
       },
     onRevoked = revokedTps =>
       lastRebalanceEvent.updateZIO { rebalanceEvent =>
@@ -207,8 +201,7 @@ private[internal] class RebalanceCoordinator(
                  s"${revokedTps.size} partitions are revoked$sameRebalance"
                }
           assignedStreams <- getCurrentAssignedStreams
-          streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) assignedStreams
-                         else assignedStreams.filter(control => revokedTps.contains(control.tp))
+          streamsToEnd = assignedStreams.filter(control => revokedTps.contains(control.tp))
           _ <- endStreams(streamsToEnd)
           _ <- ZIO.logTrace("onRevoked done")
         } yield rebalanceEvent.addCallback(RebalanceCallback(Set.empty, revokedTps, Set.empty, streamsToEnd))
