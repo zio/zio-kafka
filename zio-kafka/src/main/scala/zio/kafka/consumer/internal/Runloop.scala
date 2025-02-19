@@ -252,13 +252,13 @@ private[consumer] final class Runloop private (
                               val currentAssigned = c.assignment().asScala.toSet
                               val endedTps        = endedStreams.map(_.tp).toSet
                               for {
-                                // On re-balance, old metadata in groupMetadataRef might be invalid, so we need to fetch it again.
-                                _ <- ZIO.when(settings.hasGroupId) {
+                                // After a re-balance the group metadata changes and must be fetched again.
+                                _ <- if (settings.hasGroupId) {
                                        ZIO
                                          .attempt(c.groupMetadata())
                                          .fold(_ => None, Some(_))
-                                         .flatMap(groupMetadataRef.set)
-                                     }
+                                         .tap(groupMetadataRef.set)
+                                     } else ZIO.unit
 
                                 ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
 
