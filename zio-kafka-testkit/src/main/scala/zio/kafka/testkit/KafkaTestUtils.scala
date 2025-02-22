@@ -182,7 +182,7 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
-    rebalanceSafeCommits: Boolean = false,
+    rebalanceSafeCommits: Boolean = true,
     maxRebalanceDuration: Duration = 3.minutes,
     maxPollInterval: Duration = 5.minutes,
     `max.poll.records`: Int = 100, // settings this higher can cause concurrency bugs to go unnoticed
@@ -222,7 +222,7 @@ object KafkaTestUtils {
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
-    rebalanceSafeCommits: Boolean = false,
+    rebalanceSafeCommits: Boolean = true,
     maxRebalanceDuration: Duration = 3.minutes,
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
     properties: Map[String, String] = Map.empty
@@ -267,7 +267,7 @@ object KafkaTestUtils {
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
-    rebalanceSafeCommits: Boolean = false,
+    rebalanceSafeCommits: Boolean = true,
     maxRebalanceDuration: Duration = 3.minutes,
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
     properties: Map[String, String] = Map.empty
@@ -294,7 +294,7 @@ object KafkaTestUtils {
   // -----------------------------------------------------------------------------------------
 
   /**
-   * Makes `ConsumerSettings` for a transactional consumer, use in tests.
+   * Makes `ConsumerSettings` for a transactional consumer, for use in tests.
    */
   def transactionalConsumerSettings(
     groupId: String,
@@ -302,7 +302,7 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
-    rebalanceSafeCommits: Boolean = false,
+    rebalanceSafeCommits: Boolean = true,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     consumerSettings(
@@ -314,7 +314,7 @@ object KafkaTestUtils {
       rebalanceSafeCommits = rebalanceSafeCommits,
       properties = properties
     )
-      .map(_.withProperties(ConsumerConfig.ISOLATION_LEVEL_CONFIG -> "read_committed"))
+      .map(_.withReadCommitted())
 
   /**
    * Makes a transactional `Consumer` for use in tests.
@@ -326,7 +326,7 @@ object KafkaTestUtils {
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
-    rebalanceSafeCommits: Boolean = false,
+    rebalanceSafeCommits: Boolean = true,
     properties: Map[String, String] = Map.empty,
     rebalanceListener: RebalanceListener = RebalanceListener.noop
   ): ZIO[Scope & Kafka, Throwable, Consumer] =
@@ -356,7 +356,7 @@ object KafkaTestUtils {
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
     diagnostics: Diagnostics = Diagnostics.NoOp,
-    rebalanceSafeCommits: Boolean = false,
+    rebalanceSafeCommits: Boolean = true,
     properties: Map[String, String] = Map.empty,
     rebalanceListener: RebalanceListener = RebalanceListener.noop
   ): ZLayer[Kafka, Throwable, Consumer] =
@@ -388,7 +388,7 @@ object KafkaTestUtils {
   def consumeWithStrings(clientId: String, groupId: Option[String] = None, subscription: Subscription)(
     r: ConsumerRecord[String, String] => URIO[Any, Unit]
   ): RIO[Kafka, Unit] =
-    consumerSettings(clientId, groupId, None).flatMap { settings =>
+    consumerSettings(clientId, groupId, None, rebalanceSafeCommits = false).flatMap { settings =>
       Consumer.consumeWith[Any, Any, String, String](
         settings,
         subscription,

@@ -30,7 +30,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         _        <- KafkaTestUtils.produceMany(producer, topic1, kvs)
         _        <- KafkaTestUtils.produceMany(producer, topic2, kvs)
 
-        consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
+        consumer <- KafkaTestUtils.makeConsumer(client, Some(group), rebalanceSafeCommits = false)
         records <-
           consumer
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
@@ -60,7 +60,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         _        <- KafkaTestUtils.produceMany(producer, topic1, kvs)
         _        <- KafkaTestUtils.produceMany(producer, topic2, kvs)
 
-        consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
+        consumer <- KafkaTestUtils.makeConsumer(client, Some(group), rebalanceSafeCommits = false)
         records <-
           consumer
             .plainStream(Subscription.Pattern(s"$topic1".r), Serde.string, Serde.string)
@@ -92,7 +92,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         _        <- KafkaTestUtils.produceMany(producer, topic1, kvs)
         _        <- KafkaTestUtils.produceMany(producer, topic2, kvs)
 
-        consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
+        consumer <- KafkaTestUtils.makeConsumer(client, Some(group), rebalanceSafeCommits = false)
         consumer0 =
           consumer
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
@@ -128,7 +128,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         firstMessagesRef <- Ref.make(("", ""))
         finalizersRef    <- Ref.make(Chunk.empty[String])
 
-        consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
+        consumer <- KafkaTestUtils.makeConsumer(client, Some(group), rebalanceSafeCommits = false)
 
         c1Fib <- consumer
                    .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
@@ -190,6 +190,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         consumer <- KafkaTestUtils.makeConsumer(
                       client,
                       Some(group),
+                      rebalanceSafeCommits = false,
                       properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "10")
                     )
         _ <- consumer
@@ -216,7 +217,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         _        <- KafkaTestUtils.produceMany(producer, topic1, kvs)
         _        <- KafkaTestUtils.produceMany(producer, topic2, kvs)
 
-        consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
+        consumer <- KafkaTestUtils.makeConsumer(client, Some(group), rebalanceSafeCommits = false)
         _ <-
           consumer
             .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
@@ -240,7 +241,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         _        <- KafkaTestUtils.produceMany(producer, topic1, kvs)
 
         errored  <- Ref.make(false)
-        consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
+        consumer <- KafkaTestUtils.makeConsumer(client, Some(group), rebalanceSafeCommits = false)
         _ <- consumer
                .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
                .take(5)
@@ -262,7 +263,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         _        <- KafkaTestUtils.produceMany(producer, topic1, kvs)
 
         recordsConsumed <- Ref.make(Chunk.empty[CommittableRecord[String, String]])
-        consumer        <- KafkaTestUtils.makeConsumer(client, Some(group))
+        consumer        <- KafkaTestUtils.makeConsumer(client, Some(group), rebalanceSafeCommits = false)
         _ <- ZIO.scoped {
                consumer
                  .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)

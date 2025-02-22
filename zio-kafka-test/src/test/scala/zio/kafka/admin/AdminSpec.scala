@@ -288,7 +288,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         def consumeAndCommit(count: Long, topic: String, groupId: String) =
           ZIO.scoped {
             for {
-              consumer <- KafkaTestUtils.makeConsumer(topic, Some(groupId))
+              consumer <- KafkaTestUtils.makeConsumer(topic, Some(groupId), rebalanceSafeCommits = false)
               _ <- consumer
                      .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
                      .take(count)
@@ -335,7 +335,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         def consumeAndCommit(count: Long, topic: String, groupId: String) =
           ZIO.scoped {
             for {
-              consumer <- KafkaTestUtils.makeConsumer(topic, Some(groupId))
+              consumer <- KafkaTestUtils.makeConsumer(topic, Some(groupId), rebalanceSafeCommits = false)
               _ <- consumer
                      .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
                      .take(count)

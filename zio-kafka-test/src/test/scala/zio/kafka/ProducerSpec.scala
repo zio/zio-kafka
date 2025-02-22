@@ -36,7 +36,8 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           consumer <- KafkaTestUtils.makeConsumer(
                         clientId = "producer-spec-consumer",
-                        groupId = Some("group-0")
+                        groupId = Some("group-0"),
+                        rebalanceSafeCommits = false
                       )
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
@@ -68,7 +69,8 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           consumer <- KafkaTestUtils.makeConsumer(
                         clientId = "producer-spec-consumer",
-                        groupId = Some("group-0")
+                        groupId = Some("group-0"),
+                        rebalanceSafeCommits = false
                       )
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
@@ -104,7 +106,8 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           consumer <- KafkaTestUtils.makeConsumer(
                         clientId = "producer-spec-consumer",
-                        groupId = Some("group-0")
+                        groupId = Some("group-0"),
+                        rebalanceSafeCommits = false
                       )
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
@@ -146,7 +149,8 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           consumer <- KafkaTestUtils.makeConsumer(
                         clientId = "producer-spec-consumer",
-                        groupId = Some("group-0")
+                        groupId = Some("group-0"),
+                        rebalanceSafeCommits = false
                       )
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
@@ -212,7 +216,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           producer <- KafkaTestUtils.makeProducer
           outcome  <- producer.produceChunk(chunks, Serde.string, Serde.string)
-          settings <- KafkaTestUtils.consumerSettings(client, Some(group))
+          settings <- KafkaTestUtils.consumerSettings(client, Some(group), rebalanceSafeCommits = false)
           record1 <- ZIO.scoped {
                        withConsumer(Topics(Set(topic1)), settings).flatMap { consumer =>
                          for {
@@ -268,7 +272,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           chunk = makeChunk(standardTopic, compactedTopic)
           producer <- KafkaTestUtils.makeProducer
           outcome  <- producer.produceChunkAsyncWithFailures(chunk).flatten
-          settings <- KafkaTestUtils.consumerSettings(client, Some(group))
+          settings <- KafkaTestUtils.consumerSettings(client, Some(group), rebalanceSafeCommits = false)
           recordsConsumed <- ZIO.scoped {
                                withConsumer(Topics(Set(standardTopic)), settings).flatMap { consumer =>
                                  consumer.take.flatMap(_.exit).mapError(_.getOrElse(new NoSuchElementException))
@@ -323,7 +327,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                    } yield ()
                  }
 
-            settings <- KafkaTestUtils.transactionalConsumerSettings(group, client2)
+            settings <- KafkaTestUtils.transactionalConsumerSettings(group, client2, rebalanceSafeCommits = false)
             recordChunk <- ZIO.scoped {
                              withConsumerInt(Subscription.topics(topic), settings).flatMap { consumer =>
                                for {
@@ -367,7 +371,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                    ZIO.unit // silences the abort
                  }
 
-            settings <- KafkaTestUtils.transactionalConsumerSettings(group, client2)
+            settings <- KafkaTestUtils.transactionalConsumerSettings(group, client2, rebalanceSafeCommits = false)
             recordChunk <- ZIO.scoped {
                              withConsumerInt(Subscription.topics(topic), settings).flatMap { consumer =>
                                for {
@@ -409,7 +413,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                            }
             _ <- transaction1 <&> transaction2
 
-            settings <- KafkaTestUtils.transactionalConsumerSettings(group, client2)
+            settings <- KafkaTestUtils.transactionalConsumerSettings(group, client2, rebalanceSafeCommits = false)
             recordChunk <- ZIO.scoped {
                              withConsumerInt(Subscription.topics(topic), settings).flatMap { consumer =>
                                for {
@@ -470,7 +474,11 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                _        <- tx.produce(aliceGives20, Serde.string, Serde.int, None)
                                producer <- KafkaTestUtils.makeProducer
                                _        <- producer.produce(nonTransactional, Serde.string, Serde.int)
-                               settings <- KafkaTestUtils.consumerSettings(client2, Some(group))
+                               settings <- KafkaTestUtils.consumerSettings(
+                                             client2,
+                                             Some(group),
+                                             rebalanceSafeCommits = false
+                                           )
                                recordChunk <- ZIO.scoped {
                                                 withConsumerInt(Subscription.topics(topic), settings).flatMap {
                                                   consumer =>
@@ -514,7 +522,11 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                              _        <- tx.produce(aliceGives20, Serde.string, Serde.int, None)
                              producer <- KafkaTestUtils.makeProducer
                              _        <- producer.produce(nonTransactional, Serde.string, Serde.int)
-                             settings <- KafkaTestUtils.transactionalConsumerSettings(group, client2)
+                             settings <- KafkaTestUtils.transactionalConsumerSettings(
+                                           group,
+                                           client2,
+                                           rebalanceSafeCommits = false
+                                         )
                              recordChunk <- ZIO.scoped {
                                               withConsumerInt(Subscription.topics(topic), settings).flatMap { consumer =>
                                                 for {
@@ -564,7 +576,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                    ZIO.unit // silences the abort
                  }
 
-            settings <- KafkaTestUtils.transactionalConsumerSettings(group, client2)
+            settings <- KafkaTestUtils.transactionalConsumerSettings(group, client2, rebalanceSafeCommits = false)
             recordChunk <- ZIO.scoped {
                              withConsumerInt(Subscription.topics(topic), settings).flatMap { consumer =>
                                for {
@@ -594,7 +606,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
             // Not a transactional consumer, we want to get _all_ offsets:
-            consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group2))
+            consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group2), rebalanceSafeCommits = false)
             consumerQueue <- consumer2
                                .plainStream(Subscription.topics(topic), Serde.string, Serde.int)
                                .toQueue()
@@ -635,7 +647,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
             // Not a transactional consumer, we want to get _all_ offsets:
-            consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group2))
+            consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group2), rebalanceSafeCommits = false)
             consumerQueue <- consumer2
                                .plainStream(Subscription.topics(topic), Serde.string, Serde.int)
                                .toQueue()

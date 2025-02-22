@@ -3,16 +3,58 @@ id: migrating-to-zio-kafka-3
 title: "Migrating to zio-kafka 3"
 ---
 
+Zio-kafka 3.0.0 brings a number of backwards incompatible changes:
+
+1. `rebalanceSafeCommits` mode is now enabled by default,
+2. Removal of all deprecated methods, including accessor methods,
+3. The transactional producer is now much easier to use, 
+4. `restartStreamOnRebalancing` mode is no longer supported.
+
+This document helps you migrate from zio-kafka 2 to zio-kafka 3.
+
+# 1. `rebalanceSafeCommits` mode enabled by default
+
+Zio-kafka 3.0.0 comes with rebalance safe commits mode enabled by default. In this mode zio-kafka prevents duplicate
+processing of records after a rebalance and shutdown.
+
+:::caution Commits required
+Rebalance safe commits mode requires committing; all offsets of processed records must be committed in your zio-kafka
+application.
+:::
+
+Commits can be done in one of three ways: regular broker-commits, external commits and transactional commits. See
+[preventing duplicates](preventing-duplicates.md) for more information about rebalance safe commits mode and the
+different ways to commit.
+
+If:
+- your application does not commit offsets, OR
+- you don't mind some duplicate processing and want to minimize rebalancing delays,
+
+you can disable rebalance safe commits mode while constructing `ConsumerSettings`. Here is an example:
+
+```scala
+ConsumerSettings(bootstrapServers)
+  // this application does not commit ==> disable rebalanceSafeCommits:
+  .withRebalanceSafeCommits(false)
+```
+
+A recurring pattern in tests is to use the `take(n)` operator to consume a fixed number of records. Once `n` records
+have been consumed, the stream ends, causing an immediate rebalance. Offsets must be committed _before_ the 'take'
+operator can end the stream, otherwise the last rebalance waits for those commits in vain and ultimately causes the test
+to timeout. Either make sure the offsets are committed, or disable rebalanceSafeCommits mode in the test.
+
+# 2. Deprecations
+
 Zio-kafka 3.0.0 removes everything that was deprecated in the zio-kafka 2.x series. In particular, this includes
 accessor methods. To prepare for zio-kafka 3.0, _you should always first migrate to zio-kafka 2.11.0_ and solve all
 deprecation issues, using this page as a guide.
 
-# Renamed methods
+## Renamed methods
 
 Some methods have just been renamed. Read the deprecation message and try the new method name. If it compiles, you're
 done. Otherwise, read on.
 
-# Consumer, Producer and TransactionalProducer accessor methods
+## Consumer, Producer and TransactionalProducer accessor methods
 
 Accessor methods are little helper methods that look up a service from the environment, and then forward your call to
 that service. Accessor methods have not been recommended for some time and are now deprecated. The
@@ -78,7 +120,7 @@ for {
 } yield () 
 ```
 
-# Zio-test-kit
+## Zio-test-kit
 
 Zio-kafka provides a `zio-kafka-testkit` library to help you test your code using zio-kafka. Several methods in the
 `KafkaTestUtils` class have been replaced:
@@ -143,7 +185,13 @@ for {
 } yield ()
 ```
 
-# `restartStreamOnRebalancing` mode
+# 3. Changes in the transactional producer
+
+The transactional producer is now much easier to use. The zio-kafka 2.x transactional API is so complicated that we
+expect only a few very experienced users to make use of it. Therefore, only the new API is described in
+[transactions](transactions.md).
+
+# 4. `restartStreamOnRebalancing` mode
 
 This mode will no longer be available in zio-kafka 3. Contact us on [Discord](https://discord.com/channels/629491597070827530/629497941719121960) for alternatives.
 
