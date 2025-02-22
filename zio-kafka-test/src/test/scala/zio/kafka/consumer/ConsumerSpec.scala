@@ -29,7 +29,7 @@ import zio.test._
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.TimeoutException
+import java.util.concurrent.{ ExecutionException, TimeoutException }
 import scala.reflect.ClassTag
 
 //noinspection SimplifyAssertInspection
@@ -403,9 +403,16 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             group  <- randomGroup
             client <- randomClient
             topic  <- randomTopic
-            _ <- ZIO.fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = 5)).retryWhile {
-                   case _: TimeoutException => true; case _ => false
-                 um
+            _ <- ZIO
+                   .fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = 5))
+                   .retryWhile {
+                     case _: TimeoutException => true; case _ => false
+                   }
+                   .catchSome {
+                     case e: ExecutionException
+                         if e.getCause.isInstanceOf[org.apache.kafka.common.errors.TopicExistsException] =>
+                       ZIO.unit
+                   }
             processedMessageOffsets <- Ref.make(Chunk.empty[(TopicPartition, Long)])
             results <- ZIO.scoped {
                          for {
