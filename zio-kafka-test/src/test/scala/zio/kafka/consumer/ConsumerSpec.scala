@@ -186,7 +186,11 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                }
 
           offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO.attempt(tps.map(_ -> manualOffsetSeek.toLong).toMap))
-          consumer <- KafkaTestUtils.makeConsumer(client, Some(group), offsetRetrieval = offsetRetrieval)
+          consumer <- KafkaTestUtils.makeConsumer(
+                        client,
+                        Some(group),
+                        offsetRetrieval = offsetRetrieval
+                      )
           record <- consumer
                       .plainStream(Subscription.manual(topic, partition = 2), Serde.string, Serde.string)
                       .take(1)
@@ -738,7 +742,11 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                 defaultStrategy = defaultStrategy
                               )
             // Start the second consumer.
-            consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group), offsetRetrieval = offsetRetrieval)
+            consumer2 <- KafkaTestUtils.makeConsumer(
+                           client2,
+                           Some(group),
+                           offsetRetrieval = offsetRetrieval
+                         )
             c2Fib <- consumer2
                        .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                        .runFoldWhile(Map.empty[Int, Long])(_.size < partitionCount) { case (acc, record) =>
@@ -1297,8 +1305,17 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             ): ZIO[Kafka, Throwable, Unit] =
               ZIO.logAnnotate("consumer", name) {
                 ZIO.scoped {
-                  (for {
-                    consumer                <- ZIO.service[Consumer]
+                  for {
+                    consumer <- KafkaTestUtils.makeConsumer(
+                                  clientId,
+                                  Some(consumerGroupId),
+                                  rebalanceSafeCommits = true,
+                                  properties = Map(
+                                    ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG ->
+                                      implicitly[ClassTag[T]].runtimeClass.getName,
+                                    ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200"
+                                  )
+                                )
                     consumedMessagesCounter <- Ref.make(0)
                     _ <- consumedMessagesCounter.get
                            .flatMap(consumed => ZIO.logDebug(s"Consumed so far: $consumed"))
@@ -1332,19 +1349,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         }
                         .runDrain
                         .tapError(e => ZIO.logError(s"Error: $e") *> consumerCreated.fail(e)) <* ZIO.logDebug("Done")
-                  } yield tConsumer)
-                    .provideSome[Kafka & Scope](
-                      KafkaTestUtils.transactionalConsumer(
-                        clientId,
-                        consumerGroupId,
-                        rebalanceSafeCommits = true,
-                        properties = Map(
-                          ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG ->
-                            implicitly[ClassTag[T]].runtimeClass.getName,
-                          ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "200"
-                        )
-                      )
-                    )
+                  } yield tConsumer
                 }
               }
 
@@ -1400,6 +1405,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               messagesOnTopicB <- ZIO.logAnnotate("consumer", "validator") {
                                     consumer
                                       .plainStream(Subscription.topics(topicB), Serde.string, Serde.string)
+                                      .mapChunksZIO(chunk => ZIO.logDebug(s"Received ${chunk.size} records").as(chunk))
                                       .mapChunks(_.map(_.value))
                                       .take(messageCount.toLong)
                                       .timeout(10.seconds)
@@ -1422,10 +1428,12 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       }: _*) @@ TestAspect.nonFlaky(2),
       test("running streams don't stall after a poll timeout") {
         for {
-          topic      <- randomTopic
-          clientId   <- randomClient
-          _          <- KafkaTestUtils.createCustomTopic(topic)
-          settings   <- KafkaTestUtils.consumerSettings(clientId).map(_.withPollTimeout(50.millis))
+          topic    <- randomTopic
+          clientId <- randomClient
+          _        <- KafkaTestUtils.createCustomTopic(topic)
+          settings <- KafkaTestUtils
+                        .consumerSettings(clientId)
+                        .map(_.withPollTimeout(50.millis))
           producer   <- KafkaTestUtils.makeProducer
           _          <- KafkaTestUtils.produceOne(producer, topic, "key1", "message1")
           recordsOut <- Queue.unbounded[Unit]
