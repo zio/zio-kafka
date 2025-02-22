@@ -425,7 +425,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                            producer <- KafkaTestUtils.makeProducer
                            fib <-
                              consumer
-                               .withPartitionedStream[Any, String, String](
+                               .withPartitionedStream[Any, String, String, Any](
                                  Subscription.topics(topic),
                                  Serde.string,
                                  Serde.string
