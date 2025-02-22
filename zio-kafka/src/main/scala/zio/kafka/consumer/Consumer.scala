@@ -75,6 +75,8 @@ trait Consumer {
    * When this effect is interrupted, all partition streams are closed upstream, allowing the stream created by
    * `withStream` to complete gracefully all stream stages, thereby fully processing all buffered and/or in-flight
    * messages.
+   *
+   * EXPERIMENTAL API
    */
   def withPartitionedAssignmentStream[R, K, V](
     subscription: Subscription,
@@ -118,6 +120,8 @@ trait Consumer {
    * When this effect is interrupted, all partition streams are closed upstream, allowing the stream created by
    * `withStream` to complete gracefully all stream stages, thereby fully processing all buffered and/or in-flight
    * messages.
+   *
+   * EXPERIMENTAL API
    */
   def withPartitionedStream[R, K, V](
     subscription: Subscription,
@@ -164,6 +168,8 @@ trait Consumer {
    * When this effect is interrupted, all partition streams are closed upstream, allowing the stream created by
    * `withStream` to complete gracefully all stream stages, thereby fully processing all buffered and/or in-flight
    * messages.
+   *
+   * EXPERIMENTAL API
    */
   def withPlainStream[R, K, V](
     subscription: Subscription,
