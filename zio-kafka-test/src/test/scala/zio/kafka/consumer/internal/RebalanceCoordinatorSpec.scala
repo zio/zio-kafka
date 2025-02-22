@@ -7,7 +7,7 @@ import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
-import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
+import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
 import zio.test._
@@ -54,11 +54,27 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
         _        <- listener.toRebalanceListener.onRevoked(Set(tp2))
         _        <- listener.toRebalanceListener.onLost(Set(tp3))
         event    <- lastEvent.get
-      } yield assertTrue(
-        event.wasInvoked && event.assignedTps == Set(tp, tp4) && event.revokedTps == Set(tp2) && event.lostTps == Set(
-          tp3
-        )
-      )
+      } yield {
+        def matches(
+          rebalanceCallback: RebalanceCallback,
+          assigned: Set[TopicPartition],
+          revoked: Set[TopicPartition],
+          lost: Set[TopicPartition]
+        ): TestResult =
+          assertTrue(
+            rebalanceCallback.assignedTps == assigned,
+            rebalanceCallback.revokedTps == revoked,
+            rebalanceCallback.lostTps == lost
+          )
+        assertTrue(
+          event.wasInvoked,
+          event.rebalanceCallbacks.size == 4
+        ) &&
+        matches(event.rebalanceCallbacks(0), Set(tp), Set.empty, Set.empty) &&
+        matches(event.rebalanceCallbacks(1), Set(tp4), Set.empty, Set.empty) &&
+        matches(event.rebalanceCallbacks(2), Set.empty, Set(tp2), Set.empty) &&
+        matches(event.rebalanceCallbacks(3), Set.empty, Set.empty, Set(tp3))
+      }
     },
     test("should end streams for revoked and lost partitions") {
       for {
@@ -76,7 +92,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
         // Lost and end partition's stream should be ended
         _ <- assignedStreams(1).stream.runDrain
         _ <- assignedStreams(2).stream.runDrain
-      } yield assertTrue(event.endedStreams.map(_.tp).toSet == Set(tp2, tp3))
+      } yield assertTrue(event.rebalanceCallbacks.flatMap(_.endedStreams).map(_.tp).toSet == Set(tp2, tp3))
     },
     suite("rebalanceSafeCommits")(
       test("should wait for the last pulled offset to commit") {

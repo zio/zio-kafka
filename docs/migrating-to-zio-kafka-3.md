@@ -1,11 +1,11 @@
 ---
-id: migrating-to-2.11
-title: "Migrating to zio-kafka 2.11"
+id: migrating-to-zio-kafka-3
+title: "Migrating to zio-kafka 3"
 ---
 
-Zio-kafka 2.11 paves the way for zio-kafka 3.0 by deprecating things that will be removed in zio-kafka 3.0.
-
-If you encounter deprecated methods in your code, follow this guide.
+Zio-kafka 3.0.0 removes everything that was deprecated in the zio-kafka 2.x series. In particular, this includes
+accessor methods. To prepare for zio-kafka 3.0, _you should always first migrate to zio-kafka 2.11.0_ and solve all
+deprecation issues, using this page as a guide.
 
 # Renamed methods
 
@@ -25,7 +25,7 @@ you use these accessor methods follow one of these approaches:
 ## Use the ZIO Service pattern
 
 This is the best option. For established codebases it may be a lot of work to get here. If you are already follow
-this pattern, using it for zio-kafka services as well will be easy.
+this pattern, using it for zio-kafka services as well will be easy. See [ZIO service pattern](https://zio.dev/reference/service-pattern/) for more information.
 
 Here is an example with a `Consumer`, but it works the same with `Producer` and `TransactionalProducer`. We get the
 `Consumer` from the environment in the layer with the `ZIO.service` method, and then inject it into the service class.
@@ -57,6 +57,9 @@ case class ServiceLive(consumer: Consumer) extends Service {
 }
 ```
 
+Constructing a `Consumer` layer is described in [creating a consumer](creating-a-consumer.md). Constructing a
+`Producer` or `TransactionalProducer` layer works in a similar way.
+
 ## YOLO, use `ZIO.service` everywhere
 
 The other option is to replace all accessor methods of `Consumer`, `Producer` and `TransactionalProducer` as follows:
@@ -65,7 +68,9 @@ The other option is to replace all accessor methods of `Consumer`, `Producer` an
 - `Producer.method(...)` => `ZIO.serviceWithZIO[Producer](_.method(...))`
 - `TransactionalProducer.method(...)` => `ZIO.serviceWithZIO[TransactionalProducer](_.method(...))`
 
-Or, alternatively, use `ZIO.service`: `Consumer.method(...)` is transformed to:
+Or, alternatively, use `ZIO.service`.
+
+For example: `Consumer.method(...)` is transformed to:
 ```scala
 for {
   consumer <- ZIO.service[Consumer]
@@ -98,6 +103,7 @@ override def spec: Spec[TestEnvironment, Any] =
     }
   )
     .provideSome[Kafka](KafkaTestUtils.producer)
+    .provideShared(Kafka.embedded)
 
 // New
 // Added `Scope`:
@@ -111,7 +117,9 @@ override def spec: Spec[TestEnvironment & Scope, Any] =
         _ <- KafkaTestUtils.produceOne(producer, "topic", "key", "message")
       } yield assertCompletes
     }
-    // No more layer magic!
+    // Producer layer removed.
+    .provideSomeShared[Scope](Kafka.embedded)
+    // Using `provideSomeShared[Scope]` instead of `provideShared`
   )
 ```
 
@@ -134,6 +142,10 @@ for {
   _           <- adminClient.method() // Use the admin client...
 } yield ()
 ```
+
+# `restartStreamOnRebalancing` mode
+
+This mode will no longer be available in zio-kafka 3. Contact us on [Discord](https://discord.com/channels/629491597070827530/629497941719121960) for alternatives.
 
 # Other changes?
 

@@ -1451,14 +1451,6 @@ object AdminClient {
   }
 
   object ListConsumerGroupOffsetsOptions {
-    @deprecated("Use the listConsumerGroupOffsets overload with ListConsumerGroupOffsetsSpec", since = "2.0.5")
-    def apply(partitions: Chunk[TopicPartition], requireStable: Boolean): ListConsumerGroupOffsetsOptions =
-      new ListConsumerGroupOffsetsOptions(partitions, requireStable)
-
-    @deprecated("Use the listConsumerGroupOffsets overload with ListConsumerGroupOffsetsSpec", since = "2.0.5")
-    def apply(partitions: Chunk[TopicPartition]): ListConsumerGroupOffsetsOptions =
-      new ListConsumerGroupOffsetsOptions(partitions, requireStable = false)
-
     def apply(requireStable: Boolean): ListConsumerGroupOffsetsOptions =
       new ListConsumerGroupOffsetsOptions(Chunk.empty, requireStable)
   }

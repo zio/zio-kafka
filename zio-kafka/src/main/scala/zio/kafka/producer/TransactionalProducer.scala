@@ -7,7 +7,7 @@ import org.apache.kafka.common.errors.InvalidGroupIdException
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio._
-import zio.kafka.consumer.OffsetBatch
+import zio.kafka.consumer.{ Consumer, OffsetBatch }
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -25,7 +25,8 @@ object TransactionalProducer {
 
   private final class LiveTransactionalProducer(
     live: ProducerLive,
-    semaphore: Semaphore
+    semaphore: Semaphore,
+    consumer: Consumer
   ) extends TransactionalProducer {
     private val abortTransaction: Task[Unit] = ZIO.attemptBlocking(live.p.abortTransaction())
 
@@ -51,10 +52,12 @@ object TransactionalProducer {
           }
         }
 
-      sendOffsetsToTransaction.when(offsetBatch.offsets.nonEmpty) *> ZIO.attemptBlocking(live.p.commitTransaction())
+      sendOffsetsToTransaction.when(offsetBatch.offsets.nonEmpty) *>
+        ZIO.attemptBlocking(live.p.commitTransaction()) *>
+        consumer.registerExternalCommits(offsetBatch).unit
     }
 
-    private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): UIO[Unit] =
+    private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): ZIO[Any, Nothing, Unit] =
       exit match {
         case Exit.Success(_) =>
           transaction.offsetBatchRef.get
@@ -74,25 +77,16 @@ object TransactionalProducer {
         } { case (transaction: TransactionImpl, exit) => transaction.markAsClosed *> commitOrAbort(transaction, exit) }
   }
 
-  /**
-   * Accessor method
-   */
-  @deprecated(
-    "Use zio service pattern instead (https://zio.dev/reference/service-pattern/), will be removed in zio-kafka 3.0.0",
-    since = "2.11.0"
-  )
-  def createTransaction: ZIO[TransactionalProducer & Scope, Throwable, Transaction] =
-    ZIO.service[TransactionalProducer].flatMap(_.createTransaction)
-
-  val live: RLayer[TransactionalProducerSettings, TransactionalProducer] =
+  val live: RLayer[TransactionalProducerSettings with Consumer, TransactionalProducer] =
     ZLayer.scoped {
       for {
         settings <- ZIO.service[TransactionalProducerSettings]
-        producer <- make(settings)
+        consumer <- ZIO.service[Consumer]
+        producer <- make(settings, consumer)
       } yield producer
     }
 
-  def make(settings: TransactionalProducerSettings): ZIO[Scope, Throwable, TransactionalProducer] =
+  def make(settings: TransactionalProducerSettings, consumer: Consumer): ZIO[Scope, Throwable, TransactionalProducer] =
     for {
       rawProducer <- ZIO.acquireRelease(
                        ZIO.attempt(
@@ -112,5 +106,5 @@ object TransactionalProducer {
         )
       live = new ProducerLive(settings.producerSettings, rawProducer, runtime, sendQueue)
       _ <- ZIO.blocking(live.sendFromQueue).forkScoped
-    } yield new LiveTransactionalProducer(live, semaphore)
+    } yield new LiveTransactionalProducer(live, semaphore, consumer)
 }

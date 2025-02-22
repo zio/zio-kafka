@@ -9,7 +9,7 @@ import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.{ Finalization, Rebalance }
 import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
-import zio.kafka.consumer.internal.RebalanceCoordinator.RebalanceEvent
+import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.stream._
@@ -29,7 +29,8 @@ private[consumer] final class Runloop private (
   currentStateRef: Ref[State],
   rebalanceCoordinator: RebalanceCoordinator,
   consumerMetrics: ConsumerMetrics,
-  committer: Committer
+  committer: Committer,
+  groupMetadataRef: Ref[Option[ConsumerGroupMetadata]]
 ) {
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(
@@ -138,7 +139,7 @@ private[consumer] final class Runloop private (
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
       for {
-        consumerGroupMetadata <- getConsumerGroupMetadataIfAny
+        consumerGroupMetadata <- groupMetadataRef.get
         _ <- ZIO.foreachParDiscard(streams) { streamControl =>
                val tp      = streamControl.tp
                val records = polledRecords.records(tp)
@@ -162,10 +163,6 @@ private[consumer] final class Runloop private (
       } yield fulfillResult
     }
   }
-
-  private val getConsumerGroupMetadataIfAny: UIO[Option[ConsumerGroupMetadata]] =
-    if (settings.hasGroupId) consumer.runloopAccess(c => ZIO.attempt(c.groupMetadata())).fold(_ => None, Some(_))
-    else ZIO.none
 
   /** @return the topic-partitions for which received records should be ignored */
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
@@ -248,7 +245,7 @@ private[consumer] final class Runloop private (
                      )
                    }
             pollresult <- rebalanceCoordinator.getAndResetLastEvent.flatMap {
-                            case RebalanceEvent(false, _, _, _, _) =>
+                            case RebalanceEvent(rebalanceCallbacks) if rebalanceCallbacks.isEmpty =>
                               // The fast track, rebalance listener was not invoked:
                               //   no assignment changes, no new commits, only new records.
                               ZIO.succeed(
@@ -260,14 +257,26 @@ private[consumer] final class Runloop private (
                                 )
                               )
 
-                            case RebalanceEvent(true, assignedTps, revokedTps, lostTps, endedStreams) =>
+                            case RebalanceEvent(rebalanceCallbacks) =>
                               // The slow track, the rebalance listener was invoked:
                               //   some partitions were assigned, revoked or lost,
                               //   some streams have ended.
 
+                              @SuppressWarnings(Array("scalafix:DisableSyntax.noValPatterns"))
+                              val RebalanceCallback(assignedTps, revokedTps, lostTps, endedStreams) =
+                                rebalanceCallbacks.reduce(_ append _)
+
                               val currentAssigned = c.assignment().asScala.toSet
                               val endedTps        = endedStreams.map(_.tp).toSet
                               for {
+                                // After a re-balance the group metadata changes and must be fetched again.
+                                _ <- if (settings.hasGroupId) {
+                                       ZIO
+                                         .attempt(c.groupMetadata())
+                                         .fold(_ => None, Some(_))
+                                         .tap(groupMetadataRef.set)
+                                     } else ZIO.unit
+
                                 ignoreRecordsForTps <- doSeekForNewPartitions(c, assignedTps)
 
                                 // The topic partitions that need a new stream are:
@@ -625,6 +634,7 @@ object Runloop {
       lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
       currentStateRef   <- Ref.make(initialState)
+      groupMetadataRef  <- Ref.make[Option[ConsumerGroupMetadata]](None)
       sameThreadRuntime <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       executor          <- ZIO.executor
       metrics = new ZioConsumerMetrics(settings.metricLabels)
@@ -655,7 +665,8 @@ object Runloop {
                   currentStateRef = currentStateRef,
                   consumerMetrics = metrics,
                   rebalanceCoordinator = rebalanceCoordinator,
-                  committer = committer
+                  committer = committer,
+                  groupMetadataRef = groupMetadataRef
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 

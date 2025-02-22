@@ -26,7 +26,6 @@ final case class ConsumerSettings(
   commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
-  restartStreamOnRebalancing: Boolean = false,
   rebalanceSafeCommits: Boolean = false,
   maxRebalanceDuration: Option[Duration] = None,
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy(),
@@ -201,20 +200,6 @@ final case class ConsumerSettings(
 
   /**
    * @param value
-   *   When `true` _all_ streams are restarted during a rebalance, including those streams that are not revoked. The
-   *   default is `false`.
-   *
-   * @deprecated
-   *   starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
-   *   contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
-   *   that.
-   */
-  @deprecated("`restartStreamOnRebalancing` will be removed in zio-kafka 3.0", "2.10.0")
-  def withRestartStreamOnRebalancing(value: Boolean): ConsumerSettings =
-    copy(restartStreamOnRebalancing = value)
-
-  /**
-   * @param value
    *   Whether to hold up a rebalance until all offsets of consumed messages have been committed. The default is
    *   `false`, but the recommended value is `true` as it prevents duplicate messages.
    *
@@ -239,6 +224,8 @@ final case class ConsumerSettings(
    *
    * External commits (that is, commits to an external system, e.g. a relational database) must be registered to the
    * consumer with [[Consumer.registerExternalCommits]].
+   *
+   * When this consumer is coupled to a TransactionalProducer, `rebalanceSafeCommits` must be enabled.
    *
    * When `false`, streams for revoked partitions may continue to run even though the rebalance is not held up. Any
    * offset commits from these streams have a high chance of being delayed (commits are not possible during some phases
@@ -288,10 +275,6 @@ final case class ConsumerSettings(
    */
   def withoutPartitionPreFetching: ConsumerSettings =
     withPartitionPreFetchBufferLimit(0)
-
-  @deprecated("Use withPartitionPreFetchBufferLimit instead", "2.6.0")
-  def withMaxPartitionQueueSize(partitionPreFetchBufferLimit: Int): ConsumerSettings =
-    withPartitionPreFetchBufferLimit(partitionPreFetchBufferLimit)
 
   /**
    * @param fetchStrategy

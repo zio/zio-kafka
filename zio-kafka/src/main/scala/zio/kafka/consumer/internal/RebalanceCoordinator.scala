@@ -24,9 +24,8 @@ private[internal] class RebalanceCoordinator(
 ) {
   private val commitTimeoutNanos = settings.commitTimeout.toNanos
 
-  private val restartStreamsOnRebalancing = settings.restartStreamOnRebalancing
-  private val rebalanceSafeCommits        = settings.rebalanceSafeCommits
-  private val commitTimeout               = settings.commitTimeout
+  private val rebalanceSafeCommits = settings.rebalanceSafeCommits
+  private val commitTimeout        = settings.commitTimeout
 
   // All code in this block is called from the rebalance listener and therefore runs on the same-thread-runtime. This
   // is because the Java kafka client requires us to invoke the consumer from the same thread that invoked the
@@ -187,21 +186,12 @@ private[internal] class RebalanceCoordinator(
   def toRebalanceListener: RebalanceListener = RebalanceListener(
     onAssigned = assignedTps =>
       lastRebalanceEvent.updateZIO { rebalanceEvent =>
-        for {
-          _ <- ZIO.logDebug {
-                 val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
-                 s"${assignedTps.size} partitions are assigned$sameRebalance"
-               }
-          assignedStreams <- getCurrentAssignedStreams
-          streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) assignedStreams
-                         else Chunk.empty
-          _ <- endStreams(streamsToEnd)
-          _ <- ZIO.logTrace("onAssigned done")
-        } yield rebalanceEvent.copy(
-          wasInvoked = true,
-          assignedTps = rebalanceEvent.assignedTps ++ assignedTps,
-          endedStreams = rebalanceEvent.endedStreams ++ streamsToEnd
-        )
+        ZIO.logDebug {
+          val sameRebalance = if (rebalanceEvent.wasInvoked) " in same rebalance" else ""
+          s"${assignedTps.size} partitions are assigned$sameRebalance"
+        }.as {
+          rebalanceEvent.addCallback(RebalanceCallback(assignedTps, Set.empty, Set.empty, Chunk.empty))
+        }
       },
     onRevoked = revokedTps =>
       lastRebalanceEvent.updateZIO { rebalanceEvent =>
@@ -211,16 +201,10 @@ private[internal] class RebalanceCoordinator(
                  s"${revokedTps.size} partitions are revoked$sameRebalance"
                }
           assignedStreams <- getCurrentAssignedStreams
-          streamsToEnd = if (restartStreamsOnRebalancing && !rebalanceEvent.wasInvoked) assignedStreams
-                         else assignedStreams.filter(control => revokedTps.contains(control.tp))
+          streamsToEnd = assignedStreams.filter(control => revokedTps.contains(control.tp))
           _ <- endStreams(streamsToEnd)
           _ <- ZIO.logTrace("onRevoked done")
-        } yield rebalanceEvent.copy(
-          wasInvoked = true,
-          assignedTps = rebalanceEvent.assignedTps -- revokedTps,
-          revokedTps = rebalanceEvent.revokedTps ++ revokedTps,
-          endedStreams = rebalanceEvent.endedStreams ++ streamsToEnd
-        )
+        } yield rebalanceEvent.addCallback(RebalanceCallback(Set.empty, revokedTps, Set.empty, streamsToEnd))
       },
     onLost = lostTps =>
       lastRebalanceEvent.updateZIO { rebalanceEvent =>
@@ -230,24 +214,19 @@ private[internal] class RebalanceCoordinator(
           lostStreams = assignedStreams.filter(control => lostTps.contains(control.tp))
           _ <- ZIO.foreachDiscard(lostStreams)(_.lost)
           _ <- ZIO.logTrace(s"onLost done")
-        } yield rebalanceEvent.copy(
-          wasInvoked = true,
-          assignedTps = rebalanceEvent.assignedTps -- lostTps,
-          lostTps = rebalanceEvent.lostTps ++ lostTps,
-          endedStreams = rebalanceEvent.endedStreams ++ lostStreams
-        )
+        } yield rebalanceEvent.addCallback(RebalanceCallback(Set.empty, Set.empty, lostTps, lostStreams))
       }
   )
 }
 
 private[internal] object RebalanceCoordinator {
 
-  sealed trait EndOffsetCommitStatus
-  case object EndOffsetNotCommitted  extends EndOffsetCommitStatus { override def toString = "not committed"  }
-  case object EndOffsetCommitPending extends EndOffsetCommitStatus { override def toString = "commit pending" }
-  case object EndOffsetCommitted     extends EndOffsetCommitStatus { override def toString = "committed"      }
+  private sealed trait EndOffsetCommitStatus
+  private case object EndOffsetNotCommitted  extends EndOffsetCommitStatus { override def toString = "not committed"  }
+  private case object EndOffsetCommitPending extends EndOffsetCommitStatus { override def toString = "commit pending" }
+  private case object EndOffsetCommitted     extends EndOffsetCommitStatus { override def toString = "committed"      }
 
-  final case class StreamCompletionStatus(
+  private final case class StreamCompletionStatus(
     tp: TopicPartition,
     streamEnded: Boolean,
     lastPulledOffset: Option[Long],
@@ -262,16 +241,30 @@ private[internal] object RebalanceCoordinator {
         endOffsetCommitStatus
   }
 
-  final case class RebalanceEvent(
-    wasInvoked: Boolean,
+  final case class RebalanceCallback(
     assignedTps: Set[TopicPartition],
     revokedTps: Set[TopicPartition],
     lostTps: Set[TopicPartition],
     endedStreams: Chunk[PartitionStreamControl]
-  )
+  ) {
+    def append(other: RebalanceCallback): RebalanceCallback =
+      RebalanceCallback(
+        assignedTps ++ other.assignedTps -- other.revokedTps -- other.lostTps,
+        revokedTps ++ other.revokedTps,
+        lostTps ++ other.lostTps,
+        endedStreams ++ other.endedStreams
+      )
+  }
+
+  final case class RebalanceEvent(rebalanceCallbacks: Chunk[RebalanceCallback]) {
+    def wasInvoked: Boolean = rebalanceCallbacks.nonEmpty
+
+    def addCallback(callback: RebalanceCallback): RebalanceEvent =
+      copy(rebalanceCallbacks :+ callback)
+  }
 
   object RebalanceEvent {
     val None: RebalanceEvent =
-      RebalanceEvent(wasInvoked = false, Set.empty, Set.empty, Set.empty, Chunk.empty)
+      RebalanceEvent(Chunk.empty)
   }
 }
