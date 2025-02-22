@@ -35,7 +35,10 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     suite("::produce(record: ProducerRecord[Array[Byte], Array[Byte]])")(
       test("produces messages") {
         for {
-          consumer <- KafkaTestUtils.makeConsumer(clientId = "producer-spec-consumer", groupId = Some("group-0"))
+          consumer <- KafkaTestUtils.makeConsumer(
+                        clientId = "producer-spec-consumer",
+                        groupId = Some("group-0")
+                      )
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
           firstMessage  = "toto"
@@ -45,6 +48,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
                         .take(n.toLong)
                         .runCollect
+                        .timeoutFail(TestTimeoutException("Consuming takes too long"))(30.seconds)
           _ <- producer.produce(new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8)): ByteRecord)
           first <- consume(1)
           _ <- producer.produce(new ProducerRecord(topic, secondMessage.getBytes(StandardCharsets.UTF_8)): ByteRecord)
@@ -63,7 +67,10 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     suite("::produceAsync(record: ProducerRecord[Array[Byte], Array[Byte]])")(
       test("produces messages") {
         for {
-          consumer <- KafkaTestUtils.makeConsumer(clientId = "producer-spec-consumer", groupId = Some("group-0"))
+          consumer <- KafkaTestUtils.makeConsumer(
+                        clientId = "producer-spec-consumer",
+                        groupId = Some("group-0")
+                      )
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
           firstMessage  = "toto"
@@ -73,6 +80,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
                         .take(n.toLong)
                         .runCollect
+                        .timeoutFail(TestTimeoutException("Consuming takes too long"))(30.seconds)
           _ <- producer
                  .produceAsync(new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8)): ByteRecord)
                  .flatten
@@ -95,7 +103,10 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     suite("::produceChunkAsync(records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]])")(
       test("produces messages") {
         for {
-          consumer <- KafkaTestUtils.makeConsumer(clientId = "producer-spec-consumer", groupId = Some("group-0"))
+          consumer <- KafkaTestUtils.makeConsumer(
+                        clientId = "producer-spec-consumer",
+                        groupId = Some("group-0")
+                      )
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
           firstMessage  = "toto"
@@ -105,6 +116,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
                         .take(n.toLong)
                         .runCollect
+                        .timeoutFail(TestTimeoutException("Consuming takes too long"))(30.seconds)
           _ <- producer
                  .produceChunkAsync(Chunk(new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8))))
                  .flatten
@@ -133,7 +145,10 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     suite("::produceChunk(records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]])")(
       test("produces messages") {
         for {
-          consumer <- KafkaTestUtils.makeConsumer(clientId = "producer-spec-consumer", groupId = Some("group-0"))
+          consumer <- KafkaTestUtils.makeConsumer(
+                        clientId = "producer-spec-consumer",
+                        groupId = Some("group-0")
+                      )
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
           firstMessage  = "toto"
@@ -143,6 +158,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
                         .take(n.toLong)
                         .runCollect
+                        .timeoutFail(TestTimeoutException("Consuming takes too long"))(30.seconds)
           _ <- producer
                  .produceChunk(Chunk(new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8))))
           first <- consume(1)
@@ -565,7 +581,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         test("committing offsets after a successful transaction") {
           for {
             topic   <- randomTopic
-            group   <- randomGroup
+            group2  <- randomGroup
             client1 <- randomClient
             client2 <- randomClient
 
@@ -578,48 +594,35 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             consumer1             <- KafkaTestUtils.makeConsumer(client1)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
-            settings <- KafkaTestUtils.transactionalConsumerSettings(group, client2)
-            committedOffset <-
-              ZIO.scoped {
-                Consumer.make(settings).flatMap { c =>
-                  ZIO.scoped {
-                    c
-                      .plainStream(Subscription.topics(topic), Serde.string, Serde.int)
-                      .toQueue()
-                      .flatMap { q =>
-                        val readAliceAccount = for {
-                          messages <- q.take
-                                        .flatMap(_.exit)
-                                        .mapError(_.getOrElse(new NoSuchElementException))
-                        } yield messages.head
-                        for {
-                          aliceHadMoneyCommittableMessage <- readAliceAccount
-                          _ <- ZIO.scoped {
-                                 for {
-                                   tx <- transactionalProducer.createTransaction
-                                   _ <- tx.produce(
-                                          aliceAccountFeesPaid,
-                                          Serde.string,
-                                          Serde.int,
-                                          Some(aliceHadMoneyCommittableMessage.offset)
-                                        )
-                                 } yield ()
-                               }
-                          aliceTopicPartition =
-                            new TopicPartition(topic, aliceHadMoneyCommittableMessage.partition)
-                          committed <- c.committed(Set(aliceTopicPartition))
-                        } yield committed(aliceTopicPartition)
-                      }
-                  }
-                }
-              }
+            // Not a transactional consumer, we want to get _all_ offsets:
+            consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group2))
+            consumerQueue <- consumer2
+                               .plainStream(Subscription.topics(topic), Serde.string, Serde.int)
+                               .toQueue()
+            aliceHadMoneyCommittableRecord <- consumerQueue.take
+                                                .flatMap(_.exit)
+                                                .mapBoth(_.getOrElse(new NoSuchElementException), _.head)
 
-          } yield assertTrue(committedOffset.get.offset() == 1L)
+            _ <- ZIO.scoped {
+                   for {
+                     tx <- transactionalProducer.createTransaction
+                     _ <- tx.produce(
+                            aliceAccountFeesPaid,
+                            Serde.string,
+                            Serde.int,
+                            Some(aliceHadMoneyCommittableRecord.offset)
+                          )
+                   } yield ()
+                 }
+
+            aliceTopicPartition = new TopicPartition(topic, aliceHadMoneyCommittableRecord.partition)
+            committedOffset <- consumer2.committed(Set(aliceTopicPartition)).map(_.get(aliceTopicPartition).flatten)
+          } yield assertTrue(committedOffset.exists(_.offset == 1L))
         },
         test("not committing offsets after a failed transaction") {
           for {
             topic   <- randomTopic
-            group   <- randomGroup
+            group2  <- randomGroup
             client1 <- randomClient
             client2 <- randomClient
 
@@ -632,41 +635,31 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             consumer1             <- KafkaTestUtils.makeConsumer(client1)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
-            settings <- KafkaTestUtils.transactionalConsumerSettings(group, client2)
-            committedOffset <- ZIO.scoped {
-                                 Consumer.make(settings).flatMap { c =>
-                                   c
-                                     .plainStream(Subscription.topics(topic), Serde.string, Serde.int)
-                                     .toQueue()
-                                     .flatMap { q =>
-                                       val readAliceAccount = for {
-                                         messages <- q.take
-                                                       .flatMap(_.exit)
-                                                       .mapError(_.getOrElse(new NoSuchElementException))
-                                       } yield messages.head
-                                       for {
-                                         aliceHadMoneyCommittableMessage <- readAliceAccount
-                                         _ <- ZIO.scoped {
-                                                transactionalProducer.createTransaction.flatMap { tx =>
-                                                  tx.produce(
-                                                    aliceAccountFeesPaid,
-                                                    Serde.string,
-                                                    Serde.int,
-                                                    Some(aliceHadMoneyCommittableMessage.offset)
-                                                  ) *>
-                                                    tx.abort
-                                                }
-                                              }.catchSome { case UserInitiatedAbort =>
-                                                ZIO.unit // silences the abort
-                                              }
-                                         aliceTopicPartition =
-                                           new TopicPartition(topic, aliceHadMoneyCommittableMessage.partition)
-                                         committed <- c.committed(Set(aliceTopicPartition))
-                                       } yield committed(aliceTopicPartition)
-                                     }
-                                 }
-                               }
-          } yield assert(committedOffset)(isNone)
+            // Not a transactional consumer, we want to get _all_ offsets:
+            consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group2))
+            consumerQueue <- consumer2
+                               .plainStream(Subscription.topics(topic), Serde.string, Serde.int)
+                               .toQueue()
+            aliceHadMoneyCommittableRecord <- consumerQueue.take
+                                                .flatMap(_.exit)
+                                                .mapBoth(_.getOrElse(new NoSuchElementException), _.head)
+            _ <- ZIO.scoped {
+                   transactionalProducer.createTransaction.flatMap { tx =>
+                     tx.produce(
+                       aliceAccountFeesPaid,
+                       Serde.string,
+                       Serde.int,
+                       Some(aliceHadMoneyCommittableRecord.offset)
+                     ) *>
+                       tx.abort
+                   }
+                 }.catchSome { case UserInitiatedAbort =>
+                   ZIO.unit // silences the abort
+                 }
+
+            aliceTopicPartition = new TopicPartition(topic, aliceHadMoneyCommittableRecord.partition)
+            committedOffset <- consumer2.committed(Set(aliceTopicPartition)).map(_.get(aliceTopicPartition).flatten)
+          } yield assertTrue(committedOffset == None)
         },
         test("fails if transaction leaks") {
           val test = for {
@@ -714,7 +707,5 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       produceChunkAsyncSpec,
       produceChunkSpec
     )
-      .provideSomeShared[Scope](
-        Kafka.embedded
-      ) @@ withLiveClock @@ timeout(3.minutes)
+      .provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ timeout(2.minutes)
 }
