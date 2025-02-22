@@ -41,10 +41,6 @@ The simplest possible Kafka client that subscribes to a topic. It directly calls
 
 Same as above, but now using partition assignment instead of topic subscription.
 
-#### zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka
-
-Does the same as `zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput`.
-
 #### zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka
 
 Does the same as `zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput`, but uses a partition assignment instead of a
