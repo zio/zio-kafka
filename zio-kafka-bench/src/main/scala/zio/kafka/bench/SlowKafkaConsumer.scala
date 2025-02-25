@@ -17,7 +17,7 @@ class SlowKafkaConsumer[K, V](wrapped: Consumer[K, V], delay: Duration) extends 
   private val delayMillis = delay.toMillis
 
   override def assignment(): JavaSet[TopicPartition] = {
-    Thread.sleep(delayMillis)
+    // No network traffic, no delay
     wrapped.assignment()
   }
 
@@ -102,22 +102,22 @@ class SlowKafkaConsumer[K, V](wrapped: Consumer[K, V], delay: Duration) extends 
   }
 
   override def seek(partition: TopicPartition, offset: Long): Unit = {
-    Thread.sleep(delayMillis)
+    // No network traffic, no delay
     wrapped.seek(partition, offset)
   }
 
   override def seek(partition: TopicPartition, offsetAndMetadata: OffsetAndMetadata): Unit = {
-    Thread.sleep(delayMillis)
+    // No network traffic, no delay
     wrapped.seek(partition, offsetAndMetadata)
   }
 
   override def seekToBeginning(partitions: JavaCollection[TopicPartition]): Unit = {
-    Thread.sleep(delayMillis)
+    // No network traffic, no delay
     wrapped.seekToBeginning(partitions)
   }
 
   override def seekToEnd(partitions: JavaCollection[TopicPartition]): Unit = {
-    Thread.sleep(delayMillis)
+    // No network traffic, no delay
     wrapped.seekToEnd(partitions)
   }
 
