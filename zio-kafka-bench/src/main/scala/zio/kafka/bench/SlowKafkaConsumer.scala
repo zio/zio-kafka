@@ -168,8 +168,10 @@ class SlowKafkaConsumer[K, V](wrapped: Consumer[K, V], delay: Duration) extends 
     wrapped.clientInstanceId(timeout)
   }
 
-  override def metrics(): JavaMap[MetricName, _ <: Metric] =
+  override def metrics(): JavaMap[MetricName, _ <: Metric] = {
+    // No network traffic, no delay
     wrapped.metrics()
+  }
 
   override def partitionsFor(topic: String): JavaList[PartitionInfo] = {
     Thread.sleep(delayMillis)
@@ -191,14 +193,18 @@ class SlowKafkaConsumer[K, V](wrapped: Consumer[K, V], delay: Duration) extends 
     wrapped.listTopics(timeout)
   }
 
-  override def paused(): JavaSet[TopicPartition] =
+  override def paused(): JavaSet[TopicPartition] = {
+    // No network traffic, no delay
     wrapped.paused()
+  }
 
   override def pause(partitions: JavaCollection[TopicPartition]): Unit =
     wrapped.pause(partitions)
 
-  override def resume(partitions: JavaCollection[TopicPartition]): Unit =
+  override def resume(partitions: JavaCollection[TopicPartition]): Unit = {
+    // No network traffic, no delay
     wrapped.resume(partitions)
+  }
 
   override def offsetsForTimes(
     timestampsToSearch: JavaMap[TopicPartition, JavaLong]
@@ -247,7 +253,7 @@ class SlowKafkaConsumer[K, V](wrapped: Consumer[K, V], delay: Duration) extends 
   }
 
   override def groupMetadata(): ConsumerGroupMetadata = {
-    Thread.sleep(delayMillis)
+    // No network traffic, no delay
     wrapped.groupMetadata()
   }
 
@@ -271,6 +277,8 @@ class SlowKafkaConsumer[K, V](wrapped: Consumer[K, V], delay: Duration) extends 
     wrapped.close(timeout)
   }
 
-  override def wakeup(): Unit =
+  override def wakeup(): Unit = {
+    // No network traffic, no delay
     wrapped.wakeup()
+  }
 }
