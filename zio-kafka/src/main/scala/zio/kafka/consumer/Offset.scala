@@ -4,7 +4,7 @@ import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, OffsetAndMetad
 import org.apache.kafka.common.TopicPartition
 import zio._
 
-sealed trait Offset {
+trait Offset {
 
   def topic: String
   def partition: Int
