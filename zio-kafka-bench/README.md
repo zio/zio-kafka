@@ -23,6 +23,17 @@ the worst possible case for zio-kafka. This is because these consumers only coun
 processing. This makes the comparison look bad for zio-kafka because zio-kafka programs normally process records in
 parallel, while other Kafka consumers process records serially.
 
+All benchmarks use [embedded-kafka](https://github.com/embeddedkafka/embedded-kafka). This means that the network
+overhead of reaching out to Kafka is almost zero. Because of that, an extra network call has no impact on these
+benchmarks, even though it does impact real applications. To make extra network calls visible, we need to simulate the
+network.<br>
+Because there is no easy way to simulate network behavior within the JVM, we add an
+[artificial delay of 5ms](//zio-kafka-bench/src/main/scala/zio/kafka/bench/SlowKafkaConsumer.scala)
+to each call to the underlying java consumer (also in the non-zio benchmarks), except when we know the call does not
+result in network traffic. This is only a crude approximation since the calls of the underlying java consumer do not correspond
+1:1 to network traffic. Nevertheless, we expect that a change in the number of consumer calls will become visible in
+the benchmark results.
+
 All consumer benchmarks send 50k ~512 byte records per run.
 
 #### zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput
