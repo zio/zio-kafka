@@ -92,7 +92,7 @@ object TransactionalProducer {
 
   def make(settings: TransactionalProducerSettings, consumer: Consumer): ZIO[Scope, Throwable, TransactionalProducer] =
     for {
-      _ <- ZIO.cond[Throwable, Unit](consumer.consumerSettings.rebalanceSafeCommits, (), RebalanceSafeConsumerRequired)
+      _ <- ZIO.cond(consumer.consumerSettings.rebalanceSafeCommits, (), RebalanceSafeConsumerRequired)
       rawProducer <- ZIO.acquireRelease(
                        ZIO.attempt(
                          new KafkaProducer[Array[Byte], Array[Byte]](
