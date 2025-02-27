@@ -32,6 +32,11 @@ trait Consumer {
     timeout: Duration = Duration.Infinity
   ): Task[Map[TopicPartition, Long]]
 
+  /**
+   * The settings used to create this consumer.
+   */
+  val consumerSettings: ConsumerSettings
+
   def endOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
@@ -203,7 +208,7 @@ object Consumer {
       _                  <- SslHelper.validateEndpoint(settings.driverSettings)
       consumerAccess     <- ConsumerAccess.make(settings)
       runloopAccess      <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
-    } yield new ConsumerLive(consumerAccess, runloopAccess)
+    } yield new ConsumerLive(consumerAccess, settings, runloopAccess)
 
   /**
    * Create a zio-kafka [[Consumer]] from an `org.apache.kafka KafkaConsumer`.
@@ -243,7 +248,7 @@ object Consumer {
       wrappedDiagnostics <- ConcurrentDiagnostics.make(diagnostics)
       consumerAccess = new ConsumerAccess(javaConsumer, access)
       runloopAccess <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
-    } yield new ConsumerLive(consumerAccess, runloopAccess)
+    } yield new ConsumerLive(consumerAccess, settings, runloopAccess)
 
   /**
    * Execute an effect for each record and commit the offset after processing
@@ -340,6 +345,7 @@ object Consumer {
 
 private[consumer] final class ConsumerLive private[consumer] (
   consumer: ConsumerAccess,
+  val consumerSettings: ConsumerSettings,
   runloopAccess: RunloopAccess
 ) extends Consumer {
   import Consumer._

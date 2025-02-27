@@ -22,6 +22,10 @@ trait TransactionalProducer {
 object TransactionalProducer {
   case object UserInitiatedAbort
   final case class TransactionLeaked(offsetBatch: OffsetBatch) extends RuntimeException
+  case object RebalanceSafeConsumerRequired
+      extends RuntimeException(
+        "Consumer settings must have rebalanceSafeCommits set to true to use transactional producer."
+      )
 
   private final class LiveTransactionalProducer(
     live: ProducerLive,
@@ -88,6 +92,7 @@ object TransactionalProducer {
 
   def make(settings: TransactionalProducerSettings, consumer: Consumer): ZIO[Scope, Throwable, TransactionalProducer] =
     for {
+      _ <- ZIO.cond[Throwable, Unit](consumer.consumerSettings.rebalanceSafeCommits, (), RebalanceSafeConsumerRequired)
       rawProducer <- ZIO.acquireRelease(
                        ZIO.attempt(
                          new KafkaProducer[Array[Byte], Array[Byte]](
