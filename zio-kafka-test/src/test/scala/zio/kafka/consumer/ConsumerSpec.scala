@@ -1,35 +1,24 @@
 package zio.kafka.consumer
 
-import io.github.embeddedkafka.EmbeddedKafka
-import org.apache.kafka.clients.consumer.{
-  ConsumerConfig,
-  ConsumerPartitionAssignor,
-  CooperativeStickyAssignor,
-  RangeAssignor
-}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerPartitionAssignor, CooperativeStickyAssignor, RangeAssignor}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, CommitTimeout, OffsetRetrieval }
+import zio.kafka.consumer.Consumer.{AutoOffsetStrategy, CommitTimeout, OffsetRetrieval}
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
-import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization.{
-  ConsumerFinalized,
-  RunloopFinalized,
-  SubscriptionFinalized
-}
-import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization.{ConsumerFinalized, RunloopFinalized, SubscriptionFinalized}
+import zio.kafka.consumer.diagnostics.{DiagnosticEvent, Diagnostics}
 import zio.kafka.producer.TransactionalProducer
 import zio.kafka.serde.Serde
-import zio.kafka.testkit.{ Kafka, KafkaRandom, KafkaTestUtils }
-import zio.stream.{ ZSink, ZStream }
+import zio.kafka.testkit.{Kafka, KafkaRandom, KafkaTestUtils}
+import zio.stream.{ZSink, ZStream}
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.{ ExecutionException, TimeoutException }
 import scala.reflect.ClassTag
 
 //noinspection SimplifyAssertInspection
