@@ -32,7 +32,7 @@ lazy val kafkaVersion         = "3.9.0"
 lazy val embeddedKafkaVersion = "3.9.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
-lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.16"
+lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.17"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
@@ -42,7 +42,7 @@ lazy val _scala3   = "3.3.5"
 inThisBuild(
   List(
     name         := "ZIO Kafka",
-    zioVersion   := "2.1.15",
+    zioVersion   := "2.1.16",
     scalaVersion := _scala213,
     // zio-sbt defines these 'scala213' and 'scala3' settings, but we need to define them here to override the defaults and better control them
     scala213 := _scala213,
@@ -174,7 +174,7 @@ lazy val zioKafkaTest =
       libraryDependencies ++= Seq(
         kafkaClients,
         logback    % Test,
-        "dev.zio" %% "zio-logging-slf4j" % "2.4.0" % Test
+        "dev.zio" %% "zio-logging-slf4j" % "2.5.0" % Test
       ) ++ `embedded-kafka`.value
     )
 
@@ -201,7 +201,7 @@ lazy val zioKafkaExample =
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                 %% "zio"                % zioVersion.value,
-        "dev.zio"                 %% "zio-logging-slf4j2" % "2.4.0",
+        "dev.zio"                 %% "zio-logging-slf4j2" % "2.5.0",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
         logback,
         "dev.zio" %% "zio-test" % zioVersion.value % Test

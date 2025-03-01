@@ -15,6 +15,7 @@ const sidebars = {
         "preventing-duplicates",
         "sharing-consumer",
         "serialization-and-deserialization",
+        "transactions",
         "writing-tests",
         "migrating-to-zio-kafka-3"
       ]
