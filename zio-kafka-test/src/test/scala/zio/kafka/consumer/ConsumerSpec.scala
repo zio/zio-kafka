@@ -400,19 +400,10 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         test("runWithGracefulShutdown must end streams while still processing commits") {
           val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
           for {
-            group  <- randomGroup
-            client <- randomClient
-            topic  <- randomTopic
-            _ <- ZIO
-                   .fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = 5))
-                   .retry(Schedule.recurs(3) && Schedule.recurWhile[Throwable] {
-                     case _: TimeoutException => true; case _ => false
-                   })
-                   .catchSome {
-                     case e: ExecutionException
-                         if e.getCause.isInstanceOf[org.apache.kafka.common.errors.TopicExistsException] =>
-                       ZIO.unit
-                   }
+            group                   <- randomGroup
+            client                  <- randomClient
+            topic                   <- randomTopic
+            _                       <- KafkaTestUtils.createCustomTopic(topic, partitionCount = 5)
             processedMessageOffsets <- Ref.make(Chunk.empty[(TopicPartition, Long)])
             results <- ZIO.scoped {
                          for {
