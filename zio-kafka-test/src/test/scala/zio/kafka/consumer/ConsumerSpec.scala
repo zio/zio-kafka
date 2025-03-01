@@ -588,7 +588,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         } yield assert(offsets)(equalTo(expectedResult))
       } @@ TestAspect.timeout(20.seconds),
       test("handle rebalancing by completing topic-partition streams") {
-        val nrMessages     = 50
         val partitionCount = 6 // Must be even and strictly positive
 
         for {
@@ -600,10 +599,12 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           _        <- KafkaTestUtils.createCustomTopic(topic, partitionCount)
           producer <- KafkaTestUtils.makeProducer
-          _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
-                 KafkaTestUtils
-                   .produceMany(producer, topic, partition = i % partitionCount, kvs = List(s"key$i" -> s"msg$i"))
-               }
+          _ <- ZIO
+                 .foreachDiscard(0 until partitionCount) { p =>
+                   KafkaTestUtils.produceOne(producer, topic, p, "key", "msg")
+                 }
+                 .forever
+                 .forkScoped
 
           consumer1 <- KafkaTestUtils.makeConsumer(client1, Some(group))
           consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group))
@@ -643,7 +644,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         } yield assertCompletes
       },
       test("handle rebalancing by completing topic-partition streams - rebalanceSafeCommits") {
-        val nrMessages     = 50
         val partitionCount = 6 // Must be even and strictly positive
 
         for {
@@ -655,10 +655,12 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           _        <- KafkaTestUtils.createCustomTopic(topic, partitionCount)
           producer <- KafkaTestUtils.makeProducer
-          _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
-                 KafkaTestUtils
-                   .produceMany(producer, topic, partition = i % partitionCount, kvs = List(s"key$i" -> s"msg$i"))
-               }
+          _ <- ZIO
+                 .foreachDiscard(0 until partitionCount) { p =>
+                   KafkaTestUtils.produceOne(producer, topic, p, "key", "msg")
+                 }
+                 .forever
+                 .forkScoped
 
           consumer1 <- KafkaTestUtils.makeConsumer(client1, Some(group), rebalanceSafeCommits = true)
           consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group), rebalanceSafeCommits = true)

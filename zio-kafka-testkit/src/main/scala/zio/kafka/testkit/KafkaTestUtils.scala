@@ -121,6 +121,22 @@ object KafkaTestUtils {
     producer.produce[Any, String, String](new ProducerRecord(topic, key, message), Serde.string, Serde.string)
 
   /**
+   * Produce a single message to the given partition of a topic.
+   */
+  def produceOne(
+    producer: Producer,
+    topic: String,
+    partition: Int,
+    key: String,
+    message: String
+  ): ZIO[Any, Throwable, RecordMetadata] =
+    producer.produce[Any, String, String](
+      new ProducerRecord(topic, partition, key, message),
+      Serde.string,
+      Serde.string
+    )
+
+  /**
    * Produce many messages to the given partition of a topic.
    */
   def produceMany(
