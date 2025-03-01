@@ -301,7 +301,7 @@ trait AdminClient {
 
   /*
    * Lists access control lists (ACLs) according to the supplied filter.
-   *
+   *
    * Note: it may take some time for changes made by createAcls or deleteAcls to be reflected in the output of
    * describeAcls.
    */

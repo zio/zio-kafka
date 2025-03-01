@@ -973,7 +973,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
          *     commits (it does not actually commit anywhere). In addition we set `maxRebalanceDuration` to 20 seconds.
          *   - After a few messages consumer 2 is started and a rebalance starts.
          *   - We measure how long the rebalance takes.
-         *
+         *
          * When the rebalance finishes immediately, we know that the external commits were used. If it finishes in 20
          * seconds, we know that the external commits were not used.
          */
