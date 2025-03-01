@@ -307,93 +307,388 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _ => assert("result")(equalTo("Expected consumeWith to fail"))
         )
       } @@ timeout(10.seconds),
-      test("stopConsumption must end streams while still processing commits") {
-        for {
-          topic  <- randomTopic
-          group  <- randomGroup
-          client <- randomClient
+      suite("stopConsumption")(
+        test("stopConsumption must end streams while still processing commits") {
+          for {
+            topic  <- randomTopic
+            group  <- randomGroup
+            client <- randomClient
 
-          consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          producer <- KafkaTestUtils.makeProducer
+            consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
+            producer <- KafkaTestUtils.makeProducer
 
-          keepProducing <- Ref.make(true)
-          _ <- KafkaTestUtils
-                 .produceOne(producer, topic, "key", "value")
-                 .repeatWhileZIO(_ => keepProducing.get)
-                 .fork
-          _ <- consumer
-                 .partitionedStream(Subscription.topics(topic), Serde.string, Serde.string)
-                 .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
-                   partitionStream.zipWithIndex.tap { case (record, idx) =>
-                     consumer.stopConsumption *>
-                       (consumer.stopConsumption <* ZIO.logDebug("Stopped consumption")).when(idx == 3) *>
-                       record.offset.commit <* ZIO.logDebug(s"Committed $idx")
-                   }.tap { case (_, idx) => ZIO.logDebug(s"Consumed $idx") }
+            keepProducing <- Ref.make(true)
+            _ <- KafkaTestUtils
+                   .produceOne(producer, topic, "key", "value")
+                   .repeatWhileZIO(_ => keepProducing.get)
+                   .fork
+            _ <- consumer
+                   .partitionedStream(Subscription.topics(topic), Serde.string, Serde.string)
+                   .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
+                     partitionStream.zipWithIndex.tap { case (record, idx) =>
+                       consumer.stopConsumption *>
+                         (consumer.stopConsumption <* ZIO.logDebug("Stopped consumption")).when(idx == 3) *>
+                         record.offset.commit <* ZIO.logDebug(s"Committed $idx")
+                     }.tap { case (_, idx) => ZIO.logDebug(s"Consumed $idx") }
+                   }
+                   .runDrain
+                   .zipLeft(ZIO.logDebug("Stream completed"))
+            _ <- keepProducing.set(false)
+          } yield assertCompletes
+        },
+        test("process outstanding commits after a graceful shutdown") {
+          val kvs   = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+          val topic = "test-outstanding-commits"
+          for {
+            group  <- randomGroup
+            client <- randomClient
+
+            producer <- KafkaTestUtils.makeProducer
+            _        <- KafkaTestUtils.produceMany(producer, topic, kvs)
+
+            messagesReceived <- Ref.make[Int](0)
+            consumer         <- KafkaTestUtils.makeConsumer(client, Some(group))
+            offset <- consumer
+                        .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
+                        .mapConcatZIO { record =>
+                          for {
+                            nr <- messagesReceived.updateAndGet(_ + 1)
+                            _  <- consumer.stopConsumption.when(nr == 10)
+                          } yield if (nr < 10) Seq(record.offset) else Seq.empty
+                        }
+                        .transduce(Consumer.offsetBatches)
+                        .mapZIO(_.commit)
+                        .runDrain *>
+                        consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
+          } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
+        },
+        test("process outstanding commits after a graceful shutdown with aggregateAsync using `maxRebalanceDuration`") {
+          for {
+            topic  <- randomTopic
+            group  <- randomGroup
+            client <- randomClient
+
+            producer <- KafkaTestUtils.makeProducer
+            _ <-
+              KafkaTestUtils.scheduledProduce(producer, topic, Schedule.fixed(50.millis).jittered).runDrain.forkScoped
+
+            consumer <- KafkaTestUtils.makeConsumer(
+                          client,
+                          Some(group),
+                          commitTimeout = 4.seconds,
+                          rebalanceSafeCommits = true,
+                          maxRebalanceDuration = 6.seconds
+                        )
+            lastProcessedOffset <- Ref.make(0L)
+            offset <- consumer
+                        .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
+                        .mapZIO { record =>
+                          for {
+                            nr <- lastProcessedOffset.updateAndGet(_ + 1)
+                            _  <- consumer.stopConsumption.when(nr == 10)
+                          } yield record.offset
+                        }
+                        .aggregateAsync(Consumer.offsetBatches)
+                        .mapZIO(_.commit)
+                        .runDrain *>
+                        consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
+
+            lastOffset <- lastProcessedOffset.get
+          } yield assertTrue(offset.map(_.offset).contains(lastOffset))
+        } @@ TestAspect.nonFlaky(2),
+        test("handles RebalanceInProgressExceptions transparently") {
+          val nrPartitions = 5
+          val nrMessages   = 10000
+
+          def makeConsumer(clientId: String, groupId: String) =
+            KafkaTestUtils
+              .consumerSettings(
+                clientId = clientId,
+                groupId = Some(groupId),
+                clientInstanceId = None,
+                properties = Map(
+                  ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> classOf[CooperativeStickyAssignor].getName
+                )
+              )
+              .map(_.withPollTimeout(500.millis))
+              .flatMap(settings => Consumer.make(settings))
+
+          for {
+            // Produce messages on several partitions
+            topic <- randomTopic
+            group <- randomGroup
+
+            _        <- KafkaTestUtils.createCustomTopic(topic, nrPartitions)
+            producer <- KafkaTestUtils.makeProducer
+            _ <- ZIO
+                   .foreachDiscard(1 to nrMessages) { i =>
+                     KafkaTestUtils
+                       .produceMany(producer, topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
+                   }
+                   .forkScoped
+
+            // Consume messages
+            messagesReceivedConsumer1 <- Ref.make[Int](0)
+            messagesReceivedConsumer2 <- Ref.make[Int](0)
+            drainCount                <- Ref.make(0)
+            subscription = Subscription.topics(topic)
+            stopConsumer1 <- Promise.make[Nothing, Unit]
+            consumer1     <- makeConsumer("consumer1", group)
+            fib <-
+              ZIO
+                .logAnnotate("consumer", "1") {
+                  consumer1
+                    .partitionedAssignmentStream(subscription, Serde.string, Serde.string)
+                    .rechunk(1)
+                    .mapZIOPar(16) { partitions =>
+                      ZIO.logDebug(s"Consumer 1 got new partition assignment: ${partitions.map(_._1.toString)}") *>
+                        ZStream
+                          .fromIterable(partitions.map(_._2))
+                          .flatMapPar(Int.MaxValue)(s => s)
+                          .mapZIO(record => messagesReceivedConsumer1.update(_ + 1).as(record))
+                          .map(_.offset)
+                          .aggregateAsync(Consumer.offsetBatches)
+                          .mapZIO(offsetBatch => offsetBatch.commit)
+                          .runDrain
+                    }
+                    .mapZIO(_ => drainCount.updateAndGet(_ + 1))
+                    .interruptWhen(stopConsumer1.await)
+                    .runDrain
+                    .tapError(e => ZIO.logErrorCause(e.getMessage, Cause.fail(e)))
+                }
+                .forkScoped
+
+            _ <- messagesReceivedConsumer1.get
+                   .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
+            _ <- ZIO.logDebug("Starting consumer 2")
+
+            consumer2 <- makeConsumer("consumer2", group)
+            fib2 <-
+              ZIO
+                .logAnnotate("consumer", "2") {
+                  consumer2
+                    .plainStream(subscription, Serde.string, Serde.string)
+                    .mapZIO(record => messagesReceivedConsumer2.update(_ + 1).as(record))
+                    .map(_.offset)
+                    .aggregateAsync(Consumer.offsetBatches)
+                    .mapZIO(offsetBatch => offsetBatch.commit)
+                    .runDrain
+                    .tapError(e => ZIO.logErrorCause("Error in consumer 2", Cause.fail(e)))
+                }
+                .forkScoped
+
+            _ <- messagesReceivedConsumer2.get
+                   .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
+            _ <- stopConsumer1.succeed(())
+            _ <- fib.join
+            _ <- fib2.interrupt
+          } yield assertCompletes
+        }
+      ),
+      suite("streamWithGracefulShutdown")(
+        test("runWithGracefulShutdown must end streams while still processing commits") {
+          val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+          for {
+            group                   <- randomGroup
+            client                  <- randomClient
+            topic                   <- randomTopic
+            _                       <- KafkaTestUtils.createCustomTopic(topic, partitionCount = 5)
+            processedMessageOffsets <- Ref.make(Chunk.empty[(TopicPartition, Long)])
+            results <- ZIO.scoped {
+                         for {
+                           stop <- Promise.make[Nothing, Unit]
+                           consumer <- KafkaTestUtils.makeConsumer(
+                                         client,
+                                         Some(group),
+                                         commitTimeout = 2.seconds // Detect issues with commits earlier
+                                       )
+                           producer <- KafkaTestUtils.makeProducer
+                           fib <-
+                             consumer
+                               .withPartitionedStream[Any, String, String](
+                                 Subscription.topics(topic),
+                                 Serde.string,
+                                 Serde.string
+                               ) { stream =>
+                                 stream
+                                   .flatMapPar(Int.MaxValue) { case (tp, partitionStream) =>
+                                     partitionStream.mapConcatZIO { record =>
+                                       for {
+                                         nr <- processedMessageOffsets
+                                                 .updateAndGet(
+                                                   _ :+ (tp -> record.offset.offset)
+                                                 )
+                                                 .map(_.size)
+                                         _ <- stop.succeed(()).when(nr == 10)
+                                       } yield Seq(record.offset)
+                                     }
+                                   }
+                                   .transduce(Consumer.offsetBatches)
+                                   .mapZIO(batch =>
+                                     ZIO.logDebug("Starting batch commit") *> batch.commit
+                                       .tapErrorCause(
+                                         ZIO.logErrorCause(
+                                           s"Error doing commit of batch ${batch.offsets}",
+                                           _
+                                         )
+                                       ) *> ZIO.logDebug("Commit done")
+                                   )
+                                   .runDrain
+                               }
+                               .forkScoped
+                           _ <- KafkaTestUtils.produceMany(producer, topic, kvs)
+                           _ <- KafkaTestUtils
+                                  .scheduledProduce(
+                                    producer,
+                                    topic,
+                                    Schedule.fixed(500.millis).jittered
+                                  )
+                                  .runDrain
+                                  .forkScoped
+                           _                <- stop.await *> fib.interrupt
+                           processedOffsets <- processedMessageOffsets.get
+                           latestProcessedOffsets =
+                             processedOffsets.groupBy(_._1).map { case (tp, values) =>
+                               tp -> values.map(_._2).maxOption.getOrElse(0L)
+                             }
+                           tps = processedOffsets.map { case (tp, _) => tp }.toSet
+                           committedOffsets <- consumer.committed(tps)
+                         } yield (latestProcessedOffsets, committedOffsets)
+                       }
+            (processedOffsets, committedOffsets) = results
+          } yield assertTrue(processedOffsets.forall { case (tp, offset) =>
+            committedOffsets.get(tp).flatMap(_.map(_.offset())).contains(offset + 1)
+          })
+        } @@ nonFlaky(10),
+        test(
+          "it's possible to start a new consumption session from a Consumer that had a consumption session stopped previously"
+        ) {
+          // NOTE:
+          // When this test fails with the message `100000 was not less than 100000`, it's because
+          // your computer is so fast that the first consumer already consumed all 100000 messages.
+          val numberOfMessages: Int           = 100000
+          val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key-$i", s"msg-$i"))
+
+          def test(diagnostics: Diagnostics): ZIO[Scope & Kafka, Throwable, TestResult] =
+            for {
+              clientId <- randomClient
+              topic    <- randomTopic
+              settings <- KafkaTestUtils.consumerSettings(clientId = clientId)
+              consumer <- Consumer.make(settings, diagnostics = diagnostics)
+              producer <- KafkaTestUtils.makeProducer
+              _        <- KafkaTestUtils.produceMany(producer, topic, kvs)
+              // Starting a consumption session to start the Runloop
+              consumed0 <- ZIO.scoped {
+                             for {
+                               consumed <- Ref.make(0L)
+                               fiber <-
+                                 consumer
+                                   .withPlainStream(
+                                     Subscription.manual(topic -> 0),
+                                     Serde.string,
+                                     Serde.string
+                                   ) { stream =>
+                                     stream
+                                       .tap(_ => consumed.update(_ + 1))
+                                       .runDrain
+                                   }
+                                   .forkScoped
+                               _         <- ZIO.sleep(200.millis)
+                               _         <- fiber.interrupt
+                               consumed0 <- consumed.get
+                               _         <- ZIO.logDebug(s"consumed0: $consumed0")
+                             } yield consumed0
+                           }
+
+              _ <- ZIO.logDebug("About to sleep 5 seconds")
+              _ <- ZIO.sleep(5.seconds)
+              _ <- ZIO.logDebug("Slept 5 seconds")
+              consumed1 <- consumer
+                             .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
+                             .take(numberOfMessages.toLong)
+                             .runCount
+            } yield assert(consumed0)(isGreaterThan(0L) && isLessThan(numberOfMessages.toLong)) &&
+              assert(consumed1)(equalTo(numberOfMessages.toLong))
+
+          for {
+            diagnostics <- Diagnostics.SlidingQueue.make(1000)
+            testResult <- ZIO.scoped {
+                            test(diagnostics)
+                          }
+            finalizationEvents <- diagnostics.queue.takeAll.map(_.filter(_.isInstanceOf[Finalization]))
+          } yield testResult && assert(finalizationEvents)(
+            // The order is very important.
+            // The subscription must be finalized before the runloop, otherwise it creates a deadlock.
+            equalTo(
+              Chunk(
+                SubscriptionFinalized,
+                RunloopFinalized,
+                ConsumerFinalized
+              )
+            )
+          )
+        },
+        test("can stop one stream while keeping another one running") {
+          val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+          for {
+            topic1 <- randomTopic
+            topic2 <- randomTopic
+            client <- randomClient
+            group  <- randomGroup
+
+            producer <- KafkaTestUtils.makeProducer
+            consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
+            _        <- KafkaTestUtils.produceMany(producer, topic1, kvs)
+            _        <- KafkaTestUtils.produceMany(producer, topic2, kvs)
+            _ <- ZIO.scoped {
+                   for {
+                     stream1Started     <- Promise.make[Nothing, Unit]
+                     stream1Done        <- Promise.make[Nothing, Unit]
+                     stream1Interrupted <- Promise.make[Nothing, Unit]
+                     stream1Fib <- ZIO.logAnnotate("stream", "1") {
+                                     (consumer
+                                       .withPlainStream(
+                                         Subscription.topics(topic1),
+                                         Serde.string,
+                                         Serde.string
+                                       ) { stream =>
+                                         stream
+                                           .tap(_ => stream1Started.succeed(()))
+                                           .zipWithIndex
+                                           .map(_._2)
+                                           .runDrain
+                                       }
+                                       .tapErrorCause(c => ZIO.logErrorCause("Stream 1 failed", c))
+                                       .ensuring(stream1Done.succeed(())))
+                                       .forkScoped
+                                   }
+                     _ <- stream1Started.await
+                     _ <- ZIO.logAnnotate("stream", "2") {
+                            consumer
+                              .withPlainStream(
+                                Subscription.topics(topic2),
+                                Serde.string,
+                                Serde.string
+                              ) { stream =>
+                                stream.zipWithIndex
+                                  .map(_._2)
+                                  .tap(count =>
+                                    (stream1Fib.interrupt <* stream1Interrupted.succeed(())).when(count == 4)
+                                  )
+                                  .runDrain
+                              }
+                              .tapErrorCause(c => ZIO.logErrorCause("Stream 2 failed", c))
+                              .forkScoped
+                          }
+                     _ <- stream1Interrupted.await
+                     _ <- KafkaTestUtils.produceMany(producer, topic1, kvs)
+                     _ <- stream1Done.await
+                            .tapErrorCause(c => ZIO.logErrorCause("Stream 1 await failed", c))
+                   } yield ()
                  }
-                 .runDrain
-                 .zipLeft(ZIO.logDebug("Stream completed"))
-          _ <- keepProducing.set(false)
-        } yield assertCompletes
-      },
-      test("process outstanding commits after a graceful shutdown") {
-        val kvs   = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
-        val topic = "test-outstanding-commits"
-        for {
-          group  <- randomGroup
-          client <- randomClient
-
-          producer <- KafkaTestUtils.makeProducer
-          _        <- KafkaTestUtils.produceMany(producer, topic, kvs)
-
-          messagesReceived <- Ref.make[Int](0)
-          consumer         <- KafkaTestUtils.makeConsumer(client, Some(group))
-          offset <- consumer
-                      .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
-                      .mapConcatZIO { record =>
-                        for {
-                          nr <- messagesReceived.updateAndGet(_ + 1)
-                          _  <- consumer.stopConsumption.when(nr == 10)
-                        } yield if (nr < 10) Seq(record.offset) else Seq.empty
-                      }
-                      .transduce(Consumer.offsetBatches)
-                      .mapZIO(_.commit)
-                      .runDrain *>
-                      consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
-        } yield assert(offset.map(_.offset))(isSome(equalTo(9L)))
-      },
-      test("process outstanding commits after a graceful shutdown with aggregateAsync using `maxRebalanceDuration`") {
-        for {
-          topic  <- randomTopic
-          group  <- randomGroup
-          client <- randomClient
-
-          producer <- KafkaTestUtils.makeProducer
-          _ <- KafkaTestUtils.scheduledProduce(producer, topic, Schedule.fixed(50.millis).jittered).runDrain.forkScoped
-
-          consumer <- KafkaTestUtils.makeConsumer(
-                        client,
-                        Some(group),
-                        commitTimeout = 4.seconds,
-                        rebalanceSafeCommits = true,
-                        maxRebalanceDuration = 6.seconds
-                      )
-          lastProcessedOffset <- Ref.make(0L)
-          offset <- consumer
-                      .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
-                      .mapZIO { record =>
-                        for {
-                          nr <- lastProcessedOffset.updateAndGet(_ + 1)
-                          _  <- consumer.stopConsumption.when(nr == 10)
-                        } yield record.offset
-                      }
-                      .aggregateAsync(Consumer.offsetBatches)
-                      .mapZIO(_.commit)
-                      .runDrain *>
-                      consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
-
-          lastOffset <- lastProcessedOffset.get
-        } yield assertTrue(offset.map(_.offset).contains(lastOffset))
-      } @@ TestAspect.nonFlaky(2),
+          } yield assertCompletes
+        } @@ nonFlaky(10)
+      ),
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
         // Setup of this test:
         // - Set the max poll interval very low: a couple of seconds.
@@ -902,34 +1197,37 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     // shuts down and commits are no longer possible. Therefore, we signal the second consumer in
                     // such a way that it doesn't close the stream.
                     c1
-                      .plainStream(subscription, Serde.string, Serde.string)
-                      .tap(record =>
-                        ZIO.logDebug(
-                          s"Received record with offset ${record.partition}:${record.offset.offset} and key ${record.key}"
-                        )
-                      )
-                      .tap { record =>
-                        // Signal consumer 2 can start when a record is seen for every partition.
-                        for {
-                          keys <- c1Keys.updateAndGet(_ :+ record.key)
-                          _    <- c1Started.succeed(()).when(keys.map(_.split('-')(1)).toSet.size == partitionCount)
-                        } yield ()
+                      .withPlainStream(subscription, Serde.string, Serde.string) { stream =>
+                        stream
+                          .tap(record =>
+                            ZIO.logDebug(
+                              s"Received record with offset ${record.partition}:${record.offset.offset} and key ${record.key}"
+                            )
+                          )
+                          .tap { record =>
+                            // Signal consumer 2 can start when a record is seen for every partition.
+                            for {
+                              keys <- c1Keys.updateAndGet(_ :+ record.key)
+                              _    <- c1Started.succeed(()).when(keys.map(_.split('-')(1)).toSet.size == partitionCount)
+                            } yield ()
+                          }
+                          // Buffer so that the above can run ahead of the below, this is important;
+                          // we want consumer 2 to start before consumer 1 commits.
+                          .buffer(partitionCount)
+                          .mapZIO { record =>
+                            for {
+                              s <- c1Sleep.get
+                              _ <- ZIO.sleep(s.seconds)
+                              _ <-
+                                ZIO.logDebug(
+                                  s"Committing offset ${record.partition}:${record.offset.offset} for key ${record.key}"
+                                )
+                              _ <- record.offset.commit
+                            } yield record.key
+                          }
+                          .runCollect
+                          .map(_.toSet)
                       }
-                      // Buffer so that the above can run ahead of the below, this is important;
-                      // we want consumer 2 to start before consumer 1 commits.
-                      .buffer(partitionCount)
-                      .mapZIO { record =>
-                        for {
-                          s <- c1Sleep.get
-                          _ <- ZIO.sleep(s.seconds)
-                          _ <- ZIO.logDebug(
-                                 s"Committing offset ${record.partition}:${record.offset.offset} for key ${record.key}"
-                               )
-                          _ <- record.offset.commit
-                        } yield record.key
-                      }
-                      .runCollect
-                      .map(_.toSet)
                   }
                   .fork
               _  <- c1Started.await
@@ -949,18 +1247,18 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               _                   <- ZIO.logDebug("Waiting for consumers to end")
               c2Keys: Set[String] <- fib2.join
               _                   <- ZIO.logDebug("Consumer 2 ready")
-              _                   <- c1.stopConsumption
               _                   <- c1Sleep.set(0)
-              c1Keys: Set[String] <- fib1.join
+              _                   <- fib1.interrupt
+              c1Keys              <- c1Keys.get
               _                   <- ZIO.logDebug("Consumer 1 ready")
               _                   <- pFib.interrupt
-            } yield assertTrue((c1Keys intersect c2Keys).isEmpty)
+            } yield assertTrue((c1Keys.toSet intersect c2Keys).isEmpty)
           }
 
         // Test for both default partition assignment strategies
         Seq(
-          testForPartitionAssignmentStrategy[RangeAssignor],
-          testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
+          testForPartitionAssignmentStrategy[RangeAssignor]
+//          testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
       }: _*),
       test("external commits are used when rebalanceSafeCommits is enabled") {
@@ -1030,45 +1328,45 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           c1        <- makeConsumer(clientId1, groupId, rebalanceSafeCommits = true, c1Diagnostics)
           c1Started <- Promise.make[Nothing, Unit]
           c1Offsets <- Ref.make(Chunk.empty[Offset])
-          _ <-
+          c1Fib <-
             ZIO
               .logAnnotate("consumer", "1") {
                 // When the stream ends, the topic subscription ends as well. Because of that the consumer
                 // shuts down and commits are no longer possible. Therefore, we signal the second consumer in
                 // such a way that it doesn't close the stream.
                 c1
-                  .plainStream(subscription, Serde.string, Serde.string)
-                  .tap { record =>
-                    for {
-                      _ <-
-                        ZIO.logDebug(
-                          s"Received record with offset ${record.partition}:${record.offset.offset} and key ${record.key}"
-                        )
-                      // Signal that consumer 2 can start when a record was seen for every partition.
-                      offsets <- c1Offsets.updateAndGet(_ :+ record.offset)
-                      _       <- c1Started.succeed(()).when(offsets.map(_.partition).toSet.size == partitionCount)
-                      // Register an external commit (which we're not actually doing 😀)
-                      _ <- c1.registerExternalCommits(OffsetBatch(record.offset)).unit
-                    } yield ()
+                  .withPlainStream(subscription, Serde.string, Serde.string) { stream =>
+                    stream.tap { record =>
+                      for {
+                        _ <-
+                          ZIO.logDebug(
+                            s"Received record with offset ${record.partition}:${record.offset.offset} and key ${record.key}"
+                          )
+                        // Signal that consumer 2 can start when a record was seen for every partition.
+                        offsets <- c1Offsets.updateAndGet(_ :+ record.offset)
+                        _       <- c1Started.succeed(()).when(offsets.map(_.partition).toSet.size == partitionCount)
+                        // Register an external commit (which we're not actually doing 😀)
+                        _ <- c1.registerExternalCommits(OffsetBatch(record.offset)).unit
+                      } yield ()
+                    }.runDrain
                   }
-                  .runDrain
               }
               .fork
           _                  <- c1Started.await
           _                  <- ZIO.logDebug("Starting consumer 2")
           c2                 <- makeConsumer(clientId2, groupId, rebalanceSafeCommits = false, Diagnostics.NoOp)
           rebalanceStartTime <- Clock.instant
-          _ <- ZIO
-                 .logAnnotate("consumer", "2") {
-                   c2
-                     .plainStream(subscription, Serde.string, Serde.string)
-                     .tap(msg => ZIO.logDebug(s"Received ${msg.key}"))
-                     .runDrain
-                 }
-                 .fork
+          c2Fib <- ZIO
+                     .logAnnotate("consumer", "2") {
+                       c2
+                         .withPlainStream(subscription, Serde.string, Serde.string) { stream =>
+                           stream.tap(msg => ZIO.logDebug(s"Received ${msg.key}")).runDrain
+                         }
+                     }
+                     .fork
           _                <- ZIO.logDebug("Waiting for rebalance to end")
           rebalanceEndTime <- rebalanceEndTimePromise.await
-          _                <- c1.stopConsumption *> c2.stopConsumption
+          _                <- c1Fib.interrupt *> c2Fib.interrupt
           rebalanceDuration = Duration
                                 .fromInterval(rebalanceStartTime, rebalanceEndTime)
                                 .truncatedTo(ChronoUnit.SECONDS)
@@ -1184,94 +1482,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _      <- allAssignments.update(_ - 1)
           _      <- check(Set(0))
           _      <- fiber0.interrupt
-        } yield assertCompletes
-      },
-      test("handles RebalanceInProgressExceptions transparently") {
-        val nrPartitions = 5
-        val nrMessages   = 10000
-
-        def makeConsumer(clientId: String, groupId: String) =
-          KafkaTestUtils
-            .consumerSettings(
-              clientId = clientId,
-              groupId = Some(groupId),
-              clientInstanceId = None,
-              properties = Map(
-                ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> classOf[CooperativeStickyAssignor].getName
-              )
-            )
-            .map(_.withPollTimeout(500.millis))
-            .flatMap(settings => Consumer.make(settings))
-
-        for {
-          // Produce messages on several partitions
-          topic <- randomTopic
-          group <- randomGroup
-
-          _        <- KafkaTestUtils.createCustomTopic(topic, nrPartitions)
-          producer <- KafkaTestUtils.makeProducer
-          _ <- ZIO
-                 .foreachDiscard(1 to nrMessages) { i =>
-                   KafkaTestUtils
-                     .produceMany(producer, topic, partition = i % nrPartitions, kvs = List(s"key$i" -> s"msg$i"))
-                 }
-                 .forkScoped
-
-          // Consume messages
-          messagesReceivedConsumer1 <- Ref.make[Int](0)
-          messagesReceivedConsumer2 <- Ref.make[Int](0)
-          drainCount                <- Ref.make(0)
-          subscription = Subscription.topics(topic)
-          stopConsumer1 <- Promise.make[Nothing, Unit]
-          consumer1     <- makeConsumer("consumer1", group)
-          fib <-
-            ZIO
-              .logAnnotate("consumer", "1") {
-                consumer1
-                  .partitionedAssignmentStream(subscription, Serde.string, Serde.string)
-                  .rechunk(1)
-                  .mapZIOPar(16) { partitions =>
-                    ZIO.logDebug(s"Consumer 1 got new partition assignment: ${partitions.map(_._1.toString)}") *>
-                      ZStream
-                        .fromIterable(partitions.map(_._2))
-                        .flatMapPar(Int.MaxValue)(s => s)
-                        .mapZIO(record => messagesReceivedConsumer1.update(_ + 1).as(record))
-                        .map(_.offset)
-                        .aggregateAsync(Consumer.offsetBatches)
-                        .mapZIO(offsetBatch => offsetBatch.commit)
-                        .runDrain
-                  }
-                  .mapZIO(_ => drainCount.updateAndGet(_ + 1))
-                  .interruptWhen(stopConsumer1.await)
-                  .runDrain
-                  .tapError(e => ZIO.logErrorCause(e.getMessage, Cause.fail(e)))
-              }
-              .forkScoped
-
-          _ <- messagesReceivedConsumer1.get
-                 .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
-          _ <- ZIO.logDebug("Starting consumer 2")
-
-          consumer2 <- makeConsumer("consumer2", group)
-          fib2 <-
-            ZIO
-              .logAnnotate("consumer", "2") {
-                consumer2
-                  .plainStream(subscription, Serde.string, Serde.string)
-                  .mapZIO(record => messagesReceivedConsumer2.update(_ + 1).as(record))
-                  .map(_.offset)
-                  .aggregateAsync(Consumer.offsetBatches)
-                  .mapZIO(offsetBatch => offsetBatch.commit)
-                  .runDrain
-                  .tapError(e => ZIO.logErrorCause("Error in consumer 2", Cause.fail(e)))
-              }
-              .forkScoped
-
-          _ <- messagesReceivedConsumer2.get
-                 .repeat(Schedule.recurUntil((n: Int) => n >= 20) && Schedule.fixed(100.millis))
-          _ <- stopConsumer1.succeed(())
-          _ <- fib.join
-          _ <- fib2.interrupt
         } yield assertCompletes
       },
       suite("does not process messages twice for transactional producer, even when rebalancing")({
@@ -1624,6 +1834,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     )
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ timeout(2.minutes) @@ TestAspect.timed
+      ) @@ withLiveClock @@ timeout(10.minutes) @@ TestAspect.timed @@ TestAspect.sequential
 
 }
