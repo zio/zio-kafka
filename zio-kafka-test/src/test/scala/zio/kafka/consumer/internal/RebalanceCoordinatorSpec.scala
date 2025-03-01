@@ -133,7 +133,6 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
               lastEvent,
               consumer,
               assignedStreams = Chunk(streamControl),
-              rebalanceSafeCommits = true,
               committer = committer
             )
           _ <- listener.toRebalanceListener.onRevoked(Set(tp))
@@ -168,7 +167,6 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
               lastEvent,
               consumer,
               assignedStreams = Chunk(streamControl),
-              rebalanceSafeCommits = true,
               committer = committer
             )
           _ <- listener.toRebalanceListener.onRevoked(Set(tp))
@@ -187,7 +185,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
     assignedStreams: Chunk[PartitionStreamControl] = Chunk.empty,
     committer: Committer = new MockCommitter {},
     settings: ConsumerSettings = ConsumerSettings(List("")).withCommitTimeout(1.second),
-    rebalanceSafeCommits: Boolean = false
+    rebalanceSafeCommits: Boolean = true
   ): ZIO[Scope, Throwable, RebalanceCoordinator] =
     Semaphore
       .make(1)

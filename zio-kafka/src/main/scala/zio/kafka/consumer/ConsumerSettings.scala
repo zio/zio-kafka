@@ -26,7 +26,7 @@ final case class ConsumerSettings(
   commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
   offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(),
   rebalanceListener: RebalanceListener = RebalanceListener.noop,
-  rebalanceSafeCommits: Boolean = false,
+  rebalanceSafeCommits: Boolean = true,
   maxRebalanceDuration: Option[Duration] = None,
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy(),
   metricLabels: Set[MetricLabel] = Set.empty,
@@ -172,7 +172,7 @@ final case class ConsumerSettings(
    * Make sure that all records from a single poll (see [[withMaxPollRecords maxPollRecords]]) can be processed in this
    * interval, even when there is no concurrency because the records are all in the same partition.
    *
-   * The default is equal to [[withMaxPollInterval maxPollInterval]]).
+   * The default is equal to [[withMaxPollInterval maxPollInterval]].
    */
   def withMaxStreamPullInterval(maxStreamPullInterval: Duration): ConsumerSettings =
     copy(maxStreamPullIntervalOption = Some(maxStreamPullInterval))
@@ -200,8 +200,8 @@ final case class ConsumerSettings(
 
   /**
    * @param value
-   *   Whether to hold up a rebalance until all offsets of consumed messages have been committed. The default is
-   *   `false`, but the recommended value is `true` as it prevents duplicate messages.
+   *   Whether to hold up a rebalance until all offsets of consumed messages have been committed. Since zio-kafka 3 the
+   *   default is `true` as it prevents duplicate messages.
    *
    * Use `false` when:
    *   - your streams do not commit, or
@@ -241,7 +241,7 @@ final case class ConsumerSettings(
    *
    * In this time zio-kafka awaits processing of records and the completion of commits.
    *
-   * By default this value is set to 3/5 of `maxPollInterval` which by default calculates to 3 minutes. Only values
+   * By default, this value is set to 3/5 of `maxPollInterval` which by default calculates to 3 minutes. Only values
    * between `commitTimeout` and `maxPollInterval` are useful. Lower values will make the rebalance callback be done
    * immediately, higher values lead to lost partitions.
    *
