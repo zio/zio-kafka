@@ -6,7 +6,7 @@ import org.apache.kafka.common.config.TopicConfig
 import zio._
 import zio.kafka.admin.AdminClient.NewTopic
 import zio.kafka.consumer._
-import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
+import zio.kafka.producer.TransactionalProducer.{ RebalanceSafeCommitsRequired, TransactionLeaked, UserInitiatedAbort }
 import zio.kafka.producer.{ ByteRecord, Transaction }
 import zio.kafka.serde.Serde
 import zio.kafka.testkit._
@@ -14,7 +14,6 @@ import zio.stream.Take
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
-
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
@@ -313,7 +312,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             initialAliceAccount = new ProducerRecord(topic, "alice", 20)
             initialBobAccount   = new ProducerRecord(topic, "bob", 0)
 
-            consumer1             <- KafkaTestUtils.makeConsumer(client1)
+            consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
             _ <- ZIO.scoped {
@@ -348,7 +347,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             aliceGives20        = new ProducerRecord(topic, "alice", 0)
             bobReceives20       = new ProducerRecord(topic, "bob", 20)
 
-            consumer1             <- KafkaTestUtils.makeConsumer(client1)
+            consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
             _ <- ZIO.scoped {
@@ -393,7 +392,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             initialAliceAccount = new ProducerRecord(topic, "alice", 20)
             initialBobAccount   = new ProducerRecord(topic, "bob", 0)
 
-            consumer1             <- KafkaTestUtils.makeConsumer(client1)
+            consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
             transaction1 = ZIO.scoped {
@@ -428,7 +427,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             client1 <- randomClient
             initialBobAccount = new ProducerRecord(topic, "bob", 0)
 
-            consumer1             <- KafkaTestUtils.makeConsumer(client1)
+            consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
             result <- ZIO.scoped {
@@ -455,7 +454,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             nonTransactional    = new ProducerRecord(topic, "no one", -1)
             aliceGives20        = new ProducerRecord(topic, "alice", 0)
 
-            consumer1             <- KafkaTestUtils.makeConsumer(client1)
+            consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
             _ <- ZIO.scoped {
@@ -499,7 +498,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             nonTransactional    = new ProducerRecord(topic, "no one", -1)
             aliceGives20        = new ProducerRecord(topic, "alice", 0)
 
-            consumer1             <- KafkaTestUtils.makeConsumer(client1)
+            consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
             _ <- ZIO.scoped {
@@ -543,7 +542,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             nonTransactional    = new ProducerRecord(topic, "no one", -1)
             bobReceives20       = new ProducerRecord(topic, "bob", 20)
 
-            consumer1             <- KafkaTestUtils.makeConsumer(client1)
+            consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
             producer              <- KafkaTestUtils.makeProducer
 
@@ -591,7 +590,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             producer <- KafkaTestUtils.makeProducer
             _        <- producer.produce(initialAliceAccount, Serde.string, Serde.int)
 
-            consumer1             <- KafkaTestUtils.makeConsumer(client1)
+            consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
             // Not a transactional consumer, we want to get _all_ offsets:
@@ -632,7 +631,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             producer <- KafkaTestUtils.makeProducer
             _        <- producer.produce(initialAliceAccount, Serde.string, Serde.int)
 
-            consumer1             <- KafkaTestUtils.makeConsumer(client1)
+            consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
             // Not a transactional consumer, we want to get _all_ offsets:
@@ -667,7 +666,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             client1          <- randomClient
             transactionThief <- Ref.make(Option.empty[Transaction])
 
-            consumer1             <- KafkaTestUtils.makeConsumer(client1)
+            consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
             _ <- ZIO.scoped {
                    transactionalProducer.createTransaction.flatMap { tx =>
@@ -685,7 +684,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             client1          <- randomClient
             transactionThief <- Ref.make(Option.empty[Transaction])
 
-            consumer1             <- KafkaTestUtils.makeConsumer(client1)
+            consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
             transactionalProducer <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
 
             _ <- ZIO.scoped {
@@ -700,6 +699,17 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                  }
           } yield ()
           assertZIO(test.exit)(failsCause(containsCause(Cause.fail(TransactionLeaked(OffsetBatch.empty)))))
+        },
+        test("fails to create transactional producer if rebalanceSafeCommits are not enabled for consumer") {
+          val test = for {
+            client1 <- randomClient
+            // This consumer does not have rebalanceSafeCommits
+            consumer1 <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = false)
+
+            // Creating transactional producer should fail here.
+            _ <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
+          } yield ()
+          assertZIO(test.exit)(failsCause(containsCause(Cause.fail(RebalanceSafeCommitsRequired))))
         }
       ),
       produceSpec,
