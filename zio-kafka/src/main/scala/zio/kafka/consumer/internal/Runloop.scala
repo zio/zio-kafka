@@ -57,27 +57,23 @@ private[consumer] final class Runloop private (
 
   private[internal] def addSubscription(subscription: Subscription): IO[InvalidSubscriptionUnion, Unit] =
     for {
-      _       <- ZIO.logDebug(s"Add subscription $subscription")
-      promise <- Promise.make[InvalidSubscriptionUnion, Unit]
-      _       <- commandQueue.offer(RunloopCommand.AddSubscription(subscription, promise))
-      _       <- ZIO.logDebug(s"Waiting for subscription $subscription")
-      _       <- promise.await
-      _       <- ZIO.logDebug(s"Done for subscription $subscription")
+      _ <- ZIO.logDebug(s"Add subscription $subscription")
+      _ <- offerAndAwaitCommand(RunloopCommand.AddSubscription(subscription, _))
+      _ <- ZIO.logDebug(s"Done for subscription $subscription")
     } yield ()
 
   private[internal] def removeSubscription(subscription: Subscription): Task[Unit] =
-    for {
-      promise <- Promise.make[Throwable, Unit]
-      _       <- commandQueue.offer(RunloopCommand.RemoveSubscription(subscription, promise))
-      _       <- promise.await
-    } yield ()
+    offerAndAwaitCommand(RunloopCommand.RemoveSubscription(subscription, _))
 
   private[internal] def endStreamsBySubscription(subscription: Subscription): UIO[Unit] =
+    offerAndAwaitCommand(RunloopCommand.EndStreamsBySubscription(subscription, _))
+
+  private[internal] def offerAndAwaitCommand[E, A](f: Promise[E, A] => RunloopCommand): ZIO[Any, E, A] =
     for {
-      promise <- Promise.make[Nothing, Unit]
-      _       <- commandQueue.offer(RunloopCommand.EndStreamsBySubscription(subscription, promise)).unit
-      _       <- promise.await
-    } yield ()
+      promise <- Promise.make[E, A]
+      _       <- commandQueue.offer(f(promise))
+      r       <- promise.await
+    } yield r
 
   private def makeRebalanceListener: ConsumerRebalanceListener = {
     // Here we just want to avoid any executor shift if the user provided listener is the noop listener.
