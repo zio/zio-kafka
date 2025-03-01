@@ -294,7 +294,7 @@ object KafkaTestUtils {
   // -----------------------------------------------------------------------------------------
 
   /**
-   * Makes `ConsumerSettings` for a transactional consumer, use in tests.
+   * Makes `ConsumerSettings` for a transactional consumer, for use in tests.
    */
   def transactionalConsumerSettings(
     groupId: String,
@@ -314,7 +314,7 @@ object KafkaTestUtils {
       rebalanceSafeCommits = rebalanceSafeCommits,
       properties = properties
     )
-      .map(_.withProperties(ConsumerConfig.ISOLATION_LEVEL_CONFIG -> "read_committed"))
+      .map(_.withReadCommitted())
 
   /**
    * Makes a transactional `Consumer` for use in tests.
