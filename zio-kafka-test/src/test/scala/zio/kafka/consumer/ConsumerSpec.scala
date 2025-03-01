@@ -1097,34 +1097,37 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     // shuts down and commits are no longer possible. Therefore, we signal the second consumer in
                     // such a way that it doesn't close the stream.
                     c1
-                      .plainStream(subscription, Serde.string, Serde.string)
-                      .tap(record =>
-                        ZIO.logDebug(
-                          s"Received record with offset ${record.partition}:${record.offset.offset} and key ${record.key}"
-                        )
-                      )
-                      .tap { record =>
-                        // Signal consumer 2 can start when a record is seen for every partition.
-                        for {
-                          keys <- c1Keys.updateAndGet(_ :+ record.key)
-                          _    <- c1Started.succeed(()).when(keys.map(_.split('-')(1)).toSet.size == partitionCount)
-                        } yield ()
+                      .withPlainStream(subscription, Serde.string, Serde.string) { stream =>
+                        stream
+                          .tap(record =>
+                            ZIO.logDebug(
+                              s"Received record with offset ${record.partition}:${record.offset.offset} and key ${record.key}"
+                            )
+                          )
+                          .tap { record =>
+                            // Signal consumer 2 can start when a record is seen for every partition.
+                            for {
+                              keys <- c1Keys.updateAndGet(_ :+ record.key)
+                              _    <- c1Started.succeed(()).when(keys.map(_.split('-')(1)).toSet.size == partitionCount)
+                            } yield ()
+                          }
+                          // Buffer so that the above can run ahead of the below, this is important;
+                          // we want consumer 2 to start before consumer 1 commits.
+                          .buffer(partitionCount)
+                          .mapZIO { record =>
+                            for {
+                              s <- c1Sleep.get
+                              _ <- ZIO.sleep(s.seconds)
+                              _ <-
+                                ZIO.logDebug(
+                                  s"Committing offset ${record.partition}:${record.offset.offset} for key ${record.key}"
+                                )
+                              _ <- record.offset.commit
+                            } yield record.key
+                          }
+                          .runCollect
+                          .map(_.toSet)
                       }
-                      // Buffer so that the above can run ahead of the below, this is important;
-                      // we want consumer 2 to start before consumer 1 commits.
-                      .buffer(partitionCount)
-                      .mapZIO { record =>
-                        for {
-                          s <- c1Sleep.get
-                          _ <- ZIO.sleep(s.seconds)
-                          _ <- ZIO.logDebug(
-                                 s"Committing offset ${record.partition}:${record.offset.offset} for key ${record.key}"
-                               )
-                          _ <- record.offset.commit
-                        } yield record.key
-                      }
-                      .runCollect
-                      .map(_.toSet)
                   }
                   .fork
               _  <- c1Started.await
@@ -1144,12 +1147,12 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               _                   <- ZIO.logDebug("Waiting for consumers to end")
               c2Keys: Set[String] <- fib2.join
               _                   <- ZIO.logDebug("Consumer 2 ready")
-              _                   <- c1.stopConsumption
               _                   <- c1Sleep.set(0)
-              c1Keys: Set[String] <- fib1.join
+              _                   <- fib1.interrupt
+              c1Keys              <- c1Keys.get
               _                   <- ZIO.logDebug("Consumer 1 ready")
               _                   <- pFib.interrupt
-            } yield assertTrue((c1Keys intersect c2Keys).isEmpty)
+            } yield assertTrue((c1Keys.toSet intersect c2Keys).isEmpty)
           }
 
         // Test for both default partition assignment strategies
