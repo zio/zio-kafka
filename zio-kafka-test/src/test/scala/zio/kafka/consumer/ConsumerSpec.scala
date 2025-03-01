@@ -405,9 +405,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             topic  <- randomTopic
             _ <- ZIO
                    .fromTry(EmbeddedKafka.createCustomTopic(topic, partitions = 5))
-                   .retryWhile {
+                   .retry(Schedule.recurs(3) && Schedule.recurWhile[Throwable] {
                      case _: TimeoutException => true; case _ => false
-                   }
+                   })
                    .catchSome {
                      case e: ExecutionException
                          if e.getCause.isInstanceOf[org.apache.kafka.common.errors.TopicExistsException] =>
