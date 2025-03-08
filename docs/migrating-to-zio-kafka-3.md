@@ -161,7 +161,11 @@ expect only a few very experienced users to make use of it. Therefore, only the 
 
 # 3. `restartStreamOnRebalancing` mode
 
-This mode will no longer be available in zio-kafka 3. Contact us on [Discord](https://discord.com/channels/629491597070827530/629497941719121960) for alternatives.
+This mode is longer be available in zio-kafka 3. With `restartStreamOnRebalancing` all streams are ended during a
+rebalance, even when the partition for that stream was not revoked. One of its purposes was to enable transactional
+consuming. Since zio-kafka 3 however, transactional consuming no longer needs this mode.
+
+If your goal is to [prevent duplicates](preventing-duplicates.md), please use `rebalanceSafeCommits` instead.
 
 # Other changes?
 
