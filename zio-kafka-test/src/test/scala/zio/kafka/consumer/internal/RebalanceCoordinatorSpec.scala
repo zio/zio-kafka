@@ -46,7 +46,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
           tp2      = new TopicPartition("topic", 1)
           tp3      = new TopicPartition("topic", 2)
           tp4      = new TopicPartition("topic", 3)
-          listener <- makeCoordinator(lastEvent, consumer, rebalanceSafeCommits = true)
+          listener <- makeCoordinator(lastEvent, consumer, rebalanceSafeCommits = false)
           _        <- listener.toRebalanceListener.onAssigned(Set(tp))
           _        <- listener.toRebalanceListener.onAssigned(Set(tp4))
           _        <- listener.toRebalanceListener.onRevoked(Set(tp2))
