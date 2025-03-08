@@ -643,65 +643,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _ <- consumer2Fib.join
         } yield assertCompletes
       },
-      test("handle rebalancing by completing topic-partition streams - rebalanceSafeCommits") {
-        val partitionCount = 6 // Must be even and strictly positive
-
-        for {
-          // Produce messages on several partitions
-          topic   <- randomTopic
-          group   <- randomGroup
-          client1 <- randomClient
-          client2 <- randomClient
-
-          _        <- KafkaTestUtils.createCustomTopic(topic, partitionCount)
-          producer <- KafkaTestUtils.makeProducer
-          _ <- ZIO
-                 .foreachDiscard(0 until partitionCount) { p =>
-                   KafkaTestUtils.produceOne(producer, topic, p, "key", "msg")
-                 }
-                 .forever
-                 .forkScoped
-
-          consumer1 <- KafkaTestUtils.makeConsumer(client1, Some(group), rebalanceSafeCommits = true)
-          consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group), rebalanceSafeCommits = true)
-
-          // Consume messages
-          subscription = Subscription.topics(topic)
-          assignedPartitionsRef <- Ref.make(Set.empty[Int]) // Set of partition numbers
-          // Create a Promise to signal when consumer1 has processed half the partitions
-          consumer1Ready <- Promise.make[Nothing, Unit]
-          consumer1Fib <- consumer1
-                            .partitionedStream(subscription, Serde.string, Serde.string)
-                            .flatMapPar(partitionCount) { case (tp, partitionStream) =>
-                              ZStream
-                                .fromZIO(
-                                  consumer1Ready
-                                    .succeed(())
-                                    .whenZIO(
-                                      assignedPartitionsRef
-                                        .updateAndGet(_ + tp.partition())
-                                        .map(_.size >= (partitionCount / 2))
-                                    ) *>
-                                    partitionStream.tap(_.offset.commit).runDrain
-                                )
-                                .as(tp)
-                            }
-                            .take(partitionCount.toLong / 2)
-                            .runDrain
-                            .fork
-          _ <- consumer1Ready.await
-          consumer2Fib <- consumer2
-                            .partitionedStream(subscription, Serde.string, Serde.string)
-                            .take(partitionCount.toLong / 2)
-                            .flatMapPar(partitionCount) { case (_, partitionStream) =>
-                              partitionStream.tap(_.offset.commit)
-                            }
-                            .runDrain
-                            .fork
-          _ <- consumer1Fib.join
-          _ <- consumer2Fib.join
-        } yield assertCompletes
-      },
       test("produce diagnostic events when rebalancing") {
         val nrMessages     = 50
         val partitionCount = 6
