@@ -2,6 +2,7 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
+import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Committer.CommitOffsets
@@ -10,7 +11,9 @@ import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
 import zio.test._
-import zio._
+
+import java.util
+import scala.jdk.CollectionConverters.CollectionHasAsScala
 
 object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
   type BinaryMockConsumer = MockConsumer[Array[Byte], Array[Byte]]
@@ -92,35 +95,47 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
       },
       suite("rebalanceSafeCommits")(
         test("should wait for the last pulled offset to commit") {
-          // Outline of this test:
-          // - Create a stream and offer it 3 records immediately
-          // - Run the stream in the background, sleep for each record, then commit
-          //   Total commit time: at least 3*50ms = 150ms
-          // - Create a coordinator with rebalanceSafeCommits enabled
-          // - Revoke the partition
-          // - Assert that onRevoked takes its time, waiting for the commits to happen
-          //   but not so long that the maxRebalanceDuration triggered
           for {
-            lastEvent <- Ref.Synchronized.make(RebalanceCoordinator.RebalanceEvent.None)
-            consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {}
-            tp       = new TopicPartition("topic", 0)
+            lastEvent           <- Ref.Synchronized.make(RebalanceCoordinator.RebalanceEvent.None)
+            revokeStarted       <- Promise.make[Nothing, Unit]
+            lastCommittedOffset <- Ref.make(0L)
+            runtime             <- ZIO.runtime[Any]
+            consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) { self =>
+                         override def commitAsync(
+                           offsets: util.Map[
+                             TopicPartition,
+                             OffsetAndMetadata
+                           ],
+                           callback: OffsetCommitCallback
+                         ): Unit = {
+                           Unsafe.unsafe { implicit u =>
+                             runtime.unsafe
+                               .run(
+                                 ZIO.foreachDiscard(offsets.values().asScala.headOption.map(_.offset()))(
+                                   lastCommittedOffset.set
+                                 )
+                               )
+                               .getOrThrow()
+                           }
+                           super.commitAsync(offsets, callback)
+                         }
+                       }
+            tp = new TopicPartition("topic", 0)
             streamControl <- makeStreamControl(tp)
             records = createTestRecords(3)
             _         <- streamControl.offerRecords(records)
             committer <- LiveCommitter.make(10.seconds, Diagnostics.NoOp, mockMetrics, ZIO.unit)
 
-            _ <- streamControl.stream
-                   .tap(_ => ZIO.sleep(50.millis))
-                   .tap { record =>
+            _ <- streamControl.stream.tap { record =>
+                   ZIO.debug(record) *>
+                     revokeStarted.await *>
                      committer.commit(
                        Map(
                          new TopicPartition("topic", record.partition) ->
                            new OffsetAndMetadata(record.offset.offset)
                        )
                      )
-                   }
-                   .runDrain
-                   .forkScoped
+                 }.runDrain.forkScoped
 
             coordinator <- makeCoordinator(
                              lastEvent,
@@ -130,8 +145,10 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
                              committer = committer,
                              maxRebalanceDuration = 10.seconds
                            )
-            revokeDuration <- coordinator.toRebalanceListener.onRevoked(Set(tp)).timed.map(_._1)
-          } yield assertTrue(revokeDuration.toMillis > 150, revokeDuration.toMillis < 6000)
+            _         <- revokeStarted.succeed(())
+            _         <- coordinator.toRebalanceListener.onRevoked(Set(tp)).timed.map(_._1)
+            committed <- lastCommittedOffset.get
+          } yield assertTrue(committed == 3L + 1) // The committed offset is always the next one
         },
         test("should continue if waiting for the stream to continue has timed out") {
           // Outline of this test:
