@@ -89,7 +89,7 @@ trait Consumer {
     valueDeserializer: Deserializer[R, V],
     shutdownTimeout: Duration = 15.seconds
   )(
-    withStream: Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] => ZIO[
+    withStream: ZStream[R, Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] => ZIO[
       R,
       Throwable,
       Any
@@ -134,7 +134,7 @@ trait Consumer {
     valueDeserializer: Deserializer[R, V],
     shutdownTimeout: Duration = 15.seconds
   )(
-    withStream: Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] => ZIO[
+    withStream: ZStream[R, Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] => ZIO[
       R,
       Throwable,
       Any
@@ -479,28 +479,26 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): ZIO[Scope, Throwable, SubscriptionStreamControl[
-    Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
+  ): ZIO[Scope, Throwable, StreamControl[
+    R,
+    Throwable,
+    Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
   ]] = {
     val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
     for {
       streamControl <- runloopAccess.subscribe(subscription)
-    } yield SubscriptionStreamControl(
-      streamControl.stream
-        .map(_.exit)
-        .flattenExitOption
-        .map {
-          _.collect {
-            case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
-              val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
-                if (onlyByteArraySerdes)
-                  partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
-                else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
+    } yield streamControl.map(
+      _.map(_.exit).flattenExitOption.map {
+        _.collect {
+          case (tp, partitionStream) if Subscription.subscriptionMatches(subscription, tp) =>
+            val stream: ZStream[R, Throwable, CommittableRecord[K, V]] =
+              if (onlyByteArraySerdes)
+                partitionStream.asInstanceOf[ZStream[R, Throwable, CommittableRecord[K, V]]]
+              else partitionStream.mapChunksZIO(_.mapZIO(_.deserializeWith(keyDeserializer, valueDeserializer)))
 
-              tp -> stream
-          }
-        },
-      streamControl.stop
+            tp -> stream
+        }
+      }
     )
   }
 
@@ -510,14 +508,14 @@ private[consumer] final class ConsumerLive private[consumer] (
     valueDeserializer: Deserializer[R, V],
     shutdownTimeout: Duration = 15.seconds
   )(
-    withStream: Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] => ZIO[
+    withStream: ZStream[R, Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] => ZIO[
       R,
       Throwable,
       Any
     ]
-  ): ZIO[R, Throwable, Any] = runWithGracefulShutdown[Stream[Throwable, Chunk[
+  ): ZIO[R, Throwable, Any] = runWithGracefulShutdown[R, Throwable, Chunk[
     (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])
-  ]], R, Throwable](
+  ]](
     partitionedAssignmentStreamWithControl(subscription, keyDeserializer, valueDeserializer),
     shutdownTimeout
   )(
@@ -543,7 +541,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     valueDeserializer: Deserializer[R, V],
     shutdownTimeout: Duration = 15.seconds
   )(
-    withStream: Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] => ZIO[
+    withStream: ZStream[R, Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] => ZIO[
       R,
       Throwable,
       Any
@@ -580,8 +578,8 @@ private[consumer] final class ConsumerLive private[consumer] (
     }
 
   /**
-   * Takes a SubscriptionStreamControl for some stream and runs the given ZIO workflow on that stream such that, when
-   * interrupted, stops fetching records and gracefully waits for the ZIO workflow to complete.
+   * Takes a StreamControl for some stream and runs the given ZIO workflow on that stream such that, when interrupted,
+   * stops fetching records and gracefully waits for the ZIO workflow to complete.
    *
    * @param streamControl
    *   Result of `withPlainStream`, `withPartitionedStream` or `withPartitionedAssignmentStream`
@@ -592,11 +590,11 @@ private[consumer] final class ConsumerLive private[consumer] (
    *   workflow runs until an external interruption, the result value (Any type) is meaningless. `withStream` is
    *   typically something like `stream => stream.mapZIO(record => ZIO.debug(record)).mapZIO(_.offset.commit)`
    */
-  private def runWithGracefulShutdown[StreamType <: ZStream[_, _, _], R, E](
-    streamControl: ZIO[Scope, E, SubscriptionStreamControl[StreamType]],
+  private def runWithGracefulShutdown[R, E, A](
+    streamControl: ZIO[Scope, E, StreamControl[R, E, A]],
     shutdownTimeout: Duration
   )(
-    withStream: StreamType => ZIO[R, E, Any]
+    withStream: ZStream[R, E, A] => ZIO[R, E, Any]
   ): ZIO[R, E, Any] =
     ZIO.scoped[R] {
       for {
