@@ -11,6 +11,7 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
 import zio.test._
 import zio._
+import zio.stream.ZStream
 
 import java.util.{ Map => JavaMap }
 import scala.jdk.CollectionConverters._
@@ -94,12 +95,13 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
         } yield assertTrue(endedStreamTps == Set(tp2, tp3))
       },
       suite("rebalanceSafeCommits")(
-        test("should wait for the last pulled offset to commit") {
+        test("holds up rebalance until the last pulled offset is committed") {
           // Outline of this test:
           // - Create a stream and offer it 3 records immediately
           // - Run the stream in the background, sleep for each record, then commit
-          //   Total commit time: at least 3*50ms = 150ms
+          //   Total commit time: _at least_ 3*50ms = 150ms
           // - Create a coordinator with rebalanceSafeCommits enabled
+          // - Wait until all 3 records are pulled by the stream
           // - Revoke the partition
           // - Assert that onRevoked takes its time, waiting for all 3 commits to happen
           //   but not so long that the maxRebalanceDuration triggered
@@ -111,20 +113,15 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
             tp       = new TopicPartition("topic", 0)
             streamControl <- makeStreamControl(tp)
             recordCount = 3
-            records     = createTestRecords(recordCount)
-            _         <- streamControl.offerRecords(records)
-            committer <- LiveCommitter.make(10.seconds, Diagnostics.NoOp, mockMetrics, ZIO.unit)
+            records     = createTestRecords(tp, recordCount)
+            _ <- streamControl.offerRecords(records)
 
+            recordsPulledByStream <- Promise.make[Nothing, Unit]
+            committer <- LiveCommitter.make(10.seconds, Diagnostics.NoOp, mockMetrics, ZIO.unit)
             _ <- streamControl.stream
+                   .completePromiseWhenOffsetSeen(recordCount.toLong, recordsPulledByStream)
                    .tap(_ => ZIO.sleep(50.millis))
-                   .tap { record =>
-                     committer.commit(
-                       Map(
-                         new TopicPartition("topic", record.partition) ->
-                           new OffsetAndMetadata(record.offset.offset)
-                       )
-                     )
-                   }
+                   .commitEachRecord(committer)
                    .runDrain
                    .forkScoped
 
@@ -136,22 +133,23 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
                              committer = committer,
                              maxRebalanceDuration = 10.seconds
                            )
+            _              <- recordsPulledByStream.await
             revokeDuration <- coordinator.toRebalanceListener.onRevoked(Set(tp)).timed.map(_._1)
 
             committed <- lastCommittedOffsets.get
             lastOffset = committed.get(tp)
           } yield assertTrue(
-            lastOffset.contains(recordCount + 1L), // contains 'next offset to read', so offset of last record + 1
+            lastOffset.contains(recordCount.toLong),
             revokeDuration.toMillis > 150,
             revokeDuration.toMillis < 6000
           )
         },
-        test("should continue if waiting for the stream to continue has timed out") {
+        test("maximizes time to hold up rebalance when committing the last pulled offset takes too long") {
           // Outline of this test:
           // - Create a stream and offer it 3 records immediately
-          // - Run the stream in the background, don't do any commits, sleep for each record to make sure it will
-          //   run for a while
+          // - Run the stream in the background, don't do any commits
           // - Create a coordinator with rebalanceSafeCommits enabled
+          // - Wait until all 3 records are pulled by the stream
           // - Revoke the partition
           // - Assert that onRevoked takes its time, waiting for the configured max rebalance duration
           for {
@@ -159,11 +157,13 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
             consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {}
             tp       = new TopicPartition("topic", 0)
             streamControl <- makeStreamControl(tp)
-            records = createTestRecords(3)
-            _ <- streamControl.offerRecords(records)
+            recordCount = 3
+            records     = createTestRecords(tp, recordCount)
+            _                     <- streamControl.offerRecords(records)
 
+            recordsPulledByStream <- Promise.make[Nothing, Unit]
             _ <- streamControl.stream
-                   .tap(_ => ZIO.sleep(2.seconds))
+                   .completePromiseWhenOffsetSeen(recordCount.toLong, recordsPulledByStream)
                    .runDrain
                    .forkScoped
 
@@ -175,18 +175,22 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
                              commitTimeout = 1.second,
                              maxRebalanceDuration = 2.second
                            )
-            // Actual max rebalance time is: maxRebalanceDuration - commitTimeout = 1 second
+            _              <- recordsPulledByStream.await
             revokeDuration <- coordinator.toRebalanceListener.onRevoked(Set(tp)).timed.map(_._1)
-          } yield assertTrue(revokeDuration.toMillis >= 1000)
+          } yield assertTrue(
+            // Actual max rebalance time is: maxRebalanceDuration - commitTimeout = 1 second
+            revokeDuration.toMillis >= 1000
+          )
         }
       ),
       suite("without rebalanceSafeCommits")(
-        test("should not wait for stream to commit") {
+        test("does not hold up rebalance even though last pulled offset is not committed") {
           // Outline of this test:
           // - Create a stream and offer it 3 records immediately
           // - Run the stream in the background, don't do any commits, sleep for each record to make sure it runs
           //   for a while
           // - Create a coordinator with rebalanceSafeCommits disabled
+          // - Wait until all 3 records are pulled by the stream
           // - Revoke the partition
           // - Assert that onRevoked completes immediately, meaning that it does not wait for the stream to commit
           for {
@@ -194,12 +198,15 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
             consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {}
             tp       = new TopicPartition("topic", 0)
             streamControl <- makeStreamControl(tp)
-            records = createTestRecords(3)
+            recordCount = 3
+            records     = createTestRecords(tp, recordCount)
             _ <- streamControl.offerRecords(records)
 
             // Make the stream slow by sleeping for each record
+            recordsPulledByStream <- Promise.make[Nothing, Unit]
             _ <- streamControl.stream
-                   .tap(_ => ZIO.sleep(200.millis))
+                   .completePromiseWhenOffsetSeen(recordCount.toLong, recordsPulledByStream)
+                   .tap(_ => ZIO.sleep(500.millis))
                    .runDrain
                    .forkScoped
 
@@ -209,8 +216,9 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
                              rebalanceSafeCommits = false,
                              assignedStreams = Chunk(streamControl)
                            )
+            _              <- recordsPulledByStream.await
             revokeDuration <- coordinator.toRebalanceListener.onRevoked(Set(tp)).timed.map(_._1)
-          } yield assertTrue(revokeDuration.toMillis < 600)
+          } yield assertTrue(revokeDuration.toMillis < 1500)
         }
       )
     ) @@ TestAspect.withLiveClock
@@ -245,13 +253,13 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
         )
       }
 
-  private def createTestRecords(count: Int): Chunk[ByteArrayCommittableRecord] =
+  private def createTestRecords(tp: TopicPartition, count: Int): Chunk[ByteArrayCommittableRecord] =
     Chunk.fromIterable(
       (1 to count).map(i =>
         CommittableRecord(
           record = new ConsumerRecord[Array[Byte], Array[Byte]](
-            "test-topic",
-            0,
+            tp.topic(),
+            tp.partition(),
             i.toLong,
             Array[Byte](),
             Array[Byte]()
@@ -261,6 +269,31 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
         )
       )
     )
+
+  private implicit class RecordStreamOps(val s: ZStream[Any, Throwable, ByteArrayCommittableRecord]) extends AnyVal {
+    def completePromiseWhenOffsetSeen(
+      offsetToSee: Long,
+      offsetSeenPromise: Promise[Nothing, Unit]
+    ): ZStream[Any, Throwable, ByteArrayCommittableRecord] =
+      s.tapChunksZIO(chunk => offsetSeenPromise.succeed(()).when(chunk.map(_.offset.offset).max >= offsetToSee))
+
+    def commitEachRecord(committer: Committer): ZStream[Any, Throwable, ByteArrayCommittableRecord] =
+      s.tap { record =>
+        committer.commit {
+          Map(
+            new TopicPartition(record.offset.topic, record.offset.partition) ->
+              new OffsetAndMetadata(record.offset.offset)
+          )
+        }
+      }
+
+  }
+
+  private implicit class ZStreamTapChunks[R, E, A](val s: ZStream[R, E, A]) extends AnyVal {
+    def tapChunksZIO[R1 <: R, E1 >: E](f: Chunk[A] => ZIO[R1, E1, Any])(implicit trace: Trace): ZStream[R1, E1, A] =
+      s.mapChunksZIO(chunk => f(chunk).as(chunk))
+  }
+
 }
 
 abstract private class MockCommitter extends Committer {
@@ -287,7 +320,8 @@ private class CommitTrackingMockConsumer(
   ): Unit = {
     // The calls without offsets are not interesting, ignore those.
     if (!offsets.isEmpty) {
-      val scalaOffsets = offsets.asScala.view.mapValues(_.offset()).toMap
+      // Subtract 1 to go back from 'next record to read' to 'offset of last committed record'
+      val scalaOffsets = offsets.asScala.view.mapValues(_.offset() - 1L).toMap
       Unsafe.unsafe { implicit u =>
         runtime.unsafe.run(lastCommittedOffsets.set(scalaOffsets)).getOrThrow()
       }
