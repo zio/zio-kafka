@@ -60,7 +60,27 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                        .take(5)
                        .runCollect
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
-        } yield assert(kvOut)(equalTo(kvs))
+        } yield assertTrue(kvOut == kvs)
+      },
+      test("plainStream in rebalanceSafeCommits mode with commits") {
+        val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+        for {
+          topic  <- randomTopic
+          client <- randomClient
+          group  <- randomGroup
+
+          producer <- KafkaTestUtils.makeProducer
+          _        <- KafkaTestUtils.produceMany(producer, topic, kvs)
+
+          settings <- KafkaTestUtils.consumerSettings(client, Some(group), `max.poll.records` = 1)
+          consumer <- Consumer.make(settings)
+          records <- consumer
+                       .plainStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
+                       .tap(_.offset.commit)
+                       .take(5)
+                       .runCollect
+          kvOut = records.map(r => (r.record.key, r.record.value)).toList
+        } yield assertTrue(kvOut == kvs)
       },
       test("chunk sizes") {
         val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
@@ -314,14 +334,13 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             group  <- randomGroup
             client <- randomClient
 
-            consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
             producer <- KafkaTestUtils.makeProducer
-
-            keepProducing <- Ref.make(true)
             _ <- KafkaTestUtils
                    .produceOne(producer, topic, "key", "value")
-                   .repeatWhileZIO(_ => keepProducing.get)
-                   .fork
+                   .forever
+                   .forkScoped
+
+            consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
             _ <- consumer
                    .partitionedStream(Subscription.topics(topic), Serde.string, Serde.string)
                    .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
@@ -333,7 +352,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                    }
                    .runDrain
                    .zipLeft(ZIO.logDebug("Stream completed"))
-            _ <- keepProducing.set(false)
           } yield assertCompletes
         },
         test("process outstanding commits after a graceful shutdown") {
@@ -865,7 +883,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         } yield assert(offsets)(equalTo(expectedResult))
       } @@ TestAspect.timeout(20.seconds),
       test("handle rebalancing by completing topic-partition streams") {
-        val nrMessages     = 50
         val partitionCount = 6 // Must be even and strictly positive
 
         for {
@@ -877,10 +894,12 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           _        <- KafkaTestUtils.createCustomTopic(topic, partitionCount)
           producer <- KafkaTestUtils.makeProducer
-          _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
-                 KafkaTestUtils
-                   .produceMany(producer, topic, partition = i % partitionCount, kvs = List(s"key$i" -> s"msg$i"))
-               }
+          _ <- ZIO
+                 .foreachDiscard(0 until partitionCount) { p =>
+                   KafkaTestUtils.produceOne(producer, topic, p, "key", "msg")
+                 }
+                 .forever
+                 .forkScoped
 
           consumer1 <- KafkaTestUtils.makeConsumer(client1, Some(group))
           consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group))

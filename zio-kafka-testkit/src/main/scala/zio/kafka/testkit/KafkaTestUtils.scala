@@ -121,6 +121,22 @@ object KafkaTestUtils {
     producer.produce[Any, String, String](new ProducerRecord(topic, key, message), Serde.string, Serde.string)
 
   /**
+   * Produce a single message to the given partition of a topic.
+   */
+  def produceOne(
+    producer: Producer,
+    topic: String,
+    partition: Int,
+    key: String,
+    message: String
+  ): ZIO[Any, Throwable, RecordMetadata] =
+    producer.produce[Any, String, String](
+      new ProducerRecord(topic, partition, key, message),
+      Serde.string,
+      Serde.string
+    )
+
+  /**
    * Produce many messages to the given partition of a topic.
    */
   def produceMany(
@@ -294,7 +310,7 @@ object KafkaTestUtils {
   // -----------------------------------------------------------------------------------------
 
   /**
-   * Makes `ConsumerSettings` for a transactional consumer, use in tests.
+   * Makes `ConsumerSettings` for a transactional consumer, for use in tests.
    */
   def transactionalConsumerSettings(
     groupId: String,
@@ -314,7 +330,7 @@ object KafkaTestUtils {
       rebalanceSafeCommits = rebalanceSafeCommits,
       properties = properties
     )
-      .map(_.withProperties(ConsumerConfig.ISOLATION_LEVEL_CONFIG -> "read_committed"))
+      .map(_.withReadCommitted())
 
   /**
    * Makes a transactional `Consumer` for use in tests.
