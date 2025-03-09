@@ -12,6 +12,9 @@ import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
 import zio.test._
 import zio._
 
+import java.util.{ Map => JavaMap }
+import scala.jdk.CollectionConverters._
+
 object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
   type BinaryMockConsumer = MockConsumer[Array[Byte], Array[Byte]]
 
@@ -98,14 +101,17 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
           //   Total commit time: at least 3*50ms = 150ms
           // - Create a coordinator with rebalanceSafeCommits enabled
           // - Revoke the partition
-          // - Assert that onRevoked takes its time, waiting for the commits to happen
+          // - Assert that onRevoked takes its time, waiting for all 3 commits to happen
           //   but not so long that the maxRebalanceDuration triggered
           for {
-            lastEvent <- Ref.Synchronized.make(RebalanceCoordinator.RebalanceEvent.None)
-            consumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {}
+            lastEvent            <- Ref.Synchronized.make(RebalanceCoordinator.RebalanceEvent.None)
+            lastCommittedOffsets <- Ref.make(Map.empty[TopicPartition, Long])
+            runtime              <- ZIO.runtime[Any]
+            consumer = new CommitTrackingMockConsumer(runtime, lastCommittedOffsets)
             tp       = new TopicPartition("topic", 0)
             streamControl <- makeStreamControl(tp)
-            records = createTestRecords(3)
+            recordCount = 3
+            records     = createTestRecords(recordCount)
             _         <- streamControl.offerRecords(records)
             committer <- LiveCommitter.make(10.seconds, Diagnostics.NoOp, mockMetrics, ZIO.unit)
 
@@ -131,7 +137,14 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
                              maxRebalanceDuration = 10.seconds
                            )
             revokeDuration <- coordinator.toRebalanceListener.onRevoked(Set(tp)).timed.map(_._1)
-          } yield assertTrue(revokeDuration.toMillis > 150, revokeDuration.toMillis < 6000)
+
+            committed <- lastCommittedOffsets.get
+            lastOffset = committed.get(tp)
+          } yield assertTrue(
+            lastOffset.contains(recordCount + 1L), // contains 'next offset to read', so offset of last record + 1
+            revokeDuration.toMillis > 150,
+            revokeDuration.toMillis < 6000
+          )
         },
         test("should continue if waiting for the stream to continue has timed out") {
           // Outline of this test:
@@ -262,4 +275,23 @@ abstract private class MockCommitter extends Committer {
   override def cleanupPendingCommits: UIO[Unit]      = ZIO.unit
   override def keepCommitsForPartitions(assignedPartitions: Set[TopicPartition]): UIO[Unit] = ZIO.unit
   override def getCommittedOffsets: UIO[CommitOffsets] = ZIO.succeed(CommitOffsets.empty)
+}
+
+private class CommitTrackingMockConsumer(
+  runtime: Runtime[Any],
+  lastCommittedOffsets: Ref[Map[TopicPartition, Long]]
+) extends MockConsumer[Array[Byte], Array[Byte]](OffsetResetStrategy.LATEST) {
+  override def commitAsync(
+    offsets: JavaMap[TopicPartition, OffsetAndMetadata],
+    callback: OffsetCommitCallback
+  ): Unit = {
+    // The calls without offsets are not interesting, ignore those.
+    if (!offsets.isEmpty) {
+      val scalaOffsets = offsets.asScala.view.mapValues(_.offset()).toMap
+      Unsafe.unsafe { implicit u =>
+        runtime.unsafe.run(lastCommittedOffsets.set(scalaOffsets)).getOrThrow()
+      }
+    }
+    super.commitAsync(offsets, callback)
+  }
 }
