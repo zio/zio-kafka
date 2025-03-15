@@ -555,7 +555,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    bufferSize: Int = 4
+    bufferSize: Int
   ): ZStream[R, Throwable, CommittableRecord[K, V]] =
     partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
       n = Int.MaxValue,
