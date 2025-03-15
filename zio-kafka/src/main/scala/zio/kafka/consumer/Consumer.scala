@@ -78,10 +78,10 @@ trait Consumer {
    * Like [[partitionedAssignmentStream]] but wraps the stream in an effect that allows graceful shutdown.
    *
    * When this effect is interrupted, the stream of assigned partitions ends, allowing the streams created by
-   * `withStream` to complete gracefully, thereby fully processing all buffered and/or in-flight
-   * stream elements.
+   * `withStream` to complete gracefully, thereby fully processing all buffered and/or in-flight stream elements.
    *
-   * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any zio-kafka version.
+   * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any
+   * zio-kafka version.
    */
   def withPartitionedAssignmentStream[R, K, V](
     subscription: Subscription,
@@ -164,7 +164,7 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    bufferSize: Int
+    bufferSize: Int = 4
   ): ZStream[R, Throwable, CommittableRecord[K, V]]
 
   /**
@@ -555,7 +555,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
-    bufferSize: Int
+    bufferSize: Int = 4
   ): ZStream[R, Throwable, CommittableRecord[K, V]] =
     partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
       n = Int.MaxValue,
