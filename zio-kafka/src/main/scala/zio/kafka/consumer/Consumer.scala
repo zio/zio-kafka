@@ -613,12 +613,10 @@ private[consumer] final class ConsumerLive private[consumer] (
                 .timeout(shutdownTimeout)
                 .someOrElseZIO(
                   ZIO.logError(
-                    "Timeout joining withStream fiber in runWithGracefulShutdown. Not all pending commits may have been processed."
+                    "Timeout waiting for `withStream` to shut down gracefully. Not all in-flight records may have been processed."
                   )
                 )
-                .tapErrorCause(cause =>
-                  ZIO.logErrorCause("Error joining withStream fiber in runWithGracefulShutdown", cause)
-                )
+                .tapErrorCause(cause => ZIO.logErrorCause("Stream failed while awaiting its graceful shutdown", cause))
                 .ignore
           )
       } yield result
