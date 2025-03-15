@@ -60,7 +60,7 @@ private[consumer] final class RunloopAccess private (
     subscription: Subscription
   ): ZIO[Scope, InvalidSubscriptionUnion, StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]]] =
     for {
-      end    <- Promise.make[Nothing, Unit]
+      end    <- Promise.make[Nothing, Unit] // For ending the stream of partition streams
       stream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
