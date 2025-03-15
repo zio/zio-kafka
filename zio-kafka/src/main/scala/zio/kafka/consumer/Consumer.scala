@@ -75,13 +75,13 @@ trait Consumer {
   ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
 
   /**
-   * Like [[partitionedAssignmentStream]] but wraps the stream in a construct that ensures graceful shutdown.
+   * Like [[partitionedAssignmentStream]] but wraps the stream in an effect that allows graceful shutdown.
    *
-   * When this effect is interrupted, all partition streams are closed upstream, allowing the stream created by
-   * `withStream` to complete gracefully all stream stages, thereby fully processing all buffered and/or in-flight
-   * messages.
+   * When this effect is interrupted, the stream of assigned partitions ends, allowing the streams created by
+   * `withStream` to complete gracefully, thereby fully processing all buffered and/or in-flight
+   * stream elements.
    *
-   * EXPERIMENTAL API
+   * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any zio-kafka version.
    */
   def withPartitionedAssignmentStream[R, K, V](
     subscription: Subscription,
