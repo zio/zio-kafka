@@ -395,8 +395,11 @@ object Consumer {
    * Takes a StreamControl for some stream and runs the given ZIO workflow on that stream such that, when interrupted,
    * stops fetching records and gracefully waits for the ZIO workflow to complete.
    *
+   * This is useful for running streams from within your application's Main class, such that streams are cleanly stopped
+   * when the application is shutdown (for example by your container runtime).
+   *
    * @param streamControl
-   *   Result of [[Consumer.plainStreamWithControl()]] or [[Consumer.partitionedStreamWithControl()]]
+   *   Result of one of the Consumer's methods returning a [[StreamControl]]
    * @param shutdownTimeout
    *   Timeout for the workflow to complete after initiating the graceful shutdown
    * @param withStream
