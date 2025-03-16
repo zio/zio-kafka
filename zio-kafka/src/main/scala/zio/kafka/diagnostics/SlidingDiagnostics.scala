@@ -8,10 +8,12 @@ object SlidingDiagnostics {
    * Create a [[Diagnostics]] implementation that keeps the last `queueSize` emitted events in a queue.
    *
    * Useful for testing, or any other case where you don't want to risk high memory usage due to a slow diagnostics
-   * processor.
+   * implementation.
    *
-   * For example, for a Diagnostics that keeps the last 100 [[zio.kafka.consumer.ConsumerDiagnosticEvent]]s use:
+   * For example, for a Diagnostics that keeps the last 100
+   * [[zio.kafka.consumer.diagnostics.DiagnosticEvent consumer DiagnosticEvent]]s use:
    * {{{
+   *   import zio.kafka.consumer.diagnostics.{DiagnosticEvent => ConsumerDiagnosticEvent}
    *   for {
    *     diagnostics <- SlidingDiagnostics.make[ConsumerDiagnosticEvent](100)
    *     ... use diagnostics

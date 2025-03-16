@@ -2,11 +2,12 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.Consumer.ConsumerDiagnostics
-import zio.kafka.consumer.{ ConsumerDiagnosticEvent, Offset }
+import zio.kafka.consumer.Offset
 import zio.kafka.consumer.internal.PartitionStreamControl.QueueInfo
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.{ Take, ZStream }
 import zio._
+import zio.kafka.consumer.diagnostics.DiagnosticEvent
 
 import java.util.concurrent.TimeoutException
 import scala.util.control.NoStackTrace
@@ -149,7 +150,7 @@ object PartitionStreamControl {
       requestAndAwaitData =
         for {
           _ <- requestData
-          _ <- diagnostics.emit(ConsumerDiagnosticEvent.Request(tp))
+          _ <- diagnostics.emit(DiagnosticEvent.Request(tp))
           taken <- dataQueue
                      .takeBetween(1, Int.MaxValue)
                      .raceFirst(interruptionPromise.await)

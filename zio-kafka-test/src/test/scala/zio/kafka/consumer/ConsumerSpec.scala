@@ -11,8 +11,9 @@ import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, CommitTimeout, ConsumerDiagnostics, OffsetRetrieval }
-import zio.kafka.consumer.ConsumerDiagnosticEvent.{ ConsumerFinalized, RunloopFinalized, SubscriptionFinalized }
-import zio.kafka.diagnostics.SlidingDiagnostics
+import zio.kafka.consumer.diagnostics.DiagnosticEvent
+import zio.kafka.consumer.diagnostics.DiagnosticEvent.{ ConsumerFinalized, RunloopFinalized, SubscriptionFinalized }
+import zio.kafka.diagnostics.{ Diagnostics, SlidingDiagnostics }
 import zio.kafka.producer.TransactionalProducer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.{ Kafka, KafkaRandom, KafkaTestUtils }
@@ -643,7 +644,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         val partitionCount = 6
 
         ZIO.scoped {
-          SlidingDiagnostics.make[ConsumerDiagnosticEvent]().flatMap { diagnostics =>
+          SlidingDiagnostics.make[DiagnosticEvent]().flatMap { diagnostics =>
             for {
               // Produce messages on several partitions
               topic   <- randomTopic
@@ -686,7 +687,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                 .fork
               diagnosticStream <- ZStream
                                     .fromQueue(diagnostics.queue)
-                                    .collect { case rebalance: ConsumerDiagnosticEvent.Rebalance => rebalance }
+                                    .collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
                                     .runCollect
                                     .fork
               _ <- consumer1Ready.await
@@ -1030,11 +1031,11 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _                       <- ZIO.logDebug("Starting consumer 1")
           rebalanceEndTimePromise <- Promise.make[Nothing, Instant]
           c1Diagnostics = new ConsumerDiagnostics {
-                            override def emit(event: => ConsumerDiagnosticEvent): UIO[Unit] = event match {
-                              case r: ConsumerDiagnosticEvent.Rebalance if r.assigned.size == 1 =>
+                            override def emit(event: => DiagnosticEvent): UIO[Unit] = event match {
+                              case r: DiagnosticEvent.Rebalance if r.assigned.size == 1 =>
                                 ZIO.logDebug(s"Rebalance finished: $r") *>
                                   Clock.instant.flatMap(rebalanceEndTimePromise.succeed).unit
-                              case r: ConsumerDiagnosticEvent.Rebalance =>
+                              case r: DiagnosticEvent.Rebalance =>
                                 ZIO.logDebug(s"Rebalance finished: $r")
                               case _ => ZIO.unit
                             }
@@ -1068,7 +1069,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               .fork
           _                  <- c1Started.await
           _                  <- ZIO.logDebug("Starting consumer 2")
-          c2                 <- makeConsumer(clientId2, groupId, rebalanceSafeCommits = false, Consumer.NoDiagnostics)
+          c2                 <- makeConsumer(clientId2, groupId, rebalanceSafeCommits = false, Diagnostics.noOp)
           rebalanceStartTime <- Clock.instant
           _ <- ZIO
                  .logAnnotate("consumer", "2") {
@@ -1389,7 +1390,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             } yield assertCompletes
 
           for {
-            diagnostics <- SlidingDiagnostics.make[ConsumerDiagnosticEvent](1000)
+            diagnostics <- SlidingDiagnostics.make[DiagnosticEvent](1000)
             testResult <- ZIO.scoped {
                             test(diagnostics)
                           }
@@ -1408,7 +1409,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               } yield assertCompletes
 
             for {
-              diagnostics <- SlidingDiagnostics.make[ConsumerDiagnosticEvent](1000)
+              diagnostics <- SlidingDiagnostics.make[DiagnosticEvent](1000)
               testResult <- ZIO.scoped {
                               test(diagnostics)
                             }
@@ -1440,7 +1441,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               } yield assert(consumed0)(equalTo(1L)) && assert(consumed1)(equalTo(1L))
 
             for {
-              diagnostics <- SlidingDiagnostics.make[ConsumerDiagnosticEvent](1000)
+              diagnostics <- SlidingDiagnostics.make[DiagnosticEvent](1000)
               testResult <- ZIO.scoped {
                               test(diagnostics)
                             }
@@ -1505,7 +1506,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 assert(consumed1)(equalTo(numberOfMessages.toLong))
 
             for {
-              diagnostics <- SlidingDiagnostics.make[ConsumerDiagnosticEvent](1000)
+              diagnostics <- SlidingDiagnostics.make[DiagnosticEvent](1000)
               testResult <- ZIO.scoped {
                               test(diagnostics)
                             }
@@ -1550,7 +1551,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         Kafka.embedded
       ) @@ withLiveClock @@ timeout(2.minutes) @@ TestAspect.timed
 
-  private final implicit class ConsumerDiagnosticsOps(private val event: ConsumerDiagnosticEvent) extends AnyVal {
+  private final implicit class ConsumerDiagnosticsOps(private val event: DiagnosticEvent) extends AnyVal {
     def isFinalizationEvent: Boolean = event match {
       case SubscriptionFinalized => true
       case RunloopFinalized      => true

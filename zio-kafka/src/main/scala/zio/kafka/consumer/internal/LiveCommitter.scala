@@ -3,11 +3,11 @@ import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallba
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.kafka.consumer.Consumer.{ CommitTimeout, ConsumerDiagnostics }
-import zio.kafka.consumer.ConsumerDiagnosticEvent
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
 import zio._
+import zio.kafka.consumer.diagnostics.DiagnosticEvent
 
 import java.util.{ Map => JavaMap }
 import scala.collection.mutable
@@ -40,7 +40,7 @@ private[consumer] final class LiveCommitter(
         startTime = java.lang.System.nanoTime()
         _ <- commitQueue.offer(Commit(startTime, offsets, p))
         _ <- onCommitAvailable
-        _ <- diagnostics.emit(ConsumerDiagnosticEvent.Commit.Started(offsets))
+        _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
         _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
         endTime = java.lang.System.nanoTime()
         latency = (endTime - startTime).nanoseconds
@@ -106,7 +106,7 @@ private[consumer] final class LiveCommitter(
         } yield ()
       )
       .zipLeft(ZIO.foreachDiscard(commits)(_.cont.done(Exit.unit)))
-      .tap(offsetsWithMetaData => diagnostics.emit(ConsumerDiagnosticEvent.Commit.Success(offsetsWithMetaData)))
+      .tap(offsetsWithMetaData => diagnostics.emit(DiagnosticEvent.Commit.Success(offsetsWithMetaData)))
       .catchAllCause {
         case Cause.Fail(_: RebalanceInProgressException, _) =>
           for {
@@ -116,7 +116,7 @@ private[consumer] final class LiveCommitter(
           } yield ()
         case c =>
           ZIO.foreachDiscard(commits)(_.cont.done(Exit.fail(c.squash))) <* diagnostics.emit(
-            ConsumerDiagnosticEvent.Commit.Failure(offsets, c.squash)
+            DiagnosticEvent.Commit.Failure(offsets, c.squash)
           )
       }
       .ignore

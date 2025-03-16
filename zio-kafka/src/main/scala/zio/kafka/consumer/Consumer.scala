@@ -8,6 +8,7 @@ import org.apache.kafka.clients.consumer.{
 }
 import org.apache.kafka.common._
 import zio._
+import zio.kafka.consumer.diagnostics.DiagnosticEvent
 import zio.kafka.consumer.internal.{ ConsumerAccess, RunloopAccess }
 import zio.kafka.diagnostics.Diagnostics
 import zio.kafka.diagnostics.internal.ConcurrentDiagnostics
@@ -179,11 +180,11 @@ trait Consumer {
 
 object Consumer {
 
-  type ConsumerDiagnostics = Diagnostics[ConsumerDiagnosticEvent]
+  /** A callback for consumer diagnostic events. */
+  type ConsumerDiagnostics = zio.kafka.diagnostics.Diagnostics[DiagnosticEvent]
 
-  case object NoDiagnostics extends ConsumerDiagnostics {
-    override def emit(event: => ConsumerDiagnosticEvent): UIO[Unit] = ZIO.unit
-  }
+  /** A diagnostics implementation that does nothing. */
+  val NoDiagnostics: ConsumerDiagnostics = zio.kafka.diagnostics.Diagnostics.noOp
 
   case object CommitTimeout extends RuntimeException("Commit timeout") with NoStackTrace
 
@@ -208,7 +209,7 @@ object Consumer {
    */
   def make(
     settings: ConsumerSettings,
-    diagnostics: ConsumerDiagnostics = NoDiagnostics
+    diagnostics: ConsumerDiagnostics = Diagnostics.noOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
       wrappedDiagnostics <- makeConcurrentDiagnostics(diagnostics)
@@ -249,7 +250,7 @@ object Consumer {
     javaConsumer: JConsumer[Array[Byte], Array[Byte]],
     settings: ConsumerSettings,
     access: Semaphore,
-    diagnostics: ConsumerDiagnostics = NoDiagnostics
+    diagnostics: ConsumerDiagnostics = Diagnostics.noOp
   ): ZIO[Scope, Throwable, Consumer] =
     for {
       wrappedDiagnostics <- makeConcurrentDiagnostics(diagnostics)
@@ -350,8 +351,8 @@ object Consumer {
   }
 
   private def makeConcurrentDiagnostics(diagnostics: ConsumerDiagnostics): ZIO[Scope, Nothing, ConsumerDiagnostics] =
-    if (diagnostics == NoDiagnostics) ZIO.succeed(diagnostics)
-    else ConcurrentDiagnostics.make(diagnostics, ConsumerDiagnosticEvent.ConsumerFinalized)
+    if (diagnostics == Diagnostics.noOp) ZIO.succeed(diagnostics)
+    else ConcurrentDiagnostics.make(diagnostics, DiagnosticEvent.ConsumerFinalized)
 
 }
 

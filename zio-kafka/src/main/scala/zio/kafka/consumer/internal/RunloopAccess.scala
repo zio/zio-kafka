@@ -4,16 +4,11 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.{
-  ConsumerDiagnosticEvent,
-  ConsumerSettings,
-  InvalidSubscriptionUnion,
-  OffsetBatch,
-  Subscription
-}
+import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, OffsetBatch, Subscription }
 import zio.stream.{ Stream, Take, UStream, ZStream }
 import zio._
-import zio.kafka.consumer.Consumer.{ ConsumerDiagnostics, NoDiagnostics }
+import zio.kafka.consumer.Consumer.ConsumerDiagnostics
+import zio.kafka.consumer.diagnostics.DiagnosticEvent
 import zio.kafka.diagnostics.Diagnostics
 
 private[internal] sealed trait RunloopState
@@ -68,7 +63,7 @@ private[consumer] final class RunloopAccess private (
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
              withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription)) <*
-               diagnostics.emit(ConsumerDiagnosticEvent.SubscriptionFinalized)
+               diagnostics.emit(DiagnosticEvent.SubscriptionFinalized)
            }
     } yield stream
 
@@ -83,7 +78,7 @@ private[consumer] object RunloopAccess {
   def make(
     settings: ConsumerSettings,
     consumerAccess: ConsumerAccess,
-    diagnostics: Diagnostics[ConsumerDiagnosticEvent] = NoDiagnostics
+    diagnostics: ConsumerDiagnostics = Diagnostics.noOp
   ): ZIO[Scope, Throwable, RunloopAccess] =
     for {
       maxPollInterval <- maxPollIntervalConfig(settings)

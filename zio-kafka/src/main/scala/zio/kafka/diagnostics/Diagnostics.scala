@@ -1,7 +1,21 @@
 package zio.kafka.diagnostics
 
-import zio.UIO
+import zio.{ UIO, ZIO }
 
-trait Diagnostics[DiagnosticEvent] {
+/**
+ * A callback interface for diagnostic events.
+ */
+trait Diagnostics[-DiagnosticEvent] {
   def emit(event: => DiagnosticEvent): UIO[Unit]
+}
+
+object Diagnostics {
+
+  /**
+   * A diagnostics implementation that does nothing.
+   */
+  val noOp: Diagnostics[Any] = new Diagnostics[Any] {
+    override def emit(event: => Any): UIO[Unit] = ZIO.unit
+  }
+
 }

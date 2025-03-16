@@ -6,6 +6,7 @@ import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationEx
 import zio._
 import zio.kafka.consumer.Consumer.{ ConsumerDiagnostics, OffsetRetrieval }
 import zio.kafka.consumer._
+import zio.kafka.consumer.diagnostics.DiagnosticEvent
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop._
@@ -223,7 +224,7 @@ private[consumer] final class Runloop private (
                      val providedTps         = polledRecords.partitions().asScala.toSet
                      val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-                     ConsumerDiagnosticEvent.Poll(
+                     DiagnosticEvent.Poll(
                        tpRequested = requestedPartitions,
                        tpWithData = providedTps,
                        tpWithoutData = requestedPartitions -- providedTps
@@ -304,7 +305,7 @@ private[consumer] final class Runloop private (
                                        lostTps.size
                                      )
                                 _ <- diagnostics.emit(
-                                       ConsumerDiagnosticEvent.Rebalance(
+                                       DiagnosticEvent.Rebalance(
                                          revoked = revokedTps,
                                          assigned = assignedTps,
                                          lost = lostTps,
@@ -590,7 +591,7 @@ object Runloop {
     partitionsHub: Hub[Take[Throwable, PartitionAssignment]]
   ): URIO[Scope, Runloop] =
     for {
-      _                  <- ZIO.addFinalizer(diagnostics.emit(ConsumerDiagnosticEvent.RunloopFinalized))
+      _                  <- ZIO.addFinalizer(diagnostics.emit(DiagnosticEvent.RunloopFinalized))
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
