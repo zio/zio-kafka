@@ -82,7 +82,9 @@ The examples above will keep processing records forever, or until the fiber is i
 
 zio-kafka also supports a _graceful shutdown_, where the fetching of records for the subscribed topics/partitions is stopped, the streams are ended and all downstream stages are completed, allowing in-flight records to be fully processed.
 
-Use the `with*Stream` variants of `plainStream`, `partitionedStream` and `partitionedAssignmentStream` for this purpose. These methods accept a parameter that describes the execution of a stream, which is gracefully ended when the method is interrupted.
+Use the `*StreamWithControl` variants of `plainStream`, `partitionedStream` and `partitionedAssignmentStream` for this purpose. These methods return a `StreamControl` object allowing you to stop fetching records and terminate the execution of the stream gracefully. 
+
+There is also the `Consumer.runWithGracefulShutdown` method which can gracefully terminate the stream upon fiber interruption, useful for a controlled shutdown when your application is terminated. 
 
 As of zio-kafka 3.0, this functionality is experimental. If no issues are reported and the API has good usability, it will eventually be marked as stable.
 
@@ -90,12 +92,13 @@ As of zio-kafka 3.0, this functionality is experimental. If no issues are report
 import zio.Console.printLine
 import zio.kafka.consumer._
 
-consumer.withPartitionedStream(
-  Subscription.topics("topic150"), 
-  Serde.string, 
-  Serde.string
-) { stream =>
-    stream.flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
+for {
+  control <- consumer.partitionedStreamWithControl(
+      Subscription.topics("topic150"),
+      Serde.string,
+      Serde.string
+    )
+  _ <- control.stream.flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
         partitionStream
           .tap(record => printLine(s"key: ${record.key}, value: ${record.value}"))
           .map(_.offset)
@@ -103,5 +106,5 @@ consumer.withPartitionedStream(
       .aggregateAsync(Consumer.offsetBatches)
       .mapZIO(_.commit)
       .runDrain
-}
+} yield ()
 ```
