@@ -270,7 +270,8 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
       )
     )
 
-  private implicit class RecordStreamOps(val s: ZStream[Any, Throwable, ByteArrayCommittableRecord]) extends AnyVal {
+  private implicit class RecordStreamOps(private val s: ZStream[Any, Throwable, ByteArrayCommittableRecord])
+      extends AnyVal {
     def completePromiseWhenOffsetSeen(
       offsetToSee: Long,
       offsetSeenPromise: Promise[Nothing, Unit]
@@ -289,7 +290,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
 
   }
 
-  private implicit class ZStreamTapChunks[R, E, A](val s: ZStream[R, E, A]) extends AnyVal {
+  private implicit class ZStreamTapChunks[R, E, A](private val s: ZStream[R, E, A]) extends AnyVal {
     def tapChunksZIO[R1 <: R, E1 >: E](f: Chunk[A] => ZIO[R1, E1, Any])(implicit trace: Trace): ZStream[R1, E1, A] =
       s.mapChunksZIO(chunk => f(chunk).as(chunk))
   }
