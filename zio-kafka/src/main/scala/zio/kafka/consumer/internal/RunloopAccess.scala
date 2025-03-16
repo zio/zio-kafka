@@ -70,8 +70,6 @@ private[consumer] final class RunloopAccess private (
            }
     } yield new StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]] {
       override def stream = partitionAssignmentStream.merge(ZStream.fromZIO(ended.await).as(Take.end))
-      override def pause  = ZIO.unit // TODO
-      override def resume = ZIO.unit // TODO
       override def end =
         withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription)) *> ended.succeed(()).ignore
 

@@ -36,5 +36,6 @@ object RunloopCommand {
       extends StreamCommand {
     @inline def succeed: UIO[Unit] = cont.succeed(()).unit
   }
+
   case object RemoveAllSubscriptions extends StreamCommand
 }
