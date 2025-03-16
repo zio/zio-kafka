@@ -117,7 +117,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
             _ <- streamControl.offerRecords(records)
 
             recordsPulledByStream <- Promise.make[Nothing, Unit]
-            committer             <- LiveCommitter.make(10.seconds, Diagnostics.NoOp, mockMetrics, ZIO.unit)
+            committer             <- LiveCommitter.make(10.seconds, NoDiagnostics, mockMetrics, ZIO.unit)
             _ <- streamControl.stream
                    .completePromiseWhenOffsetSeen(recordCount.toLong, recordsPulledByStream)
                    .tap(_ => ZIO.sleep(50.millis))
