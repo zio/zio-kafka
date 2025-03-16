@@ -129,6 +129,8 @@ trait Consumer {
    * The Scope provided to the returned effect controls the lifetime of the subscription. The subscription is
    * unsubscribed when the scope is ended. Calling [[StreamControl.end]] stops fetching data for the subscription
    * partitions but will not unsubscribe until the Scope is ended.
+   *
+   * EXPERIMENTAL API
    */
   def plainStreamWithControl[R, K, V](
     subscription: Subscription,
@@ -143,6 +145,8 @@ trait Consumer {
    * The Scope provided to the returned effect controls the lifetime of the subscription. The subscription is
    * unsubscribed when the scope is ended. Calling [[StreamControl.end]] stops fetching data for the subscription
    * partitions but will not unsubscribe until the Scope is ended.
+   *
+   * EXPERIMENTAL API
    */
   def partitionedStreamWithControl[R, K, V](
     subscription: Subscription,
@@ -160,6 +164,8 @@ trait Consumer {
    * The Scope provided to the returned effect controls the lifetime of the subscription. The subscription is
    * unsubscribed when the scope is ended. Calling [[StreamControl.end]] stops fetching data for the subscription
    * partitions but will not unsubscribe until the Scope is ended.
+   *
+   * EXPERIMENTAL API
    */
   def partitionedAssignmentStreamWithControl[R, K, V](
     subscription: Subscription,
