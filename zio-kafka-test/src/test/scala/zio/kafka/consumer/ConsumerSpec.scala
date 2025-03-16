@@ -503,8 +503,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           } yield assertCompletes
         }
       ),
-      suite("streamWithGracefulShutdown")(
-        test("runWithGracefulShutdown must end streams while still processing commits") {
+      suite("streamWithControl")(
+        test("StreamControl.end must end streams while still processing commits") {
           val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
           for {
             group                   <- randomGroup
@@ -521,39 +521,38 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                          commitTimeout = 2.seconds // Detect issues with commits earlier
                                        )
                            producer <- KafkaTestUtils.makeProducer
-                           fib <-
+                           control <-
                              consumer
-                               .withPartitionedStream[Any, String, String](
+                               .partitionedStreamWithControl[Any, String, String](
                                  Subscription.topics(topic),
                                  Serde.string,
                                  Serde.string
-                               ) { stream =>
-                                 stream
-                                   .flatMapPar(Int.MaxValue) { case (tp, partitionStream) =>
-                                     partitionStream.mapConcatZIO { record =>
-                                       for {
-                                         nr <- processedMessageOffsets
-                                                 .updateAndGet(
-                                                   _ :+ (tp -> record.offset.offset)
-                                                 )
-                                                 .map(_.size)
-                                         _ <- stop.succeed(()).when(nr == 10)
-                                       } yield Seq(record.offset)
-                                     }
-                                   }
-                                   .transduce(Consumer.offsetBatches)
-                                   .mapZIO(batch =>
-                                     ZIO.logDebug("Starting batch commit") *> batch.commit
-                                       .tapErrorCause(
-                                         ZIO.logErrorCause(
-                                           s"Error doing commit of batch ${batch.offsets}",
-                                           _
-                                         )
-                                       ) *> ZIO.logDebug("Commit done")
-                                   )
-                                   .runDrain
-                               }
-                               .forkScoped
+                               )
+                           fiber <- control.stream
+                                      .flatMapPar(Int.MaxValue) { case (tp, partitionStream) =>
+                                        partitionStream.mapConcatZIO { record =>
+                                          for {
+                                            nr <- processedMessageOffsets
+                                                    .updateAndGet(
+                                                      _ :+ (tp -> record.offset.offset)
+                                                    )
+                                                    .map(_.size)
+                                            _ <- stop.succeed(()).when(nr == 10)
+                                          } yield Seq(record.offset)
+                                        }
+                                      }
+                                      .transduce(Consumer.offsetBatches)
+                                      .mapZIO(batch =>
+                                        ZIO.logDebug("Starting batch commit") *> batch.commit
+                                          .tapErrorCause(
+                                            ZIO.logErrorCause(
+                                              s"Error doing commit of batch ${batch.offsets}",
+                                              _
+                                            )
+                                          ) *> ZIO.logDebug("Commit done")
+                                      )
+                                      .runDrain
+                                      .forkScoped
                            _ <- KafkaTestUtils.produceMany(producer, topic, kvs)
                            _ <- KafkaTestUtils
                                   .scheduledProduce(
@@ -563,7 +562,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                   )
                                   .runDrain
                                   .forkScoped
-                           _                <- stop.await *> fib.interrupt
+                           _                <- stop.await *> control.end *> fiber.join
                            processedOffsets <- processedMessageOffsets.get
                            latestProcessedOffsets =
                              processedOffsets.groupBy(_._1).map { case (tp, values) =>
@@ -599,20 +598,20 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               consumed0 <- ZIO.scoped {
                              for {
                                consumed <- Ref.make(0L)
-                               fiber <-
+                               control <-
                                  consumer
-                                   .withPlainStream(
+                                   .plainStreamWithControl(
                                      Subscription.manual(topic -> 0),
                                      Serde.string,
                                      Serde.string
-                                   ) { stream =>
-                                     stream
-                                       .tap(_ => consumed.update(_ + 1))
-                                       .runDrain
-                                   }
-                                   .forkScoped
+                                   )
+                               fiber <- control.stream
+                                          .tap(_ => consumed.update(_ + 1))
+                                          .runDrain
+                                          .forkScoped
                                _         <- ZIO.sleep(200.millis)
-                               _         <- fiber.interrupt
+                               _         <- control.end
+                               _         <- fiber.join
                                consumed0 <- consumed.get
                                _         <- ZIO.logDebug(s"consumed0: $consumed0")
                              } yield consumed0
@@ -660,45 +659,41 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             _        <- KafkaTestUtils.produceMany(producer, topic2, kvs)
             _ <- ZIO.scoped {
                    for {
-                     stream1Started     <- Promise.make[Nothing, Unit]
-                     stream1Done        <- Promise.make[Nothing, Unit]
-                     stream1Interrupted <- Promise.make[Nothing, Unit]
-                     stream1Fib <- ZIO.logAnnotate("stream", "1") {
-                                     (consumer
-                                       .withPlainStream(
-                                         Subscription.topics(topic1),
-                                         Serde.string,
-                                         Serde.string
-                                       ) { stream =>
-                                         stream
-                                           .tap(_ => stream1Started.succeed(()))
-                                           .zipWithIndex
-                                           .map(_._2)
-                                           .runDrain
-                                       }
-                                       .tapErrorCause(c => ZIO.logErrorCause("Stream 1 failed", c))
-                                       .ensuring(stream1Done.succeed(())))
-                                       .forkScoped
-                                   }
+                     stream1Started <- Promise.make[Nothing, Unit]
+                     stream1Done    <- Promise.make[Nothing, Unit]
+//                     stream1Interrupted <- Promise.make[Nothing, Unit]
+                     stream1Control <- consumer
+                                         .plainStreamWithControl(
+                                           Subscription.topics(topic1),
+                                           Serde.string,
+                                           Serde.string
+                                         )
+                     stream1Fiber <- ZIO.logAnnotate("stream", "1") {
+                                       stream1Control.stream
+                                         .tap(_ => stream1Started.succeed(()))
+                                         .zipWithIndex
+                                         .map(_._2)
+                                         .runDrain
+                                         .tapErrorCause(c => ZIO.logErrorCause("Stream 1 failed", c))
+                                         .ensuring(stream1Done.succeed(()))
+                                         .forkScoped
+                                     }
                      _ <- stream1Started.await
+                     stream2Control <- consumer
+                                         .plainStreamWithControl(
+                                           Subscription.topics(topic2),
+                                           Serde.string,
+                                           Serde.string
+                                         )
                      _ <- ZIO.logAnnotate("stream", "2") {
-                            consumer
-                              .withPlainStream(
-                                Subscription.topics(topic2),
-                                Serde.string,
-                                Serde.string
-                              ) { stream =>
-                                stream.zipWithIndex
-                                  .map(_._2)
-                                  .tap(count =>
-                                    (stream1Fib.interrupt <* stream1Interrupted.succeed(())).when(count == 4)
-                                  )
-                                  .runDrain
-                              }
+                            stream2Control.stream.zipWithIndex
+                              .map(_._2)
+                              .tap(count => (stream1Control.end).when(count == 4))
+                              .runDrain
                               .tapErrorCause(c => ZIO.logErrorCause("Stream 2 failed", c))
                               .forkScoped
                           }
-                     _ <- stream1Interrupted.await
+                     _ <- stream1Fiber.await
                      _ <- KafkaTestUtils.produceMany(producer, topic1, kvs)
                      _ <- stream1Done.await
                             .tapErrorCause(c => ZIO.logErrorCause("Stream 1 await failed", c))
@@ -1204,49 +1199,48 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         }
                         .runDrain
                         .fork
-              _         <- ZIO.logDebug("Starting consumer 1")
-              c1        <- makeConsumer(clientId1, groupId, rebalanceSafeCommits = true)
-              c1Sleep   <- Ref.make[Int](3)
-              c1Started <- Promise.make[Nothing, Unit]
-              c1Keys    <- Ref.make(Chunk.empty[String])
+              _              <- ZIO.logDebug("Starting consumer 1")
+              c1             <- makeConsumer(clientId1, groupId, rebalanceSafeCommits = true)
+              c1Sleep        <- Ref.make[Int](3)
+              c1Started      <- Promise.make[Nothing, Unit]
+              c1Keys         <- Ref.make(Chunk.empty[String])
+              stream1Control <- c1.plainStreamWithControl(subscription, Serde.string, Serde.string)
+
               fib1 <-
                 ZIO
                   .logAnnotate("consumer", "1") {
                     // When the stream ends, the topic subscription ends as well. Because of that the consumer
                     // shuts down and commits are no longer possible. Therefore, we signal the second consumer in
                     // such a way that it doesn't close the stream.
-                    c1
-                      .withPlainStream(subscription, Serde.string, Serde.string) { stream =>
-                        stream
-                          .tap(record =>
-                            ZIO.logDebug(
-                              s"Received record with offset ${record.partition}:${record.offset.offset} and key ${record.key}"
-                            )
-                          )
-                          .tap { record =>
-                            // Signal consumer 2 can start when a record is seen for every partition.
-                            for {
-                              keys <- c1Keys.updateAndGet(_ :+ record.key)
-                              _    <- c1Started.succeed(()).when(keys.map(_.split('-')(1)).toSet.size == partitionCount)
-                            } yield ()
-                          }
-                          // Buffer so that the above can run ahead of the below, this is important;
-                          // we want consumer 2 to start before consumer 1 commits.
-                          .buffer(partitionCount)
-                          .mapZIO { record =>
-                            for {
-                              s <- c1Sleep.get
-                              _ <- ZIO.sleep(s.seconds)
-                              _ <-
-                                ZIO.logDebug(
-                                  s"Committing offset ${record.partition}:${record.offset.offset} for key ${record.key}"
-                                )
-                              _ <- record.offset.commit
-                            } yield record.key
-                          }
-                          .runCollect
-                          .map(_.toSet)
+                    stream1Control.stream
+                      .tap(record =>
+                        ZIO.logDebug(
+                          s"Received record with offset ${record.partition}:${record.offset.offset} and key ${record.key}"
+                        )
+                      )
+                      .tap { record =>
+                        // Signal consumer 2 can start when a record is seen for every partition.
+                        for {
+                          keys <- c1Keys.updateAndGet(_ :+ record.key)
+                          _    <- c1Started.succeed(()).when(keys.map(_.split('-')(1)).toSet.size == partitionCount)
+                        } yield ()
                       }
+                      // Buffer so that the above can run ahead of the below, this is important;
+                      // we want consumer 2 to start before consumer 1 commits.
+                      .buffer(partitionCount)
+                      .mapZIO { record =>
+                        for {
+                          s <- c1Sleep.get
+                          _ <- ZIO.sleep(s.seconds)
+                          _ <-
+                            ZIO.logDebug(
+                              s"Committing offset ${record.partition}:${record.offset.offset} for key ${record.key}"
+                            )
+                          _ <- record.offset.commit
+                        } yield record.key
+                      }
+                      .runCollect
+                      .map(_.toSet)
                   }
                   .fork
               _  <- c1Started.await
@@ -1267,7 +1261,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               c2Keys: Set[String] <- fib2.join
               _                   <- ZIO.logDebug("Consumer 2 ready")
               _                   <- c1Sleep.set(0)
-              _                   <- fib1.interrupt
+              _                   <- stream1Control.end
+              _                   <- fib1.join
               c1Keys              <- c1Keys.get
               _                   <- ZIO.logDebug("Consumer 1 ready")
               _                   <- pFib.interrupt
@@ -1344,48 +1339,44 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                               case _ => ZIO.unit
                             }
                           }
-          c1        <- makeConsumer(clientId1, groupId, rebalanceSafeCommits = true, c1Diagnostics)
-          c1Started <- Promise.make[Nothing, Unit]
-          c1Offsets <- Ref.make(Chunk.empty[Offset])
+          c1             <- makeConsumer(clientId1, groupId, rebalanceSafeCommits = true, c1Diagnostics)
+          c1Started      <- Promise.make[Nothing, Unit]
+          c1Offsets      <- Ref.make(Chunk.empty[Offset])
+          stream1Control <- c1.plainStreamWithControl(subscription, Serde.string, Serde.string)
           c1Fib <-
             ZIO
               .logAnnotate("consumer", "1") {
                 // When the stream ends, the topic subscription ends as well. Because of that the consumer
                 // shuts down and commits are no longer possible. Therefore, we signal the second consumer in
                 // such a way that it doesn't close the stream.
-                c1
-                  .withPlainStream(subscription, Serde.string, Serde.string) { stream =>
-                    stream.tap { record =>
-                      for {
-                        _ <-
-                          ZIO.logDebug(
-                            s"Received record with offset ${record.partition}:${record.offset.offset} and key ${record.key}"
-                          )
-                        // Signal that consumer 2 can start when a record was seen for every partition.
-                        offsets <- c1Offsets.updateAndGet(_ :+ record.offset)
-                        _       <- c1Started.succeed(()).when(offsets.map(_.partition).toSet.size == partitionCount)
-                        // Register an external commit (which we're not actually doing 😀)
-                        _ <- c1.registerExternalCommits(OffsetBatch(record.offset)).unit
-                      } yield ()
-                    }.runDrain
-                  }
+                stream1Control.stream.tap { record =>
+                  for {
+                    _ <-
+                      ZIO.logDebug(
+                        s"Received record with offset ${record.partition}:${record.offset.offset} and key ${record.key}"
+                      )
+                    // Signal that consumer 2 can start when a record was seen for every partition.
+                    offsets <- c1Offsets.updateAndGet(_ :+ record.offset)
+                    _       <- c1Started.succeed(()).when(offsets.map(_.partition).toSet.size == partitionCount)
+                    // Register an external commit (which we're not actually doing 😀)
+                    _ <- c1.registerExternalCommits(OffsetBatch(record.offset)).unit
+                  } yield ()
+                }.runDrain
               }
               .fork
           _                  <- c1Started.await
           _                  <- ZIO.logDebug("Starting consumer 2")
           c2                 <- makeConsumer(clientId2, groupId, rebalanceSafeCommits = false, Diagnostics.NoOp)
           rebalanceStartTime <- Clock.instant
+          stream2Control     <- c2.plainStreamWithControl(subscription, Serde.string, Serde.string)
           c2Fib <- ZIO
                      .logAnnotate("consumer", "2") {
-                       c2
-                         .withPlainStream(subscription, Serde.string, Serde.string) { stream =>
-                           stream.tap(msg => ZIO.logDebug(s"Received ${msg.key}")).runDrain
-                         }
+                       stream2Control.stream.tap(msg => ZIO.logDebug(s"Received ${msg.key}")).runDrain
                      }
                      .fork
           _                <- ZIO.logDebug("Waiting for rebalance to end")
           rebalanceEndTime <- rebalanceEndTimePromise.await
-          _                <- c1Fib.interrupt *> c2Fib.interrupt
+          _                <- stream1Control.end *> stream2Control.end *> c1Fib.join *> c2Fib.join
           rebalanceDuration = Duration
                                 .fromInterval(rebalanceStartTime, rebalanceEndTime)
                                 .truncatedTo(ChronoUnit.SECONDS)

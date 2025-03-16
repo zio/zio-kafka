@@ -60,18 +60,20 @@ private[consumer] final class RunloopAccess private (
     subscription: Subscription
   ): ZIO[Scope, InvalidSubscriptionUnion, StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]]] =
     for {
-      end    <- Promise.make[Nothing, Unit] // For ending the stream of partition streams
-      stream <- ZStream.fromHubScoped(partitionHub)
+      ended                     <- Promise.make[Nothing, Unit] // For ending the stream of partition streams
+      partitionAssignmentStream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
              withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).orDie) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
-    } yield StreamControl(
-      stream = stream.merge(ZStream.fromZIO(end.await).as(Take.end)),
-      stop = withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription)) *> end.succeed(()).ignore
-    )
+    } yield new StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]] {
+      override def stream = partitionAssignmentStream.merge(ZStream.fromZIO(ended.await).as(Take.end))
+      override def end =
+        withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription)) *> ended.succeed(()).ignore
+
+    }
 
   def registerExternalCommits(externallyCommittedOffsets: OffsetBatch): Task[Unit] =
     withRunloopZIO(requireRunning = true)(_.registerExternalCommits(externallyCommittedOffsets))
