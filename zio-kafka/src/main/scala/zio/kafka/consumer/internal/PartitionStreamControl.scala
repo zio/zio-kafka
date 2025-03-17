@@ -40,6 +40,7 @@ final class PartitionStreamControl private (
   dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
   interruptionPromise: Promise[Throwable, Nothing],
   val completedPromise: Promise[Nothing, Option[Offset]],
+  hasEndedRef: Ref[Boolean],
   queueInfoRef: Ref[QueueInfo],
   maxStreamPullInterval: Duration
 ) extends PartitionStream {
@@ -51,17 +52,20 @@ final class PartitionStreamControl private (
   )
 
   /** Offer new data for the stream to process. Should be called on every poll, also when `data.isEmpty` */
-  private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Nothing, Unit] =
-    if (data.isEmpty) {
-      queueInfoRef.update(_.withEmptyPoll)
-    } else {
-      for {
-        now <- Clock.nanoTime
-        newPullDeadline = now + maxStreamPullIntervalNanos
-        _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
-        _ <- dataQueue.offer(Take.chunk(data))
-      } yield ()
-    }
+  private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): ZIO[Any, Throwable, Unit] =
+    ZIO.ifZIO(hasEnded)(
+      onTrue = ZIO.fail(new IllegalStateException("Partition stream has already ended, cannot offer more record")),
+      onFalse = if (data.isEmpty) {
+        queueInfoRef.update(_.withEmptyPoll)
+      } else {
+        for {
+          now <- Clock.nanoTime
+          newPullDeadline = now + maxStreamPullIntervalNanos
+          _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
+          _ <- dataQueue.offer(Take.chunk(data))
+        } yield ()
+      }
+    )
 
   def queueSize: UIO[Int] = queueInfoRef.get.map(_.size)
 
@@ -107,16 +111,25 @@ final class PartitionStreamControl private (
   private[internal] def end: ZIO[Any, Nothing, Unit] =
     logAnnotate {
       ZIO.logDebug(s"Partition ${tp.toString} ending") *>
-        dataQueue.offer(Take.end).unit
+        dataQueue.offer(Take.end).unit *> hasEndedRef.set(true)
     }
 
   /** Returns true when the stream is done. */
   private[internal] def isCompleted: ZIO[Any, Nothing, Boolean] =
     completedPromise.isDone
 
-  /** Returns true when the stream is running. */
+  /**
+   * Returns true when the stream is running (the finalizer has not yet run). The stream is still considered running
+   * after `end` is called but before the stream has finalized
+   */
   private[internal] def isRunning: ZIO[Any, Nothing, Boolean] =
     isCompleted.negate
+
+  /**
+   * Returns true after `end` has been called.
+   */
+  private[internal] def hasEnded: ZIO[Any, Nothing, Boolean] =
+    hasEndedRef.get
 
   private[internal] val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
     (tp, stream)
@@ -146,6 +159,7 @@ object PartitionStreamControl {
       dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
       now                 <- Clock.nanoTime
       queueInfo           <- Ref.make(QueueInfo(now, 0, None, 0))
+      hasEndedRef         <- Ref.make(false)
       requestAndAwaitData =
         for {
           _ <- requestData
@@ -181,6 +195,7 @@ object PartitionStreamControl {
       dataQueue,
       interruptionPromise,
       completedPromise,
+      hasEndedRef,
       queueInfo,
       maxStreamPullInterval
     )

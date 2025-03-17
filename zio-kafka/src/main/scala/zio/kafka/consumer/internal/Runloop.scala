@@ -121,7 +121,7 @@ private[consumer] final class Runloop private (
     pendingRequests: Chunk[RunloopCommand.Request],
     ignoreRecordsForTps: Set[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
-  ): UIO[Runloop.FulfillResult] = {
+  ): Task[Runloop.FulfillResult] = {
     type Record = CommittableRecord[Array[Byte], Array[Byte]]
 
     // The most efficient way to get the records from [[ConsumerRecords]] per
@@ -153,7 +153,7 @@ private[consumer] final class Runloop private (
                        consumerGroupMetadata = consumerGroupMetadata
                      )
                  }
-                 streamControl.offerRecords(builder.result())
+                 streamControl.offerRecords(builder.result()).unlessZIO(streamControl.hasEnded)
                }
              }
       } yield fulfillResult
@@ -209,7 +209,7 @@ private[consumer] final class Runloop private (
 
   private def handlePoll(state: State): Task[State] = {
     for {
-      runningStreamsBeforePoll <- ZIO.filter(state.assignedStreams)(_.isRunning)
+      runningStreamsBeforePoll <- ZIO.filterNot(state.assignedStreams)(_.hasEnded)
       partitionsToFetch        <- settings.fetchStrategy.selectPartitionsToFetch(runningStreamsBeforePoll)
       pendingCommitCount       <- committer.pendingCommitCount
       _ <- ZIO.logDebug(
@@ -416,10 +416,13 @@ private[consumer] final class Runloop private (
     cmd match {
       case req: RunloopCommand.Request =>
         // Ignore request from streams that were ended or lost.
-        ZIO.succeed(
-          if (state.assignedStreams.exists(_.tp == req.tp)) state.addRequest(req)
-          else state
-        )
+        state.assignedStreams.find(_.tp == req.tp) match {
+          case Some(streamControl) =>
+            streamControl.hasEnded.map { hasEnded =>
+              if (hasEnded) state else state.addRequest(req)
+            }
+          case None => ZIO.succeed(state)
+        }
       case cmd @ RunloopCommand.AddSubscription(newSubscription, _) =>
         state.subscriptionState match {
           case SubscriptionState.NotSubscribed =>
