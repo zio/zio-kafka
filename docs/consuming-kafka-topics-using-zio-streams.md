@@ -92,19 +92,21 @@ As of zio-kafka 3.0, this functionality is experimental. If no issues are report
 import zio.Console.printLine
 import zio.kafka.consumer._
 
-for {
-  control <- consumer.partitionedStreamWithControl(
-      Subscription.topics("topic150"),
-      Serde.string,
-      Serde.string
-    )
-  _ <- control.stream.flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
-        partitionStream
-          .tap(record => printLine(s"key: ${record.key}, value: ${record.value}"))
-          .map(_.offset)
-      }
-      .aggregateAsync(Consumer.offsetBatches)
-      .mapZIO(_.commit)
-      .runDrain
-} yield ()
+ZIO.scoped {
+    for {
+      control <- consumer.partitionedStreamWithControl(
+          Subscription.topics("topic150"),
+          Serde.string,
+          Serde.string
+        )
+      _ <- control.stream.flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
+            partitionStream
+              .tap(record => printLine(s"key: ${record.key}, value: ${record.value}"))
+              .map(_.offset)
+          }
+          .aggregateAsync(Consumer.offsetBatches)
+          .mapZIO(_.commit)
+          .runDrain
+    } yield ()
+}
 ```
