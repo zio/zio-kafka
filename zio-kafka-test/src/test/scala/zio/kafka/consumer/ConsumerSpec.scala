@@ -577,6 +577,52 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             committedOffsets.get(tp).flatMap(_.map(_.offset())).contains(offset + 1)
           })
         } @@ nonFlaky(10),
+        test("StreamControl.end can be called more than once") {
+          val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+          for {
+            group  <- randomGroup
+            client <- randomClient
+            topic  <- randomTopic
+            _      <- KafkaTestUtils.createCustomTopic(topic, partitionCount = 5)
+            _ <- ZIO.scoped {
+                   for {
+                     messagesReceived <- Promise.make[Nothing, Unit]
+                     consumer <- KafkaTestUtils.makeConsumer(
+                                   client,
+                                   Some(group),
+                                   commitTimeout = 2.seconds // Detect issues with commits earlier
+                                 )
+                     producer <- KafkaTestUtils.makeProducer
+                     control <-
+                       consumer
+                         .partitionedStreamWithControl[Any, String, String](
+                           Subscription.topics(topic),
+                           Serde.string,
+                           Serde.string
+                         )
+                     fiber <- control.stream
+                                .flatMapPar(Int.MaxValue) { case (tp @ _, partitionStream) =>
+                                  partitionStream.tap(_ => messagesReceived.succeed(()))
+                                }
+                                .runDrain
+                                .forkScoped
+                     _ <- KafkaTestUtils.produceMany(producer, topic, kvs)
+                     _ <- KafkaTestUtils
+                            .scheduledProduce(
+                              producer,
+                              topic,
+                              Schedule.fixed(500.millis).jittered
+                            )
+                            .runDrain
+                            .forkScoped
+                     _ <- messagesReceived.await
+                     _ <- control.end
+                     _ <- control.end
+                     _ <- fiber.join
+                   } yield ()
+                 }
+          } yield assertCompletes
+        },
         test(
           "it's possible to start a new consumption session from a Consumer that had a consumption session stopped previously"
         ) {
