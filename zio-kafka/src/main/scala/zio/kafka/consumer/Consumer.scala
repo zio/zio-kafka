@@ -130,7 +130,8 @@ trait Consumer {
    * unsubscribed when the scope is ended. Calling [[StreamControl.end]] stops fetching data for the subscription
    * partitions but will not unsubscribe until the Scope is ended.
    *
-   * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any zio-kafka version.
+   * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any
+   * zio-kafka version.
    */
   def plainStreamWithControl[R, K, V](
     subscription: Subscription,
@@ -146,7 +147,8 @@ trait Consumer {
    * unsubscribed when the scope is ended. Calling [[StreamControl.end]] stops fetching data for the subscription
    * partitions but will not unsubscribe until the Scope is ended.
    *
-   * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any zio-kafka version.
+   * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any
+   * zio-kafka version.
    */
   def partitionedStreamWithControl[R, K, V](
     subscription: Subscription,
@@ -165,7 +167,8 @@ trait Consumer {
    * unsubscribed when the scope is ended. Calling [[StreamControl.end]] stops fetching data for the subscription
    * partitions but will not unsubscribe until the Scope is ended.
    *
-   * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any zio-kafka version.
+   * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any
+   * zio-kafka version.
    */
   def partitionedAssignmentStreamWithControl[R, K, V](
     subscription: Subscription,
@@ -404,7 +407,8 @@ object Consumer {
    * This is useful for running streams from within your application's Main class, such that streams are cleanly stopped
    * when the application is shutdown (for example by your container runtime).
    *
-   * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any zio-kafka version.
+   * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any
+   * zio-kafka version.
    *
    * @param streamControl
    *   Result of one of the Consumer's methods returning a [[StreamControl]]
