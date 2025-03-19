@@ -1,7 +1,6 @@
 package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.internal.Committer.CommitOffsets
@@ -46,7 +45,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
       test("should track assigned, revoked and lost partitions") {
         for {
           lastEvent <- Ref.Synchronized.make(RebalanceCoordinator.RebalanceEvent.None)
-          consumer = new BinaryMockConsumer(AutoOffsetResetStrategy.LATEST.toString) {}
+          consumer = new BinaryMockConsumer("latest") {}
           tp       = new TopicPartition("topic", 0)
           tp2      = new TopicPartition("topic", 1)
           tp3      = new TopicPartition("topic", 2)
@@ -82,7 +81,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
       test("should end streams for revoked and lost partitions") {
         for {
           lastEvent <- Ref.Synchronized.make(RebalanceCoordinator.RebalanceEvent.None)
-          consumer = new BinaryMockConsumer(AutoOffsetResetStrategy.LATEST.toString) {}
+          consumer = new BinaryMockConsumer("latest") {}
           tp       = new TopicPartition("topic", 0)
           tp2      = new TopicPartition("topic", 1)
           tp3      = new TopicPartition("topic", 2)
@@ -155,7 +154,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
           // - Assert that onRevoked takes its time, waiting for the configured max rebalance duration
           for {
             lastEvent <- Ref.Synchronized.make(RebalanceCoordinator.RebalanceEvent.None)
-            consumer = new BinaryMockConsumer(AutoOffsetResetStrategy.LATEST.toString) {}
+            consumer = new BinaryMockConsumer("latest") {}
             tp       = new TopicPartition("topic", 0)
             streamControl <- makeStreamControl(tp)
             recordCount = 3
@@ -196,7 +195,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
           // - Assert that onRevoked completes immediately, meaning that it does not wait for the stream to commit
           for {
             lastEvent <- Ref.Synchronized.make(RebalanceCoordinator.RebalanceEvent.None)
-            consumer = new BinaryMockConsumer(AutoOffsetResetStrategy.LATEST.toString) {}
+            consumer = new BinaryMockConsumer("latest") {}
             tp       = new TopicPartition("topic", 0)
             streamControl <- makeStreamControl(tp)
             recordCount = 3
@@ -315,7 +314,7 @@ abstract private class MockCommitter extends Committer {
 private class CommitTrackingMockConsumer(
   runtime: Runtime[Any],
   lastCommittedOffsets: Ref[Map[TopicPartition, Long]]
-) extends MockConsumer[Array[Byte], Array[Byte]](AutoOffsetResetStrategy.LATEST.toString) {
+) extends MockConsumer[Array[Byte], Array[Byte]]("latest") {
   override def commitAsync(
     offsets: JavaMap[TopicPartition, OffsetAndMetadata],
     callback: OffsetCommitCallback
