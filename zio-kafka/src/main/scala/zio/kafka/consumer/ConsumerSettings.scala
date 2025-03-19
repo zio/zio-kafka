@@ -85,6 +85,12 @@ final case class ConsumerSettings(
   def withCloseTimeout(timeout: Duration): ConsumerSettings =
     copy(closeTimeout = timeout)
 
+  /**
+   * The maximum time that zio-kafka waits for a commit to complete.
+   *
+   * Note: this configuration also affects the duration in which records should be processed when `rebalanceSafeCommits`
+   * is enabled.
+   */
   def withCommitTimeout(timeout: Duration): ConsumerSettings =
     copy(commitTimeout = timeout)
 
@@ -220,7 +226,10 @@ final case class ConsumerSettings(
    * messages until the revoked streams are ready committing.
    *
    * Rebalances are held up for at most 3/5 of `maxPollInterval` (see [[withMaxPollInterval]]), by default this
-   * calculates to 3 minutes. See [[#withMaxRebalanceDuration]] to change the default.
+   * calculates to 3 minutes but this value can be changed with [[#withMaxRebalanceDuration]]. In this time your program
+   * should be able to process up to [[withMaxPollRecords maxPollRecords]] records, including commits! Commits take time
+   * as well. Zio-kafka assumes [[#withCommitTimeout]] as worse case (defaults to 15 seconds). Therefore, with all
+   * default settings, your program has 2 minutes and 45 seconds to process and commit the records.
    *
    * External commits (that is, commits to an external system, e.g. a relational database) must be registered to the
    * consumer with [[Consumer.registerExternalCommits]].
