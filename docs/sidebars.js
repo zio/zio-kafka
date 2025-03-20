@@ -12,6 +12,7 @@ const sidebars = {
         "partition-assignment-and-offset-retrieval",
         "metrics",
         "consumer-tuning",
+        "avoiding-chunk-breakers",
         "preventing-duplicates",
         "sharing-consumer",
         "serialization-and-deserialization",

@@ -26,8 +26,7 @@ and value from the `CommittableRecord` and print them to the console.
 
 :::caution
 Some stream operators (like `tap` and `mapZIO`) break the chunking structure of the stream which heavily reduces
-throughput. See [a warning about mapZIO](serialization-and-deserialization.md#a-warning-about-mapzio) for more
-information and alternatives.
+throughput. See [avoiding chunk-breakers](avoiding-chunk-breakers.md) for more information and alternatives.
 :::
 
 (3) Here we get the offset of the record, so we now have a stream of offsets.
