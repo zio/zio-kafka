@@ -13,8 +13,7 @@ import zio.kafka.admin.AdminClient.{
   ConfigResource,
   ConfigResourceType,
   ConsumerGroupDescription,
-  ConsumerGroupState,
-  KafkaConfig,
+  GroupState,
   ListConsumerGroupOffsetsSpec,
   ListConsumerGroupsOptions,
   OffsetAndMetadata,
@@ -280,7 +279,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           groupId   <- randomGroup
           _         <- consumeNoop(topicName, groupId, "consumer1", Some("instance1")).fork
           _         <- getStableConsumerGroupDescription(client, groupId)
-          list      <- client.listConsumerGroups(Some(ListConsumerGroupsOptions(Set(ConsumerGroupState.Stable))))
+          list      <- client.listConsumerGroups(Some(ListConsumerGroupsOptions(Set(GroupState.Stable))))
         } yield assert(list)(exists(hasField("groupId", _.groupId, equalTo(groupId))))
       },
       test("list consumer group offsets") {
@@ -518,76 +517,6 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           assert(deleteResult)(equalTo(Map((configResource, ()))))
         }
       },
-      test("alter configs") {
-        for {
-          topicName <- randomTopic
-          client    <- KafkaTestUtils.makeAdminClient
-          _         <- client.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
-
-          configEntry    = new ConfigEntry("retention.ms", "1")
-          configResource = ConfigResource(ConfigResourceType.Topic, topicName)
-
-          kafkaConfig = KafkaConfig(Map(topicName -> configEntry))
-          _                        <- client.alterConfigs(Map(configResource -> kafkaConfig), AlterConfigsOptions())
-          updatedConfigsWithUpdate <- client.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
-
-          emptyKafkaConfig = KafkaConfig(Map.empty[String, ConfigEntry])
-          _ <- client.alterConfigs(Map(configResource -> emptyKafkaConfig), AlterConfigsOptions())
-          updatedConfigsWithDelete <- client.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
-        } yield {
-          val updatedRetentionMsConfig =
-            updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
-          val deleteRetentionMsConfig =
-            updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
-          assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
-          assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
-          assert(deleteRetentionMsConfig.map(_.value()))(isSome(equalTo("604800000"))) &&
-          assert(deleteRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DEFAULT_CONFIG)))
-        }
-      },
-      test("alter configs async") {
-        for {
-          topicName <- randomTopic
-          client    <- KafkaTestUtils.makeAdminClient
-          _         <- client.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
-
-          configEntry    = new ConfigEntry("retention.ms", "1")
-          configResource = ConfigResource(ConfigResourceType.Topic, topicName)
-
-          kafkaConfig = KafkaConfig(Map(topicName -> configEntry))
-          setResult <-
-            client
-              .alterConfigsAsync(Map(configResource -> kafkaConfig), AlterConfigsOptions())
-              .flatMap { configsAsync =>
-                ZIO.foreachPar(configsAsync) { case (configResource, unitAsync) =>
-                  unitAsync.map(unit => (configResource, unit))
-                }
-              }
-          updatedConfigsWithUpdate <- client.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
-
-          emptyKafkaConfig = KafkaConfig(Map.empty[String, ConfigEntry])
-          deleteResult <-
-            client
-              .alterConfigsAsync(Map(configResource -> emptyKafkaConfig), AlterConfigsOptions())
-              .flatMap { configsAsync =>
-                ZIO.foreachPar(configsAsync) { case (configResource, unitAsync) =>
-                  unitAsync.map(unit => (configResource, unit))
-                }
-              }
-          updatedConfigsWithDelete <- client.describeConfigs(Seq(ConfigResource(ConfigResourceType.Topic, topicName)))
-        } yield {
-          val updatedRetentionMsConfig =
-            updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
-          val deleteRetentionMsConfig =
-            updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
-          assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
-          assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
-          assert(deleteRetentionMsConfig.map(_.value()))(isSome(equalTo("604800000"))) &&
-          assert(deleteRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DEFAULT_CONFIG))) &&
-          assert(setResult)(equalTo(Map((configResource, ())))) &&
-          assert(deleteResult)(equalTo(Map((configResource, ()))))
-        }
-      },
       test("ACLs") {
         for {
           client <- KafkaTestUtils.makeAdminClient
@@ -650,11 +579,11 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       .repeat(
         (Schedule.recurs(5) && Schedule.fixed(Duration.fromMillis(500)) && Schedule
           .recurUntil[ConsumerGroupDescription](
-            _.state == AdminClient.ConsumerGroupState.Stable
+            _.state == AdminClient.GroupState.Stable
           )).map(_._3)
       )
       .flatMap(desc =>
-        if (desc.state == AdminClient.ConsumerGroupState.Stable) {
+        if (desc.state == AdminClient.GroupState.Stable) {
           ZIO.succeed(desc)
         } else {
           ZIO.fail(new IllegalStateException(s"Client is not in stable state: $desc"))

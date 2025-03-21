@@ -4,6 +4,7 @@ import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, OffsetAndMetad
 import org.apache.kafka.clients.producer.{ Callback, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo, TopicPartition, Uuid }
 import org.apache.kafka.clients.producer.{ Producer => KafkaProducer }
+import org.apache.kafka.common.metrics.KafkaMetric
 import zio._
 
 import java.time.Duration
@@ -251,11 +252,6 @@ class NotSupportedProducer[K, V] extends KafkaProducer[K, V] {
 
   override def sendOffsetsToTransaction(
     offsets: JMap[TopicPartition, OffsetAndMetadata],
-    consumerGroupId: String
-  ): Unit = throw new UnsupportedOperationException()
-
-  override def sendOffsetsToTransaction(
-    offsets: JMap[TopicPartition, OffsetAndMetadata],
     groupMetadata: ConsumerGroupMetadata
   ): Unit = throw new UnsupportedOperationException()
 
@@ -279,4 +275,8 @@ class NotSupportedProducer[K, V] extends KafkaProducer[K, V] {
   override def close(): Unit = throw new UnsupportedOperationException()
 
   override def close(timeout: Duration): Unit = throw new UnsupportedOperationException()
+
+  override def registerMetricForSubscription(metric: KafkaMetric): Unit = throw new UnsupportedOperationException()
+
+  override def unregisterMetricFromSubscription(metric: KafkaMetric): Unit = throw new UnsupportedOperationException()
 }
