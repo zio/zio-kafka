@@ -121,7 +121,7 @@ private[consumer] final class Runloop private (
     pendingRequests: Chunk[RunloopCommand.Request],
     ignoreRecordsForTps: Set[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
-  ): Task[Runloop.FulfillResult] = {
+  ): UIO[Runloop.FulfillResult] = {
     type Record = CommittableRecord[Array[Byte], Array[Byte]]
 
     // The most efficient way to get the records from [[ConsumerRecords]] per
