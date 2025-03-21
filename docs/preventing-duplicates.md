@@ -17,18 +17,21 @@ val consumerSettings: ConsumerSettings =
     .withGroupId("group")
     .withRebalanceSafeCommits(true)       // enable rebalance-safe-commits mode
     .withMaxRebalanceDuration(30.seconds) // defaults to 3 minutes
+    .withCommitTimeout(15.seconds)        // defaults to 15 seconds
 ```
 
 With rebalance-safe-commits mode enabled, rebalances are held up for up to max-rebalance-duration to wait for pending
 commits to be completed. Once pending commits are completed, it is safe for another consumer in the group to take over
 a partition.
 
-For this to work correctly, your program must process a chunk of records within max-rebalance-duration. The clock
-starts the moment the chunk is pushed into the stream and ends when the commits for these records complete.
+For this to work correctly, your program must process a chunk (of up to `max.poll.records` records) within the
+configured max-rebalance-duration. The clock starts the moment the chunk is pushed into the stream and ends when the
+commits for these records complete. Zio-kafka uses `commit-timeout` as the worse case time to commit. Therefore, with
+the default settings, your program has 2 minutes and 45 seconds until the offsets should be committed.
 
-In addition, your program must commit the offsets of consumed records. The most straightforward way is to commit to the
-Kafka brokers. This is done by calling `.commit` on the offset of consumed records (see the consumer documentation).
-However, there are more options: external commits and transactional producing.
+It is probably clear now that your program should commit the offsets of consumed records. The most straightforward way
+is to commit to the kafka brokers. This is done by calling `.commit` on the offset of consumed records (see the consumer
+documentation). However, there are more options: external commits and transactional producing.
 
 ### Commit to an external system
 
