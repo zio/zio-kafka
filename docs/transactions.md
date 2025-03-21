@@ -113,7 +113,7 @@ Typically, to optimize throughput, we want to produce records in batches. The un
 consumer stream is ideal for that because zio-kafka guarantees that each chunk in the stream corresponds to the records
 that were fetched together. However, we need to be careful to retain the chunking structure. For example, we should
 not use `.mapZIO` because it results in a stream where each chunk contains only a single item. Therefore, we use
-`.mapChunksZIO` instead (see also [a warning about mapZIO](serialization-and-deserialization.md#a-warning-about-mapzio)).
+`.mapChunksZIO` instead (see also [avoiding chunk-breakers](avoiding-chunk-breakers.md)).
 
 These new records can now be produced. Let's build it up slowly.
 
