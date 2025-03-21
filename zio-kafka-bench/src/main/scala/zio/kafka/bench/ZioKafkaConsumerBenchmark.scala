@@ -1,15 +1,12 @@
 package zio.kafka.bench
 
 import org.openjdk.jmh.annotations._
+import zio.{ Scope => _, _ }
 import zio.kafka.admin.AdminClient.NewTopic
-import zio.kafka.bench.ZioBenchmark.randomThing
-import zio.kafka.consumer.diagnostics.Diagnostics
-import zio.kafka.consumer.{ Consumer, Offset, OffsetBatch, Subscription }
+import zio.kafka.consumer._
 import zio.kafka.serde.Serde
-import zio.kafka.testkit.Kafka
-import zio.kafka.testkit.KafkaTestUtils
+import zio.kafka.testkit.{ Kafka, KafkaTestUtils }
 import zio.stream.ZSink
-import zio.{ Scope => ZScope, _ }
 
 import java.util.concurrent.TimeUnit
 
@@ -18,7 +15,7 @@ import java.util.concurrent.TimeUnit
 class ZioKafkaConsumerBenchmark extends ConsumerZioBenchmark[Kafka] {
 
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka] =
-    ZLayer.make[Kafka](Kafka.embedded).orDie
+    Layers.embeddedKafka
 
   override def initialize: ZIO[Kafka, Throwable, Any] =
     ZIO.scoped {
@@ -31,24 +28,12 @@ class ZioKafkaConsumerBenchmark extends ConsumerZioBenchmark[Kafka] {
       } yield ()
     }
 
-  private def makeConsumer: ZIO[ZScope & Kafka, Throwable, Consumer] =
-    for {
-      settings <- KafkaTestUtils
-                    .consumerSettings(
-                      randomThing("client"),
-                      Some(randomThing("group")),
-                      `max.poll.records` = 1000
-                    )
-                    .map(_.withPartitionPreFetchBufferLimit(8192))
-      consumer <- Consumer.make(settings, Diagnostics.NoOp)
-    } yield consumer
-
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   def throughput(): Any = runZIO {
     for {
       counter  <- Ref.make(0)
-      consumer <- makeConsumer
+      consumer <- Layers.makeConsumer
       _ <- consumer
              .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
              .chunks
@@ -66,7 +51,7 @@ class ZioKafkaConsumerBenchmark extends ConsumerZioBenchmark[Kafka] {
   def throughputWithCommits(): Any = runZIO {
     for {
       counter  <- Ref.make(0)
-      consumer <- makeConsumer
+      consumer <- Layers.makeConsumer
       _ <- ZIO.logAnnotate("consumer", "1") {
              consumer
                .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)

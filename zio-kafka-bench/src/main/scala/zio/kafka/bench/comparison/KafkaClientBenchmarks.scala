@@ -2,11 +2,11 @@ package zio.kafka.bench.comparison
 
 import org.openjdk.jmh.annotations.{ Benchmark, BenchmarkMode, Mode, OutputTimeUnit, Scope, State }
 import zio.ZIO
-import zio.kafka.bench.comparison.ComparisonBenchmark.{ zAssert, LowLevelKafka }
+import zio.kafka.bench.Layers.LowLevelKafka
+import zio.kafka.bench.comparison.ComparisonBenchmark.zAssert
 import zio.kafka.consumer.ConsumerSettings
 
 import java.util.concurrent.TimeUnit
-
 import scala.jdk.CollectionConverters._
 
 @State(Scope.Benchmark)

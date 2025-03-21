@@ -14,18 +14,6 @@ class ZioKafkaBenchmarks extends ComparisonBenchmark {
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  def zioKafka(): Any =
-    runZIO {
-      ZIO.serviceWithZIO[Consumer] {
-        _.plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
-          .take(recordCount.toLong)
-          .runCount
-          .flatMap(r => zAssert(r == recordCount, s"Consumed $r records instead of $recordCount"))
-      }
-    }
-
-  @Benchmark
-  @BenchmarkMode(Array(Mode.AverageTime))
   def manualZioKafka(): Any =
     runZIO {
       ZIO.serviceWithZIO[Consumer] { consumer =>
