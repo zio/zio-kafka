@@ -115,7 +115,6 @@ trait Consumer {
    * On completion of the stream, the consumer is unsubscribed. In case of multiple subscriptions, the total consumer
    * subscription is changed to exclude this subscription.
    */
-
   def plainStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
@@ -551,13 +550,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): Stream[
-    Throwable,
-    (
-      TopicPartition,
-      ZStream[R, Throwable, CommittableRecord[K, V]]
-    )
-  ] =
+  ): ZStream[Any, Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] =
     partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer).flattenChunks
 
   override def plainStream[R, K, V](
