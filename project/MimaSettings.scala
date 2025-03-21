@@ -14,7 +14,8 @@ object MimaSettings {
         Seq(
           mimaPreviousArtifacts := Set(organization.value %% name.value % binCompatVersion),
           mimaBinaryIssueFilters ++= Seq(
-            exclude[Problem]("zio.kafka.consumer.internal.*")
+            exclude[Problem]("zio.kafka.consumer.internal.*"),
+            exclude[Problem]("zio.kafka.diagnostics.internal.*")
           ),
           mimaFailOnProblem := failOnProblem
         )

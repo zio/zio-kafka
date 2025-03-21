@@ -67,7 +67,7 @@ The `provide` section of the main program could look like this:
 ```scala
 .provide(
   consumerSettingsLayer,
-  ZLayer.succeed(Diagnostics.NoOp),
+  ZLayer.succeed(Consumer.NoDiagnostics),
   Consumer.live
 )
 ```

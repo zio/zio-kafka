@@ -3,7 +3,6 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator._
@@ -11,6 +10,7 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
 import zio.test._
 import zio._
+import zio.kafka.diagnostics.Diagnostics
 import zio.stream.ZStream
 
 import java.util.{ Map => JavaMap }
@@ -117,7 +117,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
             _ <- streamControl.offerRecords(records)
 
             recordsPulledByStream <- Promise.make[Nothing, Unit]
-            committer             <- LiveCommitter.make(10.seconds, Diagnostics.NoOp, mockMetrics, ZIO.unit)
+            committer             <- LiveCommitter.make(10.seconds, Diagnostics.noOp, mockMetrics, ZIO.unit)
             _ <- streamControl.stream
                    .completePromiseWhenOffsetSeen(recordCount.toLong, recordsPulledByStream)
                    .tap(_ => ZIO.sleep(50.millis))
@@ -224,7 +224,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
     ) @@ TestAspect.withLiveClock
 
   private def makeStreamControl(tp: TopicPartition): UIO[PartitionStreamControl] =
-    PartitionStreamControl.newPartitionStream(tp, ZIO.unit, Diagnostics.NoOp, 30.seconds)
+    PartitionStreamControl.newPartitionStream(tp, ZIO.unit, Diagnostics.noOp, 30.seconds)
 
   private def makeCoordinator(
     lastEvent: Ref.Synchronized[RebalanceEvent],

@@ -4,8 +4,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.consumer.CommittableRecord
-import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
+import zio.kafka.diagnostics.Diagnostics
 import zio.test._
 
 import java.util.concurrent.TimeoutException
@@ -156,7 +156,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
 
   private def createTestControlWithRequestData(requestData: UIO[Any]): ZIO[Any, Nothing, PartitionStreamControl] = {
     val tp          = new TopicPartition("test-topic", 0)
-    val diagnostics = Diagnostics.NoOp
+    val diagnostics = Diagnostics.noOp
     PartitionStreamControl.newPartitionStream(
       tp,
       requestData.unit,
