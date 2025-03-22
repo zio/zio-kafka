@@ -97,7 +97,7 @@ ZIO.scoped {
       Serde.string,
       Serde.string
     )
-    _ <- Consumer.runWithGracefulShutdown(control, shutdownTimeout = 30.seconds) { stream =>
+    _ <- consumer.runWithGracefulShutdown(control, shutdownTimeout = 30.seconds) { stream =>
         stream.flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
           partitionStream
             .tap(record => printLine(s"key: ${record.key}, value: ${record.value}"))
