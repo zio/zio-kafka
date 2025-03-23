@@ -3,9 +3,9 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.clients.consumer.{ MockConsumer, OffsetAndMetadata, OffsetCommitCallback, OffsetResetStrategy }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
-import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.test._
 import zio._
+import zio.kafka.diagnostics.Diagnostics
 
 import java.util.{ Map => JavaMap }
 import scala.jdk.CollectionConverters.{ MapHasAsJava, MapHasAsScala }
