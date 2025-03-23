@@ -4,7 +4,7 @@ title: "Migrating to zio-kafka 3"
 ---
 
 Zio-kafka 3.0.0 removes everything that was deprecated in the zio-kafka 2.x series. In particular, this includes
-accessor methods. To prepare for zio-kafka 3.0, _you should always first migrate to zio-kafka 2.11.0_ and solve all
+accessor methods. To prepare for zio-kafka 3.0, _you should always first migrate to zio-kafka 2.12.0_ and solve all
 deprecation issues, using this page as a guide.
 
 # Renamed methods
@@ -19,7 +19,7 @@ that service. Accessor methods have not been recommended for some time and are n
 [ZIO service pattern](https://zio.dev/reference/service-pattern/) provides a much cleaner approach for accessing
 services.
 
-All accessor methods provided by zio-kafka are deprecated in zio-kafka 2.11 and will be removed in zio-kafka 3.0. If
+All accessor methods provided by zio-kafka are deprecated in zio-kafka 2.12 and will be removed in zio-kafka 3.0. If
 you use these accessor methods follow one of these approaches:
 
 ## Use the ZIO Service pattern
