@@ -161,7 +161,7 @@ expect only a few very experienced users to make use of it. Therefore, only the 
 
 # 3. `restartStreamOnRebalancing` mode
 
-This mode is longer be available in zio-kafka 3. With `restartStreamOnRebalancing` all streams are ended during a
+This mode is no longer available in zio-kafka 3. With `restartStreamOnRebalancing` all streams are ended during a
 rebalance, even when the partition for that stream was not revoked. One of its purposes was to enable transactional
 consuming. Since zio-kafka 3 however, transactional consuming no longer needs this mode.
 
