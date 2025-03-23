@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - master
+    paths:
+      - '**/build.sbt'
+      - 'project/**'
+      - 'zio-kafka/**'
+      - 'zio-kafka-bench/**'
   pull_request:
     types: [ opened, reopened, synchronize ]
     branches-ignore:
