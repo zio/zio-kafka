@@ -3,8 +3,8 @@ package zio.kafka.bench
 import org.openjdk.jmh.annotations._
 import zio.kafka.admin.AdminClient.NewTopic
 import zio.kafka.bench.ZioBenchmark.randomThing
-import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.{ Consumer, Offset, OffsetBatch, Subscription }
+import zio.kafka.diagnostics.Diagnostics
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
 import zio.kafka.testkit.KafkaTestUtils

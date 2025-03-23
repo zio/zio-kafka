@@ -4,9 +4,9 @@ import org.apache.kafka.clients.consumer.{ ConsumerConfig, ConsumerRecord }
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import zio._
 import zio.kafka.admin._
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
+import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, ConsumerDiagnostics, OffsetRetrieval }
 import zio.kafka.consumer._
-import zio.kafka.consumer.diagnostics.Diagnostics
+import zio.kafka.diagnostics.Diagnostics
 import zio.kafka.producer._
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.stream.ZStream
@@ -286,7 +286,7 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
-    diagnostics: Diagnostics = Diagnostics.NoOp,
+    diagnostics: ConsumerDiagnostics = Diagnostics.NoOp,
     // @deprecated
     // starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
     // contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
@@ -321,13 +321,17 @@ object KafkaTestUtils {
    *
    * ℹ️ Instead of using a layer, consider using [[KafkaTestUtils.makeConsumer]] to directly get a consumer.
    */
-  def minimalConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
+  def minimalConsumer(
+    diagnostics: ConsumerDiagnostics = Diagnostics.NoOp
+  ): ZLayer[ConsumerSettings, Throwable, Consumer] =
     ZLayer.makeSome[ConsumerSettings, Consumer](
       ZLayer.succeed(diagnostics) >>> Consumer.live
     )
 
   @deprecated("Use [[KafkaTestUtils.minimalConsumer]] instead", "2.3.1")
-  def simpleConsumer(diagnostics: Diagnostics = Diagnostics.NoOp): ZLayer[ConsumerSettings, Throwable, Consumer] =
+  def simpleConsumer(
+    diagnostics: ConsumerDiagnostics = Diagnostics.NoOp
+  ): ZLayer[ConsumerSettings, Throwable, Consumer] =
     minimalConsumer(diagnostics)
 
   /**
@@ -341,7 +345,7 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
-    diagnostics: Diagnostics = Diagnostics.NoOp,
+    diagnostics: ConsumerDiagnostics = Diagnostics.NoOp,
     // @deprecated
     // starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
     // contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
@@ -412,7 +416,7 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
-    diagnostics: Diagnostics = Diagnostics.NoOp,
+    diagnostics: ConsumerDiagnostics = Diagnostics.NoOp,
     // @deprecated
     // starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
     // contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for
@@ -448,7 +452,7 @@ object KafkaTestUtils {
     clientInstanceId: Option[String] = None,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     allowAutoCreateTopics: Boolean = true,
-    diagnostics: Diagnostics = Diagnostics.NoOp,
+    diagnostics: ConsumerDiagnostics = Diagnostics.NoOp,
     // @deprecated
     // starting zio-kafka 3.0.0 `restartStreamOnRebalancing` is no longer available. As far as the zio-kafka
     // contributors know, this feature is only used for transactional producing. Zio-kafka 3.0.0 no longer needs it for

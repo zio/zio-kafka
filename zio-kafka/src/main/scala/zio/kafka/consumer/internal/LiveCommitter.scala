@@ -2,12 +2,12 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.clients.consumer.{ OffsetAndMetadata, OffsetCommitCallback }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
-import zio.kafka.consumer.Consumer.CommitTimeout
-import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.Consumer.{ CommitTimeout, ConsumerDiagnostics }
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
 import zio._
+import zio.kafka.consumer.diagnostics.DiagnosticEvent
 
 import java.util.{ Map => JavaMap }
 import scala.collection.mutable
@@ -16,7 +16,7 @@ import scala.jdk.CollectionConverters._
 private[consumer] final class LiveCommitter(
   commitQueue: Queue[Commit],
   commitTimeout: Duration,
-  diagnostics: Diagnostics,
+  diagnostics: ConsumerDiagnostics,
   consumerMetrics: ConsumerMetrics,
   onCommitAvailable: UIO[Unit],
   committedOffsetsRef: Ref[CommitOffsets],
@@ -172,7 +172,7 @@ private[consumer] final class LiveCommitter(
 private[internal] object LiveCommitter {
   def make(
     commitTimeout: Duration,
-    diagnostics: Diagnostics,
+    diagnostics: ConsumerDiagnostics,
     consumerMetrics: ConsumerMetrics,
     onCommitAvailable: UIO[Unit]
   ): ZIO[Scope, Nothing, LiveCommitter] = for {

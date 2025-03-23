@@ -3,7 +3,6 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
@@ -12,6 +11,7 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
 import zio.test._
 import zio._
+import zio.kafka.diagnostics.Diagnostics
 
 import java.util
 

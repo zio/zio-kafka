@@ -4,10 +4,9 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException }
 import zio._
-import zio.kafka.consumer.Consumer.OffsetRetrieval
+import zio.kafka.consumer.Consumer.{ ConsumerDiagnostics, OffsetRetrieval }
 import zio.kafka.consumer._
-import zio.kafka.consumer.diagnostics.DiagnosticEvent.{ Finalization, Rebalance }
-import zio.kafka.consumer.diagnostics.{ DiagnosticEvent, Diagnostics }
+import zio.kafka.consumer.diagnostics.DiagnosticEvent
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop._
@@ -24,7 +23,7 @@ private[consumer] final class Runloop private (
   consumer: ConsumerAccess,
   commandQueue: Queue[RunloopCommand],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
-  diagnostics: Diagnostics,
+  diagnostics: ConsumerDiagnostics,
   maxStreamPullInterval: Duration,
   currentStateRef: Ref[State],
   rebalanceCoordinator: RebalanceCoordinator,
@@ -319,7 +318,7 @@ private[consumer] final class Runloop private (
                                        lostTps.size
                                      )
                                 _ <- diagnostics.emit(
-                                       Rebalance(
+                                       DiagnosticEvent.Rebalance(
                                          revoked = revokedTps,
                                          assigned = assignedTps,
                                          lost = lostTps,
@@ -600,12 +599,12 @@ object Runloop {
     settings: ConsumerSettings,
     maxStreamPullInterval: Duration,
     maxRebalanceDuration: Duration,
-    diagnostics: Diagnostics,
+    diagnostics: ConsumerDiagnostics,
     consumer: ConsumerAccess,
     partitionsHub: Hub[Take[Throwable, PartitionAssignment]]
   ): URIO[Scope, Runloop] =
     for {
-      _                  <- ZIO.addFinalizer(diagnostics.emit(Finalization.RunloopFinalized))
+      _                  <- ZIO.addFinalizer(diagnostics.emit(DiagnosticEvent.RunloopFinalized))
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
