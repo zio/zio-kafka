@@ -4,6 +4,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 
 sealed trait DiagnosticEvent
+
 object DiagnosticEvent {
 
   final case class Poll(
@@ -11,6 +12,7 @@ object DiagnosticEvent {
     tpWithData: Set[TopicPartition],
     tpWithoutData: Set[TopicPartition]
   ) extends DiagnosticEvent
+
   final case class Request(partition: TopicPartition) extends DiagnosticEvent
 
   sealed trait Commit extends DiagnosticEvent
@@ -27,11 +29,8 @@ object DiagnosticEvent {
     ended: Set[TopicPartition]
   ) extends DiagnosticEvent
 
-  sealed trait Finalization extends DiagnosticEvent
-  object Finalization {
-    case object SubscriptionFinalized extends Finalization
-    case object RunloopFinalized      extends Finalization
-    case object ConsumerFinalized     extends Finalization
-  }
+  case object SubscriptionFinalized extends DiagnosticEvent
+  case object RunloopFinalized      extends DiagnosticEvent
+  case object ConsumerFinalized     extends DiagnosticEvent
 
 }
