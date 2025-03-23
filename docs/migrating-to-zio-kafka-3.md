@@ -14,7 +14,7 @@ This document helps you migrate from zio-kafka 2 to zio-kafka 3.
 # 1. Deprecations
 
 Zio-kafka 3.0.0 removes everything that was deprecated in the zio-kafka 2.x series. In particular, this includes
-accessor methods. To prepare for zio-kafka 3.0, _you should always first migrate to zio-kafka 2.11.0_ and solve all
+accessor methods. To prepare for zio-kafka 3.0, _you should always first migrate to zio-kafka 2.12.0_ and solve all
 deprecation issues, using this page as a guide.
 
 ## Renamed methods
