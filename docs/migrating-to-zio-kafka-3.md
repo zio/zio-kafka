@@ -3,16 +3,26 @@ id: migrating-to-zio-kafka-3
 title: "Migrating to zio-kafka 3"
 ---
 
+Zio-kafka 3.0.0 brings a number of backwards incompatible changes:
+
+1. Removal of all deprecated methods, _including accessor methods,_
+2. The transactional producer is now much easier to use, 
+3. `restartStreamOnRebalancing` mode is no longer supported.
+
+This document helps you migrate from zio-kafka 2 to zio-kafka 3.
+
+# 1. Deprecations
+
 Zio-kafka 3.0.0 removes everything that was deprecated in the zio-kafka 2.x series. In particular, this includes
 accessor methods. To prepare for zio-kafka 3.0, _you should always first migrate to zio-kafka 2.12.0_ and solve all
 deprecation issues, using this page as a guide.
 
-# Renamed methods
+## Renamed methods
 
 Some methods have just been renamed. Read the deprecation message and try the new method name. If it compiles, you're
 done. Otherwise, read on.
 
-# Consumer, Producer and TransactionalProducer accessor methods
+## Consumer, Producer and TransactionalProducer accessor methods
 
 Accessor methods are little helper methods that look up a service from the environment, and then forward your call to
 that service. Accessor methods have not been recommended for some time and are now deprecated. The
@@ -22,7 +32,7 @@ services.
 All accessor methods provided by zio-kafka are deprecated in zio-kafka 2.12 and will be removed in zio-kafka 3.0. If
 you use these accessor methods follow one of these approaches:
 
-## Use the ZIO Service pattern
+### Use the ZIO Service pattern
 
 This is the best option. For established codebases it may be a lot of work to get here. If you are already follow
 this pattern, using it for zio-kafka services as well will be easy. See [ZIO service pattern](https://zio.dev/reference/service-pattern/) for more information.
@@ -60,7 +70,7 @@ case class ServiceLive(consumer: Consumer) extends Service {
 Constructing a `Consumer` layer is described in [creating a consumer](creating-a-consumer.md). Constructing a
 `Producer` or `TransactionalProducer` layer works in a similar way.
 
-## YOLO, use `ZIO.service` everywhere
+### YOLO, use `ZIO.service` everywhere
 
 The other option is to replace all accessor methods of `Consumer`, `Producer` and `TransactionalProducer` as follows:
 
@@ -78,7 +88,7 @@ for {
 } yield () 
 ```
 
-# Zio-test-kit
+## Zio-test-kit
 
 Zio-kafka provides a `zio-kafka-testkit` library to help you test your code using zio-kafka. Several methods in the
 `KafkaTestUtils` class have been replaced:
@@ -143,9 +153,19 @@ for {
 } yield ()
 ```
 
-# `restartStreamOnRebalancing` mode
+# 2. Changes in the transactional producer
 
-This mode will no longer be available in zio-kafka 3. Contact us on [Discord](https://discord.com/channels/629491597070827530/629497941719121960) for alternatives.
+The transactional producer is now much easier to use. The zio-kafka 2.x transactional API is so complicated that we
+expect only a few very experienced users to make use of it. Therefore, only the new API is described in
+[transactions](transactions.md).
+
+# 3. `restartStreamOnRebalancing` mode
+
+This mode is no longer available in zio-kafka 3. With `restartStreamOnRebalancing` all streams are ended during a
+rebalance, even when the partition for that stream was not revoked. One of its purposes was to enable transactional
+consuming. Since zio-kafka 3 however, transactional consuming no longer needs this mode.
+
+If your goal is to [prevent duplicates](preventing-duplicates.md), please use `rebalanceSafeCommits` instead.
 
 # Other changes?
 
