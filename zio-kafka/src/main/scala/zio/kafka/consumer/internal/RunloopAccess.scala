@@ -2,13 +2,13 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
+import zio._
+import zio.kafka.consumer._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.Finalization
 import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.{ ConsumerSettings, InvalidSubscriptionUnion, OffsetBatch, Subscription }
-import zio.stream.{ Stream, Take, UStream, ZStream }
-import zio._
+import zio.stream.{ Stream, Take, ZStream }
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -52,19 +52,28 @@ private[consumer] final class RunloopAccess private (
    * there's no mistake possible for the caller.
    *
    * The external world (Consumer) doesn't need to know how we "subscribe", "unsubscribe", etc. internally.
+   *
+   * @returns
+   *   A StreamControl which allows graceful shutdown of all streams created from this subscription
    */
   def subscribe(
     subscription: Subscription
-  ): ZIO[Scope, InvalidSubscriptionUnion, UStream[Take[Throwable, PartitionAssignment]]] =
+  ): ZIO[Scope, InvalidSubscriptionUnion, StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]]] =
     for {
-      stream <- ZStream.fromHubScoped(partitionHub)
+      ended                     <- Promise.make[Nothing, Unit] // For ending the stream of partition streams
+      partitionAssignmentStream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription)) <*
+             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).orDie) <*
                diagnostics.emit(Finalization.SubscriptionFinalized)
            }
-    } yield stream
+    } yield new StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]] {
+      override def stream = partitionAssignmentStream.interruptWhen(ended)
+      override def end =
+        ended.succeed(()).ignore *> withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription))
+
+    }
 
   def registerExternalCommits(externallyCommittedOffsets: OffsetBatch): Task[Unit] =
     withRunloopZIO(requireRunning = true)(_.registerExternalCommits(externallyCommittedOffsets))
