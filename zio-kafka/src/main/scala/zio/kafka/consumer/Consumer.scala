@@ -419,14 +419,13 @@ object Consumer {
    *   typically something like `stream => stream.mapZIO(record => ZIO.debug(record)).mapZIO(_.offset.commit)`
    */
   def runWithGracefulShutdown[R, E, A](
-    streamControl: ZIO[Scope, E, StreamControl[R, E, A]],
+    control: StreamControl[R, E, A],
     shutdownTimeout: Duration
   )(
     withStream: ZStream[R, E, A] => ZIO[R, E, Any]
   ): ZIO[R, E, Any] =
     ZIO.scoped[R] {
       for {
-        control <- streamControl
         fib <-
           withStream(control.stream)
             .onInterrupt(
