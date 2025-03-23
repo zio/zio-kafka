@@ -3,6 +3,7 @@ package zio.kafka.producer
 import org.apache.kafka.clients.producer.{ Producer => KafkaProducer, ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.errors.AuthenticationException
 import zio._
+import zio.kafka.diagnostics.SlidingDiagnostics
 import zio.test.TestAspect.{ flaky, withLiveClock }
 import zio.test._
 
@@ -100,6 +101,63 @@ object ProducerSpec extends ZIOSpecDefault {
               history.size == 2
             )
           }
+        }
+      ),
+      suite("produceAsync diagnostics")(
+        test("success") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendSucceed()
+            .callbackSucceed()
+          val recordToSend    = makeProducerRecord()
+          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", 0, 5))
+          for {
+            diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
+            _                <- runSingleRecordTest(mockBehavior, recordToSend, diagnostics = diagnostics)
+            diagnosticEvents <- diagnostics.queue.takeAll
+          } yield assertTrue(
+            diagnosticEvents == Chunk(
+              ProducerEvent.RecordsOffered(0, producedRecords),
+              ProducerEvent.RecordsSent(0, producedRecords, Set.empty),
+              ProducerEvent.ProducerFinalized
+            )
+          )
+        },
+        test("failure") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendFail(new RuntimeException())
+          val recordToSend    = makeProducerRecord()
+          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", 0, 5))
+          for {
+            diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
+            _                <- runSingleRecordTest(mockBehavior, recordToSend, diagnostics = diagnostics)
+            diagnosticEvents <- diagnostics.queue.takeAll
+          } yield assertTrue(
+            diagnosticEvents == Chunk(
+              ProducerEvent.RecordsOffered(0, producedRecords),
+              ProducerEvent.RecordsSent(0, producedRecords, Set(0)),
+              ProducerEvent.ProducerFinalized
+            )
+          )
+        },
+        test("auth failure") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendFail(authException)
+          val recordToSend    = makeProducerRecord()
+          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", 0, 5))
+          for {
+            diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
+            _                <- runSingleRecordTest(mockBehavior, recordToSend, diagnostics = diagnostics)
+            diagnosticEvents <- diagnostics.queue.takeAll
+          } yield assertTrue(
+            diagnosticEvents == Chunk(
+              ProducerEvent.RecordsOffered(0, producedRecords),
+              ProducerEvent.RecordsSent(0, producedRecords, Set(0)),
+              ProducerEvent.ProducerFinalized
+            )
+          )
         }
       ),
       suite("produceChunkAsyncWithFailures")(
@@ -359,18 +417,97 @@ object ProducerSpec extends ZIOSpecDefault {
             )
           }
         }
+      ),
+      suite("produceChunkAsyncWithFailures diagnostics")(
+        test("successfully produces chunk of records") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendSucceed()
+            .callbackSucceed()
+          val recordsToSend   = Chunk.single(makeProducerRecord())
+          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", 0, 5))
+          for {
+            diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
+            _                <- runChunkTest(mockBehavior, recordsToSend, diagnostics = diagnostics)
+            diagnosticEvents <- diagnostics.queue.takeAll
+          } yield assertTrue(
+            diagnosticEvents == Chunk(
+              ProducerEvent.RecordsOffered(0, producedRecords),
+              ProducerEvent.RecordsSent(0, producedRecords, Set.empty),
+              ProducerEvent.ProducerFinalized
+            )
+          )
+        },
+        test("some records in batch failed") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendSucceed()
+            .sendFail(new RuntimeException())
+            .callbackSucceed()
+          val recordsToSend = Chunk(
+            makeProducerRecord(value = "10 bytes.."),
+            makeProducerRecord(value = "7 bytes"),
+            makeProducerRecord(value = "5 byt")
+          )
+          val producedRecords = Chunk(
+            ProducerEvent.ProducedRecord("testTopic", 0, 10),
+            ProducerEvent.ProducedRecord("testTopic", 0, 7),
+            ProducerEvent.ProducedRecord("testTopic", 0, 5)
+          )
+          for {
+            diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
+            _                <- runChunkTest(mockBehavior, recordsToSend, diagnostics = diagnostics)
+            diagnosticEvents <- diagnostics.queue.takeAll
+          } yield assertTrue(
+            diagnosticEvents == Chunk(
+              ProducerEvent.RecordsOffered(0, producedRecords),
+              ProducerEvent.RecordsSent(0, producedRecords, Set(1, 2)),
+              ProducerEvent.ProducerFinalized
+            )
+          )
+        },
+        test("some records in batch failed with auth exception") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendSucceed()
+            .sendFail(authException)
+            .callbackSucceed()
+          val recordsToSend = Chunk(
+            makeProducerRecord(value = "10 bytes.."),
+            makeProducerRecord(value = "7 bytes"),
+            makeProducerRecord(value = "5 byt")
+          )
+          val producedRecords = Chunk(
+            ProducerEvent.ProducedRecord("testTopic", 0, 10),
+            ProducerEvent.ProducedRecord("testTopic", 0, 7),
+            ProducerEvent.ProducedRecord("testTopic", 0, 5)
+          )
+          for {
+            diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
+            _                <- runChunkTest(mockBehavior, recordsToSend, diagnostics = diagnostics)
+            diagnosticEvents <- diagnostics.queue.takeAll
+          } yield assertTrue(
+            diagnosticEvents == Chunk(
+              ProducerEvent.RecordsOffered(0, producedRecords),
+              ProducerEvent.RecordsSent(0, producedRecords, Set(1, 2)),
+              ProducerEvent.ProducerFinalized
+            )
+          )
+        }
       )
     ) @@ withLiveClock
 
   private def withProducer[A](
     mockJavaProducer: KafkaProducer[Array[Byte], Array[Byte]],
-    authErrorRetrySchedule: Schedule[Any, Throwable, Any]
+    authErrorRetrySchedule: Schedule[Any, Throwable, Any],
+    diagnostics: Producer.ProducerDiagnostics
   )(
     producerTest: Producer => ZIO[Scope, Throwable, A]
   ): ZIO[Any, Throwable, A] =
     ZIO.scoped {
       val producerSettings = ProducerSettings()
         .withAuthErrorRetrySchedule(authErrorRetrySchedule)
+        .withDiagnostics(diagnostics)
 
       Producer
         .fromJavaProducer(mockJavaProducer, producerSettings)
@@ -380,10 +517,11 @@ object ProducerSpec extends ZIOSpecDefault {
   private def runSingleRecordTest(
     mockBehavior: AsyncProducerTestSupport.AsyncProducerTestSupportBehavior[Array[Byte], Array[Byte]],
     recordToSend: ProducerRecord[Array[Byte], Array[Byte]],
-    authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.stop
+    authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.stop,
+    diagnostics: Producer.ProducerDiagnostics = Producer.NoDiagnostics
   ): ZIO[Any, Throwable, Either[Throwable, RecordMetadata]] =
     mockBehavior.run { mockProducer =>
-      withProducer(mockProducer, authErrorRetrySchedule) { producer =>
+      withProducer(mockProducer, authErrorRetrySchedule, diagnostics) { producer =>
         producer.produceAsync(recordToSend).flatten.either
       }
     }
@@ -391,10 +529,11 @@ object ProducerSpec extends ZIOSpecDefault {
   private def runChunkTest(
     mockBehavior: AsyncProducerTestSupport.AsyncProducerTestSupportBehavior[Array[Byte], Array[Byte]],
     recordsToSend: Chunk[ProducerRecord[Array[Byte], Array[Byte]]],
-    authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.stop
+    authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.stop,
+    diagnostics: Producer.ProducerDiagnostics = Producer.NoDiagnostics
   ): ZIO[Any, Throwable, Chunk[Either[Throwable, RecordMetadata]]] =
     mockBehavior.run { mockProducer =>
-      withProducer(mockProducer, authErrorRetrySchedule) { producer =>
+      withProducer(mockProducer, authErrorRetrySchedule, diagnostics) { producer =>
         producer.produceChunkAsyncWithFailures(recordsToSend).flatten
       }
     }

@@ -92,6 +92,7 @@ object TransactionalProducer {
 
   def make(settings: TransactionalProducerSettings, consumer: Consumer): ZIO[Scope, Throwable, TransactionalProducer] =
     for {
+      wrappedDiagnostics <- Producer.makeConcurrentDiagnostics(settings.producerSettings.diagnostics)
       _ <- ZIO.fail(RebalanceSafeCommitsRequired).unless(consumer.consumerSettings.rebalanceSafeCommits)
       rawProducer <- ZIO.acquireRelease(
                        ZIO.attempt(
@@ -109,7 +110,7 @@ object TransactionalProducer {
         Queue.bounded[(Chunk[ByteRecord], Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.producerSettings.sendBufferSize
         )
-      live = new ProducerLive(settings.producerSettings, rawProducer, runtime, sendQueue)
+      live = new ProducerLive(settings.producerSettings, wrappedDiagnostics, rawProducer, runtime, sendQueue)
       _ <- ZIO.blocking(live.sendFromQueue).forkScoped
     } yield new LiveTransactionalProducer(live, semaphore, consumer)
 }
