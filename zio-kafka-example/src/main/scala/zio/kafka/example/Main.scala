@@ -41,7 +41,6 @@ object Main extends ZIOAppDefault {
       runConsumerStream
         .provide(
           consumerSettings,
-          ZLayer.succeed(Consumer.NoDiagnostics),
           Consumer.live,
           MyKafka.embedded
         )
