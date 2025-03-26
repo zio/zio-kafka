@@ -13,6 +13,11 @@ on:
     types: [ opened, reopened, synchronize ]
     branches-ignore:
       - gh-pages
+    paths:
+      - '**/build.sbt'
+      - 'project/**'
+      - 'zio-kafka/**'
+      - 'zio-kafka-bench/**'
 
 # Prevent multiple builds at the same time from the same branch (except for 'master').
 concurrency:
