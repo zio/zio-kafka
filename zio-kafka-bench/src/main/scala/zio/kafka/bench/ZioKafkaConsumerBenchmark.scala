@@ -4,7 +4,6 @@ import org.openjdk.jmh.annotations._
 import zio.kafka.admin.AdminClient.NewTopic
 import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.consumer.{ Consumer, Offset, OffsetBatch, Subscription }
-import zio.kafka.diagnostics.Diagnostics
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
 import zio.kafka.testkit.KafkaTestUtils
@@ -40,7 +39,7 @@ class ZioKafkaConsumerBenchmark extends ConsumerZioBenchmark[Kafka] {
                       `max.poll.records` = 1000
                     )
                     .map(_.withPartitionPreFetchBufferLimit(8192))
-      consumer <- Consumer.make(settings, Diagnostics.NoOp)
+      consumer <- Consumer.make(settings)
     } yield consumer
 
   @Benchmark

@@ -203,6 +203,7 @@ object KafkaTestUtils {
     maxPollInterval: Duration = 5.minutes,
     `max.poll.records`: Int = 100, // settings this higher can cause concurrency bugs to go unnoticed
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
+    diagnostics: Consumer.ConsumerDiagnostics = Diagnostics.NoOp,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
@@ -222,6 +223,7 @@ object KafkaTestUtils {
         .withOffsetRetrieval(offsetRetrieval)
         .withRebalanceSafeCommits(rebalanceSafeCommits)
         .withMaxRebalanceDuration(maxRebalanceDuration)
+        .withDiagnostics(diagnostics)
         .withProperties(properties)
 
       val withClientInstanceId = clientInstanceId.fold(settings)(settings.withGroupInstanceId)
@@ -253,9 +255,10 @@ object KafkaTestUtils {
                     rebalanceSafeCommits = rebalanceSafeCommits,
                     maxRebalanceDuration = maxRebalanceDuration,
                     properties = properties,
-                    commitTimeout = commitTimeout
+                    commitTimeout = commitTimeout,
+                    diagnostics = diagnostics
                   )
-      c <- Consumer.make(settings, diagnostics)
+      c <- Consumer.make(settings)
     } yield c
 
   /**
@@ -266,12 +269,8 @@ object KafkaTestUtils {
    *
    * ℹ️ Instead of using a layer, consider using [[KafkaTestUtils.makeConsumer]] to directly get a consumer.
    */
-  def minimalConsumer(
-    diagnostics: ConsumerDiagnostics = Diagnostics.NoOp
-  ): ZLayer[ConsumerSettings, Throwable, Consumer] =
-    ZLayer.makeSome[ConsumerSettings, Consumer](
-      ZLayer.succeed(diagnostics) >>> Consumer.live
-    )
+  @deprecated("Use Consumer.live instead", since = "3.0.0")
+  def minimalConsumer(): ZLayer[ConsumerSettings, Throwable, Consumer] = Consumer.live
 
   /**
    * `Consumer` layer for use in tests.
@@ -321,6 +320,7 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     offsetRetrieval: OffsetRetrieval = OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest),
     rebalanceSafeCommits: Boolean = false,
+    diagnostics: ConsumerDiagnostics = Diagnostics.NoOp,
     properties: Map[String, String] = Map.empty
   ): URIO[Kafka, ConsumerSettings] =
     consumerSettings(
@@ -330,6 +330,7 @@ object KafkaTestUtils {
       allowAutoCreateTopics = allowAutoCreateTopics,
       offsetRetrieval = offsetRetrieval,
       rebalanceSafeCommits = rebalanceSafeCommits,
+      diagnostics = diagnostics,
       properties = properties
     )
       .map(_.withReadCommitted())
@@ -356,9 +357,10 @@ object KafkaTestUtils {
                     allowAutoCreateTopics = allowAutoCreateTopics,
                     offsetRetrieval = offsetRetrieval,
                     rebalanceSafeCommits = rebalanceSafeCommits,
+                    diagnostics = diagnostics,
                     properties = properties
                   ).map(_.withRebalanceListener(rebalanceListener))
-      consumer <- Consumer.make(settings, diagnostics)
+      consumer <- Consumer.make(settings)
     } yield consumer
 
   /**
