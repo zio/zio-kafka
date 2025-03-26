@@ -191,28 +191,20 @@ object Consumer {
   val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
 
-  def live: RLayer[ConsumerSettings & ConsumerDiagnostics, Consumer] =
+  def live: RLayer[ConsumerSettings, Consumer] =
     ZLayer.scoped {
       for {
-        settings    <- ZIO.service[ConsumerSettings]
-        diagnostics <- ZIO.service[ConsumerDiagnostics]
-        consumer    <- make(settings, diagnostics)
+        settings <- ZIO.service[ConsumerSettings]
+        consumer <- make(settings)
       } yield consumer
     }
 
   /**
    * A new consumer.
-   *
-   * @param diagnostics
-   *   an optional callback for key events in the consumer life-cycle. The callbacks will be executed in a separate
-   *   fiber. Since the events are queued, failure to handle these events leads to out of memory errors
    */
-  def make(
-    settings: ConsumerSettings,
-    diagnostics: ConsumerDiagnostics = Diagnostics.NoOp
-  ): ZIO[Scope, Throwable, Consumer] =
+  def make(settings: ConsumerSettings): ZIO[Scope, Throwable, Consumer] =
     for {
-      wrappedDiagnostics <- makeConcurrentDiagnostics(diagnostics)
+      wrappedDiagnostics <- makeConcurrentDiagnostics(settings.diagnostics)
       _                  <- SslHelper.validateEndpoint(settings.driverSettings)
       consumerAccess     <- ConsumerAccess.make(settings)
       runloopAccess      <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
@@ -242,18 +234,14 @@ object Consumer {
    *   Settings
    * @param access
    *   A Semaphore with 1 permit.
-   * @param diagnostics
-   *   an optional callback for key events in the consumer life-cycle. The callbacks will be executed in a separate
-   *   fiber. Since the events are queued, failure to handle these events leads to out of memory errors
    */
   def fromJavaConsumerWithPermit(
     javaConsumer: JConsumer[Array[Byte], Array[Byte]],
     settings: ConsumerSettings,
-    access: Semaphore,
-    diagnostics: ConsumerDiagnostics = Diagnostics.NoOp
+    access: Semaphore
   ): ZIO[Scope, Throwable, Consumer] =
     for {
-      wrappedDiagnostics <- makeConcurrentDiagnostics(diagnostics)
+      wrappedDiagnostics <- makeConcurrentDiagnostics(settings.diagnostics)
       consumerAccess = new ConsumerAccess(javaConsumer, access)
       runloopAccess <- RunloopAccess.make(settings, consumerAccess, wrappedDiagnostics)
     } yield new ConsumerLive(consumerAccess, settings, runloopAccess)

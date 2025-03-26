@@ -239,7 +239,7 @@ object Transactional extends ZIOAppDefault {
     runConsumerStream
       .provide(
         consumerSettings,
-        ZLayer.succeed(Consumer.NoDiagnostics),
+        ZLayer.succeed(Consumer.NoDiagnostics),  // No longer needed in zio-kafka 3.x
         Consumer.live,
         producerSettings,
         TransactionalProducer.live
