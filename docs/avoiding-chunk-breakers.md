@@ -13,7 +13,7 @@ Be careful when using `mapZIO`, `tap` and some other stream operators that break
 (or more precisely, the resulting stream has chunks with a single element). The throughput may be significantly lower
 than with the original chunking structure intact.
 
-Chunk-breaking operators can be found by looking at their scaladocs. Starting with zio-kafka 2.1.17, these scaladocs
+Chunk-breaking operators can be found by looking at their scaladocs. Starting with zio-streams 2.1.17, these scaladocs
 contain the words `This combinator destroys the chunking structure`.
 
 You can regain full throughput by processing all elements in a chunk together in one go. However, there is a catch: the
