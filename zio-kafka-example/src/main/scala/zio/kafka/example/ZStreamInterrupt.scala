@@ -14,16 +14,16 @@ object ZStreamInterrupt extends ZIOAppDefault {
         .fromSchedule(Schedule.spaced(100.micros))
         .map(Take.single)
 
-    val p = for {
-      end <- Promise.make[Nothing, Unit]
-      stoppableStream = stream.merge(ZStream.fromZIO(end.await).as(Take.end))
-      fib <- stoppableStream
-        .flattenTake
-        .runDrain
-        .onInterrupt(ZIO.logError("stream interrupted, this should not happen"))
-        .forkScoped
-      result <-
-        fib.join.onInterrupt {
+    val p = ZIO.scoped {
+      for {
+        end <- Promise.make[Nothing, Unit]
+        stoppableStream: ZStream[Any, Nothing, Take[Nothing, Long]] = stream.merge(ZStream.fromZIO(end.await).as(Take.end))
+        fib <- stoppableStream
+          .flattenTake
+          .runDrain
+          .onInterrupt(ZIO.logError("stream interrupted, this should not happen"))
+          .forkScoped
+        _ <- ZIO.addFinalizer {
           end.succeed(()) *>
             ZIO.logError("Stream end sent") *>
             fib.join
@@ -34,7 +34,9 @@ object ZStreamInterrupt extends ZIOAppDefault {
               .ignore *>
             ZIO.logError("Fiber joined")
         }
-    } yield result
+        result <- fib.join
+      } yield result
+    }
 
     // Interrupt after 1 second
     p.timeout(100.millis).repeatN(100000)
