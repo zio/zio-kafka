@@ -19,7 +19,7 @@ object MyKafka {
       customBrokerProperties = Map(
         "group.min.session.timeout.ms"     -> "500",
         "group.initial.rebalance.delay.ms" -> "0",
-        "authorizer.class.name"            -> "kafka.security.authorizer.AclAuthorizer",
+        "authorizer.class.name"            -> "org.apache.kafka.metadata.authorizer.StandardAuthorizer",
         "super.users"                      -> "User:ANONYMOUS"
       )
     )

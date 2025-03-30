@@ -29,7 +29,7 @@ object Kafka {
         Map(
           "group.min.session.timeout.ms"     -> "500",
           "group.initial.rebalance.delay.ms" -> "0",
-          "authorizer.class.name"            -> "kafka.security.authorizer.AclAuthorizer",
+          "authorizer.class.name"            -> "org.apache.kafka.metadata.authorizer.StandardAuthorizer",
           "super.users"                      -> "User:ANONYMOUS"
         ),
       customBrokerProps
@@ -47,15 +47,15 @@ object Kafka {
    */
   def saslEmbeddedWith(customBrokerProps: Ports => Map[String, String]): ZLayer[Any, Throwable, Kafka.Sasl] =
     embeddedWithBrokerProps(
-      ports =>
+      ports => // TODO: why not use constants?
         Map(
           "group.min.session.timeout.ms"         -> "500",
           "group.initial.rebalance.delay.ms"     -> "0",
-          "authorizer.class.name"                -> "kafka.security.authorizer.AclAuthorizer",
+          "authorizer.class.name"                -> "org.apache.kafka.metadata.authorizer.StandardAuthorizer",
           "sasl.enabled.mechanisms"              -> "PLAIN",
           "sasl.mechanism.inter.broker.protocol" -> "PLAIN",
           "inter.broker.listener.name"           -> "SASL_PLAINTEXT",
-          "listeners"                            -> s"SASL_PLAINTEXT://localhost:${ports.kafkaPort}",
+          "listeners"                            -> s"SASL_PLAINTEXT://localhost:${ports.kafkaPort},CONTROLLER://localhost:${ports.controllerPort}",
           "advertised.listeners"                 -> s"SASL_PLAINTEXT://localhost:${ports.kafkaPort}",
           "super.users"                          -> "User:admin",
           "listener.name.sasl_plaintext.plain.sasl.jaas.config" -> """org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_kafkabroker1="kafkabroker1-secret";"""
@@ -79,7 +79,7 @@ object Kafka {
         Map(
           "group.min.session.timeout.ms"     -> "500",
           "group.initial.rebalance.delay.ms" -> "0",
-          "authorizer.class.name"            -> "kafka.security.authorizer.AclAuthorizer",
+          "authorizer.class.name"            -> "org.apache.kafka.metadata.authorizer.StandardAuthorizer",
           "super.users"                      -> "User:ANONYMOUS",
           "ssl.client.auth"                  -> "required",
           "ssl.enabled.protocols"            -> "TLSv1.2",
@@ -91,7 +91,7 @@ object Kafka {
           "ssl.keystore.password"            -> "123456",
           "ssl.key.password"                 -> "123456",
           "inter.broker.listener.name"       -> "SSL",
-          "listeners"                        -> s"SSL://localhost:${ports.kafkaPort}",
+          "listeners"                        -> s"SSL://localhost:${ports.kafkaPort},CONTROLLER://localhost:${ports.controllerPort}",
           "advertised.listeners"             -> s"SSL://localhost:${ports.kafkaPort}",
           "zookeeper.connection.timeout.ms"  -> s"${30.second.toMillis}"
         ),
@@ -115,13 +115,16 @@ object Kafka {
         brokerProps = presetProps(ports) ++ customProps(ports) // custom is after to allow overriding
         embeddedKafkaConfig = EmbeddedKafkaConfig(
                                 ports.kafkaPort,
-                                ports.zookeeperPort,
+                                ports.controllerPort,
                                 brokerProps
                               )
         kafka <- ZIO.acquireRelease(
                    ZIO
                      .attemptBlocking(EmbeddedKafkaService(EmbeddedKafka.start()(embeddedKafkaConfig)))
                      .catchNonFatalOrDie { e =>
+                       // TODO remove after debugging
+                       println(s"Failed to start embedded Kafka: ${e.getMessage}")
+                       e.printStackTrace()
                        ZIO.fail(EmbeddedKafkaStartException("Failed to start embedded Kafka", e))
                      }
                  )(_.stop())
@@ -138,10 +141,10 @@ object Kafka {
     override def stop(): UIO[Unit]              = ZIO.unit
   }
 
-  final case class Ports(kafkaPort: Int, zookeeperPort: Int)
+  final case class Ports(kafkaPort: Int, controllerPort: Int)
 
   private val ref = Ref.unsafe.make(Ports(6001, 7001))(Unsafe.unsafe)
 
   private val nextPorts: ZIO[Any, Nothing, Ports] =
-    ref.getAndUpdate(ports => Ports(ports.kafkaPort + 1, ports.zookeeperPort + 1))
+    ref.getAndUpdate(ports => Ports(ports.kafkaPort + 1, ports.controllerPort + 1))
 }
