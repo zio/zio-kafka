@@ -50,7 +50,7 @@ trait ComparisonBenchmark extends ConsumerZioBenchmark[Env] {
         Kafka.embedded,
         settings,
         javaKafkaConsumer,
-        KafkaTestUtils.minimalConsumer()
+        Consumer.live
       )
       .orDie
 

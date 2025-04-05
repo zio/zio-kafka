@@ -32,7 +32,8 @@ final case class ConsumerSettings(
   metricLabels: Set[MetricLabel] = Set.empty,
   runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis),
   authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.recurs(5) && Schedule.spaced(500.millis),
-  maxStreamPullIntervalOption: Option[Duration] = None
+  maxStreamPullIntervalOption: Option[Duration] = None,
+  diagnostics: Consumer.ConsumerDiagnostics = Consumer.NoDiagnostics
 ) {
   // Parse booleans in a way compatible with how Kafka does this in org.apache.kafka.common.config.ConfigDef.parseType:
   require(
@@ -346,6 +347,14 @@ final case class ConsumerSettings(
     val isolationLevel = if (readCommitted) IsolationLevel.READ_COMMITTED else IsolationLevel.READ_UNCOMMITTED
     withProperty(ConsumerConfig.ISOLATION_LEVEL_CONFIG, isolationLevel.toString)
   }
+
+  /**
+   * @param diagnostics
+   *   an optional callback for key events in the consumer life-cycle. The callbacks will be executed in a separate
+   *   fiber. Since the events are queued, failure to handle these events leads to out of memory errors.
+   */
+  def withDiagnostics(diagnostics: Consumer.ConsumerDiagnostics): ConsumerSettings =
+    copy(diagnostics = diagnostics)
 
 }
 
