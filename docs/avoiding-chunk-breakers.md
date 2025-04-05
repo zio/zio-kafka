@@ -22,7 +22,6 @@ order of processing changes. For example, given a stream with elements `a` and `
 evaluation order changes to `f(a), f(b), g(a), g(b)`. Now imagine that `g(a)` fails, with `mapZIO` `f(b)` is not
 executed, but with the alternatives it _is_ executed. It is up to you to decide if this is a problem.
 
-<!-- NOT YET AVAILABLE YET
 ### Use `mapZIOChunked`
 
 _Available since zio-streams 2.1.17._
@@ -35,7 +34,6 @@ def f(a: A): ZIO[R, E, B]
 stream               // ZStream[R, E, A]
   .mapZIOChunked(f)  // ZStream[R, E, B]
 ```
--->
 
 ### Use `chunksWith`
 
@@ -67,7 +65,6 @@ stream                                         // ZStream[R, E, A]
   .flattenChunks                               // ZStream[R, E, C]
 ```
 
-<!-- NOT AVAILABLE YET
 ### Side effects per chunk with `tapChunks`
 
 _Available since zio-streams 2.1.17._
@@ -78,7 +75,6 @@ Unlike `tap', the `tapChunks' stream operator preserves the chunking structure a
 stream                                                     // ZStream[R, E, A]
   .tapChunks(c => ZIO.logInfo(s"Chunk of size ${c.size}")) // ZStream[R, E, A]
 ```
--->
 
 ### Avoid `rechunk`
 
