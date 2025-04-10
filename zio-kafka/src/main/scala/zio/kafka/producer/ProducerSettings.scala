@@ -19,7 +19,8 @@ final case class ProducerSettings(
   closeTimeout: Duration = 30.seconds,
   sendBufferSize: Int = 4096,
   authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.stop,
-  properties: Map[String, AnyRef] = Map.empty
+  properties: Map[String, AnyRef] = Map.empty,
+  diagnostics: Producer.ProducerDiagnostics = Producer.NoDiagnostics
 ) {
   def driverSettings: Map[String, AnyRef] = properties
 
@@ -72,6 +73,14 @@ final case class ProducerSettings(
     copy(sendBufferSize = sendBufferSize)
 
   /**
+   * Configure retries for authorization or authentication errors.
+   *
+   * If you want to retry other (retriable) exceptions, please use the
+   * [[https://kafka.apache.org/documentation/#producerconfigs_retries retries configuration property]].
+   *
+   * ⚠️ Retrying may cause records to be produced in a different order than the order in which they were given to
+   * zio-kafka.
+   *
    * @param authErrorRetrySchedule
    *   The schedule at which the producer will retry producing, even when producing fails with an
    *   [[org.apache.kafka.common.errors.AuthorizationException]] or
@@ -83,13 +92,17 @@ final case class ProducerSettings(
    * {{{Schedule.recurs(5) && Schedule.spaced(500.millis)}}}
    *
    * The default is `Schedule.stop` which is, to fail the producer on the first auth error.
-   *
-   * ⚠️ Retrying can cause records to be produced in a different order than the order in which they were given to
-   * zio-kafka.
    */
   def withAuthErrorRetrySchedule(authErrorRetrySchedule: Schedule[Any, Throwable, Any]): ProducerSettings =
     copy(authErrorRetrySchedule = authErrorRetrySchedule)
 
+  /**
+   * @param diagnostics
+   *   an optional callback for key events in the producer life-cycle. The callbacks will be executed in a separate
+   *   fiber. Since the events are queued, failure to handle these events leads to out of memory errors.
+   */
+  def withDiagnostics(diagnostics: Producer.ProducerDiagnostics): ProducerSettings =
+    copy(diagnostics = diagnostics)
 }
 
 object ProducerSettings {
