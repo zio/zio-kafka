@@ -820,7 +820,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           } yield assertCompletes
         } @@ nonFlaky(10)
       ),
-      test("handles rebalances during graceful shutdown") {
+      test("does not consume newly assigned partitions when rebalancing during a graceful shutdown") {
         /*
         Test outline:
         - Consumer 1 consumes some records
@@ -829,70 +829,82 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         - Consumer 1 goes through the rebalance
         - Consumer 2 gets assigned partitions
         - Consumer 1 stops holding up ending the stream
-        - Consumer 1 should not have received new partition streams
+        - Consumer 1 may get assigned new partitions, but those should not be consumed
          */
         for {
-          topic1  <- randomTopic
-          client1 <- randomClient
-          client2 <- randomClient
-          group   <- randomGroup
+          topic1         <- randomTopic
+          partitionCount <- ZIO.randomWith(_.nextIntBetween(2, 10))
+          client1        <- randomClient
+          client2        <- randomClient
+          group          <- randomGroup
 
-          producer  <- KafkaTestUtils.makeProducer
-          consumer1 <- KafkaTestUtils.makeConsumer(client1, Some(group))
-          consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group))
-          _         <- KafkaTestUtils.createCustomTopic(topic1, partitionCount = 2)
+          producer             <- KafkaTestUtils.makeProducer
+          consumer1Diagnostics <- SlidingDiagnostics.make[DiagnosticEvent](1024)
+          consumer1            <- KafkaTestUtils.makeConsumer(client1, Some(group), diagnostics = consumer1Diagnostics)
+          consumer2            <- KafkaTestUtils.makeConsumer(client2, Some(group))
+          _                    <- KafkaTestUtils.createCustomTopic(topic1, partitionCount = partitionCount)
           _ <- KafkaTestUtils.scheduledProduce(producer, topic1, Schedule.spaced(100.millis)).runDrain.forkScoped
-          _ <- ZIO.scoped {
-                 for {
-                   stream1Started <- Promise.make[Nothing, Unit]
-                   stream2Started <- Promise.make[Nothing, Unit]
-                   stream1Control <- ZIO.logAnnotate("stream", "1") {
-                                       consumer1
-                                         .partitionedStreamWithControl(
-                                           Subscription.topics(topic1),
-                                           Serde.string,
-                                           Serde.string
-                                         )
-                                     }
-                   stream1Fiber <- ZIO.logAnnotate("stream", "1") {
-                                     stream1Control.stream
-                                       .flatMapPar(Int.MaxValue) { case (tp, partitionStream) =>
-                                         ZStream.debug(s"Starting topic partition ${tp}") *>
-                                           partitionStream.map(_.offset)
-                                       }
-                                       .aggregateAsync(Consumer.offsetBatches)
-                                       .mapZIO(offsetBatch =>
-                                         stream1Started.succeed(()) *> stream2Started.await *> offsetBatch.commit
-                                       )
-                                       .runDrain
-                                       .tapErrorCause(c => ZIO.logErrorCause("Stream 1 failed", c))
-                                       .forkScoped
-                                   }
-                   _ <- stream1Started.await
-                   _ <- ZIO.logDebug("Consumer 1 started")
-                   stream2Control <- ZIO.logAnnotate("stream", "2") {
-                                       consumer2
-                                         .plainStreamWithControl(
-                                           Subscription.topics(topic1),
-                                           Serde.string,
-                                           Serde.string
-                                         )
-                                     }
-                   _ <- ZIO.logDebug("Consumer 1 start of graceful shutdown")
-                   _ <- stream1Control.end
-                   _ <- ZIO.logAnnotate("stream", "2") {
-                          stream2Control.stream
-                            .tap(_ => stream2Started.succeed(()))
-                            .runDrain
-                            .tapErrorCause(c => ZIO.logErrorCause("Stream 2 failed", c))
-                            .forkScoped
-                        }
-                   _ <- ZIO.logDebug("Waiting for consumer 1 to end")
-                   _ <- stream1Fiber.join
-                 } yield ()
-               }
-        } yield assertCompletes
-      }, //  @@ nonFlaky(10),
+          stream1PartitionsAssignedValue <-
+            ZIO.scoped {
+              for {
+                stream1Started <- Promise.make[Nothing, Unit]
+                stream2Started <- Promise.make[Nothing, Unit]
+                stream1Control <- ZIO.logAnnotate("stream", "1") {
+                                    consumer1
+                                      .partitionedStreamWithControl(
+                                        Subscription.topics(topic1),
+                                        Serde.string,
+                                        Serde.string
+                                      )
+                                  }
+                stream1PartitionsAssigned <- Ref.make(0)
+                stream1Fiber <-
+                  ZIO.logAnnotate("stream", "1") {
+                    stream1Control.stream
+                      .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
+                        ZStream.fromZIO(stream1PartitionsAssigned.update(_ + 1)) *>
+                          partitionStream.map(_.offset)
+                      }
+                      .aggregateAsync(Consumer.offsetBatches)
+                      .mapZIO(offsetBatch =>
+                        stream1Started.succeed(()) *>
+                          offsetBatch.commit.repeatUntilZIO(_ =>
+                            stream2Started.isDone
+                          ) // Somewhat artifical condition, to simulate that consumer1 is still processing records. We need to keep committing to drive polling
+                      )
+                      .runDrain
+                      .tapErrorCause(c => ZIO.logErrorCause("Stream 1 failed", c))
+                      .forkScoped
+                  }
+                _ <- stream1Started.await
+                _ <- ZIO.logInfo("Consumer 1 started")
+                stream2Control <- ZIO.logAnnotate("stream", "2") {
+                                    consumer2
+                                      .plainStreamWithControl(
+                                        Subscription.topics(topic1),
+                                        Serde.string,
+                                        Serde.string
+                                      )
+                                  }
+                _ <- ZIO.logInfo("Consumer 1 start of graceful shutdown")
+                _ <- stream1Control.end
+                _ <- ZIO.logAnnotate("stream", "2") {
+                       stream2Control.stream
+                         .tap(_ => stream2Started.succeed(()))
+                         .runDrain
+                         .tapErrorCause(c => ZIO.logErrorCause("Stream 2 failed", c))
+                         .forkScoped
+                     }
+                _                              <- ZIO.logInfo("Waiting for consumer 1 to end")
+                _                              <- stream1Fiber.join
+                stream1PartitionsAssignedValue <- stream1PartitionsAssigned.get
+              } yield stream1PartitionsAssignedValue
+            }
+          nrConsumer1Rebalances <- consumer1Diagnostics.queue.takeAll.map(_.collect {
+                                     case e: DiagnosticEvent.Rebalance => e
+                                   }.size)
+        } yield assertTrue(nrConsumer1Rebalances >= 2 && stream1PartitionsAssignedValue == partitionCount)
+      } @@ TestAspect.nonFlaky(10),
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
         // Setup of this test:
         // - Set the max poll interval very low: a couple of seconds.

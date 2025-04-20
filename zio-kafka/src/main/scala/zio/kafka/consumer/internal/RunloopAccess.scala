@@ -70,7 +70,9 @@ private[consumer] final class RunloopAccess private (
                diagnostics.emit(DiagnosticEvent.SubscriptionFinalized)
            }
     } yield new StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]] {
-      override def stream = partitionAssignmentStream.interruptWhen(ended)
+      override def stream = partitionAssignmentStream.interruptWhen(
+        ended
+      ) // This also prevents any partitions assigned during a rebalance after initiating the graceful shutdown to be consumed
       override def end =
         ended.succeed(()).ignore *> withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription))
 
