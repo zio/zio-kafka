@@ -55,7 +55,7 @@ final class PartitionStreamControl private (
   /** Offer new data for the stream to process. Should be called on every poll, also when `data.isEmpty` */
   private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): UIO[Unit] =
     ZIO.ifZIO(hasEnded)(
-      onTrue = ZIO.dieMessage("Partition stream has already ended, cannot offer more record"),
+      onTrue = ZIO.dieMessage("Partition stream has already ended, cannot offer more records"),
       onFalse = if (data.isEmpty) {
         queueInfoRef.update(_.withEmptyPoll)
       } else {
@@ -112,7 +112,8 @@ final class PartitionStreamControl private (
   private[internal] def end: ZIO[Any, Nothing, Unit] =
     logAnnotate {
       ZIO.logDebug(s"Partition ${tp.toString} ending") *>
-        dataQueue.offer(Take.end).unit *> hasEndedRef.set(true)
+        hasEndedRef.set(true) *>
+        dataQueue.offer(Take.end).unit
     }
 
   /** Returns true when the stream is done. */

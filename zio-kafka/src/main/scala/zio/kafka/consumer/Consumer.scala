@@ -130,6 +130,8 @@ trait Consumer {
    * unsubscribed when the scope is ended. Calling [[StreamControl.end]] stops fetching data for the subscription
    * partitions but will not unsubscribe until the Scope is ended.
    *
+   * See the docs at https://zio.dev/zio-kafka/consuming-kafka-topics-using-zio-streams for more information.
+   *
    * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any
    * zio-kafka version.
    */
@@ -146,6 +148,8 @@ trait Consumer {
    * The Scope provided to the returned effect controls the lifetime of the subscription. The subscription is
    * unsubscribed when the scope is ended. Calling [[StreamControl.end]] stops fetching data for the subscription
    * partitions but will not unsubscribe until the Scope is ended.
+   *
+   * See the docs at https://zio.dev/zio-kafka/consuming-kafka-topics-using-zio-streams for more information.
    *
    * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any
    * zio-kafka version.
@@ -166,6 +170,8 @@ trait Consumer {
    * The Scope provided to the returned effect controls the lifetime of the subscription. The subscription is
    * unsubscribed when the scope is ended. Calling [[StreamControl.end]] stops fetching data for the subscription
    * partitions but will not unsubscribe until the Scope is ended.
+   *
+   * See the docs at https://zio.dev/zio-kafka/consuming-kafka-topics-using-zio-streams for more information.
    *
    * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any
    * zio-kafka version.

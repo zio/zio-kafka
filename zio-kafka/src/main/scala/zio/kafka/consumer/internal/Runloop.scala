@@ -444,9 +444,9 @@ private[consumer] final class Runloop private (
         }
       case RunloopCommand.EndStreamsBySubscription(subscription, cont) =>
         for {
-          _ <- ZIO.foreachDiscard(
+          _ <- ZIO.foreachDiscard {
                  state.assignedStreams.filter(stream => Subscription.subscriptionMatches(subscription, stream.tp))
-               )(_.end)
+               }(_.end)
           _ <- cont.succeed(())
         } yield state.copy(
           pendingRequests =
