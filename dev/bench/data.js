@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1745146617451,
+  "lastUpdate": 1745147592110,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -9630,6 +9630,90 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 564.30082904,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "svroonland@users.noreply.github.com",
+            "name": "svroonland",
+            "username": "svroonland"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "98bd1649e8ae590c806eda24bd83614f0d8ca9c3",
+          "message": "Graceful shutdown of a stream for a single subscription (#1201)\n\nImplements functionality for gracefully stopping a stream for a single\nsubscription: stop fetching records for the assigned topic-partitions\nbut keep being subscribed so that offsets can still be committed.\nIntended to replace `stopConsumption`, which did not support\nmultiple-subscription use cases.\n\nA new command `EndStreamsBySubscription` is introduced, which calls the\n`end` method on the `PartitionStreamControl` of streams matching a\nsubscription. In the method `Consumer#runWithGracefulShutdown` we then\nwait for the user's stream to complete, before removing the\nsubscription.\n\nThis is experimental functionality, intended to replace\n`stopConsumption` at some point. Methods with this new functionality are\noffered besides existing methods to maintain compatibility.\n\n~All the fiber and scope trickery proved to be very hard to get right\n(the lifetime of this PR is a testimony to that), and there may still be\nsubtle issues here.~ This is now traced back to issue\nhttps://github.com/zio/zio/issues/9288\n\nImplements some of #941.\n\n---------\n\nCo-authored-by: Erik van Oosten <e.vanoosten@grons.nl>\nCo-authored-by: zio-scala-steward[bot] <145262613+zio-scala-steward[bot]@users.noreply.github.com>",
+          "timestamp": "2025-04-20T12:55:05+02:00",
+          "tree_id": "c391957cdf5418525223b392dc8f2ce43510d05d",
+          "url": "https://github.com/zio/zio-kafka/commit/98bd1649e8ae590c806eda24bd83614f0d8ca9c3"
+        },
+        "date": 1745147591644,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
+            "value": 15.803906462985012,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
+            "value": 12.859268826638635,
+            "unit": "ops/s",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 585.66080766,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 585.4197404800001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 141.4737039135714,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 388.3990154366667,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 535.6925727800001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 530.3008597999999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 555.81538304,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 562.8834029000002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
