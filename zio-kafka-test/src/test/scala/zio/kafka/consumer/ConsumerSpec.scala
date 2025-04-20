@@ -781,7 +781,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         stream1Started.succeed(()) *>
                           offsetBatch.commit.repeatUntilZIO(_ =>
                             stream2Started.isDone
-                          ) // Somewhat artifical condition, to simulate that consumer1 is still processing records. We need to keep committing to drive polling
+                          ) // Somewhat artificial condition, to simulate that consumer1 is still processing records. We need to keep committing to drive polling
                       )
                       .runDrain
                       .tapErrorCause(c => ZIO.logErrorCause("Stream 1 failed", c))
