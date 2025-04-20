@@ -47,7 +47,7 @@ object Kafka {
    */
   def saslEmbeddedWith(customBrokerProps: Ports => Map[String, String]): ZLayer[Any, Throwable, Kafka.Sasl] =
     embeddedWithBrokerProps(
-      ports => // TODO: why not use constants?
+      ports =>
         Map(
           "group.min.session.timeout.ms"         -> "500",
           "group.initial.rebalance.delay.ms"     -> "0",
