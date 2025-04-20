@@ -1383,8 +1383,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
         // Test for both default partition assignment strategies
         Seq(
-          testForPartitionAssignmentStrategy[RangeAssignor]
-//          testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
+          testForPartitionAssignmentStrategy[RangeAssignor],
+          testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
       }: _*),
       test("external commits are used when rebalanceSafeCommits is enabled") {
