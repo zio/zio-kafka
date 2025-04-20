@@ -74,3 +74,70 @@ Each time a new partition is assigned to the consumer, a new partition stream is
 ensures only a single stream is doing commits.
 
 In this example, each partition is processed in parallel, on separate fibers, while a single fiber is doing commits.
+
+## Controlled shutdown (experimental)
+
+The examples above will keep processing records forever, or until the fiber is interrupted, typically at application shutdown. When interrupted, some records may be 'in-flight', e.g. being processed by one of the stages of your consumer stream user code. Those records will be processed partly and their offsets may not be committed. For fast shutdown in an at-least-once processing scenario this is fine.
+
+zio-kafka also supports a _graceful shutdown_, where the fetching of records for the subscribed topics/partitions is stopped, the streams are ended and all downstream stages are completed, allowing in-flight records to be fully processed.
+
+Use the `*StreamWithControl` variants of `plainStream`, `partitionedStream` and `partitionedAssignmentStream` for this purpose. These methods return a `StreamControl` object allowing you to stop fetching records and terminate the execution of the stream gracefully.
+
+The `StreamControl` can be used with `Consumer.runWithGracefulShutdown`, which can gracefully terminate the stream upon fiber interruption. This is useful for a controlled shutdown when your application is terminated:
+
+```scala
+import zio.Console.printLine
+import zio.kafka.consumer._
+import zio._
+
+ZIO.scoped {
+  for {
+    control <- consumer.partitionedStreamWithControl(
+      Subscription.topics("topic150"),
+      Serde.string,
+      Serde.string
+    )
+    _ <- consumer.runWithGracefulShutdown(control, shutdownTimeout = 30.seconds) { stream =>
+        stream.flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
+          partitionStream
+            .tap(record => printLine(s"key: ${record.key}, value: ${record.value}"))
+            .map(_.offset)
+        }
+        .aggregateAsync(Consumer.offsetBatches)
+        .mapZIO(_.commit)
+        .runDrain
+      }
+  } yield ()
+}
+```
+
+For more control over when to end the stream, use the `StreamControl` construct like this:
+
+```scala
+import zio.Console.printLine
+import zio.kafka.consumer._
+
+ZIO.scoped {
+    for {
+      control <- consumer.partitionedStreamWithControl(
+          Subscription.topics("topic150"),
+          Serde.string,
+          Serde.string
+        )
+      fiber <- control.stream.flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
+            partitionStream
+              .tap(record => printLine(s"key: ${record.key}, value: ${record.value}"))
+              .map(_.offset)
+          }
+          .aggregateAsync(Consumer.offsetBatches)
+          .mapZIO(_.commit)
+          .runDrain
+          .forkScoped
+      // At some point in your code, when some condition is met
+      _ <- control.end // Stop fetching more records
+      _ <- fiber.join // Wait for graceful completion of the stream
+    } yield ()
+}
+```
+
+As of zio-kafka 3.0, this functionality is experimental. If no issues are reported and the API has good usability, it will eventually be marked as stable.

@@ -56,7 +56,17 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           _             <- control.offerRecords(records)
           _             <- control.end
           pulledRecords <- control.stream.runCollect
-        } yield assertTrue(records == pulledRecords)
+          hasEnded      <- control.hasEnded
+        } yield assertTrue(records == pulledRecords && hasEnded)
+      },
+      test("offering records after end will fail") {
+        for {
+          control <- createTestControl
+          records = createTestRecords(3)
+          _    <- control.offerRecords(records)
+          _    <- control.end
+          exit <- control.offerRecords(records).exit
+        } yield assertTrue(exit.isFailure)
       },
       test("halt completes the stream with a TimeoutException") {
         for {
