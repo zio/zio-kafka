@@ -1005,9 +1005,10 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                           `max.poll.records` = 1,
                           rebalanceSafeCommits = rebalanceSafeCommits,
                           maxRebalanceDuration = 20.seconds,
-                          commitTimeout = 1.second
+                          commitTimeout = 1.second,
+                          diagnostics = diagnostics
                         )
-            consumer <- Consumer.make(settings, diagnostics)
+            consumer <- Consumer.make(settings)
           } yield consumer
 
         for {
@@ -1383,9 +1384,10 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               clientId <- randomClient
               settings <- KafkaTestUtils.consumerSettings(
                             clientId = clientId,
-                            maxPollInterval = 500.millis
+                            maxPollInterval = 500.millis,
+                            diagnostics = diagnostics
                           )
-              _ <- Consumer.make(settings, diagnostics = diagnostics)
+              _ <- Consumer.make(settings)
               _ <- ZIO.sleep(1.second)
             } yield assertCompletes
 
@@ -1404,8 +1406,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             def test(diagnostics: ConsumerDiagnostics): ZIO[Scope & Kafka, Throwable, TestResult] =
               for {
                 clientId <- randomClient
-                settings <- KafkaTestUtils.consumerSettings(clientId = clientId)
-                _        <- Consumer.make(settings, diagnostics = diagnostics)
+                settings <- KafkaTestUtils.consumerSettings(clientId = clientId, diagnostics = diagnostics)
+                _        <- Consumer.make(settings)
               } yield assertCompletes
 
             for {
@@ -1427,8 +1429,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 producer <- KafkaTestUtils.makeProducer
                 _        <- KafkaTestUtils.produceOne(producer, topic, "key1", "message1")
 
-                settings <- KafkaTestUtils.consumerSettings(clientId = clientId)
-                consumer <- Consumer.make(settings, diagnostics = diagnostics)
+                settings <- KafkaTestUtils.consumerSettings(clientId = clientId, diagnostics = diagnostics)
+                consumer <- Consumer.make(settings)
                 // Starting a consumption session to start the Runloop.
                 consumed0 <- consumer
                                .plainStream(Subscription.manual(topic -> 0), Serde.string, Serde.string)
@@ -1474,8 +1476,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 producer <- KafkaTestUtils.makeProducer
                 _        <- KafkaTestUtils.produceMany(producer, topic, kvs)
 
-                settings <- KafkaTestUtils.consumerSettings(clientId = clientId)
-                consumer <- Consumer.make(settings, diagnostics = diagnostics)
+                settings <- KafkaTestUtils.consumerSettings(clientId = clientId, diagnostics = diagnostics)
+                consumer <- Consumer.make(settings)
                 // Create a Ref to track messages consumed and a Promise to signal when to stop consumption
                 messagesConsumedRef <- Ref.make(0)
                 stopPromise         <- Promise.make[Nothing, Unit]
