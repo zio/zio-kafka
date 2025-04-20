@@ -57,7 +57,21 @@ val consumerLayer: Layer[Any, Throwable, Consumer] =
 
 (1) By using `ZLayer.scoped`, the consumer is closed when the layer is no longer needed.
 
-## Consumer settings from a layer
+## Consumer settings from a layer (zio-kafka 3.x)
+
+If you wish to create the `ConsumerSettings` and the `Consumer` from a layer, you can use `Consumer.live`. It takes
+the consumer settings as a layer and produces a consumer.
+
+The `provide` section of the main program could look like this:
+
+```scala
+.provide(
+  consumerSettingsLayer,
+  Consumer.live
+)
+```
+
+## Consumer settings from a layer (zio-kafka 2.x)
 
 If you wish to create the `ConsumerSettings` and the `Consumer` from a layer, you can use `Consumer.live`. It takes
 the consumer settings and diagnostics settings as a layer and produces a consumer.
@@ -67,7 +81,7 @@ The `provide` section of the main program could look like this:
 ```scala
 .provide(
   consumerSettingsLayer,
-  ZLayer.succeed(Diagnostics.NoOp),
+  ZLayer.succeed(Consumer.NoDiagnostics),
   Consumer.live
 )
 ```

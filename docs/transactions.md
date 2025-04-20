@@ -171,7 +171,6 @@ Putting it all together we get:
 ```scala
 import org.apache.kafka.clients.producer.ProducerRecord
 import zio._
-import zio.kafka.consumer.diagnostics.Diagnostics
 import zio.kafka.consumer._
 import zio.kafka.producer._
 import zio.kafka.serde.Serde
@@ -240,7 +239,7 @@ object Transactional extends ZIOAppDefault {
     runConsumerStream
       .provide(
         consumerSettings,
-        ZLayer.succeed(Diagnostics.NoOp),
+        ZLayer.succeed(Consumer.NoDiagnostics),  // No longer needed in zio-kafka 3.x
         Consumer.live,
         producerSettings,
         TransactionalProducer.live

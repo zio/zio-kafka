@@ -6,15 +6,16 @@ title: "Migrating to zio-kafka 3"
 Zio-kafka 3.0.0 brings a number of backwards incompatible changes:
 
 1. Removal of all deprecated methods, _including accessor methods,_
-2. The transactional producer is now much easier to use, 
-3. `restartStreamOnRebalancing` mode is no longer supported.
+2. The transactional producer is now much easier to use,
+3. Diagnostics set via consumer settings, 
+4. `restartStreamOnRebalancing` mode is no longer supported.
 
 This document helps you migrate from zio-kafka 2 to zio-kafka 3.
 
 # 1. Deprecations
 
 Zio-kafka 3.0.0 removes everything that was deprecated in the zio-kafka 2.x series. In particular, this includes
-accessor methods. To prepare for zio-kafka 3.0, _you should always first migrate to zio-kafka 2.11.0_ and solve all
+accessor methods. To prepare for zio-kafka 3.0, _you should always first migrate to zio-kafka 2.12.0_ and solve all
 deprecation issues, using this page as a guide.
 
 ## Renamed methods
@@ -159,9 +160,77 @@ The transactional producer is now much easier to use. The zio-kafka 2.x transact
 expect only a few very experienced users to make use of it. Therefore, only the new API is described in
 [transactions](transactions.md).
 
-# 3. `restartStreamOnRebalancing` mode
+# 3. Diagnostics set via consumer settings
 
-This mode is longer be available in zio-kafka 3. With `restartStreamOnRebalancing` all streams are ended during a
+Diagnostics, an optional callback for key events in the consumer life-cycle, is now set via
+`ConsumerSettings.withDiagnostics`. In zio-kafka 2.x it was the second (optional) argument to `Consumer.make`, or an
+additional input layer for `Consumer.live`.
+
+### Migrate a layers app without diagnostics
+
+If your program uses ZIO layers, but you don't need diagnostics, it will look like this:
+
+```scala
+// zio-kafka 2.x
+.provide(
+  consumerSettingsLayer,
+  ZLayer.succeed(Consumer.NoDiagnostics), // 1
+  Consumer.live
+)
+```
+
+For zio-kafka 3.x simply remove the line marked with `// 1` and you are done.
+
+### Migrate uses of `Consumer.make` with diagnostics
+
+Rewrite your code following this example:
+
+```scala
+// zio-kafka 2.x
+val diagnostics = ???
+val settings = ConsumerSettings(bootstrap)
+val consumer = Consumer.make(settings, diagnostics)
+
+// zio-kafka 3.x
+val diagnostics = ???
+val settings = ConsumerSettings(bootstrap).withDiagnostics(diagnostics)
+val consumer = Consumer.make(settings)
+```
+
+## Migrate a layers app with diagnostics
+
+In case your application provides diagnostics via a layer, providing the layers looks like this:
+
+```scala
+// zio-kafka 2.x
+.provide(
+  consumerSettingsLayer,
+  diagnosticsLayer,
+  Consumer.live
+)
+```
+
+The cleanest solution is to merge the code that constructs `diagnosticsLayer` into the code that constructs
+`consumerSettingsLayer`.
+
+The other option is to apply a 'quick fix' that transforms the two layers into a single layer:
+
+```scala
+// zio-kafka 3.x
+.provide(
+  (consumerSettingsLayer ++ diagnosticsLayer) >>> ZLayer {
+    for {
+      settings <- ZIO.service[ConsumerSettings]
+      diagnostics <- ZIO.service[Consumer.ConsumerDiagnostics]
+    } yield settings.withDiagnostics(diagnostics)
+  },
+  Consumer.live
+)
+```
+
+# 4. `restartStreamOnRebalancing` mode
+
+This mode is no longer available in zio-kafka 3. With `restartStreamOnRebalancing` all streams are ended during a
 rebalance, even when the partition for that stream was not revoked. One of its purposes was to enable transactional
 consuming. Since zio-kafka 3 however, transactional consuming no longer needs this mode.
 
