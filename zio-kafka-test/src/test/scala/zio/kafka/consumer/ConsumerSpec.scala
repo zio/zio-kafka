@@ -560,7 +560,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           } yield assertTrue(processedOffsets.forall { case (tp, offset) =>
             committedOffsets.get(tp).flatMap(_.map(_.offset())).contains(offset + 1)
           })
-        } @@ nonFlaky(10),
+        },
         test("StreamControl.end can be called more than once") {
           val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
           for {
@@ -729,7 +729,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                    } yield ()
                  }
           } yield assertCompletes
-        } @@ nonFlaky(10)
+        }
       ),
       test("does not consume newly assigned partitions when rebalancing during a graceful shutdown") {
         /*
@@ -815,7 +815,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                      case e: DiagnosticEvent.Rebalance => e
                                    }.size)
         } yield assertTrue(nrConsumer1Rebalances >= 2 && stream1PartitionsAssignedValue == partitionCount)
-      } @@ TestAspect.nonFlaky(10),
+      },
       test("a consumer timeout interrupts the stream and shuts down the consumer") {
         // Setup of this test:
         // - Set the max poll interval very low: a couple of seconds.
@@ -1958,7 +1958,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     )
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ timeout(10.minutes) @@ TestAspect.timed @@ TestAspect.sequential
+      ) @@ withLiveClock @@ timeout(2.minutes) @@ TestAspect.timed
 
   private final implicit class ConsumerDiagnosticsOps(private val event: DiagnosticEvent) extends AnyVal {
     def isFinalizationEvent: Boolean = event match {
