@@ -484,7 +484,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           } yield assertTrue(processedOffsets.forall { case (tp, offset) =>
             committedOffsets.get(tp).flatMap(_.map(_.offset())).contains(offset + 1)
           })
-        } @@ nonFlaky(10),
+        },
         test("runWithGracefulShutdown must end streams while still processing commits when being interrupted") {
           val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
           for {
