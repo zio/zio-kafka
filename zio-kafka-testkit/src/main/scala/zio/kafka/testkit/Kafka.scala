@@ -135,9 +135,6 @@ object Kafka {
                    ZIO
                      .attemptBlocking(EmbeddedKafkaService(EmbeddedKafka.start()(embeddedKafkaConfig)))
                      .catchNonFatalOrDie { e =>
-                       // TODO remove after debugging
-                       println(s"Failed to start embedded Kafka: ${e.getMessage}")
-                       e.printStackTrace()
                        ZIO.fail(EmbeddedKafkaStartException("Failed to start embedded Kafka", e))
                      }
                  )(_.stop())
