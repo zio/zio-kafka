@@ -55,9 +55,9 @@ object Kafka {
           "sasl.enabled.mechanisms"              -> "PLAIN",
           "sasl.mechanism.inter.broker.protocol" -> "PLAIN",
           "inter.broker.listener.name"           -> "SASL_PLAINTEXT",
-          "listeners"                            -> s"SASL_PLAINTEXT://localhost:${ports.kafkaPort},CONTROLLER://localhost:${ports.controllerPort}",
-          "advertised.listeners"                 -> s"SASL_PLAINTEXT://localhost:${ports.kafkaPort}",
-          "super.users"                          -> "User:admin",
+          "listeners" -> s"SASL_PLAINTEXT://localhost:${ports.kafkaPort},CONTROLLER://localhost:${ports.controllerPort}",
+          "advertised.listeners" -> s"SASL_PLAINTEXT://localhost:${ports.kafkaPort}",
+          "super.users"          -> "User:admin",
           "listener.name.sasl_plaintext.plain.sasl.jaas.config" -> """org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_kafkabroker1="kafkabroker1-secret";"""
         ),
       customBrokerProps
@@ -91,9 +91,9 @@ object Kafka {
           "ssl.keystore.password"            -> "123456",
           "ssl.key.password"                 -> "123456",
           "inter.broker.listener.name"       -> "SSL",
-          "listeners"                        -> s"SSL://localhost:${ports.kafkaPort},CONTROLLER://localhost:${ports.controllerPort}",
-          "advertised.listeners"             -> s"SSL://localhost:${ports.kafkaPort}",
-          "zookeeper.connection.timeout.ms"  -> s"${30.second.toMillis}"
+          "listeners" -> s"SSL://localhost:${ports.kafkaPort},CONTROLLER://localhost:${ports.controllerPort}",
+          "advertised.listeners"            -> s"SSL://localhost:${ports.kafkaPort}",
+          "zookeeper.connection.timeout.ms" -> s"${30.second.toMillis}"
         ),
       customBrokerProps
     )
