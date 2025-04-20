@@ -19,6 +19,89 @@ object ProducerSpec extends ZIOSpecDefault {
 
   override def spec: Spec[TestEnvironment with Scope, Any] =
     suite("Producer")(
+      suite("produceAsync")(
+        test("successfully produces a record") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendSucceed()
+            .callbackSucceed()
+          val recordToSend = makeProducerRecord()
+          for {
+            result <- runSingleRecordTest(mockBehavior, recordToSend)
+          } yield {
+            val history = mockBehavior.history
+            assertTrue(
+              result.isRight,
+              history.size == 1
+            )
+          }
+        },
+        test("fails to produce a record") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendFail(new RuntimeException())
+          val recordToSend = makeProducerRecord()
+          for {
+            result <- runSingleRecordTest(mockBehavior, recordToSend)
+          } yield {
+            val history = mockBehavior.history
+            assertTrue(
+              result.isLeft,
+              history.size == 1
+            )
+          }
+        },
+        test("fails to produce a record with auth exception") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendFail(authException)
+          val recordToSend = makeProducerRecord()
+          for {
+            result <- runSingleRecordTest(mockBehavior, recordToSend)
+          } yield {
+            val history = mockBehavior.history
+            assertTrue(
+              result.isLeft,
+              history.size == 1
+            )
+          }
+        },
+        test("retries send after an AuthenticationException from send") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendFail(authException) // send fails immediately
+            .sendSucceed()           // the retry
+            .callbackSucceed()       // the retry
+          val recordToSend = makeProducerRecord()
+          for {
+            result <- runSingleRecordTest(mockBehavior, recordToSend, Schedule.recurs(1))
+          } yield {
+            val history = mockBehavior.history
+            assertTrue(
+              result.isRight,
+              history.size == 2
+            )
+          }
+        },
+        test("retries send after an AuthenticationException from callback") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendSucceed()
+            .callbackFail(authException) // fail from callback
+            .sendSucceed()               // the retry
+            .callbackSucceed()           // the retry
+          val recordToSend = makeProducerRecord()
+          for {
+            result <- runSingleRecordTest(mockBehavior, recordToSend, Schedule.recurs(1))
+          } yield {
+            val history = mockBehavior.history
+            assertTrue(
+              result.isRight,
+              history.size == 2
+            )
+          }
+        }
+      ),
       suite("produceChunkAsyncWithFailures")(
         test("successfully produces chunk of records") {
           val mockBehavior = AsyncProducerTestSupport
@@ -34,7 +117,7 @@ object ProducerSpec extends ZIOSpecDefault {
             .callbackSucceed()
             .callbackSucceed()
           for {
-            results <- runTest(mockBehavior, recordsToSend)
+            results <- runChunkTest(mockBehavior, recordsToSend)
           } yield {
             val history = mockBehavior.history
             assertTrue(
@@ -58,7 +141,7 @@ object ProducerSpec extends ZIOSpecDefault {
             .callbackSucceed(4)
             .callbackSucceed(3)
           for {
-            results <- runTest(mockBehavior, recordsToSend)
+            results <- runChunkTest(mockBehavior, recordsToSend)
           } yield {
             val history = mockBehavior.history
             assertTrue(
@@ -68,20 +151,39 @@ object ProducerSpec extends ZIOSpecDefault {
             )
           }
         },
-        test("omits sending further records after failure from send") {
+        test("omits sending further records after auth failure from send") {
           val mockBehavior = AsyncProducerTestSupport
             .newMockBehavior[Array[Byte], Array[Byte]]()
             .sendSucceed()
             .sendFail(authException)
             .callbackSucceed()
           for {
-            results <- runTest(mockBehavior, recordsToSend)
+            results <- runChunkTest(mockBehavior, recordsToSend)
           } yield {
             val history = mockBehavior.history
             assertTrue(
               results.length == recordsToSend.length,
               results.head.isRight,
               results(1).left.forall(_.getMessage == testAuthenticationExceptionMessage),
+              results.drop(2).forall(_ == Left(Producer.PublishOmittedException)),
+              history.size == 2
+            )
+          }
+        },
+        test("omits sending further records after failure from send") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendSucceed()
+            .sendFail(new RuntimeException("boom!"))
+            .callbackSucceed()
+          for {
+            results <- runChunkTest(mockBehavior, recordsToSend)
+          } yield {
+            val history = mockBehavior.history
+            assertTrue(
+              results.length == recordsToSend.length,
+              results.head.isRight,
+              results(1).left.forall(_.getMessage == "boom!"),
               results.drop(2).forall(_ == Left(Producer.PublishOmittedException)),
               history.size == 2
             )
@@ -101,7 +203,7 @@ object ProducerSpec extends ZIOSpecDefault {
             .callbackSucceed()
             .callbackSucceed()
           for {
-            results <- runTest(mockBehavior, recordsToSend)
+            results <- runChunkTest(mockBehavior, recordsToSend)
           } yield {
             val history = mockBehavior.history
             assertTrue(
@@ -131,7 +233,7 @@ object ProducerSpec extends ZIOSpecDefault {
             .callbackSucceed()
             .callbackSucceed()
           for {
-            results <- runTest(mockBehavior, recordsToSend, Schedule.recurs(1))
+            results <- runChunkTest(mockBehavior, recordsToSend, Schedule.recurs(1))
           } yield {
             val history = mockBehavior.history
             assertTrue(
@@ -162,7 +264,7 @@ object ProducerSpec extends ZIOSpecDefault {
             .callbackSucceed()
             .callbackSucceed()
           for {
-            results <- runTest(mockBehavior, recordsToSend, Schedule.recurs(1))
+            results <- runChunkTest(mockBehavior, recordsToSend, Schedule.recurs(1))
           } yield {
             val history = mockBehavior.history
             assertTrue(
@@ -179,7 +281,7 @@ object ProducerSpec extends ZIOSpecDefault {
             .sendFail(new RuntimeException())
             .callbackSucceed()
           for {
-            results <- runTest(mockBehavior, recordsToSend, Schedule.recurs(1))
+            results <- runChunkTest(mockBehavior, recordsToSend, Schedule.recurs(1))
           } yield {
             val history = mockBehavior.history
             assertTrue(
@@ -204,7 +306,7 @@ object ProducerSpec extends ZIOSpecDefault {
             .callbackFail(new RuntimeException())
             .callbackSucceed()
           for {
-            results <- runTest(mockBehavior, recordsToSend, Schedule.recurs(1))
+            results <- runChunkTest(mockBehavior, recordsToSend, Schedule.recurs(1))
           } yield {
             val history = mockBehavior.history
             assertTrue(
@@ -247,7 +349,7 @@ object ProducerSpec extends ZIOSpecDefault {
             .sendSucceed()
             .callbackSucceed()
           for {
-            results <- runTest(mockBehavior, recordsToSend, Schedule.forever)
+            results <- runChunkTest(mockBehavior, recordsToSend, Schedule.forever)
           } yield {
             val history = mockBehavior.history
             assertTrue(
@@ -275,7 +377,18 @@ object ProducerSpec extends ZIOSpecDefault {
         .flatMap(producerTest(_))
     }
 
-  private def runTest(
+  private def runSingleRecordTest(
+    mockBehavior: AsyncProducerTestSupport.AsyncProducerTestSupportBehavior[Array[Byte], Array[Byte]],
+    recordToSend: ProducerRecord[Array[Byte], Array[Byte]],
+    authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.stop
+  ): ZIO[Any, Throwable, Either[Throwable, RecordMetadata]] =
+    mockBehavior.run { mockProducer =>
+      withProducer(mockProducer, authErrorRetrySchedule) { producer =>
+        producer.produceAsync(recordToSend).flatten.either
+      }
+    }
+
+  private def runChunkTest(
     mockBehavior: AsyncProducerTestSupport.AsyncProducerTestSupportBehavior[Array[Byte], Array[Byte]],
     recordsToSend: Chunk[ProducerRecord[Array[Byte], Array[Byte]]],
     authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.stop
