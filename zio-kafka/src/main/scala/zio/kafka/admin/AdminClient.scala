@@ -329,6 +329,10 @@ object AdminClient {
     private val adminClient: JAdmin
   ) extends AdminClient {
 
+    // workaround for https://issues.apache.org/jira/browse/KAFKA-18818
+    private val kafka18818Workaround: ZIO[Any, Nothing, Unit] =
+      ZIO.sleep(550.millis).unit
+
     /**
      * Create multiple topics.
      */
@@ -343,7 +347,7 @@ object AdminClient {
           options
             .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts.asJava))
             .all()
-        )
+        ) <* kafka18818Workaround
       }
     }
 
@@ -385,7 +389,7 @@ object AdminClient {
           options
             .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts.asJava))
             .all()
-        )
+        ) <* kafka18818Workaround
       }
     }
 
@@ -806,7 +810,7 @@ object AdminClient {
                 options.asJava
               )
               .all()
-          )
+          ) <* kafka18818Workaround
       )
 
     override def incrementalAlterConfigsAsync(
@@ -850,7 +854,7 @@ object AdminClient {
                 adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava)
               )
               .all()
-          )
+          ) <* kafka18818Workaround
       )
 
     override def createAclsAsync(
@@ -878,7 +882,7 @@ object AdminClient {
                 adminClient.deleteAcls(filters.map(_.asJava).asJava, opt.asJava)
               )
               .all()
-          )
+          ) <* kafka18818Workaround
       ).map(_.asScala.view.map(AclBinding(_)).toSet)
 
     override def deleteAclsAsync(

@@ -49,16 +49,28 @@ object Kafka {
     embeddedWithBrokerProps(
       ports =>
         Map(
-          "group.min.session.timeout.ms"         -> "500",
-          "group.initial.rebalance.delay.ms"     -> "0",
-          "authorizer.class.name"                -> "org.apache.kafka.metadata.authorizer.StandardAuthorizer",
+          "group.min.session.timeout.ms"     -> "500",
+          "group.initial.rebalance.delay.ms" -> "0",
+          "listeners" -> s"BROKER://localhost:${ports.kafkaPort},CONTROLLER://localhost:${ports.controllerPort}",
+          "advertised.listeners"                 -> s"BROKER://localhost:${ports.kafkaPort}",
+          "listener.security.protocol.map"       -> "BROKER:SASL_PLAINTEXT,CONTROLLER:SASL_PLAINTEXT",
+          "inter.broker.listener.name"           -> "BROKER",
+          "controller.listener.names"            -> "CONTROLLER",
           "sasl.enabled.mechanisms"              -> "PLAIN",
+          "sasl.mechanism.controller.protocol"   -> "PLAIN",
           "sasl.mechanism.inter.broker.protocol" -> "PLAIN",
-          "inter.broker.listener.name"           -> "SASL_PLAINTEXT",
-          "listeners" -> s"SASL_PLAINTEXT://localhost:${ports.kafkaPort},CONTROLLER://localhost:${ports.controllerPort}",
-          "advertised.listeners" -> s"SASL_PLAINTEXT://localhost:${ports.kafkaPort}",
-          "super.users"          -> "User:admin",
-          "listener.name.sasl_plaintext.plain.sasl.jaas.config" -> """org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret" user_admin="admin-secret" user_kafkabroker1="kafkabroker1-secret";"""
+          "authorizer.class.name"                -> "org.apache.kafka.metadata.authorizer.StandardAuthorizer",
+          "allow.everyone.if.no.acl.found"       -> "false",
+          "super.users"                          -> "User:admin",
+          "listener.name.broker.plain.sasl.jaas.config" ->
+            ("""org.apache.kafka.common.security.plain.PlainLoginModule required """ +
+              """username="admin" password="admin-secret" """ +
+              """user_admin="admin-secret" """ +
+              """user_kafkabroker1="kafkabroker1-secret";"""),
+          "listener.name.controller.plain.sasl.jaas.config" ->
+            ("""org.apache.kafka.common.security.plain.PlainLoginModule required """ +
+              """username="admin" password="admin-secret" """ +
+              """user_admin="admin-secret";""")
         ),
       customBrokerProps
     ).project(Sasl(_))
@@ -79,21 +91,22 @@ object Kafka {
         Map(
           "group.min.session.timeout.ms"     -> "500",
           "group.initial.rebalance.delay.ms" -> "0",
-          "authorizer.class.name"            -> "org.apache.kafka.metadata.authorizer.StandardAuthorizer",
-          "super.users"                      -> "User:ANONYMOUS",
-          "ssl.client.auth"                  -> "required",
-          "ssl.enabled.protocols"            -> "TLSv1.2",
-          "ssl.truststore.type"              -> "JKS",
-          "ssl.keystore.type"                -> "JKS",
-          "ssl.truststore.location"          -> KafkaTestUtils.trustStoreFile.getAbsolutePath,
-          "ssl.truststore.password"          -> "123456",
-          "ssl.keystore.location"            -> KafkaTestUtils.keyStoreFile.getAbsolutePath,
-          "ssl.keystore.password"            -> "123456",
-          "ssl.key.password"                 -> "123456",
-          "inter.broker.listener.name"       -> "SSL",
-          "listeners" -> s"SSL://localhost:${ports.kafkaPort},CONTROLLER://localhost:${ports.controllerPort}",
-          "advertised.listeners"            -> s"SSL://localhost:${ports.kafkaPort}",
-          "zookeeper.connection.timeout.ms" -> s"${30.second.toMillis}"
+          "listeners" -> s"BROKER://localhost:${ports.kafkaPort},CONTROLLER://localhost:${ports.controllerPort}",
+          "advertised.listeners"           -> s"BROKER://localhost:${ports.kafkaPort}",
+          "listener.security.protocol.map" -> "BROKER:SSL,CONTROLLER:PLAINTEXT",
+          "inter.broker.listener.name"     -> "BROKER",
+          "controller.listener.names"      -> "CONTROLLER",
+          "authorizer.class.name"          -> "org.apache.kafka.metadata.authorizer.StandardAuthorizer",
+          "super.users"                    -> "User:ANONYMOUS",
+          "ssl.client.auth"                -> "required",
+          "ssl.enabled.protocols"          -> "TLSv1.2,TLSv1.3",
+          "ssl.truststore.type"            -> "JKS",
+          "ssl.keystore.type"              -> "JKS",
+          "ssl.truststore.location"        -> KafkaTestUtils.trustStoreFile.getAbsolutePath,
+          "ssl.truststore.password"        -> "123456",
+          "ssl.keystore.location"          -> KafkaTestUtils.keyStoreFile.getAbsolutePath,
+          "ssl.keystore.password"          -> "123456",
+          "ssl.key.password"               -> "123456"
         ),
       customBrokerProps
     )
