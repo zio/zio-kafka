@@ -5,11 +5,15 @@ import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationEx
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.{ Metric, MetricName, PartitionInfo }
 import zio._
+import zio.kafka.diagnostics.Diagnostics
+import zio.kafka.diagnostics.internal.ConcurrentDiagnostics
+import zio.kafka.producer.Producer.{ NoDiagnostics, ProducerDiagnostics }
 import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
 import zio.stream.{ ZPipeline, ZStream }
 
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{ AtomicInteger, AtomicLong }
+import scala.collection.immutable.BitSet
 import scala.jdk.CollectionConverters._
 import scala.util.control.{ NoStackTrace, NonFatal }
 
@@ -208,6 +212,13 @@ trait Producer {
 }
 
 object Producer {
+
+  /** A callback for producer diagnostic events. */
+  type ProducerDiagnostics = zio.kafka.diagnostics.Diagnostics[ProducerEvent]
+
+  /** A diagnostics implementation that does nothing. */
+  val NoDiagnostics: ProducerDiagnostics = zio.kafka.diagnostics.Diagnostics.NoOp
+
   case object PublishOmittedException
       extends RuntimeException("Publish omitted due to a publish error for a previous record in the chunk")
       with NoStackTrace
@@ -245,27 +256,45 @@ object Producer {
     settings: ProducerSettings
   ): ZIO[Scope, Throwable, Producer] =
     for {
-      runtime <- ZIO.runtime[Any]
+      wrappedDiagnostics <- makeConcurrentDiagnostics(settings.diagnostics)
+      runtime            <- ZIO.runtime[Any]
       sendQueue <-
         Queue.bounded[(Chunk[ByteRecord], Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.sendBufferSize
         )
-      producer = new ProducerLive(settings, javaProducer, runtime, sendQueue)
+      producer = new ProducerLive(settings, wrappedDiagnostics, javaProducer, runtime, sendQueue)
       _ <- ZIO.blocking(producer.sendFromQueue).forkScoped
     } yield producer
 
+  private[producer] def makeConcurrentDiagnostics(
+    diagnostics: ProducerDiagnostics
+  ): ZIO[Scope, Nothing, ProducerDiagnostics] =
+    if (diagnostics == Diagnostics.NoOp) ZIO.succeed(diagnostics)
+    else ConcurrentDiagnostics.make(diagnostics, ProducerEvent.ProducerFinalized)
+
+}
+
+private object ProducerLive {
+  private val set0: Set[Int] = Set(0)
+
+  private val leftPublishOmitted = Left(Producer.PublishOmittedException)
+
+  private val retryAfterAuthException: Throwable =
+    new RuntimeException("Authentication error, retry?") with NoStackTrace
 }
 
 private[producer] final class ProducerLive(
   settings: ProducerSettings,
+  diagnostics: ProducerDiagnostics,
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
   runtime: Runtime[Any],
   sendQueue: Queue[(Chunk[ByteRecord], Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])]
 ) extends Producer {
+  import ProducerLive._
 
-  private val leftPublishOmitted = Left(Producer.PublishOmittedException)
-  private val retryAfterAuthException: Throwable =
-    new RuntimeException("Authentication error, retry?") with NoStackTrace
+  private val diagnosticsEmitterMaker =
+    if (diagnostics eq NoDiagnostics) EmptyDiagnosticsEmitterMaker
+    else new BatchDiagnosticsEmitterMaker
 
   override def produce(record: ProducerRecord[Array[Byte], Array[Byte]]): Task[RecordMetadata] =
     produceAsync(record).flatten
@@ -289,6 +318,7 @@ private[producer] final class ProducerLive(
   // noinspection YieldingZIOEffectInspection
   override def produceAsync(record: ProducerRecord[Array[Byte], Array[Byte]]): Task[Task[RecordMetadata]] =
     ZIO.suspendSucceed {
+      val diagEm = diagnosticsEmitterMaker.makeDiagnosticsEmitter(record)
       def loop(
         done: Promise[Throwable, RecordMetadata],
         driver: Schedule.Driver[Any, Any, Throwable, Any]
@@ -297,16 +327,16 @@ private[producer] final class ProducerLive(
           // Since we're sending only 1 record, we know `results` has 1 item
           results.head match {
             case Right(recordMetaData) =>
-              done.succeed(recordMetaData).unit
+              diagEm.emitSuccess() *> done.succeed(recordMetaData).unit
             case Left(error @ (_: AuthorizationException | _: AuthenticationException)) =>
               driver
                 .next(retryAfterAuthException)
                 .foldZIO(
-                  _ => done.fail(error).unit,  // schedule say "no"
-                  _ => loop(done, driver).unit // start retry
+                  _ => diagEm.emitSingleFailure() *> done.fail(error).unit, // schedule say "no"
+                  _ => loop(done, driver).unit                              // start retry
                 )
             case Left(error) =>
-              done.fail(error).unit
+              diagEm.emitSingleFailure() *> done.fail(error).unit
           }
         }
 
@@ -314,6 +344,7 @@ private[producer] final class ProducerLive(
       }
 
       for {
+        _    <- diagEm.emitOffer()
         done <- Promise.make[Throwable, RecordMetadata]
         _    <- settings.authErrorRetrySchedule.driver.flatMap(d => loop(done, d))
       } yield done.await
@@ -373,6 +404,7 @@ private[producer] final class ProducerLive(
     if (records.isEmpty) ZIO.succeed(ZIO.succeed(Chunk.empty))
     else {
       val totalRecordCount = records.size
+      val diagEm           = diagnosticsEmitterMaker.makeDiagnosticsEmitter(records)
 
       lazy val finalResults: Array[Either[Throwable, RecordMetadata]] =
         Array.fill(totalRecordCount)(leftPublishOmitted)
@@ -407,13 +439,15 @@ private[producer] final class ProducerLive(
           val continuation: Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit] = { results =>
             if (results.forall(_.isRight)) {
               // All records were successfully published, we're done
-              if (recordIndices.size == totalRecordCount) {
-                // Optimization (not allocating `finalResults`) for when everything goes well first time
-                done.succeed(results).unit
-              } else {
-                // Copy results of this attempt to the final results
-                storeResults(recordIndices, results)
-                complete(done)
+              diagEm.emitSuccess() *> {
+                if (recordIndices.size == totalRecordCount) {
+                  // Optimization (not allocating `finalResults`) for when everything goes well first time
+                  done.succeed(results).unit
+                } else {
+                  // Copy results of this attempt to the final results
+                  storeResults(recordIndices, results)
+                  complete(done)
+                }
               }
             } else {
               // Copy results of this attempt to the final results
@@ -427,13 +461,13 @@ private[producer] final class ProducerLive(
                 case _ => true
               }
               if (hasFatalError) {
-                complete(done)
+                diagEm.emitFailures(finalResults) *> complete(done)
               } else {
                 // Ask the schedule if we should retry
                 driver
                   .next(retryAfterAuthException)
                   .foldZIO(
-                    _ => complete(done), // Schedule says no
+                    _ => diagEm.emitFailures(finalResults) *> complete(done), // Schedule says no
                     _ => retryFailedRecords(results)
                   )
               }
@@ -444,6 +478,7 @@ private[producer] final class ProducerLive(
         }
 
         for {
+          _    <- diagEm.emitOffer()
           done <- Promise.make[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
           _    <- settings.authErrorRetrySchedule.driver.flatMap(d => loop(records.indices, records, done, d))
         } yield done.await
@@ -536,4 +571,61 @@ private[producer] final class ProducerLive(
       key   <- keySerializer.serialize(r.topic, r.headers, r.key())
       value <- valueSerializer.serialize(r.topic, r.headers, r.value())
     } yield new ProducerRecord(r.topic, r.partition(), r.timestamp(), key, value, r.headers)
+
+  private class BatchDiagnosticsEmitterMaker extends DiagnosticsEmitterMaker {
+    private val batchIds = new AtomicLong(0L)
+
+    override def makeDiagnosticsEmitter(record: ByteRecord): DiagnosticsEmitter =
+      makeDiagnosticsEmitter(Chunk.single(record))
+
+    override def makeDiagnosticsEmitter(records: Chunk[ByteRecord]): DiagnosticsEmitter = {
+      val batchId = batchIds.getAndIncrement()
+      val producedRecords =
+        records.map(record => ProducerEvent.ProducedRecord(record.topic(), record.partition(), record.value().length))
+      new BatchDiagnosticsEmitter(batchId, producedRecords)
+    }
+  }
+
+  private class BatchDiagnosticsEmitter(batchId: Long, producedRecords: Chunk[ProducerEvent.ProducedRecord])
+      extends DiagnosticsEmitter {
+    override def emitOffer(): ZIO[Any, Nothing, Unit] =
+      diagnostics.emit(ProducerEvent.RecordsOffered(batchId, producedRecords))
+
+    override def emitSuccess(): ZIO[Any, Nothing, Unit] =
+      diagnostics.emit(ProducerEvent.RecordsSent(batchId, producedRecords, Set.empty))
+
+    override def emitSingleFailure(): ZIO[Any, Nothing, Unit] =
+      diagnostics.emit(ProducerEvent.RecordsSent(batchId, producedRecords, set0))
+
+    override def emitFailures(finalResults: Array[_ <: Either[_, _]]): ZIO[Any, Nothing, Unit] = {
+      val failed     = BitSet.empty ++ finalResults.zipWithIndex.filter(_._1.isLeft).map(_._2)
+      val recordSent = ProducerEvent.RecordsSent(batchId, producedRecords, failed)
+      diagnostics.emit(recordSent)
+    }
+  }
+
+}
+
+private abstract class DiagnosticsEmitterMaker {
+  def makeDiagnosticsEmitter(record: ByteRecord): DiagnosticsEmitter
+  def makeDiagnosticsEmitter(records: Chunk[ByteRecord]): DiagnosticsEmitter
+}
+
+private object EmptyDiagnosticsEmitterMaker extends DiagnosticsEmitterMaker {
+  override def makeDiagnosticsEmitter(record: ByteRecord): DiagnosticsEmitter         = EmptyDiagnosticsEmitter
+  override def makeDiagnosticsEmitter(records: Chunk[ByteRecord]): DiagnosticsEmitter = EmptyDiagnosticsEmitter
+}
+
+private abstract class DiagnosticsEmitter {
+  def emitOffer(): ZIO[Any, Nothing, Unit]
+  def emitSuccess(): ZIO[Any, Nothing, Unit]
+  def emitSingleFailure(): ZIO[Any, Nothing, Unit]
+  def emitFailures(finalResults: Array[_ <: Either[_, _]]): ZIO[Any, Nothing, Unit]
+}
+
+private object EmptyDiagnosticsEmitter extends DiagnosticsEmitter {
+  override def emitOffer(): ZIO[Any, Nothing, Unit]                                          = ZIO.unit
+  override def emitSuccess(): ZIO[Any, Nothing, Unit]                                        = ZIO.unit
+  override def emitSingleFailure(): ZIO[Any, Nothing, Unit]                                  = ZIO.unit
+  override def emitFailures(finalResults: Array[_ <: Either[_, _]]): ZIO[Any, Nothing, Unit] = ZIO.unit
 }
