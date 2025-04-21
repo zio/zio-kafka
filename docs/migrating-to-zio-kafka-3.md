@@ -6,9 +6,10 @@ title: "Migrating to zio-kafka 3"
 Zio-kafka 3.0.0 brings a number of backwards incompatible changes:
 
 1. Removal of all deprecated methods, _including accessor methods,_
-2. The transactional producer is now much easier to use,
-3. Diagnostics set via consumer settings, 
-4. `restartStreamOnRebalancing` mode is no longer supported.
+2. Kafka 4.x
+3. The transactional producer is now much easier to use,
+4. Diagnostics set via consumer settings, 
+5. `restartStreamOnRebalancing` mode is no longer supported.
 
 This document helps you migrate from zio-kafka 2 to zio-kafka 3.
 
@@ -154,13 +155,30 @@ for {
 } yield ()
 ```
 
-# 2. Changes in the transactional producer
+# 2. Kafka 4.x
+
+Starting with 3.0.0, zio-kafka is based on the kafka 4.0.0 client. This has a number of consequences:
+
+* Java 11 support is dropped. Even though the kafka client library still supports java 11, zio-kafka's unit tests
+  depend on an embedded kafka broker and the kafka brokers no longer support it.
+* `ConsumerGroupState` (used in the admin client) was renamed to `GroupState`, unfortunately without a deprecation
+  cycle.
+* Due to [KAFKA-18818](https://issues.apache.org/jira/browse/KAFKA-18818) we add a 550ms delay after operations like
+  `createTopic`, `deleteTopic` and `createACL` in the admin client.
+* Two deprecated methods of kafka's admin client were removed. Their equivalent in zio-kafka were unfortunately not
+  deprecated yet but had to be removed as well:
+  * `AdminClient.alterConfigs` was removed, use `AdminClient.incrementalAlterConfigs` instead.
+  * `AdminClient.alterConfigsAsync` was removed, use `AdminClient.incrementalAlterConfigs` instead.
+
+There may be more changes that affect you. See the [Kafka 4.0.0 release announcement](https://kafka.apache.org/blog#apache_kafka_400_release_announcement) for more details.
+
+# 3. Changes in the transactional producer
 
 The transactional producer is now much easier to use. The zio-kafka 2.x transactional API is so complicated that we
 expect only a few very experienced users to make use of it. Therefore, only the new API is described in
 [transactions](transactions.md).
 
-# 3. Diagnostics set via consumer settings
+# 4. Diagnostics set via consumer settings
 
 Diagnostics, an optional callback for key events in the consumer life-cycle, is now set via
 `ConsumerSettings.withDiagnostics`. In zio-kafka 2.x it was the second (optional) argument to `Consumer.make`, or an
@@ -228,7 +246,7 @@ The other option is to apply a 'quick fix' that transforms the two layers into a
 )
 ```
 
-# 4. `restartStreamOnRebalancing` mode
+# 5. `restartStreamOnRebalancing` mode
 
 This mode is no longer available in zio-kafka 3. With `restartStreamOnRebalancing` all streams are ended during a
 rebalance, even when the partition for that stream was not revoked. One of its purposes was to enable transactional
