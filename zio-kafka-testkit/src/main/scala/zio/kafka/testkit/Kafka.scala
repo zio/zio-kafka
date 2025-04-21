@@ -81,7 +81,12 @@ object Kafka {
   val sslEmbedded: ZLayer[Any, Throwable, Kafka] = sslEmbeddedWith(_ => Map.empty)
 
   /**
-   * reates an in-memory Kafka instance with a random port and SSL authentication configured.
+   * Creates an in-memory Kafka instance with a random port and SSL authentication configured.
+   *
+   * ⚠️ This does not create an actually working broker since authentication is not configured correctly.
+   * It is however sufficient to test the SSL check that zio-kafka does before connecting to a broker
+   * with plain-text settings.
+   *
    * @param customBrokerProps
    *   add/update broker properties
    */
@@ -96,6 +101,7 @@ object Kafka {
           "listener.security.protocol.map" -> "BROKER:SSL,CONTROLLER:PLAINTEXT",
           "inter.broker.listener.name"     -> "BROKER",
           "controller.listener.names"      -> "CONTROLLER",
+          "security.inter.broker.protocol" -> "PLAINTEXT",
           "authorizer.class.name"          -> "org.apache.kafka.metadata.authorizer.StandardAuthorizer",
           "super.users"                    -> "User:ANONYMOUS",
           "ssl.client.auth"                -> "required",

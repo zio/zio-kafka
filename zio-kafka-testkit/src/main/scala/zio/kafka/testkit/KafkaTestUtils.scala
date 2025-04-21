@@ -457,7 +457,7 @@ object KafkaTestUtils {
           "ssl.keystore.location"   -> keyStoreFile.getAbsolutePath,
           "ssl.keystore.password"   -> "123456",
           "ssl.key.password"        -> "123456",
-          "ssl.enabled.protocols"   -> "TLSv1.2",
+          "ssl.enabled.protocols"   -> "TLSv1.2,TLSv1.3",
           "ssl.truststore.type"     -> "JKS",
           "ssl.keystore.type"       -> "JKS"
         )

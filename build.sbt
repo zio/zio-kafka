@@ -49,6 +49,7 @@ inThisBuild(
     scala3   := _scala3,
     // We only support Scala 2.13+ and 3+. See https://github.com/zio/zio-kafka/releases/tag/v2.7.0
     crossScalaVersions       := List(scala213.value, scala3.value),
+    ciTargetJavaVersions     := List("17", "21", "24"),
     ciEnabledBranches        := Seq("master", "series/0.x"),
     useCoursier              := false,
     Test / parallelExecution := false,
