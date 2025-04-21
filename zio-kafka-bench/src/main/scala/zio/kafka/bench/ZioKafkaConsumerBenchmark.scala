@@ -4,6 +4,7 @@ import org.openjdk.jmh.annotations._
 import zio.kafka.admin.AdminClient.NewTopic
 import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.consumer.{ Consumer, Offset, OffsetBatch, Subscription }
+import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.Kafka
 import zio.kafka.testkit.KafkaTestUtils
@@ -25,8 +26,10 @@ class ZioKafkaConsumerBenchmark extends ConsumerZioBenchmark[Kafka] {
         adminClient <- KafkaTestUtils.makeAdminClient
         _           <- adminClient.deleteTopic(topic1).ignore
         _           <- adminClient.createTopic(NewTopic(topic1, partitionCount, replicationFactor = 1))
-        producer    <- KafkaTestUtils.makeProducer
-        _           <- KafkaTestUtils.produceMany(producer, topic1, kvs)
+        // Our tests run too short for linger to have a positive influence: set it to zero.
+        settings <- KafkaTestUtils.producerSettings.map(_.withLinger(0.millis))
+        producer <- Producer.make(settings)
+        _        <- KafkaTestUtils.produceMany(producer, topic1, kvs)
       } yield ()
     }
 
