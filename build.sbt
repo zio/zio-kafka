@@ -28,8 +28,8 @@ lazy val binCompatVersionToCompare =
       compatVersion
     }
 
-lazy val kafkaVersion         = "3.9.0"
-lazy val embeddedKafkaVersion = "3.9.0" // Should be the same as kafkaVersion, except for the patch part
+lazy val kafkaVersion         = "4.0.0"
+lazy val embeddedKafkaVersion = "4.0.1" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
 lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.18"
@@ -49,6 +49,7 @@ inThisBuild(
     scala3   := _scala3,
     // We only support Scala 2.13+ and 3+. See https://github.com/zio/zio-kafka/releases/tag/v2.7.0
     crossScalaVersions       := List(scala213.value, scala3.value),
+    ciTargetJavaVersions     := List("17", "21", "24"),
     ciEnabledBranches        := Seq("master", "series/0.x"),
     useCoursier              := false,
     Test / parallelExecution := false,

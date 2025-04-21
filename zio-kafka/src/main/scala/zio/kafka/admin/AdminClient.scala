@@ -38,7 +38,7 @@ import org.apache.kafka.clients.consumer.{ OffsetAndMetadata => JOffsetAndMetada
 import org.apache.kafka.common.config.{ ConfigResource => JConfigResource }
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.{
-  ConsumerGroupState => JConsumerGroupState,
+  GroupState => JGroupState,
   IsolationLevel => JIsolationLevel,
   KafkaFuture,
   Metric => JMetric,
@@ -53,7 +53,7 @@ import zio.kafka.admin.acl._
 import zio.kafka.utils.SslHelper
 
 import java.util.Optional
-import scala.annotation.{ nowarn, tailrec }
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -282,23 +282,6 @@ trait AdminClient {
     options: AlterConfigsOptions
   ): Task[Map[ConfigResource, Task[Unit]]]
 
-  /**
-   * Update the configuration for the specified resources.
-   *
-   * If you are using brokers with version 2.3.0 or higher, please use incrementalAlterConfigs instead.
-   */
-  def alterConfigs(configs: Map[ConfigResource, KafkaConfig], options: AlterConfigsOptions): Task[Unit]
-
-  /**
-   * Update the configuration for the specified resources async.
-   *
-   * If you are using brokers with version 2.3.0 or higher, please use incrementalAlterConfigs instead.
-   */
-  def alterConfigsAsync(
-    configs: Map[ConfigResource, KafkaConfig],
-    options: AlterConfigsOptions
-  ): Task[Map[ConfigResource, Task[Unit]]]
-
   /*
    * Lists access control lists (ACLs) according to the supplied filter.
    *
@@ -346,6 +329,10 @@ object AdminClient {
     private val adminClient: JAdmin
   ) extends AdminClient {
 
+    // workaround for https://issues.apache.org/jira/browse/KAFKA-18818
+    private val kafka18818Workaround: ZIO[Any, Nothing, Unit] =
+      ZIO.sleep(550.millis).unit
+
     /**
      * Create multiple topics.
      */
@@ -360,7 +347,7 @@ object AdminClient {
           options
             .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts.asJava))
             .all()
-        )
+        ) <* kafka18818Workaround
       }
     }
 
@@ -402,7 +389,7 @@ object AdminClient {
           options
             .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts.asJava))
             .all()
-        )
+        ) <* kafka18818Workaround
       }
     }
 
@@ -823,7 +810,7 @@ object AdminClient {
                 options.asJava
               )
               .all()
-          )
+          ) <* kafka18818Workaround
       )
 
     override def incrementalAlterConfigsAsync(
@@ -836,42 +823,6 @@ object AdminClient {
             .incrementalAlterConfigs(
               configs.map { case (configResource, alterConfigOps) =>
                 (configResource.asJava, alterConfigOps.map(_.asJava).asJavaCollection)
-              }.asJava,
-              options.asJava
-            )
-            .values()
-        )
-        .map(_.asScala.map { case (configResource, kf) =>
-          (ConfigResource(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
-        }.toMap)
-
-    @nowarn("msg=deprecated")
-    override def alterConfigs(configs: Map[ConfigResource, KafkaConfig], options: AlterConfigsOptions): Task[Unit] =
-      fromKafkaFutureVoid(
-        ZIO
-          .attempt(
-            adminClient
-              .alterConfigs(
-                configs.map { case (configResource, kafkaConfig) =>
-                  (configResource.asJava, kafkaConfig.asJava)
-                }.asJava,
-                options.asJava
-              )
-              .all()
-          )
-      )
-
-    @nowarn("msg=deprecated")
-    override def alterConfigsAsync(
-      configs: Map[ConfigResource, KafkaConfig],
-      options: AlterConfigsOptions
-    ): Task[Map[ConfigResource, Task[Unit]]] =
-      ZIO
-        .attempt(
-          adminClient
-            .alterConfigs(
-              configs.map { case (configResource, kafkaConfig) =>
-                (configResource.asJava, kafkaConfig.asJava)
               }.asJava,
               options.asJava
             )
@@ -903,7 +854,7 @@ object AdminClient {
                 adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava)
               )
               .all()
-          )
+          ) <* kafka18818Workaround
       )
 
     override def createAclsAsync(
@@ -931,7 +882,7 @@ object AdminClient {
                 adminClient.deleteAcls(filters.map(_.asJava).asJava, opt.asJava)
               )
               .all()
-          )
+          ) <* kafka18818Workaround
       ).map(_.asScala.view.map(AclBinding(_)).toSet)
 
     override def deleteAclsAsync(
@@ -1010,6 +961,10 @@ object AdminClient {
       override def asJava = JConfigResource.Type.CLIENT_METRICS
     }
 
+    case object Group extends ConfigResourceType {
+      override def asJava = JConfigResource.Type.GROUP
+    }
+
     def apply(jcrt: JConfigResource.Type): ConfigResourceType =
       jcrt match {
         case JConfigResource.Type.BROKER_LOGGER  => BrokerLogger
@@ -1017,56 +972,57 @@ object AdminClient {
         case JConfigResource.Type.TOPIC          => Topic
         case JConfigResource.Type.UNKNOWN        => Unknown
         case JConfigResource.Type.CLIENT_METRICS => ClientMetrics
+        case JConfigResource.Type.GROUP          => Group
       }
   }
 
-  sealed trait ConsumerGroupState {
-    def asJava: JConsumerGroupState
+  sealed trait GroupState {
+    def asJava: JGroupState
   }
 
-  object ConsumerGroupState {
-    case object Unknown extends ConsumerGroupState {
-      override def asJava: JConsumerGroupState = JConsumerGroupState.UNKNOWN
+  object GroupState {
+    case object Unknown extends GroupState {
+      override def asJava: JGroupState = JGroupState.UNKNOWN
     }
 
-    case object PreparingRebalance extends ConsumerGroupState {
-      override def asJava: JConsumerGroupState = JConsumerGroupState.PREPARING_REBALANCE
+    case object PreparingRebalance extends GroupState {
+      override def asJava: JGroupState = JGroupState.PREPARING_REBALANCE
     }
 
-    case object CompletingRebalance extends ConsumerGroupState {
-      override def asJava: JConsumerGroupState = JConsumerGroupState.COMPLETING_REBALANCE
+    case object CompletingRebalance extends GroupState {
+      override def asJava: JGroupState = JGroupState.COMPLETING_REBALANCE
     }
 
-    case object Stable extends ConsumerGroupState {
-      override def asJava: JConsumerGroupState = JConsumerGroupState.STABLE
+    case object Stable extends GroupState {
+      override def asJava: JGroupState = JGroupState.STABLE
     }
 
-    case object Dead extends ConsumerGroupState {
-      override def asJava: JConsumerGroupState = JConsumerGroupState.DEAD
+    case object Dead extends GroupState {
+      override def asJava: JGroupState = JGroupState.DEAD
     }
 
-    case object Empty extends ConsumerGroupState {
-      override def asJava: JConsumerGroupState = JConsumerGroupState.EMPTY
+    case object Empty extends GroupState {
+      override def asJava: JGroupState = JGroupState.EMPTY
     }
 
-    case object Assigning extends ConsumerGroupState {
-      override def asJava: JConsumerGroupState = JConsumerGroupState.ASSIGNING
+    case object Assigning extends GroupState {
+      override def asJava: JGroupState = JGroupState.ASSIGNING
     }
 
-    case object Reconciling extends ConsumerGroupState {
-      override def asJava: JConsumerGroupState = JConsumerGroupState.RECONCILING
+    case object Reconciling extends GroupState {
+      override def asJava: JGroupState = JGroupState.RECONCILING
     }
 
-    def apply(state: JConsumerGroupState): ConsumerGroupState =
+    def apply(state: JGroupState): GroupState =
       state match {
-        case JConsumerGroupState.UNKNOWN              => ConsumerGroupState.Unknown
-        case JConsumerGroupState.PREPARING_REBALANCE  => ConsumerGroupState.PreparingRebalance
-        case JConsumerGroupState.COMPLETING_REBALANCE => ConsumerGroupState.CompletingRebalance
-        case JConsumerGroupState.STABLE               => ConsumerGroupState.Stable
-        case JConsumerGroupState.DEAD                 => ConsumerGroupState.Dead
-        case JConsumerGroupState.EMPTY                => ConsumerGroupState.Empty
-        case JConsumerGroupState.ASSIGNING            => ConsumerGroupState.Assigning
-        case JConsumerGroupState.RECONCILING          => ConsumerGroupState.Reconciling
+        case JGroupState.UNKNOWN              => GroupState.Unknown
+        case JGroupState.PREPARING_REBALANCE  => GroupState.PreparingRebalance
+        case JGroupState.COMPLETING_REBALANCE => GroupState.CompletingRebalance
+        case JGroupState.STABLE               => GroupState.Stable
+        case JGroupState.DEAD                 => GroupState.Dead
+        case JGroupState.EMPTY                => GroupState.Empty
+        case JGroupState.ASSIGNING            => GroupState.Assigning
+        case JGroupState.RECONCILING          => GroupState.Reconciling
       }
   }
 
@@ -1094,7 +1050,7 @@ object AdminClient {
     isSimpleConsumerGroup: Boolean,
     members: List[MemberDescription],
     partitionAssignor: String,
-    state: ConsumerGroupState,
+    state: GroupState,
     coordinator: Option[Node],
     authorizedOperations: Set[AclOperation]
   )
@@ -1107,7 +1063,7 @@ object AdminClient {
         isSimpleConsumerGroup = description.isSimpleConsumerGroup,
         members = description.members.asScala.map(MemberDescription.apply).toList,
         partitionAssignor = description.partitionAssignor,
-        state = ConsumerGroupState(description.state),
+        state = GroupState(description.groupState),
         coordinator = Node(description.coordinator()),
         authorizedOperations = Option(description.authorizedOperations())
           .fold(Set.empty[AclOperation])(_.asScala.map(AclOperation.apply).toSet)
@@ -1441,18 +1397,16 @@ object AdminClient {
       ListOffsetsResultInfo(lo.offset(), lo.timestamp(), lo.leaderEpoch().toScala.map(_.toInt))
   }
 
-  @nowarn("msg=deprecated")
-  final case class ListConsumerGroupOffsetsOptions(partitions: Chunk[TopicPartition], requireStable: Boolean) {
+  final case class ListConsumerGroupOffsetsOptions(requireStable: Boolean) {
     def asJava: JListConsumerGroupOffsetsOptions = {
       val opts = new JListConsumerGroupOffsetsOptions()
       opts.requireStable(requireStable)
-      if (partitions.isEmpty) opts else opts.topicPartitions(partitions.map(_.asJava).asJava)
     }
   }
 
   object ListConsumerGroupOffsetsOptions {
     def apply(requireStable: Boolean): ListConsumerGroupOffsetsOptions =
-      new ListConsumerGroupOffsetsOptions(Chunk.empty, requireStable)
+      new ListConsumerGroupOffsetsOptions(requireStable)
   }
 
   final case class ListConsumerGroupOffsetsSpec(partitions: Chunk[TopicPartition]) {
@@ -1486,18 +1440,18 @@ object AdminClient {
     }
   }
 
-  final case class ListConsumerGroupsOptions(states: Set[ConsumerGroupState]) {
-    def asJava: JListConsumerGroupsOptions = new JListConsumerGroupsOptions().inStates(states.map(_.asJava).asJava)
+  final case class ListConsumerGroupsOptions(states: Set[GroupState]) {
+    def asJava: JListConsumerGroupsOptions = new JListConsumerGroupsOptions().inGroupStates(states.map(_.asJava).asJava)
   }
 
-  final case class ConsumerGroupListing(groupId: String, isSimple: Boolean, state: Option[ConsumerGroupState])
+  final case class ConsumerGroupListing(groupId: String, isSimple: Boolean, state: Option[GroupState])
 
   object ConsumerGroupListing {
     def apply(cg: JConsumerGroupListing): ConsumerGroupListing =
       ConsumerGroupListing(
         groupId = cg.groupId(),
         isSimple = cg.isSimpleConsumerGroup,
-        state = cg.state().toScala.map(ConsumerGroupState(_))
+        state = cg.groupState().toScala.map(GroupState(_))
       )
   }
 

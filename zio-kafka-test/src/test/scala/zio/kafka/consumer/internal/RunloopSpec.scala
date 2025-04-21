@@ -1,11 +1,6 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.{
-  ConsumerRebalanceListener,
-  ConsumerRecord,
-  MockConsumer,
-  OffsetResetStrategy
-}
+import org.apache.kafka.clients.consumer.{ ConsumerRebalanceListener, ConsumerRecord, MockConsumer }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException }
 import zio._
@@ -109,7 +104,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
           var rebalanceListener: ConsumerRebalanceListener = null
 
           // Catches the rebalance listener so we can use it
-          val mockConsumer: BinaryMockConsumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST) {
+          val mockConsumer: BinaryMockConsumer = new BinaryMockConsumer("latest") {
             override def subscribe(
               topics: util.Collection[String],
               listener: ConsumerRebalanceListener
@@ -191,7 +186,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
 
   private def withRunloop(
     diagnostics: ConsumerDiagnostics = Diagnostics.NoOp,
-    mockConsumer: BinaryMockConsumer = new BinaryMockConsumer(OffsetResetStrategy.LATEST)
+    mockConsumer: BinaryMockConsumer = new BinaryMockConsumer("latest")
   )(
     f: (BinaryMockConsumer, PartitionsHub, Runloop) => ZIO[Scope, Throwable, TestResult]
   ): ZIO[Scope, Throwable, TestResult] =

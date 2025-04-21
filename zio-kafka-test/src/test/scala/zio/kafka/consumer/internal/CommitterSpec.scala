@@ -1,6 +1,6 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.{ MockConsumer, OffsetAndMetadata, OffsetCommitCallback, OffsetResetStrategy }
+import org.apache.kafka.clients.consumer.{ MockConsumer, OffsetAndMetadata, OffsetCommitCallback }
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.test._
@@ -199,7 +199,7 @@ object CommitterSpec extends ZIOSpecDefault {
     onCommitAsync: Map[TopicPartition, OffsetAndMetadata] => Task[Map[TopicPartition, OffsetAndMetadata]]
   ): ZIO[Any, Nothing, MockConsumer[Array[Byte], Array[Byte]]] =
     ZIO.runtime[Any].map { runtime =>
-      new MockConsumer[Array[Byte], Array[Byte]](OffsetResetStrategy.LATEST) {
+      new MockConsumer[Array[Byte], Array[Byte]]("latest") {
         override def commitAsync(
           offsets: JavaMap[TopicPartition, OffsetAndMetadata],
           callback: OffsetCommitCallback
