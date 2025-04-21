@@ -20,7 +20,11 @@ class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer
   })
 
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka with Producer] =
-    ZLayer.make[Kafka with Producer](Kafka.embedded, KafkaTestUtils.producer).orDie
+    ZLayer.make[Kafka with Producer](
+      Kafka.embedded,
+      ZLayer.fromZIO(KafkaTestUtils.producerSettings.map(_.withLinger(0.millis))),
+      Producer.live
+    ).orDie
 
   override def initialize: ZIO[Kafka & Producer, Throwable, Any] =
     ZIO.scoped {
