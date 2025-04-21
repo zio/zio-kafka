@@ -105,7 +105,6 @@ object Kafka {
           "listener.security.protocol.map"   -> "BROKER:SSL,CONTROLLER:PLAINTEXT",
           "inter.broker.listener.name"       -> "BROKER",
           "controller.listener.names"        -> "CONTROLLER",
-          "security.inter.broker.protocol"   -> "PLAINTEXT",
           "authorizer.class.name"            -> "org.apache.kafka.metadata.authorizer.StandardAuthorizer",
           "super.users"                      -> "User:ANONYMOUS",
           "ssl.client.auth"                  -> "required",
