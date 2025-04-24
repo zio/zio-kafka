@@ -28,6 +28,14 @@ val benchmarksToKeep = benchmarks.arr.filter { benchmark =>
   if (isPrCommit) datetime >= prCommitCutOfDateTime
   else datetime >= masterCommitCutOfDateTime
 }
+benchmarksToKeep.arr.value.foreach { benchmark =>
+  // Remove standard commit message from scala steward
+  val message = benchmark("commit")("message").str
+  if (message.contains("\r\n\r\n## Usage")) {
+    val newMessage = message.take(message.indexOf("\r\n\r\n## Usage"))
+    benchmark("commit")("message") = newMessage
+  }
+}
 jsonContent("entries").update("JMH Benchmark", benchmarksToKeep)
 val newDataContent = dataPrefix + jsonContent.render(indent = 2) 
 
