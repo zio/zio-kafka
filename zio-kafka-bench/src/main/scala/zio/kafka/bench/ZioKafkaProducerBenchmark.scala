@@ -64,8 +64,7 @@ class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer
   }
 
   @Benchmark
-  @BenchmarkMode(Array(Mode.Throughput))
-  @OutputTimeUnit(TimeUnit.SECONDS)
+  @BenchmarkMode(Array(Mode.AverageTime))
   def produceSingleRecordSeq(): Any = runZIO {
     // Produce 100 records sequentially
     for {
@@ -75,8 +74,7 @@ class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer
   }
 
   @Benchmark
-  @BenchmarkMode(Array(Mode.Throughput))
-  @OutputTimeUnit(TimeUnit.SECONDS)
+  @BenchmarkMode(Array(Mode.AverageTime))
   def produceSingleRecordPar(): Any = runZIO {
     // Produce 100 records of which 4 run in parallel
     for {
