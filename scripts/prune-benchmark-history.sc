@@ -1,8 +1,8 @@
-//> using dep com.lihaoyi::os-lib:0.11.3
-//> using dep com.lihaoyi::upickle:4.0.2
+//> using dep com.lihaoyi::os-lib:0.11.4
+//> using dep com.lihaoyi::upickle:4.1.0
 
 import java.time.{LocalDate, ZoneId, ZonedDateTime}
-import math.Ordered.orderingToOrdered
+import scala.math.Ordered.orderingToOrdered
 import upickle.default.*
 
 val branch = os.proc("git rev-parse --abbrev-ref HEAD".split(' ')).call().out.trim()

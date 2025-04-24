@@ -1,7 +1,7 @@
 //> using dep com.lihaoyi::os-lib:0.9.2
 
 import java.time.LocalDate
-import math.Ordered.orderingToOrdered
+import scala.math.Ordered.orderingToOrdered
 import scala.util.matching.Regex
 
 val branch = os.proc("git rev-parse --abbrev-ref HEAD".split(' ')).call().out.trim()
