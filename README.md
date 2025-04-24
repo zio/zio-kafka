@@ -53,8 +53,8 @@ See the [zio-kafka tutorial](https://zio.dev/guides/tutorials/producing-consumin
 In order to use this library, we need to add the following line in our `build.sbt` file:
 
 ```scala
-libraryDependencies += "dev.zio" %% "zio-kafka"         % "2.12.0"
-libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "2.12.0" % Test
+libraryDependencies += "dev.zio" %% "zio-kafka"         % "3.0.0-rc1"
+libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "3.0.0-rc1" % Test
 ```
 
 Snapshots are available on Sonatype's snapshot repository https://oss.sonatype.org/content/repositories/snapshots.
