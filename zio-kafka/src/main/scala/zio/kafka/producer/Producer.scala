@@ -406,6 +406,8 @@ private[producer] final class ProducerLive(
       val totalRecordCount = records.size
       val diagEm           = diagnosticsEmitterMaker.makeDiagnosticsEmitter(records)
 
+      // Collects the send results over one or more retries.
+      // Lazy to prevent allocation when all sends succeed on the first attempt.
       lazy val finalResults: Array[Either[Throwable, RecordMetadata]] =
         Array.fill(totalRecordCount)(leftPublishOmitted)
 
