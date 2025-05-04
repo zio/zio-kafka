@@ -426,16 +426,16 @@ private[producer] final class ProducerLive(
         ): ZIO[Any, Nothing, Any] = {
           def retryFailedRecords(results: Chunk[Either[Throwable, RecordMetadata]]): UIO[Unit] = {
             // Note that if we get here, all Left's can be retried. Also, we know there is at least 1 Left.
-            val toRetry: Seq[(RuntimeFlags, ByteRecord)] =
-              (recordIndices lazyZip records lazyZip results).flatMap {
-                case (_, _, Right(_))     => Seq.empty
-                case (i, record, Left(_)) => Seq((i, record))
+            val toRetry: Chunk[(Int, ByteRecord)] =
+              (results lazyZip recordIndices lazyZip records).flatMap {
+                case (Right(_), _, _)     => Chunk.empty
+                case (Left(_), i, record) => Chunk.single((i, record))
               }
             val (retryIndices, retryRecords) = toRetry.unzip
             ZIO.logInfo(
               s"Retrying publish ${retryRecords.size} (of ${records.size}) records after AuthorizationException/AuthenticationException"
             ) *>
-              loop(retryIndices, Chunk.from(retryRecords), done, driver).unit
+              loop(retryIndices, retryRecords, done, driver).unit
           }
 
           val continuation: Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit] = { results =>
