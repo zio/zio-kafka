@@ -8,6 +8,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio._
 import zio.kafka.consumer.{ Consumer, OffsetBatch }
+import zio.kafka.producer.internal.ZioProducerMetrics
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -107,10 +108,12 @@ object TransactionalProducer {
       semaphore <- Semaphore.make(1)
       runtime   <- ZIO.runtime[Any]
       sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
+        Queue.bounded[(Chunk[ByteRecord], Long, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.producerSettings.sendBufferSize
         )
-      live = new ProducerLive(settings.producerSettings, wrappedDiagnostics, rawProducer, runtime, sendQueue)
+      metrics = new ZioProducerMetrics(settings.producerSettings.metricLabels)
+      live = new ProducerLive(settings.producerSettings, wrappedDiagnostics, rawProducer, runtime, sendQueue, metrics)
+      _ <- sendQueue.size.flatMap(metrics.observeSendQueueSize).schedule(Schedule.fixed(10.seconds)).forkScoped
       _ <- ZIO.blocking(live.sendFromQueue).forkScoped
     } yield new LiveTransactionalProducer(live, semaphore, consumer)
 }

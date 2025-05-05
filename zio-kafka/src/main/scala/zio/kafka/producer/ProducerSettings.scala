@@ -3,6 +3,7 @@ package zio.kafka.producer
 import org.apache.kafka.clients.producer.ProducerConfig
 import zio._
 import zio.kafka.security.KafkaCredentialStore
+import zio.metrics.MetricLabel
 
 /**
  * Settings for the Producer.
@@ -20,7 +21,8 @@ final case class ProducerSettings(
   sendBufferSize: Int = 4096,
   authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.stop,
   properties: Map[String, AnyRef] = Map.empty,
-  diagnostics: Producer.ProducerDiagnostics = Producer.NoDiagnostics
+  diagnostics: Producer.ProducerDiagnostics = Producer.NoDiagnostics,
+  metricLabels: Set[MetricLabel] = Set.empty
 ) {
   def driverSettings: Map[String, AnyRef] = properties
 
@@ -103,6 +105,21 @@ final case class ProducerSettings(
    */
   def withDiagnostics(diagnostics: Producer.ProducerDiagnostics): ProducerSettings =
     copy(diagnostics = diagnostics)
+
+  /**
+   * @param metricLabels
+   *   The labels given to all metrics collected by the zio-kafka producer. By default, no labels are set.
+   *
+   * For applications with multiple producers it is recommended to set some metric labels. For example, one can imagine
+   * a producer-id that can be used as a label:
+   *
+   * {{{
+   *   consumerSettings.withMetricLabels(Set(MetricLabel("producer-id", producerId)))
+   * }}}
+   */
+  def withMetricsLabels(metricLabels: Set[MetricLabel]): ProducerSettings =
+    copy(metricLabels = metricLabels)
+
 }
 
 object ProducerSettings {
