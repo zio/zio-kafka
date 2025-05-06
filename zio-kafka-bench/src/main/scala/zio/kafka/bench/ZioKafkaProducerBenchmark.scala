@@ -37,7 +37,7 @@ class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer
     // Produce 100 records
     for {
       producer <- ZIO.service[Producer]
-      _        <- producer.produceAsync(topic1, "key", "value", Serde.string, Serde.string).schedule(Schedule.recurs(100))
+      _ <- producer.produceAsync(topic1, "key", "value", Serde.string, Serde.string).schedule(Schedule.recurs(100))
     } yield ()
   }
 

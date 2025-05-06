@@ -5,9 +5,9 @@ import org.openjdk.jmh.annotations._
 import zio.kafka.admin.AdminClient.NewTopic
 import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
-import zio.kafka.testkit.{Kafka, KafkaTestUtils}
+import zio.kafka.testkit.{ Kafka, KafkaTestUtils }
 import zio.stream.ZStream
-import zio.{Scope => _, _}
+import zio.{ Scope => _, _ }
 
 import java.util.concurrent.TimeUnit
 
@@ -54,11 +54,11 @@ class ZioKafkaSeqProducerBenchmark extends ProducerZioBenchmark[Kafka with Produ
     for {
       producer <- ZIO.service[Producer]
       _ <- ZStream
-        .range(0, 100, 1)
-        .mapZIOParUnordered(4) { _ =>
-          producer.produce(topic1, "key", "value", Serde.string, Serde.string)
-        }
-        .runDrain
+             .range(0, 100, 1)
+             .mapZIOParUnordered(4) { _ =>
+               producer.produce(topic1, "key", "value", Serde.string, Serde.string)
+             }
+             .runDrain
     } yield ()
   }
 
