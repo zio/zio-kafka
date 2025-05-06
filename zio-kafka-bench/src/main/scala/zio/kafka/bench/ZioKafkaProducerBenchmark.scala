@@ -20,14 +20,7 @@ class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer
   })
 
   override protected def bootstrap: ZLayer[Any, Nothing, Kafka with Producer] =
-    ZLayer
-      .make[Kafka with Producer](
-        Kafka.embedded,
-        // Our tests run too short for linger to have a positive influence: set it to zero.
-        ZLayer.fromZIO(KafkaTestUtils.producerSettings.map(_.withLinger(0.millis))),
-        Producer.live
-      )
-      .orDie
+    ZLayer.make[Kafka with Producer](Kafka.embedded, KafkaTestUtils.producer).orDie
 
   override def initialize: ZIO[Kafka & Producer, Throwable, Any] =
     ZIO.scoped {
@@ -44,7 +37,17 @@ class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer
     // Produce 30 chunks sequentially
     for {
       producer <- ZIO.service[Producer]
-      _        <- producer.produceChunk(records, Serde.string, Serde.string).repeatN(29)
+      _        <- producer.produceChunk(records, Serde.string, Serde.string).schedule(Schedule.recurs(30))
+    } yield ()
+  }
+
+  @Benchmark
+  @BenchmarkMode(Array(Mode.AverageTime))
+  def produceChunkSeqAsync(): Any = runZIO {
+    // Produce 30 chunks sequentially
+    for {
+      producer <- ZIO.service[Producer]
+      _        <- producer.produceChunkAsync(records, Serde.string, Serde.string).schedule(Schedule.recurs(30))
     } yield ()
   }
 
@@ -65,24 +68,14 @@ class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  def produceSingleRecordSeq(): Any = runZIO {
-    // Produce 100 records sequentially
-    for {
-      producer <- ZIO.service[Producer]
-      _        <- producer.produce(topic1, "key", "value", Serde.string, Serde.string).repeatN(99)
-    } yield ()
-  }
-
-  @Benchmark
-  @BenchmarkMode(Array(Mode.AverageTime))
-  def produceSingleRecordPar(): Any = runZIO {
-    // Produce 100 records of which 4 run in parallel
+  def produceChunkParAsync(): Any = runZIO {
+    // Produce 30 chunks of which 4 run in parallel
     for {
       producer <- ZIO.service[Producer]
       _ <- ZStream
-             .range(0, 100, 1)
+             .range(0, 30, 1)
              .mapZIOParUnordered(4) { _ =>
-               producer.produce(topic1, "key", "value", Serde.string, Serde.string)
+               producer.produceChunkAsync(records, Serde.string, Serde.string).unit
              }
              .runDrain
     } yield ()

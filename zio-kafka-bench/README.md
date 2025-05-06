@@ -53,20 +53,22 @@ topic subscription.
 ## The producer benchmarks
 
 #### zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq
+#### zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeqAsync
 
 Sequentially produces 30 batches, where each batch contains 500 small records.
 
 #### zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar
+#### zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkParAsync
 
 Produces the same batches as the above, but from 4 fibers.
 
-#### zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq
+#### zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordSeq
 
-Sequentially produces 100 small records.
+Sequentially produces 100 small records. Lingering is disabled.
 
-#### zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar
+#### zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordPar
 
-Produces 100 small records from 4 fibers.
+Produces 100 small records from 4 fibers. Lingering is disabled.
 
 # How to run the benchmarks
 
