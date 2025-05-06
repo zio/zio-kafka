@@ -57,14 +57,19 @@ topic subscription.
 
 Sequentially produces 30 batches, where each batch contains 500 small records.
 
+The async version does not wait for acknowledges.
+
 #### zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar
-#### zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkParAsync
 
 Produces the same batches as the above, but from 4 fibers.
 
 #### zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordSeq
 
 Sequentially produces 100 small records. Lingering is disabled.
+
+#### zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeqAsync
+
+Sequentially produces 100 small records, do not wait for acknowledges.
 
 #### zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordPar
 
