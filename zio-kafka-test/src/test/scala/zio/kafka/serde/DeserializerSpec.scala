@@ -4,7 +4,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders
 import zio._
 import zio.test.Assertion._
 import zio.test._
-import zio.ZAny
 import zio.kafka.ZIOSpecDefaultSlf4j
 
 object DeserializerSpec extends ZIOSpecDefaultSlf4j {
