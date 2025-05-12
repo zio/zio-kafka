@@ -12,12 +12,12 @@ The metrics from the Java metrics can be obtained via the `Consumer.metrics` and
 return a live view on the internal metrics of the consumer/producer. We currently do not expose these metrics elsewhere,
 a PR to copy them to the zio-metrics API is welcome.
 
-## Zio-kafka consumer metrics
+## Zio-kafka metrics
 
-The zio-kafka consumer collects some additional metrics using the zio-metrics API. This allows any zio-metrics backend
-to access and process the observed values.
+The zio-kafka consumer and producer collects some additional metrics using the zio-metrics API. This allows any
+zio-metrics backend to access and process the observed values.
 
-By default, no tags are added. Tags can be configured via `ConsumerSettings.withMetricsLabels`.
+By default, no tags are added. Tags can be configured via `ConsumerSettings.withMetricsLabels` / `ProducerSettings.withMetricsLabels`.
 
 Like the zio-metrics we follow Prometheus conventions. This means that:
 
@@ -27,6 +27,8 @@ Like the zio-metrics we follow Prometheus conventions. This means that:
 
 The histograms each use 10 buckets. To reach a decent range while keeping sufficient accuracy at the low end, most
 bucket boundaries use an exponential series based on 𝑒.
+
+## Zio-kafka consumer metrics
 
 ### Poll metrics
 
@@ -98,3 +100,29 @@ See [ConsumerMetrics.scala](https://github.com/zio/zio-kafka/blob/master/zio-kaf
 Here is an example dashboard that could be built with these metrics:
 
 ![metrics-dashboard.png](metrics-dashboard.png)
+
+## Zio-kafka producer metrics
+
+### Producer metrics
+
+| Type      | Name                                | Description                                                                                              |
+|-----------|-------------------------------------|----------------------------------------------------------------------------------------------------------|
+| counter   | `ziokafka_producer_calls`           | The number of times a produce method is invoked.                                                         |
+| histogram | `ziokafka_producer_latency_seconds` | The duration of a single produce, from invocation to acknowledged (but excl. serialization), in seconds. |
+| histogram | `ziokafka_producer_records`         | The number of records produced.                                                                          |
+| gauge     | `ziokafka_producer_batch_size`      | The number of records per produce call.                                                                  |
+
+### Queue metrics
+
+| Type      | Name                                           | Description                                                     |
+|-----------|------------------------------------------------|-----------------------------------------------------------------|
+| counter   | `ziokafka_producer_send_queue_size`            | The number of records in the zio-kafka send queue.              |
+| histogram | `ziokafka_producer_send_queue_latency_seconds` | Time in send queue, including waiting for capacity, in seconds. |
+
+### Send metrics
+
+| Type    | Name                            | Description                                                                           |
+|---------|---------------------------------|---------------------------------------------------------------------------------------|
+| counter | `ziokafka_producer_auth_errors` | The number of record sends that resulted in an authentication or authorization error. |
+
+See [ProducerMetrics.scala](https://github.com/zio/zio-kafka/blob/master/zio-kafka/src/main/scala/zio/kafka/producer/internal/ProducerMetrics.scala) for the exact details.
