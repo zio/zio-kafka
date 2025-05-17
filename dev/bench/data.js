@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1747447588606,
+  "lastUpdate": 1747463068148,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -9150,6 +9150,90 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 573.62200098,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "145262613+zio-scala-steward[bot]@users.noreply.github.com",
+            "name": "zio-scala-steward[bot]",
+            "username": "zio-scala-steward[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5ceaba11f474138c11bf0390beab19f81defb5a2",
+          "message": "Update zio, zio-streams, zio-test, ... to 2.1.18 (#1534)\n\n📦 Updates \n* [dev.zio:zio](https://github.com/zio/zio)\n* [dev.zio:zio-streams](https://github.com/zio/zio)\n* [dev.zio:zio-test](https://github.com/zio/zio)\n* [dev.zio:zio-test-sbt](https://github.com/zio/zio)\n\n from `2.1.17` to `2.1.18`",
+          "timestamp": "2025-05-17T08:07:06+02:00",
+          "tree_id": "81343fd8bd246777f5a474552ffc2b2ecd246012",
+          "url": "https://github.com/zio/zio-kafka/commit/5ceaba11f474138c11bf0390beab19f81defb5a2"
+        },
+        "date": 1747463067643,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 595.2441681200002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 595.3539163600001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 124.92540397222223,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 336.6876946,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordPar",
+            "value": 54.20039830703483,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeq",
+            "value": 68.83025445785715,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 546.1315755600001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 535.4401534200001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 561.4554264799999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 572.7612698600001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
