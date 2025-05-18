@@ -109,14 +109,14 @@ Here is an example dashboard that could be built with these metrics:
 |-----------|-------------------------------------|----------------------------------------------------------------------------------------------------------|
 | counter   | `ziokafka_producer_calls`           | The number of times a produce method is invoked.                                                         |
 | histogram | `ziokafka_producer_latency_seconds` | The duration of a single produce, from invocation to acknowledged (but excl. serialization), in seconds. |
-| histogram | `ziokafka_producer_records`         | The number of records produced.                                                                          |
-| gauge     | `ziokafka_producer_batch_size`      | The number of records per produce call.                                                                  |
+| counter   | `ziokafka_producer_records`         | The number of records produced.                                                                          |
+| histogram | `ziokafka_producer_batch_size`      | The number of records per produce call.                                                                  |
 
 ### Queue metrics
 
 | Type      | Name                                           | Description                                                     |
 |-----------|------------------------------------------------|-----------------------------------------------------------------|
-| counter   | `ziokafka_producer_send_queue_size`            | The number of records in the zio-kafka send queue.              |
+| histogram | `ziokafka_producer_send_queue_size`            | The number of records in the zio-kafka send queue.              |
 | histogram | `ziokafka_producer_send_queue_latency_seconds` | Time in send queue, including waiting for capacity, in seconds. |
 
 ### Send metrics
