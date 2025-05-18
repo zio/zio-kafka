@@ -440,8 +440,8 @@ private[producer] final class ProducerLive(
             // Note that if we get here, all Left's can be retried. Also, we know there is at least 1 Left.
             val toRetry: Chunk[(Int, ByteRecord)] =
               (results lazyZip recordIndices lazyZip records).flatMap {
-                case (Right(_), _, _)     => Seq.empty
-                case (Left(_), i, record) => Seq((i, record))
+                case (Right(_), _, _)     => Chunk.empty
+                case (Left(_), i, record) => Chunk.single((i, record))
               }
             val (retryIndices, retryRecords) = toRetry.unzip
             ZIO.logInfo(
