@@ -114,7 +114,7 @@ final case class ProducerSettings(
    * a producer-id that can be used as a label:
    *
    * {{{
-   *   consumerSettings.withMetricLabels(Set(MetricLabel("producer-id", producerId)))
+   *   producerSettings.withMetricLabels(Set(MetricLabel("producer-id", producerId)))
    * }}}
    */
   def withMetricsLabels(metricLabels: Set[MetricLabel]): ProducerSettings =
