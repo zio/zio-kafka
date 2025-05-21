@@ -8,6 +8,7 @@ import zio._
 import zio.kafka.diagnostics.Diagnostics
 import zio.kafka.diagnostics.internal.ConcurrentDiagnostics
 import zio.kafka.producer.Producer.{ NoDiagnostics, ProducerDiagnostics }
+import zio.kafka.producer.ProducerLive.NanoTime
 import zio.kafka.producer.internal.{ ProducerMetrics, ZioProducerMetrics }
 import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
@@ -260,7 +261,7 @@ object Producer {
       wrappedDiagnostics <- makeConcurrentDiagnostics(settings.diagnostics)
       runtime            <- ZIO.runtime[Any]
       sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Long, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
+        Queue.bounded[(Chunk[ByteRecord], NanoTime, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.sendBufferSize
         )
       metrics  = new ZioProducerMetrics(settings.metricLabels)
@@ -278,6 +279,8 @@ object Producer {
 }
 
 private object ProducerLive {
+  private[producer] type NanoTime = Long
+
   private val set0: Set[Int] = Set(0)
 
   private val leftPublishOmitted = Left(Producer.PublishOmittedException)
@@ -291,7 +294,7 @@ private[producer] final class ProducerLive(
   diagnostics: ProducerDiagnostics,
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
   runtime: Runtime[Any],
-  sendQueue: Queue[(Chunk[ByteRecord], Long, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])],
+  sendQueue: Queue[(Chunk[ByteRecord], NanoTime, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])],
   producerMetrics: ProducerMetrics
 ) extends Producer {
   import ProducerLive._
@@ -324,7 +327,7 @@ private[producer] final class ProducerLive(
     ZIO.suspendSucceed {
       val diagEm = diagnosticsEmitterMaker.makeDiagnosticsEmitter(record)
       def loop(
-        startNanos: Long,
+        startNanos: NanoTime,
         done: Promise[Throwable, RecordMetadata],
         driver: Schedule.Driver[Any, Any, Throwable, Any]
       ): UIO[Any] = {
@@ -430,7 +433,7 @@ private[producer] final class ProducerLive(
 
       ZIO.suspendSucceed {
         def loop(
-          startNanos: Long,
+          startNanos: NanoTime,
           recordIndices: Seq[Int],
           records: Chunk[ByteRecord],
           done: Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]],
@@ -450,7 +453,7 @@ private[producer] final class ProducerLive(
               loop(startNanos, retryIndices, retryRecords, done, driver)
           }
 
-          def observeProduce(startNanos: Long): UIO[Unit] =
+          def observeProduce(startNanos: NanoTime): UIO[Unit] =
             for {
               now <- Clock.nanoTime
               _   <- producerMetrics.observeProduce((now - startNanos).nanos, totalRecordCount)
@@ -521,7 +524,7 @@ private[producer] final class ProducerLive(
 
   override def metrics: Task[Map[MetricName, Metric]] = ZIO.attemptBlocking(p.metrics().asScala.toMap)
 
-  private def observeTake(startNanos: Long): UIO[Unit] =
+  private def observeTake(startNanos: NanoTime): UIO[Unit] =
     for {
       now <- Clock.nanoTime
       _   <- producerMetrics.observeSendQueueTake((startNanos - now).nanos)

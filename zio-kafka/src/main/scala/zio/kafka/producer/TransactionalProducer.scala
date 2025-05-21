@@ -8,6 +8,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer
 import zio.Cause.Fail
 import zio._
 import zio.kafka.consumer.{ Consumer, OffsetBatch }
+import zio.kafka.producer.ProducerLive.NanoTime
 import zio.kafka.producer.internal.ZioProducerMetrics
 
 import java.util
@@ -108,7 +109,7 @@ object TransactionalProducer {
       semaphore <- Semaphore.make(1)
       runtime   <- ZIO.runtime[Any]
       sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Long, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
+        Queue.bounded[(Chunk[ByteRecord], NanoTime, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.producerSettings.sendBufferSize
         )
       metrics = new ZioProducerMetrics(settings.producerSettings.metricLabels)
