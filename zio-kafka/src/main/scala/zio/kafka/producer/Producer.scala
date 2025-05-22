@@ -8,6 +8,8 @@ import zio._
 import zio.kafka.diagnostics.Diagnostics
 import zio.kafka.diagnostics.internal.ConcurrentDiagnostics
 import zio.kafka.producer.Producer.{ NoDiagnostics, ProducerDiagnostics }
+import zio.kafka.producer.ProducerLive.NanoTime
+import zio.kafka.producer.internal.{ ProducerMetrics, ZioProducerMetrics }
 import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
 import zio.stream.{ ZPipeline, ZStream }
@@ -259,10 +261,12 @@ object Producer {
       wrappedDiagnostics <- makeConcurrentDiagnostics(settings.diagnostics)
       runtime            <- ZIO.runtime[Any]
       sendQueue <-
-        Queue.bounded[(Chunk[ByteRecord], Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
+        Queue.bounded[(Chunk[ByteRecord], NanoTime, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.sendBufferSize
         )
-      producer = new ProducerLive(settings, wrappedDiagnostics, javaProducer, runtime, sendQueue)
+      metrics  = new ZioProducerMetrics(settings.metricLabels)
+      producer = new ProducerLive(settings, wrappedDiagnostics, javaProducer, runtime, sendQueue, metrics)
+      _ <- sendQueue.size.flatMap(metrics.observeSendQueueSize).schedule(Schedule.fixed(10.seconds)).forkScoped
       _ <- ZIO.blocking(producer.sendFromQueue).forkScoped
     } yield producer
 
@@ -275,6 +279,8 @@ object Producer {
 }
 
 private object ProducerLive {
+  private[producer] type NanoTime = Long
+
   private val set0: Set[Int] = Set(0)
 
   private val leftPublishOmitted = Left(Producer.PublishOmittedException)
@@ -288,7 +294,8 @@ private[producer] final class ProducerLive(
   diagnostics: ProducerDiagnostics,
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
   runtime: Runtime[Any],
-  sendQueue: Queue[(Chunk[ByteRecord], Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])]
+  sendQueue: Queue[(Chunk[ByteRecord], NanoTime, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])],
+  producerMetrics: ProducerMetrics
 ) extends Producer {
   import ProducerLive._
 
@@ -320,33 +327,40 @@ private[producer] final class ProducerLive(
     ZIO.suspendSucceed {
       val diagEm = diagnosticsEmitterMaker.makeDiagnosticsEmitter(record)
       def loop(
+        startNanos: NanoTime,
         done: Promise[Throwable, RecordMetadata],
         driver: Schedule.Driver[Any, Any, Throwable, Any]
-      ): ZIO[Any, Nothing, Any] = {
+      ): UIO[Any] = {
         val continuation: Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit] = { results =>
           // Since we're sending only 1 record, we know `results` has 1 item
           results.head match {
             case Right(recordMetaData) =>
-              diagEm.emitSuccess() *> done.succeed(recordMetaData).unit
+              for {
+                end <- Clock.nanoTime
+                _   <- producerMetrics.observeProduce((end - startNanos).nanos, 1)
+                _   <- diagEm.emitSuccess()
+                _   <- done.succeed(recordMetaData)
+              } yield ()
             case Left(error @ (_: AuthorizationException | _: AuthenticationException)) =>
               driver
                 .next(retryAfterAuthException)
                 .foldZIO(
                   _ => diagEm.emitSingleFailure() *> done.fail(error).unit, // schedule say "no"
-                  _ => loop(done, driver).unit                              // start retry
+                  _ => loop(startNanos, done, driver).unit                  // start retry
                 )
             case Left(error) =>
               diagEm.emitSingleFailure() *> done.fail(error).unit
           }
         }
 
-        sendQueue.offer(Chunk.single(record) -> continuation)
+        sendQueue.offer((Chunk.single(record), startNanos, continuation))
       }
 
       for {
-        _    <- diagEm.emitOffer()
-        done <- Promise.make[Throwable, RecordMetadata]
-        _    <- settings.authErrorRetrySchedule.driver.flatMap(d => loop(done, d))
+        start <- Clock.nanoTime
+        _     <- diagEm.emitOffer()
+        done  <- Promise.make[Throwable, RecordMetadata]
+        _     <- settings.authErrorRetrySchedule.driver.flatMap(d => loop(start, done, d))
       } yield done.await
     }
 
@@ -419,11 +433,12 @@ private[producer] final class ProducerLive(
 
       ZIO.suspendSucceed {
         def loop(
+          startNanos: NanoTime,
           recordIndices: Seq[Int],
           records: Chunk[ByteRecord],
           done: Promise[Nothing, Chunk[Either[Throwable, RecordMetadata]]],
           driver: Schedule.Driver[Any, Any, Throwable, Any]
-        ): ZIO[Any, Nothing, Any] = {
+        ): ZIO[Any, Nothing, Unit] = {
           def retryFailedRecords(results: Chunk[Either[Throwable, RecordMetadata]]): UIO[Unit] = {
             // Note that if we get here, all Left's can be retried. Also, we know there is at least 1 Left.
             val toRetry: Chunk[(Int, ByteRecord)] =
@@ -435,22 +450,29 @@ private[producer] final class ProducerLive(
             ZIO.logInfo(
               s"Retrying publish ${retryRecords.size} (of ${records.size}) records after AuthorizationException/AuthenticationException"
             ) *>
-              loop(retryIndices, retryRecords, done, driver).unit
+              loop(startNanos, retryIndices, retryRecords, done, driver)
           }
+
+          def observeProduce(startNanos: NanoTime): UIO[Unit] =
+            for {
+              now <- Clock.nanoTime
+              _   <- producerMetrics.observeProduce((now - startNanos).nanos, totalRecordCount)
+            } yield ()
 
           val continuation: Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit] = { results =>
             if (results.forall(_.isRight)) {
               // All records were successfully published, we're done
-              diagEm.emitSuccess() *> {
-                if (recordIndices.size == totalRecordCount) {
-                  // Optimization (not allocating `finalResults`) for when everything goes well first time
-                  done.succeed(results).unit
-                } else {
-                  // Copy results of this attempt to the final results
-                  storeResults(recordIndices, results)
-                  complete(done)
+              observeProduce(startNanos) *>
+                diagEm.emitSuccess() *> {
+                  if (recordIndices.size == totalRecordCount) {
+                    // Optimization (not allocating `finalResults`) for when everything goes well first time
+                    done.succeed(results).unit
+                  } else {
+                    // Copy results of this attempt to the final results
+                    storeResults(recordIndices, results)
+                    complete(done)
+                  }
                 }
-              }
             } else {
               // Copy results of this attempt to the final results
               storeResults(recordIndices, results)
@@ -465,24 +487,32 @@ private[producer] final class ProducerLive(
               if (hasFatalError) {
                 diagEm.emitFailures(finalResults) *> complete(done)
               } else {
-                // Ask the schedule if we should retry
-                driver
-                  .next(retryAfterAuthException)
-                  .foldZIO(
-                    _ => diagEm.emitFailures(finalResults) *> complete(done), // Schedule says no
-                    _ => retryFailedRecords(results)
-                  )
+                producerMetrics.observeSendAuthError(
+                  results.count {
+                    case Left(_: AuthorizationException | _: AuthenticationException) => true
+                    case _                                                            => false
+                  }
+                ) *>
+                  // Ask the schedule if we should retry
+                  driver
+                    .next(retryAfterAuthException)
+                    .foldZIO(
+                      _ => diagEm.emitFailures(finalResults) *> complete(done), // Schedule says no
+                      _ => retryFailedRecords(results)
+                    )
               }
             }
           }
 
-          sendQueue.offer(records -> continuation)
+          sendQueue.offer((records, startNanos, continuation)).unit
         }
 
         for {
-          _    <- diagEm.emitOffer()
-          done <- Promise.make[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
-          _    <- settings.authErrorRetrySchedule.driver.flatMap(d => loop(records.indices, records, done, d))
+          startNanos <- Clock.nanoTime
+          _          <- diagEm.emitOffer()
+          done       <- Promise.make[Nothing, Chunk[Either[Throwable, RecordMetadata]]]
+          d          <- settings.authErrorRetrySchedule.driver
+          _          <- loop(startNanos, records.indices, records, done, d)
         } yield done.await
       }
     }
@@ -494,6 +524,12 @@ private[producer] final class ProducerLive(
 
   override def metrics: Task[Map[MetricName, Metric]] = ZIO.attemptBlocking(p.metrics().asScala.toMap)
 
+  private def observeTake(startNanos: NanoTime): UIO[Unit] =
+    for {
+      now <- Clock.nanoTime
+      _   <- producerMetrics.observeSendQueueTake((startNanos - now).nanos)
+    } yield ()
+
   /**
    * Calls to send may block when updating metadata or when communication with the broker is (temporarily) lost,
    * therefore this stream is run on the blocking thread pool
@@ -501,8 +537,8 @@ private[producer] final class ProducerLive(
   val sendFromQueue: ZIO[Any, Nothing, Any] =
     ZStream
       .fromQueueWithShutdown(sendQueue)
-      .mapZIO { case (serializedRecords, continuation) =>
-        ZIO.succeed {
+      .mapZIO { case (serializedRecords, startNanos, continuation) =>
+        observeTake(startNanos).as {
           val recordsLength                                = serializedRecords.length
           val sentRecordsCounter                           = new AtomicInteger(0)
           val recordsIterator: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
