@@ -57,7 +57,7 @@ private[producer] class ZioProducerMetrics(metricLabels: Set[MetricLabel]) exten
     Metric
       .histogram(
         "ziokafka_producer_latency_seconds",
-        "The duration of a single produce, from invocation to acknowledged (but excl. serialization), in seconds.",
+        "The duration of a single produce, from after serialization to acknowledged, in seconds.",
         produceLatencyBoundaries
       )
       .contramap[Duration](_.toNanos.toDouble / 1e9)

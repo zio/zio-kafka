@@ -103,14 +103,24 @@ Here is an example dashboard that could be built with these metrics:
 
 ## Zio-kafka producer metrics
 
+To understand the producer metrics it useful to know how the producer works.
+
+When you call the producer it first serializes the given batch of records (a single record is treated like a batch of
+one). The batch is then offered to an internal send queue. Once the queue accepts the batch, the `produce*Async` methods
+return immediately. The `produce*Sync` methods return later, when all acknowledgements are in. Once the fiber is ready
+for it, it pulls a batch from the queue and sends the records to the Kafka broker one by one. Meanwhile, the broker
+acknowledges records.
+
+![](producer-internals.svg)
+
 ### Producer metrics
 
-| Type      | Name                                | Description                                                                                              |
-|-----------|-------------------------------------|----------------------------------------------------------------------------------------------------------|
-| counter   | `ziokafka_producer_calls`           | The number of times a produce method is invoked.                                                         |
-| histogram | `ziokafka_producer_latency_seconds` | The duration of a single produce, from invocation to acknowledged (but excl. serialization), in seconds. |
-| counter   | `ziokafka_producer_records`         | The number of records produced.                                                                          |
-| histogram | `ziokafka_producer_batch_size`      | The number of records per produce call.                                                                  |
+| Type      | Name                                | Description                                                                             |
+|-----------|-------------------------------------|-----------------------------------------------------------------------------------------|
+| counter   | `ziokafka_producer_calls`           | The number of times a produce method is invoked.                                        |
+| histogram | `ziokafka_producer_latency_seconds` | The duration of a single produce, from after serialization to acknowledged, in seconds. |
+| counter   | `ziokafka_producer_records`         | The number of records produced.                                                         |
+| histogram | `ziokafka_producer_batch_size`      | The number of records per produce call.                                                 |
 
 ### Queue metrics
 
