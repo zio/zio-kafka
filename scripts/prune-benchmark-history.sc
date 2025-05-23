@@ -1,5 +1,5 @@
 //> using dep com.lihaoyi::os-lib:0.11.4
-//> using dep com.lihaoyi::upickle:4.1.0
+//> using dep com.lihaoyi::upickle:4.2.1
 
 import java.time.{LocalDate, ZoneId, ZonedDateTime}
 import scala.math.Ordered.orderingToOrdered
@@ -35,6 +35,8 @@ benchmarksToKeep.arr.value.foreach { benchmark =>
     val newMessage = message.take(message.indexOf("\r\n\r\n## Usage"))
     benchmark("commit")("message") = newMessage
   }
+  // Keep benches in bench-name order
+  benchmark("benches") = benchmark("benches").arr.sortBy(_("name").str)
 }
 jsonContent("entries").update("JMH Benchmark", benchmarksToKeep)
 val newDataContent = dataPrefix + jsonContent.render(indent = 2) 
