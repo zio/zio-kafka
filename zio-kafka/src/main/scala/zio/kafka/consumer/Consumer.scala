@@ -418,15 +418,19 @@ object Consumer {
    * @param withStream
    *   Takes the stream as input and returns a ZIO workflow that processes the stream. As in most programs the given
    *   workflow runs until an external interruption, the result value (Any type) is meaningless. `withStream` is
-   *   typically something like `stream => stream.mapZIO(record => ZIO.debug(record)).mapZIO(_.offset.commit)`
+   *   typically something like:
+   *   {{{
+   *     stream => stream.mapZIO(record => ZIO.debug(record))
+   *                     .mapZIO(record => record.offset.commit)
+   *   }}}
    */
-  def runWithGracefulShutdown[R, E, A](
-    control: StreamControl[R, E, A],
+  def runWithGracefulShutdown[R1, R2, E, A](
+    control: StreamControl[R1, E, A],
     shutdownTimeout: Duration
   )(
-    withStream: ZStream[R, E, A] => ZIO[R, E, Any]
-  ): ZIO[R, E, Any] =
-    ZIO.scoped[R] {
+    withStream: ZStream[R1, E, A] => ZIO[R2 & Scope, E, Any]
+  ): ZIO[R1 & R2, E, Any] =
+    ZIO.scoped[R1 & R2] {
       for {
         fib <-
           withStream(control.stream)
