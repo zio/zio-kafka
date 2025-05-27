@@ -170,6 +170,7 @@ object ReadmeExample extends ZIOAppDefault {
 
 ### Video
 
+- [Free ZIO Kafka course](https://www.learnscala.dev/) Free video training courses by Alvin Alexander, sponsored by Ziverge (2025) to learn Scala 3, Functional Programming, and ZIO 2. The zio-kafka module can be followed separately.
 - [Optimizing Data Transfer Kafka to BQ: let's use Scala to make it custom](https://www.youtube.com/watch?v=McnC2UU-RIE) by Dario Amorosi, Adevinta (November 2024)
 - [Making ZIO-Kafka Safer and Faster in 2023](https://www.youtube.com/watch?v=MJoRwEyyVxM) by Erik van Oosten (November 2023)
 - [ZIO Kafka with Scala: A Tutorial](https://www.youtube.com/watch?v=ExFjjczwwHs) by Rock the JVM (August 2021)
