@@ -3,7 +3,7 @@ package zio.kafka.serde
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Serde => KafkaSerde, Serdes => KafkaSerdes }
 import org.apache.kafka.common.utils.Bytes
-import zio.{ RIO, ZIO }
+import zio.{ RIO, Trace, ZIO }
 
 import java.nio.ByteBuffer
 import java.util.UUID
@@ -29,11 +29,15 @@ private[zio] trait Serdes {
    */
   val byteArray: Serde[Any, Array[Byte]] =
     new Serde[Any, Array[Byte]] {
-      override final def serialize(topic: String, headers: Headers, value: Array[Byte]): RIO[Any, Array[Byte]] =
-        ZIO.succeed(value)
-
-      override final def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[Any, Array[Byte]] =
+      override final def deserialize(topic: String, headers: Headers, data: Array[Byte])(implicit
+        trace: Trace
+      ): RIO[Any, Array[Byte]] =
         ZIO.succeed(data)
+
+      override final def serialize(topic: String, headers: Headers, value: Array[Byte])(implicit
+        trace: Trace
+      ): RIO[Any, Array[Byte]] =
+        ZIO.succeed(value)
     }
 
   private[this] def convertPrimitiveSerde[T](serde: KafkaSerde[T]): Serde[Any, T] =
@@ -41,10 +45,14 @@ private[zio] trait Serdes {
       private final val serializer   = serde.serializer()
       private final val deserializer = serde.deserializer()
 
-      override final def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[Any, T] =
+      override final def deserialize(topic: String, headers: Headers, data: Array[Byte])(implicit
+        trace: Trace
+      ): RIO[Any, T] =
         ZIO.attempt(deserializer.deserialize(topic, headers, data))
 
-      override final def serialize(topic: String, headers: Headers, value: T): RIO[Any, Array[Byte]] =
+      override final def serialize(topic: String, headers: Headers, value: T)(implicit
+        trace: Trace
+      ): RIO[Any, Array[Byte]] =
         ZIO.attempt(serializer.serialize(topic, headers, value))
     }
 }

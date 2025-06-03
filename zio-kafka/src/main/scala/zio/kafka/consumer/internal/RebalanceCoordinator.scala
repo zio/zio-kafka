@@ -37,12 +37,12 @@ private[internal] class RebalanceCoordinator(
   // Time between polling the commit queue from the rebalance listener when `rebalanceSafeCommits` is enabled.
   private val commitQueuePollInterval = 100.millis
 
-  def getAndResetLastEvent: UIO[RebalanceEvent] =
+  def getAndResetLastEvent(implicit trace: Trace): UIO[RebalanceEvent] =
     lastRebalanceEvent.getAndSet(RebalanceEvent.None)
 
   // End streams from the rebalance listener.
   // When `rebalanceSafeCommits` is enabled, wait for consumed offsets to be committed.
-  private def endStreams(streamsToEnd: Chunk[PartitionStreamControl]): Task[Any] =
+  private def endStreams(streamsToEnd: Chunk[PartitionStreamControl])(implicit trace: Trace): Task[Any] =
     ZIO.unless(streamsToEnd.isEmpty) {
       for {
         _ <- ZIO.foreachDiscard(streamsToEnd)(_.end)
@@ -53,7 +53,7 @@ private[internal] class RebalanceCoordinator(
   private def doAwaitStreamCommits(
     consumer: ByteArrayKafkaConsumer,
     streamsToEnd: Chunk[PartitionStreamControl]
-  ): Task[Unit] = {
+  )(implicit trace: Trace): Task[Unit] = {
     val deadline = java.lang.System.nanoTime() + maxRebalanceDuration.toNanos - commitTimeoutNanos
 
     def timeToDeadlineMillis(): Long = (deadline - java.lang.System.nanoTime()) / 1000000L
@@ -61,7 +61,7 @@ private[internal] class RebalanceCoordinator(
     def completionStatusesAsString(completionStatuses: Chunk[StreamCompletionStatus]): String =
       "Revoked partitions: " + completionStatuses.map(_.toString).mkString("; ")
 
-    def getStreamCompletionStatuses: UIO[Chunk[StreamCompletionStatus]] =
+    def getStreamCompletionStatuses(implicit trace: Trace): UIO[Chunk[StreamCompletionStatus]] =
       for {
         committedOffsets           <- committer.getCommittedOffsets
         latestPendingCommitOffsets <- committer.getPendingCommits.map(_.offsets)
@@ -91,7 +91,9 @@ private[internal] class RebalanceCoordinator(
       } yield streamResults
 
     @inline
-    def logStreamCompletionStatuses(completionStatuses: Chunk[StreamCompletionStatus]): UIO[Unit] = {
+    def logStreamCompletionStatuses(
+      completionStatuses: Chunk[StreamCompletionStatus]
+    )(implicit trace: Trace): UIO[Unit] = {
       val statusStrings = completionStatusesAsString(completionStatuses)
       ZIO.logDebug(
         s"Delaying rebalance until ${streamsToEnd.size} streams (of revoked partitions) have committed " +
@@ -99,13 +101,13 @@ private[internal] class RebalanceCoordinator(
       )
     }
 
-    def logInitialStreamCompletionStatuses: UIO[Unit] =
+    def logInitialStreamCompletionStatuses(implicit trace: Trace): UIO[Unit] =
       for {
         completionStatuses <- getStreamCompletionStatuses
         _                  <- logStreamCompletionStatuses(completionStatuses)
       } yield ()
 
-    def endingStreamsCompletedAndCommitsExist: UIO[Boolean] =
+    def endingStreamsCompletedAndCommitsExist(implicit trace: Trace): UIO[Boolean] =
       for {
         completionStatuses <- getStreamCompletionStatuses
         _                  <- logStreamCompletionStatuses(completionStatuses)
@@ -114,7 +116,7 @@ private[internal] class RebalanceCoordinator(
         status.lastPulledOffset.isEmpty || (status.streamEnded && status.endOffsetCommitStatus != EndOffsetNotCommitted)
       }
 
-    def logFinalStreamCompletionStatuses(completed: Boolean): UIO[Unit] =
+    def logFinalStreamCompletionStatuses(completed: Boolean)(implicit trace: Trace): UIO[Unit] =
       if (completed)
         ZIO.logInfo("Continuing rebalance, all offsets of consumed records in the revoked partitions were committed.")
       else
@@ -129,7 +131,7 @@ private[internal] class RebalanceCoordinator(
             )
         } yield ()
 
-    def commitSync: Task[Unit] =
+    def commitSync(implicit trace: Trace): Task[Unit] =
       ZIO.attempt(consumer.commitSync(java.util.Collections.emptyMap(), commitTimeout))
 
     // Outline:

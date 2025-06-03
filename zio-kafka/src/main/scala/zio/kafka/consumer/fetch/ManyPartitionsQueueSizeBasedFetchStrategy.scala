@@ -1,7 +1,7 @@
 package zio.kafka.consumer.fetch
 
 import org.apache.kafka.common.TopicPartition
-import zio.{ Chunk, ZIO }
+import zio.{ Chunk, Trace, ZIO }
 import zio.kafka.consumer.internal.PartitionStream
 
 import scala.collection.mutable
@@ -41,7 +41,7 @@ final case class ManyPartitionsQueueSizeBasedFetchStrategy(
 ) extends FetchStrategy {
   override def selectPartitionsToFetch(
     streams: Chunk[PartitionStream]
-  ): ZIO[Any, Nothing, Set[TopicPartition]] =
+  )(implicit trace: Trace): ZIO[Any, Nothing, Set[TopicPartition]] =
     for {
       random          <- ZIO.random
       shuffledStreams <- random.shuffle(streams)

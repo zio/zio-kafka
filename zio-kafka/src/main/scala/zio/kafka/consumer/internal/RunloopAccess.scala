@@ -34,7 +34,7 @@ private[consumer] final class RunloopAccess private (
 
   private def withRunloopZIO[E](
     requireRunning: Boolean
-  )(whenRunning: Runloop => IO[E, Unit]): IO[E, Unit] =
+  )(whenRunning: Runloop => IO[E, Unit])(implicit trace: Trace): IO[E, Unit] =
     runloopStateRef.updateSomeAndGetZIO {
       case RunloopState.NotStarted if requireRunning => makeRunloop.map(RunloopState.Started.apply)
     }.flatMap {
@@ -46,7 +46,7 @@ private[consumer] final class RunloopAccess private (
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has not been started or has been stopped.
    */
-  def stopConsumption: UIO[Unit] = withRunloopZIO(requireRunning = false)(_.stopConsumption)
+  def stopConsumption(implicit trace: Trace): UIO[Unit] = withRunloopZIO(requireRunning = false)(_.stopConsumption)
 
   /**
    * We're doing all of these things in this method so that the interface of this class is as simple as possible and
@@ -59,6 +59,8 @@ private[consumer] final class RunloopAccess private (
    */
   def subscribe(
     subscription: Subscription
+  )(implicit
+    trace: Trace
   ): ZIO[Scope, InvalidSubscriptionUnion, StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]]] =
     for {
       ended                     <- Promise.make[Nothing, Unit] // For ending the stream of partition streams
@@ -70,15 +72,18 @@ private[consumer] final class RunloopAccess private (
                diagnostics.emit(DiagnosticEvent.SubscriptionFinalized)
            }
     } yield new StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]] {
-      override def stream = partitionAssignmentStream.interruptWhen(
-        ended
-      ) // This also prevents any partitions assigned during a rebalance after initiating the graceful shutdown to be consumed
-      override def end =
+      override def stream(implicit
+        trace: Trace
+      ): ZStream[Any, Nothing, Take[Throwable, (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])]] =
+        partitionAssignmentStream.interruptWhen(
+          ended
+        ) // This also prevents any partitions assigned during a rebalance after initiating the graceful shutdown to be consumed
+      override def end(implicit trace: Trace): UIO[Unit] =
         ended.succeed(()).ignore *> withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription))
 
     }
 
-  def registerExternalCommits(externallyCommittedOffsets: OffsetBatch): Task[Unit] =
+  def registerExternalCommits(externallyCommittedOffsets: OffsetBatch)(implicit trace: Trace): Task[Unit] =
     withRunloopZIO(requireRunning = true)(_.registerExternalCommits(externallyCommittedOffsets))
 
 }
@@ -90,7 +95,7 @@ private[consumer] object RunloopAccess {
     settings: ConsumerSettings,
     consumerAccess: ConsumerAccess,
     diagnostics: ConsumerDiagnostics = Diagnostics.NoOp
-  ): ZIO[Scope, Throwable, RunloopAccess] =
+  )(implicit trace: Trace): ZIO[Scope, Throwable, RunloopAccess] =
     for {
       maxPollInterval <- maxPollIntervalConfig(settings)
       maxStreamPullInterval = settings.maxStreamPullIntervalOption.getOrElse(maxPollInterval)
@@ -117,7 +122,7 @@ private[consumer] object RunloopAccess {
                       .provide(ZLayer.succeed(consumerScope))
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
 
-  private def maxPollIntervalConfig(settings: ConsumerSettings): Task[Duration] = ZIO.attempt {
+  private def maxPollIntervalConfig(settings: ConsumerSettings)(implicit trace: Trace): Task[Duration] = ZIO.attempt {
     def defaultMaxPollInterval: Int = ConsumerConfig
       .configDef()
       .defaultValues()

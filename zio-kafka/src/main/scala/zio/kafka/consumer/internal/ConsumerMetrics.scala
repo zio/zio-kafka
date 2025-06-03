@@ -12,17 +12,21 @@ import zio._
  * zio-kafka version.
  */
 private[internal] trait ConsumerMetrics {
-  def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int): UIO[Unit]
-  def observeCommit(latency: Duration): UIO[Unit]
-  def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit]
-  def observeRebalance(currentlyAssignedCount: Int, assignedCount: Int, revokedCount: Int, lostCount: Int): UIO[Unit]
+  def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int)(implicit
+    trace: Trace
+  ): UIO[Unit]
+  def observeCommit(latency: Duration)(implicit trace: Trace): UIO[Unit]
+  def observeAggregatedCommit(latency: Duration, commitSize: Long)(implicit trace: Trace): UIO[Unit]
+  def observeRebalance(currentlyAssignedCount: Int, assignedCount: Int, revokedCount: Int, lostCount: Int)(implicit
+    trace: Trace
+  ): UIO[Unit]
   def observeRunloopMetrics(
     state: Runloop.State,
     commandQueueSize: Int,
     commitQueueSize: Int,
     pendingCommits: Int
-  ): UIO[Unit]
-  def observePollAuthError(): UIO[Unit]
+  )(implicit trace: Trace): UIO[Unit]
+  def observePollAuthError()(implicit trace: Trace): UIO[Unit]
 }
 
 /**
@@ -98,7 +102,9 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  override def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int): UIO[Unit] =
+  override def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int)(implicit
+    trace: Trace
+  ): UIO[Unit] =
     for {
       _ <- pollCounter.increment
       _ <- partitionsResumedInLatestPollGauge.update(resumedCount)
@@ -134,7 +140,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
       .contramap[Duration](_.toNanos.toDouble / 1e9)
       .tagged(metricLabels)
 
-  override def observeCommit(latency: zio.Duration): UIO[Unit] =
+  override def observeCommit(latency: zio.Duration)(implicit trace: Trace): UIO[Unit] =
     for {
       _ <- commitCounter.increment
       _ <- commitLatencyHistogram.update(latency)
@@ -184,7 +190,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
       .contramap[Long](_.toDouble)
       .tagged(metricLabels)
 
-  override def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit] =
+  override def observeAggregatedCommit(latency: Duration, commitSize: Long)(implicit trace: Trace): UIO[Unit] =
     for {
       _ <- aggregatedCommitCounter.increment
       _ <- aggregatedCommitLatencyHistogram.update(latency)
@@ -227,7 +233,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
     assignedCount: Int,
     revokedCount: Int,
     lostCount: Int
-  ): UIO[Unit] =
+  )(implicit trace: Trace): UIO[Unit] =
     for {
       _ <- rebalanceCounter.increment
       _ <- partitionsCurrentlyAssignedGauge.update(currentlyAssignedCount)
@@ -340,7 +346,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
     commandQueueSize: Int,
     commitQueueSize: Int,
     pendingCommits: Int
-  ): UIO[Unit] =
+  )(implicit trace: Trace): UIO[Unit] =
     for {
       _          <- ZIO.foreachDiscard(state.assignedStreams)(_.outstandingPolls @@ queuePollsHistogram)
       queueSizes <- ZIO.foreach(state.assignedStreams)(_.queueSize)
@@ -366,7 +372,7 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
       )
       .tagged(metricLabels)
 
-  def observePollAuthError(): UIO[Unit] =
+  def observePollAuthError()(implicit trace: Trace): UIO[Unit] =
     pollAuthErrorCounter.increment
 
 }

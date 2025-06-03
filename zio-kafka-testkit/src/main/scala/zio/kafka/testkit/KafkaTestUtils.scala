@@ -55,7 +55,9 @@ object KafkaTestUtils {
    *
    * Note: to run multiple tests in parallel, each producer needs a different transactional id.
    */
-  def transactionalProducerSettings(transactionalId: String): ZIO[Kafka, Nothing, TransactionalProducerSettings] =
+  def transactionalProducerSettings(
+    transactionalId: String
+  )(implicit trace: Trace): ZIO[Kafka, Nothing, TransactionalProducerSettings] =
     ZIO
       .serviceWith[Kafka](_.bootstrapServers)
       .map(TransactionalProducerSettings(_, transactionalId))
@@ -66,7 +68,7 @@ object KafkaTestUtils {
    * Note: to run multiple tests in parallel, you need to use different transactional ids via
    * `transactionalProducerSettings(transactionalId)`.
    */
-  val transactionalProducerSettings: ZIO[Kafka, Nothing, TransactionalProducerSettings] =
+  def transactionalProducerSettings(implicit trace: Trace): ZIO[Kafka, Nothing, TransactionalProducerSettings] =
     transactionalProducerSettings("test-transaction")
 
   /**
@@ -77,7 +79,7 @@ object KafkaTestUtils {
   def makeTransactionalProducer(
     transactionalId: String,
     consumer: Consumer
-  ): ZIO[Scope & Kafka, Throwable, TransactionalProducer] =
+  )(implicit trace: Trace): ZIO[Scope & Kafka, Throwable, TransactionalProducer] =
     transactionalProducerSettings(transactionalId).flatMap(TransactionalProducer.make(_, consumer))
 
   /**
@@ -117,7 +119,7 @@ object KafkaTestUtils {
     topic: String,
     key: String,
     message: String
-  ): ZIO[Any, Throwable, RecordMetadata] =
+  )(implicit trace: Trace): ZIO[Any, Throwable, RecordMetadata] =
     producer.produce[Any, String, String](new ProducerRecord(topic, key, message), Serde.string, Serde.string)
 
   /**
@@ -129,7 +131,7 @@ object KafkaTestUtils {
     partition: Int,
     key: String,
     message: String
-  ): ZIO[Any, Throwable, RecordMetadata] =
+  )(implicit trace: Trace): ZIO[Any, Throwable, RecordMetadata] =
     producer.produce[Any, String, String](
       new ProducerRecord(topic, partition, key, message),
       Serde.string,
@@ -144,7 +146,7 @@ object KafkaTestUtils {
     topic: String,
     partition: Int,
     kvs: Iterable[(String, String)]
-  ): ZIO[Any, Throwable, Chunk[RecordMetadata]] =
+  )(implicit trace: Trace): ZIO[Any, Throwable, Chunk[RecordMetadata]] =
     producer.produceChunk[Any, String, String](
       Chunk.fromIterable(kvs.map { case (k, v) =>
         new ProducerRecord(topic, partition, null, k, v)
@@ -160,7 +162,7 @@ object KafkaTestUtils {
     producer: Producer,
     topic: String,
     kvs: Iterable[(String, String)]
-  ): ZIO[Any, Throwable, Chunk[RecordMetadata]] =
+  )(implicit trace: Trace): ZIO[Any, Throwable, Chunk[RecordMetadata]] =
     producer.produceChunk[Any, String, String](
       Chunk.fromIterable(kvs.map { case (k, v) =>
         new ProducerRecord(topic, k, v)
@@ -205,7 +207,7 @@ object KafkaTestUtils {
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
     diagnostics: Consumer.ConsumerDiagnostics = Diagnostics.NoOp,
     properties: Map[String, String] = Map.empty
-  ): URIO[Kafka, ConsumerSettings] =
+  )(implicit trace: Trace): URIO[Kafka, ConsumerSettings] =
     ZIO.serviceWith[Kafka] { (kafka: Kafka) =>
       val settings = ConsumerSettings(kafka.bootstrapServers)
         .withClientId(clientId)
@@ -244,7 +246,7 @@ object KafkaTestUtils {
     maxRebalanceDuration: Duration = 3.minutes,
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
     properties: Map[String, String] = Map.empty
-  ): ZIO[Scope & Kafka, Throwable, Consumer] =
+  )(implicit trace: Trace): ZIO[Scope & Kafka, Throwable, Consumer] =
     for {
       settings <- consumerSettings(
                     clientId = clientId,
@@ -288,7 +290,7 @@ object KafkaTestUtils {
     maxRebalanceDuration: Duration = 3.minutes,
     commitTimeout: Duration = ConsumerSettings.defaultCommitTimeout,
     properties: Map[String, String] = Map.empty
-  ): ZLayer[Kafka, Throwable, Consumer] =
+  )(implicit trace: Trace): ZLayer[Kafka, Throwable, Consumer] =
     ZLayer.scoped {
       makeConsumer(
         clientId,
@@ -322,7 +324,7 @@ object KafkaTestUtils {
     rebalanceSafeCommits: Boolean = false,
     diagnostics: ConsumerDiagnostics = Diagnostics.NoOp,
     properties: Map[String, String] = Map.empty
-  ): URIO[Kafka, ConsumerSettings] =
+  )(implicit trace: Trace): URIO[Kafka, ConsumerSettings] =
     consumerSettings(
       clientId = clientId,
       groupId = Some(groupId),
@@ -348,7 +350,7 @@ object KafkaTestUtils {
     rebalanceSafeCommits: Boolean = false,
     properties: Map[String, String] = Map.empty,
     rebalanceListener: RebalanceListener = RebalanceListener.noop
-  ): ZIO[Scope & Kafka, Throwable, Consumer] =
+  )(implicit trace: Trace): ZIO[Scope & Kafka, Throwable, Consumer] =
     for {
       settings <- transactionalConsumerSettings(
                     groupId = groupId,
@@ -407,7 +409,7 @@ object KafkaTestUtils {
    */
   def consumeWithStrings(clientId: String, groupId: Option[String] = None, subscription: Subscription)(
     r: ConsumerRecord[String, String] => URIO[Any, Unit]
-  ): RIO[Kafka, Unit] =
+  )(implicit trace: Trace): RIO[Kafka, Unit] =
     consumerSettings(clientId, groupId, None).flatMap { settings =>
       Consumer.consumeWith[Any, Any, String, String](
         settings,
@@ -426,13 +428,15 @@ object KafkaTestUtils {
   /**
    * Makes `AdminClientSettings` for use in tests.
    */
-  val adminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
+  def adminSettings(implicit trace: Trace): ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO.serviceWith[Kafka](_.bootstrapServers).map(bootstrapServers => AdminClientSettings(bootstrapServers))
 
   /**
    * Makes `AdminClientSettings` for use in tests, using SASL_PLAINTEXT security protocol.
    */
-  def saslAdminSettings(username: String, password: String): ZIO[Kafka.Sasl, Nothing, AdminClientSettings] =
+  def saslAdminSettings(username: String, password: String)(implicit
+    trace: Trace
+  ): ZIO[Kafka.Sasl, Nothing, AdminClientSettings] =
     ZIO
       .serviceWith[Kafka.Sasl](_.value.bootstrapServers)
       .map { bootstrapServers =>
@@ -446,7 +450,7 @@ object KafkaTestUtils {
   /**
    * Makes `AdminClientSettings` for use in tests, using SSL security protocol.
    */
-  val sslAdminSettings: ZIO[Kafka, Nothing, AdminClientSettings] =
+  def sslAdminSettings(implicit trace: Trace): ZIO[Kafka, Nothing, AdminClientSettings] =
     ZIO
       .serviceWith[Kafka](_.bootstrapServers)
       .map { bootstrapServers =>
@@ -466,7 +470,7 @@ object KafkaTestUtils {
   /**
    * Makes a `AdminClient` for use in tests.
    */
-  def makeAdminClient: ZIO[Scope & Kafka, Throwable, AdminClient] =
+  def makeAdminClient(implicit trace: Trace): ZIO[Scope & Kafka, Throwable, AdminClient] =
     adminSettings.flatMap(AdminClient.make)
 
   /**
@@ -475,13 +479,13 @@ object KafkaTestUtils {
   def makeSaslAdminClient(
     username: String = "admin",
     password: String = "admin-secret"
-  ): ZIO[Scope & Kafka.Sasl, Throwable, AdminClient] =
+  )(implicit trace: Trace): ZIO[Scope & Kafka.Sasl, Throwable, AdminClient] =
     saslAdminSettings(username, password).flatMap(AdminClient.make)
 
   /**
    * Makes a `AdminClient` for use in tests, using the `SSL` security protocol.
    */
-  def makeSslAdminClient: ZIO[Scope & Kafka, Throwable, AdminClient] =
+  def makeSslAdminClient(implicit trace: Trace): ZIO[Scope & Kafka, Throwable, AdminClient] =
     sslAdminSettings.flatMap(AdminClient.make)
 
   // -----------------------------------------------------------------------------------------
@@ -493,7 +497,7 @@ object KafkaTestUtils {
   /**
    * Create a topic.
    */
-  def createCustomTopic(topic: String, partitionCount: Int = 1): ZIO[Kafka, Throwable, Unit] =
+  def createCustomTopic(topic: String, partitionCount: Int = 1)(implicit trace: Trace): ZIO[Kafka, Throwable, Unit] =
     ZIO.scoped {
       for {
         adminClient <- makeAdminClient

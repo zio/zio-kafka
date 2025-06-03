@@ -14,12 +14,12 @@ object ConcurrentDiagnostics {
   def make[DiagnosticEvent](
     wrapped: Diagnostics[DiagnosticEvent],
     finalEvent: DiagnosticEvent
-  ): ZIO[Scope, Nothing, Diagnostics[DiagnosticEvent]] =
+  )(implicit trace: Trace): ZIO[Scope, Nothing, Diagnostics[DiagnosticEvent]] =
     for {
       queue <- ZIO.acquireRelease(Queue.unbounded[DiagnosticEvent])(_.shutdown)
       fib   <- ZStream.fromQueue(queue).tap(wrapped.emit(_)).takeUntil(_ == finalEvent).runDrain.forkScoped
       _     <- ZIO.addFinalizer(queue.offer(finalEvent) *> fib.await)
     } yield new Diagnostics[DiagnosticEvent] {
-      override def emit(event: => DiagnosticEvent): UIO[Unit] = queue.offer(event).unit
+      override def emit(event: => DiagnosticEvent)(implicit trace: Trace): UIO[Unit] = queue.offer(event).unit
     }
 }

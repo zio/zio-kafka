@@ -14,7 +14,7 @@ import scala.util.control.NoStackTrace
 
 abstract class PartitionStream {
   def tp: TopicPartition
-  def queueSize: UIO[Int]
+  def queueSize(implicit trace: Trace): UIO[Int]
 }
 
 /**
@@ -53,7 +53,7 @@ final class PartitionStreamControl private (
   )
 
   /** Offer new data for the stream to process. Should be called on every poll, also when `data.isEmpty` */
-  private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord]): UIO[Unit] =
+  private[internal] def offerRecords(data: Chunk[ByteArrayCommittableRecord])(implicit trace: Trace): UIO[Unit] =
     ZIO.ifZIO(hasEnded)(
       onTrue = ZIO.dieMessage("Partition stream has already ended, cannot offer more records"),
       onFalse = if (data.isEmpty) {
@@ -68,16 +68,16 @@ final class PartitionStreamControl private (
       }
     )
 
-  def queueSize: UIO[Int] = queueInfoRef.get.map(_.size)
+  def queueSize(implicit trace: Trace): UIO[Int] = queueInfoRef.get.map(_.size)
 
-  def lastPulledOffset: UIO[Option[Offset]] = queueInfoRef.get.map(_.lastPulledOffset)
+  def lastPulledOffset(implicit trace: Trace): UIO[Option[Offset]] = queueInfoRef.get.map(_.lastPulledOffset)
 
   /**
    * @return
    *   the number of polls there are records idling in the queue. It is increased on every poll (when the queue is
    *   nonEmpty) and reset to 0 when the stream pulls the records
    */
-  def outstandingPolls: UIO[Int] = queueInfoRef.get.map(_.outstandingPolls)
+  def outstandingPolls(implicit trace: Trace): UIO[Int] = queueInfoRef.get.map(_.outstandingPolls)
 
   /**
    * @param now
@@ -86,18 +86,18 @@ final class PartitionStreamControl private (
    *   `true` when the stream has data available, but none has been pulled for more than `maxPollInterval` (since data
    *   became available), `false` otherwise
    */
-  private[internal] def maxStreamPullIntervalExceeded(now: NanoTime): UIO[Boolean] =
+  private[internal] def maxStreamPullIntervalExceeded(now: NanoTime)(implicit trace: Trace): UIO[Boolean] =
     queueInfoRef.get.map(_.deadlineExceeded(now))
 
   /** To be invoked when the stream is no longer processing. */
-  private[internal] def halt: UIO[Unit] = {
+  private[internal] def halt(implicit trace: Trace): UIO[Unit] = {
     val timeOutMessage = s"No records were pulled for more than $maxStreamPullInterval for topic partition $tp."
     val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
     interruptionPromise.fail(consumeTimeout).unit
   }
 
   /** To be invoked when the partition was lost. It clears the queue and ends the stream. */
-  private[internal] def lost: UIO[Unit] =
+  private[internal] def lost(implicit trace: Trace): UIO[Unit] =
     logAnnotate {
       for {
         _     <- ZIO.logDebug(s"Partition ${tp.toString} lost")
@@ -109,7 +109,7 @@ final class PartitionStreamControl private (
     }
 
   /** To be invoked when the partition was revoked or otherwise needs to be ended. */
-  private[internal] def end: ZIO[Any, Nothing, Unit] =
+  private[internal] def end(implicit trace: Trace): ZIO[Any, Nothing, Unit] =
     logAnnotate {
       ZIO.logDebug(s"Partition ${tp.toString} ending") *>
         hasEndedRef.set(true) *>
@@ -117,20 +117,20 @@ final class PartitionStreamControl private (
     }
 
   /** Returns true when the stream is done. */
-  private[internal] def isCompleted: ZIO[Any, Nothing, Boolean] =
+  private[internal] def isCompleted(implicit trace: Trace): ZIO[Any, Nothing, Boolean] =
     completedPromise.isDone
 
   /**
    * Returns true when the stream is running (the finalizer has not yet run). The stream is still considered running
    * after `end` is called but before the stream has finalized
    */
-  private[internal] def isRunning: ZIO[Any, Nothing, Boolean] =
+  private[internal] def isRunning(implicit trace: Trace): ZIO[Any, Nothing, Boolean] =
     isCompleted.negate
 
   /**
    * Returns true after `end` has been called.
    */
-  private[internal] def hasEnded: ZIO[Any, Nothing, Boolean] =
+  private[internal] def hasEnded(implicit trace: Trace): ZIO[Any, Nothing, Boolean] =
     hasEndedRef.get
 
   private[internal] val tpStream: (TopicPartition, ZStream[Any, Throwable, ByteArrayCommittableRecord]) =
@@ -144,10 +144,12 @@ object PartitionStreamControl {
     requestData: UIO[Unit],
     diagnostics: ConsumerDiagnostics,
     maxStreamPullInterval: Duration
-  ): UIO[PartitionStreamControl] = {
+  )(implicit trace: Trace): UIO[PartitionStreamControl] = {
     val maxStreamPullIntervalNanos = maxStreamPullInterval.toNanos
 
-    def registerPull(queueInfo: Ref[QueueInfo], records: Chunk[ByteArrayCommittableRecord]): UIO[Unit] =
+    def registerPull(queueInfo: Ref[QueueInfo], records: Chunk[ByteArrayCommittableRecord])(implicit
+      trace: Trace
+    ): UIO[Unit] =
       for {
         now <- Clock.nanoTime
         newPullDeadline = now + maxStreamPullIntervalNanos

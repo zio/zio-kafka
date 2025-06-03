@@ -1,6 +1,6 @@
 package zio.kafka.diagnostics
 
-import zio.{ Queue, Scope, UIO, ZIO }
+import zio.{ Queue, Scope, Trace, UIO, ZIO }
 
 object SlidingDiagnostics {
 
@@ -28,12 +28,14 @@ object SlidingDiagnostics {
    * @tparam DiagnosticEvent
    *   the type of event to keep
    */
-  def make[DiagnosticEvent](queueSize: Int = 16): ZIO[Scope, Nothing, QueuingDiagnostics[DiagnosticEvent]] =
+  def make[DiagnosticEvent](queueSize: Int = 16)(implicit
+    trace: Trace
+  ): ZIO[Scope, Nothing, QueuingDiagnostics[DiagnosticEvent]] =
     ZIO.acquireRelease(Queue.sliding[DiagnosticEvent](queueSize))(_.shutdown).map(QueuingDiagnostics(_))
 
 }
 
 final case class QueuingDiagnostics[DiagnosticEvent] private[diagnostics] (queue: Queue[DiagnosticEvent])
     extends Diagnostics[DiagnosticEvent] {
-  override def emit(event: => DiagnosticEvent): UIO[Unit] = queue.offer(event).unit
+  override def emit(event: => DiagnosticEvent)(implicit trace: Trace): UIO[Unit] = queue.offer(event).unit
 }

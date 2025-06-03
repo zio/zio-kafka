@@ -111,7 +111,7 @@ object ManyPartitionsQueueSizeBasedFetchStrategySpec extends ZIOSpecDefaultSlf4j
 
   private def newStream(topicPartition: TopicPartition, currentQueueSize: Int): PartitionStream =
     new PartitionStream {
-      override def tp: TopicPartition  = topicPartition
-      override def queueSize: UIO[Int] = ZIO.succeed(currentQueueSize)
+      override def tp: TopicPartition                         = topicPartition
+      override def queueSize(implicit trace: Trace): UIO[Int] = ZIO.succeed(currentQueueSize)
     }
 }

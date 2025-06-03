@@ -5,7 +5,7 @@ import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
-import zio.{ Chunk, Task, UIO }
+import zio.{ Chunk, Task, Trace, UIO }
 
 import java.lang.Math.max
 import scala.collection.mutable
@@ -34,20 +34,20 @@ private[internal] trait Committer {
   def processQueuedCommits(
     consumer: ByteArrayKafkaConsumer,
     executeOnEmpty: Boolean = false
-  ): Task[Unit]
+  )(implicit trace: Trace): Task[Unit]
 
-  def queueSize: UIO[Int]
+  def queueSize(implicit trace: Trace): UIO[Int]
 
-  def pendingCommitCount: UIO[Int]
+  def pendingCommitCount(implicit trace: Trace): UIO[Int]
 
-  def getPendingCommits: UIO[CommitOffsets]
+  def getPendingCommits(implicit trace: Trace): UIO[CommitOffsets]
 
   /** Removes all completed commits from `pendingCommits`. */
-  def cleanupPendingCommits: UIO[Unit]
+  def cleanupPendingCommits(implicit trace: Trace): UIO[Unit]
 
-  def keepCommitsForPartitions(assignedPartitions: Set[TopicPartition]): UIO[Unit]
+  def keepCommitsForPartitions(assignedPartitions: Set[TopicPartition])(implicit trace: Trace): UIO[Unit]
 
-  def getCommittedOffsets: UIO[CommitOffsets]
+  def getCommittedOffsets(implicit trace: Trace): UIO[CommitOffsets]
 }
 
 private[internal] object Committer {

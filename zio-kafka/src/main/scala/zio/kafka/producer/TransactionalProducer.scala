@@ -18,7 +18,7 @@ import scala.jdk.CollectionConverters._
  * A producer that produces records transactionally.
  */
 trait TransactionalProducer {
-  def createTransaction: ZIO[Scope, Throwable, Transaction]
+  def createTransaction(implicit trace: Trace): ZIO[Scope, Throwable, Transaction]
 }
 
 object TransactionalProducer {
@@ -36,7 +36,7 @@ object TransactionalProducer {
   ) extends TransactionalProducer {
     private val abortTransaction: Task[Unit] = ZIO.attemptBlocking(live.p.abortTransaction())
 
-    private def commitTransactionWithOffsets(offsetBatch: OffsetBatch): Task[Unit] = {
+    private def commitTransactionWithOffsets(offsetBatch: OffsetBatch)(implicit trace: Trace): Task[Unit] = {
       val sendOffsetsToTransaction: Task[Unit] =
         ZIO.suspend {
           @inline def invalidGroupIdException: IO[InvalidGroupIdException, Nothing] =
@@ -63,7 +63,9 @@ object TransactionalProducer {
         consumer.registerExternalCommits(offsetBatch).unit
     }
 
-    private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any]): ZIO[Any, Nothing, Unit] =
+    private def commitOrAbort(transaction: TransactionImpl, exit: Exit[Any, Any])(implicit
+      trace: Trace
+    ): ZIO[Any, Nothing, Unit] =
       exit match {
         case Exit.Success(_) =>
           transaction.offsetBatchRef.get
@@ -72,7 +74,7 @@ object TransactionalProducer {
         case Exit.Failure(_)                           => abortTransaction.retryN(5).orDie
       }
 
-    override def createTransaction: ZIO[Scope, Throwable, Transaction] =
+    override def createTransaction(implicit trace: Trace): ZIO[Scope, Throwable, Transaction] =
       semaphore.withPermitScoped *>
         ZIO.acquireReleaseExit {
           for {
@@ -92,7 +94,9 @@ object TransactionalProducer {
       } yield producer
     }
 
-  def make(settings: TransactionalProducerSettings, consumer: Consumer): ZIO[Scope, Throwable, TransactionalProducer] =
+  def make(settings: TransactionalProducerSettings, consumer: Consumer)(implicit
+    trace: Trace
+  ): ZIO[Scope, Throwable, TransactionalProducer] =
     for {
       wrappedDiagnostics <- Producer.makeConcurrentDiagnostics(settings.producerSettings.diagnostics)
       _ <- ZIO.fail(RebalanceSafeCommitsRequired).unless(consumer.consumerSettings.rebalanceSafeCommits)

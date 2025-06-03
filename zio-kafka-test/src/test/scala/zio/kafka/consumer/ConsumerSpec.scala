@@ -1443,14 +1443,15 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _                       <- ZIO.logDebug("Starting consumer 1")
           rebalanceEndTimePromise <- Promise.make[Nothing, Instant]
           c1Diagnostics = new ConsumerDiagnostics {
-                            override def emit(event: => DiagnosticEvent): UIO[Unit] = event match {
-                              case r: DiagnosticEvent.Rebalance if r.assigned.size == 1 =>
-                                ZIO.logDebug(s"Rebalance finished: $r") *>
-                                  Clock.instant.flatMap(rebalanceEndTimePromise.succeed).unit
-                              case r: DiagnosticEvent.Rebalance =>
-                                ZIO.logDebug(s"Rebalance finished: $r")
-                              case _ => ZIO.unit
-                            }
+                            override def emit(event: => DiagnosticEvent)(implicit trace: Trace): UIO[Unit] =
+                              event match {
+                                case r: DiagnosticEvent.Rebalance if r.assigned.size == 1 =>
+                                  ZIO.logDebug(s"Rebalance finished: $r") *>
+                                    Clock.instant.flatMap(rebalanceEndTimePromise.succeed).unit
+                                case r: DiagnosticEvent.Rebalance =>
+                                  ZIO.logDebug(s"Rebalance finished: $r")
+                                case _ => ZIO.unit
+                              }
                           }
           c1             <- makeConsumer(clientId1, groupId, rebalanceSafeCommits = true, c1Diagnostics)
           c1Started      <- Promise.make[Nothing, Unit]

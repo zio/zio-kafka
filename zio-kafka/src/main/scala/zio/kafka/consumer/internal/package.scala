@@ -33,7 +33,7 @@ package object internal {
   /**
    * A sleep that is safe to use from the same-thread-runtime.
    */
-  private[internal] def blockingSleep(sleepTime: Duration): Task[Unit] =
+  private[internal] def blockingSleep(sleepTime: Duration)(implicit trace: Trace): Task[Unit] =
     ZIO.attempt(Thread.sleep(sleepTime.toMillis))
 
 }

@@ -27,14 +27,14 @@ object RunloopCommand {
 
   final case class AddSubscription(subscription: Subscription, cont: Promise[InvalidSubscriptionUnion, Unit])
       extends StreamCommand {
-    @inline def succeed: UIO[Unit]                           = cont.succeed(()).unit
-    @inline def fail(e: InvalidSubscriptionUnion): UIO[Unit] = cont.fail(e).unit
+    @inline def succeed(implicit trace: Trace): UIO[Unit]                           = cont.succeed(()).unit
+    @inline def fail(e: InvalidSubscriptionUnion)(implicit trace: Trace): UIO[Unit] = cont.fail(e).unit
   }
   final case class RemoveSubscription(subscription: Subscription, cont: Promise[Throwable, Unit]) extends StreamCommand
 
   final case class EndStreamsBySubscription(subscription: Subscription, cont: Promise[Nothing, Unit])
       extends StreamCommand {
-    @inline def succeed: UIO[Unit] = cont.succeed(()).unit
+    @inline def succeed(implicit trace: Trace): UIO[Unit] = cont.succeed(()).unit
   }
 
   case object RemoveAllSubscriptions extends StreamCommand

@@ -53,9 +53,13 @@ object Serde extends Serdes {
     deser: (String, Headers, Array[Byte]) => RIO[R, T]
   )(ser: (String, Headers, T) => RIO[R, Array[Byte]]): Serde[R, T] =
     new Serde[R, T] {
-      override final def serialize(topic: String, headers: Headers, value: T): RIO[R, Array[Byte]] =
+      override final def serialize(topic: String, headers: Headers, value: T)(implicit
+        trace: Trace
+      ): RIO[R, Array[Byte]] =
         ser(topic, headers, value)
-      override final def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T] =
+      override final def deserialize(topic: String, headers: Headers, data: Array[Byte])(implicit
+        trace: Trace
+      ): RIO[R, T] =
         deser(topic, headers, data)
     }
 
@@ -64,31 +68,41 @@ object Serde extends Serdes {
    */
   def apply[R, T](deser: Deserializer[R, T])(ser: Serializer[R, T]): Serde[R, T] =
     new Serde[R, T] {
-      override final def serialize(topic: String, headers: Headers, value: T): RIO[R, Array[Byte]] =
+      override final def serialize(topic: String, headers: Headers, value: T)(implicit
+        trace: Trace
+      ): RIO[R, Array[Byte]] =
         ser.serialize(topic, headers, value)
-      override final def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, T] =
+      override final def deserialize(topic: String, headers: Headers, data: Array[Byte])(implicit
+        trace: Trace
+      ): RIO[R, T] =
         deser.deserialize(topic, headers, data)
     }
 
   /**
    * Create a Serde from a Kafka Serde
    */
-  def fromKafkaSerde[T](serde: KafkaSerde[T], props: Map[String, AnyRef], isKey: Boolean): Task[Serde[Any, T]] =
+  def fromKafkaSerde[A](serde: KafkaSerde[A], props: Map[String, AnyRef], isKey: Boolean)(implicit
+    trace: Trace
+  ): Task[Serde[Any, A]] =
     ZIO
       .attempt(serde.configure(props.asJava, isKey))
       .as(
-        new Serde[Any, T] {
+        new Serde[Any, A] {
           private final val serializer   = serde.serializer()
           private final val deserializer = serde.deserializer()
 
-          override final def deserialize(topic: String, headers: Headers, data: Array[Byte]): Task[T] =
+          override final def deserialize(topic: String, headers: Headers, data: Array[Byte])(implicit
+            trace: Trace
+          ): Task[A] =
             ZIO.attempt(deserializer.deserialize(topic, headers, data))
 
-          override final def serialize(topic: String, headers: Headers, value: T): Task[Array[Byte]] =
+          override final def serialize(topic: String, headers: Headers, value: A)(implicit
+            trace: Trace
+          ): Task[Array[Byte]] =
             ZIO.attempt(serializer.serialize(topic, headers, value))
         }
       )
 
-  implicit def deserializerWithError[R, T](implicit deser: Deserializer[R, T]): Deserializer[R, Try[T]] =
+  implicit def deserializerWithError[R, T](implicit deser: Deserializer[R, T], trace: Trace): Deserializer[R, Try[T]] =
     deser.asTry
 }

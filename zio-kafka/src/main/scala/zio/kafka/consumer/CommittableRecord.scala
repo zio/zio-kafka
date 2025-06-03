@@ -3,7 +3,7 @@ package zio.kafka.consumer
 import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, ConsumerRecord, OffsetAndMetadata }
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.serde.Deserializer
-import zio.{ RIO, Task }
+import zio.{ RIO, Task, Trace }
 
 final case class CommittableRecord[K, V](
   record: ConsumerRecord[K, V],
@@ -13,7 +13,7 @@ final case class CommittableRecord[K, V](
   def deserializeWith[R, K1, V1](
     keyDeserializer: Deserializer[R, K1],
     valueDeserializer: Deserializer[R, V1]
-  )(implicit ev1: K <:< Array[Byte], ev2: V <:< Array[Byte]): RIO[R, CommittableRecord[K1, V1]] =
+  )(implicit ev1: K <:< Array[Byte], ev2: V <:< Array[Byte], trace: Trace): RIO[R, CommittableRecord[K1, V1]] =
     for {
       key   <- keyDeserializer.deserialize(record.topic(), record.headers(), record.key())
       value <- valueDeserializer.deserialize(record.topic(), record.headers(), record.value())

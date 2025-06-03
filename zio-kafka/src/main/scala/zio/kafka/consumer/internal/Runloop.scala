@@ -31,7 +31,7 @@ private[consumer] final class Runloop private (
   committer: Committer,
   groupMetadataRef: Ref[Option[ConsumerGroupMetadata]]
 ) {
-  private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
+  private def newPartitionStream(tp: TopicPartition)(implicit trace: Trace): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(
       tp,
       commandQueue.offer(RunloopCommand.Request(tp)).unit,
@@ -39,11 +39,11 @@ private[consumer] final class Runloop private (
       maxStreamPullInterval
     )
 
-  def stopConsumption: UIO[Unit] =
+  def stopConsumption(implicit trace: Trace): UIO[Unit] =
     ZIO.logDebug("stopConsumption called") *>
       commandQueue.offer(RunloopCommand.StopAllStreams).unit
 
-  private[consumer] def shutdown: UIO[Unit] =
+  private[consumer] def shutdown(implicit trace: Trace): UIO[Unit] =
     ZIO.logDebug(s"Shutting down runloop initiated") *>
       commandQueue
         .offerAll(
@@ -54,20 +54,24 @@ private[consumer] final class Runloop private (
         )
         .unit
 
-  private[internal] def addSubscription(subscription: Subscription): IO[InvalidSubscriptionUnion, Unit] =
+  private[internal] def addSubscription(
+    subscription: Subscription
+  )(implicit trace: Trace): IO[InvalidSubscriptionUnion, Unit] =
     for {
       _ <- ZIO.logDebug(s"Add subscription $subscription")
       _ <- offerAndAwaitCommand(RunloopCommand.AddSubscription(subscription, _))
       _ <- ZIO.logDebug(s"Done for subscription $subscription")
     } yield ()
 
-  private[internal] def removeSubscription(subscription: Subscription): Task[Unit] =
+  private[internal] def removeSubscription(subscription: Subscription)(implicit trace: Trace): Task[Unit] =
     offerAndAwaitCommand(RunloopCommand.RemoveSubscription(subscription, _))
 
-  private[internal] def endStreamsBySubscription(subscription: Subscription): UIO[Unit] =
+  private[internal] def endStreamsBySubscription(subscription: Subscription)(implicit trace: Trace): UIO[Unit] =
     offerAndAwaitCommand(RunloopCommand.EndStreamsBySubscription(subscription, _))
 
-  private[internal] def offerAndAwaitCommand[E, A](f: Promise[E, A] => RunloopCommand): ZIO[Any, E, A] =
+  private[internal] def offerAndAwaitCommand[E, A](
+    f: Promise[E, A] => RunloopCommand
+  )(implicit trace: Trace): ZIO[Any, E, A] =
     for {
       promise <- Promise.make[E, A]
       _       <- commandQueue.offer(f(promise))
@@ -120,7 +124,7 @@ private[consumer] final class Runloop private (
     pendingRequests: Chunk[RunloopCommand.Request],
     ignoreRecordsForTps: Set[TopicPartition],
     polledRecords: ConsumerRecords[Array[Byte], Array[Byte]]
-  ): UIO[Runloop.FulfillResult] = {
+  )(implicit trace: Trace): UIO[Runloop.FulfillResult] = {
     type Record = CommittableRecord[Array[Byte], Array[Byte]]
 
     // The most efficient way to get the records from [[ConsumerRecords]] per
@@ -160,7 +164,9 @@ private[consumer] final class Runloop private (
   }
 
   /** @return the topic-partitions for which received records should be ignored */
-  private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
+  private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition])(implicit
+    trace: Trace
+  ): Task[Set[TopicPartition]] =
     settings.offsetRetrieval match {
       case OffsetRetrieval.Auto(_) => ZIO.succeed(Set.empty)
       case OffsetRetrieval.Manual(getOffsets, _) =>
@@ -179,7 +185,7 @@ private[consumer] final class Runloop private (
   private def resumeAndPausePartitions(
     c: ByteArrayKafkaConsumer,
     requestedPartitions: Set[TopicPartition]
-  ): Task[(Int, Int)] = ZIO.attempt {
+  )(implicit trace: Trace): Task[(Int, Int)] = ZIO.attempt {
     val assignment = c.assignment().asScala.toSet
     val toResume   = assignment intersect requestedPartitions
     val toPause    = assignment -- requestedPartitions
@@ -190,7 +196,9 @@ private[consumer] final class Runloop private (
     (toResume.size, toPause.size)
   }
 
-  private def doPoll(c: ByteArrayKafkaConsumer): Task[ConsumerRecords[Array[Byte], Array[Byte]]] =
+  private def doPoll(
+    c: ByteArrayKafkaConsumer
+  )(implicit trace: Trace): Task[ConsumerRecords[Array[Byte], Array[Byte]]] =
     ZIO.attempt {
       val recordsOrNull = c.poll(settings.pollTimeout)
       if (recordsOrNull eq null) ConsumerRecords.empty[Array[Byte], Array[Byte]]()
@@ -206,7 +214,7 @@ private[consumer] final class Runloop private (
           settings.authErrorRetrySchedule
       )
 
-  private def handlePoll(state: State): Task[State] = {
+  private def handlePoll(state: State)(implicit trace: Trace): Task[State] = {
     for {
       runningStreamsBeforePoll <- ZIO.filterNot(state.assignedStreams)(_.hasEnded)
       partitionsToFetch        <- settings.fetchStrategy.selectPartitionsToFetch(runningStreamsBeforePoll)
@@ -358,18 +366,21 @@ private[consumer] final class Runloop private (
   private def verifyAssignedStreamsMatchesAssignment(
     assignedStreams: Chunk[PartitionStreamControl],
     currentAssigned: Set[TopicPartition]
-  ) =
+  )(implicit trace: Trace): ZIO[Any, Nothing, Unit] =
     ZIO
       .logWarning(
         s"Not all assigned partitions have a (single) stream or vice versa. Assigned: ${currentAssigned.mkString(",")}, streams: ${assignedStreams.map(_.tp).mkString(",")}"
       )
       .when(currentAssigned != assignedStreams.map(_.tp).toSet || currentAssigned.size != assignedStreams.size)
+      .unit
 
   /**
    * Check each stream to see if it exceeded its pull interval. If so, halt it. In addition, if any stream has exceeded
    * its pull interval, shutdown the consumer.
    */
-  private def checkStreamPullInterval(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Unit] = {
+  private def checkStreamPullInterval(
+    streams: Chunk[PartitionStreamControl]
+  )(implicit trace: Trace): ZIO[Any, Nothing, Unit] = {
     def logShutdown(stream: PartitionStreamControl): ZIO[Any, Nothing, Unit] =
       ZIO.logError(
         s"Stream for ${stream.tp} has not pulled chunks for more than $maxStreamPullInterval, shutting down. " +
@@ -390,7 +401,7 @@ private[consumer] final class Runloop private (
     } yield ()
   }
 
-  private def handleCommand(state: State, cmd: RunloopCommand.StreamCommand): Task[State] = {
+  private def handleCommand(state: State, cmd: RunloopCommand.StreamCommand)(implicit trace: Trace): Task[State] = {
     def doChangeSubscription(newSubscriptionState: SubscriptionState): Task[State] =
       applyNewSubscriptionState(newSubscriptionState).flatMap { newAssignedStreams =>
         val newState = state.copy(
@@ -487,7 +498,7 @@ private[consumer] final class Runloop private (
 
   private def applyNewSubscriptionState(
     newSubscriptionState: SubscriptionState
-  ): Task[Chunk[PartitionStreamControl]] =
+  )(implicit trace: Trace): Task[Chunk[PartitionStreamControl]] =
     consumer.runloopAccess { c =>
       newSubscriptionState match {
         case SubscriptionState.NotSubscribed =>
@@ -529,7 +540,7 @@ private[consumer] final class Runloop private (
    *
    * Note that this method is executed on a dedicated single-thread Executor
    */
-  private def run(initialState: State): ZIO[Scope, Throwable, Any] = {
+  private def run(initialState: State)(implicit trace: Trace): ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
 
     ZStream
@@ -556,12 +567,14 @@ private[consumer] final class Runloop private (
       .onError(cause => partitionsHub.offer(Take.failCause(cause)))
   }
 
-  def shouldPoll(state: State): UIO[Boolean] =
+  def shouldPoll(state: State)(implicit trace: Trace): UIO[Boolean] =
     committer.pendingCommitCount.map { pendingCommitCount =>
       state.subscriptionState.isSubscribed && (state.pendingRequests.nonEmpty || pendingCommitCount > 0 || state.assignedStreams.isEmpty)
     }
 
-  private def observeRunloopMetrics(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ZIO[Any, Nothing, Unit] = {
+  private def observeRunloopMetrics(
+    runloopMetricsSchedule: Schedule[Any, Unit, Long]
+  )(implicit trace: Trace): ZIO[Any, Nothing, Unit] = {
     val observe = for {
       currentState       <- currentStateRef.get
       commandQueueSize   <- commandQueue.size
@@ -576,7 +589,7 @@ private[consumer] final class Runloop private (
       .unit
   }
 
-  def registerExternalCommits(offsetBatch: OffsetBatch): Task[Unit] =
+  def registerExternalCommits(offsetBatch: OffsetBatch)(implicit trace: Trace): Task[Unit] =
     committer.registerExternalCommits(offsetBatch.offsets)
 }
 
@@ -589,7 +602,9 @@ object Runloop {
      * Code initially inspired by the implementation of [[ZStream.runFoldZIO]] with everything we don't need removed and
      * with chunking added
      */
-    def runFoldChunksDiscardZIO[R1 <: R, E1 >: E, S](s: S)(f: (S, Chunk[A]) => ZIO[R1, E1, S]): ZIO[R1, E1, Unit] = {
+    def runFoldChunksDiscardZIO[R1 <: R, E1 >: E, S](
+      s: S
+    )(f: (S, Chunk[A]) => ZIO[R1, E1, S])(implicit trace: Trace): ZIO[R1, E1, Unit] = {
       def reader(s: S): ZChannel[R1, E1, Chunk[A], Any, E1, Nothing, Unit] =
         ZChannel.readWithCause(
           (in: Chunk[A]) => ZChannel.fromZIO(f(s, in)).flatMap(reader),
@@ -624,7 +639,7 @@ object Runloop {
     diagnostics: ConsumerDiagnostics,
     consumer: ConsumerAccess,
     partitionsHub: Hub[Take[Throwable, PartitionAssignment]]
-  ): URIO[Scope, Runloop] =
+  )(implicit trace: Trace): URIO[Scope, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(DiagnosticEvent.RunloopFinalized))
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)

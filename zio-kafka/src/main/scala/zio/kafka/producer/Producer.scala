@@ -28,7 +28,7 @@ trait Producer {
    */
   def produce(
     record: ProducerRecord[Array[Byte], Array[Byte]]
-  ): Task[RecordMetadata]
+  )(implicit trace: Trace): Task[RecordMetadata]
 
   /**
    * Produces a single record and await broker acknowledgement.
@@ -39,7 +39,7 @@ trait Producer {
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, RecordMetadata]
+  )(implicit trace: Trace): RIO[R, RecordMetadata]
 
   /**
    * Produces a single record and await broker acknowledgement.
@@ -52,7 +52,7 @@ trait Producer {
     value: V,
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, RecordMetadata]
+  )(implicit trace: Trace): RIO[R, RecordMetadata]
 
   /**
    * A stream pipeline that produces all records from the stream.
@@ -75,7 +75,7 @@ trait Producer {
    */
   def produceAsync(
     record: ProducerRecord[Array[Byte], Array[Byte]]
-  ): Task[Task[RecordMetadata]]
+  )(implicit trace: Trace): Task[Task[RecordMetadata]]
 
   /**
    * Produces a single record. The effect returned from this method has two layers and describes the completion of two
@@ -91,7 +91,7 @@ trait Producer {
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, Task[RecordMetadata]]
+  )(implicit trace: Trace): RIO[R, Task[RecordMetadata]]
 
   /**
    * Produces a single record. The effect returned from this method has two layers and describes the completion of two
@@ -109,7 +109,7 @@ trait Producer {
     value: V,
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, Task[RecordMetadata]]
+  )(implicit trace: Trace): RIO[R, Task[RecordMetadata]]
 
   /**
    * Produces a chunk of records.
@@ -121,7 +121,7 @@ trait Producer {
    */
   def produceChunk(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
-  ): Task[Chunk[RecordMetadata]]
+  )(implicit trace: Trace): Task[Chunk[RecordMetadata]]
 
   /**
    * Produces a chunk of records.
@@ -135,7 +135,7 @@ trait Producer {
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, Chunk[RecordMetadata]]
+  )(implicit trace: Trace): RIO[R, Chunk[RecordMetadata]]
 
   /**
    * Produces a chunk of records. The effect returned from this method has two layers and describes the completion of
@@ -152,7 +152,7 @@ trait Producer {
    */
   def produceChunkAsync(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
-  ): Task[Task[Chunk[RecordMetadata]]]
+  )(implicit trace: Trace): Task[Task[Chunk[RecordMetadata]]]
 
   /**
    * Produces a chunk of records. The effect returned from this method has two layers and describes the completion of
@@ -171,7 +171,7 @@ trait Producer {
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, Task[Chunk[RecordMetadata]]]
+  )(implicit trace: Trace): RIO[R, Task[Chunk[RecordMetadata]]]
 
   /**
    * Produces a chunk of records. The effect returned from this method has two layers and describes the completion of
@@ -194,23 +194,23 @@ trait Producer {
    */
   def produceChunkAsyncWithFailures(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
-  ): UIO[UIO[Chunk[Either[Throwable, RecordMetadata]]]]
+  )(implicit trace: Trace): UIO[UIO[Chunk[Either[Throwable, RecordMetadata]]]]
 
   /**
    * Get the partition metadata for the given topic
    */
-  def partitionsFor(topic: String): Task[Chunk[PartitionInfo]]
+  def partitionsFor(topic: String)(implicit trace: Trace): Task[Chunk[PartitionInfo]]
 
   /**
    * Flushes the producer's internal buffer. This will guarantee that all records currently buffered will be transmitted
    * to the broker.
    */
-  def flush: Task[Unit]
+  def flush(implicit trace: Trace): Task[Unit]
 
   /**
    * Expose internal producer metrics
    */
-  def metrics: Task[Map[MetricName, Metric]]
+  def metrics(implicit trace: Trace): Task[Map[MetricName, Metric]]
 }
 
 object Producer {
@@ -233,7 +233,7 @@ object Producer {
       } yield producer
     }
 
-  def make(settings: ProducerSettings): ZIO[Scope, Throwable, Producer] =
+  def make(settings: ProducerSettings)(implicit trace: Trace): ZIO[Scope, Throwable, Producer] =
     for {
       _ <- SslHelper.validateEndpoint(settings.driverSettings)
       rawProducer <- ZIO.acquireRelease(
@@ -256,7 +256,7 @@ object Producer {
   def fromJavaProducer(
     javaProducer: JProducer[Array[Byte], Array[Byte]],
     settings: ProducerSettings
-  ): ZIO[Scope, Throwable, Producer] =
+  )(implicit trace: Trace): ZIO[Scope, Throwable, Producer] =
     for {
       wrappedDiagnostics <- makeConcurrentDiagnostics(settings.diagnostics)
       runtime            <- ZIO.runtime[Any]
@@ -272,7 +272,7 @@ object Producer {
 
   private[producer] def makeConcurrentDiagnostics(
     diagnostics: ProducerDiagnostics
-  ): ZIO[Scope, Nothing, ProducerDiagnostics] =
+  )(implicit trace: Trace): ZIO[Scope, Nothing, ProducerDiagnostics] =
     if (diagnostics == Diagnostics.NoOp) ZIO.succeed(diagnostics)
     else ConcurrentDiagnostics.make(diagnostics, ProducerEvent.ProducerFinalized)
 
@@ -303,14 +303,14 @@ private[producer] final class ProducerLive(
     if (diagnostics eq NoDiagnostics) EmptyDiagnosticsEmitterMaker
     else new BatchDiagnosticsEmitterMaker
 
-  override def produce(record: ProducerRecord[Array[Byte], Array[Byte]]): Task[RecordMetadata] =
+  override def produce(record: ProducerRecord[Array[Byte], Array[Byte]])(implicit trace: Trace): Task[RecordMetadata] =
     produceAsync(record).flatten
 
   override def produce[R, K, V](
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, RecordMetadata] =
+  )(implicit trace: Trace): RIO[R, RecordMetadata] =
     produceAsync(record, keySerializer, valueSerializer).flatten
 
   override def produce[R, K, V](
@@ -319,11 +319,13 @@ private[producer] final class ProducerLive(
     value: V,
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, RecordMetadata] =
+  )(implicit trace: Trace): RIO[R, RecordMetadata] =
     produce(new ProducerRecord(topic, key, value), keySerializer, valueSerializer)
 
   // noinspection YieldingZIOEffectInspection
-  override def produceAsync(record: ProducerRecord[Array[Byte], Array[Byte]]): Task[Task[RecordMetadata]] =
+  override def produceAsync(
+    record: ProducerRecord[Array[Byte], Array[Byte]]
+  )(implicit trace: Trace): Task[Task[RecordMetadata]] =
     ZIO.suspendSucceed {
       val diagEm = diagnosticsEmitterMaker.makeDiagnosticsEmitter(record)
       def loop(
@@ -368,7 +370,7 @@ private[producer] final class ProducerLive(
     record: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, Task[RecordMetadata]] =
+  )(implicit trace: Trace): RIO[R, Task[RecordMetadata]] =
     serialize(record, keySerializer, valueSerializer).flatMap(produceAsync)
 
   override def produceAsync[R, K, V](
@@ -377,23 +379,25 @@ private[producer] final class ProducerLive(
     value: V,
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, Task[RecordMetadata]] =
+  )(implicit trace: Trace): RIO[R, Task[RecordMetadata]] =
     produceAsync(new ProducerRecord(topic, key, value), keySerializer, valueSerializer)
 
-  override def produceChunk(records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]): Task[Chunk[RecordMetadata]] =
+  override def produceChunk(records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]])(implicit
+    trace: Trace
+  ): Task[Chunk[RecordMetadata]] =
     produceChunkAsync(records).flatten
 
   override def produceChunk[R, K, V](
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, Chunk[RecordMetadata]] =
+  )(implicit trace: Trace): RIO[R, Chunk[RecordMetadata]] =
     produceChunkAsync(records, keySerializer, valueSerializer).flatten
 
   // noinspection YieldingZIOEffectInspection
   override def produceChunkAsync(
     records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]]
-  ): Task[Task[Chunk[RecordMetadata]]] =
+  )(implicit trace: Trace): Task[Task[Chunk[RecordMetadata]]] =
     produceChunkAsyncWithFailures(records).map(_.flatMap { chunkResults =>
       val (errors, success) = chunkResults.partitionMap(identity)
       errors.headOption match {
@@ -406,7 +410,7 @@ private[producer] final class ProducerLive(
     records: Chunk[ProducerRecord[K, V]],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, Task[Chunk[RecordMetadata]]] =
+  )(implicit trace: Trace): RIO[R, Task[Chunk[RecordMetadata]]] =
     ZIO
       .foreach(records)(serialize(_, keySerializer, valueSerializer))
       .flatMap(produceChunkAsync)
@@ -414,7 +418,7 @@ private[producer] final class ProducerLive(
   // noinspection YieldingZIOEffectInspection
   override def produceChunkAsyncWithFailures(
     records: Chunk[ByteRecord]
-  ): UIO[UIO[Chunk[Either[Throwable, RecordMetadata]]]] =
+  )(implicit trace: Trace): UIO[UIO[Chunk[Either[Throwable, RecordMetadata]]]] =
     if (records.isEmpty) ZIO.succeed(ZIO.succeed(Chunk.empty))
     else {
       val totalRecordCount = records.size
@@ -517,14 +521,15 @@ private[producer] final class ProducerLive(
       }
     }
 
-  override def partitionsFor(topic: String): Task[Chunk[PartitionInfo]] =
+  override def partitionsFor(topic: String)(implicit trace: Trace): Task[Chunk[PartitionInfo]] =
     ZIO.attemptBlocking(Chunk.fromJavaIterable(p.partitionsFor(topic)))
 
-  override def flush: Task[Unit] = ZIO.attemptBlocking(p.flush())
+  override def flush(implicit trace: Trace): Task[Unit] = ZIO.attemptBlocking(p.flush())
 
-  override def metrics: Task[Map[MetricName, Metric]] = ZIO.attemptBlocking(p.metrics().asScala.toMap)
+  override def metrics(implicit trace: Trace): Task[Map[MetricName, Metric]] =
+    ZIO.attemptBlocking(p.metrics().asScala.toMap)
 
-  private def observeTake(startNanos: NanoTime): UIO[Unit] =
+  private def observeTake(startNanos: NanoTime)(implicit trace: Trace): UIO[Unit] =
     for {
       now <- Clock.nanoTime
       _   <- producerMetrics.observeSendQueueTake((startNanos - now).nanos)
@@ -604,7 +609,7 @@ private[producer] final class ProducerLive(
     r: ProducerRecord[K, V],
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): RIO[R, ByteRecord] =
+  )(implicit trace: Trace): RIO[R, ByteRecord] =
     for {
       key   <- keySerializer.serialize(r.topic, r.headers, r.key())
       value <- valueSerializer.serialize(r.topic, r.headers, r.value())
@@ -626,16 +631,18 @@ private[producer] final class ProducerLive(
 
   private class BatchDiagnosticsEmitter(batchId: Long, producedRecords: Chunk[ProducerEvent.ProducedRecord])
       extends DiagnosticsEmitter {
-    override def emitOffer(): ZIO[Any, Nothing, Unit] =
+    override def emitOffer()(implicit trace: Trace): ZIO[Any, Nothing, Unit] =
       diagnostics.emit(ProducerEvent.RecordsOffered(batchId, producedRecords))
 
-    override def emitSuccess(): ZIO[Any, Nothing, Unit] =
+    override def emitSuccess()(implicit trace: Trace): ZIO[Any, Nothing, Unit] =
       diagnostics.emit(ProducerEvent.RecordsSent(batchId, producedRecords, Set.empty))
 
-    override def emitSingleFailure(): ZIO[Any, Nothing, Unit] =
+    override def emitSingleFailure()(implicit trace: Trace): ZIO[Any, Nothing, Unit] =
       diagnostics.emit(ProducerEvent.RecordsSent(batchId, producedRecords, set0))
 
-    override def emitFailures(finalResults: Array[_ <: Either[_, _]]): ZIO[Any, Nothing, Unit] = {
+    override def emitFailures(
+      finalResults: Array[_ <: Either[_, _]]
+    )(implicit trace: Trace): ZIO[Any, Nothing, Unit] = {
       val failed     = BitSet.empty ++ finalResults.zipWithIndex.filter(_._1.isLeft).map(_._2)
       val recordSent = ProducerEvent.RecordsSent(batchId, producedRecords, failed)
       diagnostics.emit(recordSent)
@@ -655,15 +662,16 @@ private object EmptyDiagnosticsEmitterMaker extends DiagnosticsEmitterMaker {
 }
 
 private abstract class DiagnosticsEmitter {
-  def emitOffer(): ZIO[Any, Nothing, Unit]
-  def emitSuccess(): ZIO[Any, Nothing, Unit]
-  def emitSingleFailure(): ZIO[Any, Nothing, Unit]
-  def emitFailures(finalResults: Array[_ <: Either[_, _]]): ZIO[Any, Nothing, Unit]
+  def emitOffer()(implicit trace: Trace): ZIO[Any, Nothing, Unit]
+  def emitSuccess()(implicit trace: Trace): ZIO[Any, Nothing, Unit]
+  def emitSingleFailure()(implicit trace: Trace): ZIO[Any, Nothing, Unit]
+  def emitFailures(finalResults: Array[_ <: Either[_, _]])(implicit trace: Trace): ZIO[Any, Nothing, Unit]
 }
 
 private object EmptyDiagnosticsEmitter extends DiagnosticsEmitter {
-  override def emitOffer(): ZIO[Any, Nothing, Unit]                                          = ZIO.unit
-  override def emitSuccess(): ZIO[Any, Nothing, Unit]                                        = ZIO.unit
-  override def emitSingleFailure(): ZIO[Any, Nothing, Unit]                                  = ZIO.unit
-  override def emitFailures(finalResults: Array[_ <: Either[_, _]]): ZIO[Any, Nothing, Unit] = ZIO.unit
+  override def emitOffer()(implicit trace: Trace): ZIO[Any, Nothing, Unit]         = ZIO.unit
+  override def emitSuccess()(implicit trace: Trace): ZIO[Any, Nothing, Unit]       = ZIO.unit
+  override def emitSingleFailure()(implicit trace: Trace): ZIO[Any, Nothing, Unit] = ZIO.unit
+  override def emitFailures(finalResults: Array[_ <: Either[_, _]])(implicit trace: Trace): ZIO[Any, Nothing, Unit] =
+    ZIO.unit
 }

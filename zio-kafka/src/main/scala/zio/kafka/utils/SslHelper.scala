@@ -32,7 +32,7 @@ object SslHelper {
   private final case class ConnectionError(cause: Throwable) extends NoStackTrace
 
   // ⚠️ Must not do anything else than calling `doValidateEndpoint`. The algorithm of this function must be completely contained in `doValidateEndpoint`.
-  def validateEndpoint(props: Map[String, AnyRef]): IO[KafkaException, Unit] =
+  def validateEndpoint(props: Map[String, AnyRef])(implicit trace: Trace): IO[KafkaException, Unit] =
     doValidateEndpoint(SocketChannel.open)(props)
 
   /**
@@ -40,7 +40,7 @@ object SslHelper {
    */
   private[utils] def doValidateEndpoint(
     unsafeOpenSocket: InetSocketAddress => SocketChannel // Handy for unit-tests
-  )(props: Map[String, AnyRef]): IO[KafkaException, Unit] = {
+  )(props: Map[String, AnyRef])(implicit trace: Trace): IO[KafkaException, Unit] = {
     @inline def `request.timeout.ms`: Duration = {
       val defaultValue = 30.seconds
 
@@ -166,7 +166,7 @@ object SslHelper {
   private def validateSslConfigOf(
     unsafeOpenSocket: InetSocketAddress => SocketChannel,
     socketTimeout: Duration
-  )(address: InetSocketAddress): Task[Unit] = {
+  )(address: InetSocketAddress)(implicit trace: Trace): Task[Unit] = {
     @inline def unexpectedSslPacketError: IO[IllegalArgumentException, Nothing] =
       ZIO.fail(
         new IllegalArgumentException(

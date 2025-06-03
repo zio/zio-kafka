@@ -54,7 +54,7 @@ private[consumer] final class LiveCommitter(
   override def processQueuedCommits(
     consumer: ByteArrayKafkaConsumer,
     executeOnEmpty: Boolean = false
-  ): Task[Unit] = for {
+  )(implicit trace: Trace): Task[Unit] = for {
     commits <- commitQueue.takeAll
     _       <- ZIO.logDebug(s"Processing ${commits.size} commits")
     _ <- ZIO.when(commits.nonEmpty || executeOnEmpty) {
@@ -94,7 +94,7 @@ private[consumer] final class LiveCommitter(
     offsets: Map[TopicPartition, OffsetAndMetadata],
     startTime: NanoTime,
     commitResults: Either[Exception, Map[TopicPartition, OffsetAndMetadata]]
-  ): UIO[Unit] =
+  )(implicit trace: Trace): UIO[Unit] =
     ZIO
       .from(commitResults)
       .zipLeft(
@@ -131,7 +131,7 @@ private[consumer] final class LiveCommitter(
     consumer: ByteArrayKafkaConsumer,
     offsets: Map[TopicPartition, OffsetAndMetadata],
     doOnComplete: Either[Exception, Map[TopicPartition, OffsetAndMetadata]] => UIO[Unit]
-  ): Task[Unit] =
+  )(implicit trace: Trace): Task[Unit] =
     for {
       runtime <- ZIO.runtime[Any]
       _ <- ZIO.attempt {
@@ -153,20 +153,20 @@ private[consumer] final class LiveCommitter(
            }
     } yield ()
 
-  override def queueSize: UIO[Int] = commitQueue.size
+  override def queueSize(implicit trace: Trace): UIO[Int] = commitQueue.size
 
-  override def pendingCommitCount: UIO[Int] = pendingCommits.get.map(_.size)
+  override def pendingCommitCount(implicit trace: Trace): UIO[Int] = pendingCommits.get.map(_.size)
 
-  override def getPendingCommits: UIO[CommitOffsets] =
+  override def getPendingCommits(implicit trace: Trace): UIO[CommitOffsets] =
     pendingCommits.get.map(CommitOffsets.empty.addCommits(_)._2)
 
-  override def cleanupPendingCommits: UIO[Unit] =
+  override def cleanupPendingCommits(implicit trace: Trace): UIO[Unit] =
     pendingCommits.updateZIO(_.filterZIO(_.isPending))
 
-  override def keepCommitsForPartitions(assignedPartitions: Set[TopicPartition]): UIO[Unit] =
+  override def keepCommitsForPartitions(assignedPartitions: Set[TopicPartition])(implicit trace: Trace): UIO[Unit] =
     committedOffsetsRef.update(_.keepPartitions(assignedPartitions))
 
-  override def getCommittedOffsets: UIO[CommitOffsets] = committedOffsetsRef.get
+  override def getCommittedOffsets(implicit trace: Trace): UIO[CommitOffsets] = committedOffsetsRef.get
 }
 
 private[internal] object LiveCommitter {
@@ -175,7 +175,7 @@ private[internal] object LiveCommitter {
     diagnostics: ConsumerDiagnostics,
     consumerMetrics: ConsumerMetrics,
     onCommitAvailable: UIO[Unit]
-  ): ZIO[Scope, Nothing, LiveCommitter] = for {
+  )(implicit trace: Trace): ZIO[Scope, Nothing, LiveCommitter] = for {
     pendingCommits      <- Ref.Synchronized.make(Chunk.empty[Commit])
     commitQueue         <- ZIO.acquireRelease(Queue.unbounded[Commit])(_.shutdown)
     committedOffsetsRef <- Ref.make(CommitOffsets.empty)
@@ -194,6 +194,6 @@ private[internal] object LiveCommitter {
     offsets: Map[TopicPartition, OffsetAndMetadata],
     cont: Promise[Throwable, Unit]
   ) {
-    @inline def isPending: UIO[Boolean] = cont.isDone.negate
+    @inline def isPending(implicit trace: Trace): UIO[Boolean] = cont.isDone.negate
   }
 }

@@ -6,7 +6,7 @@ import zio._
 trait Kafka {
   def bootstrapServers: List[String]
 
-  def stop(): UIO[Unit]
+  def stop()(implicit trace: Trace): UIO[Unit]
 }
 
 final case class EmbeddedKafkaStartException(msg: String, cause: Throwable = null) extends RuntimeException(msg, cause)
@@ -152,19 +152,19 @@ object Kafka {
     }
 
   final case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka {
-    override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
-    override def stop(): UIO[Unit]              = ZIO.succeed(embeddedK.stop(true))
+    override def bootstrapServers: List[String]           = List(s"localhost:${embeddedK.config.kafkaPort}")
+    override def stop()(implicit trace: Trace): UIO[Unit] = ZIO.succeed(embeddedK.stop(true))
   }
 
   case object DefaultLocal extends Kafka {
-    override def bootstrapServers: List[String] = List(s"localhost:9092")
-    override def stop(): UIO[Unit]              = ZIO.unit
+    override def bootstrapServers: List[String]           = List(s"localhost:9092")
+    override def stop()(implicit trace: Trace): UIO[Unit] = ZIO.unit
   }
 
   final case class Ports(kafkaPort: Int, controllerPort: Int)
 
   private val ref = Ref.unsafe.make(Ports(6001, 7001))(Unsafe.unsafe)
 
-  private val nextPorts: ZIO[Any, Nothing, Ports] =
+  private def nextPorts(implicit trace: Trace): ZIO[Any, Nothing, Ports] =
     ref.getAndUpdate(ports => Ports(ports.kafkaPort + 1, ports.controllerPort + 1))
 }

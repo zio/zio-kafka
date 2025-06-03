@@ -8,11 +8,11 @@ trait KafkaRandom {
 
   def kafkaPrefix: String
 
-  def randomThing(prefix: String): Task[String] = ZIO.attempt(s"$prefix-${UUID.randomUUID()}")
+  def randomThing(prefix: String)(implicit trace: Trace): Task[String] = ZIO.attempt(s"$prefix-${UUID.randomUUID()}")
 
-  def randomTopic: Task[String] = randomThing(s"$kafkaPrefix-topic")
+  def randomTopic(implicit trace: Trace): Task[String] = randomThing(s"$kafkaPrefix-topic")
 
-  def randomGroup: Task[String] = randomThing(s"$kafkaPrefix-group")
+  def randomGroup(implicit trace: Trace): Task[String] = randomThing(s"$kafkaPrefix-group")
 
-  def randomClient: Task[String] = randomThing(s"$kafkaPrefix-client")
+  def randomClient(implicit trace: Trace): Task[String] = randomThing(s"$kafkaPrefix-client")
 }

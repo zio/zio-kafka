@@ -20,24 +20,28 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
   type BinaryMockConsumer = MockConsumer[Array[Byte], Array[Byte]]
 
   private val mockMetrics = new ConsumerMetrics {
-    override def observePoll(resumedCount: Int, pausedCount: Int, latency: zio.Duration, pollSize: Int): UIO[Unit] =
+    override def observePoll(resumedCount: Int, pausedCount: Int, latency: zio.Duration, pollSize: Int)(implicit
+      trace: Trace
+    ): UIO[Unit] =
       ZIO.unit
 
-    override def observeCommit(latency: zio.Duration): UIO[Unit]                                 = ZIO.unit
-    override def observeAggregatedCommit(latency: zio.Duration, commitSize: NanoTime): UIO[Unit] = ZIO.unit
+    override def observeCommit(latency: zio.Duration)(implicit trace: Trace): UIO[Unit] = ZIO.unit
+    override def observeAggregatedCommit(latency: zio.Duration, commitSize: NanoTime)(implicit
+      trace: Trace
+    ): UIO[Unit] = ZIO.unit
     override def observeRebalance(
       currentlyAssignedCount: Int,
       assignedCount: Int,
       revokedCount: Int,
       lostCount: Int
-    ): UIO[Unit] = ZIO.unit
+    )(implicit trace: Trace): UIO[Unit] = ZIO.unit
     override def observeRunloopMetrics(
       state: Runloop.State,
       commandQueueSize: Int,
       commitQueueSize: Int,
       pendingCommits: Int
-    ): UIO[Unit] = ZIO.unit
-    override def observePollAuthError(): UIO[Unit] = ZIO.unit
+    )(implicit trace: Trace): UIO[Unit] = ZIO.unit
+    override def observePollAuthError()(implicit trace: Trace): UIO[Unit] = ZIO.unit
   }
 
   def spec: Spec[TestEnvironment with Scope, Throwable] =
@@ -301,14 +305,17 @@ abstract private class MockCommitter extends Committer {
   override val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]                  = _ => ZIO.unit
   override val registerExternalCommits: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] = _ => ZIO.unit
 
-  override def processQueuedCommits(consumer: ByteArrayKafkaConsumer, executeOnEmpty: Boolean): Task[Unit] = ZIO.unit
+  override def processQueuedCommits(consumer: ByteArrayKafkaConsumer, executeOnEmpty: Boolean)(implicit
+    trace: Trace
+  ): Task[Unit] = ZIO.unit
 
-  override def queueSize: UIO[Int]                   = ZIO.succeed(0)
-  override def pendingCommitCount: UIO[Int]          = ZIO.succeed(0)
-  override def getPendingCommits: UIO[CommitOffsets] = ZIO.succeed(CommitOffsets.empty)
-  override def cleanupPendingCommits: UIO[Unit]      = ZIO.unit
-  override def keepCommitsForPartitions(assignedPartitions: Set[TopicPartition]): UIO[Unit] = ZIO.unit
-  override def getCommittedOffsets: UIO[CommitOffsets] = ZIO.succeed(CommitOffsets.empty)
+  override def queueSize(implicit trace: Trace): UIO[Int]                   = ZIO.succeed(0)
+  override def pendingCommitCount(implicit trace: Trace): UIO[Int]          = ZIO.succeed(0)
+  override def getPendingCommits(implicit trace: Trace): UIO[CommitOffsets] = ZIO.succeed(CommitOffsets.empty)
+  override def cleanupPendingCommits(implicit trace: Trace): UIO[Unit]      = ZIO.unit
+  override def keepCommitsForPartitions(assignedPartitions: Set[TopicPartition])(implicit trace: Trace): UIO[Unit] =
+    ZIO.unit
+  override def getCommittedOffsets(implicit trace: Trace): UIO[CommitOffsets] = ZIO.succeed(CommitOffsets.empty)
 }
 
 private class CommitTrackingMockConsumer(

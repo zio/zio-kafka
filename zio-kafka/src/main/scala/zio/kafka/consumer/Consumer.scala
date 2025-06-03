@@ -26,12 +26,12 @@ trait Consumer {
    *
    * This is subject to consumer rebalancing, unless using a manual subscription.
    */
-  def assignment: Task[Set[TopicPartition]]
+  def assignment(implicit trace: Trace): Task[Set[TopicPartition]]
 
   def beginningOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
-  ): Task[Map[TopicPartition, Long]]
+  )(implicit trace: Trace): Task[Map[TopicPartition, Long]]
 
   /**
    * The settings used to create this consumer.
@@ -41,7 +41,7 @@ trait Consumer {
   def endOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
-  ): Task[Map[TopicPartition, Long]]
+  )(implicit trace: Trace): Task[Map[TopicPartition, Long]]
 
   /**
    * Retrieve the last committed offset for the given topic-partitions
@@ -49,9 +49,9 @@ trait Consumer {
   def committed(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
-  ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]]
+  )(implicit trace: Trace): Task[Map[TopicPartition, Option[OffsetAndMetadata]]]
 
-  def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]]
+  def listTopics(timeout: Duration = Duration.Infinity)(implicit trace: Trace): Task[Map[String, List[PartitionInfo]]]
 
   /**
    * Create a stream that emits chunks whenever new partitions are assigned to this consumer.
@@ -73,7 +73,7 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
+  )(implicit trace: Trace): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]]
 
   /**
    * Create a stream with messages on the subscribed topic-partitions by topic-partition
@@ -96,7 +96,7 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
+  )(implicit trace: Trace): Stream[Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
 
   /**
    * Create a stream with all messages on the subscribed topic-partitions
@@ -121,7 +121,7 @@ trait Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
-  ): ZStream[R, Throwable, CommittableRecord[K, V]]
+  )(implicit trace: Trace): ZStream[R, Throwable, CommittableRecord[K, V]]
 
   /**
    * Like [[plainStream]] but returns an object to control the stream.
@@ -140,7 +140,7 @@ trait Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
-  ): ZIO[Scope with R, Throwable, StreamControl[R, Throwable, CommittableRecord[K, V]]]
+  )(implicit trace: Trace): ZIO[Scope with R, Throwable, StreamControl[R, Throwable, CommittableRecord[K, V]]]
 
   /**
    * Like [[partitionedStream]] but returns an object to control the stream.
@@ -158,6 +158,8 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
+  )(implicit
+    trace: Trace
   ): ZIO[
     Scope with R,
     Throwable,
@@ -180,6 +182,8 @@ trait Consumer {
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
+  )(implicit
+    trace: Trace
   ): ZIO[Scope, Throwable, StreamControl[
     R,
     Throwable,
@@ -190,7 +194,7 @@ trait Consumer {
    * Stops consumption of data, drains buffered records, and ends the attached streams while still serving commit
    * requests.
    */
-  def stopConsumption: UIO[Unit]
+  def stopConsumption(implicit trace: Trace): UIO[Unit]
 
   /**
    * See [[Consumer.consumeWith]].
@@ -202,7 +206,7 @@ trait Consumer {
     commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
   )(
     f: ConsumerRecord[K, V] => URIO[R1, Unit]
-  ): ZIO[R & R1, Throwable, Unit]
+  )(implicit trace: Trace): ZIO[R & R1, Throwable, Unit]
 
   /**
    * Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the earliest
@@ -214,18 +218,20 @@ trait Consumer {
   def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
     timeout: Duration = Duration.Infinity
-  ): Task[Map[TopicPartition, OffsetAndTimestamp]]
+  )(implicit trace: Trace): Task[Map[TopicPartition, OffsetAndTimestamp]]
 
-  def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): Task[List[PartitionInfo]]
+  def partitionsFor(topic: String, timeout: Duration = Duration.Infinity)(implicit
+    trace: Trace
+  ): Task[List[PartitionInfo]]
 
-  def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): Task[Long]
+  def position(partition: TopicPartition, timeout: Duration = Duration.Infinity)(implicit trace: Trace): Task[Long]
 
-  def subscription: Task[Set[String]]
+  def subscription(implicit trace: Trace): Task[Set[String]]
 
   /**
    * Expose internal consumer metrics
    */
-  def metrics: Task[Map[MetricName, Metric]]
+  def metrics(implicit trace: Trace): Task[Map[MetricName, Metric]]
 
   /**
    * Register a commit that was done externally, that is, not by this consumer.
@@ -238,7 +244,7 @@ trait Consumer {
    *
    * See also [[zio.kafka.consumer.ConsumerSettings.withRebalanceSafeCommits]].
    */
-  def registerExternalCommits(offsetBatch: OffsetBatch): Task[Unit]
+  def registerExternalCommits(offsetBatch: OffsetBatch)(implicit trace: Trace): Task[Unit]
 }
 
 object Consumer {
@@ -265,7 +271,7 @@ object Consumer {
   /**
    * A new consumer.
    */
-  def make(settings: ConsumerSettings): ZIO[Scope, Throwable, Consumer] =
+  def make(settings: ConsumerSettings)(implicit trace: Trace): ZIO[Scope, Throwable, Consumer] =
     for {
       wrappedDiagnostics <- makeConcurrentDiagnostics(settings.diagnostics)
       _                  <- SslHelper.validateEndpoint(settings.driverSettings)
@@ -302,7 +308,7 @@ object Consumer {
     javaConsumer: JConsumer[Array[Byte], Array[Byte]],
     settings: ConsumerSettings,
     access: Semaphore
-  ): ZIO[Scope, Throwable, Consumer] =
+  )(implicit trace: Trace): ZIO[Scope, Throwable, Consumer] =
     for {
       wrappedDiagnostics <- makeConcurrentDiagnostics(settings.diagnostics)
       consumerAccess = new ConsumerAccess(javaConsumer, access)
@@ -369,7 +375,7 @@ object Consumer {
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
-  )(f: ConsumerRecord[K, V] => URIO[R1, Unit]): RIO[R & R1, Unit] =
+  )(f: ConsumerRecord[K, V] => URIO[R1, Unit])(implicit trace: Trace): RIO[R & R1, Unit] =
     ZIO.scoped[R & R1] {
       Consumer
         .make(settings)
@@ -429,7 +435,7 @@ object Consumer {
     shutdownTimeout: Duration
   )(
     withStream: ZStream[R1, E, A] => ZIO[R2 & Scope, E, Any]
-  ): ZIO[R1 & R2, E, Any] =
+  )(implicit trace: Trace): ZIO[R1 & R2, E, Any] =
     ZIO.scoped[R1 & R2] {
       for {
         fib <-
@@ -455,7 +461,9 @@ object Consumer {
       } yield result
     }
 
-  private def makeConcurrentDiagnostics(diagnostics: ConsumerDiagnostics): ZIO[Scope, Nothing, ConsumerDiagnostics] =
+  private def makeConcurrentDiagnostics(
+    diagnostics: ConsumerDiagnostics
+  )(implicit trace: Trace): ZIO[Scope, Nothing, ConsumerDiagnostics] =
     if (diagnostics == Diagnostics.NoOp) ZIO.succeed(diagnostics)
     else ConcurrentDiagnostics.make(diagnostics, DiagnosticEvent.ConsumerFinalized)
 }
@@ -467,13 +475,13 @@ private[consumer] final class ConsumerLive private[consumer] (
 ) extends Consumer {
   import Consumer._
 
-  override def assignment: Task[Set[TopicPartition]] =
+  override def assignment(implicit trace: Trace): Task[Set[TopicPartition]] =
     consumer.withConsumer(_.assignment().asScala.toSet)
 
   override def beginningOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
-  ): Task[Map[TopicPartition, Long]] =
+  )(implicit trace: Trace): Task[Map[TopicPartition, Long]] =
     consumer.withConsumer(
       _.beginningOffsets(partitions.asJava, timeout.asJava).asScala.map { case (tp, l) =>
         tp -> l.longValue()
@@ -483,7 +491,7 @@ private[consumer] final class ConsumerLive private[consumer] (
   override def endOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
-  ): Task[Map[TopicPartition, Long]] =
+  )(implicit trace: Trace): Task[Map[TopicPartition, Long]] =
     consumer.withConsumer { eo =>
       val offs = eo.endOffsets(partitions.asJava, timeout.asJava)
       offs.asScala.map { case (k, v) => k -> v.longValue() }.toMap
@@ -492,18 +500,22 @@ private[consumer] final class ConsumerLive private[consumer] (
   override def committed(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
-  ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]] =
+  )(implicit trace: Trace): Task[Map[TopicPartition, Option[OffsetAndMetadata]]] =
     consumer.withConsumer(
       _.committed(partitions.asJava, timeout.asJava).asScala.map { case (k, v) => k -> Option(v) }.toMap
     )
 
-  override def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]] =
+  override def listTopics(timeout: Duration = Duration.Infinity)(implicit
+    trace: Trace
+  ): Task[Map[String, List[PartitionInfo]]] =
     consumer.withConsumer(_.listTopics(timeout.asJava).asScala.map { case (k, v) => k -> v.asScala.toList }.toMap)
 
   override def partitionedAssignmentStream[R, K, V](
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
+  )(implicit
+    trace: Trace
   ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
     val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
 
@@ -532,6 +544,8 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
+  )(implicit
+    trace: Trace
   ): ZIO[Scope, Throwable, StreamControl[
     R,
     Throwable,
@@ -559,7 +573,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
-  ): ZStream[Any, Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] =
+  )(implicit trace: Trace): ZStream[Any, Throwable, (TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])] =
     partitionedAssignmentStream(subscription, keyDeserializer, valueDeserializer).flattenChunks
 
   override def plainStream[R, K, V](
@@ -567,7 +581,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int
-  ): ZStream[R, Throwable, CommittableRecord[K, V]] =
+  )(implicit trace: Trace): ZStream[R, Throwable, CommittableRecord[K, V]] =
     partitionedStream(subscription, keyDeserializer, valueDeserializer).flatMapPar(
       n = Int.MaxValue,
       bufferSize = bufferSize
@@ -578,7 +592,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V],
     bufferSize: Int = 4
-  ): ZIO[Scope with R, Throwable, StreamControl[R, Throwable, CommittableRecord[K, V]]] =
+  )(implicit trace: Trace): ZIO[Scope with R, Throwable, StreamControl[R, Throwable, CommittableRecord[K, V]]] =
     partitionedStreamWithControl(subscription, keyDeserializer, valueDeserializer).map(
       _.map(
         _.flatMapPar(
@@ -592,6 +606,8 @@ private[consumer] final class ConsumerLive private[consumer] (
     subscription: Subscription,
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
+  )(implicit
+    trace: Trace
   ): ZIO[
     Scope with R,
     Throwable,
@@ -599,7 +615,7 @@ private[consumer] final class ConsumerLive private[consumer] (
   ] = partitionedAssignmentStreamWithControl(subscription, keyDeserializer, valueDeserializer)
     .map(_.map(_.flattenChunks))
 
-  override def stopConsumption: UIO[Unit] =
+  override def stopConsumption(implicit trace: Trace): UIO[Unit] =
     ZIO.logDebug("stopConsumption called") *>
       runloopAccess.stopConsumption
 
@@ -610,7 +626,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     commitRetryPolicy: Schedule[Any, Any, Any] = Schedule.exponential(1.second) && Schedule.recurs(3)
   )(
     f: ConsumerRecord[K, V] => URIO[R1, Unit]
-  ): ZIO[R & R1, Throwable, Unit] =
+  )(implicit trace: Trace): ZIO[R & R1, Throwable, Unit] =
     for {
       r <- ZIO.environment[R & R1]
       _ <- partitionedStream(subscription, keyDeserializer, valueDeserializer)
@@ -626,7 +642,7 @@ private[consumer] final class ConsumerLive private[consumer] (
   override def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
     timeout: Duration = Duration.Infinity
-  ): Task[Map[TopicPartition, OffsetAndTimestamp]] =
+  )(implicit trace: Trace): Task[Map[TopicPartition, OffsetAndTimestamp]] =
     consumer.withConsumer(
       _.offsetsForTimes(timestamps.map { case (k, v) => k -> Long.box(v) }.asJava, timeout.asJava).asScala.toMap
         // If a partition doesn't exist yet, the map will have 'null' as entry.
@@ -637,22 +653,24 @@ private[consumer] final class ConsumerLive private[consumer] (
   override def partitionsFor(
     topic: String,
     timeout: Duration = Duration.Infinity
-  ): Task[List[PartitionInfo]] =
+  )(implicit trace: Trace): Task[List[PartitionInfo]] =
     consumer.withConsumer { c =>
       val partitions = c.partitionsFor(topic, timeout.asJava)
       if (partitions eq null) List.empty else partitions.asScala.toList
     }
 
-  override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): Task[Long] =
+  override def position(partition: TopicPartition, timeout: Duration = Duration.Infinity)(implicit
+    trace: Trace
+  ): Task[Long] =
     consumer.withConsumer(_.position(partition, timeout.asJava))
 
-  override def subscription: Task[Set[String]] =
+  override def subscription(implicit trace: Trace): Task[Set[String]] =
     consumer.withConsumer(_.subscription().asScala.toSet)
 
-  override def metrics: Task[Map[MetricName, Metric]] =
+  override def metrics(implicit trace: Trace): Task[Map[MetricName, Metric]] =
     consumer.withConsumer(_.metrics().asScala.toMap)
 
-  override def registerExternalCommits(externallyCommittedOffsets: OffsetBatch): Task[Unit] =
+  override def registerExternalCommits(externallyCommittedOffsets: OffsetBatch)(implicit trace: Trace): Task[Unit] =
     runloopAccess.registerExternalCommits(externallyCommittedOffsets)
 
 }

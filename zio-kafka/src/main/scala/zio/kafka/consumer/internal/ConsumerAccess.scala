@@ -14,15 +14,15 @@ private[consumer] final class ConsumerAccess(
   access: Semaphore
 ) {
 
-  def withConsumer[A](f: ByteArrayKafkaConsumer => A): Task[A] =
+  def withConsumer[A](f: ByteArrayKafkaConsumer => A)(implicit trace: Trace): Task[A] =
     withConsumerZIO[Any, A](c => ZIO.attempt(f(c)))
 
-  def withConsumerZIO[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
+  def withConsumerZIO[R, A](f: ByteArrayKafkaConsumer => RIO[R, A])(implicit trace: Trace): RIO[R, A] =
     access.withPermit(withConsumerNoPermit(f))
 
   private def withConsumerNoPermit[R, A](
     f: ByteArrayKafkaConsumer => RIO[R, A]
-  ): RIO[R, A] =
+  )(implicit trace: Trace): RIO[R, A] =
     ZIO
       .blocking(ZIO.suspend(f(consumer)))
       .catchSome { case _: WakeupException =>
@@ -34,13 +34,17 @@ private[consumer] final class ConsumerAccess(
   /**
    * Use this method only from Runloop.
    */
-  private[internal] def runloopAccess[R, E, A](f: ByteArrayKafkaConsumer => ZIO[R, E, A]): ZIO[R, E, A] =
+  private[internal] def runloopAccess[R, E, A](f: ByteArrayKafkaConsumer => ZIO[R, E, A])(implicit
+    trace: Trace
+  ): ZIO[R, E, A] =
     access.withPermit(f(consumer))
 
   /**
    * Use this method ONLY from the rebalance listener.
    */
-  private[internal] def rebalanceListenerAccess[R, A](f: ByteArrayKafkaConsumer => RIO[R, A]): RIO[R, A] =
+  private[internal] def rebalanceListenerAccess[R, A](f: ByteArrayKafkaConsumer => RIO[R, A])(implicit
+    trace: Trace
+  ): RIO[R, A] =
     withConsumerNoPermit(f)
 
 }
@@ -48,7 +52,7 @@ private[consumer] final class ConsumerAccess(
 private[consumer] object ConsumerAccess {
   type ByteArrayKafkaConsumer = JConsumer[Array[Byte], Array[Byte]]
 
-  def make(settings: ConsumerSettings): ZIO[Scope, Throwable, ConsumerAccess] =
+  def make(settings: ConsumerSettings)(implicit trace: Trace): ZIO[Scope, Throwable, ConsumerAccess] =
     for {
       access <- Semaphore.make(1)
       consumer <- ZIO.acquireRelease {
