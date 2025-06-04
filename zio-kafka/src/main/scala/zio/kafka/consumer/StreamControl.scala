@@ -1,6 +1,7 @@
 package zio.kafka.consumer
 import zio.{ Trace, UIO }
 import zio.stream.ZStream
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 trait StreamControl[-R, +E, +A] {
 

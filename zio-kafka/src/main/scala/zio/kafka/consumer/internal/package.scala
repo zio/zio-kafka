@@ -2,6 +2,7 @@ package zio.kafka.consumer
 
 import zio._
 import zio.internal.ExecutionMetrics
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 package object internal {
 

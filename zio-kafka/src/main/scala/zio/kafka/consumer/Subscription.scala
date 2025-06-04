@@ -1,6 +1,7 @@
 package zio.kafka.consumer
 
 import zio._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import scala.util.matching.Regex
 import java.util.regex.{ Pattern => JPattern }

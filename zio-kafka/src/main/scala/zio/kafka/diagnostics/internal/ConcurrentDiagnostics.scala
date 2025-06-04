@@ -3,6 +3,7 @@ package zio.kafka.diagnostics.internal
 import zio._
 import zio.kafka.diagnostics.Diagnostics
 import zio.stream._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 object ConcurrentDiagnostics {
 

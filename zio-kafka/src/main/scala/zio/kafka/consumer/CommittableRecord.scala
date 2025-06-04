@@ -4,6 +4,7 @@ import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.serde.Deserializer
 import zio.{ RIO, Task, Trace }
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 final case class CommittableRecord[K, V](
   record: ConsumerRecord[K, V],

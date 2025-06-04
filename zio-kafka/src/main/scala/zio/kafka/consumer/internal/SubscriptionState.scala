@@ -1,6 +1,7 @@
 package zio.kafka.consumer.internal
 
 import zio.kafka.consumer.Subscription
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 private[internal] sealed trait SubscriptionState {
   def isSubscribed: Boolean =

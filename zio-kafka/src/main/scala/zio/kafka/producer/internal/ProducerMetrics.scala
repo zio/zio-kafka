@@ -3,6 +3,7 @@ package zio.kafka.producer.internal
 import zio.metrics.MetricKeyType.Histogram
 import zio.metrics._
 import zio._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 /**
  * Implementations of this trait are responsible for measuring all Producer metrics. The different methods are invoked
@@ -12,10 +13,10 @@ import zio._
  * zio-kafka version.
  */
 private[producer] trait ProducerMetrics {
-  def observeProduce(latency: Duration, batchSize: Int): UIO[Unit]
-  def observeSendQueueSize(size: Int): UIO[Unit]
-  def observeSendQueueTake(latency: Duration): UIO[Unit]
-  def observeSendAuthError(errorCount: Int): UIO[Unit]
+  def observeProduce(latency: Duration, batchSize: Int)(implicit trace: Trace): UIO[Unit]
+  def observeSendQueueSize(size: Int)(implicit trace: Trace): UIO[Unit]
+  def observeSendQueueTake(latency: Duration)(implicit trace: Trace): UIO[Unit]
+  def observeSendAuthError(errorCount: Int)(implicit trace: Trace): UIO[Unit]
 }
 
 /**
@@ -141,7 +142,7 @@ private[producer] class ZioProducerMetrics(metricLabels: Set[MetricLabel]) exten
       )
       .tagged(metricLabels)
 
-  override def observeSendAuthError(errorCount: Int): UIO[Unit] =
+  override def observeSendAuthError(errorCount: Int)(implicit trace: Trace): UIO[Unit] =
     sendAuthErrorCounter.incrementBy(errorCount)
 
 }

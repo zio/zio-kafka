@@ -6,6 +6,7 @@ import org.apache.kafka.common.network.TransferableChannel
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ ApiVersionsRequest, RequestHeader }
 import zio._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer

@@ -12,6 +12,7 @@ import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.stream._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import scala.jdk.CollectionConverters._
 

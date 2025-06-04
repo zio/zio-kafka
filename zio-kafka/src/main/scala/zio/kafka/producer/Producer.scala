@@ -13,6 +13,7 @@ import zio.kafka.producer.internal.{ ProducerMetrics, ZioProducerMetrics }
 import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
 import zio.stream.{ ZPipeline, ZStream }
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import java.util.concurrent.atomic.{ AtomicInteger, AtomicLong }
 import scala.collection.immutable.BitSet

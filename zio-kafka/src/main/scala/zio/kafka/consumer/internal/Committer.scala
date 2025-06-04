@@ -6,6 +6,7 @@ import zio.kafka.consumer.internal.Committer.CommitOffsets
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
 import zio.{ Chunk, Task, Trace, UIO }
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import java.lang.Math.max
 import scala.collection.mutable
@@ -13,10 +14,10 @@ import scala.collection.mutable
 private[internal] trait Committer {
 
   /** A function to commit offsets. */
-  val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]
+  def commit(offsets: Map[TopicPartition, OffsetAndMetadata])(implicit trace: Trace): Task[Unit]
 
   /** A function to register offsets that have been committed externally. */
-  val registerExternalCommits: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]
+  def registerExternalCommits(offsets: Map[TopicPartition, OffsetAndMetadata])(implicit trace: Trace): Task[Unit]
 
   /**
    * Takes commits from the queue, commits them and adds them to pending commits

@@ -5,6 +5,7 @@ import zio.kafka.consumer.{ Offset, OffsetBatch }
 import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
 import zio.kafka.serde.Serializer
 import zio._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 trait Transaction {
   def produce[R, K, V](

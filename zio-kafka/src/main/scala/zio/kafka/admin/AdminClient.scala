@@ -58,6 +58,7 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 import scala.util.{ Failure, Success, Try }
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 /**
  * Admin client, can be used to create, list, delete topics, consumer groups, etc.

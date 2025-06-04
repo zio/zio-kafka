@@ -3,6 +3,7 @@ package zio.kafka.serde
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Serializer => KafkaSerializer }
 import zio._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import scala.jdk.CollectionConverters._
 

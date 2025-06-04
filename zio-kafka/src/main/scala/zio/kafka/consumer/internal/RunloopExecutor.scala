@@ -1,6 +1,7 @@
 package zio.kafka.consumer.internal
 
 import zio._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong

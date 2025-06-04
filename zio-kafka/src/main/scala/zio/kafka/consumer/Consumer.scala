@@ -15,6 +15,7 @@ import zio.kafka.diagnostics.internal.ConcurrentDiagnostics
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.kafka.utils.SslHelper
 import zio.stream._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import scala.jdk.CollectionConverters._
 import scala.util.control.NoStackTrace

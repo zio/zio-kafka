@@ -2,6 +2,7 @@ package zio.kafka.testkit
 
 import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import zio._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 trait Kafka {
   def bootstrapServers: List[String]

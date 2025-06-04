@@ -8,6 +8,7 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.{ Take, ZStream }
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import java.util.concurrent.TimeoutException
 import scala.util.control.NoStackTrace

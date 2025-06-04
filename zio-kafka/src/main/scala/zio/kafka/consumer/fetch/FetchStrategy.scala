@@ -3,6 +3,7 @@ package zio.kafka.consumer.fetch
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.consumer.internal.PartitionStream
 import zio.{ Chunk, Trace, ZIO }
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import scala.collection.mutable
 

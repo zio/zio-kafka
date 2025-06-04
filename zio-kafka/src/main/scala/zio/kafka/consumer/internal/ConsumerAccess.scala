@@ -6,6 +6,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio._
 import zio.kafka.consumer.ConsumerSettings
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import scala.jdk.CollectionConverters._
 

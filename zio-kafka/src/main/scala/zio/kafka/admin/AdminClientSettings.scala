@@ -3,6 +3,7 @@ package zio.kafka.admin
 import org.apache.kafka.clients.admin.AdminClientConfig
 import zio._
 import zio.kafka.security.KafkaCredentialStore
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 /**
  * Settings for the admin client.

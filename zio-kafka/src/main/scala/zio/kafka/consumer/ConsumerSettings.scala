@@ -7,6 +7,7 @@ import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.fetch.{ FetchStrategy, QueueSizeBasedFetchStrategy }
 import zio.kafka.security.KafkaCredentialStore
 import zio.metrics.MetricLabel
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 /**
  * Settings for the consumer.

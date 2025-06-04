@@ -10,6 +10,7 @@ import zio._
 import zio.kafka.consumer.{ Consumer, OffsetBatch }
 import zio.kafka.producer.ProducerLive.NanoTime
 import zio.kafka.producer.internal.ZioProducerMetrics
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import java.util
 import scala.jdk.CollectionConverters._

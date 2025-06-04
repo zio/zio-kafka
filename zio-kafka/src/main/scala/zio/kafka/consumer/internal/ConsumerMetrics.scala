@@ -3,6 +3,7 @@ package zio.kafka.consumer.internal
 import zio.metrics.MetricKeyType.Histogram
 import zio.metrics._
 import zio._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 /**
  * Implementations of this trait are responsible for measuring all consumer metrics. The different methods are invoked

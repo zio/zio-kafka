@@ -5,6 +5,7 @@ import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.{ ConsumerSettings, RebalanceListener }
 import zio.stream.ZStream
 import zio._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 /**
  * The Runloop's RebalanceListener gets notified of partitions that are assigned, revoked and lost

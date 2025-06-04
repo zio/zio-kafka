@@ -2,6 +2,7 @@ package zio.kafka.testkit
 
 import zio.ZLayer
 import zio.test._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 /**
  * This trait should be used if you want to run your tests with a shared-across-your-suites embedded Kafka cluster.

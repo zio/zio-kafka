@@ -3,6 +3,7 @@ package zio.kafka.consumer.internal
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.consumer.{ InvalidSubscriptionUnion, Subscription }
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 sealed trait RunloopCommand
 object RunloopCommand {

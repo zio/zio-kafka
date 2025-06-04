@@ -1,6 +1,7 @@
 package zio.kafka.diagnostics
 
 import zio.{ Queue, Scope, Trace, UIO, ZIO }
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 object SlidingDiagnostics {
 

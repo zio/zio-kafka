@@ -1,6 +1,7 @@
 package zio.kafka.producer
 
 import zio._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 sealed trait ProducerEvent
 

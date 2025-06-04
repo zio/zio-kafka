@@ -10,6 +10,7 @@ import zio.kafka.diagnostics.Diagnostics
 import zio.kafka.producer._
 import zio.kafka.serde.{ Deserializer, Serde }
 import zio.stream.ZStream
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import java.io.File
 import java.nio.file.{ Files, StandardCopyOption }

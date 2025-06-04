@@ -1,6 +1,7 @@
 package zio.kafka.diagnostics
 
 import zio.{ Trace, UIO, ZIO }
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 /**
  * A callback interface for diagnostic events.

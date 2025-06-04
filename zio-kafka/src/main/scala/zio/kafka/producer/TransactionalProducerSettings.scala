@@ -2,6 +2,7 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.ProducerConfig
 import zio._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 /**
  * Settings for a transactional producer.

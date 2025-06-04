@@ -2,6 +2,7 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.record.CompressionType
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 abstract sealed class ProducerCompression(name: String, extra: Option[(String, AnyRef)] = None) {
   def properties: Map[String, AnyRef] =

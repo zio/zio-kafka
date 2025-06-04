@@ -4,6 +4,7 @@ import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Serde => KafkaSerde, Serdes => KafkaSerdes }
 import org.apache.kafka.common.utils.Bytes
 import zio.{ RIO, Trace, ZIO }
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import java.nio.ByteBuffer
 import java.util.UUID

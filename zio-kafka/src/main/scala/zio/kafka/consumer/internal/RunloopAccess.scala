@@ -10,6 +10,7 @@ import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.kafka.consumer._
 import zio.kafka.diagnostics.Diagnostics
 import zio.stream.{ Stream, Take, ZStream }
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {

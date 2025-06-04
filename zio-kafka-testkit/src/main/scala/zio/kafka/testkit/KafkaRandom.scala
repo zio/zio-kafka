@@ -1,6 +1,7 @@
 package zio.kafka.testkit
 
 import zio._
+//import zio.stacktracer.TracingImplicits.disableAutoTrace
 
 import java.util.UUID
 
