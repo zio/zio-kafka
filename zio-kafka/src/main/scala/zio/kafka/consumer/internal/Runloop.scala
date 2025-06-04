@@ -78,7 +78,7 @@ private[consumer] final class Runloop private (
       r       <- promise.await
     } yield r
 
-  private def makeRebalanceListener: ConsumerRebalanceListener = {
+  private def makeRebalanceListener(implicit trace: Trace): ConsumerRebalanceListener = {
     // Here we just want to avoid any executor shift if the user provided listener is the noop listener.
     val userRebalanceListener =
       settings.rebalanceListener match {
@@ -99,7 +99,7 @@ private[consumer] final class Runloop private (
     pendingRequests: Chunk[RunloopCommand.Request],
     assignedStreams: Chunk[PartitionStreamControl],
     isRevoked: TopicPartition => Boolean
-  ): UIO[Runloop.RevokeResult] = {
+  )(implicit trace: Trace): UIO[Runloop.RevokeResult] = {
     val (revokedStreams, newAssignedStreams) =
       assignedStreams.partition(control => isRevoked(control.tp))
 

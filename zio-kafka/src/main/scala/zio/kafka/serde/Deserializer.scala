@@ -22,24 +22,29 @@ trait Deserializer[-R, +A] {
    * Returns a new deserializer that executes its deserialization function on the blocking threadpool.
    */
   def blocking: Deserializer[R, A] =
-    Deserializer((topic, headers, data) => ZIO.blocking(deserialize(topic, headers, data)))
+    new Deserializer[R, A] {
+      override def deserialize(topic: String, headers: Headers, data: Array[Byte])(implicit trace: Trace): RIO[R, A] =
+        ZIO.blocking(deserialize(topic, headers, data))
+    }
 
   /**
    * Create a deserializer for a type U based on the deserializer for type T and a mapping function
    */
-  def map[U](f: A => U): Deserializer[R, U] = Deserializer(deserialize(_, _, _).map(f))
+  def map[U](f: A => U)(implicit trace: Trace): Deserializer[R, U] = Deserializer(deserialize(_, _, _).map(f))
 
   /**
    * Create a deserializer for a type U based on the deserializer for type T and an effectful mapping function
    */
-  def mapZIO[R1 <: R, U](f: A => RIO[R1, U]): Deserializer[R1, U] = Deserializer(deserialize(_, _, _).flatMap(f))
+  def mapZIO[R1 <: R, U](f: A => RIO[R1, U])(implicit trace: Trace): Deserializer[R1, U] = Deserializer(
+    deserialize(_, _, _).flatMap(f)
+  )
 
   /**
    * When this serializer fails, attempt to deserialize with the alternative
    *
    * If both deserializers fail, the error will be the last deserializer's exception.
    */
-  def orElse[R1 <: R, U >: A](alternative: Deserializer[R1, U]): Deserializer[R1, U] =
+  def orElse[R1 <: R, U >: A](alternative: Deserializer[R1, U])(implicit trace: Trace): Deserializer[R1, U] =
     Deserializer { (topic, headers, data) =>
       deserialize(topic, headers, data) orElse alternative.deserialize(topic, headers, data)
     }
@@ -49,13 +54,13 @@ trait Deserializer[-R, +A] {
    *
    * This is useful for explicitly handling deserialization failures.
    */
-  def asTry: Deserializer[R, Try[A]] =
+  def asTry(implicit trace: Trace): Deserializer[R, Try[A]] =
     Deserializer(deserialize(_, _, _).fold(e => Failure(e), v => Success(v)))
 
   /**
    * Returns a new deserializer that deserializes values as Option values, mapping null data to None values.
    */
-  def asOption: Deserializer[R, Option[A]] =
+  def asOption(implicit trace: Trace): Deserializer[R, Option[A]] =
     Deserializer((topic, headers, data) => ZIO.foreach(Option(data))(deserialize(topic, headers, _)))
 }
 

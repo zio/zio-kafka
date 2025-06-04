@@ -20,25 +20,25 @@ trait Serde[-R, T] extends Deserializer[R, T] with Serializer[R, T] {
   /**
    * Creates a new Serde that uses optional values. Null data will be mapped to None values.
    */
-  override def asOption: Serde[R, Option[T]] =
+  override def asOption(implicit trace: Trace): Serde[R, Option[T]] =
     Serde(super[Deserializer].asOption)(super[Serializer].asOption)
 
   /**
    * Creates a new Serde that executes its serialization and deserialization functions on the blocking threadpool.
    */
-  override def blocking: Serde[R, T] =
+  override def blocking(implicit trace: Trace): Serde[R, T] =
     Serde(super[Deserializer].blocking)(super[Serializer].blocking)
 
   /**
    * Converts to a Serde of type U with pure transformations
    */
-  def inmap[U](f: T => U)(g: U => T): Serde[R, U] =
+  def inmap[U](f: T => U)(g: U => T)(implicit trace: Trace): Serde[R, U] =
     Serde(map(f))(contramap(g))
 
   /**
    * Convert to a Serde of type U with effectful transformations
    */
-  def inmapZIO[R1 <: R, U](f: T => RIO[R1, U])(g: U => RIO[R1, T]): Serde[R1, U] =
+  def inmapZIO[R1 <: R, U](f: T => RIO[R1, U])(g: U => RIO[R1, T])(implicit trace: Trace): Serde[R1, U] =
     Serde(mapZIO(f))(contramapZIO(g))
 }
 

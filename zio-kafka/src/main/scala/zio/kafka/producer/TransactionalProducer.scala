@@ -33,7 +33,8 @@ object TransactionalProducer {
     live: ProducerLive,
     semaphore: Semaphore,
     consumer: Consumer
-  ) extends TransactionalProducer {
+  )(implicit trace: Trace)
+      extends TransactionalProducer {
     private val abortTransaction: Task[Unit] = ZIO.attemptBlocking(live.p.abortTransaction())
 
     private def commitTransactionWithOffsets(offsetBatch: OffsetBatch)(implicit trace: Trace): Task[Unit] = {
@@ -85,7 +86,7 @@ object TransactionalProducer {
         } { case (transaction: TransactionImpl, exit) => transaction.markAsClosed *> commitOrAbort(transaction, exit) }
   }
 
-  val live: RLayer[TransactionalProducerSettings with Consumer, TransactionalProducer] =
+  def live(implicit trace: Trace): RLayer[TransactionalProducerSettings with Consumer, TransactionalProducer] =
     ZLayer.scoped {
       for {
         settings <- ZIO.service[TransactionalProducerSettings]

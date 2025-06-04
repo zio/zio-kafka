@@ -23,7 +23,9 @@ private[consumer] final class LiveCommitter(
   pendingCommits: Ref.Synchronized[Chunk[Commit]]
 ) extends Committer {
 
-  override val registerExternalCommits: Map[
+  override def registerExternalCommits(implicit
+    trace: Trace
+  ): Map[
     TopicPartition,
     OffsetAndMetadata
   ] => Task[Unit] = offsets =>
@@ -33,7 +35,7 @@ private[consumer] final class LiveCommitter(
     }.unit
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
-  override val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] =
+  override def commit(implicit trace: Trace): Map[TopicPartition, OffsetAndMetadata] => Task[Unit] =
     offsets =>
       for {
         p <- Promise.make[Throwable, Unit]

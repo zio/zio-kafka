@@ -18,14 +18,14 @@ final case class RebalanceListener(
   /**
    * Combine with another [[RebalanceListener]] and execute their actions sequentially
    */
-  def ++(that: RebalanceListener): RebalanceListener =
+  def ++(that: RebalanceListener)(implicit trace: Trace): RebalanceListener =
     RebalanceListener(
       assigned => onAssigned(assigned) *> that.onAssigned(assigned),
       revoked => onRevoked(revoked) *> that.onRevoked(revoked),
       lost => onLost(lost) *> that.onLost(lost)
     )
 
-  def runOnExecutor(executor: Executor): RebalanceListener = RebalanceListener(
+  def runOnExecutor(executor: Executor)(implicit trace: Trace): RebalanceListener = RebalanceListener(
     assigned => onAssigned(assigned).onExecutor(executor),
     revoked => onRevoked(revoked).onExecutor(executor),
     lost => onLost(lost).onExecutor(executor)
@@ -49,7 +49,7 @@ object RebalanceListener {
   private[kafka] def toKafka(
     rebalanceListener: RebalanceListener,
     runtime: Runtime[Any]
-  ): ConsumerRebalanceListener =
+  )(implicit trace: Trace): ConsumerRebalanceListener =
     new ConsumerRebalanceListener {
       override def onPartitionsRevoked(
         partitions: java.util.Collection[TopicPartition]

@@ -72,12 +72,12 @@ trait AdminClient {
   def createTopics(
     newTopics: Iterable[NewTopic],
     options: Option[CreateTopicsOptions] = None
-  ): Task[Unit]
+  )(implicit trace: Trace): Task[Unit]
 
   /**
    * Create a single topic.
    */
-  def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit]
+  def createTopic(newTopic: NewTopic, validateOnly: Boolean = false)(implicit trace: Trace): Task[Unit]
 
   /**
    * Delete consumer groups.
@@ -85,7 +85,7 @@ trait AdminClient {
   def deleteConsumerGroups(
     groupIds: Iterable[String],
     options: Option[DeleteConsumerGroupOptions] = None
-  ): Task[Unit]
+  )(implicit trace: Trace): Task[Unit]
 
   /**
    * Delete multiple topics.
@@ -93,12 +93,12 @@ trait AdminClient {
   def deleteTopics(
     topics: Iterable[String],
     options: Option[DeleteTopicsOptions] = None
-  ): Task[Unit]
+  )(implicit trace: Trace): Task[Unit]
 
   /**
    * Delete a single topic.
    */
-  def deleteTopic(topic: String): Task[Unit]
+  def deleteTopic(topic: String)(implicit trace: Trace): Task[Unit]
 
   /**
    * Delete records.
@@ -106,12 +106,14 @@ trait AdminClient {
   def deleteRecords(
     recordsToDelete: Map[TopicPartition, RecordsToDelete],
     deleteRecordsOptions: Option[DeleteRecordsOptions] = None
-  ): Task[Unit]
+  )(implicit trace: Trace): Task[Unit]
 
   /**
    * List the topics in the cluster.
    */
-  def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): Task[Map[String, TopicListing]]
+  def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None)(implicit
+    trace: Trace
+  ): Task[Map[String, TopicListing]]
 
   /**
    * Describe the specified topics.
@@ -119,7 +121,7 @@ trait AdminClient {
   def describeTopics(
     topicNames: Iterable[String],
     options: Option[DescribeTopicsOptions] = None
-  ): Task[Map[String, TopicDescription]]
+  )(implicit trace: Trace): Task[Map[String, TopicDescription]]
 
   /**
    * Get the configuration for the specified resources.
@@ -127,7 +129,7 @@ trait AdminClient {
   def describeConfigs(
     configResources: Iterable[ConfigResource],
     options: Option[DescribeConfigsOptions] = None
-  ): Task[Map[ConfigResource, KafkaConfig]]
+  )(implicit trace: Trace): Task[Map[ConfigResource, KafkaConfig]]
 
   /**
    * Get the configuration for the specified resources async.
@@ -135,29 +137,31 @@ trait AdminClient {
   def describeConfigsAsync(
     configResources: Iterable[ConfigResource],
     options: Option[DescribeConfigsOptions] = None
-  ): Task[Map[ConfigResource, Task[KafkaConfig]]]
+  )(implicit trace: Trace): Task[Map[ConfigResource, Task[KafkaConfig]]]
 
   /**
    * Get the cluster nodes.
    */
-  def describeClusterNodes(options: Option[DescribeClusterOptions] = None): Task[List[Node]]
+  def describeClusterNodes(options: Option[DescribeClusterOptions] = None)(implicit trace: Trace): Task[List[Node]]
 
   /**
    * Get the cluster controller.
    */
-  def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Option[Node]]
+  def describeClusterController(options: Option[DescribeClusterOptions] = None)(implicit
+    trace: Trace
+  ): Task[Option[Node]]
 
   /**
    * Get the cluster id.
    */
-  def describeClusterId(options: Option[DescribeClusterOptions] = None): Task[String]
+  def describeClusterId(options: Option[DescribeClusterOptions] = None)(implicit trace: Trace): Task[String]
 
   /**
    * Get the cluster authorized operations.
    */
   def describeClusterAuthorizedOperations(
     options: Option[DescribeClusterOptions] = None
-  ): Task[Set[AclOperation]]
+  )(implicit trace: Trace): Task[Set[AclOperation]]
 
   /**
    * Add new partitions to a topic.
@@ -165,7 +169,7 @@ trait AdminClient {
   def createPartitions(
     newPartitions: Map[String, NewPartitions],
     options: Option[CreatePartitionsOptions] = None
-  ): Task[Unit]
+  )(implicit trace: Trace): Task[Unit]
 
   /**
    * List offset for the specified partitions.
@@ -173,7 +177,7 @@ trait AdminClient {
   def listOffsets(
     topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
     options: Option[ListOffsetsOptions] = None
-  ): Task[Map[TopicPartition, ListOffsetsResultInfo]]
+  )(implicit trace: Trace): Task[Map[TopicPartition, ListOffsetsResultInfo]]
 
   /**
    * List offset for the specified partitions.
@@ -181,7 +185,7 @@ trait AdminClient {
   def listOffsetsAsync(
     topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
     options: Option[ListOffsetsOptions] = None
-  ): Task[Map[TopicPartition, Task[ListOffsetsResultInfo]]]
+  )(implicit trace: Trace): Task[Map[TopicPartition, Task[ListOffsetsResultInfo]]]
 
   /**
    * List Consumer Group offsets for the specified partitions.
@@ -189,7 +193,7 @@ trait AdminClient {
   def listConsumerGroupOffsets(
     groupId: String,
     options: Option[ListConsumerGroupOffsetsOptions] = None
-  ): Task[Map[TopicPartition, OffsetAndMetadata]]
+  )(implicit trace: Trace): Task[Map[TopicPartition, OffsetAndMetadata]]
 
   /**
    * Given a mapping of consumer group IDs and list of partitions, list the consumer group offsets available in the
@@ -197,7 +201,7 @@ trait AdminClient {
    */
   def listConsumerGroupOffsets(
     groupSpecs: Map[String, ListConsumerGroupOffsetsSpec]
-  ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]]
+  )(implicit trace: Trace): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]]
 
   /**
    * Given a mapping of consumer group IDs and list of partitions, list the consumer group offsets available in the
@@ -206,7 +210,7 @@ trait AdminClient {
   def listConsumerGroupOffsets(
     groupSpecs: Map[String, ListConsumerGroupOffsetsSpec],
     options: ListConsumerGroupOffsetsOptions
-  ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]]
+  )(implicit trace: Trace): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]]
 
   /**
    * Alter offsets for the specified partitions and consumer group.
@@ -215,22 +219,24 @@ trait AdminClient {
     groupId: String,
     offsets: Map[TopicPartition, OffsetAndMetadata],
     options: Option[AlterConsumerGroupOffsetsOptions] = None
-  ): Task[Unit]
+  )(implicit trace: Trace): Task[Unit]
 
   /**
    * Retrieves metrics for the underlying AdminClient
    */
-  def metrics: Task[Map[MetricName, Metric]]
+  def metrics(implicit trace: Trace): Task[Map[MetricName, Metric]]
 
   /**
    * List the consumer groups in the cluster.
    */
-  def listConsumerGroups(options: Option[ListConsumerGroupsOptions] = None): Task[List[ConsumerGroupListing]]
+  def listConsumerGroups(options: Option[ListConsumerGroupsOptions] = None)(implicit
+    trace: Trace
+  ): Task[List[ConsumerGroupListing]]
 
   /**
    * Describe the specified consumer groups.
    */
-  def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]]
+  def describeConsumerGroups(groupIds: String*)(implicit trace: Trace): Task[Map[String, ConsumerGroupDescription]]
 
   /**
    * Describe the specified consumer groups.
@@ -238,31 +244,31 @@ trait AdminClient {
   def describeConsumerGroups(
     groupIds: List[String],
     options: Option[DescribeConsumerGroupsOptions]
-  ): Task[Map[String, ConsumerGroupDescription]]
+  )(implicit trace: Trace): Task[Map[String, ConsumerGroupDescription]]
 
   /**
    * Remove the specified members from a consumer group.
    */
-  def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit]
+  def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String])(implicit trace: Trace): Task[Unit]
 
   /**
    * Remove all members from a consumer group.
    */
-  def removeMembersFromConsumerGroup(groupId: String): Task[Unit]
+  def removeMembersFromConsumerGroup(groupId: String)(implicit trace: Trace): Task[Unit]
 
   /**
    * Describe the log directories of the specified brokers
    */
   def describeLogDirs(
     brokersId: Iterable[Int]
-  ): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]]
+  )(implicit trace: Trace): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]]
 
   /**
    * Describe the log directories of the specified brokers async
    */
   def describeLogDirsAsync(
     brokersId: Iterable[Int]
-  ): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]]
+  )(implicit trace: Trace): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]]
 
   /**
    * Incrementally update the configuration for the specified resources. Only supported by brokers with version 2.3.0 or
@@ -271,7 +277,7 @@ trait AdminClient {
   def incrementalAlterConfigs(
     configs: Map[ConfigResource, Iterable[AlterConfigOp]],
     options: AlterConfigsOptions
-  ): Task[Unit]
+  )(implicit trace: Trace): Task[Unit]
 
   /**
    * Incrementally update the configuration for the specified resources async. Only supported by brokers with version
@@ -280,7 +286,7 @@ trait AdminClient {
   def incrementalAlterConfigsAsync(
     configs: Map[ConfigResource, Iterable[AlterConfigOp]],
     options: AlterConfigsOptions
-  ): Task[Map[ConfigResource, Task[Unit]]]
+  )(implicit trace: Trace): Task[Map[ConfigResource, Task[Unit]]]
 
   /*
    * Lists access control lists (ACLs) according to the supplied filter.
@@ -288,12 +294,14 @@ trait AdminClient {
    * Note: it may take some time for changes made by createAcls or deleteAcls to be reflected in the output of
    * describeAcls.
    */
-  def describeAcls(filter: AclBindingFilter, options: Option[DescribeAclOptions] = None): Task[Set[AclBinding]]
+  def describeAcls(filter: AclBindingFilter, options: Option[DescribeAclOptions] = None)(implicit
+    trace: Trace
+  ): Task[Set[AclBinding]]
 
   /**
    * Creates access control lists (ACLs) which are bound to specific resources.
    */
-  def createAcls(acls: Set[AclBinding], options: Option[CreateAclOptions] = None): Task[Unit]
+  def createAcls(acls: Set[AclBinding], options: Option[CreateAclOptions] = None)(implicit trace: Trace): Task[Unit]
 
   /**
    * Creates access control lists (ACLs) which are bound to specific resources async.
@@ -301,12 +309,14 @@ trait AdminClient {
   def createAclsAsync(
     acls: Set[AclBinding],
     options: Option[CreateAclOptions] = None
-  ): Task[Map[AclBinding, Task[Unit]]]
+  )(implicit trace: Trace): Task[Map[AclBinding, Task[Unit]]]
 
   /**
    * Deletes access control lists (ACLs) according to the supplied filters.
    */
-  def deleteAcls(filters: Set[AclBindingFilter], options: Option[DeleteAclsOptions] = None): Task[Set[AclBinding]]
+  def deleteAcls(filters: Set[AclBindingFilter], options: Option[DeleteAclsOptions] = None)(implicit
+    trace: Trace
+  ): Task[Set[AclBinding]]
 
   /**
    * Deletes access control lists (ACLs) according to the supplied filters async.
@@ -314,7 +324,7 @@ trait AdminClient {
   def deleteAclsAsync(
     filters: Set[AclBindingFilter],
     options: Option[DeleteAclsOptions] = None
-  ): Task[Map[AclBindingFilter, Task[Map[AclBinding, Option[Throwable]]]]]
+  )(implicit trace: Trace): Task[Map[AclBindingFilter, Task[Map[AclBinding, Option[Throwable]]]]]
 
 }
 
@@ -330,7 +340,7 @@ object AdminClient {
   ) extends AdminClient {
 
     // workaround for https://issues.apache.org/jira/browse/KAFKA-18818
-    private val kafka18818Workaround: ZIO[Any, Nothing, Unit] =
+    private def kafka18818Workaround(implicit trace: Trace): ZIO[Any, Nothing, Unit] =
       ZIO.sleep(550.millis).unit
 
     /**
@@ -339,7 +349,7 @@ object AdminClient {
     override def createTopics(
       newTopics: Iterable[NewTopic],
       options: Option[CreateTopicsOptions] = None
-    ): Task[Unit] = {
+    )(implicit trace: Trace): Task[Unit] = {
       val asJava = newTopics.map(_.asJava).asJavaCollection
 
       fromKafkaFutureVoid {
@@ -354,7 +364,7 @@ object AdminClient {
     /**
      * Create a single topic.
      */
-    override def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit] =
+    override def createTopic(newTopic: NewTopic, validateOnly: Boolean = false)(implicit trace: Trace): Task[Unit] =
       createTopics(List(newTopic), Some(CreateTopicsOptions(validateOnly = validateOnly, timeout = Option.empty)))
 
     /**
@@ -363,7 +373,7 @@ object AdminClient {
     override def deleteConsumerGroups(
       groupIds: Iterable[String],
       options: Option[DeleteConsumerGroupOptions]
-    ): Task[Unit] = {
+    )(implicit trace: Trace): Task[Unit] = {
       val asJava = groupIds.asJavaCollection
       fromKafkaFutureVoid {
         ZIO.attempt(
@@ -382,7 +392,7 @@ object AdminClient {
     override def deleteTopics(
       topics: Iterable[String],
       options: Option[DeleteTopicsOptions] = None
-    ): Task[Unit] = {
+    )(implicit trace: Trace): Task[Unit] = {
       val asJava = topics.asJavaCollection
       fromKafkaFutureVoid {
         ZIO.attempt(
@@ -396,8 +406,8 @@ object AdminClient {
     /**
      * Delete a single topic.
      */
-    override def deleteTopic(topic: String): Task[Unit] =
-      deleteTopics(List(topic))
+    override def deleteTopic(topic: String)(implicit trace: Trace): Task[Unit] =
+      deleteTopics(List(topic), None)
 
     /**
      * Delete records.
@@ -405,7 +415,7 @@ object AdminClient {
     override def deleteRecords(
       recordsToDelete: Map[TopicPartition, RecordsToDelete],
       deleteRecordsOptions: Option[DeleteRecordsOptions] = None
-    ): Task[Unit] = {
+    )(implicit trace: Trace): Task[Unit] = {
       val records = recordsToDelete.map { case (k, v) => k.asJava -> v }.asJava
       fromKafkaFutureVoid {
         ZIO.attempt(
@@ -419,7 +429,9 @@ object AdminClient {
     /**
      * List the topics in the cluster.
      */
-    override def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): Task[Map[String, TopicListing]] =
+    override def listTopics(
+      listTopicsOptions: Option[ListTopicsOptions] = None
+    )(implicit trace: Trace): Task[Map[String, TopicListing]] =
       fromKafkaFuture {
         ZIO.attempt(
           listTopicsOptions
@@ -434,7 +446,7 @@ object AdminClient {
     override def describeTopics(
       topicNames: Iterable[String],
       options: Option[DescribeTopicsOptions] = None
-    ): Task[Map[String, TopicDescription]] = {
+    )(implicit trace: Trace): Task[Map[String, TopicDescription]] = {
       val asJava = topicNames.asJavaCollection
       fromKafkaFuture {
         ZIO.attempt(
@@ -456,7 +468,7 @@ object AdminClient {
     override def describeConfigs(
       configResources: Iterable[ConfigResource],
       options: Option[DescribeConfigsOptions] = None
-    ): Task[Map[ConfigResource, KafkaConfig]] = {
+    )(implicit trace: Trace): Task[Map[ConfigResource, KafkaConfig]] = {
       val asJava = configResources.map(_.asJava).asJavaCollection
       fromKafkaFuture {
         ZIO.attempt(
@@ -477,7 +489,7 @@ object AdminClient {
     override def describeConfigsAsync(
       configResources: Iterable[ConfigResource],
       options: Option[DescribeConfigsOptions] = None
-    ): Task[Map[ConfigResource, Task[KafkaConfig]]] = {
+    )(implicit trace: Trace): Task[Map[ConfigResource, Task[KafkaConfig]]] = {
       val asJava = configResources.map(_.asJava).asJavaCollection
       ZIO
         .attempt(
@@ -498,7 +510,9 @@ object AdminClient {
         }
     }
 
-    private def describeCluster(options: Option[DescribeClusterOptions]): Task[DescribeClusterResult] =
+    private def describeCluster(
+      options: Option[DescribeClusterOptions]
+    )(implicit trace: Trace): Task[DescribeClusterResult] =
       ZIO.attempt(
         options.fold(adminClient.describeCluster())(opts => adminClient.describeCluster(opts.asJava))
       )
@@ -506,7 +520,9 @@ object AdminClient {
     /**
      * Get the cluster nodes.
      */
-    override def describeClusterNodes(options: Option[DescribeClusterOptions] = None): Task[List[Node]] =
+    override def describeClusterNodes(
+      options: Option[DescribeClusterOptions] = None
+    )(implicit trace: Trace): Task[List[Node]] =
       fromKafkaFuture(
         describeCluster(options).map(_.nodes())
       ).flatMap { nodes =>
@@ -523,7 +539,9 @@ object AdminClient {
     /**
      * Get the cluster controller.
      */
-    override def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Option[Node]] =
+    override def describeClusterController(
+      options: Option[DescribeClusterOptions] = None
+    )(implicit trace: Trace): Task[Option[Node]] =
       fromKafkaFuture(
         describeCluster(options).map(_.controller())
       ).map(Node(_))
@@ -531,7 +549,9 @@ object AdminClient {
     /**
      * Get the cluster id.
      */
-    override def describeClusterId(options: Option[DescribeClusterOptions] = None): Task[String] =
+    override def describeClusterId(
+      options: Option[DescribeClusterOptions] = None
+    )(implicit trace: Trace): Task[String] =
       fromKafkaFuture(
         describeCluster(options).map(_.clusterId())
       )
@@ -541,7 +561,7 @@ object AdminClient {
      */
     override def describeClusterAuthorizedOperations(
       options: Option[DescribeClusterOptions] = None
-    ): Task[Set[AclOperation]] =
+    )(implicit trace: Trace): Task[Set[AclOperation]] =
       for {
         res <- describeCluster(options)
         opt <- fromKafkaFuture(ZIO.attempt(res.authorizedOperations())).map(Option(_))
@@ -555,7 +575,7 @@ object AdminClient {
     override def createPartitions(
       newPartitions: Map[String, NewPartitions],
       options: Option[CreatePartitionsOptions] = None
-    ): Task[Unit] = {
+    )(implicit trace: Trace): Task[Unit] = {
       val asJava = newPartitions.map { case (k, v) => k -> v.asJava }.asJava
       fromKafkaFutureVoid {
         ZIO.attempt(
@@ -572,7 +592,7 @@ object AdminClient {
     override def listOffsets(
       topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
       options: Option[ListOffsetsOptions] = None
-    ): Task[Map[TopicPartition, ListOffsetsResultInfo]] = {
+    )(implicit trace: Trace): Task[Map[TopicPartition, ListOffsetsResultInfo]] = {
       val asJava = topicPartitionOffsets.bimap(_.asJava, _.asJava).asJava
       fromKafkaFuture {
         ZIO.attempt(
@@ -589,7 +609,7 @@ object AdminClient {
     override def listOffsetsAsync(
       topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
       options: Option[ListOffsetsOptions]
-    ): Task[Map[TopicPartition, Task[ListOffsetsResultInfo]]] = {
+    )(implicit trace: Trace): Task[Map[TopicPartition, Task[ListOffsetsResultInfo]]] = {
       val topicPartitionOffsetsAsJava = topicPartitionOffsets.bimap(_.asJava, _.asJava)
       val topicPartitionsAsJava       = topicPartitionOffsetsAsJava.keySet
       val asJava                      = topicPartitionOffsetsAsJava.asJava
@@ -613,7 +633,7 @@ object AdminClient {
     override def listConsumerGroupOffsets(
       groupId: String,
       options: Option[ListConsumerGroupOffsetsOptions] = None
-    ): Task[Map[TopicPartition, OffsetAndMetadata]] =
+    )(implicit trace: Trace): Task[Map[TopicPartition, OffsetAndMetadata]] =
       fromKafkaFuture {
         ZIO.attempt(
           options
@@ -630,7 +650,7 @@ object AdminClient {
      */
     override def listConsumerGroupOffsets(
       groupSpecs: Map[String, ListConsumerGroupOffsetsSpec]
-    ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]] =
+    )(implicit trace: Trace): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]] =
       fromKafkaFuture {
         ZIO.attempt(
           adminClient
@@ -651,7 +671,7 @@ object AdminClient {
     override def listConsumerGroupOffsets(
       groupSpecs: Map[String, ListConsumerGroupOffsetsSpec],
       options: ListConsumerGroupOffsetsOptions
-    ): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]] =
+    )(implicit trace: Trace): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]] =
       fromKafkaFuture {
         ZIO.attempt(
           adminClient
@@ -677,7 +697,7 @@ object AdminClient {
       groupId: String,
       offsets: Map[TopicPartition, OffsetAndMetadata],
       options: Option[AlterConsumerGroupOffsetsOptions] = None
-    ): Task[Unit] = {
+    )(implicit trace: Trace): Task[Unit] = {
       val asJava = offsets.bimap(_.asJava, _.asJava).asJava
       fromKafkaFutureVoid {
         ZIO.attempt(
@@ -693,7 +713,7 @@ object AdminClient {
     /**
      * Retrieves metrics for the underlying AdminClient
      */
-    override def metrics: Task[Map[MetricName, Metric]] =
+    override def metrics(implicit trace: Trace): Task[Map[MetricName, Metric]] =
       ZIO.attempt(
         adminClient.metrics().asScala.toMap.map { case (metricName, metric) =>
           (MetricName(metricName), Metric(metric))
@@ -705,7 +725,7 @@ object AdminClient {
      */
     override def listConsumerGroups(
       options: Option[ListConsumerGroupsOptions] = None
-    ): Task[List[ConsumerGroupListing]] =
+    )(implicit trace: Trace): Task[List[ConsumerGroupListing]] =
       fromKafkaFuture {
         ZIO.attempt(
           options
@@ -717,7 +737,9 @@ object AdminClient {
     /**
      * Describe the specified consumer groups.
      */
-    override def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]] =
+    override def describeConsumerGroups(groupIds: String*)(implicit
+      trace: Trace
+    ): Task[Map[String, ConsumerGroupDescription]] =
       describeConsumerGroups(groupIds.toList, options = None)
 
     /**
@@ -726,7 +748,7 @@ object AdminClient {
     override def describeConsumerGroups(
       groupIds: List[String],
       options: Option[DescribeConsumerGroupsOptions]
-    ): Task[Map[String, ConsumerGroupDescription]] =
+    )(implicit trace: Trace): Task[Map[String, ConsumerGroupDescription]] =
       fromKafkaFuture(
         ZIO.attempt(
           options
@@ -740,7 +762,9 @@ object AdminClient {
     /**
      * Remove the specified members from a consumer group.
      */
-    override def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit] = {
+    override def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String])(implicit
+      trace: Trace
+    ): Task[Unit] = {
       val options = new RemoveMembersFromConsumerGroupOptions(
         membersToRemove.map(new MemberToRemove(_)).asJavaCollection
       )
@@ -754,7 +778,7 @@ object AdminClient {
     /**
      * Remove all members from a consumer group.
      */
-    override def removeMembersFromConsumerGroup(groupId: String): Task[Unit] = {
+    override def removeMembersFromConsumerGroup(groupId: String)(implicit trace: Trace): Task[Unit] = {
       val options = new RemoveMembersFromConsumerGroupOptions()
       fromKafkaFuture(
         ZIO.attempt(
@@ -765,7 +789,7 @@ object AdminClient {
 
     override def describeLogDirs(
       brokersId: Iterable[Int]
-    ): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]] =
+    )(implicit trace: Trace): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]] =
       fromKafkaFuture(
         ZIO.attempt(
           adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).allDescriptions()
@@ -779,7 +803,7 @@ object AdminClient {
      */
     override def describeLogDirsAsync(
       brokersId: Iterable[Int]
-    ): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]] =
+    )(implicit trace: Trace): ZIO[Any, Throwable, Map[Int, Task[Map[String, LogDirDescription]]]] =
       ZIO
         .attempt(
           adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).descriptions()
@@ -798,7 +822,7 @@ object AdminClient {
     override def incrementalAlterConfigs(
       configs: Map[ConfigResource, Iterable[AlterConfigOp]],
       options: AlterConfigsOptions
-    ): Task[Unit] =
+    )(implicit trace: Trace): Task[Unit] =
       fromKafkaFutureVoid(
         ZIO
           .attempt(
@@ -816,7 +840,7 @@ object AdminClient {
     override def incrementalAlterConfigsAsync(
       configs: Map[ConfigResource, Iterable[AlterConfigOp]],
       options: AlterConfigsOptions
-    ): Task[Map[ConfigResource, Task[Unit]]] =
+    )(implicit trace: Trace): Task[Map[ConfigResource, Task[Unit]]] =
       ZIO
         .attempt(
           adminClient
@@ -835,7 +859,7 @@ object AdminClient {
     override def describeAcls(
       filter: AclBindingFilter,
       options: Option[DescribeAclOptions]
-    ): Task[Set[AclBinding]] =
+    )(implicit trace: Trace): Task[Set[AclBinding]] =
       fromKafkaFuture(
         ZIO
           .attempt(
@@ -845,7 +869,9 @@ object AdminClient {
           )
       ).map(_.asScala.view.map(AclBinding(_)).toSet)
 
-    override def createAcls(acls: Set[AclBinding], options: Option[CreateAclOptions]): Task[Unit] =
+    override def createAcls(acls: Set[AclBinding], options: Option[CreateAclOptions])(implicit
+      trace: Trace
+    ): Task[Unit] =
       fromKafkaFutureVoid(
         ZIO
           .attempt(
@@ -860,7 +886,7 @@ object AdminClient {
     override def createAclsAsync(
       acls: Set[AclBinding],
       options: Option[CreateAclOptions]
-    ): Task[Map[AclBinding, Task[Unit]]] =
+    )(implicit trace: Trace): Task[Map[AclBinding, Task[Unit]]] =
       ZIO
         .attempt(
           options
@@ -873,7 +899,9 @@ object AdminClient {
           (AclBinding(k), ZIO.fromCompletionStage(v.toCompletionStage).unit)
         }.toMap)
 
-    override def deleteAcls(filters: Set[AclBindingFilter], options: Option[DeleteAclsOptions]): Task[Set[AclBinding]] =
+    override def deleteAcls(filters: Set[AclBindingFilter], options: Option[DeleteAclsOptions])(implicit
+      trace: Trace
+    ): Task[Set[AclBinding]] =
       fromKafkaFuture(
         ZIO
           .attempt(
@@ -888,7 +916,7 @@ object AdminClient {
     override def deleteAclsAsync(
       filters: Set[AclBindingFilter],
       options: Option[DeleteAclsOptions]
-    ): Task[Map[AclBindingFilter, Task[Map[AclBinding, Option[Throwable]]]]] =
+    )(implicit trace: Trace): Task[Map[AclBindingFilter, Task[Map[AclBinding, Option[Throwable]]]]] =
       ZIO
         .attempt(
           options
@@ -913,7 +941,7 @@ object AdminClient {
 
   }
 
-  val live: ZLayer[AdminClientSettings, Throwable, AdminClient] =
+  def live(implicit trace: Trace): ZLayer[AdminClientSettings, Throwable, AdminClient] =
     ZLayer.scoped {
       for {
         settings <- ZIO.service[AdminClientSettings]
@@ -921,10 +949,10 @@ object AdminClient {
       } yield admin
     }
 
-  def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]]): RIO[R, T] =
+  def fromKafkaFuture[R, T](kfv: RIO[R, KafkaFuture[T]])(implicit trace: Trace): RIO[R, T] =
     kfv.flatMap(f => ZIO.fromCompletionStage(f.toCompletionStage))
 
-  def fromKafkaFutureVoid[R](kfv: RIO[R, KafkaFuture[Void]]): RIO[R, Unit] =
+  def fromKafkaFutureVoid[R](kfv: RIO[R, KafkaFuture[Void]])(implicit trace: Trace): RIO[R, Unit] =
     fromKafkaFuture(kfv).unit
 
   final case class ConfigResource(`type`: ConfigResourceType, name: String) {
@@ -1478,20 +1506,20 @@ object AdminClient {
       ReplicaInfo(size = ri.size(), offsetLag = ri.offsetLag(), isFuture = ri.isFuture)
   }
 
-  def make(settings: AdminClientSettings): ZIO[Scope, Throwable, AdminClient] =
+  def make(settings: AdminClientSettings)(implicit trace: Trace): ZIO[Scope, Throwable, AdminClient] =
     fromScopedJavaClient(javaClientFromSettings(settings))
 
-  def fromJavaClient(javaClient: JAdmin): URIO[Any, AdminClient] =
+  def fromJavaClient(javaClient: JAdmin)(implicit trace: Trace): URIO[Any, AdminClient] =
     ZIO.succeed(new LiveAdminClient(javaClient))
 
   def fromScopedJavaClient[R, E](
     scopedJavaClient: ZIO[R & Scope, E, JAdmin]
-  ): ZIO[R & Scope, E, AdminClient] =
+  )(implicit trace: Trace): ZIO[R & Scope, E, AdminClient] =
     scopedJavaClient.flatMap { javaClient =>
       fromJavaClient(javaClient)
     }
 
-  def javaClientFromSettings(settings: AdminClientSettings): ZIO[Scope, Throwable, JAdmin] =
+  def javaClientFromSettings(settings: AdminClientSettings)(implicit trace: Trace): ZIO[Scope, Throwable, JAdmin] =
     ZIO.acquireRelease {
       val endpointCheck = SslHelper
         .validateEndpoint(settings.driverSettings)

@@ -60,7 +60,7 @@ trait Producer {
   final def produceAll[R, K, V](
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
-  ): ZPipeline[R, Throwable, ProducerRecord[K, V], RecordMetadata] =
+  )(implicit trace: Trace): ZPipeline[R, Throwable, ProducerRecord[K, V], RecordMetadata] =
     ZPipeline.mapChunksZIO(records => produceChunk(records, keySerializer, valueSerializer))
 
   /**
@@ -225,7 +225,7 @@ object Producer {
       extends RuntimeException("Publish omitted due to a publish error for a previous record in the chunk")
       with NoStackTrace
 
-  val live: RLayer[ProducerSettings, Producer] =
+  def live(implicit trace: Trace): RLayer[ProducerSettings, Producer] =
     ZLayer.scoped {
       for {
         settings <- ZIO.service[ProducerSettings]
@@ -539,7 +539,7 @@ private[producer] final class ProducerLive(
    * Calls to send may block when updating metadata or when communication with the broker is (temporarily) lost,
    * therefore this stream is run on the blocking thread pool
    */
-  val sendFromQueue: ZIO[Any, Nothing, Any] =
+  def sendFromQueue(implicit trace: Trace): ZIO[Any, Nothing, Any] =
     ZStream
       .fromQueueWithShutdown(sendQueue)
       .mapZIO { case (serializedRecords, startNanos, continuation) =>

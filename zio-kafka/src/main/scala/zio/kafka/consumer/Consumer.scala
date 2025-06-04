@@ -257,10 +257,10 @@ object Consumer {
 
   case object CommitTimeout extends RuntimeException("Commit timeout") with NoStackTrace
 
-  val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
+  def offsetBatches(implicit trace: Trace): ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
 
-  def live: RLayer[ConsumerSettings, Consumer] =
+  def live(implicit trace: Trace): RLayer[ConsumerSettings, Consumer] =
     ZLayer.scoped {
       for {
         settings <- ZIO.service[ConsumerSettings]

@@ -40,7 +40,7 @@ object Subscription {
    * @return
    *   The created subscription or failure when the pattern is invalid
    */
-  def pattern(pattern: String): Task[Subscription] =
+  def pattern(pattern: String)(implicit trace: Trace): Task[Subscription] =
     ZIO.attempt(new Regex(pattern)).map(Pattern.apply)
 
   /**

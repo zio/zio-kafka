@@ -78,7 +78,7 @@ private[producer] class ZioProducerMetrics(metricLabels: Set[MetricLabel]) exten
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  override def observeProduce(latency: Duration, batchSize: Int): UIO[Unit] =
+  override def observeProduce(latency: Duration, batchSize: Int)(implicit trace: Trace): UIO[Unit] =
     for {
       _ <- produceCounter.increment
       _ <- produceLatencyHistogram.update(latency)
@@ -122,10 +122,10 @@ private[producer] class ZioProducerMetrics(metricLabels: Set[MetricLabel]) exten
       .contramap[Duration](_.toNanos.toDouble / 1e9)
       .tagged(metricLabels)
 
-  override def observeSendQueueSize(size: Int): UIO[Unit] =
+  override def observeSendQueueSize(size: Int)(implicit trace: Trace): UIO[Unit] =
     sendQueueSizeHistogram.update(size)
 
-  override def observeSendQueueTake(latency: Duration): UIO[Unit] =
+  override def observeSendQueueTake(latency: Duration)(implicit trace: Trace): UIO[Unit] =
     sendQueueLatencyHistogram.update(latency)
 
   // -----------------------------------------------------

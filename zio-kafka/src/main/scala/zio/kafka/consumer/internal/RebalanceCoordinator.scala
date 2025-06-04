@@ -185,7 +185,7 @@ private[internal] class RebalanceCoordinator(
   // - ends streams that need to be ended
   // - updates `lastRebalanceEvent`
   //
-  def toRebalanceListener: RebalanceListener = RebalanceListener(
+  def toRebalanceListener(implicit trace: Trace): RebalanceListener = RebalanceListener(
     onAssigned = assignedTps =>
       lastRebalanceEvent.updateZIO { rebalanceEvent =>
         ZIO.logDebug {

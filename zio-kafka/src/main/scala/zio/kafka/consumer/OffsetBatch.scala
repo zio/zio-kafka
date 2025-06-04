@@ -15,7 +15,7 @@ sealed trait OffsetBatch {
    * Attempts to commit and retries according to the given policy when the commit fails with a
    * RetriableCommitFailedException
    */
-  def commitOrRetry[R](policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
+  def commitOrRetry[R](policy: Schedule[R, Throwable, Any])(implicit trace: Trace): RIO[R, Unit] =
     Offset.commitOrRetry(commit, policy)
 }
 

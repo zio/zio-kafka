@@ -19,25 +19,25 @@ trait Serializer[-R, -A] {
   /**
    * Create a serializer for a type U based on the serializer for type T and a mapping function
    */
-  def contramap[U](f: U => A): Serializer[R, U] =
+  def contramap[U](f: U => A)(implicit trace: Trace): Serializer[R, U] =
     Serializer((topic, headers, u) => serialize(topic, headers, f(u)))
 
   /**
    * Create a serializer for a type U based on the serializer for type T and an effectful mapping function
    */
-  def contramapZIO[R1 <: R, U](f: U => RIO[R1, A]): Serializer[R1, U] =
+  def contramapZIO[R1 <: R, U](f: U => RIO[R1, A])(implicit trace: Trace): Serializer[R1, U] =
     Serializer((topic, headers, u) => f(u).flatMap(serialize(topic, headers, _)))
 
   /**
    * Returns a new serializer that executes its serialization function on the blocking threadpool.
    */
-  def blocking: Serializer[R, A] =
+  def blocking(implicit trace: Trace): Serializer[R, A] =
     Serializer((topic, headers, t) => ZIO.blocking(serialize(topic, headers, t)))
 
   /**
    * Returns a new serializer that handles optional values and serializes them as nulls.
    */
-  def asOption[U <: A]: Serializer[R, Option[U]] =
+  def asOption[U <: A](implicit trace: Trace): Serializer[R, Option[U]] =
     Serializer { (topic, headers, valueOpt) =>
       valueOpt match {
         case None        => ZIO.succeed(null)
