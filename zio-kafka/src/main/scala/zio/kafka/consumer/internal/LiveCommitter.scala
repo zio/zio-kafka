@@ -23,29 +23,25 @@ private[consumer] final class LiveCommitter(
   pendingCommits: Ref.Synchronized[Chunk[Commit]]
 ) extends Committer {
 
-  override val registerExternalCommits: Map[
-    TopicPartition,
-    OffsetAndMetadata
-  ] => Task[Unit] = offsets =>
+  override def registerExternalCommits(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit] =
     committedOffsetsRef.modify {
       // The continuation promise can be `null` because this commit is not actually handled by the consumer.
       _.addCommits(Chunk(Commit(java.lang.System.nanoTime(), offsets, null)))
     }.unit
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
-  override val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] =
-    offsets =>
-      for {
-        p <- Promise.make[Throwable, Unit]
-        startTime = java.lang.System.nanoTime()
-        _ <- commitQueue.offer(Commit(startTime, offsets, p))
-        _ <- onCommitAvailable
-        _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
-        _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
-        endTime = java.lang.System.nanoTime()
-        latency = (endTime - startTime).nanoseconds
-        _ <- consumerMetrics.observeCommit(latency)
-      } yield ()
+  override def commit(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit] =
+    for {
+      p <- Promise.make[Throwable, Unit]
+      startTime = java.lang.System.nanoTime()
+      _ <- commitQueue.offer(Commit(startTime, offsets, p))
+      _ <- onCommitAvailable
+      _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
+      _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
+      endTime = java.lang.System.nanoTime()
+      latency = (endTime - startTime).nanoseconds
+      _ <- consumerMetrics.observeCommit(latency)
+    } yield ()
 
   /**
    * WARNING: this method is used during a rebalance from the same-thread-runtime. This restricts what ZIO operations
