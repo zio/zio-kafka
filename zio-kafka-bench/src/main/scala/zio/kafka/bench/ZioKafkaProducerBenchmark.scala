@@ -36,8 +36,9 @@ class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer
   def produceSingleRecordSeqAsync(): Any = runZIO {
     // Produce 100 records
     for {
-      producer <- ZIO.service[Producer]
-      _ <- producer.produceAsync(topic1, "key", "value", Serde.string, Serde.string).schedule(Schedule.recurs(100))
+      producer      <- ZIO.service[Producer]
+      continuations <- ZIO.replicateZIO(100)(producer.produceAsync(topic1, "key", "value", Serde.string, Serde.string))
+      _             <- ZIO.forkAllDiscard(continuations)
     } yield ()
   }
 
@@ -56,8 +57,9 @@ class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer
   def produceChunkSeqAsync(): Any = runZIO {
     // Produce 30 chunks sequentially
     for {
-      producer <- ZIO.service[Producer]
-      _        <- producer.produceChunkAsync(records, Serde.string, Serde.string).schedule(Schedule.recurs(30))
+      producer      <- ZIO.service[Producer]
+      continuations <- ZIO.replicateZIO(30)(producer.produceChunkAsync(records, Serde.string, Serde.string))
+      _             <- ZIO.forkAllDiscard(continuations)
     } yield ()
   }
 
