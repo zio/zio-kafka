@@ -298,8 +298,8 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
 }
 
 abstract private class MockCommitter extends Committer {
-  override val commit: Map[TopicPartition, OffsetAndMetadata] => Task[Unit]                  = _ => ZIO.unit
-  override val registerExternalCommits: Map[TopicPartition, OffsetAndMetadata] => Task[Unit] = _ => ZIO.unit
+  override def commit(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit]                  = ZIO.unit
+  override def registerExternalCommits(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit] = ZIO.unit
 
   override def processQueuedCommits(consumer: ByteArrayKafkaConsumer, executeOnEmpty: Boolean): Task[Unit] = ZIO.unit
 

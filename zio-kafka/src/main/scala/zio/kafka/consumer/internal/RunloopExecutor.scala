@@ -9,7 +9,7 @@ private[consumer] object RunloopExecutor {
 
   private val counter: AtomicLong = new AtomicLong(0)
 
-  private val newSingleThreadedExecutor: URIO[Scope, Executor] =
+  private def newSingleThreadedExecutor: URIO[Scope, Executor] =
     ZIO.acquireRelease {
       ZIO.succeed {
         val javaExecutor =
