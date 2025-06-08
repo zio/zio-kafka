@@ -25,21 +25,21 @@ trait Deserializer[-R, +A] {
     Deserializer((topic, headers, data) => ZIO.blocking(deserialize(topic, headers, data)))
 
   /**
-   * Create a deserializer for a type U based on the deserializer for type A and a mapping function.
+   * Create a deserializer for a type B based on the deserializer for type A and a mapping function.
    */
-  def map[U](f: A => U): Deserializer[R, U] = Deserializer(deserialize(_, _, _).map(f))
+  def map[B](f: A => B): Deserializer[R, B] = Deserializer(deserialize(_, _, _).map(f))
 
   /**
-   * Create a deserializer for a type U based on the deserializer for type A and an effectful mapping function.
+   * Create a deserializer for a type B based on the deserializer for type A and an effectful mapping function.
    */
-  def mapZIO[R1 <: R, U](f: A => RIO[R1, U]): Deserializer[R1, U] = Deserializer(deserialize(_, _, _).flatMap(f))
+  def mapZIO[R1 <: R, B](f: A => RIO[R1, B]): Deserializer[R1, B] = Deserializer(deserialize(_, _, _).flatMap(f))
 
   /**
    * When this serializer fails, attempt to deserialize with the alternative.
    *
    * If both deserializers fail, the error will be the last deserializer's exception.
    */
-  def orElse[R1 <: R, U >: A](alternative: Deserializer[R1, U]): Deserializer[R1, U] =
+  def orElse[R1 <: R, A1 >: A](alternative: Deserializer[R1, A1]): Deserializer[R1, A1] =
     Deserializer { (topic, headers, data) =>
       deserialize(topic, headers, data) orElse alternative.deserialize(topic, headers, data)
     }

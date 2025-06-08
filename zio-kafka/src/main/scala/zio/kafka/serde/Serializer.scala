@@ -17,15 +17,15 @@ trait Serializer[-R, -A] {
   def serialize(topic: String, headers: Headers, value: A): RIO[R, Array[Byte]]
 
   /**
-   * Create a serializer for a type U based on the serializer for type A and a mapping function.
+   * Create a serializer for a type B based on the serializer for type A and a mapping function.
    */
-  def contramap[U](f: U => A): Serializer[R, U] =
+  def contramap[B](f: B => A): Serializer[R, B] =
     Serializer((topic, headers, u) => serialize(topic, headers, f(u)))
 
   /**
-   * Create a serializer for a type U based on the serializer for type A and an effectful mapping function.
+   * Create a serializer for a type B based on the serializer for type A and an effectful mapping function.
    */
-  def contramapZIO[R1 <: R, U](f: U => RIO[R1, A]): Serializer[R1, U] =
+  def contramapZIO[R1 <: R, B](f: B => RIO[R1, A]): Serializer[R1, B] =
     Serializer((topic, headers, u) => f(u).flatMap(serialize(topic, headers, _)))
 
   /**
@@ -37,7 +37,7 @@ trait Serializer[-R, -A] {
   /**
    * Returns a new serializer that handles optional values and serializes them as nulls.
    */
-  def asOption[U <: A]: Serializer[R, Option[U]] =
+  def asOption[A1 <: A]: Serializer[R, Option[A1]] =
     Serializer { (topic, headers, valueOpt) =>
       valueOpt match {
         case None        => ZIO.succeed(null)

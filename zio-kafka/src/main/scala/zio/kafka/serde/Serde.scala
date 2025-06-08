@@ -30,15 +30,15 @@ trait Serde[-R, A] extends Deserializer[R, A] with Serializer[R, A] {
     Serde(super[Deserializer].blocking)(super[Serializer].blocking)
 
   /**
-   * Converts to a Serde of type U with pure transformations.
+   * Converts to a Serde of type B with pure transformations.
    */
-  def inmap[U](f: A => U)(g: U => A): Serde[R, U] =
+  def inmap[B](f: A => B)(g: B => A): Serde[R, B] =
     Serde(map(f))(contramap(g))
 
   /**
-   * Convert to a Serde of type U with effectful transformations.
+   * Convert to a Serde of type B with effectful transformations.
    */
-  def inmapZIO[R1 <: R, U](f: A => RIO[R1, U])(g: U => RIO[R1, A]): Serde[R1, U] =
+  def inmapZIO[R1 <: R, B](f: A => RIO[R1, B])(g: B => RIO[R1, A]): Serde[R1, B] =
     Serde(mapZIO(f))(contramapZIO(g))
 }
 
