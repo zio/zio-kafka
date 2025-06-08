@@ -36,15 +36,15 @@ private[zio] trait Serdes {
         ZIO.succeed(data)
     }
 
-  private[this] def convertPrimitiveSerde[T](serde: KafkaSerde[T]): Serde[Any, T] =
-    new Serde[Any, T] {
+  private[this] def convertPrimitiveSerde[A](serde: KafkaSerde[A]): Serde[Any, A] =
+    new Serde[Any, A] {
       private final val serializer   = serde.serializer()
       private final val deserializer = serde.deserializer()
 
-      override final def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[Any, T] =
+      override final def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[Any, A] =
         ZIO.attempt(deserializer.deserialize(topic, headers, data))
 
-      override final def serialize(topic: String, headers: Headers, value: T): RIO[Any, Array[Byte]] =
+      override final def serialize(topic: String, headers: Headers, value: A): RIO[Any, Array[Byte]] =
         ZIO.attempt(serializer.serialize(topic, headers, value))
     }
 }

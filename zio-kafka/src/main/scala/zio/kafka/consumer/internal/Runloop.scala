@@ -358,12 +358,13 @@ private[consumer] final class Runloop private (
   private def verifyAssignedStreamsMatchesAssignment(
     assignedStreams: Chunk[PartitionStreamControl],
     currentAssigned: Set[TopicPartition]
-  ) =
+  ): ZIO[Any, Nothing, Unit] =
     ZIO
       .logWarning(
         s"Not all assigned partitions have a (single) stream or vice versa. Assigned: ${currentAssigned.mkString(",")}, streams: ${assignedStreams.map(_.tp).mkString(",")}"
       )
       .when(currentAssigned != assignedStreams.map(_.tp).toSet || currentAssigned.size != assignedStreams.size)
+      .unit
 
   /**
    * Check each stream to see if it exceeded its pull interval. If so, halt it. In addition, if any stream has exceeded
