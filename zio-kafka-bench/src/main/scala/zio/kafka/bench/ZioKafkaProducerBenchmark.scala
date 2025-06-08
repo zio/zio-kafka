@@ -38,7 +38,7 @@ class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer
     for {
       producer      <- ZIO.service[Producer]
       continuations <- ZIO.replicateZIO(100)(producer.produceAsync(topic1, "key", "value", Serde.string, Serde.string))
-      _             <- ZIO.forkAllDiscard(continuations)
+      _             <- ZIO.foreachDiscard(continuations)(identity)
     } yield ()
   }
 
@@ -59,7 +59,7 @@ class ZioKafkaProducerBenchmark extends ProducerZioBenchmark[Kafka with Producer
     for {
       producer      <- ZIO.service[Producer]
       continuations <- ZIO.replicateZIO(30)(producer.produceChunkAsync(records, Serde.string, Serde.string))
-      _             <- ZIO.forkAllDiscard(continuations)
+      _             <- ZIO.foreachDiscard(continuations)(identity)
     } yield ()
   }
 
