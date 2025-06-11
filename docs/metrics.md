@@ -23,12 +23,18 @@ Like the zio-metrics we follow Prometheus conventions. This means that:
 
 - durations are expressed in seconds,
 - counters can only increase,
-- metric names use snake_case and end in the unit where possible.
+- metric names use snake_case and end with the unit name where possible.
 
 The histograms each use 10 buckets. To reach a decent range while keeping sufficient accuracy at the low end, most
 bucket boundaries use an exponential series based on 𝑒.
 
 ## Zio-kafka consumer metrics
+
+To interpret the metrics you need to know how zio-kafka works internally.
+
+![](consumer-internals.svg)
+
+See the [tuning guide](consumer-tuning#using-metrics-to-tune-the-consumer) for more details on the internals.
 
 ### Poll metrics
 

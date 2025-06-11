@@ -3,7 +3,13 @@ id: consumer-tuning
 title: "Tuning the consumer"
 ---
 
-Zio-kafka's consumer can be tuned with the `ConsumerSettings` class. 
+Zio-kafka's consumer can be tuned for:
+
+* throughput
+* latency
+* memory usage
+
+All tuning is done via `ConsumerSettings`:
 
 ```scala
 val settings = ConsumerSettings(bootstrapServers)
@@ -11,6 +17,8 @@ val settings = ConsumerSettings(bootstrapServers)
   .withProperties(properties)
   .... etc.
 ```
+
+Read on for more details.
 
 ## Names
 
