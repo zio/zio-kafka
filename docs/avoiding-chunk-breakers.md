@@ -19,7 +19,7 @@ contain the words `This combinator destroys the chunking structure`.
 You can regain full throughput by processing all elements in a chunk together in one go. However, there is a catch: the
 order of processing changes. For example, given a stream with elements `a` and `b` in the same chunk, for
 `stream.mapZIO(f).mapZIO(g)` the evaluation order is `f(a), g(a), f(b), g(b)`. For the alternatives listed below the
-evaluation order changes to `f(a), f(b), g(a), g(b)`. Now imagine that `g(a)` fails, with `mapZIO` `f(b)` is not
+evaluation order changes to `f(a), f(b), g(a), g(b)`. Now imagine that `g(a)` fails, with `mapZIO`, `f(b)` is not
 executed, but with the alternatives it _is_ executed. It is up to you to decide if this is a problem.
 
 ### Use `mapZIOChunked`
@@ -69,7 +69,7 @@ stream                                         // ZStream[R, E, A]
 
 _Available since zio-streams 2.1.17._
 
-Unlike `tap', the `tapChunks' stream operator preserves the chunking structure and allows side effects per chunk.
+Unlike `tap`, the `tapChunks` stream operator preserves the chunking structure and allows side effects per chunk.
 
 ```scala
 stream                                                     // ZStream[R, E, A]
