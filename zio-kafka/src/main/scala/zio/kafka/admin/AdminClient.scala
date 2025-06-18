@@ -48,6 +48,7 @@ import org.apache.kafka.common.{
   TopicPartitionInfo => JTopicPartitionInfo,
   Uuid
 }
+import org.apache.kafka.common.utils.AppInfoParser
 import zio._
 import zio.kafka.admin.acl._
 import zio.kafka.utils.SslHelper
@@ -329,9 +330,13 @@ object AdminClient {
     private val adminClient: JAdmin
   ) extends AdminClient {
 
-    // workaround for https://issues.apache.org/jira/browse/KAFKA-18818
-    private val kafka18818Workaround: ZIO[Any, Nothing, Unit] =
-      ZIO.sleep(550.millis).unit
+    // Workaround for https://issues.apache.org/jira/browse/KAFKA-18818
+    // which was introduced in 4.0.0 and fixed in Kafka 4.1.0.
+    private val kafka18818Workaround: ZIO[Any, Nothing, Unit] = {
+      val kafkaVersion = AppInfoParser.getVersion
+      if (kafkaVersion.startsWith("4.0.")) ZIO.sleep(550.millis).unit
+      else ZIO.unit
+    }
 
     /**
      * Create multiple topics.
