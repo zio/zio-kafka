@@ -3,6 +3,9 @@ package zio.kafka.testkit
 import io.github.embeddedkafka.{ EmbeddedK, EmbeddedKafka, EmbeddedKafkaConfig }
 import zio._
 
+import java.io.IOException
+import java.net.ServerSocket
+
 trait Kafka {
   def bootstrapServers: List[String]
 
@@ -163,8 +166,31 @@ object Kafka {
 
   final case class Ports(kafkaPort: Int, controllerPort: Int)
 
-  private val ref = Ref.unsafe.make(Ports(6001, 7001))(Unsafe.unsafe)
+  private val ref = {
+    val p1 = findNextFreePort(2000 + scala.util.Random.nextInt(65000))
+    val p2 = findNextFreePort(p1 + 1)
+    Ref.unsafe.make(Ports(p1, p2))(Unsafe.unsafe)
+  }
 
   private val nextPorts: ZIO[Any, Nothing, Ports] =
-    ref.getAndUpdate(ports => Ports(ports.kafkaPort + 1, ports.controllerPort + 1))
+    ref.updateAndGet { ports =>
+      val p1 = findNextFreePort(ports.controllerPort + 1)
+      val p2 = findNextFreePort(p1 + 1)
+      Ports(p1, p2)
+    }
+
+  private def findNextFreePort(searchFrom: Int): Int =
+    Iterator
+      .from(searchFrom)
+      .find { attemptPort =>
+        try {
+          val s = new ServerSocket(attemptPort)
+          s.setReuseAddress(true)
+          s.close()
+          true
+        } catch {
+          case _: IOException => false
+        }
+      }
+      .getOrElse(throw new AssertionError("Could not get a free port!"))
 }
