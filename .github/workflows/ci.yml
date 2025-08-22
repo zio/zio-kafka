@@ -26,7 +26,7 @@ jobs:
     continue-on-error: true
     steps:
     - name: Git Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: '0'
     - name: Install libuv
@@ -53,7 +53,7 @@ jobs:
     continue-on-error: false
     steps:
     - name: Git Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: '0'
     - name: Install libuv
@@ -97,7 +97,7 @@ jobs:
     - name: Cache Dependencies
       uses: coursier/cache-action@v6
     - name: Git Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: '0'
     - name: Test
@@ -109,7 +109,7 @@ jobs:
     if: ${{ github.event_name == 'push' }}
     steps:
     - name: Git Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: '0'
     - name: Install libuv
@@ -185,7 +185,7 @@ jobs:
     if: ${{ github.event_name != 'pull_request' }}
     steps:
     - name: Git Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: '0'
     - name: Install libuv
@@ -216,7 +216,7 @@ jobs:
     if: ${{ ((github.event_name == 'release') && (github.event.action == 'published')) || (github.event_name == 'workflow_dispatch') }}
     steps:
     - name: Git Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: '0'
     - name: Install libuv
@@ -249,7 +249,7 @@ jobs:
     if: ${{ (github.event_name == 'release') && (github.event.action == 'published') }}
     steps:
     - name: Git Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: '0'
     - name: notify the main repo about the new release of docs package
