@@ -28,7 +28,7 @@ lazy val binCompatVersionToCompare =
       compatVersion
     }
 
-lazy val kafkaVersion         = "4.0.0"
+lazy val kafkaVersion         = "4.1.0"
 lazy val embeddedKafkaVersion = "4.0.1.1" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
