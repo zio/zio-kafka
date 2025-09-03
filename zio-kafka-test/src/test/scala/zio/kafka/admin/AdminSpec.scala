@@ -329,6 +329,9 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           invalidGroupIdOffsets.get(invalidGroupId).exists(_.isEmpty)
         )
       },
+      test("list group offsets") {
+        assertTrue(false) // TODO: implement this test
+      },
       test("delete consumer group offsets") {
 
         def consumeAndCommit(count: Long, topic: String, groupId: String) =

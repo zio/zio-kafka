@@ -8,7 +8,6 @@ import org.apache.kafka.clients.admin.{
   AlterConsumerGroupOffsetsOptions => JAlterConsumerGroupOffsetsOptions,
   Config => JConfig,
   ConsumerGroupDescription => JConsumerGroupDescription,
-  ConsumerGroupListing => JConsumerGroupListing,
   CreatePartitionsOptions => JCreatePartitionsOptions,
   CreateTopicsOptions => JCreateTopicsOptions,
   DeleteAclsOptions => _,
@@ -19,9 +18,10 @@ import org.apache.kafka.clients.admin.{
   DescribeConfigsOptions => JDescribeConfigsOptions,
   DescribeConsumerGroupsOptions => JDescribeConsumerGroupsOptions,
   DescribeTopicsOptions => JDescribeTopicsOptions,
+  GroupListing => JGroupListing,
   ListConsumerGroupOffsetsOptions => JListConsumerGroupOffsetsOptions,
   ListConsumerGroupOffsetsSpec => JListConsumerGroupOffsetsSpec,
-  ListConsumerGroupsOptions => JListConsumerGroupsOptions,
+  ListGroupsOptions => JListGroupsOptions,
   ListOffsetsOptions => JListOffsetsOptions,
   ListTopicsOptions => JListTopicsOptions,
   LogDirDescription => JLogDirDescription,
@@ -39,6 +39,7 @@ import org.apache.kafka.common.config.{ ConfigResource => JConfigResource }
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.{
   GroupState => JGroupState,
+  GroupType => JGroupType,
   IsolationLevel => JIsolationLevel,
   KafkaFuture,
   Metric => JMetric,
@@ -227,6 +228,11 @@ trait AdminClient {
    * List the consumer groups in the cluster.
    */
   def listConsumerGroups(options: Option[ListConsumerGroupsOptions] = None): Task[List[ConsumerGroupListing]]
+
+  /**
+   * List the groups in the cluster.
+   */
+  def listGroups(options: Option[ListGroupsOptions] = None): Task[List[GroupListing]]
 
   /**
    * Describe the specified consumer groups.
@@ -712,12 +718,32 @@ object AdminClient {
       options: Option[ListConsumerGroupsOptions] = None
     ): Task[List[ConsumerGroupListing]] =
       fromKafkaFuture {
-        ZIO.attempt(
-          options
-            .fold(adminClient.listConsumerGroups())(opts => adminClient.listConsumerGroups(opts.asJava))
-            .all()
-        )
+        ZIO.attempt {
+          val result = options match {
+            case None =>
+              adminClient.listGroups(JListGroupsOptions.forConsumerGroups())
+            case Some(opt) =>
+              adminClient.listGroups(opt.asJListGroupsOptions)
+          }
+          result.all()
+        }
       }.map(_.asScala.map(ConsumerGroupListing(_)).toList)
+
+    /**
+     * List the groups in the cluster.
+     */
+    override def listGroups(options: Option[ListGroupsOptions] = None): Task[List[GroupListing]] =
+      fromKafkaFuture {
+        ZIO.attempt {
+          val result = options match {
+            case None =>
+              adminClient.listGroups()
+            case Some(opts) =>
+              adminClient.listGroups(opts.asJava)
+          }
+          result.all()
+        }
+      }.map(_.asScala.map(GroupListing(_)).toList)
 
     /**
      * Describe the specified consumer groups.
@@ -1018,6 +1044,10 @@ object AdminClient {
       override def asJava: JGroupState = JGroupState.RECONCILING
     }
 
+    case object NotReady extends GroupState {
+      override def asJava: JGroupState = JGroupState.NOT_READY
+    }
+
     def apply(state: JGroupState): GroupState =
       state match {
         case JGroupState.UNKNOWN              => GroupState.Unknown
@@ -1028,6 +1058,38 @@ object AdminClient {
         case JGroupState.EMPTY                => GroupState.Empty
         case JGroupState.ASSIGNING            => GroupState.Assigning
         case JGroupState.RECONCILING          => GroupState.Reconciling
+        case JGroupState.NOT_READY            => GroupState.NotReady
+      }
+  }
+
+  sealed trait GroupType {
+    def asJava: JGroupType
+  }
+
+  object GroupType {
+    case object Unknown extends GroupType {
+      override def asJava = JGroupType.UNKNOWN
+    }
+    case object Consumer extends GroupType {
+      override def asJava = JGroupType.CONSUMER
+    }
+    case object Classic extends GroupType {
+      override def asJava = JGroupType.CLASSIC
+    }
+    case object Share extends GroupType {
+      override def asJava = JGroupType.SHARE
+    }
+    case object Streams extends GroupType {
+      override def asJava = JGroupType.STREAMS
+    }
+
+    def apply(groupType: JGroupType): GroupType =
+      groupType match {
+        case JGroupType.UNKNOWN  => GroupType.Unknown
+        case JGroupType.CONSUMER => GroupType.Consumer
+        case JGroupType.CLASSIC  => GroupType.Classic
+        case JGroupType.SHARE    => GroupType.Share
+        case JGroupType.STREAMS  => GroupType.Streams
       }
   }
 
@@ -1446,17 +1508,70 @@ object AdminClient {
   }
 
   final case class ListConsumerGroupsOptions(states: Set[GroupState]) {
-    def asJava: JListConsumerGroupsOptions = new JListConsumerGroupsOptions().inGroupStates(states.map(_.asJava).asJava)
+    def asJListGroupsOptions: JListGroupsOptions =
+      JListGroupsOptions.forConsumerGroups().inGroupStates(states.map(_.asJava).asJava)
   }
 
   final case class ConsumerGroupListing(groupId: String, isSimple: Boolean, state: Option[GroupState])
 
   object ConsumerGroupListing {
-    def apply(cg: JConsumerGroupListing): ConsumerGroupListing =
+    def apply(cg: JGroupListing): ConsumerGroupListing = {
+      val groupType = cg.`type`().toScala.map(GroupType(_))
+      assert(
+        groupType.contains(GroupType.Consumer),
+        s"ConsumerGroupListing used for group with type $groupType, expected the 'consumer' type"
+      )
       ConsumerGroupListing(
         groupId = cg.groupId(),
         isSimple = cg.isSimpleConsumerGroup,
         state = cg.groupState().toScala.map(GroupState(_))
+      )
+    }
+  }
+
+  final case class GroupListing(
+    groupId: String,
+    groupType: Option[GroupType],
+    protocol: String,
+    groupState: Option[GroupState]
+  ) {
+    def asJava: JGroupListing =
+      new JGroupListing(
+        groupId,
+        groupType.map(_.asJava).toJava,
+        protocol,
+        groupState.map(_.asJava).toJava
+      )
+  }
+
+  object GroupListing {
+    def apply(jgl: JGroupListing): GroupListing =
+      GroupListing(
+        jgl.groupId(),
+        jgl.`type`().toScala.map(GroupType(_)),
+        jgl.protocol(),
+        jgl.groupState().toScala.map(GroupState(_))
+      )
+  }
+
+  final case class ListGroupsOptions(
+    groupStates: Set[GroupState],
+    groupTypes: Set[GroupType],
+    protocolTypes: Set[String]
+  ) {
+    def asJava: JListGroupsOptions =
+      new JListGroupsOptions()
+        .inGroupStates(groupStates.map(_.asJava).asJava)
+        .withTypes(groupTypes.map(_.asJava).asJava)
+        .withProtocolTypes(protocolTypes.asJava)
+  }
+
+  object ListGroupsOptions {
+    def apply(lgo: JListGroupsOptions): ListGroupsOptions =
+      ListGroupsOptions(
+        lgo.groupStates().asScala.map(GroupState(_)).toSet,
+        lgo.types().asScala.map(GroupType(_)).toSet,
+        lgo.protocolTypes().asScala.toSet
       )
   }
 
