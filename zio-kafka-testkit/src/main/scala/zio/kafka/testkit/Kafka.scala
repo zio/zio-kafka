@@ -147,7 +147,7 @@ object Kafka {
         kafka <- ZIO.acquireRelease(
                    ZIO
                      .attemptBlocking(EmbeddedKafkaService(EmbeddedKafka.start()(embeddedKafkaConfig)))
-                     .catchNonFatalOrDie { e =>
+                     .catchAll { e =>
                        ZIO.fail(EmbeddedKafkaStartException("Failed to start embedded Kafka", e))
                      }
                  )(_.stop())
