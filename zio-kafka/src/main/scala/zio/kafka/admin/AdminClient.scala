@@ -450,7 +450,9 @@ object AdminClient {
         )
       }.flatMap { jTopicDescriptions =>
         ZIO.fromTry {
-          jTopicDescriptions.asScala.toList.forEach { case (k, v) => AdminClient.TopicDescription.fromJava(v).map(k -> _) }
+          jTopicDescriptions.asScala.toList.forEach { case (k, v) =>
+            AdminClient.TopicDescription.fromJava(v).map(k -> _)
+          }
             .map(_.toMap)
         }
       }
@@ -628,12 +630,11 @@ object AdminClient {
             )
             .partitionsToOffsetAndMetadata()
         )
+      }.map {
+        _.asScala.filter { case (_, om) => om ne null }
+          .bimap(TopicPartition.fromJava, OffsetAndMetadata.fromJava)
+          .toMap
       }
-        .map {
-          _.asScala
-            .filter { case (_, om) => om ne null }
-            .bimap(TopicPartition.fromJava, OffsetAndMetadata.fromJava).toMap
-        }
 
     /**
      * List the consumer group offsets available in the cluster for the specified consumer groups.
@@ -1260,7 +1261,8 @@ object AdminClient {
 
   final case class Metric(name: MetricName, metricValue: AnyRef)
   object Metric {
-    def fromJava(jm: JMetric): Metric = Metric(name = MetricName.fromJava(jmn = jm.metricName()), metricValue = jm.metricValue())
+    def fromJava(jm: JMetric): Metric =
+      Metric(name = MetricName.fromJava(jmn = jm.metricName()), metricValue = jm.metricValue())
   }
 
   final case class NewTopic(
@@ -1401,7 +1403,8 @@ object AdminClient {
   }
 
   object TopicPartition {
-    def fromJava(tp: JTopicPartition): TopicPartition = new TopicPartition(name = tp.topic(), partition = tp.partition())
+    def fromJava(tp: JTopicPartition): TopicPartition =
+      new TopicPartition(name = tp.topic(), partition = tp.partition())
   }
 
   sealed abstract class OffsetSpec {
@@ -1514,13 +1517,12 @@ object AdminClient {
   final case class ConsumerGroupListing(groupId: String, isSimple: Boolean, state: Option[GroupState])
 
   object ConsumerGroupListing {
-    def fromJava(cg: JGroupListing): ConsumerGroupListing = {
+    def fromJava(cg: JGroupListing): ConsumerGroupListing =
       ConsumerGroupListing(
         groupId = cg.groupId(),
         isSimple = cg.isSimpleConsumerGroup,
         state = cg.groupState().toScala.map(GroupState.fromJava)
       )
-    }
   }
 
   final case class GroupListing(

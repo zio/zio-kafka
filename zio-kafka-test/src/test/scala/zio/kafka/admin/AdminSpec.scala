@@ -280,8 +280,8 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           groupId   <- randomGroup
           _         <- consumeNoop(topicName, groupId, "consumer1", Some("instance1")).fork
           _         <- getStableConsumerGroupDescription(client, groupId)
-          list1      <- client.listConsumerGroups()
-          list2      <- client.listConsumerGroups(Some(ListConsumerGroupsOptions(Set(GroupState.Stable))))
+          list1     <- client.listConsumerGroups()
+          list2     <- client.listConsumerGroups(Some(ListConsumerGroupsOptions(Set(GroupState.Stable))))
         } yield assert(list1)(exists(hasField("groupId", _.groupId, equalTo(groupId)))) &&
           assert(list2)(exists(hasField("groupId", _.groupId, equalTo(groupId))))
       },
@@ -293,8 +293,8 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           groupId   <- randomGroup
           _         <- consumeNoop(topicName, groupId, "consumer1", Some("instance1")).fork
           _         <- getStableConsumerGroupDescription(client, groupId)
-          list1      <- client.listGroups()
-          list2      <- client.listGroups(Some(ListGroupsOptions(Set(GroupState.Stable))))
+          list1     <- client.listGroups()
+          list2     <- client.listGroups(Some(ListGroupsOptions(Set(GroupState.Stable))))
         } yield assert(list1)(exists(hasField("groupId", _.groupId, equalTo(groupId)))) &&
           assert(list2)(exists(hasField("groupId", _.groupId, equalTo(groupId))))
       },
