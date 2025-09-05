@@ -432,7 +432,7 @@ object AdminClient {
             .fold(adminClient.listTopics())(opts => adminClient.listTopics(opts.asJava))
             .namesToListings()
         )
-      }.map(_.asScala.map { case (k, v) => k -> TopicListing(v) }.toMap)
+      }.map(_.asScala.map { case (k, v) => k -> TopicListing.fromJava(v) }.toMap)
 
     /**
      * Describe the specified topics.
@@ -450,7 +450,7 @@ object AdminClient {
         )
       }.flatMap { jTopicDescriptions =>
         ZIO.fromTry {
-          jTopicDescriptions.asScala.toList.forEach { case (k, v) => AdminClient.TopicDescription(v).map(k -> _) }
+          jTopicDescriptions.asScala.toList.forEach { case (k, v) => AdminClient.TopicDescription.fromJava(v).map(k -> _) }
             .map(_.toMap)
         }
       }
@@ -472,7 +472,7 @@ object AdminClient {
         )
       }.map {
         _.asScala.view.map { case (configResource, config) =>
-          (ConfigResource(configResource), KafkaConfig(config))
+          (ConfigResource.fromJava(configResource), KafkaConfig.fromJava(config))
         }.toMap
       }
     }
@@ -494,10 +494,10 @@ object AdminClient {
         .map {
           _.asScala.view.map { case (configResource, configFuture) =>
             (
-              ConfigResource(configResource),
+              ConfigResource.fromJava(configResource),
               ZIO
                 .fromCompletionStage(configFuture.toCompletionStage)
-                .map(config => KafkaConfig(config))
+                .map(config => KafkaConfig.fromJava(config))
             )
 
           }.toMap
@@ -518,7 +518,7 @@ object AdminClient {
       ).flatMap { nodes =>
         ZIO.fromTry {
           nodes.asScala.toList.forEach { jNode =>
-            Node(jNode) match {
+            Node.fromJava(jNode) match {
               case Some(node) => Success(node)
               case None       => Failure(new RuntimeException("NoNode not expected when listing cluster nodes"))
             }
@@ -532,7 +532,7 @@ object AdminClient {
     override def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Option[Node]] =
       fromKafkaFuture(
         describeCluster(options).map(_.controller())
-      ).map(Node(_))
+      ).map(Node.fromJava)
 
     /**
      * Get the cluster id.
@@ -587,7 +587,7 @@ object AdminClient {
             .all()
         )
       }
-    }.map(_.asScala.bimap(TopicPartition(_), ListOffsetsResultInfo(_)).toMap)
+    }.map(_.asScala.bimap(TopicPartition.fromJava, ListOffsetsResultInfo.fromJava).toMap)
 
     /**
      * List offset for the specified partitions.
@@ -607,8 +607,8 @@ object AdminClient {
     }.map {
       _.view.map { case (topicPartition, listOffsetResultInfoFuture) =>
         (
-          TopicPartition(topicPartition),
-          ZIO.fromCompletionStage(listOffsetResultInfoFuture.toCompletionStage).map(ListOffsetsResultInfo(_))
+          TopicPartition.fromJava(topicPartition),
+          ZIO.fromCompletionStage(listOffsetResultInfoFuture.toCompletionStage).map(ListOffsetsResultInfo.fromJava)
         )
       }.toMap
     }
@@ -629,7 +629,11 @@ object AdminClient {
             .partitionsToOffsetAndMetadata()
         )
       }
-        .map(_.asScala.filter { case (_, om) => om ne null }.bimap(TopicPartition(_), OffsetAndMetadata(_)).toMap)
+        .map {
+          _.asScala
+            .filter { case (_, om) => om ne null }
+            .bimap(TopicPartition.fromJava, OffsetAndMetadata.fromJava).toMap
+        }
 
     /**
      * List the consumer group offsets available in the cluster for the specified consumer groups.
@@ -649,7 +653,7 @@ object AdminClient {
         _.asScala.map { case (groupId, offsets) =>
           groupId ->
             offsets.asScala.filter { case (_, om) => om ne null }
-              .bimap(TopicPartition(_), OffsetAndMetadata(_))
+              .bimap(TopicPartition.fromJava, OffsetAndMetadata.fromJava)
               .toMap
         }.toMap
       }
@@ -671,7 +675,7 @@ object AdminClient {
         _.asScala.map { case (groupId, offsets) =>
           groupId ->
             offsets.asScala.filter { case (_, om) => om ne null }
-              .bimap(TopicPartition(_), OffsetAndMetadata(_))
+              .bimap(TopicPartition.fromJava, OffsetAndMetadata.fromJava)
               .toMap
         }.toMap
       }
@@ -702,7 +706,7 @@ object AdminClient {
     override def metrics: Task[Map[MetricName, Metric]] =
       ZIO.attempt(
         adminClient.metrics().asScala.toMap.map { case (metricName, metric) =>
-          (MetricName(metricName), Metric(metric))
+          (MetricName.fromJava(metricName), Metric.fromJava(metric))
         }
       )
 
@@ -722,7 +726,7 @@ object AdminClient {
           }
           result.all()
         }
-      }.map(_.asScala.map(ConsumerGroupListing(_)).toList)
+      }.map(_.asScala.map(ConsumerGroupListing.fromJava).toList)
 
     /**
      * List the groups in the cluster.
@@ -738,7 +742,7 @@ object AdminClient {
           }
           result.all()
         }
-      }.map(_.asScala.map(GroupListing(_)).toList)
+      }.map(_.asScala.map(GroupListing.fromJava).toList)
 
     /**
      * Describe the specified consumer groups.
@@ -761,7 +765,7 @@ object AdminClient {
             )
             .all
         )
-      ).map(_.asScala.map { case (k, v) => k -> ConsumerGroupDescription(v) }.toMap)
+      ).map(_.asScala.map { case (k, v) => k -> ConsumerGroupDescription.fromJava(v) }.toMap)
 
     /**
      * Remove the specified members from a consumer group.
@@ -797,7 +801,7 @@ object AdminClient {
           adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).allDescriptions()
         )
       ).map {
-        _.asScala.bimap(_.intValue, _.asScala.bimap(identity, LogDirDescription(_)).toMap).toMap
+        _.asScala.bimap(_.intValue, _.asScala.bimap(identity, LogDirDescription.fromJava).toMap).toMap
       }
 
     /**
@@ -816,7 +820,7 @@ object AdminClient {
               brokerId.intValue(),
               ZIO
                 .fromCompletionStage(descriptionsFuture.toCompletionStage)
-                .map(_.asScala.toMap.map { case (k, v) => (k, LogDirDescription(v)) })
+                .map(_.asScala.toMap.map { case (k, v) => (k, LogDirDescription.fromJava(v)) })
             )
           }.toMap
         }
@@ -855,7 +859,7 @@ object AdminClient {
             .values()
         )
         .map(_.asScala.map { case (configResource, kf) =>
-          (ConfigResource(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
+          (ConfigResource.fromJava(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
         }.toMap)
 
     override def describeAcls(
@@ -958,8 +962,8 @@ object AdminClient {
   }
 
   object ConfigResource {
-    def apply(jcr: JConfigResource): ConfigResource =
-      ConfigResource(`type` = ConfigResourceType(jcrt = jcr.`type`()), name = jcr.name())
+    def fromJava(jcr: JConfigResource): ConfigResource =
+      ConfigResource(`type` = ConfigResourceType.fromJava(jcrt = jcr.`type`()), name = jcr.name())
   }
 
   trait ConfigResourceType {
@@ -991,7 +995,7 @@ object AdminClient {
       override def asJava = JConfigResource.Type.GROUP
     }
 
-    def apply(jcrt: JConfigResource.Type): ConfigResourceType =
+    def fromJava(jcrt: JConfigResource.Type): ConfigResourceType =
       jcrt match {
         case JConfigResource.Type.BROKER_LOGGER  => BrokerLogger
         case JConfigResource.Type.BROKER         => Broker
@@ -1043,7 +1047,7 @@ object AdminClient {
       override def asJava: JGroupState = JGroupState.NOT_READY
     }
 
-    def apply(state: JGroupState): GroupState =
+    def fromJava(state: JGroupState): GroupState =
       state match {
         case JGroupState.UNKNOWN              => GroupState.Unknown
         case JGroupState.PREPARING_REBALANCE  => GroupState.PreparingRebalance
@@ -1078,7 +1082,7 @@ object AdminClient {
       override def asJava = JGroupType.STREAMS
     }
 
-    def apply(groupType: JGroupType): GroupType =
+    def fromJava(groupType: JGroupType): GroupType =
       groupType match {
         case JGroupType.UNKNOWN  => GroupType.Unknown
         case JGroupType.CONSUMER => GroupType.Consumer
@@ -1097,13 +1101,13 @@ object AdminClient {
   )
 
   object MemberDescription {
-    def apply(desc: JMemberDescription): MemberDescription =
+    def fromJava(desc: JMemberDescription): MemberDescription =
       MemberDescription(
         consumerId = desc.consumerId,
         groupInstanceId = desc.groupInstanceId.toScala,
         clientId = desc.clientId(),
         host = desc.host(),
-        assignment = desc.assignment.topicPartitions().asScala.map(TopicPartition.apply).toSet
+        assignment = desc.assignment.topicPartitions().asScala.map(TopicPartition.fromJava).toSet
       )
   }
 
@@ -1119,14 +1123,14 @@ object AdminClient {
 
   object ConsumerGroupDescription {
 
-    def apply(description: JConsumerGroupDescription): ConsumerGroupDescription =
+    def fromJava(description: JConsumerGroupDescription): ConsumerGroupDescription =
       ConsumerGroupDescription(
         groupId = description.groupId,
         isSimpleConsumerGroup = description.isSimpleConsumerGroup,
-        members = description.members.asScala.map(MemberDescription.apply).toList,
+        members = description.members.asScala.map(MemberDescription.fromJava).toList,
         partitionAssignor = description.partitionAssignor,
-        state = GroupState(description.groupState),
-        coordinator = Node(description.coordinator()),
+        state = GroupState.fromJava(description.groupState),
+        coordinator = Node.fromJava(description.coordinator()),
         authorizedOperations = Option(description.authorizedOperations())
           .fold(Set.empty[AclOperation])(_.asScala.map(AclOperation.apply).toSet)
       )
@@ -1245,7 +1249,7 @@ object AdminClient {
 
   final case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
   object MetricName {
-    def apply(jmn: JMetricName): MetricName =
+    def fromJava(jmn: JMetricName): MetricName =
       MetricName(
         name = jmn.name(),
         group = jmn.group(),
@@ -1256,7 +1260,7 @@ object AdminClient {
 
   final case class Metric(name: MetricName, metricValue: AnyRef)
   object Metric {
-    def apply(jm: JMetric): Metric = Metric(name = MetricName(jmn = jm.metricName()), metricValue = jm.metricValue())
+    def fromJava(jm: JMetric): Metric = Metric(name = MetricName.fromJava(jmn = jm.metricName()), metricValue = jm.metricValue())
   }
 
   final case class NewTopic(
@@ -1298,7 +1302,7 @@ object AdminClient {
     lazy val asJava: JNode = new JNode(id, host.getOrElse(""), port.getOrElse(-1), rack.orNull)
   }
   object Node {
-    def apply(jNode: JNode): Option[Node] =
+    def fromJava(jNode: JNode): Option[Node] =
       Option(jNode)
         .filter(_.id() >= 0)
         .map { jNode =>
@@ -1319,10 +1323,10 @@ object AdminClient {
   )
 
   object TopicDescription {
-    def apply(jt: JTopicDescription): Try[TopicDescription] = {
+    def fromJava(jt: JTopicDescription): Try[TopicDescription] = {
       val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet).map(_.map(AclOperation.apply))
 
-      jt.partitions.asScala.toList.forEach(TopicPartitionInfo.apply).map { partitions =>
+      jt.partitions.asScala.toList.forEach(TopicPartitionInfo.fromJava).map { partitions =>
         TopicDescription(
           name = jt.name,
           internal = jt.isInternal,
@@ -1344,14 +1348,14 @@ object AdminClient {
   }
 
   object TopicPartitionInfo {
-    def apply(jtpi: JTopicPartitionInfo): Try[TopicPartitionInfo] = {
+    def fromJava(jtpi: JTopicPartitionInfo): Try[TopicPartitionInfo] = {
       val replicas: Try[List[Node]] =
         jtpi
           .replicas()
           .asScala
           .toList
           .forEach { jNode =>
-            Node(jNode) match {
+            Node.fromJava(jNode) match {
               case Some(node) => Success(node)
               case None       => Failure(new RuntimeException("NoNode node not expected among topic replicas"))
             }
@@ -1363,7 +1367,7 @@ object AdminClient {
           .asScala
           .toList
           .forEach { jNode =>
-            Node(jNode) match {
+            Node.fromJava(jNode) match {
               case Some(node) => Success(node)
               case None       => Failure(new RuntimeException("NoNode node not expected among topic in sync replicas"))
             }
@@ -1374,7 +1378,7 @@ object AdminClient {
         inSyncReplicas <- inSyncReplicas
       } yield TopicPartitionInfo(
         partition = jtpi.partition(),
-        leader = Node(jtpi.leader()),
+        leader = Node.fromJava(jtpi.leader()),
         replicas = replicas,
         isr = inSyncReplicas
       )
@@ -1386,7 +1390,7 @@ object AdminClient {
   }
 
   object TopicListing {
-    def apply(jtl: JTopicListing): TopicListing = TopicListing(jtl.name(), jtl.topicId(), jtl.isInternal)
+    def fromJava(jtl: JTopicListing): TopicListing = TopicListing(jtl.name(), jtl.topicId(), jtl.isInternal)
   }
 
   final case class TopicPartition(
@@ -1397,7 +1401,7 @@ object AdminClient {
   }
 
   object TopicPartition {
-    def apply(tp: JTopicPartition): TopicPartition = new TopicPartition(name = tp.topic(), partition = tp.partition())
+    def fromJava(tp: JTopicPartition): TopicPartition = new TopicPartition(name = tp.topic(), partition = tp.partition())
   }
 
   sealed abstract class OffsetSpec {
@@ -1455,7 +1459,7 @@ object AdminClient {
     leaderEpoch: Option[Int]
   )
   object ListOffsetsResultInfo {
-    def apply(lo: JListOffsetsResultInfo): ListOffsetsResultInfo =
+    def fromJava(lo: JListOffsetsResultInfo): ListOffsetsResultInfo =
       ListOffsetsResultInfo(lo.offset(), lo.timestamp(), lo.leaderEpoch().toScala.map(_.toInt))
   }
 
@@ -1487,7 +1491,7 @@ object AdminClient {
     def asJava: JOffsetAndMetadata = new JOffsetAndMetadata(offset, leaderEpoch.map(Int.box).toJava, metadata.orNull)
   }
   object OffsetAndMetadata {
-    def apply(om: JOffsetAndMetadata): OffsetAndMetadata =
+    def fromJava(om: JOffsetAndMetadata): OffsetAndMetadata =
       OffsetAndMetadata(
         offset = om.offset(),
         leaderEpoch = om.leaderEpoch().toScala.map(_.toInt),
@@ -1510,11 +1514,11 @@ object AdminClient {
   final case class ConsumerGroupListing(groupId: String, isSimple: Boolean, state: Option[GroupState])
 
   object ConsumerGroupListing {
-    def apply(cg: JGroupListing): ConsumerGroupListing = {
+    def fromJava(cg: JGroupListing): ConsumerGroupListing = {
       ConsumerGroupListing(
         groupId = cg.groupId(),
         isSimple = cg.isSimpleConsumerGroup,
-        state = cg.groupState().toScala.map(GroupState(_))
+        state = cg.groupState().toScala.map(GroupState.fromJava)
       )
     }
   }
@@ -1535,19 +1539,19 @@ object AdminClient {
   }
 
   object GroupListing {
-    def apply(jgl: JGroupListing): GroupListing =
+    def fromJava(jgl: JGroupListing): GroupListing =
       GroupListing(
         jgl.groupId(),
-        jgl.`type`().toScala.map(GroupType(_)),
+        jgl.`type`().toScala.map(GroupType.fromJava),
         jgl.protocol(),
-        jgl.groupState().toScala.map(GroupState(_))
+        jgl.groupState().toScala.map(GroupState.fromJava)
       )
   }
 
   final case class ListGroupsOptions(
-    groupStates: Set[GroupState],
-    groupTypes: Set[GroupType],
-    protocolTypes: Set[String]
+    groupStates: Set[GroupState] = Set.empty,
+    groupTypes: Set[GroupType] = Set.empty,
+    protocolTypes: Set[String] = Set.empty
   ) {
     def asJava: JListGroupsOptions =
       new JListGroupsOptions()
@@ -1557,10 +1561,10 @@ object AdminClient {
   }
 
   object ListGroupsOptions {
-    def apply(lgo: JListGroupsOptions): ListGroupsOptions =
+    def fromJava(lgo: JListGroupsOptions): ListGroupsOptions =
       ListGroupsOptions(
-        lgo.groupStates().asScala.map(GroupState(_)).toSet,
-        lgo.types().asScala.map(GroupType(_)).toSet,
+        lgo.groupStates().asScala.map(GroupState.fromJava).toSet,
+        lgo.types().asScala.map(GroupType.fromJava).toSet,
         lgo.protocolTypes().asScala.toSet
       )
   }
@@ -1569,22 +1573,22 @@ object AdminClient {
     def asJava: JConfig = new JConfig(entries.values.asJavaCollection)
   }
   object KafkaConfig {
-    def apply(jConfig: JConfig): KafkaConfig =
+    def fromJava(jConfig: JConfig): KafkaConfig =
       KafkaConfig(entries = jConfig.entries().asScala.map(e => e.name() -> e).toMap)
   }
 
   final case class LogDirDescription(error: ApiException, replicaInfos: Map[TopicPartition, ReplicaInfo])
   object LogDirDescription {
-    def apply(ld: JLogDirDescription): LogDirDescription =
+    def fromJava(ld: JLogDirDescription): LogDirDescription =
       LogDirDescription(
         error = ld.error(),
-        replicaInfos = ld.replicaInfos().asScala.bimap(TopicPartition(_), ReplicaInfo(_)).toMap
+        replicaInfos = ld.replicaInfos().asScala.bimap(TopicPartition.fromJava, ReplicaInfo.fromJava).toMap
       )
   }
 
   final case class ReplicaInfo(size: Long, offsetLag: Long, isFuture: Boolean)
   object ReplicaInfo {
-    def apply(ri: JReplicaInfo): ReplicaInfo =
+    def fromJava(ri: JReplicaInfo): ReplicaInfo =
       ReplicaInfo(size = ri.size(), offsetLag = ri.offsetLag(), isFuture = ri.isFuture)
   }
 
