@@ -1516,11 +1516,6 @@ object AdminClient {
 
   object ConsumerGroupListing {
     def apply(cg: JGroupListing): ConsumerGroupListing = {
-      val groupType = cg.`type`().toScala.map(GroupType(_))
-      assert(
-        groupType.contains(GroupType.Consumer),
-        s"ConsumerGroupListing used for group with type $groupType, expected the 'consumer' type"
-      )
       ConsumerGroupListing(
         groupId = cg.groupId(),
         isSimple = cg.isSimpleConsumerGroup,
