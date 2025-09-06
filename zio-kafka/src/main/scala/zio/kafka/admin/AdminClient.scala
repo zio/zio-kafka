@@ -1,64 +1,24 @@
 package zio.kafka.admin
 
-import org.apache.kafka.clients.admin.ListOffsetsResult.{ ListOffsetsResultInfo => JListOffsetsResultInfo }
 import org.apache.kafka.clients.admin.{
   Admin => JAdmin,
-  AlterConfigOp => JAlterConfigOp,
-  AlterConfigsOptions => JAlterConfigsOptions,
-  AlterConsumerGroupOffsetsOptions => JAlterConsumerGroupOffsetsOptions,
-  Config => JConfig,
-  ConsumerGroupDescription => JConsumerGroupDescription,
-  CreatePartitionsOptions => JCreatePartitionsOptions,
-  CreateTopicsOptions => JCreateTopicsOptions,
+  ConfigEntry,
   DeleteAclsOptions => _,
-  DeleteConsumerGroupsOptions => JDeleteConsumerGroupsOptions,
-  DeleteRecordsOptions => JDeleteRecordsOptions,
-  DeleteTopicsOptions => JDeleteTopicsOptions,
-  DescribeClusterOptions => JDescribeClusterOptions,
-  DescribeConfigsOptions => JDescribeConfigsOptions,
-  DescribeConsumerGroupsOptions => JDescribeConsumerGroupsOptions,
-  DescribeTopicsOptions => JDescribeTopicsOptions,
-  GroupListing => JGroupListing,
-  ListConsumerGroupOffsetsOptions => JListConsumerGroupOffsetsOptions,
-  ListConsumerGroupOffsetsSpec => JListConsumerGroupOffsetsSpec,
+  DescribeClusterResult,
   ListGroupsOptions => JListGroupsOptions,
-  ListOffsetsOptions => JListOffsetsOptions,
-  ListTopicsOptions => JListTopicsOptions,
-  LogDirDescription => JLogDirDescription,
-  MemberDescription => JMemberDescription,
-  NewPartitions => JNewPartitions,
-  NewTopic => JNewTopic,
-  OffsetSpec => JOffsetSpec,
-  ReplicaInfo => JReplicaInfo,
-  TopicDescription => JTopicDescription,
-  TopicListing => JTopicListing,
-  _
+  MemberToRemove,
+  RecordsToDelete,
+  RemoveMembersFromConsumerGroupOptions
 }
-import org.apache.kafka.clients.consumer.{ OffsetAndMetadata => JOffsetAndMetadata }
-import org.apache.kafka.common.config.{ ConfigResource => JConfigResource }
 import org.apache.kafka.common.errors.ApiException
-import org.apache.kafka.common.{
-  GroupState => JGroupState,
-  GroupType => JGroupType,
-  IsolationLevel => JIsolationLevel,
-  KafkaFuture,
-  Metric => JMetric,
-  MetricName => JMetricName,
-  Node => JNode,
-  TopicPartition => JTopicPartition,
-  TopicPartitionInfo => JTopicPartitionInfo,
-  Uuid
-}
+import org.apache.kafka.common.{ KafkaFuture, Uuid }
 import zio._
 import zio.kafka.admin.acl._
+import zio.kafka.admin.internal.JavaConverters._
 import zio.kafka.utils.SslHelper
 
-import java.util.Optional
-import scala.annotation.tailrec
-import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
-import scala.util.{ Failure, Success, Try }
+import scala.util.{ Failure, Success }
 
 /**
  * Admin client, can be used to create, list, delete topics, consumer groups, etc.
@@ -85,7 +45,7 @@ trait AdminClient {
    */
   def deleteConsumerGroups(
     groupIds: Iterable[String],
-    options: Option[DeleteConsumerGroupOptions] = None
+    options: Option[DeleteConsumerGroupsOptions] = None
   ): Task[Unit]
 
   /**
@@ -368,7 +328,7 @@ object AdminClient {
      */
     override def deleteConsumerGroups(
       groupIds: Iterable[String],
-      options: Option[DeleteConsumerGroupOptions]
+      options: Option[DeleteConsumerGroupsOptions]
     ): Task[Unit] = {
       val asJava = groupIds.asJavaCollection
       fromKafkaFutureVoid {
@@ -432,7 +392,7 @@ object AdminClient {
             .fold(adminClient.listTopics())(opts => adminClient.listTopics(opts.asJava))
             .namesToListings()
         )
-      }.map(_.asScala.map { case (k, v) => k -> TopicListing.fromJava(v) }.toMap)
+      }.map(_.asScala.map { case (k, v) => k -> v.asScala }.toMap)
 
     /**
      * Describe the specified topics.
@@ -451,7 +411,7 @@ object AdminClient {
       }.flatMap { jTopicDescriptions =>
         ZIO.fromTry {
           jTopicDescriptions.asScala.toList.forEach { case (k, v) =>
-            AdminClient.TopicDescription.fromJava(v).map(k -> _)
+            JTopicDescriptionAsScala(v).asScala.map(k -> _)
           }
             .map(_.toMap)
         }
@@ -474,7 +434,7 @@ object AdminClient {
         )
       }.map {
         _.asScala.view.map { case (configResource, config) =>
-          (ConfigResource.fromJava(configResource), KafkaConfig.fromJava(config))
+          (configResource.asScala, config.asScala)
         }.toMap
       }
     }
@@ -496,10 +456,10 @@ object AdminClient {
         .map {
           _.asScala.view.map { case (configResource, configFuture) =>
             (
-              ConfigResource.fromJava(configResource),
+              configResource.asScala,
               ZIO
                 .fromCompletionStage(configFuture.toCompletionStage)
-                .map(config => KafkaConfig.fromJava(config))
+                .map(config => config.asScala)
             )
 
           }.toMap
@@ -520,7 +480,7 @@ object AdminClient {
       ).flatMap { nodes =>
         ZIO.fromTry {
           nodes.asScala.toList.forEach { jNode =>
-            Node.fromJava(jNode) match {
+            jNode.asScala match {
               case Some(node) => Success(node)
               case None       => Failure(new RuntimeException("NoNode not expected when listing cluster nodes"))
             }
@@ -532,9 +492,7 @@ object AdminClient {
      * Get the cluster controller.
      */
     override def describeClusterController(options: Option[DescribeClusterOptions] = None): Task[Option[Node]] =
-      fromKafkaFuture(
-        describeCluster(options).map(_.controller())
-      ).map(Node.fromJava)
+      fromKafkaFuture(describeCluster(options).map(_.controller())).map(_.asScala)
 
     /**
      * Get the cluster id.
@@ -554,7 +512,7 @@ object AdminClient {
         res <- describeCluster(options)
         opt <- fromKafkaFuture(ZIO.attempt(res.authorizedOperations())).map(Option(_))
         lst <- ZIO.fromOption(opt.map(_.asScala.toSet)).orElseSucceed(Set.empty)
-        aclOperations = lst.map(AclOperation.apply)
+        aclOperations = lst.map(_.asScala)
       } yield aclOperations
 
     /**
@@ -589,7 +547,7 @@ object AdminClient {
             .all()
         )
       }
-    }.map(_.asScala.bimap(TopicPartition.fromJava, ListOffsetsResultInfo.fromJava).toMap)
+    }.map(_.asScala.bimap(_.asScala, _.asScala).toMap)
 
     /**
      * List offset for the specified partitions.
@@ -609,8 +567,8 @@ object AdminClient {
     }.map {
       _.view.map { case (topicPartition, listOffsetResultInfoFuture) =>
         (
-          TopicPartition.fromJava(topicPartition),
-          ZIO.fromCompletionStage(listOffsetResultInfoFuture.toCompletionStage).map(ListOffsetsResultInfo.fromJava)
+          topicPartition.asScala,
+          ZIO.fromCompletionStage(listOffsetResultInfoFuture.toCompletionStage).map(_.asScala)
         )
       }.toMap
     }
@@ -632,7 +590,7 @@ object AdminClient {
         )
       }.map {
         _.asScala.filter { case (_, om) => om ne null }
-          .bimap(TopicPartition.fromJava, OffsetAndMetadata.fromJava)
+          .bimap(_.asScala, _.asScala)
           .toMap
       }
 
@@ -654,7 +612,7 @@ object AdminClient {
         _.asScala.map { case (groupId, offsets) =>
           groupId ->
             offsets.asScala.filter { case (_, om) => om ne null }
-              .bimap(TopicPartition.fromJava, OffsetAndMetadata.fromJava)
+              .bimap(_.asScala, _.asScala)
               .toMap
         }.toMap
       }
@@ -676,7 +634,7 @@ object AdminClient {
         _.asScala.map { case (groupId, offsets) =>
           groupId ->
             offsets.asScala.filter { case (_, om) => om ne null }
-              .bimap(TopicPartition.fromJava, OffsetAndMetadata.fromJava)
+              .bimap(_.asScala, _.asScala)
               .toMap
         }.toMap
       }
@@ -707,7 +665,7 @@ object AdminClient {
     override def metrics: Task[Map[MetricName, Metric]] =
       ZIO.attempt(
         adminClient.metrics().asScala.toMap.map { case (metricName, metric) =>
-          (MetricName.fromJava(metricName), Metric.fromJava(metric))
+          (metricName.asScala, metric.asScala)
         }
       )
 
@@ -727,7 +685,7 @@ object AdminClient {
           }
           result.all()
         }
-      }.map(_.asScala.map(ConsumerGroupListing.fromJava).toList)
+      }.map(_.asScala.map(_.asConsumerGroupListing).toList)
 
     /**
      * List the groups in the cluster.
@@ -743,7 +701,7 @@ object AdminClient {
           }
           result.all()
         }
-      }.map(_.asScala.map(GroupListing.fromJava).toList)
+      }.map(_.asScala.map(_.asScala).toList)
 
     /**
      * Describe the specified consumer groups.
@@ -766,7 +724,7 @@ object AdminClient {
             )
             .all
         )
-      ).map(_.asScala.map { case (k, v) => k -> ConsumerGroupDescription.fromJava(v) }.toMap)
+      ).map(_.asScala.map { case (k, v) => k -> v.asScala }.toMap)
 
     /**
      * Remove the specified members from a consumer group.
@@ -802,7 +760,7 @@ object AdminClient {
           adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).allDescriptions()
         )
       ).map {
-        _.asScala.bimap(_.intValue, _.asScala.bimap(identity, LogDirDescription.fromJava).toMap).toMap
+        _.asScala.bimap(_.intValue, _.asScala.bimap(identity, _.asScala).toMap).toMap
       }
 
     /**
@@ -821,7 +779,7 @@ object AdminClient {
               brokerId.intValue(),
               ZIO
                 .fromCompletionStage(descriptionsFuture.toCompletionStage)
-                .map(_.asScala.toMap.map { case (k, v) => (k, LogDirDescription.fromJava(v)) })
+                .map(_.asScala.toMap.map { case (k, v) => (k, v.asScala) })
             )
           }.toMap
         }
@@ -860,7 +818,7 @@ object AdminClient {
             .values()
         )
         .map(_.asScala.map { case (configResource, kf) =>
-          (ConfigResource.fromJava(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
+          (configResource.asScala, ZIO.fromCompletionStage(kf.toCompletionStage).unit)
         }.toMap)
 
     override def describeAcls(
@@ -958,139 +916,38 @@ object AdminClient {
   def fromKafkaFutureVoid[R](kfv: RIO[R, KafkaFuture[Void]]): RIO[R, Unit] =
     fromKafkaFuture(kfv).unit
 
-  final case class ConfigResource(`type`: ConfigResourceType, name: String) {
-    lazy val asJava: JConfigResource = new JConfigResource(`type`.asJava, name)
-  }
+  final case class ConfigResource(`type`: ConfigResourceType, name: String)
 
-  object ConfigResource {
-    def fromJava(jcr: JConfigResource): ConfigResource =
-      ConfigResource(`type` = ConfigResourceType.fromJava(jcrt = jcr.`type`()), name = jcr.name())
-  }
-
-  trait ConfigResourceType {
-    def asJava: JConfigResource.Type
-  }
-
+  sealed trait ConfigResourceType
   object ConfigResourceType {
-    case object BrokerLogger extends ConfigResourceType {
-      override def asJava = JConfigResource.Type.BROKER_LOGGER
-    }
-
-    case object Broker extends ConfigResourceType {
-      override def asJava = JConfigResource.Type.BROKER
-    }
-
-    case object Topic extends ConfigResourceType {
-      override def asJava = JConfigResource.Type.TOPIC
-    }
-
-    case object Unknown extends ConfigResourceType {
-      override def asJava = JConfigResource.Type.UNKNOWN
-    }
-
-    case object ClientMetrics extends ConfigResourceType {
-      override def asJava = JConfigResource.Type.CLIENT_METRICS
-    }
-
-    case object Group extends ConfigResourceType {
-      override def asJava = JConfigResource.Type.GROUP
-    }
-
-    def fromJava(jcrt: JConfigResource.Type): ConfigResourceType =
-      jcrt match {
-        case JConfigResource.Type.BROKER_LOGGER  => BrokerLogger
-        case JConfigResource.Type.BROKER         => Broker
-        case JConfigResource.Type.TOPIC          => Topic
-        case JConfigResource.Type.UNKNOWN        => Unknown
-        case JConfigResource.Type.CLIENT_METRICS => ClientMetrics
-        case JConfigResource.Type.GROUP          => Group
-      }
+    case object BrokerLogger  extends ConfigResourceType
+    case object Broker        extends ConfigResourceType
+    case object Topic         extends ConfigResourceType
+    case object Unknown       extends ConfigResourceType
+    case object ClientMetrics extends ConfigResourceType
+    case object Group         extends ConfigResourceType
   }
 
-  sealed trait GroupState {
-    def asJava: JGroupState
-  }
-
+  sealed trait GroupState
   object GroupState {
-    case object Unknown extends GroupState {
-      override def asJava: JGroupState = JGroupState.UNKNOWN
-    }
-
-    case object PreparingRebalance extends GroupState {
-      override def asJava: JGroupState = JGroupState.PREPARING_REBALANCE
-    }
-
-    case object CompletingRebalance extends GroupState {
-      override def asJava: JGroupState = JGroupState.COMPLETING_REBALANCE
-    }
-
-    case object Stable extends GroupState {
-      override def asJava: JGroupState = JGroupState.STABLE
-    }
-
-    case object Dead extends GroupState {
-      override def asJava: JGroupState = JGroupState.DEAD
-    }
-
-    case object Empty extends GroupState {
-      override def asJava: JGroupState = JGroupState.EMPTY
-    }
-
-    case object Assigning extends GroupState {
-      override def asJava: JGroupState = JGroupState.ASSIGNING
-    }
-
-    case object Reconciling extends GroupState {
-      override def asJava: JGroupState = JGroupState.RECONCILING
-    }
-
-    case object NotReady extends GroupState {
-      override def asJava: JGroupState = JGroupState.NOT_READY
-    }
-
-    def fromJava(state: JGroupState): GroupState =
-      state match {
-        case JGroupState.UNKNOWN              => GroupState.Unknown
-        case JGroupState.PREPARING_REBALANCE  => GroupState.PreparingRebalance
-        case JGroupState.COMPLETING_REBALANCE => GroupState.CompletingRebalance
-        case JGroupState.STABLE               => GroupState.Stable
-        case JGroupState.DEAD                 => GroupState.Dead
-        case JGroupState.EMPTY                => GroupState.Empty
-        case JGroupState.ASSIGNING            => GroupState.Assigning
-        case JGroupState.RECONCILING          => GroupState.Reconciling
-        case JGroupState.NOT_READY            => GroupState.NotReady
-      }
+    case object Unknown             extends GroupState
+    case object PreparingRebalance  extends GroupState
+    case object CompletingRebalance extends GroupState
+    case object Stable              extends GroupState
+    case object Dead                extends GroupState
+    case object Empty               extends GroupState
+    case object Assigning           extends GroupState
+    case object Reconciling         extends GroupState
+    case object NotReady            extends GroupState
   }
 
-  sealed trait GroupType {
-    def asJava: JGroupType
-  }
-
+  sealed trait GroupType
   object GroupType {
-    case object Unknown extends GroupType {
-      override def asJava = JGroupType.UNKNOWN
-    }
-    case object Consumer extends GroupType {
-      override def asJava = JGroupType.CONSUMER
-    }
-    case object Classic extends GroupType {
-      override def asJava = JGroupType.CLASSIC
-    }
-    case object Share extends GroupType {
-      override def asJava = JGroupType.SHARE
-    }
-    case object Streams extends GroupType {
-      override def asJava = JGroupType.STREAMS
-    }
-
-    def fromJava(groupType: JGroupType): GroupType =
-      groupType match {
-        case JGroupType.UNKNOWN  => GroupType.Unknown
-        case JGroupType.CONSUMER => GroupType.Consumer
-        case JGroupType.CLASSIC  => GroupType.Classic
-        case JGroupType.SHARE    => GroupType.Share
-        case JGroupType.STREAMS  => GroupType.Streams
-      }
+    case object Unknown  extends GroupType
+    case object Consumer extends GroupType
+    case object Classic  extends GroupType
+    case object Share    extends GroupType
+    case object Streams  extends GroupType
   }
 
   final case class MemberDescription(
@@ -1100,17 +957,6 @@ object AdminClient {
     host: String,
     assignment: Set[TopicPartition]
   )
-
-  object MemberDescription {
-    def fromJava(desc: JMemberDescription): MemberDescription =
-      MemberDescription(
-        consumerId = desc.consumerId,
-        groupInstanceId = desc.groupInstanceId.toScala,
-        clientId = desc.clientId(),
-        host = desc.host(),
-        assignment = desc.assignment.topicPartitions().asScala.map(TopicPartition.fromJava).toSet
-      )
-  }
 
   final case class ConsumerGroupDescription(
     groupId: String,
@@ -1122,175 +968,49 @@ object AdminClient {
     authorizedOperations: Set[AclOperation]
   )
 
-  object ConsumerGroupDescription {
-
-    def fromJava(description: JConsumerGroupDescription): ConsumerGroupDescription =
-      ConsumerGroupDescription(
-        groupId = description.groupId,
-        isSimpleConsumerGroup = description.isSimpleConsumerGroup,
-        members = description.members.asScala.map(MemberDescription.fromJava).toList,
-        partitionAssignor = description.partitionAssignor,
-        state = GroupState.fromJava(description.groupState),
-        coordinator = Node.fromJava(description.coordinator()),
-        authorizedOperations = Option(description.authorizedOperations())
-          .fold(Set.empty[AclOperation])(_.asScala.map(AclOperation.apply).toSet)
-      )
-  }
-
   final case class CreatePartitionsOptions(
     validateOnly: Boolean = false,
     retryOnQuotaViolation: Boolean = true,
     timeout: Option[Duration]
-  ) {
-    def asJava: JCreatePartitionsOptions = {
-      val opts = new JCreatePartitionsOptions()
-        .validateOnly(validateOnly)
-        .retryOnQuotaViolation(retryOnQuotaViolation)
+  )
 
-      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
-
-  final case class CreateTopicsOptions(validateOnly: Boolean, timeout: Option[Duration]) {
-    def asJava: JCreateTopicsOptions = {
-      val opts = new JCreateTopicsOptions().validateOnly(validateOnly)
-      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
-
-  final case class DeleteConsumerGroupOptions(timeout: Option[Duration]) {
-    def asJava: JDeleteConsumerGroupsOptions = {
-      val opts = new JDeleteConsumerGroupsOptions()
-      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
-
-  final case class DeleteTopicsOptions(retryOnQuotaViolation: Boolean = true, timeout: Option[Duration]) {
-    def asJava: JDeleteTopicsOptions = {
-      val opts = new JDeleteTopicsOptions().retryOnQuotaViolation(retryOnQuotaViolation)
-      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
-
-  final case class ListTopicsOptions(listInternal: Boolean = false, timeout: Option[Duration]) {
-    def asJava: JListTopicsOptions = {
-      val opts = new JListTopicsOptions().listInternal(listInternal)
-      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
-
-  final case class DescribeTopicsOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
-    def asJava: JDescribeTopicsOptions = {
-      val opts = new JDescribeTopicsOptions().includeAuthorizedOperations(includeAuthorizedOperations)
-      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
-
+  final case class CreateTopicsOptions(validateOnly: Boolean, timeout: Option[Duration])
+  @deprecated(since = "3.1.0", message = "Use DeleteConsumerGroupsOptions")
+  type DeleteConsumerGroupOptions = DeleteConsumerGroupsOptions
+  final case class DeleteConsumerGroupsOptions(timeout: Option[Duration])
+  final case class DeleteTopicsOptions(retryOnQuotaViolation: Boolean = true, timeout: Option[Duration])
+  final case class ListTopicsOptions(listInternal: Boolean = false, timeout: Option[Duration])
+  final case class DescribeTopicsOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration])
   final case class DescribeConfigsOptions(
     includeSynonyms: Boolean = false,
     includeDocumentation: Boolean = false,
     timeout: Option[Duration]
-  ) {
-    def asJava: JDescribeConfigsOptions = {
-      val opts = new JDescribeConfigsOptions()
-        .includeSynonyms(includeSynonyms)
-        .includeDocumentation(includeDocumentation)
+  )
+  final case class DescribeClusterOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration])
+  final case class DescribeConsumerGroupsOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration])
+  final case class AlterConfigsOptions(validateOnly: Boolean = false, timeout: Option[Duration] = None)
+  final case class AlterConfigOp(configEntry: ConfigEntry, opType: AlterConfigOpType)
 
-      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
-
-  final case class DescribeClusterOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
-    lazy val asJava: JDescribeClusterOptions = {
-      val opts = new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
-      timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
-
-  final case class DescribeConsumerGroupsOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
-    lazy val asJava: JDescribeConsumerGroupsOptions = {
-      val jOpts = new JDescribeConsumerGroupsOptions()
-        .includeAuthorizedOperations(includeAuthorizedOperations)
-      timeout.fold(jOpts)(timeout => jOpts.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
-
-  final case class AlterConfigsOptions(validateOnly: Boolean = false, timeout: Option[Duration] = None) {
-    lazy val asJava: JAlterConfigsOptions = {
-      val jOpts = new JAlterConfigsOptions().validateOnly(validateOnly)
-      timeout.fold(jOpts)(timeout => jOpts.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
-
-  final case class AlterConfigOp(configEntry: ConfigEntry, opType: AlterConfigOpType) {
-    lazy val asJava: JAlterConfigOp = new JAlterConfigOp(configEntry, opType.asJava)
-  }
-
-  sealed trait AlterConfigOpType {
-    def asJava: JAlterConfigOp.OpType
-  }
-
+  sealed trait AlterConfigOpType
   object AlterConfigOpType {
-    case object Set extends AlterConfigOpType {
-      override def asJava = JAlterConfigOp.OpType.SET
-    }
-
-    case object Delete extends AlterConfigOpType {
-      override def asJava = JAlterConfigOp.OpType.DELETE
-    }
-
-    case object Append extends AlterConfigOpType {
-      override def asJava = JAlterConfigOp.OpType.APPEND
-    }
-
-    case object Substract extends AlterConfigOpType {
-      override def asJava = JAlterConfigOp.OpType.SUBTRACT
-    }
+    case object Set      extends AlterConfigOpType
+    case object Delete   extends AlterConfigOpType
+    case object Append   extends AlterConfigOpType
+    case object Subtract extends AlterConfigOpType
+    // noinspection SpellCheckingInspection
+    @deprecated(since = "3.1.0", message = "Use Subtract")
+    val Substract: Subtract.type = Subtract
   }
 
   final case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
-  object MetricName {
-    def fromJava(jmn: JMetricName): MetricName =
-      MetricName(
-        name = jmn.name(),
-        group = jmn.group(),
-        description = jmn.description(),
-        tags = jmn.tags().asScala.toMap
-      )
-  }
-
   final case class Metric(name: MetricName, metricValue: AnyRef)
-  object Metric {
-    def fromJava(jm: JMetric): Metric =
-      Metric(name = MetricName.fromJava(jmn = jm.metricName()), metricValue = jm.metricValue())
-  }
-
   final case class NewTopic(
     name: String,
     numPartitions: Int,
     replicationFactor: Short,
     configs: Map[String, String] = Map.empty
-  ) {
-    def asJava: JNewTopic = {
-      val jn = new JNewTopic(name, numPartitions, replicationFactor)
-
-      if (configs.nonEmpty) {
-        val _ = jn.configs(configs.asJava)
-      }
-
-      jn
-    }
-  }
-
-  final case class NewPartitions(
-    totalCount: Int,
-    newAssignments: List[List[Int]] = List.empty
-  ) {
-    def asJava: JNewPartitions =
-      if (newAssignments.nonEmpty)
-        JNewPartitions.increaseTo(totalCount, newAssignments.map(_.map(Int.box).asJava).asJava)
-      else JNewPartitions.increaseTo(totalCount)
-  }
+  )
+  final case class NewPartitions(totalCount: Int, newAssignments: List[List[Int]] = List.empty)
 
   /**
    * @param id
@@ -1300,22 +1020,7 @@ object AdminClient {
    * @param port
    *   can't be negative if present
    */
-  final case class Node(id: Int, host: Option[String], port: Option[Int], rack: Option[String] = None) {
-    lazy val asJava: JNode = new JNode(id, host.getOrElse(""), port.getOrElse(-1), rack.orNull)
-  }
-  object Node {
-    def fromJava(jNode: JNode): Option[Node] =
-      Option(jNode)
-        .filter(_.id() >= 0)
-        .map { jNode =>
-          Node(
-            id = jNode.id(),
-            host = Option(jNode.host()).filterNot(_.isEmpty),
-            port = Option(jNode.port()).filter(_ >= 0),
-            rack = Option(jNode.rack())
-          )
-        }
-  }
+  final case class Node(id: Int, host: Option[String], port: Option[Int], rack: Option[String] = None)
 
   final case class TopicDescription(
     name: String,
@@ -1324,275 +1029,66 @@ object AdminClient {
     authorizedOperations: Option[Set[AclOperation]]
   )
 
-  object TopicDescription {
-    def fromJava(jt: JTopicDescription): Try[TopicDescription] = {
-      val authorizedOperations = Option(jt.authorizedOperations).map(_.asScala.toSet).map(_.map(AclOperation.apply))
+  final case class TopicPartitionInfo(partition: Int, leader: Option[Node], replicas: List[Node], isr: List[Node])
+  final case class TopicListing(name: String, topicId: Uuid, isInternal: Boolean)
+  final case class TopicPartition(name: String, partition: Int)
 
-      jt.partitions.asScala.toList.forEach(TopicPartitionInfo.fromJava).map { partitions =>
-        TopicDescription(
-          name = jt.name,
-          internal = jt.isInternal,
-          partitions = partitions,
-          authorizedOperations = authorizedOperations
-        )
-      }
-    }
-  }
-
-  final case class TopicPartitionInfo(partition: Int, leader: Option[Node], replicas: List[Node], isr: List[Node]) {
-    lazy val asJava: JTopicPartitionInfo =
-      new JTopicPartitionInfo(
-        partition,
-        leader.map(_.asJava).getOrElse(JNode.noNode()),
-        replicas.map(_.asJava).asJava,
-        isr.map(_.asJava).asJava
-      )
-  }
-
-  object TopicPartitionInfo {
-    def fromJava(jtpi: JTopicPartitionInfo): Try[TopicPartitionInfo] = {
-      val replicas: Try[List[Node]] =
-        jtpi
-          .replicas()
-          .asScala
-          .toList
-          .forEach { jNode =>
-            Node.fromJava(jNode) match {
-              case Some(node) => Success(node)
-              case None       => Failure(new RuntimeException("NoNode node not expected among topic replicas"))
-            }
-          }
-
-      val inSyncReplicas: Try[List[Node]] =
-        jtpi
-          .isr()
-          .asScala
-          .toList
-          .forEach { jNode =>
-            Node.fromJava(jNode) match {
-              case Some(node) => Success(node)
-              case None       => Failure(new RuntimeException("NoNode node not expected among topic in sync replicas"))
-            }
-          }
-
-      for {
-        replicas       <- replicas
-        inSyncReplicas <- inSyncReplicas
-      } yield TopicPartitionInfo(
-        partition = jtpi.partition(),
-        leader = Node.fromJava(jtpi.leader()),
-        replicas = replicas,
-        isr = inSyncReplicas
-      )
-    }
-  }
-
-  final case class TopicListing(name: String, topicId: Uuid, isInternal: Boolean) {
-    def asJava: JTopicListing = new JTopicListing(name, topicId, isInternal)
-  }
-
-  object TopicListing {
-    def fromJava(jtl: JTopicListing): TopicListing = TopicListing(jtl.name(), jtl.topicId(), jtl.isInternal)
-  }
-
-  final case class TopicPartition(
-    name: String,
-    partition: Int
-  ) {
-    def asJava: JTopicPartition = new JTopicPartition(name, partition)
-  }
-
-  object TopicPartition {
-    def fromJava(tp: JTopicPartition): TopicPartition =
-      new TopicPartition(name = tp.topic(), partition = tp.partition())
-  }
-
-  sealed abstract class OffsetSpec {
-    def asJava: JOffsetSpec
-  }
-
+  sealed abstract class OffsetSpec
   object OffsetSpec {
-    case object EarliestSpec extends OffsetSpec {
-      override def asJava: JOffsetSpec = JOffsetSpec.earliest()
-    }
-
-    case object LatestSpec extends OffsetSpec {
-      override def asJava: JOffsetSpec = JOffsetSpec.latest()
-    }
-
-    final case class TimestampSpec(timestamp: Long) extends OffsetSpec {
-      override def asJava: JOffsetSpec = JOffsetSpec.forTimestamp(timestamp)
-    }
+    case object EarliestSpec                        extends OffsetSpec
+    case object LatestSpec                          extends OffsetSpec
+    final case class TimestampSpec(timestamp: Long) extends OffsetSpec
   }
 
-  sealed abstract class IsolationLevel {
-    def asJava: JIsolationLevel
-  }
-
+  sealed abstract class IsolationLevel
   object IsolationLevel {
-    case object ReadUncommitted extends IsolationLevel {
-      override def asJava: JIsolationLevel = JIsolationLevel.READ_UNCOMMITTED
-    }
-
-    case object ReadCommitted extends IsolationLevel {
-      override def asJava: JIsolationLevel = JIsolationLevel.READ_COMMITTED
-    }
+    case object ReadUncommitted extends IsolationLevel
+    case object ReadCommitted   extends IsolationLevel
   }
 
-  final case class DeleteRecordsOptions(timeout: Option[Duration]) {
-    def asJava: JDeleteRecordsOptions = {
-      val deleteRecordsOpt = new JDeleteRecordsOptions()
-      timeout.fold(deleteRecordsOpt)(timeout => deleteRecordsOpt.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
+  final case class DeleteRecordsOptions(timeout: Option[Duration])
 
   final case class ListOffsetsOptions(
     isolationLevel: IsolationLevel = IsolationLevel.ReadUncommitted,
     timeout: Option[Duration]
-  ) {
-    def asJava: JListOffsetsOptions = {
-      val offsetOpt = new JListOffsetsOptions(isolationLevel.asJava)
-      timeout.fold(offsetOpt)(timeout => offsetOpt.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
-
+  )
   final case class ListOffsetsResultInfo(
     offset: Long,
     timestamp: Long,
     leaderEpoch: Option[Int]
   )
-  object ListOffsetsResultInfo {
-    def fromJava(lo: JListOffsetsResultInfo): ListOffsetsResultInfo =
-      ListOffsetsResultInfo(lo.offset(), lo.timestamp(), lo.leaderEpoch().toScala.map(_.toInt))
-  }
-
-  final case class ListConsumerGroupOffsetsOptions(requireStable: Boolean) {
-    def asJava: JListConsumerGroupOffsetsOptions = {
-      val opts = new JListConsumerGroupOffsetsOptions()
-      opts.requireStable(requireStable)
-    }
-  }
-
-  object ListConsumerGroupOffsetsOptions {
-    def apply(requireStable: Boolean): ListConsumerGroupOffsetsOptions =
-      new ListConsumerGroupOffsetsOptions(requireStable)
-  }
-
-  final case class ListConsumerGroupOffsetsSpec(partitions: Chunk[TopicPartition]) {
-    def asJava: JListConsumerGroupOffsetsSpec = {
-      val opts = new JListConsumerGroupOffsetsSpec
-      opts.topicPartitions(partitions.map(_.asJava).asJava)
-      opts
-    }
-  }
+  final case class ListConsumerGroupOffsetsOptions(requireStable: Boolean)
+  final case class ListConsumerGroupOffsetsSpec(partitions: Chunk[TopicPartition])
 
   final case class OffsetAndMetadata(
     offset: Long,
     leaderEpoch: Option[Int] = None,
     metadata: Option[String] = None
-  ) {
-    def asJava: JOffsetAndMetadata = new JOffsetAndMetadata(offset, leaderEpoch.map(Int.box).toJava, metadata.orNull)
-  }
-  object OffsetAndMetadata {
-    def fromJava(om: JOffsetAndMetadata): OffsetAndMetadata =
-      OffsetAndMetadata(
-        offset = om.offset(),
-        leaderEpoch = om.leaderEpoch().toScala.map(_.toInt),
-        metadata = Some(om.metadata())
-      )
-  }
+  )
 
-  final case class AlterConsumerGroupOffsetsOptions(timeout: Option[Duration]) {
-    def asJava: JAlterConsumerGroupOffsetsOptions = {
-      val options = new JAlterConsumerGroupOffsetsOptions()
-      timeout.fold(options)(timeout => options.timeoutMs(timeout.toMillis.toInt))
-    }
-  }
-
-  final case class ListConsumerGroupsOptions(states: Set[GroupState]) {
-    def asJListGroupsOptions: JListGroupsOptions =
-      JListGroupsOptions.forConsumerGroups().inGroupStates(states.map(_.asJava).asJava)
-  }
+  final case class AlterConsumerGroupOffsetsOptions(timeout: Option[Duration])
+  final case class ListConsumerGroupsOptions(states: Set[GroupState])
 
   final case class ConsumerGroupListing(groupId: String, isSimple: Boolean, state: Option[GroupState])
-
-  object ConsumerGroupListing {
-    def fromJava(cg: JGroupListing): ConsumerGroupListing =
-      ConsumerGroupListing(
-        groupId = cg.groupId(),
-        isSimple = cg.isSimpleConsumerGroup,
-        state = cg.groupState().toScala.map(GroupState.fromJava)
-      )
-  }
 
   final case class GroupListing(
     groupId: String,
     groupType: Option[GroupType],
     protocol: String,
     groupState: Option[GroupState]
-  ) {
-    def asJava: JGroupListing =
-      new JGroupListing(
-        groupId,
-        groupType.map(_.asJava).toJava,
-        protocol,
-        groupState.map(_.asJava).toJava
-      )
-  }
-
-  object GroupListing {
-    def fromJava(jgl: JGroupListing): GroupListing =
-      GroupListing(
-        jgl.groupId(),
-        jgl.`type`().toScala.map(GroupType.fromJava),
-        jgl.protocol(),
-        jgl.groupState().toScala.map(GroupState.fromJava)
-      )
-  }
+  )
 
   final case class ListGroupsOptions(
     groupStates: Set[GroupState] = Set.empty,
     groupTypes: Set[GroupType] = Set.empty,
     protocolTypes: Set[String] = Set.empty
-  ) {
-    def asJava: JListGroupsOptions =
-      new JListGroupsOptions()
-        .inGroupStates(groupStates.map(_.asJava).asJava)
-        .withTypes(groupTypes.map(_.asJava).asJava)
-        .withProtocolTypes(protocolTypes.asJava)
-  }
+  )
 
-  object ListGroupsOptions {
-    def fromJava(lgo: JListGroupsOptions): ListGroupsOptions =
-      ListGroupsOptions(
-        lgo.groupStates().asScala.map(GroupState.fromJava).toSet,
-        lgo.types().asScala.map(GroupType.fromJava).toSet,
-        lgo.protocolTypes().asScala.toSet
-      )
-  }
-
-  final case class KafkaConfig(entries: Map[String, ConfigEntry]) {
-    def asJava: JConfig = new JConfig(entries.values.asJavaCollection)
-  }
-  object KafkaConfig {
-    def fromJava(jConfig: JConfig): KafkaConfig =
-      KafkaConfig(entries = jConfig.entries().asScala.map(e => e.name() -> e).toMap)
-  }
+  final case class KafkaConfig(entries: Map[String, ConfigEntry])
 
   final case class LogDirDescription(error: ApiException, replicaInfos: Map[TopicPartition, ReplicaInfo])
-  object LogDirDescription {
-    def fromJava(ld: JLogDirDescription): LogDirDescription =
-      LogDirDescription(
-        error = ld.error(),
-        replicaInfos = ld.replicaInfos().asScala.bimap(TopicPartition.fromJava, ReplicaInfo.fromJava).toMap
-      )
-  }
 
   final case class ReplicaInfo(size: Long, offsetLag: Long, isFuture: Boolean)
-  object ReplicaInfo {
-    def fromJava(ri: JReplicaInfo): ReplicaInfo =
-      ReplicaInfo(size = ri.size(), offsetLag = ri.offsetLag(), isFuture = ri.isFuture)
-  }
 
   def make(settings: AdminClientSettings): ZIO[Scope, Throwable, AdminClient] =
     fromScopedJavaClient(javaClientFromSettings(settings))
@@ -1615,36 +1111,4 @@ object AdminClient {
       endpointCheck *> ZIO.attempt(JAdmin.create(settings.driverSettings.asJava))
     }(client => ZIO.attempt(client.close(settings.closeTimeout)).orDie)
 
-  implicit final class MapOps[K1, V1](private val v: Map[K1, V1]) extends AnyVal {
-    def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): Map[K2, V2] = v.map { case (k, v) => fk(k) -> fv(v) }
-  }
-
-  implicit final class MutableMapOps[K1, V1](private val v: mutable.Map[K1, V1]) extends AnyVal {
-    def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): mutable.Map[K2, V2] = v.map { case (k, v) => fk(k) -> fv(v) }
-  }
-
-  implicit final class OptionalOps[T](private val v: Optional[T]) extends AnyVal {
-    def toScala: Option[T] = if (v.isPresent) Some(v.get()) else None
-  }
-
-  implicit final class OptionOps[T](private val v: Option[T]) extends AnyVal {
-    def toJava: Optional[T] = v.fold(Optional.empty[T])(Optional.of)
-  }
-
-  implicit final class ListOps[A](private val list: List[A]) extends AnyVal {
-    def forEach[B](f: A => Try[B]): Try[List[B]] = {
-      @tailrec
-      def loop(acc: ListBuffer[B], rest: List[A]): Try[List[B]] =
-        rest match {
-          case Nil => Success(acc.toList)
-          case h :: t =>
-            f(h) match {
-              case Success(b)        => loop(acc += b, t)
-              case fail @ Failure(_) => fail.asInstanceOf[Try[List[B]]]
-            }
-        }
-
-      loop(ListBuffer.empty, list)
-    }
-  }
 }
