@@ -52,6 +52,9 @@ object AclOperation {
   case object DescribeTokens extends AclOperation {
     def asJava: JAclOperation = JAclOperation.DESCRIBE_TOKENS
   }
+  case object TwoPhaseCommit extends AclOperation {
+    def asJava: JAclOperation = JAclOperation.TWO_PHASE_COMMIT
+  }
 
   def apply(jAclOperation: JAclOperation): AclOperation =
     jAclOperation match {
@@ -70,5 +73,6 @@ object AclOperation {
       case JAclOperation.IDEMPOTENT_WRITE => IdempotentWrite
       case JAclOperation.CREATE_TOKENS    => CreateTokens
       case JAclOperation.DESCRIBE_TOKENS  => DescribeTokens
+      case JAclOperation.TWO_PHASE_COMMIT => TwoPhaseCommit
     }
 }

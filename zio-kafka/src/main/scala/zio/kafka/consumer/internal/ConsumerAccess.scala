@@ -1,6 +1,6 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.{ Consumer => JConsumer, KafkaConsumer }
+import org.apache.kafka.clients.consumer.{ CloseOptions, Consumer => JConsumer, KafkaConsumer }
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import zio._
@@ -60,7 +60,11 @@ private[consumer] object ConsumerAccess {
                       )
                     }
                   } { consumer =>
-                    ZIO.blocking(access.withPermit(ZIO.attempt(consumer.close(settings.closeTimeout)))).orDie
+                    ZIO.blocking {
+                      access.withPermit {
+                        ZIO.attempt(consumer.close(CloseOptions.timeout(settings.closeTimeout)))
+                      }
+                    }.orDie
                   }
     } yield new ConsumerAccess(consumer, access)
 }

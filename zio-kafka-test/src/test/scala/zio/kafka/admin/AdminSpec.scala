@@ -16,6 +16,7 @@ import zio.kafka.admin.AdminClient.{
   GroupState,
   ListConsumerGroupOffsetsSpec,
   ListConsumerGroupsOptions,
+  ListGroupsOptions,
   OffsetAndMetadata,
   OffsetSpec,
   TopicPartition
@@ -279,8 +280,23 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           groupId   <- randomGroup
           _         <- consumeNoop(topicName, groupId, "consumer1", Some("instance1")).fork
           _         <- getStableConsumerGroupDescription(client, groupId)
-          list      <- client.listConsumerGroups(Some(ListConsumerGroupsOptions(Set(GroupState.Stable))))
-        } yield assert(list)(exists(hasField("groupId", _.groupId, equalTo(groupId))))
+          list1     <- client.listConsumerGroups()
+          list2     <- client.listConsumerGroups(Some(ListConsumerGroupsOptions(Set(GroupState.Stable))))
+        } yield assert(list1)(exists(hasField("groupId", _.groupId, equalTo(groupId)))) &&
+          assert(list2)(exists(hasField("groupId", _.groupId, equalTo(groupId))))
+      },
+      test("list groups") {
+        for {
+          topicName <- randomTopic
+          client    <- KafkaTestUtils.makeAdminClient
+          _         <- client.createTopic(AdminClient.NewTopic(topicName, numPartitions = 10, replicationFactor = 1))
+          groupId   <- randomGroup
+          _         <- consumeNoop(topicName, groupId, "consumer1", Some("instance1")).fork
+          _         <- getStableConsumerGroupDescription(client, groupId)
+          list1     <- client.listGroups()
+          list2     <- client.listGroups(Some(ListGroupsOptions(Set(GroupState.Stable))))
+        } yield assert(list1)(exists(hasField("groupId", _.groupId, equalTo(groupId)))) &&
+          assert(list2)(exists(hasField("groupId", _.groupId, equalTo(groupId))))
       },
       test("list consumer group offsets") {
 
@@ -424,28 +440,28 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         )
       },
       test("should correctly handle no node (null) when converting JNode to Node") {
-        assert(AdminClient.Node.apply(null))(isNone)
+        assert(AdminClient.Node.fromJava(null))(isNone)
       },
       test("should correctly handle noNode when converting JNode to Node") {
-        assert(AdminClient.Node.apply(JNode.noNode()))(isNone)
+        assert(AdminClient.Node.fromJava(JNode.noNode()))(isNone)
       },
       test("should correctly keep all information when converting a valid jNode to Node") {
         val posIntGen = Gen.int(0, Int.MaxValue)
         check(posIntGen, Gen.string1(Gen.char), posIntGen, Gen.option(Gen.string)) { (id, host, port, rack) =>
           val jNode = new JNode(id, host, port, rack.orNull)
-          assertTrue(AdminClient.Node.apply(jNode).map(_.asJava) == Some(jNode))
+          assertTrue(AdminClient.Node.fromJava(jNode).map(_.asJava) == Some(jNode))
         }
       },
       test("will replace invalid port by None") {
         val posIntGen = Gen.int(0, Int.MaxValue)
         check(posIntGen, Gen.string1(Gen.char), Gen.int, Gen.option(Gen.string)) { (id, host, port, rack) =>
           val jNode = new JNode(id, host, port, rack.orNull)
-          assertTrue(AdminClient.Node.apply(jNode).map(_.port.isEmpty) == Some(port < 0))
+          assertTrue(AdminClient.Node.fromJava(jNode).map(_.port.isEmpty) == Some(port < 0))
         }
       },
       test("will replace empty host by None") {
         val jNode = new JNode(0, "", 9092, null)
-        assertTrue(AdminClient.Node.apply(jNode).map(_.host.isEmpty) == Some(true))
+        assertTrue(AdminClient.Node.fromJava(jNode).map(_.host.isEmpty) == Some(true))
       },
       test("incremental alter configs") {
         for {
@@ -468,10 +484,12 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
           val deleteRetentionMsConfig =
             updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
-          assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
-          assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
-          assert(deleteRetentionMsConfig.map(_.value()))(isSome(equalTo("604800000"))) &&
-          assert(deleteRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DEFAULT_CONFIG)))
+          assertTrue(
+            updatedRetentionMsConfig.map(_.value()).get == "1",
+            updatedRetentionMsConfig.map(_.source()).get == ConfigSource.DYNAMIC_TOPIC_CONFIG,
+            deleteRetentionMsConfig.map(_.value()).get == "604800000",
+            deleteRetentionMsConfig.map(_.source()).get == ConfigSource.DEFAULT_CONFIG
+          )
         }
       },
       test("incremental alter configs async") {
@@ -509,12 +527,14 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             updatedConfigsWithUpdate.get(configResource).flatMap(_.entries.get("retention.ms"))
           val deleteRetentionMsConfig =
             updatedConfigsWithDelete.get(configResource).flatMap(_.entries.get("retention.ms"))
-          assert(updatedRetentionMsConfig.map(_.value()))(isSome(equalTo("1"))) &&
-          assert(updatedRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DYNAMIC_TOPIC_CONFIG))) &&
-          assert(deleteRetentionMsConfig.map(_.value()))(isSome(equalTo("604800000"))) &&
-          assert(deleteRetentionMsConfig.map(_.source()))(isSome(equalTo(ConfigSource.DEFAULT_CONFIG))) &&
-          assert(setResult)(equalTo(Map((configResource, ())))) &&
-          assert(deleteResult)(equalTo(Map((configResource, ()))))
+          assertTrue(
+            updatedRetentionMsConfig.map(_.value()).get == "1",
+            updatedRetentionMsConfig.map(_.source()).get == ConfigSource.DYNAMIC_TOPIC_CONFIG,
+            deleteRetentionMsConfig.map(_.value()).get == "604800000",
+            deleteRetentionMsConfig.map(_.source()).get == ConfigSource.DEFAULT_CONFIG,
+            setResult == Map((configResource, ())),
+            deleteResult == Map((configResource, ()))
+          )
         }
       },
       test("ACLs") {
