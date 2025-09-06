@@ -1,5 +1,6 @@
 package zio.kafka.admin.acl
 
+import zio.kafka.admin.internal.JavaConverters._
 import org.apache.kafka.common.acl.{ AccessControlEntryFilter => JAccessControlEntryFilter }
 
 final case class AccessControlEntryFilter(
@@ -18,7 +19,7 @@ object AccessControlEntryFilter {
   def apply(jAccessControlEntryFilter: JAccessControlEntryFilter): AccessControlEntryFilter = AccessControlEntryFilter(
     principal = jAccessControlEntryFilter.principal(),
     host = jAccessControlEntryFilter.host(),
-    operation = AclOperation(jAccessControlEntryFilter.operation()),
+    operation = jAccessControlEntryFilter.operation().asScala,
     permissionType = AclPermissionType(jAccessControlEntryFilter.permissionType())
   )
 }
