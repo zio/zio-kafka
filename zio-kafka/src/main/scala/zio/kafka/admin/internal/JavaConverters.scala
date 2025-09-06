@@ -92,15 +92,15 @@ object JavaConverters {
     }
   }
 
-  implicit class ConfigResourceAsJava(val cr: ConfigResource) extends AnyVal {
+  implicit class ConfigResourceAsJava(private val cr: ConfigResource) extends AnyVal {
     def asJava: JConfigResource = new JConfigResource(cr.`type`.asJava, cr.name)
   }
-  implicit class JConfigResourceAsScala(val jcr: JConfigResource) extends AnyVal {
+  implicit class JConfigResourceAsScala(private val jcr: JConfigResource) extends AnyVal {
     def asScala: ConfigResource =
       ConfigResource(`type` = jcr.`type`().asScala, name = jcr.name())
   }
 
-  implicit class ConfigResourceTypeAsJava(val crt: ConfigResourceType) extends AnyVal {
+  implicit class ConfigResourceTypeAsJava(private val crt: ConfigResourceType) extends AnyVal {
     def asJava: JConfigResource.Type =
       crt match {
         case ConfigResourceType.BrokerLogger  => JConfigResource.Type.BROKER_LOGGER
@@ -111,7 +111,7 @@ object JavaConverters {
         case ConfigResourceType.Group         => JConfigResource.Type.GROUP
       }
   }
-  implicit class JConfigResourceTypeAsScala(val jcrt: JConfigResource.Type) extends AnyVal {
+  implicit class JConfigResourceTypeAsScala(private val jcrt: JConfigResource.Type) extends AnyVal {
     def asScala: ConfigResourceType =
       jcrt match {
         case JConfigResource.Type.BROKER_LOGGER  => ConfigResourceType.BrokerLogger
@@ -123,7 +123,7 @@ object JavaConverters {
       }
   }
 
-  implicit class GroupStateAsJava(val gs: GroupState) extends AnyVal {
+  implicit class GroupStateAsJava(private val gs: GroupState) extends AnyVal {
     def asJava: JGroupState =
       gs match {
         case GroupState.Unknown             => JGroupState.UNKNOWN
@@ -137,7 +137,7 @@ object JavaConverters {
         case GroupState.NotReady            => JGroupState.NOT_READY
       }
   }
-  implicit class JGroupStateAsScala(val jgs: JGroupState) extends AnyVal {
+  implicit class JGroupStateAsScala(private val jgs: JGroupState) extends AnyVal {
     def asScala: GroupState =
       jgs match {
         case JGroupState.UNKNOWN              => GroupState.Unknown
@@ -152,7 +152,7 @@ object JavaConverters {
       }
   }
 
-  implicit class GroupTypeAsJava(val gt: GroupType) extends AnyVal {
+  implicit class GroupTypeAsJava(private val gt: GroupType) extends AnyVal {
     def asJava: JGroupType =
       gt match {
         case GroupType.Unknown  => JGroupType.UNKNOWN
@@ -162,7 +162,7 @@ object JavaConverters {
         case GroupType.Streams  => JGroupType.STREAMS
       }
   }
-  implicit class JGroupTypeAsScale(val jgt: JGroupType) extends AnyVal {
+  implicit class JGroupTypeAsScale(private val jgt: JGroupType) extends AnyVal {
     def asScala: GroupType =
       jgt match {
         case JGroupType.UNKNOWN  => GroupType.Unknown
@@ -173,7 +173,7 @@ object JavaConverters {
       }
   }
 
-  implicit class JMemberDescriptionAsScala(val jmd: JMemberDescription) extends AnyVal {
+  implicit class JMemberDescriptionAsScala(private val jmd: JMemberDescription) extends AnyVal {
     def asScala: MemberDescription =
       MemberDescription(
         consumerId = jmd.consumerId,
@@ -184,7 +184,7 @@ object JavaConverters {
       )
   }
 
-  implicit class JConsumerGroupDescriptionAsScala(val description: JConsumerGroupDescription) extends AnyVal {
+  implicit class JConsumerGroupDescriptionAsScala(private val description: JConsumerGroupDescription) extends AnyVal {
     def asScala: ConsumerGroupDescription =
       ConsumerGroupDescription(
         groupId = description.groupId,
@@ -198,7 +198,7 @@ object JavaConverters {
       )
   }
 
-  implicit class CreatePartitionsOptionsAsJava(val cpo: CreatePartitionsOptions) extends AnyVal {
+  implicit class CreatePartitionsOptionsAsJava(private val cpo: CreatePartitionsOptions) extends AnyVal {
     def asJava: JCreatePartitionsOptions = {
       val opts = new JCreatePartitionsOptions()
         .validateOnly(cpo.validateOnly)
@@ -207,42 +207,42 @@ object JavaConverters {
     }
   }
 
-  implicit class CreateTopicsOptionsAsJava(val cto: CreateTopicsOptions) extends AnyVal {
+  implicit class CreateTopicsOptionsAsJava(private val cto: CreateTopicsOptions) extends AnyVal {
     def asJava: JCreateTopicsOptions = {
       val opts = new JCreateTopicsOptions().validateOnly(cto.validateOnly)
       cto.timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  implicit class DeleteConsumerGroupsOptionsAsJava(val cto: DeleteConsumerGroupsOptions) extends AnyVal {
+  implicit class DeleteConsumerGroupsOptionsAsJava(private val cto: DeleteConsumerGroupsOptions) extends AnyVal {
     def asJava: JDeleteConsumerGroupsOptions = {
       val opts = new JDeleteConsumerGroupsOptions()
       cto.timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  implicit class DeleteTopicsOptionsAsJava(val dto: DeleteTopicsOptions) extends AnyVal {
+  implicit class DeleteTopicsOptionsAsJava(private val dto: DeleteTopicsOptions) extends AnyVal {
     def asJava: JDeleteTopicsOptions = {
       val opts = new JDeleteTopicsOptions().retryOnQuotaViolation(dto.retryOnQuotaViolation)
       dto.timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  implicit class ListTopicsOptionsAsJava(val lto: ListTopicsOptions) extends AnyVal {
+  implicit class ListTopicsOptionsAsJava(private val lto: ListTopicsOptions) extends AnyVal {
     def asJava: JListTopicsOptions = {
       val opts = new JListTopicsOptions().listInternal(lto.listInternal)
       lto.timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  implicit class DescribeTopicsOptionsAsJava(val dto: DescribeTopicsOptions) extends AnyVal {
+  implicit class DescribeTopicsOptionsAsJava(private val dto: DescribeTopicsOptions) extends AnyVal {
     def asJava: JDescribeTopicsOptions = {
       val opts = new JDescribeTopicsOptions().includeAuthorizedOperations(dto.includeAuthorizedOperations)
       dto.timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  implicit class DescribeConfigsOptionsAsJava(val dco: DescribeConfigsOptions) extends AnyVal {
+  implicit class DescribeConfigsOptionsAsJava(private val dco: DescribeConfigsOptions) extends AnyVal {
     def asJava: JDescribeConfigsOptions = {
       val opts = new JDescribeConfigsOptions()
         .includeSynonyms(dco.includeSynonyms)
@@ -251,14 +251,14 @@ object JavaConverters {
     }
   }
 
-  implicit class DescribeClusterOptionsAsJava(val dco: DescribeClusterOptions) extends AnyVal {
+  implicit class DescribeClusterOptionsAsJava(private val dco: DescribeClusterOptions) extends AnyVal {
     def asJava: JDescribeClusterOptions = {
       val opts = new JDescribeClusterOptions().includeAuthorizedOperations(dco.includeAuthorizedOperations)
       dco.timeout.fold(opts)(timeout => opts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  implicit class DescribeConsumerGroupsOptionsAsJava(val dcgo: DescribeConsumerGroupsOptions) extends AnyVal {
+  implicit class DescribeConsumerGroupsOptionsAsJava(private val dcgo: DescribeConsumerGroupsOptions) extends AnyVal {
     def asJava: JDescribeConsumerGroupsOptions = {
       val jOpts = new JDescribeConsumerGroupsOptions()
         .includeAuthorizedOperations(dcgo.includeAuthorizedOperations)
@@ -266,18 +266,18 @@ object JavaConverters {
     }
   }
 
-  implicit class AlterConfigsOptionsAsJava(val aco: AlterConfigsOptions) extends AnyVal {
+  implicit class AlterConfigsOptionsAsJava(private val aco: AlterConfigsOptions) extends AnyVal {
     def asJava: JAlterConfigsOptions = {
       val jOpts = new JAlterConfigsOptions().validateOnly(aco.validateOnly)
       aco.timeout.fold(jOpts)(timeout => jOpts.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  implicit class AlterConfigOpAsJava(val aco: AlterConfigOp) extends AnyVal {
+  implicit class AlterConfigOpAsJava(private val aco: AlterConfigOp) extends AnyVal {
     def asJava: JAlterConfigOp = new JAlterConfigOp(aco.configEntry, aco.opType.asJava)
   }
 
-  implicit class AlterConfigOpTypeAsJava(val acot: AlterConfigOpType) extends AnyVal {
+  implicit class AlterConfigOpTypeAsJava(private val acot: AlterConfigOpType) extends AnyVal {
     def asJava: JAlterConfigOp.OpType =
       acot match {
         case AlterConfigOpType.Set      => JAlterConfigOp.OpType.SET
@@ -287,7 +287,7 @@ object JavaConverters {
       }
   }
 
-  implicit class JMetricNameAsScala(val jmn: JMetricName) extends AnyVal {
+  implicit class JMetricNameAsScala(private val jmn: JMetricName) extends AnyVal {
     def asScala: MetricName =
       MetricName(
         name = jmn.name(),
@@ -297,12 +297,12 @@ object JavaConverters {
       )
   }
 
-  implicit class JMetricAsScala(val jm: JMetric) extends AnyVal {
+  implicit class JMetricAsScala(private val jm: JMetric) extends AnyVal {
     def asScala: Metric =
       Metric(name = jm.metricName().asScala, metricValue = jm.metricValue())
   }
 
-  implicit class NewTopicAsJava(val nt: NewTopic) extends AnyVal {
+  implicit class NewTopicAsJava(private val nt: NewTopic) extends AnyVal {
     def asJava: JNewTopic = {
       val jn = new JNewTopic(nt.name, nt.numPartitions, nt.replicationFactor)
 
@@ -314,13 +314,13 @@ object JavaConverters {
     }
   }
 
-  implicit class NewPartitionsAsJava(val np: NewPartitions) extends AnyVal {
+  implicit class NewPartitionsAsJava(private val np: NewPartitions) extends AnyVal {
     def asJava: JNewPartitions =
       if (np.newAssignments.isEmpty) JNewPartitions.increaseTo(np.totalCount)
       else JNewPartitions.increaseTo(np.totalCount, np.newAssignments.map(_.map(Int.box).asJava).asJava)
   }
 
-  implicit class NodeAsJava(val n: Node) extends AnyVal {
+  implicit class NodeAsJava(private val n: Node) extends AnyVal {
     def asJava: JNode = new JNode(n.id, n.host.getOrElse(""), n.port.getOrElse(-1), n.rack.orNull)
   }
 
@@ -328,7 +328,7 @@ object JavaConverters {
    * @param jn
    *   may be null
    */
-  implicit class JNodeAsScala(val jn: JNode) extends AnyVal {
+  implicit class JNodeAsScala(private val jn: JNode) extends AnyVal {
     def asScala: Option[Node] =
       Option(jn)
         .filter(_.id() >= 0)
@@ -342,7 +342,7 @@ object JavaConverters {
         }
   }
 
-  implicit class JTopicDescriptionAsScala(val td: JTopicDescription) extends AnyVal {
+  implicit class JTopicDescriptionAsScala(private val td: JTopicDescription) extends AnyVal {
     def asScala: Try[TopicDescription] = {
       val authorizedOperations = Option(td.authorizedOperations).map(_.asScala.toSet).map(_.map(_.asScala))
 
@@ -357,7 +357,7 @@ object JavaConverters {
     }
   }
 
-  implicit class TopicPartitionInfoAsJava(val tpi: TopicPartitionInfo) extends AnyVal {
+  implicit class TopicPartitionInfoAsJava(private val tpi: TopicPartitionInfo) extends AnyVal {
     def asJava: JTopicPartitionInfo =
       new JTopicPartitionInfo(
         tpi.partition,
@@ -366,7 +366,7 @@ object JavaConverters {
         tpi.isr.map(_.asJava).asJava
       )
   }
-  implicit class JTopicPartitionInfoAsScala(val jtpi: JTopicPartitionInfo) extends AnyVal {
+  implicit class JTopicPartitionInfoAsScala(private val jtpi: JTopicPartitionInfo) extends AnyVal {
     def asScala: Try[TopicPartitionInfo] = {
       val replicas: Try[List[Node]] =
         jtpi
@@ -404,23 +404,23 @@ object JavaConverters {
     }
   }
 
-  implicit class TopicListingAsJava(val tl: TopicListing) extends AnyVal {
+  implicit class TopicListingAsJava(private val tl: TopicListing) extends AnyVal {
     def asJava: JTopicListing = new JTopicListing(tl.name, tl.topicId, tl.isInternal)
   }
-  implicit class JTopicListingAsScala(val jtl: JTopicListing) extends AnyVal {
+  implicit class JTopicListingAsScala(private val jtl: JTopicListing) extends AnyVal {
     def asScala: TopicListing = TopicListing(jtl.name(), jtl.topicId(), jtl.isInternal)
   }
 
-  implicit class TopicPartitionAsJava(val tp: TopicPartition) extends AnyVal {
+  implicit class TopicPartitionAsJava(private val tp: TopicPartition) extends AnyVal {
     def asJava: JTopicPartition = new JTopicPartition(tp.name, tp.partition)
   }
 
-  implicit class JTopicPartitionAsScala(val jtp: JTopicPartition) extends AnyVal {
+  implicit class JTopicPartitionAsScala(private val jtp: JTopicPartition) extends AnyVal {
     def asScala: TopicPartition =
       TopicPartition(name = jtp.topic(), partition = jtp.partition())
   }
 
-  implicit class OffsetSpecAsJava(val os: OffsetSpec) extends AnyVal {
+  implicit class OffsetSpecAsJava(private val os: OffsetSpec) extends AnyVal {
     def asJava: JOffsetSpec =
       os match {
         case OffsetSpec.EarliestSpec             => JOffsetSpec.earliest()
@@ -429,7 +429,7 @@ object JavaConverters {
       }
   }
 
-  implicit class IsolationLevelAsJava(val il: IsolationLevel) extends AnyVal {
+  implicit class IsolationLevelAsJava(private val il: IsolationLevel) extends AnyVal {
     def asJava: JIsolationLevel =
       il match {
         case IsolationLevel.ReadUncommitted => JIsolationLevel.READ_UNCOMMITTED
@@ -437,33 +437,34 @@ object JavaConverters {
       }
   }
 
-  implicit class DeleteRecordsOptionsAsJava(val dro: DeleteRecordsOptions) extends AnyVal {
+  implicit class DeleteRecordsOptionsAsJava(private val dro: DeleteRecordsOptions) extends AnyVal {
     def asJava: JDeleteRecordsOptions = {
       val deleteRecordsOpt = new JDeleteRecordsOptions()
       dro.timeout.fold(deleteRecordsOpt)(timeout => deleteRecordsOpt.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  implicit class ListOffsetsOptionsAsJava(val loo: ListOffsetsOptions) extends AnyVal {
+  implicit class ListOffsetsOptionsAsJava(private val loo: ListOffsetsOptions) extends AnyVal {
     def asJava: JListOffsetsOptions = {
       val offsetOpt = new JListOffsetsOptions(loo.isolationLevel.asJava)
       loo.timeout.fold(offsetOpt)(timeout => offsetOpt.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  implicit class JListOffsetsResultInfoAsScala(val jlori: JListOffsetsResultInfo) extends AnyVal {
+  implicit class JListOffsetsResultInfoAsScala(private val jlori: JListOffsetsResultInfo) extends AnyVal {
     def asScala: ListOffsetsResultInfo =
       ListOffsetsResultInfo(jlori.offset(), jlori.timestamp(), jlori.leaderEpoch().toScala.map(_.toInt))
   }
 
-  implicit class JListConsumerGroupOffsetsOptionsAsJava(val lcgoo: ListConsumerGroupOffsetsOptions) extends AnyVal {
+  implicit class JListConsumerGroupOffsetsOptionsAsJava(private val lcgoo: ListConsumerGroupOffsetsOptions)
+      extends AnyVal {
     def asJava: JListConsumerGroupOffsetsOptions = {
       val opts = new JListConsumerGroupOffsetsOptions()
       opts.requireStable(lcgoo.requireStable)
     }
   }
 
-  implicit class ListConsumerGroupOffsetsSpecAsScala(val lcgos: ListConsumerGroupOffsetsSpec) extends AnyVal {
+  implicit class ListConsumerGroupOffsetsSpecAsScala(private val lcgos: ListConsumerGroupOffsetsSpec) extends AnyVal {
     def asJava: JListConsumerGroupOffsetsSpec = {
       val opts = new JListConsumerGroupOffsetsSpec
       opts.topicPartitions(lcgos.partitions.map(_.asJava).asJava)
@@ -471,11 +472,11 @@ object JavaConverters {
     }
   }
 
-  implicit class OffsetAndMetadataAsJava(val oam: OffsetAndMetadata) extends AnyVal {
+  implicit class OffsetAndMetadataAsJava(private val oam: OffsetAndMetadata) extends AnyVal {
     def asJava: JOffsetAndMetadata =
       new JOffsetAndMetadata(oam.offset, oam.leaderEpoch.map(Int.box).toJava, oam.metadata.orNull)
   }
-  implicit class JOffsetAndMetadataAsScala(val joam: JOffsetAndMetadata) extends AnyVal {
+  implicit class JOffsetAndMetadataAsScala(private val joam: JOffsetAndMetadata) extends AnyVal {
     def asScala: OffsetAndMetadata =
       OffsetAndMetadata(
         offset = joam.offset(),
@@ -484,19 +485,20 @@ object JavaConverters {
       )
   }
 
-  implicit class AlterConsumerGroupOffsetsOptionsAsJava(val acgoo: AlterConsumerGroupOffsetsOptions) extends AnyVal {
+  implicit class AlterConsumerGroupOffsetsOptionsAsJava(private val acgoo: AlterConsumerGroupOffsetsOptions)
+      extends AnyVal {
     def asJava: JAlterConsumerGroupOffsetsOptions = {
       val options = new JAlterConsumerGroupOffsetsOptions()
       acgoo.timeout.fold(options)(timeout => options.timeoutMs(timeout.toMillis.toInt))
     }
   }
 
-  implicit class ListConsumerGroupsOptionsAsJava(val lcgo: ListConsumerGroupsOptions) extends AnyVal {
+  implicit class ListConsumerGroupsOptionsAsJava(private val lcgo: ListConsumerGroupsOptions) extends AnyVal {
     def asJListGroupsOptions: JListGroupsOptions =
       JListGroupsOptions.forConsumerGroups().inGroupStates(lcgo.states.map(_.asJava).asJava)
   }
 
-  implicit class JGroupListingAsScala(val jgl: JGroupListing) extends AnyVal {
+  implicit class JGroupListingAsScala(private val jgl: JGroupListing) extends AnyVal {
     def asConsumerGroupListing: ConsumerGroupListing =
       ConsumerGroupListing(
         groupId = jgl.groupId(),
@@ -513,7 +515,7 @@ object JavaConverters {
       )
   }
 
-  implicit class ListGroupsOptionsAsJava(val lgo: ListGroupsOptions) extends AnyVal {
+  implicit class ListGroupsOptionsAsJava(private val lgo: ListGroupsOptions) extends AnyVal {
     def asJava: JListGroupsOptions =
       new JListGroupsOptions()
         .inGroupStates(lgo.groupStates.map(_.asJava).asJava)
@@ -521,7 +523,7 @@ object JavaConverters {
         .withProtocolTypes(lgo.protocolTypes.asJava)
   }
 
-  implicit class JListGroupsOptionsAsScala(val jlgo: JListGroupsOptions) extends AnyVal {
+  implicit class JListGroupsOptionsAsScala(private val jlgo: JListGroupsOptions) extends AnyVal {
     def asScala: ListGroupsOptions =
       ListGroupsOptions(
         jlgo.groupStates().asScala.map(_.asScala).toSet,
@@ -530,15 +532,15 @@ object JavaConverters {
       )
   }
 
-  implicit class KafkaConfigAsJava(val kc: KafkaConfig) extends AnyVal {
+  implicit class KafkaConfigAsJava(private val kc: KafkaConfig) extends AnyVal {
     def asJava: JConfig = new JConfig(kc.entries.values.asJavaCollection)
   }
-  implicit class JConfigAsScala(val jc: JConfig) extends AnyVal {
+  implicit class JConfigAsScala(private val jc: JConfig) extends AnyVal {
     def asScala: KafkaConfig =
       KafkaConfig(entries = jc.entries().asScala.map(e => e.name() -> e).toMap)
   }
 
-  implicit class JLogDirDescriptionAsScala(val jldd: JLogDirDescription) extends AnyVal {
+  implicit class JLogDirDescriptionAsScala(private val jldd: JLogDirDescription) extends AnyVal {
     def asScala: LogDirDescription =
       LogDirDescription(
         error = jldd.error(),
@@ -546,12 +548,12 @@ object JavaConverters {
       )
   }
 
-  implicit class JReplicaInfoAsScala(val jri: JReplicaInfo) extends AnyVal {
+  implicit class JReplicaInfoAsScala(private val jri: JReplicaInfo) extends AnyVal {
     def asScala: ReplicaInfo =
       ReplicaInfo(size = jri.size(), offsetLag = jri.offsetLag(), isFuture = jri.isFuture)
   }
 
-  implicit class AclOperationAsScala(val ao: AclOperation) extends AnyVal {
+  implicit class AclOperationAsScala(private val ao: AclOperation) extends AnyVal {
     def asJava: JAclOperation =
       ao match {
         case AclOperation.Unknown         => JAclOperation.UNKNOWN
@@ -572,7 +574,7 @@ object JavaConverters {
         case AclOperation.TwoPhaseCommit  => JAclOperation.TWO_PHASE_COMMIT
       }
   }
-  implicit class JAclOperationAsJava(val jao: JAclOperation) extends AnyVal {
+  implicit class JAclOperationAsJava(private val jao: JAclOperation) extends AnyVal {
     def asScala: AclOperation =
       jao match {
         case JAclOperation.UNKNOWN          => AclOperation.Unknown
