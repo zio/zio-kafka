@@ -5,7 +5,7 @@ import zio.kafka.consumer.Consumer.ConsumerDiagnostics
 import zio.kafka.consumer.Offset
 import zio.kafka.consumer.internal.PartitionStreamControl.QueueInfo
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
-import zio.stream.{ Take, ZStream }
+import zio.stream.ZStream
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent
 
@@ -16,14 +16,6 @@ abstract class PartitionStream {
   def tp: TopicPartition
   def queueSize: UIO[Int]
 }
-
-// ----------------------------
-// Developer notes
-//
-// Even though a Take can define multiple values, all our queueing operations are on chunks of records. We explicitly
-// model that with takes defined as `Take[Throwable, Chunk[ByteArrayCommittableRecord]]` and not
-// `Take[Throwable, ByteArrayCommittableRecord]`.
-//
 
 /**
  * Provides control and information over a stream that consumes from a partition.
@@ -47,7 +39,7 @@ abstract class PartitionStream {
 final class PartitionStreamControl private (
   val tp: TopicPartition,
   val stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
-  dataQueue: Queue[Take[Throwable, Chunk[ByteArrayCommittableRecord]]],
+  dataQueue: Queue[Exit[Option[Throwable], Chunk[ByteArrayCommittableRecord]]],
   interruptionPromise: Promise[Throwable, Nothing],
   val completedPromise: Promise[Nothing, Option[Offset]],
   hasEndedRef: Ref[Boolean],
@@ -72,7 +64,7 @@ final class PartitionStreamControl private (
           now <- Clock.nanoTime
           newPullDeadline = now + maxStreamPullIntervalNanos
           _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
-          _ <- dataQueue.offer(Take.single(data))
+          _ <- dataQueue.offer(Exit.succeed(data))
         } yield ()
       }
     )
@@ -111,13 +103,11 @@ final class PartitionStreamControl private (
       for {
         _     <- ZIO.logDebug(s"Partition ${tp.toString} lost")
         taken <- dataQueue.takeAll
-        _     <- dataQueue.offer(Take.end)
+        _     <- dataQueue.offer(Exit.fail(None))
         _     <- queueInfoRef.update(_.withQueueClearedOnLost)
         _ <- ZIO.succeed {
-               // A take can represent multiple values, and therefore `Take.fold` gives chunks in the 3rd argument. Our
-               // takes however, always contains exactly 1 value. It is extracted with `_.head`.
                val takenChunks: Chunk[Chunk[ByteArrayCommittableRecord]] =
-                 taken.map(_.fold(Chunk.empty, _ => Chunk.empty, _.head))
+                 taken.map(_.getOrElse(_ => Chunk.empty))
                val pollCount   = takenChunks.size
                val recordCount = takenChunks.map(_.size).sum
                ZIO
@@ -132,7 +122,7 @@ final class PartitionStreamControl private (
     logAnnotate {
       ZIO.logDebug(s"Partition ${tp.toString} ending") *>
         hasEndedRef.set(true) *>
-        dataQueue.offer(Take.end).unit
+        dataQueue.offer(Exit.fail(None)).unit
     }
 
   /** Returns true when the stream is done. */
@@ -177,7 +167,7 @@ object PartitionStreamControl {
       _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
       interruptionPromise <- Promise.make[Throwable, Nothing]
       completedPromise    <- Promise.make[Nothing, Option[Offset]]
-      dataQueue           <- Queue.unbounded[Take[Throwable, Chunk[ByteArrayCommittableRecord]]]
+      dataQueue           <- Queue.unbounded[Exit[Option[Throwable], Chunk[ByteArrayCommittableRecord]]]
       now                 <- Clock.nanoTime
       queueInfo           <- Ref.make(QueueInfo(now, 0, None, 0))
       hasEndedRef         <- Ref.make(false)
@@ -206,7 +196,7 @@ object PartitionStreamControl {
                      case None        => requestAndAwaitData
                      case Some(taken) => ZIO.succeed(taken)
                    }
-                 }.flattenTake
+                 }.flattenExitOption
                    .tap(chunk => registerPull(queueInfo, chunk))
                    // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
                    .mapZIO(chunk => interruptionPromise.await.whenZIO(interruptionPromise.isDone).as(chunk))
