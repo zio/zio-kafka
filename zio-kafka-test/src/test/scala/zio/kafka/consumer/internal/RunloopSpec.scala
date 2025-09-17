@@ -198,10 +198,10 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
         partitionsHub <- ZIO
                            .acquireRelease(Hub.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
                            .provide(ZLayer.succeed(consumerScope))
+        runloopConfig <- RunloopConfig(consumerSettings)
         runloop <- Runloop.make(
                      consumerSettings,
-                     100.millis,
-                     100.millis,
+                     runloopConfig,
                      diagnostics,
                      consumerAccess,
                      partitionsHub

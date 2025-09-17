@@ -171,6 +171,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
       tp,
       requestData.unit,
       diagnostics,
+      500,
       Duration.fromSeconds(30)
     )
   }

@@ -1,6 +1,5 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.consumer.Consumer.ConsumerDiagnostics
@@ -92,10 +91,7 @@ private[consumer] object RunloopAccess {
     diagnostics: ConsumerDiagnostics = Diagnostics.NoOp
   ): ZIO[Scope, Throwable, RunloopAccess] =
     for {
-      maxPollInterval <- maxPollIntervalConfig(settings)
-      maxStreamPullInterval = settings.maxStreamPullIntervalOption.getOrElse(maxPollInterval)
-      // See scaladoc of [[ConsumerSettings.withMaxRebalanceDuration]]:
-      maxRebalanceDuration = settings.maxRebalanceDuration.getOrElse(((maxPollInterval.toNanos / 5L) * 3L).nanos)
+      runloopConfig <- RunloopConfig(settings)
       // This scope allows us to link the lifecycle of the Runloop and of the Hub to the lifecycle of the Consumer
       // When the Consumer is shutdown, the Runloop and the Hub will be shutdown too (before the consumer)
       consumerScope <- ZIO.scope
@@ -106,8 +102,7 @@ private[consumer] object RunloopAccess {
       makeRunloop = Runloop
                       .make(
                         settings = settings,
-                        maxStreamPullInterval = maxStreamPullInterval,
-                        maxRebalanceDuration = maxRebalanceDuration,
+                        runloopConfig = runloopConfig,
                         diagnostics = diagnostics,
                         consumer = consumerAccess,
                         partitionsHub = partitionsHub
@@ -117,17 +112,4 @@ private[consumer] object RunloopAccess {
                       .provide(ZLayer.succeed(consumerScope))
     } yield new RunloopAccess(runloopStateRef, partitionsHub, makeRunloop, diagnostics)
 
-  private def maxPollIntervalConfig(settings: ConsumerSettings): Task[Duration] = ZIO.attempt {
-    def defaultMaxPollInterval: Int = ConsumerConfig
-      .configDef()
-      .defaultValues()
-      .get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)
-      .asInstanceOf[Integer]
-
-    settings.properties
-      .get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)
-      .flatMap(_.toString.toIntOption) // Ignore invalid
-      .getOrElse(defaultMaxPollInterval)
-      .millis
-  }
 }

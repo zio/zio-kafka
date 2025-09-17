@@ -224,7 +224,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
     ) @@ TestAspect.withLiveClock
 
   private def makeStreamControl(tp: TopicPartition): UIO[PartitionStreamControl] =
-    PartitionStreamControl.newPartitionStream(tp, ZIO.unit, Diagnostics.NoOp, 30.seconds)
+    PartitionStreamControl.newPartitionStream(tp, ZIO.unit, Diagnostics.NoOp, 500, 30.seconds)
 
   private def makeCoordinator(
     lastEvent: Ref.Synchronized[RebalanceEvent],

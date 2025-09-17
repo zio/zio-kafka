@@ -104,7 +104,7 @@ final class PartitionStreamControl private (
         taken <- dataQueue.takeAll.map(_.size)
         _     <- dataQueue.offer(Take.end)
         _     <- queueInfoRef.update(_.withQueueClearedOnLost)
-        _     <- ZIO.logDebug(s"Ignored ${taken} records on lost partition").when(taken != 0)
+        _     <- ZIO.logDebug(s"Ignored $taken records on lost partition").when(taken != 0)
       } yield ()
     }
 
@@ -143,6 +143,7 @@ object PartitionStreamControl {
     tp: TopicPartition,
     requestData: UIO[Unit],
     diagnostics: ConsumerDiagnostics,
+    maxPollRecords: Int,
     maxStreamPullInterval: Duration
   ): UIO[PartitionStreamControl] = {
     val maxStreamPullIntervalNanos = maxStreamPullInterval.toNanos
@@ -167,7 +168,7 @@ object PartitionStreamControl {
           _ <- requestData
           _ <- diagnostics.emit(DiagnosticEvent.Request(tp))
           taken <- dataQueue
-                     .takeBetween(1, Int.MaxValue)
+                     .takeBetween(1, maxPollRecords)
                      .raceFirst(interruptionPromise.await)
         } yield taken
 
@@ -183,9 +184,13 @@ object PartitionStreamControl {
                    } yield ()
                  } *>
                  ZStream.repeatZIOChunk {
-                   // First try to take all records that are available right now.
+                   // First try to take some records that are available right now.
                    // When no data is available, request more data and await its arrival.
-                   dataQueue.takeAll.flatMap(data => if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data))
+                   dataQueue
+                     .takeUpTo(maxPollRecords)
+                     .flatMap { data =>
+                       if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data)
+                     }
                  }.flattenTake.chunksWith { s =>
                    s.tap(records => registerPull(queueInfo, records))
                      // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
