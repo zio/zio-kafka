@@ -80,10 +80,10 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           control   <- createTestControl
           _         <- control.offerRecords(createTestRecords(5))
           _         <- control.lost
-          _         <- control.stream.runCollect
+          taken     <- control.stream.runCollect
           size      <- control.queueSize
           completed <- control.isCompleted
-        } yield assertTrue(size == 0, completed)
+        } yield assertTrue(size == 0, completed, taken.isEmpty)
       },
       test("finalizing the stream will set isCompleted") {
         for {
@@ -171,7 +171,6 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
       tp,
       requestData.unit,
       diagnostics,
-      500,
       Duration.fromSeconds(30)
     )
   }

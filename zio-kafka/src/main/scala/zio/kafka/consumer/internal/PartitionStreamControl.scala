@@ -17,6 +17,14 @@ abstract class PartitionStream {
   def queueSize: UIO[Int]
 }
 
+// ----------------------------
+// Developer notes
+//
+// Even though a Take can define multiple values, all our queueing operations are on chunks of records. We explicitly
+// model that with takes defined as `Take[Throwable, Chunk[ByteArrayCommittableRecord]]` and not
+// `Take[Throwable, ByteArrayCommittableRecord]`.
+//
+
 /**
  * Provides control and information over a stream that consumes from a partition.
  *
@@ -25,7 +33,8 @@ abstract class PartitionStream {
  * @param stream
  *   the stream
  * @param dataQueue
- *   the queue the stream reads data from
+ *   the queue the stream reads data from, each element is a chunk of records that were offered together, and correspond
+ *   to the records fetched in a single poll for this partition
  * @param interruptionPromise
  *   a promise that when completed stops the stream
  * @param completedPromise
@@ -38,7 +47,7 @@ abstract class PartitionStream {
 final class PartitionStreamControl private (
   val tp: TopicPartition,
   val stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
-  dataQueue: Queue[Take[Throwable, ByteArrayCommittableRecord]],
+  dataQueue: Queue[Take[Throwable, Chunk[ByteArrayCommittableRecord]]],
   interruptionPromise: Promise[Throwable, Nothing],
   val completedPromise: Promise[Nothing, Option[Offset]],
   hasEndedRef: Ref[Boolean],
@@ -63,7 +72,7 @@ final class PartitionStreamControl private (
           now <- Clock.nanoTime
           newPullDeadline = now + maxStreamPullIntervalNanos
           _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
-          _ <- dataQueue.offer(Take.chunk(data))
+          _ <- dataQueue.offer(Take.single(data))
         } yield ()
       }
     )
@@ -101,10 +110,20 @@ final class PartitionStreamControl private (
     logAnnotate {
       for {
         _     <- ZIO.logDebug(s"Partition ${tp.toString} lost")
-        taken <- dataQueue.takeAll.map(_.size)
+        taken <- dataQueue.takeAll
         _     <- dataQueue.offer(Take.end)
         _     <- queueInfoRef.update(_.withQueueClearedOnLost)
-        _     <- ZIO.logDebug(s"Ignored $taken records on lost partition").when(taken != 0)
+        _ <- ZIO.succeed {
+               // A take can represent multiple values, and therefore `Take.fold` gives chunks in the 3rd argument. Our
+               // takes however, always contains exactly 1 value. It is extracted with `_.head`.
+               val takenChunks: Chunk[Chunk[ByteArrayCommittableRecord]] =
+                 taken.map(_.fold(Chunk.empty, _ => Chunk.empty, _.head))
+               val pollCount   = takenChunks.size
+               val recordCount = takenChunks.map(_.size).sum
+               ZIO
+                 .logDebug(s"Ignored $recordCount records from $pollCount polls on the lost partition")
+                 .when(pollCount != 0)
+             }
       } yield ()
     }
 
@@ -143,7 +162,6 @@ object PartitionStreamControl {
     tp: TopicPartition,
     requestData: UIO[Unit],
     diagnostics: ConsumerDiagnostics,
-    maxPollRecords: Int,
     maxStreamPullInterval: Duration
   ): UIO[PartitionStreamControl] = {
     val maxStreamPullIntervalNanos = maxStreamPullInterval.toNanos
@@ -159,17 +177,15 @@ object PartitionStreamControl {
       _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
       interruptionPromise <- Promise.make[Throwable, Nothing]
       completedPromise    <- Promise.make[Nothing, Option[Offset]]
-      dataQueue           <- Queue.unbounded[Take[Throwable, ByteArrayCommittableRecord]]
+      dataQueue           <- Queue.unbounded[Take[Throwable, Chunk[ByteArrayCommittableRecord]]]
       now                 <- Clock.nanoTime
       queueInfo           <- Ref.make(QueueInfo(now, 0, None, 0))
       hasEndedRef         <- Ref.make(false)
       requestAndAwaitData =
         for {
-          _ <- requestData
-          _ <- diagnostics.emit(DiagnosticEvent.Request(tp))
-          taken <- dataQueue
-                     .takeBetween(1, maxPollRecords)
-                     .raceFirst(interruptionPromise.await)
+          _     <- requestData
+          _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
+          taken <- dataQueue.take.raceFirst(interruptionPromise.await)
         } yield taken
 
       stream = ZStream.logAnnotate(
@@ -183,19 +199,18 @@ object PartitionStreamControl {
                      _  <- ZIO.logDebug(s"Partition stream ${tp.toString} has ended")
                    } yield ()
                  } *>
-                 ZStream.repeatZIOChunk {
-                   // First try to take some records that are available right now.
+                 ZStream.repeatZIO {
+                   // First try to take a chunk of records that are available right now.
                    // When no data is available, request more data and await its arrival.
-                   dataQueue
-                     .takeUpTo(maxPollRecords)
-                     .flatMap { data =>
-                       if (data.isEmpty) requestAndAwaitData else ZIO.succeed(data)
-                     }
-                 }.flattenTake.chunksWith { s =>
-                   s.tap(records => registerPull(queueInfo, records))
-                     // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
-                     .mapZIO(chunk => interruptionPromise.await.whenZIO(interruptionPromise.isDone).as(chunk))
-                 }
+                   dataQueue.poll.flatMap {
+                     case None        => requestAndAwaitData
+                     case Some(taken) => ZIO.succeed(taken)
+                   }
+                 }.flattenTake
+                   .tap(chunk => registerPull(queueInfo, chunk))
+                   // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
+                   .mapZIO(chunk => interruptionPromise.await.whenZIO(interruptionPromise.isDone).as(chunk))
+                   .flattenChunks
     } yield new PartitionStreamControl(
       tp,
       stream,

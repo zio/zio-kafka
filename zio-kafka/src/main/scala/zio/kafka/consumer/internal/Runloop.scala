@@ -36,7 +36,6 @@ private[consumer] final class Runloop private (
       tp,
       commandQueue.offer(RunloopCommand.Request(tp)).unit,
       diagnostics,
-      runloopConfig.maxPollRecords,
       runloopConfig.maxStreamPullInterval
     )
 
