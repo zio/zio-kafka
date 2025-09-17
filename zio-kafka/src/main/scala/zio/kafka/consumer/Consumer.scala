@@ -318,7 +318,7 @@ object Consumer {
    * parallel.
    *
    * Offsets are committed after execution of the effect. They are batched when a commit action is in progress to avoid
-   * backpressuring the stream. When commits fail due to a
+   * backpressuring the stream. When commits fail due to an
    * org.apache.kafka.clients.consumer.RetriableCommitFailedException they are retried according to commitRetryPolicy
    *
    * The effect should absorb any failures. Failures should be handled by retries or ignoring the error, which will
@@ -411,7 +411,7 @@ object Consumer {
    * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any
    * zio-kafka version.
    *
-   * @param streamControl
+   * @param control
    *   Result of one of the Consumer's methods returning a [[StreamControl]]
    * @param shutdownTimeout
    *   Timeout for the workflow to complete after initiating the graceful shutdown

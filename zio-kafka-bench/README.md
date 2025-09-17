@@ -77,7 +77,7 @@ Produces 100 small records from 4 fibers. Lingering is disabled.
 
 # How to run the benchmarks
 
-To run these "comparison" benchmarks, in a sbt console, run:
+To run these "comparison" benchmarks, in an sbt console, run:
 
 ```scala
 clean

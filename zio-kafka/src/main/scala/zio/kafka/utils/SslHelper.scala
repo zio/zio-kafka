@@ -17,7 +17,7 @@ import scala.util.control.{ NoStackTrace, NonFatal }
  * This function validates that your Kafka client (Admin, Consumer, or Producer) configurations are valid for the Kafka
  * Cluster you want to contact.
  *
- * This function protects you against this long standing bug in kafka-clients that leads to crash your app with an OOM.
+ * This function protects you against this long-standing bug in kafka-clients that leads to crash your app with an OOM.
  * More details, see: https://issues.apache.org/jira/browse/KAFKA-4090
  *
  * Credits for this work go to Nick Pavlov (https://github.com/gurinderu), Guillaume Bécan (https://github.com/gbecan)
@@ -112,7 +112,7 @@ object SslHelper {
    * APIs/features.
    *
    * The goal of this function is to validate that the SSL configuration of the client is correct for the Kafka cluster
-   * we want to contact. (ie. that the Kafka cluster is not configured with SSL as we previously validated that the
+   * we want to contact. (i.e. that the Kafka cluster is not configured with SSL as we previously validated that the
    * client was not configured for an SSL server)
    *
    * The algorithm is the following:
@@ -124,16 +124,16 @@ object SslHelper {
    * This algorithm and its implementation, per se, are relatively simple. It's the few lines of code inside the
    * `ZIO.attemptBlockingInterrupt` call.
    *
-   * The tricky part is that we want to be able to timeout the whole process if it takes too long but timeouting a
+   * The tricky part is that we want to be able to time out the whole process if it takes too long but timing out a
    * `SocketChannel` is, theoretically, not possible.
    *
    * Also, we don't want to leak memory so we want to be sure that the socket is closed in all cases (success, failure,
    * or timeout/interruption).
    *
    * The socket might be closed in two possible cases:
-   *   1. The socket is successfully opened and we successfully sent the request to the Kafka cluster. In this case, the
-   *      `finally` block will close the socket.
-   *   1. The networking exchange takes too long and we timeout/interrupt the whole process. In this case, and that's
+   *   1. The socket is successfully opened, and we successfully sent the request to the Kafka cluster. In this case,
+   *      the `finally` block will close the socket.
+   *   1. The networking exchange takes too long, and we time out/interrupt the whole process. In this case, and that's
    *      the most tricky/weird part, to close the socket, we interrupt the thread running it.
    *
    * Why does interrupting the thread running the networking exchange closes the socket? Because the `SocketChannel`
@@ -151,9 +151,9 @@ object SslHelper {
    * Let's recap.
    *
    * We use a `SocketChannel` to test the SSL configuration of the Kafka nodes. This `SocketChannel` is a resource and
-   * needs to be closed to avoid leaking memory. We want to be able to timeout the whole process if it takes too long
-   * but a `SocketChannel` is not timeoutable. So we implement a timeout mechanism that will interrupt the thread on
-   * which the `SocketChannel` is running to close it as it's one of the properties of the `SocketChannel` class.
+   * needs to be closed to avoid leaking memory. We want to be able to time out the whole process if it takes too long
+   * but a `SocketChannel` can't time out. So we implement a timeout mechanism that will interrupt the thread on which
+   * the `SocketChannel` is running to close it as it's one of the properties of the `SocketChannel` class.
    *
    * Note that there are unit-tests proving that this works.
    *
@@ -179,8 +179,9 @@ object SslHelper {
 
     ZIO.attemptBlockingInterrupt {
       // Note about this algorithm:
-      // We make all the networking exchanges (ie. `unsafeOpenSocket`, `unsafeSendTestRequest` and `unsafeReadAnswerFromTestRequest`) in this
-      // interruptible blocking section so that we can easily timeout/interrupt the whole process if it takes too long.
+      // We make all the networking exchanges (i.e. `unsafeOpenSocket`, `unsafeSendTestRequest` and
+      // `unsafeReadAnswerFromTestRequest`) in this interruptible blocking section so that we can easily
+      // time out/interrupt the whole process if it takes too long.
 
       val channel: SocketChannel =
         try unsafeOpenSocket(address)

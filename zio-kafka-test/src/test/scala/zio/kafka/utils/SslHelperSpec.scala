@@ -201,7 +201,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               port0                = Utils.getPort(server0)
               server1              = s"$address0:${port0 + 6000}"
               settingsWithDownNode = settings.withBootstrapServers(settings.bootstrapServers :+ server1)
-              // We simulate that the Socket opening always fails (ie. that all Nodes are down)
+              // We simulate that the Socket opening always fails (i.e. that all Nodes are down)
               result <-
                 SslHelper.doValidateEndpoint(_ => throw new java.net.ConnectException("Connection refused. 💥!"))(
                   settingsWithDownNode.properties

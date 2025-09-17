@@ -5,8 +5,8 @@ title: "Partition Assignment And Offset Retrieval"
 
 `zio-kafka` offers several ways to control which Kafka topics and partitions are assigned to your application.
 
-| Use case                                           | Method                                                                      |
-|----------------------------------------------------|-----------------------------------------------------------------------------|
+| Use case                                           | Method                                                  |
+|----------------------------------------------------|---------------------------------------------------------|
 | One or more topics, automatic partition assignment | `Subscription.topics("my_topic", "other_topic")`        |
 | Topics matching a pattern                          | `Subscription.pattern("topic.*")`                       |
 | Manual partition assignment                        | `Subscription.manual("my_topic" -> 1, "my_topic" -> 2)` |

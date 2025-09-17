@@ -123,7 +123,7 @@ final case class ConsumerSettings(
    * the given offset strategy is used and consuming starts from the `Latest` offset (the default), the `Earliest`
    * offset, or results in an error for `None`.
    *
-   * The `Manual` option allows fine grained control over which offset to consume from. The provided `getOffsets`
+   * The `Manual` option allows fine-grained control over which offset to consume from. The provided `getOffsets`
    * function should return an offset for each topic-partition that is being assigned. When the returned offset is
    * smaller than the log start offset or larger than the log end offset, the `defaultStrategy` is used and consuming
    * starts from the `Latest` offset (the default), the `Earliest` offset, or results in an error for `None`.

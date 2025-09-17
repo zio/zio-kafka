@@ -22,7 +22,7 @@ private[internal] object RunloopState {
  * starting a consuming session.
  *
  * This is needed because a Consumer can be used to do something else than consuming (e.g. fetching Kafka topics
- * metadata)
+ * metadata).
  */
 private[consumer] final class RunloopAccess private (
   runloopStateRef: Ref.Synchronized[RunloopState],
@@ -53,7 +53,7 @@ private[consumer] final class RunloopAccess private (
    *
    * The external world (Consumer) doesn't need to know how we "subscribe", "unsubscribe", etc. internally.
    *
-   * @returns
+   * @return
    *   A StreamControl which allows graceful shutdown of all streams created from this subscription
    */
   def subscribe(
