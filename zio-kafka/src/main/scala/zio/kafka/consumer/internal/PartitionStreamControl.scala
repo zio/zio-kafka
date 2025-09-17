@@ -198,9 +198,11 @@ object PartitionStreamControl {
                      case Some(taken) => ZIO.succeed(taken)
                    }
                  }.takeUntil(_ eq EndOfStream)
-                   .tap(chunk => registerPull(queueInfo, chunk))
-                   // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
-                   .mapZIO(chunk => interruptionPromise.await.whenZIO(interruptionPromise.isDone).as(chunk))
+                   .tap { chunk =>
+                     registerPull(queueInfo, chunk) *>
+                       // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
+                       interruptionPromise.await.whenZIO(interruptionPromise.isDone)
+                   }
                    .flattenChunks
     } yield new PartitionStreamControl(
       tp,
