@@ -7,9 +7,9 @@ import zio.kafka.consumer.ConsumerSettings
 import java.util.{ Map => JavaMap }
 
 /**
- * Configuration for the [[Runloop]].
+ * Configuration for the Runloop.
  *
- * See [[ConsumerSettings]] for a description of each config.
+ * See ConsumerSettings for a description of each config.
  */
 final case class RunloopConfig(
   maxPollRecords: Int,
