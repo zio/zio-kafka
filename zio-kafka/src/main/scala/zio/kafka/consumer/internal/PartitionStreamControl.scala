@@ -98,25 +98,7 @@ final class PartitionStreamControl private (
     interruptionPromise.fail(consumeTimeout).unit
   }
 
-  /** To be invoked when the partition was lost. It clears the queue and ends the stream. */
-  private[internal] def lost: UIO[Unit] =
-    logAnnotate {
-      for {
-        _     <- ZIO.logDebug(s"Partition ${tp.toString} lost")
-        taken <- dataQueue.takeAll
-        _     <- dataQueue.offer(EndOfStream)
-        _     <- queueInfoRef.update(_.withQueueClearedOnLost)
-        _ <- {
-          val pollCount   = taken.size
-          val recordCount = taken.map(_.size).sum
-          ZIO
-            .logDebug(s"Ignored $recordCount records from $pollCount polls on the lost partition")
-            .when(recordCount != 0)
-        }
-      } yield ()
-    }
-
-  /** To be invoked when the partition was revoked or otherwise needs to be ended. */
+  /** To be invoked when the partition was revoked, lost or otherwise needs to be ended. */
   private[internal] def end: ZIO[Any, Nothing, Unit] =
     logAnnotate {
       ZIO.logDebug(s"Partition ${tp.toString} ending") *>
@@ -244,9 +226,6 @@ object PartitionStreamControl {
         lastPulledOffset = records.lastOption.map(_.offset).orElse(lastPulledOffset),
         outstandingPolls = 0
       )
-
-    def withQueueClearedOnLost: QueueInfo =
-      copy(size = 0)
 
     def deadlineExceeded(now: NanoTime): Boolean =
       size > 0 && pullDeadline <= now

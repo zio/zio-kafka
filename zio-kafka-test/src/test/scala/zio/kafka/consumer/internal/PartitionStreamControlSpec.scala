@@ -74,16 +74,6 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           result  <- control.stream.runCollect.exit
         } yield assertTrue(result.isFailure, result.causeOrNull.squash.isInstanceOf[TimeoutException])
       },
-      test("lost clears queue and ends stream") {
-        for {
-          control   <- createTestControl
-          _         <- control.offerRecords(createTestRecords(5))
-          _         <- control.lost
-          taken     <- control.stream.runCollect
-          size      <- control.queueSize
-          completed <- control.isCompleted
-        } yield assertTrue(size == 0, completed, taken.isEmpty)
-      },
       test("finalizing the stream will set isCompleted") {
         for {
           control            <- createTestControl
