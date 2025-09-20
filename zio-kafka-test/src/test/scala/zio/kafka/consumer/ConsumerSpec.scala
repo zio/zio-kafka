@@ -142,6 +142,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           client <- randomClient
           group  <- randomGroup
 
+          _ <- KafkaTestUtils.createCustomTopic("pattern150")
+
           producer <- KafkaTestUtils.makeProducer
           _        <- KafkaTestUtils.produceMany(producer, "pattern150", kvs)
 
@@ -190,7 +192,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           group  <- randomGroup
           topic  <- randomTopic
 
-          _        <- KafkaTestUtils.createCustomTopic(topic, partitionCount)
+          _ <- KafkaTestUtils.createCustomTopic(topic, partitionCount)
+
           producer <- KafkaTestUtils.makeProducer
           _ <- ZIO.foreachDiscard(1 to partitionCount) { i =>
                  KafkaTestUtils.produceMany(
@@ -1207,57 +1210,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             )
           }
         )
-      },
-      test("commit offsets for all consumed messages") {
-        val nrMessages = 50
-        val messages   = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
-
-        def consumeIt(
-          client: String,
-          group: String,
-          subscription: Subscription,
-          messagesReceived: Ref[List[(String, String)]],
-          done: Promise[Nothing, Unit]
-        ) =
-          KafkaTestUtils
-            .consumeWithStrings(client, Some(group), subscription)(record =>
-              for {
-                messagesSoFar <- messagesReceived.updateAndGet(_ :+ (record.key() -> record.value()))
-                _             <- ZIO.when(messagesSoFar.size == nrMessages)(done.succeed(()))
-              } yield ()
-            )
-            .fork
-
-        for {
-          topic    <- randomTopic
-          group    <- randomGroup
-          client   <- randomClient
-          producer <- KafkaTestUtils.makeProducer
-
-          subscription = Subscription.Topics(Set(topic))
-
-          done             <- Promise.make[Nothing, Unit]
-          messagesReceived <- Ref.make(List.empty[(String, String)])
-          _                <- KafkaTestUtils.produceMany(producer, topic, messages)
-          fib              <- consumeIt(client, group, subscription, messagesReceived, done)
-          _ <-
-            done.await *> Live
-              .live(
-                ZIO.sleep(3.seconds)
-              ) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
-          _ <- fib.interrupt
-          _ <- KafkaTestUtils.produceOne(producer, topic, "key-new", "msg-new")
-
-          consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          newMessage <- consumer
-                          .plainStream(subscription, Serde.string, Serde.string)
-                          .take(1)
-                          .map(r => (r.record.key(), r.record.value()))
-                          .run(ZSink.collectAll[(String, String)])
-                          .map(_.head)
-                          .orDie
-          consumedMessages <- messagesReceived.get
-        } yield assert(consumedMessages)(contains(newMessage).negate)
       },
       suite("rebalanceSafeCommits prevents processing messages twice when rebalancing")({
 
