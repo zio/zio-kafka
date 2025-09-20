@@ -82,7 +82,8 @@ private[consumer] final class Runloop private (
         case _                      => settings.rebalanceListener.runOnExecutor(topLevelExecutor)
       }
 
-    RebalanceListener.toKafka(rebalanceCoordinator.toRebalanceListener ++ userRebalanceListener, sameThreadRuntime)
+    val rebalanceListener = rebalanceCoordinator.toRebalanceListener ++ userRebalanceListener
+    RebalanceListener.toKafka(rebalanceListener, sameThreadRuntime)
   }
 
   /**
