@@ -150,6 +150,14 @@ object ReadmeExample extends ZIOAppDefault {
 }
 ```
 
+## Documentation
+
+If you are reading this page from https://zio.dev/zio-kafka/, the documentation is in the sub-pages and can be found by
+scrolling the left panel of this page.
+
+If you are reading this from GitHub, the documentation can be found in
+[the docs folder](https://github.com/zio/zio-kafka/tree/master/docs).
+
 ## Resources
 
 ### Articles
