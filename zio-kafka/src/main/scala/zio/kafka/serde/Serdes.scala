@@ -3,7 +3,7 @@ package zio.kafka.serde
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.{ Serde => KafkaSerde, Serdes => KafkaSerdes }
 import org.apache.kafka.common.utils.Bytes
-import zio.{ RIO, ZIO }
+import zio.{ Exit, RIO, ZIO }
 
 import java.nio.ByteBuffer
 import java.util.UUID
@@ -25,15 +25,15 @@ private[zio] trait Serdes {
    * Here, we're not using `KafkaSerdes.ByteArray()` because the underlying deserializer and serializer implementations
    * are just identity functions.
    *
-   * That allows us to use [[ZIO.succeed]] instead of [[ZIO.attempt]].
+   * That allows us to use [[Exit.succeed]] instead of [[ZIO.attempt]].
    */
   val byteArray: Serde[Any, Array[Byte]] =
     new Serde[Any, Array[Byte]] {
       override final def serialize(topic: String, headers: Headers, value: Array[Byte]): RIO[Any, Array[Byte]] =
-        ZIO.succeed(value)
+        Exit.succeed(value)
 
       override final def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[Any, Array[Byte]] =
-        ZIO.succeed(data)
+        Exit.succeed(data)
     }
 
   private[this] def convertPrimitiveSerde[A](serde: KafkaSerde[A]): Serde[Any, A] =

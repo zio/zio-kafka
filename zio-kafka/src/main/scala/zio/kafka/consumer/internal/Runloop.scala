@@ -131,7 +131,7 @@ private[consumer] final class Runloop private (
     val streams =
       if (tps.isEmpty) Chunk.empty else partitionStreams.filter(streamControl => tps.contains(streamControl.tp))
 
-    if (streams.isEmpty) ZIO.succeed(fulfillResult)
+    if (streams.isEmpty) Exit.succeed(fulfillResult)
     else {
       for {
         consumerGroupMetadata <- groupMetadataRef.get
@@ -162,9 +162,9 @@ private[consumer] final class Runloop private (
   /** @return the topic-partitions for which received records should be ignored */
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
     settings.offsetRetrieval match {
-      case OffsetRetrieval.Auto(_) => ZIO.succeed(Set.empty)
+      case OffsetRetrieval.Auto(_) => Exit.succeed(Set.empty)
       case OffsetRetrieval.Manual(getOffsets, _) =>
-        if (tps.isEmpty) ZIO.succeed(Set.empty)
+        if (tps.isEmpty) Exit.succeed(Set.empty)
         else
           getOffsets(tps).flatMap { offsets =>
             ZIO
@@ -201,7 +201,7 @@ private[consumer] final class Runloop private (
         Schedule.recurWhileZIO[Any, Throwable] {
           case _: AuthorizationException | _: AuthenticationException =>
             consumerMetrics.observePollAuthError().as(true)
-          case _ => ZIO.succeed(false)
+          case _ => Exit.succeed(false)
         } &&
           settings.authErrorRetrySchedule
       )
@@ -243,7 +243,7 @@ private[consumer] final class Runloop private (
                             case RebalanceEvent(rebalanceCallbacks) if rebalanceCallbacks.isEmpty =>
                               // The fast track, rebalance listener was not invoked:
                               //   no assignment changes, no new commits, only new records.
-                              ZIO.succeed(
+                              Exit.succeed(
                                 PollResult(
                                   records = polledRecords,
                                   ignoreRecordsForTps = Set.empty,
@@ -398,7 +398,7 @@ private[consumer] final class Runloop private (
           assignedStreams = state.assignedStreams ++ newAssignedStreams,
           subscriptionState = newSubscriptionState
         )
-        if (newSubscriptionState.isSubscribed) ZIO.succeed(newState)
+        if (newSubscriptionState.isSubscribed) Exit.succeed(newState)
         else
           // End all streams and pending requests
           endRevokedPartitions(
@@ -421,7 +421,7 @@ private[consumer] final class Runloop private (
             streamControl.hasEnded.map { hasEnded =>
               if (hasEnded) state else state.addRequest(req)
             }
-          case None => ZIO.succeed(state)
+          case None => Exit.succeed(state)
         }
       case cmd @ RunloopCommand.AddSubscription(newSubscription, _) =>
         state.subscriptionState match {
@@ -456,7 +456,7 @@ private[consumer] final class Runloop private (
 
       case RunloopCommand.RemoveSubscription(subscription, cont) =>
         (state.subscriptionState match {
-          case SubscriptionState.NotSubscribed => ZIO.succeed(state)
+          case SubscriptionState.NotSubscribed => Exit.succeed(state)
           case SubscriptionState.Subscribed(existingSubscriptions, _) =>
             val newUnion: Option[(Subscription, NonEmptyChunk[Subscription])] =
               NonEmptyChunk
@@ -545,7 +545,7 @@ private[consumer] final class Runloop private (
 
           updatedStateAfterPoll <- shouldPoll(stateAfterCommands).flatMap {
                                      case true  => handlePoll(stateAfterCommands)
-                                     case false => ZIO.succeed(stateAfterCommands)
+                                     case false => Exit.succeed(stateAfterCommands)
                                    }
           // Immediately poll again, after processing all new queued commands
           _ <- ZIO.whenZIO(shouldPoll(updatedStateAfterPoll))(commandQueue.offer(RunloopCommand.Poll))

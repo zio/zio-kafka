@@ -273,7 +273,7 @@ object Producer {
   private[producer] def makeConcurrentDiagnostics(
     diagnostics: ProducerDiagnostics
   ): ZIO[Scope, Nothing, ProducerDiagnostics] =
-    if (diagnostics == Diagnostics.NoOp) ZIO.succeed(diagnostics)
+    if (diagnostics == Diagnostics.NoOp) Exit.succeed(diagnostics)
     else ConcurrentDiagnostics.make(diagnostics, ProducerEvent.ProducerFinalized)
 
 }
@@ -398,7 +398,7 @@ private[producer] final class ProducerLive(
       val (errors, success) = chunkResults.partitionMap(identity)
       errors.headOption match {
         case Some(error) => ZIO.fail(error) // Only the first failure is returned.
-        case None        => ZIO.succeed(success)
+        case None        => Exit.succeed(success)
       }
     })
 
@@ -415,7 +415,7 @@ private[producer] final class ProducerLive(
   override def produceChunkAsyncWithFailures(
     records: Chunk[ByteRecord]
   ): UIO[UIO[Chunk[Either[Throwable, RecordMetadata]]]] =
-    if (records.isEmpty) ZIO.succeed(ZIO.succeed(Chunk.empty))
+    if (records.isEmpty) Exit.succeed(Exit.succeed(Chunk.empty))
     else {
       val totalRecordCount = records.size
       val diagEm           = diagnosticsEmitterMaker.makeDiagnosticsEmitter(records)
