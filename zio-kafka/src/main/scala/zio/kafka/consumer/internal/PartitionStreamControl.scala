@@ -177,7 +177,7 @@ object PartitionStreamControl {
                    // When no data is available, request more data and await its arrival.
                    dataQueue.poll.flatMap {
                      case None        => requestAndAwaitData
-                     case Some(taken) => ZIO.succeed(taken)
+                     case Some(taken) => Exit.succeed(taken)
                    }
                  }.takeUntil(_ eq EndOfStream)
                    // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
