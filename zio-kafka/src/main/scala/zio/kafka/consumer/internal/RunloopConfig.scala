@@ -11,14 +11,14 @@ import java.util.{ Map => JavaMap }
  *
  * See ConsumerSettings for a description of each config.
  */
-final case class RunloopConfig(
+private[internal] final case class RunloopConfig(
   maxPollRecords: Int,
   maxPollInterval: Duration,
   maxStreamPullInterval: Duration,
   maxRebalanceDuration: Duration
 )
 
-object RunloopConfig {
+private[internal] object RunloopConfig {
   def apply(settings: ConsumerSettings): Task[RunloopConfig] = ZIO.attempt {
     // Give an Int config value as overridden by the user, or else None.
     // Note: it is safe to ignore invalid values, they will lead to an exception
