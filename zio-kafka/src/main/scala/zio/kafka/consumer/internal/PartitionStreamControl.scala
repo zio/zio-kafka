@@ -25,9 +25,9 @@ abstract class PartitionStream {
  * @param stream
  *   the stream
  * @param dataQueue
- *   the queue the stream reads records from, each element is a chunk of records that were offered together, and
- *   correspond to the records fetched in a single poll for this partition, `PartitionStreamControl.EndOfStream` is used
- *   to indicate the last element.
+ *   the queue the stream reads records from, each success element is a chunk of records that were offered together, and
+ *   correspond to the records fetched in a single poll for this partition, `Exit.failure(None)` is used to indicate the
+ *   last element.
  * @param interruptionPromise
  *   a promise that when completed stops the stream
  * @param completedPromise
@@ -40,7 +40,7 @@ abstract class PartitionStream {
 final class PartitionStreamControl private (
   val tp: TopicPartition,
   val stream: ZStream[Any, Throwable, ByteArrayCommittableRecord],
-  dataQueue: Queue[Chunk[ByteArrayCommittableRecord]],
+  dataQueue: Queue[Exit[Option[Throwable], Chunk[ByteArrayCommittableRecord]]],
   interruptionPromise: Promise[Throwable, Nothing],
   val completedPromise: Promise[Nothing, Option[Offset]],
   hasEndedRef: Ref[Boolean],
@@ -65,7 +65,7 @@ final class PartitionStreamControl private (
           now <- Clock.nanoTime
           newPullDeadline = now + maxStreamPullIntervalNanos
           _ <- queueInfoRef.update(_.withOffer(newPullDeadline, data.size))
-          _ <- dataQueue.offer(data)
+          _ <- dataQueue.offer(Exit.succeed(data))
         } yield ()
       }
     )
@@ -129,7 +129,7 @@ final class PartitionStreamControl private (
 
 object PartitionStreamControl {
 
-  private val EndOfStream: Chunk[Nothing] = Chunk.empty
+  private val EndOfStream = Exit.failNone
 
   private[internal] def newPartitionStream(
     tp: TopicPartition,
@@ -150,16 +150,17 @@ object PartitionStreamControl {
       _                   <- ZIO.logDebug(s"Creating partition stream ${tp.toString}")
       interruptionPromise <- Promise.make[Throwable, Nothing]
       completedPromise    <- Promise.make[Nothing, Option[Offset]]
-      dataQueue           <- Queue.unbounded[Chunk[ByteArrayCommittableRecord]]
+      dataQueue           <- Queue.unbounded[Exit[Option[Throwable], Chunk[ByteArrayCommittableRecord]]]
       now                 <- Clock.nanoTime
       queueInfo           <- Ref.make(QueueInfo(now, 0, None, 0))
       hasEndedRef         <- Ref.make(false)
-      requestAndAwaitData =
+      requestAndAwaitData: ZIO[Any, Option[Throwable], Chunk[ByteArrayCommittableRecord]] =
         for {
           _     <- requestData
           _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
-          taken <- dataQueue.take.raceFirst(interruptionPromise.await)
+          taken <- dataQueue.take.raceFirst(interruptionPromise.await).mapError(Option.apply).unexit
         } yield taken
+      notEnded = hasEndedRef.get.negate
 
       stream = ZStream.logAnnotate(
                  LogAnnotation("topic", tp.topic()),
@@ -172,18 +173,18 @@ object PartitionStreamControl {
                      _  <- ZIO.logDebug(s"Partition stream ${tp.toString} has ended")
                    } yield ()
                  } *>
-                 ZStream.repeatZIO {
+                 ZStream.repeatZIOOption {
                    // First try to take a chunk of records that are available right now.
                    // When no data is available, request more data and await its arrival.
                    dataQueue.poll.flatMap {
-                     case None        => requestAndAwaitData
-                     case Some(taken) => Exit.succeed(taken)
+                     case None       => requestAndAwaitData
+                     case Some(exit) => exit
                    }
-                 }.takeUntil(_ eq EndOfStream)
+                 }
                    // Due to https://github.com/zio/zio/issues/8515 we cannot use Zstream.interruptWhen.
                    .tap(_ => interruptionPromise.await.whenZIO(interruptionPromise.isDone))
                    // When stream.end was invoked, some chunks of records may be in transit, filter those out.
-                   .filterZIO(_ => hasEndedRef.get.negate)
+                   .filterZIO(_ => notEnded)
                    .tap(registerPull(queueInfo, _))
                    .flattenChunks
     } yield new PartitionStreamControl(
