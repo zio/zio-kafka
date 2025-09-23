@@ -15,8 +15,6 @@ object RunloopConfigSpec extends ZIOSpecDefaultSlf4j {
         for {
           runloopConfig <- RunloopConfig(consumerSettings)
         } yield assertTrue(
-          runloopConfig.maxPollRecords == 500,
-          runloopConfig.maxPollInterval == 5.minutes,
           runloopConfig.maxStreamPullInterval == 5.minutes,
           runloopConfig.maxRebalanceDuration == 3.minutes
         )
@@ -43,14 +41,10 @@ object RunloopConfigSpec extends ZIOSpecDefaultSlf4j {
         for {
           runloopConfig <- RunloopConfig(
                              consumerSettings
-                               .withMaxPollRecords(100)
-                               .withMaxPollInterval(1.minute)
                                .withMaxStreamPullInterval(2.minutes)
                                .withMaxRebalanceDuration(90.seconds)
                            )
         } yield assertTrue(
-          runloopConfig.maxPollRecords == 100,
-          runloopConfig.maxPollInterval == 1.minute,
           runloopConfig.maxStreamPullInterval == 2.minutes,
           runloopConfig.maxRebalanceDuration == 90.seconds
         )

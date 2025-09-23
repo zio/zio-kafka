@@ -12,8 +12,6 @@ import java.util.{ Map => JavaMap }
  * See ConsumerSettings for a description of each config.
  */
 private[internal] final case class RunloopConfig(
-  maxPollRecords: Int,
-  maxPollInterval: Duration,
   maxStreamPullInterval: Duration,
   maxRebalanceDuration: Duration
 )
@@ -40,15 +38,10 @@ private[internal] object RunloopConfig {
       overriddenConfigInt(configName).getOrElse(defaultConfigInt(configName)).millis
     }
 
-    val maxPollRecords = {
-      val configName = ConsumerConfig.MAX_POLL_RECORDS_CONFIG
-      overriddenConfigInt(configName).getOrElse(defaultConfigInt(configName))
-    }
-
     val maxStreamPullInterval = settings.maxStreamPullIntervalOption.getOrElse(maxPollInterval)
     // See scaladoc of [[ConsumerSettings.withMaxRebalanceDuration]]:
     val maxRebalanceDuration = settings.maxRebalanceDuration.getOrElse(((maxPollInterval.toNanos / 5L) * 3L).nanos)
 
-    RunloopConfig(maxPollRecords, maxPollInterval, maxStreamPullInterval, maxRebalanceDuration)
+    RunloopConfig(maxStreamPullInterval, maxRebalanceDuration)
   }
 }
