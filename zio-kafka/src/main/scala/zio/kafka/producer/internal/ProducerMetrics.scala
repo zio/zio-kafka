@@ -21,7 +21,7 @@ private[producer] trait ProducerMetrics {
 /**
  * A `ProducerMetrics` that uses zio-metrics for measuring.
  *
- * Sub-classes are allowed to override the Histogram boundaries.
+ * Subclasses are allowed to override the Histogram boundaries.
  *
  * WARNING: This is an INTERNAL API and may change in an incompatible way, or disappear, without notice, in any
  * zio-kafka version.

@@ -141,7 +141,7 @@ private[internal] class RebalanceCoordinator(
     //   - All streams that were ended have completed their work, and
     //   - we have seen a completed or pending commit for all end-offsets.
     //     An end-offset of a stream is the offset of the last record given to that stream.
-    // - Do a single sync commit without any offsets, this has the side-effect of blocking until all
+    // - Do a single sync commit without any offsets, this has the side effect of blocking until all
     //   preceding async commits are complete (this requires kafka-client 3.6.0 or later).
     //   Because all commits created here (including those from non-ending streams) are now complete, we do not
     //   have to add them to the pending commits of the runloop state.

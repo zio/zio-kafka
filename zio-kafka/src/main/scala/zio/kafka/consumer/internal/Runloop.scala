@@ -214,7 +214,7 @@ private[consumer] final class Runloop private (
       pendingCommitCount       <- committer.pendingCommitCount
       _ <- ZIO.logDebug(
              s"Starting poll with ${state.pendingRequests.size} pending requests and" +
-               s" ${pendingCommitCount} pending commits," +
+               s" $pendingCommitCount pending commits," +
                s" resuming ${partitionsToFetch.size} out of ${state.assignedStreams.size} partitions"
            )
       _ <- currentStateRef.set(state)

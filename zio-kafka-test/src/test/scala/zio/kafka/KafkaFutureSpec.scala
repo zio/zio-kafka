@@ -53,7 +53,7 @@ object KafkaFutureSpec extends ZIOSpecDefaultSlf4j {
           withKafkaFuture.flatMap { f =>
             for {
               latch  <- Promise.make[Nothing, Unit]
-              fiber  <- AdminClient.fromKafkaFuture(latch.succeed(()) *> ZIO.succeed(f)).fork
+              fiber  <- AdminClient.fromKafkaFuture(latch.succeed(()).as(f)).fork
               _      <- latch.await
               result <- fiber.interrupt
             } yield assert(result.isInterrupted)(equalTo(true) ?? "fiber was interrupted") &&

@@ -585,7 +585,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                            Serde.string
                          )
                      fiber <- control.stream
-                                .flatMapPar(Int.MaxValue) { case (tp @ _, partitionStream) =>
+                                .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
                                   partitionStream.tap(_ => messagesReceived.succeed(()))
                                 }
                                 .runDrain
@@ -717,7 +717,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                      _ <- ZIO.logAnnotate("stream", "2") {
                             stream2Control.stream.zipWithIndex
                               .map(_._2)
-                              .tap(count => (stream1Control.end).when(count == 4))
+                              .tap(count => stream1Control.end.when(count == 4))
                               .runDrain
                               .tapErrorCause(c => ZIO.logErrorCause("Stream 2 failed", c))
                               .forkScoped
@@ -921,15 +921,15 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           // Consume messages
           subscription = Subscription.topics(topic)
           consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          offsets <- (consumer
-                       .partitionedStream(subscription, Serde.string, Serde.string)
-                       .flatMapPar(partitionCount)(_._2.map(_.offset))
-                       .take(nrMessages.toLong)
-                       .transduce(Consumer.offsetBatches)
-                       .take(1)
-                       .mapZIO(_.commit)
-                       .runDrain *>
-                       consumer.committed((0 until partitionCount).map(new TopicPartition(topic, _)).toSet))
+          _ <- consumer
+                 .partitionedStream(subscription, Serde.string, Serde.string)
+                 .flatMapPar(partitionCount)(_._2.map(_.offset))
+                 .take(nrMessages.toLong)
+                 .transduce(Consumer.offsetBatches)
+                 .take(1)
+                 .mapZIO(_.commit)
+                 .runDrain
+          offsets <- consumer.committed((0 until partitionCount).map(new TopicPartition(topic, _)).toSet)
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / partitionCount))))
       },
       test("commits an offset with metadata") {
@@ -1052,62 +1052,62 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         val partitionCount = 6
 
         ZIO.scoped {
-          SlidingDiagnostics.make[DiagnosticEvent]().flatMap { diagnostics =>
-            for {
-              // Produce messages on several partitions
-              topic   <- randomTopic
-              group   <- randomGroup
-              client1 <- randomClient
-              client2 <- randomClient
+          for {
+            diagnostics <- SlidingDiagnostics.make[DiagnosticEvent]()
 
-              _        <- KafkaTestUtils.createCustomTopic(topic, partitionCount)
-              producer <- KafkaTestUtils.makeProducer
-              _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
-                     KafkaTestUtils
-                       .produceMany(producer, topic, partition = i % partitionCount, kvs = List(s"key$i" -> s"msg$i"))
-                   }
+            // Produce messages on several partitions
+            topic   <- randomTopic
+            group   <- randomGroup
+            client1 <- randomClient
+            client2 <- randomClient
 
-              consumer1 <- KafkaTestUtils.makeConsumer(client1, Some(group), diagnostics = diagnostics)
-              consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group))
+            _        <- KafkaTestUtils.createCustomTopic(topic, partitionCount)
+            producer <- KafkaTestUtils.makeProducer
+            _ <- ZIO.foreachDiscard(1 to nrMessages) { i =>
+                   KafkaTestUtils
+                     .produceMany(producer, topic, partition = i % partitionCount, kvs = List(s"key$i" -> s"msg$i"))
+                 }
 
-              // Consume messages
-              subscription = Subscription.topics(topic)
-              consumer1Ready        <- Promise.make[Nothing, Unit]
-              assignedPartitionsRef <- Ref.make(Set.empty[Int]) // Set of partition numbers
-              consumer1Fib <- consumer1
-                                .partitionedStream(subscription, Serde.string, Serde.string)
-                                .flatMapPar(partitionCount) { case (tp, partition) =>
-                                  ZStream
-                                    .fromZIO(
-                                      consumer1Ready
-                                        .succeed(())
-                                        .whenZIO(
-                                          assignedPartitionsRef
-                                            .updateAndGet(_ + tp.partition())
-                                            .map(_.size >= (partitionCount / 2))
-                                        ) *>
-                                        partition.runDrain
-                                    )
-                                    .as(tp)
-                                }
-                                .take(partitionCount.toLong / 2)
-                                .runDrain
-                                .fork
-              diagnosticStream <- ZStream
-                                    .fromQueue(diagnostics.queue)
-                                    .collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
-                                    .runCollect
-                                    .fork
-              _ <- consumer1Ready.await
-              consumer2Fib <- consumer2
-                                .partitionedStream(subscription, Serde.string, Serde.string)
-                                .take(partitionCount.toLong / 2)
-                                .runDrain
-                                .fork
-              _ <- consumer1Fib.join
-              _ <- consumer2Fib.join
-            } yield diagnosticStream.join
-          }
+            consumer1 <- KafkaTestUtils.makeConsumer(client1, Some(group), diagnostics = diagnostics)
+            consumer2 <- KafkaTestUtils.makeConsumer(client2, Some(group))
+
+            // Consume messages
+            subscription = Subscription.topics(topic)
+            consumer1Ready        <- Promise.make[Nothing, Unit]
+            assignedPartitionsRef <- Ref.make(Set.empty[Int]) // Set of partition numbers
+            consumer1Fib <- consumer1
+                              .partitionedStream(subscription, Serde.string, Serde.string)
+                              .flatMapPar(partitionCount) { case (tp, partition) =>
+                                ZStream
+                                  .fromZIO(
+                                    consumer1Ready
+                                      .succeed(())
+                                      .whenZIO(
+                                        assignedPartitionsRef
+                                          .updateAndGet(_ + tp.partition())
+                                          .map(_.size >= (partitionCount / 2))
+                                      ) *>
+                                      partition.runDrain
+                                  )
+                                  .as(tp)
+                              }
+                              .take(partitionCount.toLong / 2)
+                              .runDrain
+                              .fork
+            diagnosticStream <- ZStream
+                                  .fromQueue(diagnostics.queue)
+                                  .collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
+                                  .runCollect
+                                  .fork
+            _ <- consumer1Ready.await
+            consumer2Fib <- consumer2
+                              .partitionedStream(subscription, Serde.string, Serde.string)
+                              .take(partitionCount.toLong / 2)
+                              .runDrain
+                              .fork
+            _ <- consumer1Fib.join
+            _ <- consumer2Fib.join
+          } yield diagnosticStream.join
         }.flatten
           .map(diagnosticEvents => assert(diagnosticEvents.size)(isGreaterThanEqualTo(2)))
       },
@@ -1394,7 +1394,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
          *   - A producer generates some messages on every partition of a topic (2 partitions),
          *   - Consumer 1 starts reading from the topic. It is the only consumer so it handles all partitions. This
          *     consumer has `rebalanceSafeCommits` enabled. It does not commit offsets, but it does register external
-         *     commits (it does not actually commit anywhere). In addition we set `maxRebalanceDuration` to 20 seconds.
+         *     commits (it does not actually commit anywhere). In addition, we set `maxRebalanceDuration` to 20 seconds.
          *   - After a few messages consumer 2 is started and a rebalance starts.
          *   - We measure how long the rebalance takes.
          *

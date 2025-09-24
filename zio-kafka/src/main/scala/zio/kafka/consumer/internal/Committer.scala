@@ -67,7 +67,7 @@ private[internal] object Committer {
               offsetIncrease += max(0L, offset - existingOffset)
               max(existingOffset, offset)
             case None =>
-              // This partition was not committed to from this consumer yet. Therefore we do not know the offset
+              // This partition was not committed to from this consumer yet. Therefore, we do not know the offset
               // increase. A good estimate would be the poll size for this consumer, another okayish estimate is 0.
               // Let's go with the simplest for now: ```offsetIncrease += 0```
               offset

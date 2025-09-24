@@ -43,7 +43,7 @@ Each Stream can have a different lifetime. Subscriptions are tied to their Strea
 
 Consumer sharing is only possible when using the same type of `Subscription`: `Topics`, `Pattern` or `Manual`. Mixing different types will result in a failed stream. Note that every `Topic` subscription can also be written as a `Pattern` subscription, so if you want to mix `Topic` and `Pattern` subscriptions, you can just use `Pattern`. 
 
-If your subscriptions overlap, eg `Subscription.topics("topic1", "topic2")` and `Subscription.topics("topic2", "topic3")`, which stream will get the partitions of `topic2` is not deterministic.
+If your subscriptions overlap, e.g. `Subscription.topics("topic1", "topic2")` and `Subscription.topics("topic2", "topic3")`, which stream will get the partitions of `topic2` is not deterministic.
 
 :::note
 Upon starting or ending subscriptions, Kafka will also reassign all partitions of the _other_ subscriptions. Record fetching will resume from the last committed offset, so records may be processed twice when not all offsets are committed yet. This works the same as for regular rebalancing. To minimize this issue, commit frequently or enable [rebalance safe commits](preventing-duplicates.md).
