@@ -49,15 +49,14 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           pulledRecords <- stream.take(3).runCollect
         } yield assertTrue(records == pulledRecords)
       },
-      test("end will end the stream") {
+      test("end discards records and ends the stream") {
         for {
-          control <- createTestControl
-          records = createTestRecords(3)
-          _             <- control.offerRecords(records)
+          control       <- createTestControl
+          _             <- control.offerRecords(createTestRecords(3))
           _             <- control.end
           pulledRecords <- control.stream.runCollect
           hasEnded      <- control.hasEnded
-        } yield assertTrue(records == pulledRecords && hasEnded)
+        } yield assertTrue(pulledRecords.isEmpty && hasEnded)
       },
       test("offering records after end will fail") {
         for {
@@ -74,16 +73,6 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           _       <- control.halt
           result  <- control.stream.runCollect.exit
         } yield assertTrue(result.isFailure, result.causeOrNull.squash.isInstanceOf[TimeoutException])
-      },
-      test("lost clears queue and ends stream") {
-        for {
-          control   <- createTestControl
-          _         <- control.offerRecords(createTestRecords(5))
-          _         <- control.lost
-          _         <- control.stream.runCollect
-          size      <- control.queueSize
-          completed <- control.isCompleted
-        } yield assertTrue(size == 0, completed)
       },
       test("finalizing the stream will set isCompleted") {
         for {

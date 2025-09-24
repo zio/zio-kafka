@@ -54,10 +54,39 @@ consumer.plainStream(Subscription.topics("topic2000"), Serde.string, Serde.strin
 
 ### Commit with a transactional producer
 
-Although transactional producing is possible with zio-kafka, it is not easy and the code is very messy (see
-`ConsumerSpec` for an example). Transactional producing can not be used in combination with rebalance-safe-commits mode.
+Transactional producing is described in [transactions](transactions.md).
 
-Zio-kafka v3.0.0 will make transactional producing much easier.
+## Long-running processes / slow consumers
+
+When rebalance-safe-commits mode is enabled, consumers have tighter dead-lines. Besides a suitable `max.poll.records`
+and `max.poll.interval.ms` (see [consumer tuning](consumer-tuning.md#long-running-processes--slow-consumers)), a
+consumer must also be able to process `max.poll.records` within `maxRebalanceDuration`, with some margin to complete
+commits.
+
+With the default values of `500` for `max.poll.records`, 3 minutes for `maxRebalanceDuration` (which is 3/5 of 5
+minutes for `max.poll.interval.ms`), and 10 seconds for `commitTimeout`, a consumer must be able to process and commit
+`500` records in 2 minutes, 50 seconds (_3 records per second_). **This is a hard threshold.** Change the settings such
+that there is sufficient head-room for busy services, network delays, garbage collections or reduced CPU capacity due to
+other processes.
+
+In case the consumer can handle less than 10 times the minimum records per second, it is important to use the Range
+Assignor (see [PR 1576](https://github.com/zio/zio-kafka/pull/1576) for an extensive explanation).
+
+Settings described in this section can be changed as follows:
+
+```scala
+val settings = ConsumerSettings(bootstrapServers)
+  .withRebalanceSafeCommits(true)
+  .withMaxPollRecords(1)
+  .withMaxPollInterval(15.minutes)
+  .withMaxRebalanceDuration(4.minutes)
+  .withProperty(
+    org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+    classOf[org.apache.kafka.clients.consumer.RangeAssignor].getName
+  )
+  .withCommitTimeout(10.seconds)
+  .... etc.
+```
 
 ## More information
 

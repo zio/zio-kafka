@@ -853,7 +853,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                   // Sleep for some seconds to simulate a consumer that is stuck (only sleep for the first chunk).
                   // Because slow consumers are only detected once every run-loop, detection can take many seconds.
                   .tap { c =>
-                    ZIO.sleep(10.seconds).when(c.head.key == "key0")
+                    (ZIO.logDebug("Sleeping for 10 seconds") *> ZIO.sleep(10.seconds)).when(c.head.key == "key0")
                   }
                   // Use `take` to ensure the test ends quickly, even when the interrupt fails to occur.
                   .take(8)
@@ -1473,6 +1473,10 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                     _       <- c1Started.succeed(()).when(offsets.map(_.partition).toSet.size == partitionCount)
                     // Register an external commit (which we're not actually doing 😀)
                     _ <- c1.registerExternalCommits(OffsetBatch(record.offset)).unit
+                    _ <-
+                      ZIO.logDebug(
+                        s"External commit registered for offset ${record.partition}:${record.offset.offset} and key ${record.key}"
+                      )
                   } yield ()
                 }.runDrain
               }
