@@ -1,8 +1,9 @@
 package zio.kafka.bench.comparison
 
 import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import zio.kafka.admin.AdminClient.{ NewTopic, TopicPartition }
+import zio.kafka.admin.AdminClient.NewTopic
 import zio.kafka.bench.ConsumerZioBenchmark
 import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.bench.comparison.ComparisonBenchmark._
@@ -15,7 +16,7 @@ import scala.jdk.CollectionConverters._
 trait ComparisonBenchmark extends ConsumerZioBenchmark[Env] {
 
   protected final val topicPartitions: List[TopicPartition] =
-    (0 until partitionCount).map(TopicPartition(topic1, _)).toList
+    (0 until partitionCount).map(new TopicPartition(topic1, _)).toList
 
   private val javaKafkaConsumer: ZLayer[ConsumerSettings, Throwable, LowLevelKafka] =
     ZLayer.scoped {
