@@ -8,6 +8,7 @@ Zio-kafka's consumer can be tuned for:
 * throughput
 * latency
 * memory usage
+* long-running processes / slow consumers
 
 All tuning is done via `ConsumerSettings`:
 
@@ -67,7 +68,7 @@ The total can be tuned by changing the `partitionPreFetchBufferLimit`, `max.poll
 Another option is to write a custom `FetchStrategy`. For example the `ManyPartitionsQueueSizeBasedFetchStrategy` in
 [draft PR 970](https://github.com/zio/zio-kafka/pull/970) (merged into zio-kafka since 2.8.1).
 
-## Long processing durations
+## Long-running processes / slow consumers
 
 To detect stalled consumers, Kafka revokes a partition when a consumer does not poll within the max poll interval (see
 [configuration `max.poll.interval.ms`](https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms)). The default max poll interval is 5 minutes. After a partition is revoked,
@@ -76,15 +77,19 @@ it will be assigned to another consumer.
 In zio-kafka (versions 2.5.1+) a stream needs to pull data within the max poll interval. If this doesn't happen, the
 stream is interrupted with a failure and the whole consumer shuts down.
 
-To see if your application must be configured with a higher `max.poll.interval.ms` value we need to consider the
-maximum duration between polls. If processing is sequential, we can obtain this maximum by multiplying
-`max.poll.records` with the maximum duration to process a single record. To also accommodate things like long garbage
-collections and buffering, configuration `max.poll.interval.ms` should be substantially higher than the maximum
-processing time.
+To prevent the above failure states, either decrease `max.poll.records` (so that time between polling gets shorter),
+and/or increase `max.poll.interval.ms` (so that the time between polls may be longer).
 
-`max.poll.interval.ms` can be set with:
+To see if your application must be configured with a lower `max.poll.records` and/or a higher `max.poll.interval.ms`
+value we need to consider the maximum duration between polls. If processing is sequential, we can obtain this maximum by
+multiplying `max.poll.records` with the maximum duration to process a single record. To also accommodate things like
+long garbage collections and buffering, configuration `max.poll.interval.ms` should be substantially higher than the
+maximum processing time.
+
+`max.poll.records` and `max.poll.interval.ms` can be set with:
 
 ```scala
+  .withMaxPollRecords(1)
   .withMaxPollInterval(15.minutes)
 ```
 
@@ -97,6 +102,11 @@ On older zio-kafka versions `withMaxPollInterval` is not available. Use the foll
 ⚠️In zio-kafka versions 2.2 up to 2.5.0 it may also be necessary to increase the `runloopTimeout` setting.
 When no stream is processing data for this amount of time (while new data is available), the consumer will halt with a
 failure. In zio-kafka 2.5.0 `runloopTimeout` defaults to 4 minutes, a little bit lower than `max.poll.interval.ms`.
+
+### Long-running processes and `rebalance-safe-commits`
+
+When `rebalance-safe-commits` is enabled, additional settings are needed for long-running processes. See
+[preventing duplicates](preventing-duplicates.md) for more details.
 
 ## Using metrics to tune the consumer
 

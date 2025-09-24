@@ -18,13 +18,13 @@ import scala.jdk.CollectionConverters._
 //noinspection SimplifyWhenInspection,SimplifyUnlessInspection
 private[consumer] final class Runloop private (
   settings: ConsumerSettings,
+  runloopConfig: RunloopConfig,
   topLevelExecutor: Executor,
   sameThreadRuntime: Runtime[Any],
   consumer: ConsumerAccess,
   commandQueue: Queue[RunloopCommand],
   partitionsHub: Hub[Take[Throwable, PartitionAssignment]],
   diagnostics: ConsumerDiagnostics,
-  maxStreamPullInterval: Duration,
   currentStateRef: Ref[State],
   rebalanceCoordinator: RebalanceCoordinator,
   consumerMetrics: ConsumerMetrics,
@@ -36,7 +36,7 @@ private[consumer] final class Runloop private (
       tp,
       commandQueue.offer(RunloopCommand.Request(tp)).unit,
       diagnostics,
-      maxStreamPullInterval
+      runloopConfig.maxStreamPullInterval
     )
 
   def stopConsumption: UIO[Unit] =
@@ -82,7 +82,8 @@ private[consumer] final class Runloop private (
         case _                      => settings.rebalanceListener.runOnExecutor(topLevelExecutor)
       }
 
-    RebalanceListener.toKafka(rebalanceCoordinator.toRebalanceListener ++ userRebalanceListener, sameThreadRuntime)
+    val rebalanceListener = rebalanceCoordinator.toRebalanceListener ++ userRebalanceListener
+    RebalanceListener.toKafka(rebalanceListener, sameThreadRuntime)
   }
 
   /**
@@ -373,9 +374,9 @@ private[consumer] final class Runloop private (
   private def checkStreamPullInterval(streams: Chunk[PartitionStreamControl]): ZIO[Any, Nothing, Unit] = {
     def logShutdown(stream: PartitionStreamControl): ZIO[Any, Nothing, Unit] =
       ZIO.logError(
-        s"Stream for ${stream.tp} has not pulled chunks for more than $maxStreamPullInterval, shutting down. " +
-          "Use ConsumerSettings.withMaxPollInterval or .withMaxStreamPullInterval to set a longer interval when " +
-          "processing a batch of records needs more time."
+        s"Stream for ${stream.tp} has not pulled chunks for more than ${runloopConfig.maxStreamPullInterval}, " +
+          "shutting down. Use ConsumerSettings.withMaxPollInterval or .withMaxStreamPullInterval to set a longer " +
+          "interval when processing a batch of records needs more time."
       )
 
     for {
@@ -620,8 +621,7 @@ object Runloop {
 
   private[consumer] def make(
     settings: ConsumerSettings,
-    maxStreamPullInterval: Duration,
-    maxRebalanceDuration: Duration,
+    runloopConfig: RunloopConfig,
     diagnostics: ConsumerDiagnostics,
     consumer: ConsumerAccess,
     partitionsHub: Hub[Take[Throwable, PartitionAssignment]]
@@ -647,19 +647,19 @@ object Runloop {
                                lastRebalanceEvent,
                                settings,
                                consumer,
-                               maxRebalanceDuration,
+                               runloopConfig.maxRebalanceDuration,
                                currentStateRef.get.map(_.assignedStreams),
                                committer
                              )
       runloop = new Runloop(
                   settings = settings,
+                  runloopConfig = runloopConfig,
                   topLevelExecutor = executor,
                   sameThreadRuntime = sameThreadRuntime,
                   consumer = consumer,
                   commandQueue = commandQueue,
                   partitionsHub = partitionsHub,
                   diagnostics = diagnostics,
-                  maxStreamPullInterval = maxStreamPullInterval,
                   currentStateRef = currentStateRef,
                   consumerMetrics = metrics,
                   rebalanceCoordinator = rebalanceCoordinator,

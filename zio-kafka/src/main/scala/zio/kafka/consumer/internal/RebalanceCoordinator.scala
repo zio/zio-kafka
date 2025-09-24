@@ -212,7 +212,7 @@ private[internal] class RebalanceCoordinator(
           _               <- ZIO.logDebug(s"${lostTps.size} partitions are lost")
           assignedStreams <- getCurrentAssignedStreams
           lostStreams = assignedStreams.filter(control => lostTps.contains(control.tp))
-          _ <- ZIO.foreachDiscard(lostStreams)(_.lost)
+          _ <- ZIO.foreachDiscard(lostStreams)(_.end)
           _ <- ZIO.logTrace(s"onLost done")
         } yield rebalanceEvent.addCallback(RebalanceCallback(Set.empty, Set.empty, lostTps, lostStreams))
       }

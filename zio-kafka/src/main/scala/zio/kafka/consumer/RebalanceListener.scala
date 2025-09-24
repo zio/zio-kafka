@@ -19,11 +19,14 @@ final case class RebalanceListener(
    * Combine with another [[RebalanceListener]] and execute their actions sequentially
    */
   def ++(that: RebalanceListener): RebalanceListener =
-    RebalanceListener(
-      assigned => onAssigned(assigned) *> that.onAssigned(assigned),
-      revoked => onRevoked(revoked) *> that.onRevoked(revoked),
-      lost => onLost(lost) *> that.onLost(lost)
-    )
+    if (that eq RebalanceListener.noop) this
+    else if (this eq RebalanceListener.noop) that
+    else
+      RebalanceListener(
+        assigned => onAssigned(assigned) *> that.onAssigned(assigned),
+        revoked => onRevoked(revoked) *> that.onRevoked(revoked),
+        lost => onLost(lost) *> that.onLost(lost)
+      )
 
   def runOnExecutor(executor: Executor): RebalanceListener = RebalanceListener(
     assigned => onAssigned(assigned).onExecutor(executor),
