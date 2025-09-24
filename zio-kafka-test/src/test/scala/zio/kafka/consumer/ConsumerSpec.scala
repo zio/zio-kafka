@@ -31,7 +31,12 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
   override val kafkaPrefix: String = "consumespec"
 
   override def spec: Spec[TestEnvironment with Scope, Throwable] =
-    suite("Consumer Streaming")(
+    suite("ConsumerSpec")(
+      test("make validates ConsumerSettings") {
+        val settings = ConsumerSettings(List("host")).withProperty("enable.auto.commit", "true")
+        val consumer = Consumer.make(settings).exit
+        assertZIO(consumer)(failsWithA[IllegalArgumentException])
+      },
       test("export metrics") {
         for {
           client   <- randomClient
