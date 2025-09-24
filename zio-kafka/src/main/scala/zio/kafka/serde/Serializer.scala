@@ -40,7 +40,7 @@ trait Serializer[-R, -A] {
   def asOption[A1 <: A]: Serializer[R, Option[A1]] =
     Serializer { (topic, headers, valueOpt) =>
       valueOpt match {
-        case None        => ZIO.succeed(null)
+        case None        => Exit.succeed(null)
         case Some(value) => serialize(topic, headers, value)
       }
     }
