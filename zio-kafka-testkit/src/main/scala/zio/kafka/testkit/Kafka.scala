@@ -167,7 +167,7 @@ object Kafka {
   final case class Ports(kafkaPort: Int, controllerPort: Int)
 
   private val ref = {
-    val p1 = findNextFreePort(2000 + scala.util.Random.nextInt(60000))
+    val p1 = findNextFreePort(2000 + scala.util.Random.nextInt(40000))
     val p2 = findNextFreePort(p1 + 1)
     Ref.unsafe.make(Ports(p1, p2))(Unsafe.unsafe)
   }
