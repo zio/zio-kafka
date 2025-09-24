@@ -53,8 +53,8 @@ See the [zio-kafka tutorial](https://zio.dev/guides/tutorials/producing-consumin
 In order to use this library, we need to add the following line in our `build.sbt` file:
 
 ```scala
-libraryDependencies += "dev.zio" %% "zio-kafka"         % "3.0.0"
-libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "3.0.0" % Test
+libraryDependencies += "dev.zio" %% "zio-kafka"         % "3.1.0-rc1"
+libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "3.1.0-rc1" % Test
 ```
 
 Snapshots are available on Sonatype's snapshot repository https://oss.sonatype.org/content/repositories/snapshots.
@@ -149,6 +149,14 @@ object ReadmeExample extends ZIOAppDefault {
     ZIO.raceFirst(producerRun, List(consumerRun))
 }
 ```
+
+## Documentation
+
+If you are reading this page from https://zio.dev/zio-kafka/, the documentation is in the sub-pages and can be found by
+scrolling the left panel of this page.
+
+If you are reading this from GitHub, the documentation can be found in
+[the docs folder](https://github.com/zio/zio-kafka/tree/master/docs).
 
 ## Resources
 
