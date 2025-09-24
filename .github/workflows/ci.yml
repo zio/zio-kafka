@@ -106,7 +106,7 @@ jobs:
     name: Update README
     runs-on: ubuntu-latest
     continue-on-error: false
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.ref == 'refs/heads/master' }}
     steps:
     - name: Git Checkout
       uses: actions/checkout@v5
