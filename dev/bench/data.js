@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758679486184,
+  "lastUpdate": 1758704913738,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -6350,6 +6350,102 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 578.5255366400002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3fd9790b05bc5d6628acf02d6c8249d80c320931",
+          "message": "Make rebalances faster, support slow consumers (#1576)\n\nThis PR prevents a slow consumer from timing out on a rebalance when the\npre-fetch buffers are full, and `rebalanceSafeCommits` is enabled. In\naddition, it makes rebalances go even faster for fast consumers.\n\nAfter this PR, consumers should run fine when they are configured such\nthat they can process `max.poll.records` within `maxRebalanceDuration`,\nand (in some cases) use the `RangeAssignor` as partition assignor.\n\n#### Details\n\n**Context:** Each zstream of a zio-kafka consumer (there is one stream\nper partition) consumes from an internal partition queue for that\npartition. These queues also act as a pre-fetch buffer. For performance\nreasons, record are pulled from the queue in chunks. These chunks then\nbecome the consumer zstream chunks.\n\n**The problem:** When `rebalanceSafeCommits` is enabled, during a\nrebalance or shutdown, we wait until the consumer's zstreams have\nprocessed the records that were pulled from the queue. Before this\nchange, the zstream pulled _all_ available records from the queue. Due\nto pre-fetching the number of records pulled, could be 2, 3 or more\ntimes higher than `max.poll.records` (depending on the pre-fetching\nsettings and data availability). Slow consumers may need more time than\n`maxRebalanceDuration` to process that many records. This is a problem;\nwhen the deadline is missed the entire consumer fails.\n\n**Solution part 1:** Before this change the partition queues contained\nrecords, now they contain chunks of records, where each chunk contains\nrecords fetched together in a single broker poll. This has the advantage\nthat the consumer can never get more than `max.poll.records` records in\na zstream chunk. As long as the consumer can process `max.poll.records`\nwithin `maxRebalanceDuration` we can avoid time-outs. This solution\ndoesn't affect throughput too much; `max.poll.records` is also the\nmaximum that a very fast consumer can get in each zstream chunk.\n\nNot all broker polls may result in `max.poll.records` records. When the\nbroker gives smaller batches, the consumer also gets smaller chunks,\nwhich can lower throughput. Luckily, the Kafka broker tries to make the\nbatches as large as possible, making this situation unlikely to happen.\nHowever, if needed, we can write smart chunk-merging logic that respects\nthe maximum chunk size in a separate PR.\n\n**Solution part 2:** With solution part 1, the consumer's zstreams no\nlonger contains very large chunks. However they still continue pulling\nchunks from the queue until the end-of-stream marker, even though the\npartition was just revoked. It is fine to drop those records; they will\nbe picked up by another consumer after the rebalance. Therefore, we now\ndiscard these pre-fetched records as soon as the stream ends.\n\nDue to this change method `PartitionStreamControl.lost` is now\neffectively the same as `PartitionStreamControl.end`. Method `lost` has\nbeen removed.\n\n**Solution part 3:** Partitions that are _not_ revoked during a\nrebalance can still time out. There is no solution for this yet.\nHowever, as a workaround you can use the RangeAssignor. The\nRangeAssignor revokes all partitions during a rebalance.\n\nAlso:\n- Collect the runloop configuration in a separate class. This has the\nadditional advantage that it can be tested better.\n- The stream partition queues now contain 'Exit's instead of 'Take's.\n'Take's can represent multiple values. Since we want to queue chunks\nexplicitly, the slightly simpler `Exit` is sufficient and leads to\nslightly simpler code. The streaming is simplified further by directly\nusing `ZStream.repeatZIOOption` instead of `ZSteam.repeatX` and\n`ZStream.flattenX`.\n\n### Considered alternatives\n\nAn alternative is to make the consumer stream poll no more than\n`max.poll.records` from the partition queue. However, this breaks\nzio-kafka's guarantee that all records (for a given partition) fetched\ntogether from the broker are grouped into one chunk.\n\nFixes #1572\nFixes #1573\nFixes #1574",
+          "timestamp": "2025-09-24T10:44:46+02:00",
+          "tree_id": "6761da140fae20eb6868db257d952df8b9fa7e70",
+          "url": "https://github.com/zio/zio-kafka/commit/3fd9790b05bc5d6628acf02d6c8249d80c320931"
+        },
+        "date": 1758704913179,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 588.86441262,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 588.6295093000001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 84.83526768923076,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 272.28843655000003,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeqAsync",
+            "value": 23.649739655060294,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeqAsync",
+            "value": 6.69065891089134,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordPar",
+            "value": 55.44626277556895,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordSeq",
+            "value": 76.8800353658608,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 545.5311286200001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 535.8294298999999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 560.6828568,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 571.77989004,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
