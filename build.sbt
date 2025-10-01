@@ -33,7 +33,7 @@ lazy val kafkaVersion         = "4.1.0"
 lazy val embeddedKafkaVersion = "4.1.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
-lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.18"
+lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.19"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
@@ -57,7 +57,7 @@ inThisBuild(
     Test / fork              := true,
     run / fork               := true,
     // Update the readme on every push to master:
-    ciUpdateReadmeCondition  := Some(Condition.Expression("github.ref == 'refs/heads/master'")),
+    ciUpdateReadmeCondition := Some(Condition.Expression("github.ref == 'refs/heads/master'")),
     ciJvmOptions ++= Seq("-Xms6G", "-Xmx6G", "-Xss4M", "-XX:+UseG1GC"),
     scalafixDependencies ++= List(
       "com.github.vovapolu"                      %% "scaluzzi" % "0.1.23",
