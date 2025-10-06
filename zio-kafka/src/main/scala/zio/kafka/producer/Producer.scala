@@ -266,8 +266,11 @@ object Producer {
         )
       metrics  = new ZioProducerMetrics(settings.metricLabels)
       producer = new ProducerLive(settings, wrappedDiagnostics, javaProducer, runtime, sendQueue, metrics)
-      _ <- sendQueue.size.flatMap(metrics.observeSendQueueSize).schedule(Schedule.fixed(10.seconds)).forkScoped
-      _ <- ZIO.blocking(producer.sendFromQueue).forkScoped
+      // forkScoped needs to run in an interruptable region, otherwise the fibers can't be interrupted #1588
+      _ <- ZIO.interruptible {
+             sendQueue.size.flatMap(metrics.observeSendQueueSize).schedule(Schedule.fixed(10.seconds)).forkScoped *>
+               ZIO.blocking(producer.sendFromQueue).forkScoped
+           }
     } yield producer
 
   private[producer] def makeConcurrentDiagnostics(
