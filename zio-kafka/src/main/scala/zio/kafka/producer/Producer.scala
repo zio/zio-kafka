@@ -267,7 +267,11 @@ object Producer {
       metrics  = new ZioProducerMetrics(settings.metricLabels)
       producer = new ProducerLive(settings, wrappedDiagnostics, javaProducer, runtime, sendQueue, metrics)
       // To prevent shutdown problems, the following fibers need to be interruptable (see #1588):
-      _ <- sendQueue.size.flatMap(metrics.observeSendQueueSize).schedule(Schedule.fixed(10.seconds)).interruptible.forkScoped
+      _ <- sendQueue.size
+             .flatMap(metrics.observeSendQueueSize)
+             .schedule(Schedule.fixed(10.seconds))
+             .interruptible
+             .forkScoped
       _ <- ZIO.blocking(producer.sendFromQueue).interruptible.forkScoped
     } yield producer
 
