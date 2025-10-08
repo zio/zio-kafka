@@ -31,7 +31,7 @@ class ZioKafkaBenchmarks extends ComparisonBenchmark {
       ZIO.serviceWithZIO[Consumer] { consumer =>
         consumer
           .plainStream(
-            Subscription.manual(topicPartitions.map(tp => tp.name -> tp.partition): _*),
+            Subscription.manual(topicPartitions.map(tp => tp.topic() -> tp.partition()): _*),
             Serde.byteArray,
             Serde.byteArray
           )
