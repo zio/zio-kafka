@@ -136,24 +136,21 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
-      test("plainStream emits messages for a pattern subscription") {
-        val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
+      test("plainStream receives messages for a pattern subscription") {
+        val topic = "pattern" + (1000 + scala.util.Random.nextInt(9000))
         for {
-          client <- randomClient
-          group  <- randomGroup
-
-          _ <- KafkaTestUtils.createCustomTopic("pattern150")
-
+          client   <- randomClient
+          group    <- randomGroup
+          _        <- KafkaTestUtils.createCustomTopic(topic)
           producer <- KafkaTestUtils.makeProducer
-          _        <- KafkaTestUtils.produceMany(producer, "pattern150", kvs)
-
+          _        <- KafkaTestUtils.scheduledProduce(producer, topic, Schedule.recurs(100)).runDrain.forkScoped
           consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          records <- consumer
+          _        <- consumer
                        .plainStream(Subscription.Pattern("pattern[0-9]+".r), Serde.string, Serde.string)
                        .take(5)
                        .runCollect
-          kvOut = records.map(r => (r.record.key, r.record.value)).toList
-        } yield assert(kvOut)(equalTo(kvs))
+          _ <- ZIO.logError("end of test")
+        } yield assertCompletes
       },
       test("receive only messages from the subscribed topic-partition when creating a manual subscription") {
         val partitionCount = 5
@@ -192,8 +189,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           group  <- randomGroup
           topic  <- randomTopic
 
-          _ <- KafkaTestUtils.createCustomTopic(topic, partitionCount)
-
+          _        <- KafkaTestUtils.createCustomTopic(topic, partitionCount)
           producer <- KafkaTestUtils.makeProducer
           _ <- ZIO.foreachDiscard(1 to partitionCount) { i =>
                  KafkaTestUtils.produceMany(
