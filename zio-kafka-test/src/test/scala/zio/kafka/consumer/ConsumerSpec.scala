@@ -127,10 +127,10 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           producer <- KafkaTestUtils.makeProducer
           _        <- KafkaTestUtils.scheduledProduce(producer, topic, Schedule.recurs(100)).runDrain.forkScoped
           consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          _        <- consumer
-                       .plainStream(Subscription.Pattern("pattern[0-9]+".r), Serde.string, Serde.string)
-                       .take(5)
-                       .runCollect
+          _ <- consumer
+                 .plainStream(Subscription.Pattern("pattern[0-9]+".r), Serde.string, Serde.string)
+                 .take(5)
+                 .runCollect
           _ <- ZIO.logError("end of test")
         } yield assertCompletes
       },

@@ -266,8 +266,9 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           standardTopic  <- randomTopic
 
           adminClient <- KafkaTestUtils.makeAdminClient
-          _ <- adminClient.createTopic(NewTopic(compactedTopic, 1, 1, Map(TopicConfig.CLEANUP_POLICY_CONFIG -> "compact")))
-          _ <- KafkaTestUtils.createCustomTopic(standardTopic)
+          _ <-
+            adminClient.createTopic(NewTopic(compactedTopic, 1, 1, Map(TopicConfig.CLEANUP_POLICY_CONFIG -> "compact")))
+          _      <- KafkaTestUtils.createCustomTopic(standardTopic)
           group  <- randomGroup
           client <- randomClient
           chunk = makeChunk(standardTopic, compactedTopic)
