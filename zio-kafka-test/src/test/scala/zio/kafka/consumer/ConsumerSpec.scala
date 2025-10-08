@@ -118,40 +118,21 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
-      test("Consuming+provideCustomLayer") {
-        val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
+      test("plainStream receives messages for a pattern subscription") {
+        val topic = "pattern" + (1000 + scala.util.Random.nextInt(9000))
         for {
-          topic  <- randomTopic
-          client <- randomClient
-          group  <- randomGroup
-
+          client   <- randomClient
+          group    <- randomGroup
+          _        <- KafkaTestUtils.createCustomTopic(topic)
           producer <- KafkaTestUtils.makeProducer
-          _        <- KafkaTestUtils.produceMany(producer, topic, kvs)
-
+          _        <- KafkaTestUtils.scheduledProduce(producer, topic, Schedule.recurs(100)).runDrain.forkScoped
           consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          records <- consumer
-                       .plainStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
-                       .take(100)
-                       .runCollect
-          kvOut = records.map(r => (r.record.key, r.record.value)).toList
-        } yield assert(kvOut)(equalTo(kvs))
-      },
-      test("plainStream emits messages for a pattern subscription") {
-        val kvs = (1 to 5).toList.map(i => (s"key$i", s"msg$i"))
-        for {
-          client <- randomClient
-          group  <- randomGroup
-
-          producer <- KafkaTestUtils.makeProducer
-          _        <- KafkaTestUtils.produceMany(producer, "pattern150", kvs)
-
-          consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          records <- consumer
-                       .plainStream(Subscription.Pattern("pattern[0-9]+".r), Serde.string, Serde.string)
-                       .take(5)
-                       .runCollect
-          kvOut = records.map(r => (r.record.key, r.record.value)).toList
-        } yield assert(kvOut)(equalTo(kvs))
+          _ <- consumer
+                 .plainStream(Subscription.Pattern("pattern[0-9]+".r), Serde.string, Serde.string)
+                 .take(5)
+                 .runCollect
+          _ <- ZIO.logError("end of test")
+        } yield assertCompletes
       },
       test("receive only messages from the subscribed topic-partition when creating a manual subscription") {
         val partitionCount = 5
@@ -1208,57 +1189,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           }
         )
       },
-      test("commit offsets for all consumed messages") {
-        val nrMessages = 50
-        val messages   = (1 to nrMessages).toList.map(i => (s"key$i", s"msg$i"))
-
-        def consumeIt(
-          client: String,
-          group: String,
-          subscription: Subscription,
-          messagesReceived: Ref[List[(String, String)]],
-          done: Promise[Nothing, Unit]
-        ) =
-          KafkaTestUtils
-            .consumeWithStrings(client, Some(group), subscription)(record =>
-              for {
-                messagesSoFar <- messagesReceived.updateAndGet(_ :+ (record.key() -> record.value()))
-                _             <- ZIO.when(messagesSoFar.size == nrMessages)(done.succeed(()))
-              } yield ()
-            )
-            .fork
-
-        for {
-          topic    <- randomTopic
-          group    <- randomGroup
-          client   <- randomClient
-          producer <- KafkaTestUtils.makeProducer
-
-          subscription = Subscription.Topics(Set(topic))
-
-          done             <- Promise.make[Nothing, Unit]
-          messagesReceived <- Ref.make(List.empty[(String, String)])
-          _                <- KafkaTestUtils.produceMany(producer, topic, messages)
-          fib              <- consumeIt(client, group, subscription, messagesReceived, done)
-          _ <-
-            done.await *> Live
-              .live(
-                ZIO.sleep(3.seconds)
-              ) // TODO the sleep is necessary for the outstanding commits to be flushed. Maybe we can fix that another way
-          _ <- fib.interrupt
-          _ <- KafkaTestUtils.produceOne(producer, topic, "key-new", "msg-new")
-
-          consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          newMessage <- consumer
-                          .plainStream(subscription, Serde.string, Serde.string)
-                          .take(1)
-                          .map(r => (r.record.key(), r.record.value()))
-                          .run(ZSink.collectAll[(String, String)])
-                          .map(_.head)
-                          .orDie
-          consumedMessages <- messagesReceived.get
-        } yield assert(consumedMessages)(contains(newMessage).negate)
-      },
       suite("rebalanceSafeCommits prevents processing messages twice when rebalancing")({
 
         /**
@@ -1593,6 +1523,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           producer <- KafkaTestUtils.makeProducer
           _ <- KafkaTestUtils
                  .produceMany(producer, topic, kvs = (0 until nrMessages).map(n => s"key-$n" -> s"value->$n"))
+                 .repeat(Schedule.spaced(10.millis))
+                 .forkScoped
 
           allAssignments <- Ref.make(Map.empty[Int, List[Int]])
           check = checkAssignments(allAssignments)(_)

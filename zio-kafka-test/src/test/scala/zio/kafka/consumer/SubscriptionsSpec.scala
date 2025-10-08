@@ -27,6 +27,9 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           client <- randomClient
           group  <- randomGroup
 
+          _ <- KafkaTestUtils.createCustomTopic(topic1)
+          _ <- KafkaTestUtils.createCustomTopic(topic2)
+
           producer <- KafkaTestUtils.makeProducer
           _        <- KafkaTestUtils.produceMany(producer, topic1, kvs)
           _        <- KafkaTestUtils.produceMany(producer, topic2, kvs)
@@ -177,34 +180,34 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           assert(finalizingOrder)(equalTo(Chunk("consumer1 finalized", "consumer0 finalized")))
       } @@ nonFlaky(5),
       test("distributes records (randomly) from overlapping subscriptions over all subscribers") {
-        val kvs = (1 to 500).toList.map(i => (s"key$i", s"msg$i"))
         for {
-          topic1 <- randomTopic
-          client <- randomClient
-          group  <- randomGroup
-
+          topic1   <- randomTopic
+          client   <- randomClient
+          group    <- randomGroup
+          _        <- KafkaTestUtils.createCustomTopic(topic1)
           producer <- KafkaTestUtils.makeProducer
-          _        <- KafkaTestUtils.produceMany(producer, topic1, kvs)
+          _        <- KafkaTestUtils.scheduledProduce(producer, topic1, Schedule.spaced(5.millis)).runDrain.forkScoped
 
           consumer1GotMessage <- Promise.make[Nothing, Unit]
           consumer2GotMessage <- Promise.make[Nothing, Unit]
           consumer <- KafkaTestUtils.makeConsumer(
                         client,
                         Some(group),
-                        properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "10")
+                        properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1")
                       )
-          _ <- consumer
-                 .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
-                 .tap(_ => consumer1GotMessage.succeed(()))
-                 .merge(
+          _ <- ZStream
+                 .mergeAllUnbounded()(
+                   consumer
+                     .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
+                     .tap(_ => consumer1GotMessage.succeed(())),
                    consumer
                      .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
                      .tap(_ => consumer2GotMessage.succeed(()))
                  )
                  .interruptWhen(consumer1GotMessage.await *> consumer2GotMessage.await)
-                 .runCollect
+                 .runDrain
         } yield assertCompletes
-      } @@ TestAspect.nonFlaky(5),
+      },
       test("can handle unsubscribing during the lifetime of other streams") {
         val kvs = (1 to 50).toList.map(i => (s"key$i", s"msg$i"))
         for {

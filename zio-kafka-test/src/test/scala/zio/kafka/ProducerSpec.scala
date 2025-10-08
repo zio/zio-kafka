@@ -40,6 +40,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       )
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
+          _        <- KafkaTestUtils.createCustomTopic(topic)
           firstMessage  = "toto"
           secondMessage = "tata"
           consume = (n: Int) =>
@@ -72,6 +73,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       )
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
+          _        <- KafkaTestUtils.createCustomTopic(topic)
           firstMessage  = "toto"
           secondMessage = "tata"
           consume = (n: Int) =>
@@ -102,12 +104,10 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     suite("::produceChunkAsync(records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]])")(
       test("produces messages") {
         for {
-          consumer <- KafkaTestUtils.makeConsumer(
-                        clientId = "producer-spec-consumer",
-                        groupId = Some("group-0")
-                      )
+          consumer <- KafkaTestUtils.makeConsumer(clientId = "producer-spec-consumer", groupId = Some("group-0"))
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
+          _        <- KafkaTestUtils.createCustomTopic(topic)
           firstMessage  = "toto"
           secondMessage = "tata"
           consume = (n: Int) =>
@@ -150,6 +150,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       )
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
+          _        <- KafkaTestUtils.createCustomTopic(topic)
           firstMessage  = "toto"
           secondMessage = "tata"
           consume = (n: Int) =>
@@ -186,6 +187,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
+          _        <- KafkaTestUtils.createCustomTopic(topic)
           _        <- producer.produce(new ProducerRecord(topic, "boo", "baa"), Serde.string, Serde.string)
         } yield assertCompletes
       },
@@ -202,6 +204,8 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           topic2 <- randomTopic
           group  <- randomGroup
           client <- randomClient
+          _      <- KafkaTestUtils.createCustomTopic(topic1)
+          _      <- KafkaTestUtils.createCustomTopic(topic2)
           key1   = "boo"
           value1 = "baa"
           key2   = "baa"
@@ -260,9 +264,11 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           compactedTopic <- randomTopic
           standardTopic  <- randomTopic
-          adminClient    <- KafkaTestUtils.makeAdminClient
-          _ <- adminClient
-                 .createTopic(NewTopic(compactedTopic, 1, 1, Map(TopicConfig.CLEANUP_POLICY_CONFIG -> "compact")))
+
+          adminClient <- KafkaTestUtils.makeAdminClient
+          _ <-
+            adminClient.createTopic(NewTopic(compactedTopic, 1, 1, Map(TopicConfig.CLEANUP_POLICY_CONFIG -> "compact")))
+          _      <- KafkaTestUtils.createCustomTopic(standardTopic)
           group  <- randomGroup
           client <- randomClient
           chunk = makeChunk(standardTopic, compactedTopic)
@@ -283,10 +289,9 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         )
       },
       test("an empty chunk of records") {
-        val chunks = Chunk.fromIterable(List.empty)
         for {
           producer <- KafkaTestUtils.makeProducer
-          outcome  <- producer.produceChunk(chunks, Serde.string, Serde.string)
+          outcome  <- producer.produceChunk(Chunk.empty, Serde.string, Serde.string)
         } yield assertTrue(outcome.isEmpty)
       },
       test("export metrics") {
@@ -299,6 +304,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           producer <- KafkaTestUtils.makeProducer
           topic    <- randomTopic
+          _        <- KafkaTestUtils.createCustomTopic(topic)
           info     <- producer.partitionsFor(topic).debug
         } yield assertTrue(info.headOption.map(_.topic()).contains(topic))
       },
@@ -309,6 +315,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             group   <- randomGroup
             client1 <- randomClient
             client2 <- randomClient
+            _       <- KafkaTestUtils.createCustomTopic(topic)
             initialAliceAccount = new ProducerRecord(topic, "alice", 20)
             initialBobAccount   = new ProducerRecord(topic, "bob", 0)
 
@@ -342,6 +349,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             group   <- randomGroup
             client1 <- randomClient
             client2 <- randomClient
+            _       <- KafkaTestUtils.createCustomTopic(topic)
             initialAliceAccount = new ProducerRecord(topic, "alice", 20)
             initialBobAccount   = new ProducerRecord(topic, "bob", 0)
             aliceGives20        = new ProducerRecord(topic, "alice", 0)
@@ -389,6 +397,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             group   <- randomGroup
             client1 <- randomClient
             client2 <- randomClient
+            _       <- KafkaTestUtils.createCustomTopic(topic)
             initialAliceAccount = new ProducerRecord(topic, "alice", 20)
             initialBobAccount   = new ProducerRecord(topic, "bob", 0)
 
@@ -425,6 +434,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           for {
             topic   <- randomTopic
             client1 <- randomClient
+            _       <- KafkaTestUtils.createCustomTopic(topic)
             initialBobAccount = new ProducerRecord(topic, "bob", 0)
 
             consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
@@ -448,6 +458,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             group   <- randomGroup
             client1 <- randomClient
             client2 <- randomClient
+            _       <- KafkaTestUtils.createCustomTopic(topic)
 
             initialAliceAccount = new ProducerRecord(topic, "alice", 20)
             initialBobAccount   = new ProducerRecord(topic, "bob", 0)
@@ -492,6 +503,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             group   <- randomGroup
             client1 <- randomClient
             client2 <- randomClient
+            _       <- KafkaTestUtils.createCustomTopic(topic)
 
             initialAliceAccount = new ProducerRecord(topic, "alice", 20)
             initialBobAccount   = new ProducerRecord(topic, "bob", 0)
@@ -535,6 +547,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             group   <- randomGroup
             client1 <- randomClient
             client2 <- randomClient
+            _       <- KafkaTestUtils.createCustomTopic(topic)
 
             initialAliceAccount = new ProducerRecord(topic, "alice", 20)
             initialBobAccount   = new ProducerRecord(topic, "bob", 0)
@@ -583,6 +596,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             group2  <- randomGroup
             client1 <- randomClient
             client2 <- randomClient
+            _       <- KafkaTestUtils.createCustomTopic(topic)
 
             initialAliceAccount  = new ProducerRecord(topic, "alice", 20)
             aliceAccountFeesPaid = new ProducerRecord(topic, "alice", 0)
@@ -624,6 +638,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             group2  <- randomGroup
             client1 <- randomClient
             client2 <- randomClient
+            _       <- KafkaTestUtils.createCustomTopic(topic)
 
             initialAliceAccount  = new ProducerRecord(topic, "alice", 20)
             aliceAccountFeesPaid = new ProducerRecord(topic, "alice", 0)
@@ -664,6 +679,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           val test = for {
             topic            <- randomTopic
             client1          <- randomClient
+            _                <- KafkaTestUtils.createCustomTopic(topic)
             transactionThief <- Ref.make(Option.empty[Transaction])
 
             consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
@@ -682,6 +698,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           val test = for {
             topic            <- randomTopic
             client1          <- randomClient
+            _                <- KafkaTestUtils.createCustomTopic(topic)
             transactionThief <- Ref.make(Option.empty[Transaction])
 
             consumer1             <- KafkaTestUtils.makeConsumer(client1, rebalanceSafeCommits = true)
