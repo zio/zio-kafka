@@ -1545,6 +1545,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           producer <- KafkaTestUtils.makeProducer
           _ <- KafkaTestUtils
                  .produceMany(producer, topic, kvs = (0 until nrMessages).map(n => s"key-$n" -> s"value->$n"))
+                 .repeat(Schedule.spaced(10.millis))
+                 .forkScoped
 
           allAssignments <- Ref.make(Map.empty[Int, List[Int]])
           check = checkAssignments(allAssignments)(_)
