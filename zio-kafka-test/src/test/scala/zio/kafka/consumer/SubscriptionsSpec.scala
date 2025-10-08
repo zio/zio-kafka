@@ -180,29 +180,26 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           assert(finalizingOrder)(equalTo(Chunk("consumer1 finalized", "consumer0 finalized")))
       } @@ nonFlaky(5),
       test("distributes records (randomly) from overlapping subscriptions over all subscribers") {
-        val kvs = (1 to 1000).toList.map(i => (s"key$i", s"msg$i"))
         for {
-          topic1 <- randomTopic
-          client <- randomClient
-          group  <- randomGroup
-
-          // Lots of partitions to increase chance that each consumer gets some records
-          _ <- KafkaTestUtils.createCustomTopic(topic1, 10)
-
+          topic1   <- randomTopic
+          client   <- randomClient
+          group    <- randomGroup
+          _        <- KafkaTestUtils.createCustomTopic(topic1)
           producer <- KafkaTestUtils.makeProducer
-          _        <- KafkaTestUtils.produceMany(producer, topic1, kvs)
+          _        <- KafkaTestUtils.scheduledProduce(producer, topic1, Schedule.spaced(5.millis)).runDrain.forkScoped
 
           consumer1GotMessage <- Promise.make[Nothing, Unit]
           consumer2GotMessage <- Promise.make[Nothing, Unit]
           consumer <- KafkaTestUtils.makeConsumer(
                         client,
                         Some(group),
-                        properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "10")
+                        properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1")
                       )
-          _ <- consumer
-                 .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
-                 .tap(_ => consumer1GotMessage.succeed(()))
-                 .merge(
+          _ <- ZStream
+                 .mergeAllUnbounded()(
+                   consumer
+                     .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
+                     .tap(_ => consumer1GotMessage.succeed(())),
                    consumer
                      .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
                      .tap(_ => consumer2GotMessage.succeed(()))
