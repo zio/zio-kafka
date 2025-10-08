@@ -118,24 +118,6 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           kvOut = records.map(r => (r.record.key, r.record.value)).toList
         } yield assert(kvOut)(equalTo(kvs))
       },
-      test("Consuming+provideCustomLayer") {
-        val kvs = (1 to 100).toList.map(i => (s"key$i", s"msg$i"))
-        for {
-          topic  <- randomTopic
-          client <- randomClient
-          group  <- randomGroup
-
-          producer <- KafkaTestUtils.makeProducer
-          _        <- KafkaTestUtils.produceMany(producer, topic, kvs)
-
-          consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          records <- consumer
-                       .plainStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
-                       .take(100)
-                       .runCollect
-          kvOut = records.map(r => (r.record.key, r.record.value)).toList
-        } yield assert(kvOut)(equalTo(kvs))
-      },
       test("plainStream receives messages for a pattern subscription") {
         val topic = "pattern" + (1000 + scala.util.Random.nextInt(9000))
         for {
