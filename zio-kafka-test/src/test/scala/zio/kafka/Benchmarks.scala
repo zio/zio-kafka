@@ -70,7 +70,11 @@ object Plain {
         lengthCounter += record.value().length
       }
 
-      println(s"messageCounter = $messageCounter")
+      println(s"message count: $messageCounter")
+      println(s"total bytes: $lengthCounter")
+      if (messageCounter > 0) {
+        println(s"avg message length: ${lengthCounter.doubleValue / messageCounter.doubleValue}")
+      }
     }
 
     val duration = System.currentTimeMillis() - startTime
