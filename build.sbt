@@ -38,12 +38,12 @@ lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.19"
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
 lazy val _scala213 = "2.13.17"
-lazy val _scala3   = "3.3.6"
+lazy val _scala3   = "3.3.7"
 
 inThisBuild(
   List(
     name         := "ZIO Kafka",
-    zioVersion   := "2.1.21",
+    zioVersion   := "2.1.22",
     scalaVersion := _scala213,
     // zio-sbt defines these 'scala213' and 'scala3' settings, but we need to define them here to override the defaults and better control them
     scala213 := _scala213,

@@ -35,11 +35,6 @@ final case class ConsumerSettings(
   maxStreamPullIntervalOption: Option[Duration] = None,
   diagnostics: Consumer.ConsumerDiagnostics = Consumer.NoDiagnostics
 ) {
-  // Parse booleans in a way compatible with how Kafka does this in org.apache.kafka.common.config.ConfigDef.parseType:
-  require(
-    properties.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG).forall(_.toString.trim.equalsIgnoreCase("false")),
-    "Because zio-kafka does pre-fetching, auto commit is not supported"
-  )
 
   /**
    * Tunes the consumer for high throughput.
@@ -76,9 +71,6 @@ final case class ConsumerSettings(
       .withPollTimeout(50.millis)
       .withMaxPollRecords(100)
       .withFetchStrategy(QueueSizeBasedFetchStrategy(partitionPreFetchBufferLimit = 512))
-
-  def driverSettings: Map[String, AnyRef] =
-    Map(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false") ++ properties
 
   def withBootstrapServers(servers: List[String]): ConsumerSettings =
     withProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, servers.mkString(","))
@@ -355,6 +347,31 @@ final case class ConsumerSettings(
    */
   def withDiagnostics(diagnostics: Consumer.ConsumerDiagnostics): ConsumerSettings =
     copy(diagnostics = diagnostics)
+
+  def driverSettings: Map[String, AnyRef] =
+    Map(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false") ++ properties
+
+  def validate(): ZIO[Any, Throwable, Unit] = {
+    // Parse booleans in a way compatible with how Kafka does this in org.apache.kafka.common.config.ConfigDef.parseType:
+    def booleanProperty(configName: String): Option[Boolean] =
+      properties.get(configName).map(_.toString.trim.equalsIgnoreCase("false"))
+
+    def assert(assertion: => Boolean, error: String): Chunk[String] =
+      if (assertion) Chunk.empty else Chunk.single(error)
+
+    val errors = Chunk.empty ++
+      assert(
+        booleanProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG).forall(identity),
+        s"Because zio-kafka does pre-fetching, auto commit is not supported. Please do not set config ${ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG}."
+      ) ++
+      assert(
+        commitTimeout.toNanos > 2L * pollTimeout.toNanos,
+        s"Commit timeout must be larger than 2 * pollTimeout, saw commitTimeout ${commitTimeout} and pollTimeout ${pollTimeout}."
+      )
+
+    if (errors.isEmpty) ZIO.unit
+    else ZIO.fail(new IllegalArgumentException(errors.mkString("Invalid settings: ", " ", "")))
+  }
 
 }
 
