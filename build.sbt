@@ -38,7 +38,7 @@ lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.19"
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
 lazy val _scala213 = "2.13.17"
-lazy val _scala3   = "3.3.6"
+lazy val _scala3   = "3.3.7"
 
 inThisBuild(
   List(
