@@ -48,7 +48,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
                         .take(n.toLong)
                         .runCollect
-                        .timeoutFail(TestTimeoutException("Consuming takes too long"))(30.seconds)
+                        .timeoutFail(TestTimeoutException(s"Consuming $n records takes too long"))(30.seconds)
           _ <- producer.produce(new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8)): ByteRecord)
           first <- consume(1)
           _ <- producer.produce(new ProducerRecord(topic, secondMessage.getBytes(StandardCharsets.UTF_8)): ByteRecord)
@@ -81,7 +81,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
                         .take(n.toLong)
                         .runCollect
-                        .timeoutFail(TestTimeoutException("Consuming takes too long"))(30.seconds)
+                        .timeoutFail(TestTimeoutException(s"Consuming $n records takes too long"))(30.seconds)
           _ <- producer
                  .produceAsync(new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8)): ByteRecord)
                  .flatten
@@ -115,7 +115,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
                         .take(n.toLong)
                         .runCollect
-                        .timeoutFail(TestTimeoutException("Consuming takes too long"))(30.seconds)
+                        .timeoutFail(TestTimeoutException(s"Consuming $n records takes too long"))(30.seconds)
           _ <- producer
                  .produceChunkAsync(Chunk(new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8))))
                  .flatten
@@ -158,7 +158,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         .plainStream(Subscription.topics(topic), Serde.byteArray, Serde.byteArray)
                         .take(n.toLong)
                         .runCollect
-                        .timeoutFail(TestTimeoutException("Consuming takes too long"))(30.seconds)
+                        .timeoutFail(TestTimeoutException(s"Consuming $n records takes too long"))(30.seconds)
           _ <- producer
                  .produceChunk(Chunk(new ProducerRecord(topic, firstMessage.getBytes(StandardCharsets.UTF_8))))
           first <- consume(1)

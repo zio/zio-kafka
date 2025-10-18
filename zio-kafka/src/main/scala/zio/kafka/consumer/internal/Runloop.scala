@@ -229,17 +229,18 @@ private[consumer] final class Runloop private (
             pullDurationAndRecords <- doPoll(c).timed
             (pollDuration, polledRecords) = pullDurationAndRecords
 
-            _ <- consumerMetrics.observePoll(toResumeCount, toPauseCount, pollDuration, polledRecords.count()) *>
-                   diagnostics.emit {
-                     val providedTps         = polledRecords.partitions().asScala.toSet
-                     val requestedPartitions = state.pendingRequests.map(_.tp).toSet
+            _ <- consumerMetrics.observePoll(toResumeCount, toPauseCount, pollDuration, polledRecords.count())
+            _ <- diagnostics.emit {
+                   val providedTps         = polledRecords.partitions().asScala.toSet
+                   val requestedPartitions = state.pendingRequests.map(_.tp).toSet
 
-                     DiagnosticEvent.Poll(
-                       tpRequested = requestedPartitions,
-                       tpWithData = providedTps,
-                       tpWithoutData = requestedPartitions -- providedTps
-                     )
-                   }
+                   DiagnosticEvent.Poll(
+                     tpRequested = requestedPartitions,
+                     tpWithData = providedTps,
+                     tpWithoutData = requestedPartitions -- providedTps
+                   )
+                 }
+
             pollresult <- rebalanceCoordinator.getAndResetLastEvent.flatMap {
                             case RebalanceEvent(rebalanceCallbacks) if rebalanceCallbacks.isEmpty =>
                               // The fast track, rebalance listener was not invoked:

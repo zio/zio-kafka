@@ -110,6 +110,14 @@ object KafkaTestUtils {
   // -----------------------------------------------------------------------------------------
 
   /**
+   * Acked record are not immediately visible to the consumer, even when the producer uses `acks=all`. Evaluate this
+   * after synchronous producing as a workaround.
+   *
+   * See also [[https://issues.apache.org/jira/browse/KAFKA-19811 KAFKA-19811]].
+   */
+  val kafka19811Workaround: UIO[Unit] = ZIO.sleep(5.millis)
+
+  /**
    * Produce a single message to a topic.
    */
   def produceOne(
@@ -118,7 +126,11 @@ object KafkaTestUtils {
     key: String,
     message: String
   ): ZIO[Any, Throwable, RecordMetadata] =
-    producer.produce[Any, String, String](new ProducerRecord(topic, key, message), Serde.string, Serde.string)
+    producer.produce[Any, String, String](
+      new ProducerRecord(topic, key, message),
+      Serde.string,
+      Serde.string
+    ) <* kafka19811Workaround
 
   /**
    * Produce a single message to the given partition of a topic.
@@ -134,7 +146,7 @@ object KafkaTestUtils {
       new ProducerRecord(topic, partition, key, message),
       Serde.string,
       Serde.string
-    )
+    ) <* kafka19811Workaround
 
   /**
    * Produce many messages to the given partition of a topic.
@@ -151,7 +163,7 @@ object KafkaTestUtils {
       }),
       Serde.string,
       Serde.string
-    )
+    ) <* kafka19811Workaround
 
   /**
    * Produce many messages to a topic.
@@ -167,7 +179,7 @@ object KafkaTestUtils {
       }),
       Serde.string,
       Serde.string
-    )
+    ) <* kafka19811Workaround
 
   /**
    * A stream that produces messages to a topic on a schedule for as long as it is running.
