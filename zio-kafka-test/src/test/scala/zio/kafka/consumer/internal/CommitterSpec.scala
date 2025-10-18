@@ -11,7 +11,7 @@ import java.util.{ Map => JavaMap }
 import scala.jdk.CollectionConverters.{ MapHasAsJava, MapHasAsScala }
 
 object CommitterSpec extends ZIOSpecDefault {
-  override def spec = suite("Committer")(
+  override def spec: Spec[TestEnvironment with Scope, Throwable] = suite("Committer")(
     test("signals that a new commit is available") {
       for {
         commitAvailable <- Promise.make[Nothing, Unit]
