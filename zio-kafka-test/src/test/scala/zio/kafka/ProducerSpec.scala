@@ -6,7 +6,7 @@ import org.apache.kafka.common.config.TopicConfig
 import zio._
 import zio.kafka.admin.AdminClient.NewTopic
 import zio.kafka.consumer._
-import zio.kafka.producer.TransactionalProducer.{ RebalanceSafeCommitsRequired, TransactionLeaked, UserInitiatedAbort }
+import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
 import zio.kafka.producer.{ ByteRecord, Transaction }
 import zio.kafka.serde.Serde
 import zio.kafka.testkit._
@@ -726,7 +726,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             // Creating transactional producer should fail here.
             _ <- KafkaTestUtils.makeTransactionalProducer(UUID.randomUUID().toString, consumer1)
           } yield ()
-          assertZIO(test.exit)(failsCause(containsCause(Cause.fail(RebalanceSafeCommitsRequired))))
+          assertZIO(test.exit)(failsWithA[IllegalArgumentException])
         }
       ),
       produceSpec,
