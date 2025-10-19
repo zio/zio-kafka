@@ -869,6 +869,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             // A slow producer
             producer <- KafkaTestUtils.makeProducer
             _        <- KafkaTestUtils.scheduledProduce(producer, topic, Schedule.fixed(1.second)).runDrain.forkScoped
+            _        <- KafkaTestUtils.kafka19811Workaround
 
             settings <- KafkaTestUtils.consumerSettings(
                           clientId = clientId,
