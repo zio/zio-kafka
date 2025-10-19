@@ -131,6 +131,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _        <- KafkaTestUtils.createCustomTopic(topic)
           producer <- KafkaTestUtils.makeProducer
           _        <- KafkaTestUtils.scheduledProduce(producer, topic, Schedule.recurs(100)).runDrain.forkScoped
+          _        <- KafkaTestUtils.kafka19811Workaround
           consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
           _ <- consumer
                  .plainStream(Subscription.Pattern("pattern[0-9]+".r), Serde.string, Serde.string)
@@ -371,6 +372,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             producer <- KafkaTestUtils.makeProducer
             _ <-
               KafkaTestUtils.scheduledProduce(producer, topic, Schedule.fixed(50.millis).jittered).runDrain.forkScoped
+            _ <- KafkaTestUtils.kafka19811Workaround
 
             consumer <- KafkaTestUtils.makeConsumer(
                           client,
@@ -741,6 +743,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           consumer2            <- KafkaTestUtils.makeConsumer(client2, Some(group))
           _                    <- KafkaTestUtils.createCustomTopic(topic1, partitionCount = partitionCount)
           _ <- KafkaTestUtils.scheduledProduce(producer, topic1, Schedule.spaced(100.millis)).runDrain.forkScoped
+          _ <- KafkaTestUtils.kafka19811Workaround
           stream1PartitionsAssignedValue <-
             ZIO.scoped {
               for {
@@ -821,6 +824,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           producer <- KafkaTestUtils.makeProducer
           _        <- KafkaTestUtils.scheduledProduce(producer, topic1, producerSchedule).runDrain.forkScoped
           _        <- KafkaTestUtils.scheduledProduce(producer, topic2, producerSchedule).runDrain.forkScoped
+          _        <- KafkaTestUtils.kafka19811Workaround
 
           settings <- KafkaTestUtils
                         .consumerSettings(
