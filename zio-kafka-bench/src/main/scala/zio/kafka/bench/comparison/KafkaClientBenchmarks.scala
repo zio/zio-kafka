@@ -43,7 +43,7 @@ class KafkaClientBenchmarks extends ComparisonBenchmark {
         ZIO
           .serviceWithZIO[LowLevelKafka] { consumer =>
             ZIO.attemptBlocking {
-              consumer.assign(topicPartitions.map(_.asJava).asJava)
+              consumer.assign(topicPartitions.asJava)
 
               var count = 0L
               while (count < recordCount) {

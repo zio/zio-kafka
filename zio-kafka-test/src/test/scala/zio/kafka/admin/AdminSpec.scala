@@ -3,6 +3,7 @@ package zio.kafka.admin
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin.{ ConfigEntry, RecordsToDelete }
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import zio.kafka.admin.internal.JavaConverters._
 import org.apache.kafka.common.{ Node => JNode }
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
@@ -440,28 +441,33 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         )
       },
       test("should correctly handle no node (null) when converting JNode to Node") {
-        assert(AdminClient.Node.fromJava(null))(isNone)
+        val result = JNodeAsScala(null).asScala
+        assertTrue(result == None)
       },
       test("should correctly handle noNode when converting JNode to Node") {
-        assert(AdminClient.Node.fromJava(JNode.noNode()))(isNone)
+        val result = JNodeAsScala(JNode.noNode()).asScala
+        assertTrue(result == None)
       },
       test("should correctly keep all information when converting a valid jNode to Node") {
         val posIntGen = Gen.int(0, Int.MaxValue)
         check(posIntGen, Gen.string1(Gen.char), posIntGen, Gen.option(Gen.string)) { (id, host, port, rack) =>
-          val jNode = new JNode(id, host, port, rack.orNull)
-          assertTrue(AdminClient.Node.fromJava(jNode).map(_.asJava) == Some(jNode))
+          val jNode  = new JNode(id, host, port, rack.orNull)
+          val result = JNodeAsScala(jNode).asScala.map(_.asJava)
+          assertTrue(result == Some(jNode))
         }
       },
       test("will replace invalid port by None") {
         val posIntGen = Gen.int(0, Int.MaxValue)
         check(posIntGen, Gen.string1(Gen.char), Gen.int, Gen.option(Gen.string)) { (id, host, port, rack) =>
-          val jNode = new JNode(id, host, port, rack.orNull)
-          assertTrue(AdminClient.Node.fromJava(jNode).map(_.port.isEmpty) == Some(port < 0))
+          val jNode  = new JNode(id, host, port, rack.orNull)
+          val result = JNodeAsScala(jNode).asScala
+          assertTrue(result.map(_.port.isEmpty) == Some(port < 0))
         }
       },
       test("will replace empty host by None") {
-        val jNode = new JNode(0, "", 9092, null)
-        assertTrue(AdminClient.Node.fromJava(jNode).map(_.host.isEmpty) == Some(true))
+        val jNode  = new JNode(0, "", 9092, null)
+        val result = JNodeAsScala(jNode).asScala
+        assertTrue(result.map(_.host.isEmpty) == Some(true))
       },
       test("incremental alter configs") {
         for {
