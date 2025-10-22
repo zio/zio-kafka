@@ -352,7 +352,9 @@ final case class ConsumerSettings(
   def withDiagnostics(diagnostics: Consumer.ConsumerDiagnostics): ConsumerSettings =
     copy(diagnostics = diagnostics)
 
-  // This is an internal API. It can change in any zio-kafka version.
+  /**
+   * Configuration for the underlying java Kafka client.
+   */
   def driverSettings: Map[String, AnyRef] =
     Map(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false") ++
       Option.when(rebalanceSafeCommits)(
@@ -360,8 +362,7 @@ final case class ConsumerSettings(
       ) ++
       properties
 
-  // This is an internal API. It can change in any zio-kafka version.
-  def validate: ZIO[Any, IllegalArgumentException, Unit] =
+  private[kafka] def validate: ZIO[Any, IllegalArgumentException, Unit] =
     failOnErrors {
       assert(
         booleanProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG).getOrElse(true),
@@ -373,8 +374,8 @@ final case class ConsumerSettings(
         )
     }
 
-  // This is an internal API. It can change in any zio-kafka version.
-  def validateForTransactional: ZIO[Any, IllegalArgumentException, Unit] =
+  // NOTE: It is assumed that `validate` is invoked as well.
+  private[kafka] def validateForTransactional: ZIO[Any, IllegalArgumentException, Unit] =
     failOnErrors {
       assert(
         rebalanceSafeCommits,
