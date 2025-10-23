@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761160026544,
+  "lastUpdate": 1761200046230,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -5418,6 +5418,102 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 574.52890674,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ffcaaf7343dfff7495db06ce65e9670f354e01ef",
+          "message": "No CooperativeStickyAssignor for transactional, RangeAssignor for rebalance-safe-commits (#1597)\n\nIn this change we:\n1. disallow CooperativeStickyAssignor for transactional use cases,\n2. make RangeAssignor the default for rebalance-safe-commits.\n\n**Context:** most partition assignors revoke all partitions during a\nrebalance, even when a partition is re-assigned to the same consumer\nafter the rebalance. The CooperativeStickyAssignor however, has the\noption to not revoke a partition in case it will be assigned to the same\nconsumer.\n\nWhen rebalance-safe-commits is enabled, the zio-kafka consumer awaits\nprocessing completion for every partition that gets revoked during a\nrebalance. Partitions that are not revoked in the rebalance, will\ncontinue to process records. _After_ the rebalance, the consumer might\nstill be processing records that were received from _before_ the\nrebalance. In cases where the epoch of the consumed records is\nimportant, this causes problems.\n\nOne such case is when the consumer is coupled to a transactional\nproducer. The brokers do not allow committing a transaction with offsets\nreceived in a previous epoch. To prevent this situation, zio-kafka now\nvalidates that the CooperativeStickyAssignor is not configured for\ntransactional use cases.\n\nSince zio-kafka does not know upfront whether a consumer will be coupled\nto a transactional producer, and because the default partition assignor\nis `[RangeAssignor, CooperativeStickyAssignor]` (the consumer switches\nto the second when all consumers support it), and because it is not\npossible to receive new records during the rebalance anyways (this is a\nlimitation of the underlying kafka consumer, see also KIP-983), we now\nmake `[RangeAssignor]` the default when rebalance-safe-commits is\nenabled.\n\nThe custom `RebalanceSafeCommitsRequired` exception (a subclass of\n`IllegalArgumentException`) has been removed. We now use\nIllegalArgumentException directly. This is a non-binary compatible\nchange. However, we expect that absolutely nobody handles this exception\nexplicitly.\n\nSee also \"solution part 3\" in #1576.\n\nAlso:\n- Test transactional producing with all standard partition assignors\n(except the CooperativeStickyAssignor).\n- Make the transactional producing test fail immediately when\nconstructing the consumer fails.\n- Mark some methods on ConsumerSettings as an internal API.\n- More ConsumerSettings tests.\n- Make the error message for invalid settings a bit nicer.",
+          "timestamp": "2025-10-23T07:53:14+02:00",
+          "tree_id": "32ba16f9c4a7f3b9a2e84db56bc7c266d8ad7c26",
+          "url": "https://github.com/zio/zio-kafka/commit/ffcaaf7343dfff7495db06ce65e9670f354e01ef"
+        },
+        "date": 1761200045403,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 592.5558696200001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 588.86946528,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 83.16065572256412,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 265.54090549,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeqAsync",
+            "value": 22.42755961434781,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeqAsync",
+            "value": 6.654732952564354,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordPar",
+            "value": 54.53302376881214,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordSeq",
+            "value": 73.68899176029487,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 545.0657354,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 535.70169988,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 560.59402256,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 571.9187167800001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
