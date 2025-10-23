@@ -721,6 +721,54 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           } yield assertCompletes
         }
       ),
+      test("supports having no partitions assigned") {
+
+        /**
+         * Outline of this test:
+         *   - Create partition with single partition.
+         *   - Create 2 consumers c1 and c2.
+         *   - Wait a few polls.
+         *   - Produce a messages.
+         *   - One of the 2 consumers receives the message, interrupt it. The other consumer should get the partition
+         *     assigned.
+         *   - Test that by sending another message. It should be received by the other consumer.
+         */
+        ZIO.logLevel(LogLevel.Debug) {
+          for {
+            topic  <- randomTopic
+            group  <- randomGroup
+            client <- randomClient
+
+            _            <- KafkaTestUtils.createCustomTopic(topic, 1)
+            producer     <- KafkaTestUtils.makeProducer
+            c1RecordSeen <- Promise.make[Throwable, Unit]
+            c1           <- KafkaTestUtils.makeConsumer(client, Some(group))
+            f1 <- ZIO.logAnnotate("c", "1") {
+                    c1.plainStream(Subscription.topics(topic), Serde.string, Serde.string)
+                      .tap(_ => ZIO.logDebug("c1 record received") *> c1RecordSeen.succeed(()))
+                      .runDrain
+                      .forkScoped
+                  }
+            c2RecordSeen <- Promise.make[Throwable, Unit]
+            c2           <- KafkaTestUtils.makeConsumer(client, Some(group))
+            f2 <- ZIO.logAnnotate("c", "2") {
+                    c2.plainStream(Subscription.topics(topic), Serde.string, Serde.string)
+                      .tap(_ => ZIO.logDebug("c2 record received") *> c2RecordSeen.succeed(()))
+                      .runDrain
+                      .forkScoped
+                  }
+            _      <- ZIO.sleep(500.millis) // Sleep for a couple of polls
+            _      <- KafkaTestUtils.produceOne(producer, topic, "k1", "m1")
+            seenBy <- c1RecordSeen.await <|> c2RecordSeen.await
+            // Abort the consumer fiber that received the record:
+            _ <- seenBy.fold(_ => f1.interrupt, _ => f2.interrupt)
+            _ <- ZIO.sleep(500.millis) // Sleep for a couple of polls
+            // Send some more records which should be received by the other consumer:
+            _ <- KafkaTestUtils.produceOne(producer, topic, "k2", "m2")
+            _ <- seenBy.fold(_ => c2RecordSeen.await, _ => c1RecordSeen.await)
+          } yield assertCompletes
+        }
+      },
       test("does not consume newly assigned partitions when rebalancing during a graceful shutdown") {
         /*
         Test outline:
