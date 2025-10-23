@@ -267,7 +267,7 @@ object Consumer {
    */
   def make(settings: ConsumerSettings): ZIO[Scope, Throwable, Consumer] =
     for {
-      _                  <- settings.validate()
+      _                  <- settings.validate
       wrappedDiagnostics <- makeConcurrentDiagnostics(settings.diagnostics)
       _                  <- SslHelper.validateEndpoint(settings.driverSettings)
       consumerAccess     <- ConsumerAccess.make(settings)

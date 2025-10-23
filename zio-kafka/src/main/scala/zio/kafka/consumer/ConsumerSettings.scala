@@ -1,12 +1,14 @@
 package zio.kafka.consumer
 
-import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.consumer.{ ConsumerConfig, CooperativeStickyAssignor, RangeAssignor }
 import org.apache.kafka.common.IsolationLevel
 import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.fetch.{ FetchStrategy, QueueSizeBasedFetchStrategy }
 import zio.kafka.security.KafkaCredentialStore
 import zio.metrics.MetricLabel
+
+import scala.jdk.CollectionConverters._
 
 /**
  * Settings for the consumer.
@@ -227,7 +229,9 @@ final case class ConsumerSettings(
    * External commits (that is, commits to an external system, e.g. a relational database) must be registered to the
    * consumer with [[Consumer.registerExternalCommits]].
    *
-   * When this consumer is coupled to a TransactionalProducer, `rebalanceSafeCommits` must be enabled.
+   * When this consumer is coupled to a TransactionalProducer, `rebalanceSafeCommits` must be enabled. In addition, it
+   * is required to use a partition assignor that revokes all partitions during a rebalance. In particular, this
+   * excludes the `CooperativeStickyAssignor`.
    *
    * When `false`, streams for revoked partitions may continue to run even though the rebalance is not held up. Any
    * offset commits from these streams have a high chance of being delayed (commits are not possible during some phases
@@ -348,30 +352,73 @@ final case class ConsumerSettings(
   def withDiagnostics(diagnostics: Consumer.ConsumerDiagnostics): ConsumerSettings =
     copy(diagnostics = diagnostics)
 
+  /**
+   * Configuration for the underlying java Kafka client.
+   */
   def driverSettings: Map[String, AnyRef] =
-    Map(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false") ++ properties
-
-  def validate(): ZIO[Any, Throwable, Unit] = {
-    // Parse booleans in a way compatible with how Kafka does this in org.apache.kafka.common.config.ConfigDef.parseType:
-    def booleanProperty(configName: String): Option[Boolean] =
-      properties.get(configName).map(_.toString.trim.equalsIgnoreCase("false"))
-
-    def assert(assertion: => Boolean, error: String): Chunk[String] =
-      if (assertion) Chunk.empty else Chunk.single(error)
-
-    val errors = Chunk.empty ++
-      assert(
-        booleanProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG).forall(identity),
-        s"Because zio-kafka does pre-fetching, auto commit is not supported. Please do not set config ${ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG}."
+    Map(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false") ++
+      Option.when(rebalanceSafeCommits)(
+        ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> classOf[RangeAssignor].getName
       ) ++
-      assert(
-        commitTimeout.toNanos > 2L * pollTimeout.toNanos,
-        s"Commit timeout must be larger than 2 * pollTimeout, saw commitTimeout ${commitTimeout} and pollTimeout ${pollTimeout}."
-      )
+      properties
 
+  private[kafka] def validate: ZIO[Any, IllegalArgumentException, Unit] =
+    failOnErrors {
+      assert(
+        booleanProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG).getOrElse(true),
+        s"Because zio-kafka does pre-fetching, auto commit is not supported, do not set config ${ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG}."
+      ) ++
+        assert(
+          commitTimeout.toNanos > 2L * pollTimeout.toNanos,
+          s"Commit timeout must be larger than 2 * pollTimeout, saw commitTimeout ${commitTimeout} and pollTimeout ${pollTimeout}."
+        )
+    }
+
+  // NOTE: It is assumed that `validate` is invoked as well.
+  private[kafka] def validateForTransactional: ZIO[Any, IllegalArgumentException, Unit] =
+    failOnErrors {
+      assert(
+        rebalanceSafeCommits,
+        "RebalanceSafeCommits must be enabled when the consumer is used with a transactional producer."
+      ) ++
+        assert(
+          !listStringProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG)
+            .contains(classOf[CooperativeStickyAssignor].getName),
+          "A partition assigner that revokes all partitions during a rebalance is required when the consumer is used " +
+            s"with a transactional producer, therefore ${classOf[CooperativeStickyAssignor].getSimpleName} is not " +
+            "supported."
+        )
+    }
+
+  // noinspection SimplifyUnlessInspection
+  private def failOnErrors(errors: Chunk[String]): ZIO[Any, IllegalArgumentException, Unit] =
     if (errors.isEmpty) ZIO.unit
-    else ZIO.fail(new IllegalArgumentException(errors.mkString("Invalid settings: ", " ", "")))
+    else {
+      val errorCount = if (errors.size <= 1) "" else s" (${errors.size} errors)"
+      ZIO.fail(new IllegalArgumentException(errors.mkString(s"Invalid consumer settings$errorCount: ", " ", "")))
+    }
+
+  // Parse list in a way that is roughly compatible with how Kafka does this in
+  // org.apache.kafka.common.config.ConfigDef.parseType:
+  private def listStringProperty(configName: String): Chunk[String] = {
+    val values = properties.getOrElse(configName, "") match {
+      case c: Class[_] => Chunk.single(c.getName)
+      case l: java.util.List[_] =>
+        Chunk.from(l.asScala).map {
+          case c: Class[_] => c.getName
+          case o           => o.toString
+        }
+      case o => Chunk.from(o.toString.split(','))
+    }
+    values.map(_.trim).filter(_.nonEmpty)
   }
+
+  // Parse booleans in a way compatible with how Kafka does this in org.apache.kafka.common.config.ConfigDef.parseType:
+  private def booleanProperty(configName: String): Option[Boolean] =
+    properties.get(configName).map(_.toString.trim.equalsIgnoreCase("false"))
+
+  private def assert(assertion: => Boolean, error: String): Chunk[String] =
+    if (assertion) Chunk.empty else Chunk.single(error)
 
 }
 

@@ -4,7 +4,9 @@ import org.apache.kafka.clients.consumer.{
   ConsumerConfig,
   ConsumerPartitionAssignor,
   CooperativeStickyAssignor,
-  RangeAssignor
+  RangeAssignor,
+  RoundRobinAssignor,
+  StickyAssignor
 }
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -1603,8 +1605,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
                     transactionalId   <- randomThing("transactional")
                     tProducerSettings <- KafkaTestUtils.transactionalProducerSettings(transactionalId)
-                    tProducer <-
-                      TransactionalProducer.make(tProducerSettings, consumer)
+                    tProducer         <- TransactionalProducer.make(tProducerSettings, consumer)
 
                     tConsumer <-
                       consumer
@@ -1627,9 +1628,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                             }
                         }
                         .runDrain
-                        .tapError(e => ZIO.logError(s"Error: $e") *> consumerCreated.fail(e)) <* ZIO.logDebug("Done")
                   } yield tConsumer
                 }
+                  .tapError(e => ZIO.logError(s"Error: $e") *> consumerCreated.fail(e)) <* ZIO.logDebug("Done")
               }
 
             for {
@@ -1698,12 +1699,13 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             } yield assertTrue(messageCount == messagesOnTopicBCount && messageCount == messagesOnTopicBDistinctCount)
           }
 
-        // Test for both default partition assignment strategies
+        // Test for all default partition assignment strategies except the not supported CooperativeStickyAssignor:
         Seq(
           testForPartitionAssignmentStrategy[RangeAssignor],
-          testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
+          testForPartitionAssignmentStrategy[RoundRobinAssignor],
+          testForPartitionAssignmentStrategy[StickyAssignor]
+          // Not supported: testForPartitionAssignmentStrategy[CooperativeStickyAssignor]
         )
-
       }: _*) @@ TestAspect.nonFlaky(2),
       test("running streams don't stall after a poll timeout") {
         for {
