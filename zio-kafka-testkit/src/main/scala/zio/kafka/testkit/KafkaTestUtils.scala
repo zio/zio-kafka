@@ -115,7 +115,7 @@ object KafkaTestUtils {
    *
    * See also [[https://issues.apache.org/jira/browse/KAFKA-19811 KAFKA-19811]].
    */
-  val kafka19811Workaround: UIO[Unit] = ZIO.sleep(5.millis)
+  val kafka19811Workaround: UIO[Unit] = ZIO.sleep(10.millis)
 
   /**
    * Produce a single message to a topic.
