@@ -45,7 +45,7 @@ final case class ManyPartitionsQueueSizeBasedFetchStrategy(
     for {
       random          <- ZIO.random
       shuffledStreams <- random.shuffle(streams)
-      tps <- ZIO
+      tps             <- ZIO
                .foldLeft(shuffledStreams)((mutable.ArrayBuilder.make[TopicPartition], maxTotalQueueSize)) {
                  case (acc @ (partitions, queueBudget), stream) =>
                    stream.queueSize.map { queueSize =>

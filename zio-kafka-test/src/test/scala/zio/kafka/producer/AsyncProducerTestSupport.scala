@@ -89,11 +89,11 @@ object AsyncProducerTestSupport {
   }
 
   private sealed trait MockBehavior
-  private final case class SendSucceed(n: Int) extends MockBehavior
+  private final case class SendSucceed(n: Int)    extends MockBehavior
   private final case class SendFail(e: Throwable) extends MockBehavior {
     override def toString: String = s"SendFail(${e.getClass.getSimpleName})"
   }
-  private final case class CallbackSucceed(n: Int) extends MockBehavior
+  private final case class CallbackSucceed(n: Int)            extends MockBehavior
   private final case class CallbackFail(n: Int, e: Exception) extends MockBehavior {
     override def toString: String = s"CallbackFail($n, ${e.getClass.getSimpleName})"
   }
@@ -200,14 +200,14 @@ object AsyncProducerTestSupport {
                            }
                          }
                        }
-        sei = sendExpectations.iterator
+        sei             = sendExpectations.iterator
         handleBehaviors =
           ZIO.foreach(behaviors) {
             case mb @ (SendSucceed(_) | SendFail(_)) =>
               for {
                 sendOperation <- fromOptionOrDie(sei.nextOption())
                 _             <- sendOperation.startPromise.succeed(())
-                _ <- ZIO
+                _             <- ZIO
                        .raceFirst(
                          sendOperation.callbackPromise.await,
                          Seq(ZIO.logInfo(s"Still expecting mock behavior $mb").delay(3.seconds).forever)

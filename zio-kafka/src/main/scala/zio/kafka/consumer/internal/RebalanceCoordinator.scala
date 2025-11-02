@@ -65,7 +65,7 @@ private[internal] class RebalanceCoordinator(
       for {
         committedOffsets           <- committer.getCommittedOffsets
         latestPendingCommitOffsets <- committer.getPendingCommits.map(_.offsets)
-        streamResults <-
+        streamResults              <-
           ZIO.foreach(streamsToEnd) { stream =>
             for {
               isDone           <- stream.completedPromise.isDone
@@ -149,7 +149,7 @@ private[internal] class RebalanceCoordinator(
     // Note, we cannot use ZStream.fromQueue because that will emit nothing when the queue is empty.
     // Instead, we poll the queue in a loop.
     for {
-      _ <- logInitialStreamCompletionStatuses
+      _         <- logInitialStreamCompletionStatuses
       completed <-
         ZStream
           .fromZIO(blockingSleep(commitQueuePollInterval))

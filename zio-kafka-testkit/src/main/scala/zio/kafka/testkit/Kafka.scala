@@ -54,19 +54,19 @@ object Kafka {
         val brokerListener     = s"BROKER://localhost:${ports.kafkaPort}"
         val controllerListener = s"CONTROLLER://localhost:${ports.controllerPort}"
         Map(
-          "group.min.session.timeout.ms"         -> "500",
-          "group.initial.rebalance.delay.ms"     -> "0",
-          "listeners"                            -> s"$brokerListener,$controllerListener",
-          "advertised.listeners"                 -> brokerListener,
-          "listener.security.protocol.map"       -> "BROKER:SASL_PLAINTEXT,CONTROLLER:SASL_PLAINTEXT",
-          "inter.broker.listener.name"           -> "BROKER",
-          "controller.listener.names"            -> "CONTROLLER",
-          "sasl.enabled.mechanisms"              -> "PLAIN",
-          "sasl.mechanism.controller.protocol"   -> "PLAIN",
-          "sasl.mechanism.inter.broker.protocol" -> "PLAIN",
-          "authorizer.class.name"                -> "org.apache.kafka.metadata.authorizer.StandardAuthorizer",
-          "allow.everyone.if.no.acl.found"       -> "false",
-          "super.users"                          -> "User:admin",
+          "group.min.session.timeout.ms"                -> "500",
+          "group.initial.rebalance.delay.ms"            -> "0",
+          "listeners"                                   -> s"$brokerListener,$controllerListener",
+          "advertised.listeners"                        -> brokerListener,
+          "listener.security.protocol.map"              -> "BROKER:SASL_PLAINTEXT,CONTROLLER:SASL_PLAINTEXT",
+          "inter.broker.listener.name"                  -> "BROKER",
+          "controller.listener.names"                   -> "CONTROLLER",
+          "sasl.enabled.mechanisms"                     -> "PLAIN",
+          "sasl.mechanism.controller.protocol"          -> "PLAIN",
+          "sasl.mechanism.inter.broker.protocol"        -> "PLAIN",
+          "authorizer.class.name"                       -> "org.apache.kafka.metadata.authorizer.StandardAuthorizer",
+          "allow.everyone.if.no.acl.found"              -> "false",
+          "super.users"                                 -> "User:admin",
           "listener.name.broker.plain.sasl.jaas.config" ->
             ("""org.apache.kafka.common.security.plain.PlainLoginModule required """ +
               """username="admin" password="admin-secret" """ +
@@ -138,7 +138,7 @@ object Kafka {
     ZLayer.scoped {
       for {
         ports <- nextPorts
-        brokerProps = presetProps(ports) ++ customProps(ports) // custom is after to allow overriding
+        brokerProps         = presetProps(ports) ++ customProps(ports) // custom is after to allow overriding
         embeddedKafkaConfig = EmbeddedKafkaConfig(
                                 ports.kafkaPort,
                                 ports.controllerPort,

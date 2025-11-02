@@ -15,7 +15,7 @@ object CommitterSpec extends ZIOSpecDefault {
     test("signals that a new commit is available") {
       for {
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- LiveCommitter
+        committer       <- LiveCommitter
                        .make(
                          10.seconds,
                          Diagnostics.NoOp,
@@ -30,7 +30,7 @@ object CommitterSpec extends ZIOSpecDefault {
     test("handles a successful commit by completing the commit effect") {
       for {
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- LiveCommitter.make(
+        committer       <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        new DummyMetrics,
@@ -47,7 +47,7 @@ object CommitterSpec extends ZIOSpecDefault {
     test("handles a failed commit by completing the commit effect with a failure") {
       for {
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- LiveCommitter.make(
+        committer       <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        new DummyMetrics,
@@ -64,7 +64,7 @@ object CommitterSpec extends ZIOSpecDefault {
     test("retries when rebalancing") {
       for {
         commitAvailable <- Queue.bounded[Unit](1)
-        committer <- LiveCommitter.make(
+        committer       <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        new DummyMetrics,
@@ -74,7 +74,7 @@ object CommitterSpec extends ZIOSpecDefault {
         commitFiber <- committer.commit(Map(tp -> new OffsetAndMetadata(0))).forkScoped
         _           <- commitAvailable.take
         callCount   <- Ref.make(0)
-        consumer <-
+        consumer    <-
           createMockConsumer { offsets =>
             callCount.updateAndGet(_ + 1).flatMap { count =>
               if (count == 1) {
@@ -93,7 +93,7 @@ object CommitterSpec extends ZIOSpecDefault {
     test("adds 1 to the committed last offset") {
       for {
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- LiveCommitter.make(
+        committer       <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        new DummyMetrics,
@@ -114,7 +114,7 @@ object CommitterSpec extends ZIOSpecDefault {
       for {
         commitsAvailable <- Promise.make[Nothing, Unit]
         nrCommitsDone    <- Ref.make(0)
-        committer <- LiveCommitter.make(
+        committer        <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        new DummyMetrics,
@@ -139,7 +139,7 @@ object CommitterSpec extends ZIOSpecDefault {
     test("keeps track of pending commits") {
       for {
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- LiveCommitter.make(
+        committer       <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        new DummyMetrics,
@@ -159,7 +159,7 @@ object CommitterSpec extends ZIOSpecDefault {
     test("keep track of committed offsets") {
       for {
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- LiveCommitter.make(
+        committer       <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        new DummyMetrics,
@@ -177,7 +177,7 @@ object CommitterSpec extends ZIOSpecDefault {
     test("clean committed offsets of no-longer assigned partitions") {
       for {
         commitAvailable <- Promise.make[Nothing, Unit]
-        committer <- LiveCommitter.make(
+        committer       <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
                        new DummyMetrics,

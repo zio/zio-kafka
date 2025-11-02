@@ -1636,7 +1636,7 @@ object AdminClient {
       @tailrec
       def loop(acc: ListBuffer[B], rest: List[A]): Try[List[B]] =
         rest match {
-          case Nil => Success(acc.toList)
+          case Nil    => Success(acc.toList)
           case h :: t =>
             f(h) match {
               case Success(b)        => loop(acc += b, t)

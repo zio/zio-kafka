@@ -118,7 +118,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
 
             recordsPulledByStream <- Promise.make[Nothing, Unit]
             committer             <- LiveCommitter.make(10.seconds, Diagnostics.NoOp, mockMetrics, ZIO.unit)
-            _ <- streamControl.stream
+            _                     <- streamControl.stream
                    .completePromiseWhenOffsetSeen(recordCount.toLong, recordsPulledByStream)
                    .tap(_ => ZIO.sleep(50.millis))
                    .commitEachRecord(committer)
@@ -162,7 +162,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
             _ <- streamControl.offerRecords(records)
 
             recordsPulledByStream <- Promise.make[Nothing, Unit]
-            _ <- streamControl.stream
+            _                     <- streamControl.stream
                    .completePromiseWhenOffsetSeen(recordCount.toLong, recordsPulledByStream)
                    .runDrain
                    .forkScoped
@@ -204,7 +204,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
 
             // Make the stream slow by sleeping for each record
             recordsPulledByStream <- Promise.make[Nothing, Unit]
-            _ <- streamControl.stream
+            _                     <- streamControl.stream
                    .completePromiseWhenOffsetSeen(recordCount.toLong, recordsPulledByStream)
                    .tap(_ => ZIO.sleep(500.millis))
                    .runDrain

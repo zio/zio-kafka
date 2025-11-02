@@ -45,7 +45,7 @@ object SslHelper {
       val defaultValue = 30.seconds
 
       props.get(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG) match {
-        case None => defaultValue
+        case None      => defaultValue
         case Some(raw) =>
           try {
             val v = raw.toString.toLong

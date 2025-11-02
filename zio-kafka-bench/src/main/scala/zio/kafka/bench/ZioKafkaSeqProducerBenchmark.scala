@@ -53,7 +53,7 @@ class ZioKafkaSeqProducerBenchmark extends ProducerZioBenchmark[Kafka with Produ
     // Produce 100 records of which 4 run in parallel
     for {
       producer <- ZIO.service[Producer]
-      _ <- ZStream
+      _        <- ZStream
              .range(0, 100, 1)
              .mapZIOParUnordered(4) { _ =>
                producer.produce(topic1, "key", "value", Serde.string, Serde.string)

@@ -232,7 +232,7 @@ lazy val docs = project
     mainModuleName                             := (zioKafka / moduleName).value,
     projectStage                               := ProjectStage.ProductionReady,
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioKafka),
-    readmeCredits :=
+    readmeCredits                              :=
       "This library is heavily inspired and made possible by the research and implementation done in " +
         "[Alpakka Kafka](https://github.com/akka/alpakka-kafka), a library maintained by the Akka team and originally " +
         "written as Reactive Kafka by SoftwareMill.",

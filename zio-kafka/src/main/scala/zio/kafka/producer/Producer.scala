@@ -235,7 +235,7 @@ object Producer {
 
   def make(settings: ProducerSettings): ZIO[Scope, Throwable, Producer] =
     for {
-      _ <- SslHelper.validateEndpoint(settings.driverSettings)
+      _           <- SslHelper.validateEndpoint(settings.driverSettings)
       rawProducer <- ZIO.acquireRelease(
                        ZIO.attemptBlocking(
                          new KafkaProducer[Array[Byte], Array[Byte]](
@@ -260,7 +260,7 @@ object Producer {
     for {
       wrappedDiagnostics <- makeConcurrentDiagnostics(settings.diagnostics)
       runtime            <- ZIO.runtime[Any]
-      sendQueue <-
+      sendQueue          <-
         Queue.bounded[(Chunk[ByteRecord], NanoTime, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.sendBufferSize
         )
@@ -539,9 +539,9 @@ private[producer] final class ProducerLive(
       .fromQueueWithShutdown(sendQueue)
       .mapZIO { case (serializedRecords, startNanos, continuation) =>
         observeTake(startNanos).as {
-          val recordsLength                                = serializedRecords.length
-          val sentRecordsCounter                           = new AtomicInteger(0)
-          val recordsIterator: Iterator[(ByteRecord, Int)] = serializedRecords.iterator.zipWithIndex
+          val recordsLength                                         = serializedRecords.length
+          val sentRecordsCounter                                    = new AtomicInteger(0)
+          val recordsIterator: Iterator[(ByteRecord, Int)]          = serializedRecords.iterator.zipWithIndex
           val sentResults: Array[Either[Throwable, RecordMetadata]] =
             new Array[Either[Throwable, RecordMetadata]](recordsLength)
 
@@ -617,7 +617,7 @@ private[producer] final class ProducerLive(
       makeDiagnosticsEmitter(Chunk.single(record))
 
     override def makeDiagnosticsEmitter(records: Chunk[ByteRecord]): DiagnosticsEmitter = {
-      val batchId = batchIds.getAndIncrement()
+      val batchId         = batchIds.getAndIncrement()
       val producedRecords =
         records.map(record => ProducerEvent.ProducedRecord(record.topic(), record.partition(), record.value().length))
       new BatchDiagnosticsEmitter(batchId, producedRecords)

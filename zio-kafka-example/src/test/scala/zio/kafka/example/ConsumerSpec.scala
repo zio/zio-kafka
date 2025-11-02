@@ -30,7 +30,7 @@ object ConsumerSpec extends ZIOSpecDefault {
             _        <- KafkaTestUtils.produceMany(producer, topic, kvs) // Produces messages to the topic.
 
             consumer <- KafkaTestUtils.makeConsumer(clientId = client, groupId = Some(group))
-            records <- consumer
+            records  <- consumer
                          .plainStream(Subscription.topics(topic), Serde.string, Serde.string)
                          .take(5)
                          .runCollect

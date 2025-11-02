@@ -53,8 +53,8 @@ private[consumer] final class LiveCommitter(
   ): Task[Unit] = for {
     commits <- commitQueue.takeAll
     _       <- ZIO.logDebug(s"Processing ${commits.size} commits")
-    _ <- ZIO.when(commits.nonEmpty || executeOnEmpty) {
-           val offsets = mergeCommitOffsets(commits)
+    _       <- ZIO.when(commits.nonEmpty || executeOnEmpty) {
+           val offsets             = mergeCommitOffsets(commits)
            val offsetsWithMetaData = offsets.map { case (tp, offset) =>
              tp -> new OffsetAndMetadata(offset.offset + 1, offset.leaderEpoch, offset.metadata)
            }
@@ -62,7 +62,7 @@ private[consumer] final class LiveCommitter(
            for {
              _         <- pendingCommits.update(_ ++ commits)
              startTime <- ZIO.clockWith(_.nanoTime)
-             _ <- commitAsyncZIO(
+             _         <- commitAsyncZIO(
                     consumer,
                     offsetsWithMetaData,
                     doOnComplete = handleCommitCompletion(commits, offsetsWithMetaData, startTime, _)
@@ -130,7 +130,7 @@ private[consumer] final class LiveCommitter(
   ): Task[Unit] =
     for {
       runtime <- ZIO.runtime[Any]
-      _ <- ZIO.attempt {
+      _       <- ZIO.attempt {
              consumer.commitAsync(
                offsets.asJava,
                new OffsetCommitCallback {

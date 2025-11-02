@@ -31,8 +31,8 @@ object AdminSaslSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 )
               )
             )
-          client <- KafkaTestUtils.makeSaslAdminClient()
-          _      <- client.createAcls(bindings)
+          client      <- KafkaTestUtils.makeSaslAdminClient()
+          _           <- client.createAcls(bindings)
           createdAcls <-
             client
               .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))

@@ -9,7 +9,7 @@ import zio._
 object ManyPartitionsQueueSizeBasedFetchStrategySpec extends ZIOSpecDefaultSlf4j {
 
   private val maxPartitionQueueSize = 50
-  private val fetchStrategy = ManyPartitionsQueueSizeBasedFetchStrategy(
+  private val fetchStrategy         = ManyPartitionsQueueSizeBasedFetchStrategy(
     maxPartitionQueueSize,
     maxTotalQueueSize = 80
   )

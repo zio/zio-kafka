@@ -43,7 +43,7 @@ object TransactionalProducer {
             )
 
           offsetBatch.consumerGroupMetadata match {
-            case None => invalidGroupIdException
+            case None                        => invalidGroupIdException
             case Some(consumerGroupMetadata) =>
               val offsets: util.Map[TopicPartition, OffsetAndMetadata] =
                 offsetBatch.offsets.map { case (topicPartition, offset) =>
@@ -92,7 +92,7 @@ object TransactionalProducer {
     for {
       _                  <- consumer.consumerSettings.validateForTransactional
       wrappedDiagnostics <- Producer.makeConcurrentDiagnostics(settings.producerSettings.diagnostics)
-      rawProducer <- ZIO.acquireRelease(
+      rawProducer        <- ZIO.acquireRelease(
                        ZIO.attempt(
                          new KafkaProducer[Array[Byte], Array[Byte]](
                            settings.producerSettings.driverSettings.asJava,

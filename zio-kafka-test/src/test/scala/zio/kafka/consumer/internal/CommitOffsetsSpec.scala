@@ -58,7 +58,7 @@ object CommitOffsetsSpec extends ZIOSpecDefault {
         )
       },
       test("addCommits adds multiple commits") {
-        val s1 = CommitOffsets(Map(tp10 -> 10L, tp20 -> 200L, tp21 -> 210L, tp22 -> 220L))
+        val s1        = CommitOffsets(Map(tp10 -> 10L, tp20 -> 200L, tp21 -> 210L, tp22 -> 220L))
         val (inc, s2) = s1.addCommits(
           Chunk(
             makeCommit(Map(tp11 -> 11, tp20 -> 199L, tp21 -> 211L, tp22 -> 219L)),

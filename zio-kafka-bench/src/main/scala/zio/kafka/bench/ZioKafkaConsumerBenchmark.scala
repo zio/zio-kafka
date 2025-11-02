@@ -51,7 +51,7 @@ class ZioKafkaConsumerBenchmark extends ConsumerZioBenchmark[Kafka] {
     for {
       counter  <- Ref.make(0)
       consumer <- makeConsumer
-      _ <- consumer
+      _        <- consumer
              .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
              .chunks
              .tap { batch =>
@@ -69,7 +69,7 @@ class ZioKafkaConsumerBenchmark extends ConsumerZioBenchmark[Kafka] {
     for {
       counter  <- Ref.make(0)
       consumer <- makeConsumer
-      _ <- ZIO.logAnnotate("consumer", "1") {
+      _        <- ZIO.logAnnotate("consumer", "1") {
              consumer
                .plainStream(Subscription.topics(topic1), Serde.byteArray, Serde.byteArray)
                .map(_.offset)

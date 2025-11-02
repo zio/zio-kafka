@@ -61,7 +61,7 @@ private[internal] object Committer {
       var offsetIncrease = 0L
       c.foreach { commit =>
         commit.offsets.foreach { case (tp, offsetAndMeta) =>
-          val offset = offsetAndMeta.offset()
+          val offset    = offsetAndMeta.offset()
           val maxOffset = updatedOffsets.get(tp) match {
             case Some(existingOffset) =>
               offsetIncrease += max(0L, offset - existingOffset)

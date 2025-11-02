@@ -91,7 +91,7 @@ object ZIOKafka extends ZIOAppDefault {
 
   override def run: ZIO[Any with ZIOAppArgs with Scope, Throwable, Unit] = {
     val expectedCount = 1000000
-    val settings = ConsumerSettings(List("localhost:9092"))
+    val settings      = ConsumerSettings(List("localhost:9092"))
       .withGroupId(s"zio-kafka-${scala.util.Random.nextInt()}")
       .withOffsetRetrieval(OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest))
       .withProperty("fetch.min.bytes", "128000")
@@ -101,7 +101,7 @@ object ZIOKafka extends ZIOAppDefault {
       _         <- Console.readLine
       startTime <- Clock.currentTime(TimeUnit.MILLISECONDS)
       consumer  <- Consumer.make(settings)
-      _ <- consumer
+      _         <- consumer
              .plainStream(Subscription.topics("inputs-topic"), Serde.string, Serde.string)
              .take(expectedCount.toLong)
              .mapChunks { recordChunk =>

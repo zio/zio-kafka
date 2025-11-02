@@ -50,7 +50,7 @@ private[consumer] object ConsumerAccess {
 
   def make(settings: ConsumerSettings): ZIO[Scope, Throwable, ConsumerAccess] =
     for {
-      access <- Semaphore.make(1)
+      access   <- Semaphore.make(1)
       consumer <- ZIO.acquireRelease {
                     ZIO.attemptBlocking {
                       new KafkaConsumer[Array[Byte], Array[Byte]](

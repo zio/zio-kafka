@@ -62,7 +62,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       for {
                         topic    <- randomTopic
                         consumer <- KafkaTestUtils.makeConsumer(clientId = "test", groupId = Some("test"))
-                        _ <- consumer.consumeWith(
+                        _        <- consumer.consumeWith(
                                Subscription.Topics(Set(topic)),
                                Serde.byteArray,
                                Serde.byteArray
@@ -221,8 +221,8 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             // See:
             //   - https://stackoverflow.com/questions/44929981/how-to-simulate-network-delay-on-a-local-port#comment76837344_44929981
             //   - https://stackoverflow.com/a/904609/2431728
-            val host = "10.255.255.1"
-            val port = "9999"
+            val host     = "10.255.255.1"
+            val port     = "9999"
             val settings = AdminClientSettings(List(s"$host:$port"))
               .withProperty("request.timeout.ms", 1.second.toMillis.toString)
 
@@ -265,8 +265,8 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             // See:
             //   - https://stackoverflow.com/questions/44929981/how-to-simulate-network-delay-on-a-local-port#comment76837344_44929981
             //   - https://stackoverflow.com/a/904609/2431728
-            val host = "10.255.255.1"
-            val port = "9999"
+            val host     = "10.255.255.1"
+            val port     = "9999"
             val settings = AdminClientSettings(List(s"$host:$port"))
               .withProperty("request.timeout.ms", 30.second.toMillis.toString)
 

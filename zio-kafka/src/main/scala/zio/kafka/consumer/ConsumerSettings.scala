@@ -402,7 +402,7 @@ final case class ConsumerSettings(
   // org.apache.kafka.common.config.ConfigDef.parseType:
   private def listStringProperty(configName: String): Chunk[String] = {
     val values = properties.getOrElse(configName, "") match {
-      case c: Class[_] => Chunk.single(c.getName)
+      case c: Class[_]          => Chunk.single(c.getName)
       case l: java.util.List[_] =>
         Chunk.from(l.asScala).map {
           case c: Class[_] => c.getName

@@ -42,7 +42,7 @@ object Transactional extends ZIOAppDefault {
       consumer              <- ZIO.service[Consumer]
       transactionalProducer <- ZIO.service[TransactionalProducer]
       _                     <- ZIO.logInfo(s"Consuming messages from topic $topic...")
-      _ <- consumer
+      _                     <- consumer
              .plainStream(Subscription.topics(topic), Serde.int, Serde.long)
              .mapChunks { records: Chunk[CommittableRecord[Int, Long]] =>
                records.map { record =>
@@ -60,7 +60,7 @@ object Transactional extends ZIOAppDefault {
                  for {
                    _  <- ZIO.addFinalizer(ZIO.logInfo("Completing transaction"))
                    tx <- transactionalProducer.createTransaction
-                   _ <- {
+                   _  <- {
                      val (records, offsets) = recordsAndOffsets.unzip
                      tx.produceChunkBatch(
                        records,

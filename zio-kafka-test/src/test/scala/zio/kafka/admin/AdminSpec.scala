@@ -62,7 +62,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           client <- KafkaTestUtils.makeAdminClient
           list1  <- listTopicsFiltered(client, prefix)
-          _ <- client.createTopics(
+          _      <- client.createTopics(
                  List(AdminClient.NewTopic(s"$prefix-topic2", 1, 1), AdminClient.NewTopic(s"$prefix-topic3", 4, 1))
                )
           list2 <- listTopicsFiltered(client, prefix)
@@ -83,7 +83,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           client <- KafkaTestUtils.makeAdminClient
           list1  <- listTopicsFiltered(client, prefix)
-          _ <- client.createTopics(
+          _      <- client.createTopics(
                  List(AdminClient.NewTopic(s"$prefix-topic4", 1, 1), AdminClient.NewTopic(s"$prefix-topic5", 4, 1))
                )
           descriptions <- client.describeTopics(List(s"$prefix-topic4", s"$prefix-topic5"))
@@ -96,7 +96,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         for {
           client <- KafkaTestUtils.makeAdminClient
           list1  <- listTopicsFiltered(client, prefix)
-          _ <- client.createTopics(
+          _      <- client.createTopics(
                  List(AdminClient.NewTopic(s"$prefix-topic6", 1, 1), AdminClient.NewTopic(s"$prefix-topic7", 4, 1))
                )
           configResources = List(
@@ -139,7 +139,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       },
       test("describe broker config") {
         for {
-          client <- KafkaTestUtils.makeAdminClient
+          client  <- KafkaTestUtils.makeAdminClient
           configs <- client.describeConfigs(
                        List(ConfigResource(ConfigResourceType.Broker, "0"))
                      )
@@ -147,7 +147,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       },
       test("describe broker config async") {
         for {
-          client <- KafkaTestUtils.makeAdminClient
+          client      <- KafkaTestUtils.makeAdminClient
           configTasks <- client.describeConfigsAsync(
                            List(
                              ConfigResource(ConfigResourceType.Broker, "0")
@@ -169,7 +169,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _        <- client.createTopics(List(AdminClient.NewTopic("adminspec-topic8", partitionCount, 1)))
           producer <- KafkaTestUtils.makeProducer
           _        <- KafkaTestUtils.produceMany(producer, topic, kvs)
-          offsets <- client.listOffsets(
+          offsets  <- client.listOffsets(
                        (0 until partitionCount).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
                      )
         } yield assertTrue(offsets.values.map(_.offset).sum == msgCount.toLong)
@@ -180,10 +180,10 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         val kvs      = (1 to msgCount).toList.map(i => (s"key$i", s"msg$i"))
 
         for {
-          client   <- KafkaTestUtils.makeAdminClient
-          _        <- client.createTopics(List(AdminClient.NewTopic("adminspec-topic9", 3, 1)))
-          producer <- KafkaTestUtils.makeProducer
-          _        <- KafkaTestUtils.produceMany(producer, topic, kvs)
+          client      <- KafkaTestUtils.makeAdminClient
+          _           <- client.createTopics(List(AdminClient.NewTopic("adminspec-topic9", 3, 1)))
+          producer    <- KafkaTestUtils.makeProducer
+          _           <- KafkaTestUtils.produceMany(producer, topic, kvs)
           offsetTasks <- client.listOffsetsAsync(
                            (0 until 3).map(i => TopicPartition(topic, i) -> OffsetSpec.LatestSpec).toMap
                          )
@@ -206,7 +206,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           ZIO.scoped {
             for {
               consumer <- KafkaTestUtils.makeConsumer("adminspec-topic10", Some(consumerGroupID))
-              records <-
+              records  <-
                 consumer
                   .partitionedStream[Kafka, String, String](
                     Subscription.Topics(Set(topic)),
@@ -239,7 +239,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _          <- KafkaTestUtils.produceMany(producer, topic, kvs)
           records    <- consumeAndCommit(msgCount.toLong).map(toMap)
           endOffsets <- client.listOffsets((0 until partitionCount).map(i => p(i) -> OffsetSpec.LatestSpec).toMap)
-          _ <- client.alterConsumerGroupOffsets(
+          _          <- client.alterConsumerGroupOffsets(
                  consumerGroupID,
                  Map(
                    p(0) -> OffsetAndMetadata(0),                                         // from the beginning
@@ -304,7 +304,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           ZIO.scoped {
             for {
               consumer <- KafkaTestUtils.makeConsumer(topic, Some(groupId))
-              _ <- consumer
+              _        <- consumer
                      .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
                      .take(count)
                      .foreach(_.offset.commit)
@@ -324,7 +324,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           producer <- KafkaTestUtils.makeProducer
           _        <- KafkaTestUtils.produceMany(producer, topic, kvs)
           _        <- consumeAndCommit(msgConsume.toLong, topic, groupId)
-          offsets <- client.listConsumerGroupOffsets(
+          offsets  <- client.listConsumerGroupOffsets(
                        Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
                      )
           invalidTopicOffsets <-
@@ -351,7 +351,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           ZIO.scoped {
             for {
               consumer <- KafkaTestUtils.makeConsumer(topic, Some(groupId))
-              _ <- consumer
+              _        <- consumer
                      .plainStream[Kafka, String, String](Subscription.Topics(Set(topic)), Serde.string, Serde.string)
                      .take(count)
                      .foreach(_.offset.commit)
@@ -370,7 +370,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _        <- KafkaTestUtils.produceMany(producer, topic, kvs)
           _        <- consumeAndCommit(msgConsume.toLong, topic, groupId)
           _        <- client.deleteConsumerGroups(Chunk.single(groupId))
-          offsets <- client.listConsumerGroupOffsets(
+          offsets  <- client.listConsumerGroupOffsets(
                        Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.single(TopicPartition(topic, 0))))
                      )
         } yield assert(offsets.get(groupId).flatMap(_.get(TopicPartition(topic, 0))).map(_.offset))(isNone)
@@ -426,7 +426,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           client    <- KafkaTestUtils.makeAdminClient
           _         <- client.createTopic(AdminClient.NewTopic(topicName, numPartitions = 1, replicationFactor = 1))
           node      <- client.describeClusterNodes().head.orElseFail(new NoSuchElementException())
-          logDirs <-
+          logDirs   <-
             client.describeLogDirsAsync(List(node.id)).flatMap { descriptions =>
               ZIO.foreachPar(descriptions) { case (brokerId, descriptionAsync) =>
                 descriptionAsync.map(description => (brokerId, description))
@@ -553,7 +553,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 )
               )
             )
-          _ <- client.createAcls(bindings)
+          _           <- client.createAcls(bindings)
           createdAcls <-
             client
               .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
@@ -583,7 +583,7 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     ZIO.scoped {
       for {
         consumer <- KafkaTestUtils.makeConsumer(clientId, Some(groupId), groupInstanceId)
-        _ <- consumer
+        _        <- consumer
                .plainStream(Subscription.topics(topicName), Serde.string, Serde.string)
                .foreach(_.offset.commit)
       } yield ()

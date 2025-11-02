@@ -35,7 +35,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _        <- KafkaTestUtils.produceMany(producer, topic2, kvs)
 
           consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          records <-
+          records  <-
             consumer
               .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
               .take(5)
@@ -65,7 +65,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _        <- KafkaTestUtils.produceMany(producer, topic2, kvs)
 
           consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          records <-
+          records  <-
             consumer
               .plainStream(Subscription.Pattern(s"$topic1".r), Serde.string, Serde.string)
               .take(5)
@@ -190,7 +190,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           consumer1GotMessage <- Promise.make[Nothing, Unit]
           consumer2GotMessage <- Promise.make[Nothing, Unit]
-          consumer <- KafkaTestUtils.makeConsumer(
+          consumer            <- KafkaTestUtils.makeConsumer(
                         client,
                         Some(group),
                         properties = Map(ConsumerConfig.MAX_POLL_RECORDS_CONFIG -> "1")
@@ -221,7 +221,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           _        <- KafkaTestUtils.produceMany(producer, topic2, kvs)
 
           consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          _ <-
+          _        <-
             consumer
               .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
               .take(100)
@@ -245,7 +245,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           errored  <- Ref.make(false)
           consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          _ <- consumer
+          _        <- consumer
                  .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
                  .take(5)
                  .tap(_ => ZIO.unlessZIO(errored.getAndSet(true))(ZIO.fail(new RuntimeException("Stream failure 1"))))
@@ -267,7 +267,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           recordsConsumed <- Ref.make(Chunk.empty[CommittableRecord[String, String]])
           consumer        <- KafkaTestUtils.makeConsumer(client, Some(group))
-          _ <- ZIO.scoped {
+          _               <- ZIO.scoped {
                  consumer
                    .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
                    .take(40)

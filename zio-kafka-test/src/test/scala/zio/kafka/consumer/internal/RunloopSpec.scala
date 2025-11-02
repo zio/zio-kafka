@@ -41,7 +41,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
           for {
             streamStream <- ZStream.fromHubScoped(partitionsHub)
             _            <- runloop.addSubscription(Subscription.Topics(Set(tp10.topic())))
-            record <- streamStream
+            record       <- streamStream
                         .map(_.exit)
                         .flattenExitOption
                         .flattenChunks
@@ -71,7 +71,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
             for {
               streamStream <- ZStream.fromHubScoped(partitionsHub)
               _            <- runloop.addSubscription(Subscription.Topics(Set(tp10, tp11).map(_.topic())))
-              _ <- streamStream
+              _            <- streamStream
                      .map(_.exit)
                      .flattenExitOption
                      .flattenChunks
@@ -130,7 +130,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
             for {
               streamStream <- ZStream.fromHubScoped(partitionsHub)
               _            <- runloop.addSubscription(Subscription.Topics(Set(tp10, tp11).map(_.topic())))
-              result <- streamStream
+              result       <- streamStream
                           .map(_.exit)
                           .flattenExitOption
                           .flattenChunks
@@ -164,7 +164,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
           for {
             streamStream <- ZStream.fromHubScoped(partitionsHub)
             _            <- runloop.addSubscription(Subscription.Topics(Set(tp10.topic())))
-            record <- streamStream
+            record       <- streamStream
                         .map(_.exit)
                         .flattenExitOption
                         .flattenChunks
@@ -199,7 +199,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
                            .acquireRelease(Hub.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
                            .provide(ZLayer.succeed(consumerScope))
         runloopConfig <- RunloopConfig(consumerSettings)
-        runloop <- Runloop.make(
+        runloop       <- Runloop.make(
                      consumerSettings,
                      runloopConfig,
                      diagnostics,

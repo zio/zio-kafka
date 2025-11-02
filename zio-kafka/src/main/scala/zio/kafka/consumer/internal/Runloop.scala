@@ -129,14 +129,14 @@ private[consumer] final class Runloop private (
     // then requesting the records per topic-partition.
     val tps           = polledRecords.partitions().asScala.toSet -- ignoreRecordsForTps
     val fulfillResult = Runloop.FulfillResult(pendingRequests = pendingRequests.filter(req => !tps.contains(req.tp)))
-    val streams =
+    val streams       =
       if (tps.isEmpty) Chunk.empty else partitionStreams.filter(streamControl => tps.contains(streamControl.tp))
 
     if (streams.isEmpty) ZIO.succeed(fulfillResult)
     else {
       for {
         consumerGroupMetadata <- groupMetadataRef.get
-        _ <- ZIO.foreachParDiscard(streams) { streamControl =>
+        _                     <- ZIO.foreachParDiscard(streams) { streamControl =>
                val tp      = streamControl.tp
                val records = polledRecords.records(tp)
                if (records.isEmpty) {
@@ -163,7 +163,7 @@ private[consumer] final class Runloop private (
   /** @return the topic-partitions for which received records should be ignored */
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
     settings.offsetRetrieval match {
-      case OffsetRetrieval.Auto(_) => ZIO.succeed(Set.empty)
+      case OffsetRetrieval.Auto(_)               => ZIO.succeed(Set.empty)
       case OffsetRetrieval.Manual(getOffsets, _) =>
         if (tps.isEmpty) ZIO.succeed(Set.empty)
         else
@@ -212,12 +212,12 @@ private[consumer] final class Runloop private (
       runningStreamsBeforePoll <- ZIO.filterNot(state.assignedStreams)(_.hasEnded)
       partitionsToFetch        <- settings.fetchStrategy.selectPartitionsToFetch(runningStreamsBeforePoll)
       pendingCommitCount       <- committer.pendingCommitCount
-      _ <- ZIO.logDebug(
+      _                        <- ZIO.logDebug(
              s"Starting poll with ${state.pendingRequests.size} pending requests and" +
                s" $pendingCommitCount pending commits," +
                s" resuming ${partitionsToFetch.size} out of ${state.assignedStreams.size} partitions"
            )
-      _ <- currentStateRef.set(state)
+      _          <- currentStateRef.set(state)
       pollResult <-
         consumer.runloopAccess { c =>
           for {
@@ -381,7 +381,7 @@ private[consumer] final class Runloop private (
       )
 
     for {
-      now <- Clock.nanoTime
+      now         <- Clock.nanoTime
       anyExceeded <- ZIO.foldLeft(streams)(false) { case (acc, stream) =>
                        stream
                          .maxStreamPullIntervalExceeded(now)
@@ -435,7 +435,7 @@ private[consumer] final class Runloop private (
             val subs = NonEmptyChunk.fromIterable(newSubscription, existingSubscriptions)
 
             Subscription.unionAll(subs) match {
-              case None => cmd.fail(InvalidSubscriptionUnion(subs)).as(state)
+              case None        => cmd.fail(InvalidSubscriptionUnion(subs)).as(state)
               case Some(union) =>
                 val newSubState =
                   SubscriptionState.Subscribed(
@@ -458,7 +458,7 @@ private[consumer] final class Runloop private (
 
       case RunloopCommand.RemoveSubscription(subscription, cont) =>
         (state.subscriptionState match {
-          case SubscriptionState.NotSubscribed => ZIO.succeed(state)
+          case SubscriptionState.NotSubscribed                        => ZIO.succeed(state)
           case SubscriptionState.Subscribed(existingSubscriptions, _) =>
             val newUnion: Option[(Subscription, NonEmptyChunk[Subscription])] =
               NonEmptyChunk
@@ -570,7 +570,7 @@ private[consumer] final class Runloop private (
       commandQueueSize   <- commandQueue.size
       commitQueueSize    <- committer.queueSize
       pendingCommitCount <- committer.pendingCommitCount
-      _ <- consumerMetrics
+      _                  <- consumerMetrics
              .observeRunloopMetrics(currentState, commandQueueSize, commitQueueSize, pendingCommitCount)
     } yield ()
 

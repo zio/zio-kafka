@@ -135,7 +135,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           offerNextBatch = control.offerRecords(records.slice(3, 6))
 
           offsetsAfterChunks <- Ref.make(Chunk.empty[Option[Long]])
-          _ <- {
+          _                  <- {
             def updateLastPulledOffsets =
               control.lastPulledOffset.flatMap(offset => offsetsAfterChunks.update(_ :+ offset.map(_.offset)))
 
