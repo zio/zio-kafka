@@ -337,7 +337,8 @@ object AdminClient {
 
     // workaround for https://issues.apache.org/jira/browse/KAFKA-18818
     private val kafka18818Workaround: ZIO[Any, Nothing, Unit] =
-      ZIO.sleep(550.millis).unit
+      ZIO.unit
+//      ZIO.sleep(550.millis).unit
 
     /**
      * Create multiple topics.
