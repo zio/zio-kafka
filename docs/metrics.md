@@ -34,7 +34,7 @@ To interpret the metrics you need to know how zio-kafka works internally.
 
 ![](consumer-internals.svg)
 
-See the [tuning guide](consumer-tuning#using-metrics-to-tune-the-consumer) for more details on the internals.
+See the [tuning guide](consumer-tuning.md#using-metrics-to-tune-the-consumer) for more details on the internals.
 
 ### Poll metrics
 
