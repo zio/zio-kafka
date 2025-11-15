@@ -60,7 +60,8 @@ libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "@VERSION@" % Test
 Snapshots are available on Sonatype's snapshot repository https://oss.sonatype.org/content/repositories/snapshots.
 [Browse here](https://oss.sonatype.org/content/repositories/snapshots/dev/zio/zio-kafka_3/) to find available versions.
 
-For `zio-kafka-testkit` together with Scala 3, you also need to add the following to your `build.sbt` file:
+If you use `zio-kafka` 3.x, scala 3, `zio-kafka-testkit` and `embedded-kafka`, you also need to add the following to
+your `build.sbt` file:
 
 ```scala
 excludeDependencies += "org.scala-lang.modules" % "scala-collection-compat_2.13"
