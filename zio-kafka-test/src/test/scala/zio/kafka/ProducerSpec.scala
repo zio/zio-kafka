@@ -7,13 +7,14 @@ import zio._
 import zio.kafka.admin.AdminClient.NewTopic
 import zio.kafka.consumer._
 import zio.kafka.producer.TransactionalProducer.{ TransactionLeaked, UserInitiatedAbort }
-import zio.kafka.producer.{ ByteRecord, Transaction }
+import zio.kafka.producer.{ ByteRecord, Producer, Transaction }
 import zio.kafka.serde.Serde
 import zio.kafka.testkit._
 import zio.stream.Take
 import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
+
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
@@ -30,7 +31,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       c.plainStream(subscription, Serde.string, Serde.int).toQueue()
     }
 
-  private val produceSpec =
+  private val produceSpec: Spec[Scope & Kafka, Throwable] =
     suite("::produce(record: ProducerRecord[Array[Byte], Array[Byte]])")(
       test("produces messages") {
         for {
@@ -63,7 +64,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       }
     )
 
-  private val produceAsyncSpec =
+  private val produceAsyncSpec: Spec[Scope & Kafka, Throwable] =
     suite("::produceAsync(record: ProducerRecord[Array[Byte], Array[Byte]])")(
       test("produces messages") {
         for {
@@ -100,7 +101,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       }
     )
 
-  private val produceChunkAsyncSpec =
+  private val produceChunkAsyncSpec: Spec[Scope & Kafka, Throwable] =
     suite("::produceChunkAsync(records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]])")(
       test("produces messages") {
         for {
@@ -140,7 +141,7 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       }
     )
 
-  private val produceChunkSpec =
+  private val produceChunkSpec: Spec[Scope & Kafka, Throwable] =
     suite("::produceChunk(records: Chunk[ProducerRecord[Array[Byte], Array[Byte]]])")(
       test("produces messages") {
         for {
@@ -178,6 +179,23 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           asString(second(1).value) == firstMessage,
           asString(second(2).value) == secondMessage
         )
+      }
+    )
+
+  private val reloadableProducerSpec: Spec[Kafka, Throwable] =
+    suite("Reloadable producer")(
+      test("producer can be used in a reloadable layer") {
+        (for {
+          producerR <- ZIO.service[Reloadable[Producer]]
+          _         <- producerR.reload.orElseFail(new RuntimeException("Reload failed"))
+          producer  <- producerR.get
+          topic     <- randomTopic
+          _         <- KafkaTestUtils.createCustomTopic(topic)
+          _         <- KafkaTestUtils.produceOne(producer, topic, "k", "m")
+        } yield ())
+          .repeatN(2)
+          .provideSome[Kafka](KafkaTestUtils.producer.reloadableManual)
+          .as(assertCompletes)
       }
     )
 
@@ -732,7 +750,8 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
       produceSpec,
       produceAsyncSpec,
       produceChunkAsyncSpec,
-      produceChunkSpec
+      produceChunkSpec,
+      reloadableProducerSpec
     )
       .provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ timeout(2.minutes)
 }
