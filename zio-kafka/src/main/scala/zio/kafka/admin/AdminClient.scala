@@ -346,14 +346,19 @@ object AdminClient {
       newTopics: Iterable[NewTopic],
       options: Option[CreateTopicsOptions] = None
     ): Task[Unit] = {
-      val asJava = newTopics.map(_.asJava).asJavaCollection
+      val asJava     = newTopics.map(_.asJava).asJavaCollection
+      val topicNames = asJava.asScala.map(_.name()).toIndexedSeq
 
       fromKafkaFutureVoid {
         ZIO.attempt(
           options
             .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts.asJava))
             .all()
-        ) <* kafka18818Workaround
+        ) <* listTopics().repeat(
+          Schedule.exponential(50.millis) &&
+            Schedule.recurs(50) &&
+            Schedule.recurUntil(topics => topicNames.forall(topics.contains))
+        )
       }
     }
 
@@ -389,13 +394,18 @@ object AdminClient {
       topics: Iterable[String],
       options: Option[DeleteTopicsOptions] = None
     ): Task[Unit] = {
-      val asJava = topics.asJavaCollection
+      val asJava     = topics.asJavaCollection
+      val topicNames = asJava.asScala.toIndexedSeq
       fromKafkaFutureVoid {
         ZIO.attempt(
           options
             .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts.asJava))
             .all()
-        ) <* kafka18818Workaround
+        ) <* listTopics().repeat(
+          Schedule.exponential(50.millis) &&
+            Schedule.recurs(50) &&
+            Schedule.recurUntil(topics => topicNames.forall(name => !topics.contains(name)))
+        )
       }
     }
 
