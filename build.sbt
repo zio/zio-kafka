@@ -56,8 +56,6 @@ inThisBuild(
     Test / parallelExecution := false,
     Test / fork              := true,
     run / fork               := true,
-    // Update the readme on every push to master:
-    ciUpdateReadmeCondition := Some(Condition.Expression("github.ref == 'refs/heads/master'")),
     ciJvmOptions ++= Seq("-Xms6G", "-Xmx6G", "-Xss4M", "-XX:+UseG1GC"),
     scalafixDependencies ++= List(
       "com.github.vovapolu"                      %% "scaluzzi" % "0.1.23",
