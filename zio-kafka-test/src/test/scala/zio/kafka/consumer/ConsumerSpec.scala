@@ -134,12 +134,16 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           producer <- KafkaTestUtils.makeProducer
           _        <- KafkaTestUtils.scheduledProduce(producer, topic, Schedule.recurs(100)).runDrain.forkScoped
           _        <- KafkaTestUtils.kafka19811Workaround
-          consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          _ <- consumer
-                 .plainStream(Subscription.Pattern("pattern[0-9]+".r), Serde.string, Serde.string)
-                 .take(5)
-                 .runCollect
-          _ <- ZIO.logError("end of test")
+          _ <- ZIO.logLevel(LogLevel.Debug) {
+                 for {
+                   consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
+                   _ <- consumer
+                          .plainStream(Subscription.Pattern("pattern[0-9]+".r), Serde.string, Serde.string)
+                          .take(5)
+                          .runCollect
+                   _ <- ZIO.logDebug("end of test")
+                 } yield ()
+               }
         } yield assertCompletes
       },
       test("receive only messages from the subscribed topic-partition when creating a manual subscription") {
