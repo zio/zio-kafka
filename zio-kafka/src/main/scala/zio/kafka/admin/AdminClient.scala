@@ -346,15 +346,22 @@ object AdminClient {
       newTopics: Iterable[NewTopic],
       options: Option[CreateTopicsOptions] = None
     ): Task[Unit] = {
-      val asJava = newTopics.map(_.asJava).asJavaCollection
+      val asJava     = newTopics.map(_.asJava).asJavaCollection
+      val topicNames = asJava.asScala.map(_.name()).toIndexedSeq
 
       fromKafkaFutureVoid {
         ZIO.attempt(
           options
             .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts.asJava))
             .all()
-        ) <* kafka18818Workaround
-      }
+        )
+      } <*
+        ZIO.sleep(50.millis) <*
+        listTopics().repeat(
+          Schedule.exponential(50.millis) &&
+            Schedule.upTo(5.seconds) &&
+            Schedule.recurUntil(topics => topicNames.forall(topics.contains))
+        )
     }
 
     /**
@@ -389,14 +396,21 @@ object AdminClient {
       topics: Iterable[String],
       options: Option[DeleteTopicsOptions] = None
     ): Task[Unit] = {
-      val asJava = topics.asJavaCollection
+      val asJava     = topics.asJavaCollection
+      val topicNames = asJava.asScala.toIndexedSeq
       fromKafkaFutureVoid {
         ZIO.attempt(
           options
             .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts.asJava))
             .all()
-        ) <* kafka18818Workaround
-      }
+        )
+      } <*
+        ZIO.sleep(50.millis) <*
+        listTopics().repeat(
+          Schedule.exponential(50.millis) &&
+            Schedule.upTo(5.seconds) &&
+            Schedule.recurUntil(topics => topicNames.forall(name => !topics.contains(name)))
+        )
     }
 
     /**
@@ -419,7 +433,7 @@ object AdminClient {
             .fold(adminClient.deleteRecords(records))(opts => adminClient.deleteRecords(records, opts.asJava))
             .all()
         )
-      }
+      } <* kafka18818Workaround
     }
 
     /**
@@ -572,7 +586,7 @@ object AdminClient {
             .all()
         )
       }
-    }
+    } <* kafka18818Workaround
 
     /**
      * List offset for the specified partitions.
@@ -699,7 +713,7 @@ object AdminClient {
             .all()
         )
       }
-    }
+    } <* kafka18818Workaround
 
     /**
      * Retrieves metrics for the underlying AdminClient
@@ -775,11 +789,11 @@ object AdminClient {
       val options = new RemoveMembersFromConsumerGroupOptions(
         membersToRemove.map(new MemberToRemove(_)).asJavaCollection
       )
-      fromKafkaFuture(
+      fromKafkaFuture {
         ZIO.attempt(
           adminClient.removeMembersFromConsumerGroup(groupId, options).all()
         )
-      ).unit
+      }.unit <* kafka18818Workaround
     }
 
     /**
@@ -787,21 +801,21 @@ object AdminClient {
      */
     override def removeMembersFromConsumerGroup(groupId: String): Task[Unit] = {
       val options = new RemoveMembersFromConsumerGroupOptions()
-      fromKafkaFuture(
+      fromKafkaFuture {
         ZIO.attempt(
           adminClient.removeMembersFromConsumerGroup(groupId, options).all()
         )
-      ).unit
+      }.unit <* kafka18818Workaround
     }
 
     override def describeLogDirs(
       brokersId: Iterable[Int]
     ): ZIO[Any, Throwable, Map[Int, Map[String, LogDirDescription]]] =
-      fromKafkaFuture(
+      fromKafkaFuture {
         ZIO.attempt(
           adminClient.describeLogDirs(brokersId.map(Int.box).asJavaCollection).allDescriptions()
         )
-      ).map {
+      }.map {
         _.asScala.bimap(_.intValue, _.asScala.bimap(identity, LogDirDescription.fromJava).toMap).toMap
       }
 
@@ -830,7 +844,7 @@ object AdminClient {
       configs: Map[ConfigResource, Iterable[AlterConfigOp]],
       options: AlterConfigsOptions
     ): Task[Unit] =
-      fromKafkaFutureVoid(
+      fromKafkaFutureVoid {
         ZIO
           .attempt(
             adminClient
@@ -841,8 +855,8 @@ object AdminClient {
                 options.asJava
               )
               .all()
-          ) <* kafka18818Workaround
-      )
+          )
+      } <* kafka18818Workaround
 
     override def incrementalAlterConfigsAsync(
       configs: Map[ConfigResource, Iterable[AlterConfigOp]],
@@ -859,25 +873,27 @@ object AdminClient {
             )
             .values()
         )
-        .map(_.asScala.map { case (configResource, kf) =>
-          (ConfigResource.fromJava(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
-        }.toMap)
+        .map {
+          _.asScala.map { case (configResource, kf) =>
+            (ConfigResource.fromJava(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
+          }.toMap
+        } <* kafka18818Workaround
 
     override def describeAcls(
       filter: AclBindingFilter,
       options: Option[DescribeAclOptions]
     ): Task[Set[AclBinding]] =
-      fromKafkaFuture(
+      fromKafkaFuture {
         ZIO
           .attempt(
             options
               .fold(adminClient.describeAcls(filter.asJava))(opt => adminClient.describeAcls(filter.asJava, opt.asJava))
               .values()
           )
-      ).map(_.asScala.view.map(AclBinding(_)).toSet)
+      }.map(_.asScala.view.map(AclBinding(_)).toSet)
 
     override def createAcls(acls: Set[AclBinding], options: Option[CreateAclOptions]): Task[Unit] =
-      fromKafkaFutureVoid(
+      fromKafkaFutureVoid {
         ZIO
           .attempt(
             options
@@ -885,8 +901,8 @@ object AdminClient {
                 adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava)
               )
               .all()
-          ) <* kafka18818Workaround
-      )
+          )
+      } <* kafka18818Workaround
 
     override def createAclsAsync(
       acls: Set[AclBinding],
@@ -900,12 +916,14 @@ object AdminClient {
             )
             .values()
         )
-        .map(_.asScala.view.map { case (k, v) =>
-          (AclBinding(k), ZIO.fromCompletionStage(v.toCompletionStage).unit)
-        }.toMap)
+        .map {
+          _.asScala.view.map { case (k, v) =>
+            (AclBinding(k), ZIO.fromCompletionStage(v.toCompletionStage).unit)
+          }.toMap
+        } <* kafka18818Workaround
 
     override def deleteAcls(filters: Set[AclBindingFilter], options: Option[DeleteAclsOptions]): Task[Set[AclBinding]] =
-      fromKafkaFuture(
+      fromKafkaFuture {
         ZIO
           .attempt(
             options
@@ -913,8 +931,9 @@ object AdminClient {
                 adminClient.deleteAcls(filters.map(_.asJava).asJava, opt.asJava)
               )
               .all()
-          ) <* kafka18818Workaround
-      ).map(_.asScala.view.map(AclBinding(_)).toSet)
+          )
+      }
+        .map(_.asScala.view.map(AclBinding(_)).toSet) <* kafka18818Workaround
 
     override def deleteAclsAsync(
       filters: Set[AclBindingFilter],
@@ -928,19 +947,21 @@ object AdminClient {
             )
             .values()
         )
-        .map(_.asScala.view.map { case (k, v) =>
-          (
-            AclBindingFilter(k),
-            ZIO
-              .fromCompletionStage(v.toCompletionStage)
-              .map(
-                _.values().asScala.view.map { filterRes =>
-                  // FilterResult.binding() is claimed to be nullable but in fact it is not: see DeleteAclsResponse.aclBinding
-                  AclBinding(filterRes.binding()) -> Option(filterRes.exception())
-                }.toMap
-              )
-          )
-        }.toMap)
+        .map {
+          _.asScala.view.map { case (k, v) =>
+            (
+              AclBindingFilter(k),
+              ZIO
+                .fromCompletionStage(v.toCompletionStage)
+                .map(
+                  _.values().asScala.view.map { filterRes =>
+                    // FilterResult.binding() is claimed to be nullable but in fact it is not: see DeleteAclsResponse.aclBinding
+                    AclBinding(filterRes.binding()) -> Option(filterRes.exception())
+                  }.toMap
+                )
+            )
+          }.toMap
+        } <* kafka18818Workaround
 
   }
 

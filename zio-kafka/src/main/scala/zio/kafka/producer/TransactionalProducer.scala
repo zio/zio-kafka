@@ -110,7 +110,11 @@ object TransactionalProducer {
         )
       metrics = new ZioProducerMetrics(settings.producerSettings.metricLabels)
       live = new ProducerLive(settings.producerSettings, wrappedDiagnostics, rawProducer, runtime, sendQueue, metrics)
-      _ <- sendQueue.size.flatMap(metrics.observeSendQueueSize).schedule(Schedule.fixed(10.seconds)).forkScoped
-      _ <- ZIO.blocking(live.sendFromQueue).forkScoped
+      _ <- sendQueue.size
+             .flatMap(metrics.observeSendQueueSize)
+             .schedule(Schedule.fixed(10.seconds))
+             .interruptible
+             .forkScoped
+      _ <- ZIO.blocking(live.sendFromQueue).interruptible.forkScoped
     } yield new LiveTransactionalProducer(live, semaphore, consumer)
 }

@@ -33,7 +33,7 @@ lazy val kafkaVersion         = "4.1.0"
 lazy val embeddedKafkaVersion = "4.1.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
-lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.20"
+lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.21"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
@@ -56,8 +56,6 @@ inThisBuild(
     Test / parallelExecution := false,
     Test / fork              := true,
     run / fork               := true,
-    // Update the readme on every push to master:
-    ciUpdateReadmeCondition := Some(Condition.Expression("github.ref == 'refs/heads/master'")),
     ciJvmOptions ++= Seq("-Xms6G", "-Xmx6G", "-Xss4M", "-XX:+UseG1GC"),
     scalafixDependencies ++= List(
       "com.github.vovapolu"                      %% "scaluzzi" % "0.1.23",
@@ -142,14 +140,6 @@ lazy val zioKafka =
       libraryDependencies ++= Seq(kafkaClients)
     )
 
-lazy val `embedded-kafka`: Def.Initialize[Seq[sbt.ModuleID]] = {
-  val embeddedKafka = "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion
-  dependenciesOnOrElse("3")(
-    embeddedKafka
-      .cross(CrossVersion.for3Use2_13) exclude ("org.scala-lang.modules", "scala-collection-compat_2.13")
-  )(embeddedKafka)
-}
-
 lazy val zioKafkaTestkit =
   project
     .in(file("zio-kafka-testkit"))
@@ -159,10 +149,11 @@ lazy val zioKafkaTestkit =
     .settings(mimaSettings(binCompatVersionToCompare, failOnProblem = false))
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio" %% "zio"      % zioVersion.value,
-        "dev.zio" %% "zio-test" % zioVersion.value,
+        "dev.zio"                 %% "zio"            % zioVersion.value,
+        "dev.zio"                 %% "zio-test"       % zioVersion.value,
+        "io.github.embeddedkafka" %% "embedded-kafka" % embeddedKafkaVersion,
         kafkaClients
-      ) ++ `embedded-kafka`.value
+      )
     )
 
 lazy val zioKafkaTest =
@@ -177,9 +168,10 @@ lazy val zioKafkaTest =
     .settings(
       libraryDependencies ++= Seq(
         kafkaClients,
-        logback    % Test,
-        "dev.zio" %% "zio-logging-slf4j" % "2.5.1" % Test
-      ) ++ `embedded-kafka`.value
+        logback                    % Test,
+        "dev.zio"                 %% "zio-logging-slf4j" % "2.5.1" % Test,
+        "io.github.embeddedkafka" %% "embedded-kafka"    % embeddedKafkaVersion
+      )
     )
 
 lazy val zioKafkaBench =

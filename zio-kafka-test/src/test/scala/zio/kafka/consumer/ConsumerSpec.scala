@@ -1906,7 +1906,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     )
       .provideSomeShared[Scope](
         Kafka.embedded
-      ) @@ withLiveClock @@ timeout(2.minutes) @@ TestAspect.timed
+      ) @@ withLiveClock @@ timeout(2.minutes) @@ TestAspect.timed @@ TestAspect.parallelN(4)
 
   private final implicit class ConsumerDiagnosticsOps(private val event: DiagnosticEvent) extends AnyVal {
     def isFinalizationEvent: Boolean = event match {
