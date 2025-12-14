@@ -16,6 +16,9 @@ env:
   pull_request:
     branches-ignore:
     - gh-pages
+permissions:
+  id-token: write
+  contents: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.run_id || github.ref }}
   cancel-in-progress: true
@@ -238,8 +241,6 @@ jobs:
         registry-url: https://registry.npmjs.org
     - name: Publish Docs to NPM Registry
       run: sbt docs/publishToNpm
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
   notify-docs-release:
     name: Notify Docs Release
     runs-on: ubuntu-latest
