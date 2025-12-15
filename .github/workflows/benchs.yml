@@ -74,7 +74,7 @@ jobs:
         run: sbt "zioKafkaBench/Jmh/run -wi 5 -i 5 -r 1 -w 1 -t 1 -to 120 -rf json -foe true"
 
       - name: Download previous benchmark data
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: ./cache
           key: ${{ runner.os }}-benchmark
