@@ -26,7 +26,7 @@ jobs:
           check-latest: true
       - name: Setup sbt
         uses: sbt/setup-sbt@v1
-      - uses: coursier/cache-action@v6
+      - uses: coursier/cache-action@v7
       - uses: VirtusLab/scala-cli-setup@main
       - name: Use CI sbt jvmopts
         shell: bash

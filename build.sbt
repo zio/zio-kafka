@@ -29,21 +29,21 @@ lazy val binCompatVersionToCompare =
       compatVersion
     }
 
-lazy val kafkaVersion         = "4.1.0"
+lazy val kafkaVersion         = "4.1.1"
 lazy val embeddedKafkaVersion = "4.1.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
-lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.21"
+lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.23"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
-lazy val _scala213 = "2.13.17"
+lazy val _scala213 = "2.13.18"
 lazy val _scala3   = "3.3.7"
 
 inThisBuild(
   List(
     name         := "ZIO Kafka",
-    zioVersion   := "2.1.22",
+    zioVersion   := "2.1.24",
     scalaVersion := _scala213,
     // zio-sbt defines these 'scala213' and 'scala3' settings, but we need to define them here to override the defaults and better control them
     scala213 := _scala213,
@@ -56,8 +56,6 @@ inThisBuild(
     Test / parallelExecution := false,
     Test / fork              := true,
     run / fork               := true,
-    // Update the readme on every push to master:
-    ciUpdateReadmeCondition := Some(Condition.Expression("github.ref == 'refs/heads/master'")),
     ciJvmOptions ++= Seq("-Xms6G", "-Xmx6G", "-Xss4M", "-XX:+UseG1GC"),
     scalafixDependencies ++= List(
       "com.github.vovapolu"                      %% "scaluzzi" % "0.1.23",
@@ -171,7 +169,7 @@ lazy val zioKafkaTest =
       libraryDependencies ++= Seq(
         kafkaClients,
         logback                    % Test,
-        "dev.zio"                 %% "zio-logging-slf4j" % "2.5.1" % Test,
+        "dev.zio"                 %% "zio-logging-slf4j" % "2.5.2" % Test,
         "io.github.embeddedkafka" %% "embedded-kafka"    % embeddedKafkaVersion
       )
     )
@@ -199,7 +197,7 @@ lazy val zioKafkaExample =
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                 %% "zio"                % zioVersion.value,
-        "dev.zio"                 %% "zio-logging-slf4j2" % "2.5.1",
+        "dev.zio"                 %% "zio-logging-slf4j2" % "2.5.2",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
         logback,
         "dev.zio" %% "zio-test" % zioVersion.value % Test
