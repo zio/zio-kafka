@@ -57,6 +57,7 @@ inThisBuild(
     Test / fork              := true,
     run / fork               := true,
     ciJvmOptions ++= Seq("-Xms6G", "-Xmx6G", "-Xss4M", "-XX:+UseG1GC"),
+    tpolecatExcludeOptions += org.typelevel.scalacoptions.ScalacOptions.lintInferAny,
     scalafixDependencies ++= List(
       "com.github.vovapolu"                      %% "scaluzzi" % "0.1.23",
       "io.github.ghostbuster91.scalafix-unified" %% "unified"  % "0.0.9"
@@ -90,7 +91,6 @@ inThisBuild(
   )
 )
 
-val excludeInferAny = { options: Seq[String] => options.filterNot(Set("-Xlint:infer-any")) }
 
 lazy val root = project
   .in(file("."))
