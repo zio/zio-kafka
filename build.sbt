@@ -218,6 +218,7 @@ lazy val docs = project
   .in(file("zio-kafka-docs"))
   .settings(
     moduleName := "zio-kafka-docs",
+    tpolecatExcludeOptions += org.typelevel.scalacoptions.ScalacOptions.lintInferAny,
     scalacOptions -= "-Yno-imports",
     scalacOptions -= "-Xfatal-warnings",
     projectName                                := "ZIO Kafka",
