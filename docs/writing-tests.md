@@ -276,7 +276,7 @@ See related zio-test documentation: https://zio.dev/reference/test/sharing-layer
 The `KafkaRandom` trait provides a few methods to generate random values.
 To use it, you need to mix it in your test suite, like this:
 
-```scala mdoc:compile-only
+```scala
 import zio.kafka.testkit.Kafka
 import zio.kafka.testkit.KafkaRandom
 import zio.kafka.testkit.KafkaTestUtils
