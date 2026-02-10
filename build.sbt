@@ -33,7 +33,7 @@ lazy val kafkaVersion         = "4.1.1"
 lazy val embeddedKafkaVersion = "4.1.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
-lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.28"
+lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.5.29"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
@@ -90,7 +90,6 @@ inThisBuild(
     )
   )
 )
-
 
 lazy val root = project
   .in(file("."))
