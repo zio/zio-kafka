@@ -13,7 +13,7 @@ trait ConsumerMetrics {
   def observeCommit(latency: Duration): UIO[Unit]
   def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit]
   def observeRebalance(currentlyAssignedCount: Int, assignedCount: Int, revokedCount: Int, lostCount: Int): UIO[Unit]
-  def observeRunloopMetrics(state: ConsumerMetrics.RunloopState): UIO[Unit]
+  def observeRunloopMetrics(state: ConsumerMetrics.ConsumerState): UIO[Unit]
   def observePollAuthError(): UIO[Unit]
 }
 
@@ -34,11 +34,11 @@ object ConsumerMetrics {
       revokedCount: RuntimeFlags,
       lostCount: RuntimeFlags
     ): UIO[Unit] = ZIO.unit
-    override def observeRunloopMetrics(state: RunloopState): UIO[Unit] = ZIO.unit
-    override def observePollAuthError(): UIO[Unit]                     = ZIO.unit
+    override def observeRunloopMetrics(state: ConsumerState): UIO[Unit] = ZIO.unit
+    override def observePollAuthError(): UIO[Unit]                      = ZIO.unit
   }
 
-  final case class RunloopState(
+  final case class ConsumerState(
     pendingRequestCount: Int,
     assignedPartitionCount: Int,
     perPartitionQueueSizes: Chunk[Int],

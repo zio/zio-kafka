@@ -573,7 +573,7 @@ private[consumer] final class Runloop private (
       pendingCommitCount           <- committer.pendingCommitCount
       perPartitionQueueSizes       <- ZIO.foreach(currentState.assignedStreams)(_.queueSize)
       perPartitionOutstandingPolls <- ZIO.foreach(currentState.assignedStreams)(_.outstandingPolls)
-      runloopState = ConsumerMetrics.RunloopState(
+      runloopState = ConsumerMetrics.ConsumerState(
                        pendingRequestCount = currentState.pendingRequests.size,
                        assignedPartitionCount = currentState.assignedStreams.size,
                        perPartitionQueueSizes = perPartitionQueueSizes,

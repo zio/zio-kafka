@@ -310,7 +310,7 @@ class DefaultConsumerMetrics(metricLabels: Set[MetricLabel]) extends ConsumerMet
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  override def observeRunloopMetrics(state: ConsumerMetrics.RunloopState): UIO[Unit] =
+  override def observeRunloopMetrics(state: ConsumerMetrics.ConsumerState): UIO[Unit] =
     for {
       _ <- ZIO.foreachDiscard(state.perPartitionOutstandingPolls)(queuePollsHistogram.update(_))
       _ <- ZIO.foreachDiscard(state.perPartitionQueueSizes)(qs => queueSizeHistogram.update(qs))
