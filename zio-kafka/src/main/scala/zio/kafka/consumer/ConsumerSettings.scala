@@ -356,8 +356,8 @@ final case class ConsumerSettings(
 
   /**
    * @param metrics
-   *   a custom [[ConsumerMetrics]] implementation for collecting consumer metrics. When not set, the default
-   *   zio-metrics based implementation is used.
+   *   a custom [[zio.kafka.consumer.metrics.ConsumerMetrics]] implementation for collecting consumer metrics. When not
+   *   set, the default zio-metrics based implementation is used.
    *
    * Use this to integrate with alternative metrics backends (Dropwizard, Micrometer, etc.) or to customize histogram
    * boundaries by subclassing [[zio.kafka.consumer.metrics.ConsumerMetrics]].
