@@ -5,6 +5,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RebalanceInProgressException
 import zio.test._
 import zio._
+import zio.kafka.consumer.metrics.ConsumerMetrics
 import zio.kafka.diagnostics.Diagnostics
 
 import java.util.{ Map => JavaMap }
@@ -19,7 +20,7 @@ object CommitterSpec extends ZIOSpecDefault {
                        .make(
                          10.seconds,
                          Diagnostics.NoOp,
-                         new DummyMetrics,
+                         ConsumerMetrics.NoOp,
                          onCommitAvailable = commitAvailable.succeed(()).unit
                        )
         tp = new TopicPartition("topic", 0)
@@ -33,7 +34,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       new DummyMetrics,
+                       ConsumerMetrics.NoOp,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp = new TopicPartition("topic", 0)
@@ -50,7 +51,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       new DummyMetrics,
+                       ConsumerMetrics.NoOp,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp = new TopicPartition("topic", 0)
@@ -67,7 +68,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       new DummyMetrics,
+                       ConsumerMetrics.NoOp,
                        onCommitAvailable = commitAvailable.offer(()).unit
                      )
         tp = new TopicPartition("topic", 0)
@@ -96,7 +97,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       new DummyMetrics,
+                       ConsumerMetrics.NoOp,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp = new TopicPartition("topic", 0)
@@ -117,7 +118,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       new DummyMetrics,
+                       ConsumerMetrics.NoOp,
                        onCommitAvailable =
                          ZIO.whenZIO(nrCommitsDone.updateAndGet(_ + 1).map(_ == 3))(commitsAvailable.succeed(())).unit
                      )
@@ -142,7 +143,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       new DummyMetrics,
+                       ConsumerMetrics.NoOp,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp = new TopicPartition("topic", 0)
@@ -162,7 +163,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       new DummyMetrics,
+                       ConsumerMetrics.NoOp,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp = new TopicPartition("topic", 0)
@@ -180,7 +181,7 @@ object CommitterSpec extends ZIOSpecDefault {
         committer <- LiveCommitter.make(
                        10.seconds,
                        Diagnostics.NoOp,
-                       new DummyMetrics,
+                       ConsumerMetrics.NoOp,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
         tp = new TopicPartition("topic", 0)
