@@ -11,7 +11,7 @@ import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.metrics.{ ConsumerMetrics, DefaultConsumerMetrics }
+import zio.kafka.consumer.metrics.{ ConsumerMetrics, ZioMetricsConsumerMetrics }
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
@@ -649,7 +649,7 @@ object Runloop {
       groupMetadataRef  <- Ref.make[Option[ConsumerGroupMetadata]](None)
       sameThreadRuntime <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       executor          <- ZIO.executor
-      metrics = settings.consumerMetrics.getOrElse(new DefaultConsumerMetrics(settings.metricLabels))
+      metrics = settings.consumerMetrics.getOrElse(new ZioMetricsConsumerMetrics(settings.metricLabels))
       committer <- LiveCommitter
                      .make(
                        settings.commitTimeout,

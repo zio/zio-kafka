@@ -7,11 +7,13 @@ import zio.metrics._
 /**
  * A [[ConsumerMetrics]] implementation that uses zio-metrics for measuring.
  *
+ * Subclasses are allowed to override the Histogram boundaries.
+ *
  * @param metricLabels
  *   the metric labels that are added to each metric
  */
 //noinspection ScalaWeakerAccess
-private[consumer] class DefaultConsumerMetrics(metricLabels: Set[MetricLabel]) extends ConsumerMetrics {
+class ZioMetricsConsumerMetrics(metricLabels: Set[MetricLabel]) extends ConsumerMetrics {
 
   // -----------------------------------------------------
   //
