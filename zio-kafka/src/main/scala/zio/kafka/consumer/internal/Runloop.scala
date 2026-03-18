@@ -578,7 +578,6 @@ private[consumer] final class Runloop private (
                        assignedPartitionCount = currentState.assignedStreams.size,
                        perPartitionQueueSizes = perPartitionQueueSizes,
                        perPartitionOutstandingPolls = perPartitionOutstandingPolls,
-                       totalQueueSize = perPartitionQueueSizes.sum,
                        isSubscribed = currentState.subscriptionState.isSubscribed,
                        commandQueueSize = commandQueueSize,
                        commitQueueSize = commitQueueSize,
