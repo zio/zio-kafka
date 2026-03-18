@@ -8,6 +8,7 @@ import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
+import zio.kafka.consumer.metrics.ConsumerMetrics
 import zio.test._
 import zio._
 import zio.kafka.diagnostics.Diagnostics
@@ -31,13 +32,8 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
       revokedCount: Int,
       lostCount: Int
     ): UIO[Unit] = ZIO.unit
-    override def observeRunloopMetrics(
-      state: Runloop.State,
-      commandQueueSize: Int,
-      commitQueueSize: Int,
-      pendingCommits: Int
-    ): UIO[Unit] = ZIO.unit
-    override def observePollAuthError(): UIO[Unit] = ZIO.unit
+    override def observeRunloopMetrics(state: ConsumerMetrics.ConsumerState): UIO[Unit] = ZIO.unit
+    override def observePollAuthError(): UIO[Unit]                                      = ZIO.unit
   }
 
   def spec: Spec[TestEnvironment with Scope, Throwable] =

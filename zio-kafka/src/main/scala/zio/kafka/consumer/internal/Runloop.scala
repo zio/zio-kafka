@@ -11,6 +11,7 @@ import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
+import zio.kafka.consumer.metrics.{ ConsumerMetrics, ZioMetricsConsumerMetrics }
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
@@ -566,12 +567,23 @@ private[consumer] final class Runloop private (
 
   private def observeRunloopMetrics(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ZIO[Any, Nothing, Unit] = {
     val observe = for {
-      currentState       <- currentStateRef.get
-      commandQueueSize   <- commandQueue.size
-      commitQueueSize    <- committer.queueSize
-      pendingCommitCount <- committer.pendingCommitCount
-      _ <- consumerMetrics
-             .observeRunloopMetrics(currentState, commandQueueSize, commitQueueSize, pendingCommitCount)
+      currentState                 <- currentStateRef.get
+      commandQueueSize             <- commandQueue.size
+      commitQueueSize              <- committer.queueSize
+      pendingCommitCount           <- committer.pendingCommitCount
+      perPartitionQueueSizes       <- ZIO.foreach(currentState.assignedStreams)(_.queueSize)
+      perPartitionOutstandingPolls <- ZIO.foreach(currentState.assignedStreams)(_.outstandingPolls)
+      runloopState = ConsumerMetrics.ConsumerState(
+                       pendingRequestCount = currentState.pendingRequests.size,
+                       assignedPartitionCount = currentState.assignedStreams.size,
+                       perPartitionQueueSizes = perPartitionQueueSizes,
+                       perPartitionOutstandingPolls = perPartitionOutstandingPolls,
+                       isSubscribed = currentState.subscriptionState.isSubscribed,
+                       commandQueueSize = commandQueueSize,
+                       commitQueueSize = commitQueueSize,
+                       pendingCommitCount = pendingCommitCount
+                     )
+      _ <- consumerMetrics.observeRunloopMetrics(runloopState)
     } yield ()
 
     observe
@@ -636,7 +648,7 @@ object Runloop {
       groupMetadataRef  <- Ref.make[Option[ConsumerGroupMetadata]](None)
       sameThreadRuntime <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       executor          <- ZIO.executor
-      metrics = new ZioConsumerMetrics(settings.metricLabels)
+      metrics = settings.consumerMetrics.getOrElse(new ZioMetricsConsumerMetrics(settings.metricLabels))
       committer <- LiveCommitter
                      .make(
                        settings.commitTimeout,

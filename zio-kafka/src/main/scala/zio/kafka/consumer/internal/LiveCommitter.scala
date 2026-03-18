@@ -8,6 +8,7 @@ import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent
+import zio.kafka.consumer.metrics.ConsumerMetrics
 
 import java.util.{ Map => JavaMap }
 import scala.collection.mutable

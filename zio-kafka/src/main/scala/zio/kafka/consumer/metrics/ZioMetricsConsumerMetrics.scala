@@ -1,43 +1,19 @@
-package zio.kafka.consumer.internal
+package zio.kafka.consumer.metrics
 
+import zio._
 import zio.metrics.MetricKeyType.Histogram
 import zio.metrics._
-import zio._
 
 /**
- * Implementations of this trait are responsible for measuring all consumer metrics. The different methods are invoked
- * from different places in the consumer.
- *
- * WARNING: This is an INTERNAL API and may change in an incompatible way, or disappear, without notice, in any
- * zio-kafka version.
- */
-private[internal] trait ConsumerMetrics {
-  def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int): UIO[Unit]
-  def observeCommit(latency: Duration): UIO[Unit]
-  def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit]
-  def observeRebalance(currentlyAssignedCount: Int, assignedCount: Int, revokedCount: Int, lostCount: Int): UIO[Unit]
-  def observeRunloopMetrics(
-    state: Runloop.State,
-    commandQueueSize: Int,
-    commitQueueSize: Int,
-    pendingCommits: Int
-  ): UIO[Unit]
-  def observePollAuthError(): UIO[Unit]
-}
-
-/**
- * A `ConsumerMetrics` that uses zio-metrics for measuring.
+ * A [[ConsumerMetrics]] implementation that uses zio-metrics for measuring.
  *
  * Subclasses are allowed to override the Histogram boundaries.
- *
- * WARNING: This is an INTERNAL API and may change in an incompatible way, or disappear, without notice, in any
- * zio-kafka version.
  *
  * @param metricLabels
  *   the metric labels that are added to each metric
  */
 //noinspection ScalaWeakerAccess
-private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) extends ConsumerMetrics {
+class ZioMetricsConsumerMetrics(metricLabels: Set[MetricLabel]) extends ConsumerMetrics {
 
   // -----------------------------------------------------
   //
@@ -302,13 +278,12 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  private val subscriptionStateGauge: Metric.Gauge[SubscriptionState] =
+  private val subscriptionStateGauge: Metric.Gauge[Double] =
     Metric
       .gauge(
         "ziokafka_consumer_subscription_state",
         "Whether the consumer is subscribed (1) or not (0)."
       )
-      .contramap[SubscriptionState](s => if (s.isSubscribed) 1 else 0)
       .tagged(metricLabels)
 
   // 0,1,3,8,21,55,149,404,1097,2981
@@ -335,22 +310,16 @@ private[internal] class ZioConsumerMetrics(metricLabels: Set[MetricLabel]) exten
       .contramap[Int](_.toDouble)
       .tagged(metricLabels)
 
-  override def observeRunloopMetrics(
-    state: Runloop.State,
-    commandQueueSize: Int,
-    commitQueueSize: Int,
-    pendingCommits: Int
-  ): UIO[Unit] =
+  override def observeRunloopMetrics(state: ConsumerMetrics.ConsumerState): UIO[Unit] =
     for {
-      _          <- ZIO.foreachDiscard(state.assignedStreams)(_.outstandingPolls @@ queuePollsHistogram)
-      queueSizes <- ZIO.foreach(state.assignedStreams)(_.queueSize)
-      _          <- ZIO.foreachDiscard(queueSizes)(qs => queueSizeHistogram.update(qs))
-      _          <- allQueueSizeHistogram.update(queueSizes.sum)
-      _          <- pendingRequestsHistogram.update(state.pendingRequests.size)
-      _          <- pendingCommitsHistogram.update(pendingCommits)
-      _          <- subscriptionStateGauge.update(state.subscriptionState)
-      _          <- commandQueueSizeHistogram.update(commandQueueSize)
-      _          <- commitQueueSizeHistogram.update(commitQueueSize)
+      _ <- ZIO.foreachDiscard(state.perPartitionOutstandingPolls)(queuePollsHistogram.update(_))
+      _ <- ZIO.foreachDiscard(state.perPartitionQueueSizes)(qs => queueSizeHistogram.update(qs))
+      _ <- allQueueSizeHistogram.update(state.totalQueueSize)
+      _ <- pendingRequestsHistogram.update(state.pendingRequestCount)
+      _ <- pendingCommitsHistogram.update(state.pendingCommitCount)
+      _ <- subscriptionStateGauge.set(if (state.isSubscribed) 1.0 else 0.0)
+      _ <- commandQueueSizeHistogram.update(state.commandQueueSize)
+      _ <- commitQueueSizeHistogram.update(state.commitQueueSize)
     } yield ()
 
   // -----------------------------------------------------
