@@ -475,11 +475,16 @@ object KafkaTestUtils {
         )
       }
 
+  /** At most 5 concurrently admin write operations over all tests. */
+  private val adminWriteSemaphore: Option[Semaphore] = Unsafe.unsafe { implicit unsafe =>
+    Some(Semaphore.unsafe.make(5))
+  }
+
   /**
    * Makes a `AdminClient` for use in tests.
    */
   def makeAdminClient: ZIO[Scope & Kafka, Throwable, AdminClient] =
-    adminSettings.flatMap(AdminClient.make)
+    adminSettings.flatMap(settings => AdminClient.make(settings, adminWriteSemaphore))
 
   /**
    * Makes a `AdminClient` for use in tests, using the `SASL_PLAINTEXT` security protocol.
@@ -488,13 +493,13 @@ object KafkaTestUtils {
     username: String = "admin",
     password: String = "admin-secret"
   ): ZIO[Scope & Kafka.Sasl, Throwable, AdminClient] =
-    saslAdminSettings(username, password).flatMap(AdminClient.make)
+    saslAdminSettings(username, password).flatMap(settings => AdminClient.make(settings, adminWriteSemaphore))
 
   /**
    * Makes a `AdminClient` for use in tests, using the `SSL` security protocol.
    */
   def makeSslAdminClient: ZIO[Scope & Kafka, Throwable, AdminClient] =
-    sslAdminSettings.flatMap(AdminClient.make)
+    sslAdminSettings.flatMap(settings => AdminClient.make(settings, adminWriteSemaphore))
 
   // -----------------------------------------------------------------------------------------
   //
