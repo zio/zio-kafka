@@ -476,9 +476,7 @@ object KafkaTestUtils {
       }
 
   /** At most 5 concurrently admin write operations over all tests. */
-  private val adminWriteSemaphore: Option[Semaphore] = Unsafe.unsafe { implicit unsafe =>
-    Some(Semaphore.unsafe.make(5))
-  }
+  private val adminWriteSemaphore: Option[Semaphore] = Some(Semaphore.unsafe.make(5)(Unsafe))
 
   /**
    * Makes a `AdminClient` for use in tests.
