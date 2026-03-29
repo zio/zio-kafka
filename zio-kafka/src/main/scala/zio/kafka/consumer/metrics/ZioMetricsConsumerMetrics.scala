@@ -15,6 +15,8 @@ import zio.metrics._
 //noinspection ScalaWeakerAccess
 class ZioMetricsConsumerMetrics(metricLabels: Set[MetricLabel]) extends ConsumerMetrics {
 
+  import ZioMetricsConsumerMetrics._
+
   // -----------------------------------------------------
   //
   // Poll metrics
@@ -22,57 +24,25 @@ class ZioMetricsConsumerMetrics(metricLabels: Set[MetricLabel]) extends Consumer
 
   // 0.01,0.03,0.08,0.21,0.55,1.49,4.04,10.97,29.81,81.04 in seconds
   // 10,30,80,210,550,1490,4040,10970,29810,81040 in milliseconds
-  protected val pollLatencyBoundaries: Histogram.Boundaries =
-    MetricKeyType.Histogram.Boundaries.fromChunk(
-      Chunk.iterate(0.01, 10)(_ * Math.E).map(d => Math.ceil(d * 100.0) / 100.0)
-    )
+  protected val pollLatencyBoundaries: Histogram.Boundaries = defaultPollLatencyBoundaries
 
   // 1,3,8,21,55,149,404,1097,2981,8104
-  protected val pollSizeBoundaries: Histogram.Boundaries =
-    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk.iterate(1.0, 10)(_ * Math.E).map(Math.ceil))
+  protected val pollSizeBoundaries: Histogram.Boundaries = defaultPollSizeBoundaries
 
   private val pollCounter: Metric.Counter[Int] =
-    Metric
-      .counterInt("ziokafka_consumer_polls", "The number of polls.")
-      .tagged(metricLabels)
+    pollCounterMetric.tagged(metricLabels)
 
   private val partitionsResumedInLatestPollGauge: Metric.Gauge[Int] =
-    Metric
-      .gauge(
-        "ziokafka_consumer_partitions_resumed_in_latest_poll",
-        "The number of partitions resumed in the latest poll call."
-      )
-      .contramap[Int](_.toDouble)
-      .tagged(metricLabels)
+    partitionsResumedInLatestPollGaugeMetric.tagged(metricLabels)
 
   private val partitionsPausedInLatestPollGauge: Metric.Gauge[Int] =
-    Metric
-      .gauge(
-        "ziokafka_consumer_partitions_paused_in_latest_poll",
-        "The number of partitions paused in the latest poll call (because of backpressure)."
-      )
-      .contramap[Int](_.toDouble)
-      .tagged(metricLabels)
+    partitionsPausedInLatestPollGaugeMetric.tagged(metricLabels)
 
   private val pollLatencyHistogram: Metric.Histogram[Duration] =
-    Metric
-      .histogram(
-        "ziokafka_consumer_poll_latency_seconds",
-        "The duration of a single poll in seconds.",
-        pollLatencyBoundaries
-      )
-      .contramap[Duration](_.toNanos.toDouble / 1e9)
-      .tagged(metricLabels)
+    pollLatencyHistogramMetric(pollLatencyBoundaries).tagged(metricLabels)
 
   private val pollSizeHistogram: Metric.Histogram[Int] =
-    Metric
-      .histogram(
-        "ziokafka_consumer_poll_size",
-        "The number of records fetched by a single poll.",
-        pollSizeBoundaries
-      )
-      .contramap[Int](_.toDouble)
-      .tagged(metricLabels)
+    pollSizeHistogramMetric(pollSizeBoundaries).tagged(metricLabels)
 
   override def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int): UIO[Unit] =
     for {
@@ -90,25 +60,13 @@ class ZioMetricsConsumerMetrics(metricLabels: Set[MetricLabel]) extends Consumer
 
   // 0.01,0.03,0.08,0.21,0.55,1.49,4.04,10.97,29.81,81.04 in seconds
   // 10,30,80,210,550,1490,4040,10970,29810,81040 in milliseconds
-  protected val commitLatencyBoundaries: Histogram.Boundaries =
-    MetricKeyType.Histogram.Boundaries.fromChunk(
-      Chunk.iterate(0.01, 10)(_ * Math.E).map(d => Math.ceil(d * 100.0) / 100.0)
-    )
+  protected val commitLatencyBoundaries: Histogram.Boundaries = defaultCommitLatencyBoundaries
 
   private val commitCounter: Metric.Counter[Int] =
-    Metric
-      .counterInt("ziokafka_consumer_commits", "The number of commits.")
-      .tagged(metricLabels)
+    commitCounterMetric.tagged(metricLabels)
 
   private val commitLatencyHistogram: Metric.Histogram[Duration] =
-    Metric
-      .histogram(
-        "ziokafka_consumer_commit_latency_seconds",
-        "The duration of a commit in seconds.",
-        commitLatencyBoundaries
-      )
-      .contramap[Duration](_.toNanos.toDouble / 1e9)
-      .tagged(metricLabels)
+    commitLatencyHistogramMetric(commitLatencyBoundaries).tagged(metricLabels)
 
   override def observeCommit(latency: zio.Duration): UIO[Unit] =
     for {
@@ -125,40 +83,20 @@ class ZioMetricsConsumerMetrics(metricLabels: Set[MetricLabel]) extends Consumer
 
   // 0.01,0.03,0.08,0.21,0.55,1.49,4.04,10.97,29.81,81.04 in seconds
   // 10,30,80,210,550,1490,4040,10970,29810,81040 in milliseconds
-  protected val aggregatedCommitLatencyBoundaries: Histogram.Boundaries =
-    MetricKeyType.Histogram.Boundaries.fromChunk(
-      Chunk.iterate(0.01, 10)(_ * Math.E).map(d => Math.ceil(d * 100.0) / 100.0)
-    )
+  protected val aggregatedCommitLatencyBoundaries: Histogram.Boundaries = defaultAggregatedCommitLatencyBoundaries
 
   // 1,3,8,21,55,149,404,1097,2981,8104
-  protected val aggregatedCommitSizeBoundaries: Histogram.Boundaries =
-    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk.iterate(1.0, 10)(_ * Math.E).map(Math.ceil))
+  protected val aggregatedCommitSizeBoundaries: Histogram.Boundaries = defaultAggregatedCommitSizeBoundaries
 
   private val aggregatedCommitCounter: Metric.Counter[Int] =
-    Metric
-      .counterInt("ziokafka_consumer_aggregated_commits", "The number of aggregated commits.")
-      .tagged(metricLabels)
+    aggregatedCommitCounterMetric.tagged(metricLabels)
 
   private val aggregatedCommitLatencyHistogram: Metric.Histogram[Duration] =
-    Metric
-      .histogram(
-        "ziokafka_consumer_aggregated_commit_latency_seconds",
-        "The duration of an aggregated commit in seconds.",
-        aggregatedCommitLatencyBoundaries
-      )
-      .contramap[Duration](_.toNanos.toDouble / 1e9)
-      .tagged(metricLabels)
+    aggregatedCommitLatencyHistogramMetric(aggregatedCommitLatencyBoundaries).tagged(metricLabels)
 
   // Note: the metric is an approximation because the first commit to a partition is not included.
   private val aggregatedCommitSizeHistogram: Metric.Histogram[Long] =
-    Metric
-      .histogram(
-        "ziokafka_consumer_aggregated_commit_size",
-        "An approximation of the number of records (offsets) per aggregated commit.",
-        aggregatedCommitSizeBoundaries
-      )
-      .contramap[Long](_.toDouble)
-      .tagged(metricLabels)
+    aggregatedCommitSizeHistogramMetric(aggregatedCommitSizeBoundaries).tagged(metricLabels)
 
   override def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit] =
     for {
@@ -173,30 +111,19 @@ class ZioMetricsConsumerMetrics(metricLabels: Set[MetricLabel]) extends Consumer
   //
 
   private val rebalanceCounter: Metric.Counter[Int] =
-    Metric
-      .counterInt("ziokafka_consumer_rebalances", "The number of rebalances.")
-      .tagged(metricLabels)
+    rebalanceCounterMetric.tagged(metricLabels)
 
   private val partitionsCurrentlyAssignedGauge: Metric.Gauge[Int] =
-    Metric
-      .gauge(
-        "ziokafka_consumer_partitions_currently_assigned",
-        "The number of partitions currently assigned to the consumer."
-      )
-      .contramap[Int](_.toDouble)
-      .tagged(metricLabels)
+    partitionsCurrentlyAssignedGaugeMetric.tagged(metricLabels)
 
-  private def partitionsToStateCounter(state: String): Metric.Counter[Int] =
-    Metric
-      .counterInt(
-        s"ziokafka_consumer_partitions_$state",
-        s"The number of partitions $state to the consumer."
-      )
-      .tagged(metricLabels)
+  private val partitionsAssignedCounter: Metric.Counter[Int] =
+    partitionsAssignedCounterMetric.tagged(metricLabels)
 
-  private val partitionsAssignedCounter = partitionsToStateCounter("assigned")
-  private val partitionsRevokedCounter  = partitionsToStateCounter("revoked")
-  private val partitionsLostCounter     = partitionsToStateCounter("lost")
+  private val partitionsRevokedCounter: Metric.Counter[Int] =
+    partitionsRevokedCounterMetric.tagged(metricLabels)
+
+  private val partitionsLostCounter: Metric.Counter[Int] =
+    partitionsLostCounterMetric.tagged(metricLabels)
 
   override def observeRebalance(
     currentlyAssignedCount: Int,
@@ -218,97 +145,39 @@ class ZioMetricsConsumerMetrics(metricLabels: Set[MetricLabel]) extends Consumer
   //
 
   // 0,1,3,8,21,55,149,404,1097,2981
-  protected val streamCountBoundaries: Histogram.Boundaries =
-    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk(0.0) ++ Chunk.iterate(1.0, 9)(_ * Math.E).map(Math.ceil))
+  protected val streamCountBoundaries: Histogram.Boundaries = defaultStreamCountBoundaries
 
   // 0,100,272,739,2009,5460,14842,40343,109664,298096
-  protected val streamSizeBoundaries: Histogram.Boundaries =
-    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk(0.0) ++ Chunk.iterate(100.0, 9)(_ * Math.E).map(Math.ceil))
+  protected val streamSizeBoundaries: Histogram.Boundaries = defaultStreamSizeBoundaries
 
-  protected val queuePollSizeBoundaries: Histogram.Boundaries =
-    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk[Double](0, 1, 2, 3, 4, 5, 6, 7, 8, 9))
-
-  private val pendingRequestsHistogram: Metric.Histogram[Int] =
-    Metric
-      .histogram(
-        "ziokafka_consumer_pending_requests",
-        "The number of partitions that ran out of records (the queue is empty).",
-        streamCountBoundaries
-      )
-      .contramap[Int](_.toDouble)
-      .tagged(metricLabels)
-
-  private val pendingCommitsHistogram: Metric.Histogram[Int] =
-    Metric
-      .histogram(
-        "ziokafka_consumer_pending_commits",
-        "The number of commits that are awaiting completion.",
-        streamCountBoundaries
-      )
-      .contramap[Int](_.toDouble)
-      .tagged(metricLabels)
-
-  private val queueSizeHistogram: Metric.Histogram[Int] =
-    Metric
-      .histogram(
-        "ziokafka_consumer_queue_size",
-        "The number of records queued for a partition.",
-        streamSizeBoundaries
-      )
-      .contramap[Int](_.toDouble)
-      .tagged(metricLabels)
-
-  private val queuePollsHistogram: Metric.Histogram[Int] =
-    Metric
-      .histogram(
-        "ziokafka_consumer_queue_polls",
-        "The number of polls during which records are idling in a queue.",
-        queuePollSizeBoundaries
-      )
-      .contramap[Int](_.toDouble)
-      .tagged(metricLabels)
-
-  private val allQueueSizeHistogram: Metric.Histogram[Int] =
-    Metric
-      .histogram(
-        "ziokafka_consumer_all_queue_size",
-        "The total number of records queued for all partitions.",
-        streamSizeBoundaries
-      )
-      .contramap[Int](_.toDouble)
-      .tagged(metricLabels)
-
-  private val subscriptionStateGauge: Metric.Gauge[Double] =
-    Metric
-      .gauge(
-        "ziokafka_consumer_subscription_state",
-        "Whether the consumer is subscribed (1) or not (0)."
-      )
-      .tagged(metricLabels)
+  protected val queuePollSizeBoundaries: Histogram.Boundaries = defaultQueuePollSizeBoundaries
 
   // 0,1,3,8,21,55,149,404,1097,2981
-  protected val commandAndCommitQueueSizeBoundaries: Histogram.Boundaries =
-    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk(0.0) ++ Chunk.iterate(1.0, 9)(_ * Math.E).map(Math.ceil))
+  protected val commandAndCommitQueueSizeBoundaries: Histogram.Boundaries = defaultCommandAndCommitQueueSizeBoundaries
+
+  private val pendingRequestsHistogram: Metric.Histogram[Int] =
+    pendingRequestsHistogramMetric(streamCountBoundaries).tagged(metricLabels)
+
+  private val pendingCommitsHistogram: Metric.Histogram[Int] =
+    pendingCommitsHistogramMetric(streamCountBoundaries).tagged(metricLabels)
+
+  private val queueSizeHistogram: Metric.Histogram[Int] =
+    queueSizeHistogramMetric(streamSizeBoundaries).tagged(metricLabels)
+
+  private val queuePollsHistogram: Metric.Histogram[Int] =
+    queuePollsHistogramMetric(queuePollSizeBoundaries).tagged(metricLabels)
+
+  private val allQueueSizeHistogram: Metric.Histogram[Int] =
+    allQueueSizeHistogramMetric(streamSizeBoundaries).tagged(metricLabels)
+
+  private val subscriptionStateGauge: Metric.Gauge[Double] =
+    subscriptionStateGaugeMetric.tagged(metricLabels)
 
   private val commandQueueSizeHistogram: Metric.Histogram[Int] =
-    Metric
-      .histogram(
-        "ziokafka_consumer_command_queue_size",
-        "The number of commands queued in the consumer.",
-        commandAndCommitQueueSizeBoundaries
-      )
-      .contramap[Int](_.toDouble)
-      .tagged(metricLabels)
+    commandQueueSizeHistogramMetric(commandAndCommitQueueSizeBoundaries).tagged(metricLabels)
 
   private val commitQueueSizeHistogram: Metric.Histogram[Int] =
-    Metric
-      .histogram(
-        "ziokafka_consumer_commit_queue_size",
-        "The number of commits queued in the consumer.",
-        commandAndCommitQueueSizeBoundaries
-      )
-      .contramap[Int](_.toDouble)
-      .tagged(metricLabels)
+    commitQueueSizeHistogramMetric(commandAndCommitQueueSizeBoundaries).tagged(metricLabels)
 
   override def observeRunloopMetrics(state: ConsumerMetrics.ConsumerState): UIO[Unit] =
     for {
@@ -328,14 +197,247 @@ class ZioMetricsConsumerMetrics(metricLabels: Set[MetricLabel]) extends Consumer
   //
 
   private val pollAuthErrorCounter: Metric.Counter[Int] =
-    Metric
-      .counterInt(
-        "ziokafka_consumer_poll_auth_errors",
-        "The number of polls that ended with an authentication or authorization error."
-      )
-      .tagged(metricLabels)
+    pollAuthErrorCounterMetric.tagged(metricLabels)
 
   def observePollAuthError(): UIO[Unit] =
     pollAuthErrorCounter.increment
+
+}
+
+object ZioMetricsConsumerMetrics {
+
+  // 0.01,0.03,0.08,0.21,0.55,1.49,4.04,10.97,29.81,81.04 in seconds
+  // 10,30,80,210,550,1490,4040,10970,29810,81040 in milliseconds
+  private[metrics] val defaultPollLatencyBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.fromChunk(
+      Chunk.iterate(0.01, 10)(_ * Math.E).map(d => Math.ceil(d * 100.0) / 100.0)
+    )
+
+  // 1,3,8,21,55,149,404,1097,2981,8104
+  private[metrics] val defaultPollSizeBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk.iterate(1.0, 10)(_ * Math.E).map(Math.ceil))
+
+  // 0.01,0.03,0.08,0.21,0.55,1.49,4.04,10.97,29.81,81.04 in seconds
+  // 10,30,80,210,550,1490,4040,10970,29810,81040 in milliseconds
+  private[metrics] val defaultCommitLatencyBoundaries: Histogram.Boundaries = defaultPollLatencyBoundaries
+
+  // 0.01,0.03,0.08,0.21,0.55,1.49,4.04,10.97,29.81,81.04 in seconds
+  // 10,30,80,210,550,1490,4040,10970,29810,81040 in milliseconds
+  private[metrics] val defaultAggregatedCommitLatencyBoundaries: Histogram.Boundaries = defaultPollLatencyBoundaries
+
+  // 1,3,8,21,55,149,404,1097,2981,8104
+  private[metrics] val defaultAggregatedCommitSizeBoundaries: Histogram.Boundaries = defaultPollSizeBoundaries
+
+  // 0,1,3,8,21,55,149,404,1097,2981
+  private[metrics] val defaultStreamCountBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk(0.0) ++ Chunk.iterate(1.0, 9)(_ * Math.E).map(Math.ceil))
+
+  // 0,100,272,739,2009,5460,14842,40343,109664,298096
+  private[metrics] val defaultStreamSizeBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk(0.0) ++ Chunk.iterate(100.0, 9)(_ * Math.E).map(Math.ceil))
+
+  private[metrics] val defaultQueuePollSizeBoundaries: Histogram.Boundaries =
+    MetricKeyType.Histogram.Boundaries.fromChunk(Chunk[Double](0, 1, 2, 3, 4, 5, 6, 7, 8, 9))
+
+  // 0,1,3,8,21,55,149,404,1097,2981
+  private[metrics] val defaultCommandAndCommitQueueSizeBoundaries: Histogram.Boundaries = defaultStreamCountBoundaries
+
+  private[metrics] val pollCounterMetric: Metric.Counter[Int] =
+    Metric.counterInt("ziokafka_consumer_polls", "The number of polls.")
+
+  private[metrics] val partitionsResumedInLatestPollGaugeMetric: Metric.Gauge[Int] =
+    Metric
+      .gauge(
+        "ziokafka_consumer_partitions_resumed_in_latest_poll",
+        "The number of partitions resumed in the latest poll call."
+      )
+      .contramap[Int](_.toDouble)
+
+  private[metrics] val partitionsPausedInLatestPollGaugeMetric: Metric.Gauge[Int] =
+    Metric
+      .gauge(
+        "ziokafka_consumer_partitions_paused_in_latest_poll",
+        "The number of partitions paused in the latest poll call (because of backpressure)."
+      )
+      .contramap[Int](_.toDouble)
+
+  private[metrics] def pollLatencyHistogramMetric(
+    boundaries: Histogram.Boundaries = defaultPollLatencyBoundaries
+  ): Metric.Histogram[Duration] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_poll_latency_seconds",
+        "The duration of a single poll in seconds.",
+        boundaries
+      )
+      .contramap[Duration](_.toNanos.toDouble / 1e9)
+
+  private[metrics] def pollSizeHistogramMetric(
+    boundaries: Histogram.Boundaries = defaultPollSizeBoundaries
+  ): Metric.Histogram[Int] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_poll_size",
+        "The number of records fetched by a single poll.",
+        boundaries
+      )
+      .contramap[Int](_.toDouble)
+
+  private[metrics] val commitCounterMetric: Metric.Counter[Int] =
+    Metric.counterInt("ziokafka_consumer_commits", "The number of commits.")
+
+  private[metrics] def commitLatencyHistogramMetric(
+    boundaries: Histogram.Boundaries = defaultCommitLatencyBoundaries
+  ): Metric.Histogram[Duration] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_commit_latency_seconds",
+        "The duration of a commit in seconds.",
+        boundaries
+      )
+      .contramap[Duration](_.toNanos.toDouble / 1e9)
+
+  private[metrics] val aggregatedCommitCounterMetric: Metric.Counter[Int] =
+    Metric.counterInt("ziokafka_consumer_aggregated_commits", "The number of aggregated commits.")
+
+  private[metrics] def aggregatedCommitLatencyHistogramMetric(
+    boundaries: Histogram.Boundaries = defaultAggregatedCommitLatencyBoundaries
+  ): Metric.Histogram[Duration] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_aggregated_commit_latency_seconds",
+        "The duration of an aggregated commit in seconds.",
+        boundaries
+      )
+      .contramap[Duration](_.toNanos.toDouble / 1e9)
+
+  private[metrics] def aggregatedCommitSizeHistogramMetric(
+    boundaries: Histogram.Boundaries = defaultAggregatedCommitSizeBoundaries
+  ): Metric.Histogram[Long] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_aggregated_commit_size",
+        "An approximation of the number of records (offsets) per aggregated commit.",
+        boundaries
+      )
+      .contramap[Long](_.toDouble)
+
+  private[metrics] val rebalanceCounterMetric: Metric.Counter[Int] =
+    Metric.counterInt("ziokafka_consumer_rebalances", "The number of rebalances.")
+
+  private[metrics] val partitionsCurrentlyAssignedGaugeMetric: Metric.Gauge[Int] =
+    Metric
+      .gauge(
+        "ziokafka_consumer_partitions_currently_assigned",
+        "The number of partitions currently assigned to the consumer."
+      )
+      .contramap[Int](_.toDouble)
+
+  private[metrics] val partitionsAssignedCounterMetric: Metric.Counter[Int] =
+    Metric.counterInt(
+      "ziokafka_consumer_partitions_assigned",
+      "The number of partitions assigned to the consumer."
+    )
+
+  private[metrics] val partitionsRevokedCounterMetric: Metric.Counter[Int] =
+    Metric.counterInt(
+      "ziokafka_consumer_partitions_revoked",
+      "The number of partitions revoked to the consumer."
+    )
+
+  private[metrics] val partitionsLostCounterMetric: Metric.Counter[Int] =
+    Metric.counterInt(
+      "ziokafka_consumer_partitions_lost",
+      "The number of partitions lost to the consumer."
+    )
+
+  private[metrics] def pendingRequestsHistogramMetric(
+    boundaries: Histogram.Boundaries = defaultStreamCountBoundaries
+  ): Metric.Histogram[Int] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_pending_requests",
+        "The number of partitions that ran out of records (the queue is empty).",
+        boundaries
+      )
+      .contramap[Int](_.toDouble)
+
+  private[metrics] def pendingCommitsHistogramMetric(
+    boundaries: Histogram.Boundaries = defaultStreamCountBoundaries
+  ): Metric.Histogram[Int] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_pending_commits",
+        "The number of commits that are awaiting completion.",
+        boundaries
+      )
+      .contramap[Int](_.toDouble)
+
+  private[metrics] def queueSizeHistogramMetric(
+    boundaries: Histogram.Boundaries = defaultStreamSizeBoundaries
+  ): Metric.Histogram[Int] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_queue_size",
+        "The number of records queued for a partition.",
+        boundaries
+      )
+      .contramap[Int](_.toDouble)
+
+  private[metrics] def queuePollsHistogramMetric(
+    boundaries: Histogram.Boundaries = defaultQueuePollSizeBoundaries
+  ): Metric.Histogram[Int] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_queue_polls",
+        "The number of polls during which records are idling in a queue.",
+        boundaries
+      )
+      .contramap[Int](_.toDouble)
+
+  private[metrics] def allQueueSizeHistogramMetric(
+    boundaries: Histogram.Boundaries = defaultStreamSizeBoundaries
+  ): Metric.Histogram[Int] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_all_queue_size",
+        "The total number of records queued for all partitions.",
+        boundaries
+      )
+      .contramap[Int](_.toDouble)
+
+  private[metrics] val subscriptionStateGaugeMetric: Metric.Gauge[Double] =
+    Metric.gauge(
+      "ziokafka_consumer_subscription_state",
+      "Whether the consumer is subscribed (1) or not (0)."
+    )
+
+  private[metrics] def commandQueueSizeHistogramMetric(
+    boundaries: Histogram.Boundaries = defaultCommandAndCommitQueueSizeBoundaries
+  ): Metric.Histogram[Int] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_command_queue_size",
+        "The number of commands queued in the consumer.",
+        boundaries
+      )
+      .contramap[Int](_.toDouble)
+
+  private[metrics] def commitQueueSizeHistogramMetric(
+    boundaries: Histogram.Boundaries = defaultCommandAndCommitQueueSizeBoundaries
+  ): Metric.Histogram[Int] =
+    Metric
+      .histogram(
+        "ziokafka_consumer_commit_queue_size",
+        "The number of commits queued in the consumer.",
+        boundaries
+      )
+      .contramap[Int](_.toDouble)
+
+  private[metrics] val pollAuthErrorCounterMetric: Metric.Counter[Int] =
+    Metric.counterInt(
+      "ziokafka_consumer_poll_auth_errors",
+      "The number of polls that ended with an authentication or authorization error."
+    )
 
 }
