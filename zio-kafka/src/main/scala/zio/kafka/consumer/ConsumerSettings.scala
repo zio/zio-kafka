@@ -5,7 +5,7 @@ import org.apache.kafka.common.IsolationLevel
 import zio._
 import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.consumer.fetch.{ FetchStrategy, QueueSizeBasedFetchStrategy }
-import zio.kafka.consumer.metrics.ConsumerMetrics
+import zio.kafka.consumer.metrics.ConsumerMetricsObserver
 import zio.kafka.security.KafkaCredentialStore
 import zio.metrics.MetricLabel
 
@@ -33,11 +33,11 @@ final case class ConsumerSettings(
   maxRebalanceDuration: Option[Duration] = None,
   fetchStrategy: FetchStrategy = QueueSizeBasedFetchStrategy(),
   metricLabels: Set[MetricLabel] = Set.empty,
+  metricsObserver: Option[ConsumerMetricsObserver] = None,
   runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis),
   authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.recurs(5) && Schedule.spaced(500.millis),
   maxStreamPullIntervalOption: Option[Duration] = None,
-  diagnostics: Consumer.ConsumerDiagnostics = Consumer.NoDiagnostics,
-  consumerMetrics: Option[ConsumerMetrics] = None
+  diagnostics: Consumer.ConsumerDiagnostics = Consumer.NoDiagnostics
 ) {
 
   /**
@@ -303,9 +303,24 @@ final case class ConsumerSettings(
    * {{{
    *   consumerSettings.withMetricLabels(Set(MetricLabel("group-id", groupId)))
    * }}}
+   *
+   * This setting is ignored when an alternative [[withMetricsObserver() metrics observer]] is set.
    */
   def withMetricsLabels(metricLabels: Set[MetricLabel]): ConsumerSettings =
     copy(metricLabels = metricLabels)
+
+  /**
+   * @param observer
+   *   a custom [[zio.kafka.consumer.metrics.ConsumerMetricsObserver]] implementation for collecting consumer metrics.
+   *   When not set, the default zio-metrics based implementation is used.
+   *
+   * Use this to integrate with alternative metrics backends (Dropwizard, Micrometer, etc.) or to customize histogram
+   * boundaries.
+   *
+   * Use the [[zio.kafka.consumer.metrics.ConsumerMetricsObserver.NoOp]] to disable metric collection.
+   */
+  def withMetricsObserver(observer: ConsumerMetricsObserver): ConsumerSettings =
+    copy(metricsObserver = Some(observer))
 
   /**
    * @param runloopMetricsSchedule
@@ -353,17 +368,6 @@ final case class ConsumerSettings(
    */
   def withDiagnostics(diagnostics: Consumer.ConsumerDiagnostics): ConsumerSettings =
     copy(diagnostics = diagnostics)
-
-  /**
-   * @param metrics
-   *   a custom [[zio.kafka.consumer.metrics.ConsumerMetrics]] implementation for collecting consumer metrics. When not
-   *   set, the default zio-metrics based implementation is used.
-   *
-   * Use this to integrate with alternative metrics backends (Dropwizard, Micrometer, etc.) or to customize histogram
-   * boundaries by subclassing [[zio.kafka.consumer.metrics.ConsumerMetrics]].
-   */
-  def withConsumerMetrics(metrics: ConsumerMetrics): ConsumerSettings =
-    copy(consumerMetrics = Some(metrics))
 
   /**
    * Configuration for the underlying java Kafka client.

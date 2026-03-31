@@ -8,7 +8,7 @@ import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.consumer.{ CommittableRecord, ConsumerSettings }
-import zio.kafka.consumer.metrics.ConsumerMetrics
+import zio.kafka.consumer.metrics.ConsumerMetricsObserver
 import zio.test._
 import zio._
 import zio.kafka.diagnostics.Diagnostics
@@ -20,7 +20,7 @@ import scala.jdk.CollectionConverters._
 object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
   type BinaryMockConsumer = MockConsumer[Array[Byte], Array[Byte]]
 
-  private val mockMetrics = new ConsumerMetrics {
+  private val mockMetrics = new ConsumerMetricsObserver {
     override def observePoll(resumedCount: Int, pausedCount: Int, latency: zio.Duration, pollSize: Int): UIO[Unit] =
       ZIO.unit
 
@@ -32,8 +32,8 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
       revokedCount: Int,
       lostCount: Int
     ): UIO[Unit] = ZIO.unit
-    override def observeRunloopMetrics(state: ConsumerMetrics.ConsumerState): UIO[Unit] = ZIO.unit
-    override def observePollAuthError(): UIO[Unit]                                      = ZIO.unit
+    override def observeRunloopMetrics(state: ConsumerMetricsObserver.ConsumerState): UIO[Unit] = ZIO.unit
+    override def observePollAuthError(): UIO[Unit]                                              = ZIO.unit
   }
 
   def spec: Spec[TestEnvironment with Scope, Throwable] =

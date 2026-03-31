@@ -11,7 +11,7 @@ import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop._
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
-import zio.kafka.consumer.metrics.{ ConsumerMetrics, ZioMetricsConsumerMetrics }
+import zio.kafka.consumer.metrics.{ ConsumerMetricsObserver, ZioMetricsConsumerMetricsObserver }
 import zio.stream._
 
 import scala.jdk.CollectionConverters._
@@ -28,7 +28,7 @@ private[consumer] final class Runloop private (
   diagnostics: ConsumerDiagnostics,
   currentStateRef: Ref[State],
   rebalanceCoordinator: RebalanceCoordinator,
-  consumerMetrics: ConsumerMetrics,
+  metricsObserver: ConsumerMetricsObserver,
   committer: Committer,
   groupMetadataRef: Ref[Option[ConsumerGroupMetadata]]
 ) {
@@ -202,7 +202,7 @@ private[consumer] final class Runloop private (
       .retry(
         Schedule.recurWhileZIO[Any, Throwable] {
           case _: AuthorizationException | _: AuthenticationException =>
-            consumerMetrics.observePollAuthError().as(true)
+            metricsObserver.observePollAuthError().as(true)
           case _ => ZIO.succeed(false)
         } &&
           settings.authErrorRetrySchedule
@@ -230,7 +230,7 @@ private[consumer] final class Runloop private (
             pullDurationAndRecords <- doPoll(c).timed
             (pollDuration, polledRecords) = pullDurationAndRecords
 
-            _ <- consumerMetrics.observePoll(toResumeCount, toPauseCount, pollDuration, polledRecords.count())
+            _ <- metricsObserver.observePoll(toResumeCount, toPauseCount, pollDuration, polledRecords.count())
             _ <- diagnostics.emit {
                    val providedTps         = polledRecords.partitions().asScala.toSet
                    val requestedPartitions = state.pendingRequests.map(_.tp).toSet
@@ -310,7 +310,7 @@ private[consumer] final class Runloop private (
                                 _ <-
                                   committer.keepCommitsForPartitions(updatedAssignedStreams.map(_.tp).toSet): Task[Unit]
 
-                                _ <- consumerMetrics.observeRebalance(
+                                _ <- metricsObserver.observeRebalance(
                                        currentAssigned.size,
                                        assignedTps.size,
                                        revokedTps.size,
@@ -573,7 +573,7 @@ private[consumer] final class Runloop private (
       pendingCommitCount           <- committer.pendingCommitCount
       perPartitionQueueSizes       <- ZIO.foreach(currentState.assignedStreams)(_.queueSize)
       perPartitionOutstandingPolls <- ZIO.foreach(currentState.assignedStreams)(_.outstandingPolls)
-      runloopState = ConsumerMetrics.ConsumerState(
+      runloopState = ConsumerMetricsObserver.ConsumerState(
                        pendingRequestCount = currentState.pendingRequests.size,
                        assignedPartitionCount = currentState.assignedStreams.size,
                        perPartitionQueueSizes = perPartitionQueueSizes,
@@ -583,7 +583,7 @@ private[consumer] final class Runloop private (
                        commitQueueSize = commitQueueSize,
                        pendingCommitCount = pendingCommitCount
                      )
-      _ <- consumerMetrics.observeRunloopMetrics(runloopState)
+      _ <- metricsObserver.observeRunloopMetrics(runloopState)
     } yield ()
 
     observe
@@ -648,12 +648,13 @@ object Runloop {
       groupMetadataRef  <- Ref.make[Option[ConsumerGroupMetadata]](None)
       sameThreadRuntime <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       executor          <- ZIO.executor
-      metrics = settings.consumerMetrics.getOrElse(new ZioMetricsConsumerMetrics(settings.metricLabels))
+      metricsObserver =
+        settings.metricsObserver.getOrElse(ZioMetricsConsumerMetricsObserver.make(settings.metricLabels))
       committer <- LiveCommitter
                      .make(
                        settings.commitTimeout,
                        diagnostics,
-                       metrics,
+                       metricsObserver,
                        commandQueue.offer(RunloopCommand.CommitAvailable).unit
                      )
       rebalanceCoordinator = new RebalanceCoordinator(
@@ -674,7 +675,7 @@ object Runloop {
                   partitionsHub = partitionsHub,
                   diagnostics = diagnostics,
                   currentStateRef = currentStateRef,
-                  consumerMetrics = metrics,
+                  metricsObserver = metricsObserver,
                   rebalanceCoordinator = rebalanceCoordinator,
                   committer = committer,
                   groupMetadataRef = groupMetadataRef
