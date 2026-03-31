@@ -304,7 +304,7 @@ final case class ConsumerSettings(
    *   consumerSettings.withMetricLabels(Set(MetricLabel("group-id", groupId)))
    * }}}
    *
-   * This setting is ignored when an alternative [[ConsumerSettings.withMetricsObserver() metrics observer]] is set.
+   * This setting is ignored when an alternative [[ConsumerSettings.withMetricsObserver metrics observer]] is set.
    */
   def withMetricsLabels(metricLabels: Set[MetricLabel]): ConsumerSettings =
     copy(metricLabels = metricLabels)
