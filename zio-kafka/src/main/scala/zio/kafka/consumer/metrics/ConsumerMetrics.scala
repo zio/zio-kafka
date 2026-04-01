@@ -8,9 +8,12 @@ import zio.metrics.MetricKeyType.Histogram
  * A description of all metrics that can be observed by the zio-kafka consumer.
  *
  * This class serves two purposes:
- *   - change specific histogram boundaries, metric name or description by sub-classing this class,
- *   - as a repository for the default metric names/descriptions/boundaries for alternative metrics collectors like
- *     Micrometer, Dropwizard, etc.
+ *   - change specific histogram boundaries, metric name or description by providing a subclass of this class
+ *     (with some overrides) to the default [[ZioMetricsConsumerMetricsObserver]],
+ *   - as a repository for the default metric names/descriptions/boundaries for alternative metrics observers
+ *     implemented with Micrometer, Dropwizard, etc.
+ *
+ * WARNING: this is an UNSTABLE API and may change in an incompatible way without notice in any zio-kafka version.
  */
 class ConsumerMetrics {
   import ConsumerMetrics._

@@ -3,12 +3,14 @@ package zio.kafka.consumer.metrics
 import zio._
 
 /**
- * Implementations of this trait are responsible for measuring all consumer metrics. The different methods are invoked
- * from different places in the consumer.
+ * Implementations of this trait are responsible for observing consumer metrics and collect the measurements.
+ * The different methods are invoked from different places in the consumer.
  *
  * These methods hold up the consumer; they should return quickly or else throughput of the consumer will be affected.
  *
  * Users can provide a custom implementation via [[zio.kafka.consumer.ConsumerSettings.withMetricsObserver]].
+ *
+ * WARNING: this is an UNSTABLE API and may change in an incompatible way without notice in any zio-kafka version.
  */
 trait ConsumerMetricsObserver {
   def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int): UIO[Unit]
@@ -21,6 +23,9 @@ trait ConsumerMetricsObserver {
 
 object ConsumerMetricsObserver {
 
+  /**
+   * A metrics observer that does nothing.
+   */
   object NoOp extends ConsumerMetricsObserver {
     override def observePoll(
       resumedCount: Int,
