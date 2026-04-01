@@ -17,6 +17,7 @@ import scala.jdk.CollectionConverters._
  * To stay source compatible with future releases, you are recommended to construct the settings as follows:
  * {{{
  *   ConsumerSettings(bootstrapServers)
+ *     .tuneForHighThroughput
  *     .withGroupId(groupId)
  *     .withProperties(properties)
  *     .... etc.
