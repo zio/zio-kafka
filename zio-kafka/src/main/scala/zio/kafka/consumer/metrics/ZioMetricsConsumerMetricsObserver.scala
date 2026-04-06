@@ -8,7 +8,7 @@ import zio.metrics._
  * A [[ConsumerMetricsObserver]] implementation that uses zio-metrics to collect observations.
  *
  * @param consumerMetrics
- *   the names, descriptions and boundaries of all the metrics
+ *   the names, descriptions and histogram boundaries of all the metrics
  * @param metricLabels
  *   the metric labels that are added to each metric
  */
@@ -18,6 +18,16 @@ class ZioMetricsConsumerMetricsObserver(
   metricLabels: Set[MetricLabel]
 ) extends ConsumerMetricsObserver {
   import ZioMetricsConsumerMetricsObserver._
+
+  /**
+   * A [[ConsumerMetricsObserver]] implementation that uses zio-metrics to collect observations, using the default
+   * metric names, descriptions and histogram boundaries.
+   *
+   * @param metricLabels
+   *   the metric labels that are added to each metric
+   */
+  def this(metricLabels: Set[MetricLabel]) =
+    this(new ConsumerMetrics(), metricLabels)
 
   // -----------------------------------------------------
   //
@@ -178,9 +188,6 @@ class ZioMetricsConsumerMetricsObserver(
 }
 
 object ZioMetricsConsumerMetricsObserver {
-
-  def make(metricLabels: Set[MetricLabel]) =
-    new ZioMetricsConsumerMetricsObserver(new ConsumerMetrics(), metricLabels)
 
   private implicit class CounterInfoToMetric(val counterInfo: CounterInfo) {
     def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Counter[Int] =

@@ -648,8 +648,7 @@ object Runloop {
       groupMetadataRef  <- Ref.make[Option[ConsumerGroupMetadata]](None)
       sameThreadRuntime <- ZIO.runtime[Any].provideLayer(SameThreadRuntimeLayer)
       executor          <- ZIO.executor
-      metricsObserver =
-        settings.metricsObserver.getOrElse(ZioMetricsConsumerMetricsObserver.make(settings.metricLabels))
+      metricsObserver = settings.metricsObserver.getOrElse(new ZioMetricsConsumerMetricsObserver(settings.metricLabels))
       committer <- LiveCommitter
                      .make(
                        settings.commitTimeout,
