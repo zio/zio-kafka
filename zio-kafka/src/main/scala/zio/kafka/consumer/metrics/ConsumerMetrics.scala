@@ -34,6 +34,7 @@ import zio.metrics.MetricKeyType.Histogram
  * WARNING: this is an UNSTABLE API and may change in an incompatible way without notice in any zio-kafka version.
  */
 final case class ConsumerMetrics(
+
   // -----------------------------------------------------
   //
   // Poll metrics
@@ -58,6 +59,7 @@ final case class ConsumerMetrics(
     "The number of records fetched by a single poll.",
     defaultCountBoundaries
   ),
+
   // -----------------------------------------------------
   //
   // Commit metrics
@@ -69,6 +71,7 @@ final case class ConsumerMetrics(
     "The duration of a commit in seconds.",
     defaultLatencyBoundaries
   ),
+
   // -----------------------------------------------------
   //
   // Aggregated commit metrics
@@ -89,6 +92,7 @@ final case class ConsumerMetrics(
     "An approximation of the number of records (offsets) per aggregated commit.",
     defaultCountBoundaries
   ),
+
   // -----------------------------------------------------
   //
   // Rebalance metrics
@@ -102,6 +106,7 @@ final case class ConsumerMetrics(
   partitionsAssignedCounter: CounterInfo = partitionsToStateCounter("assigned"),
   partitionsRevokedCounter: CounterInfo = partitionsToStateCounter("revoked"),
   partitionsLostCounter: CounterInfo = partitionsToStateCounter("lost"),
+
   // -----------------------------------------------------
   //
   // Runloop metrics
@@ -146,6 +151,7 @@ final case class ConsumerMetrics(
     "The number of commits queued in the consumer.",
     defaultCommandAndCommitQueueSizeBoundaries
   ),
+
   // -----------------------------------------------------
   //
   // Poll auth error metrics
