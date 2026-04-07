@@ -1,6 +1,5 @@
 import sbt.Def
 import MimaSettings.mimaSettings
-import zio.sbt.githubactions.Condition
 import scala.sys.process.*
 import scala.util.Try
 
