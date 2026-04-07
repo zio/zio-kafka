@@ -27,7 +27,7 @@ class ZioMetricsConsumerMetricsObserver(
    *   the metric labels that are added to each metric
    */
   def this(metricLabels: Set[MetricLabel]) =
-    this(new ConsumerMetrics(), metricLabels)
+    this(ConsumerMetrics(), metricLabels)
 
   // -----------------------------------------------------
   //
