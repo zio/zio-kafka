@@ -34,7 +34,6 @@ import zio.metrics.MetricKeyType.Histogram
  * WARNING: this is an UNSTABLE API and may change in an incompatible way without notice in any zio-kafka version.
  */
 final case class ConsumerMetrics(
-
   // -----------------------------------------------------
   //
   // Poll metrics
