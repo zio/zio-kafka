@@ -85,7 +85,7 @@ final case class ConsumerMetrics(
     "The duration of an aggregated commit in seconds.",
     defaultLatencyBoundaries
   ),
-  /** Note: the metric is an approximation because the first commit to a partition is not included. */
+  // Note: the metric is an approximation because the first commit to a partition is not included.
   aggregatedCommitSizeHistogram: HistogramInfo[Long] = HistogramInfo[Long](
     "ziokafka_consumer_aggregated_commit_size",
     "An approximation of the number of records (offsets) per aggregated commit.",
