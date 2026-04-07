@@ -2,6 +2,7 @@ package zio.kafka.consumer.metrics
 
 import zio.{ Chunk, Duration }
 import zio.metrics.MetricKeyType
+import zio.kafka.consumer.metrics.ConsumerMetrics._
 import zio.metrics.MetricKeyType.Histogram
 
 /**
@@ -38,37 +39,35 @@ final case class ConsumerMetrics(
   // Poll metrics
   //
 
-  pollCounter: ConsumerMetrics.CounterInfo =
-    ConsumerMetrics.CounterInfo("ziokafka_consumer_polls", "The number of polls."),
-  partitionsResumedInLatestPollGauge: ConsumerMetrics.GaugeInfo[Int] = ConsumerMetrics.GaugeInfo[Int](
+  pollCounter: CounterInfo = CounterInfo("ziokafka_consumer_polls", "The number of polls."),
+  partitionsResumedInLatestPollGauge: GaugeInfo[Int] = GaugeInfo[Int](
     "ziokafka_consumer_partitions_resumed_in_latest_poll",
     "The number of partitions resumed in the latest poll call."
   ),
-  partitionsPausedInLatestPollGauge: ConsumerMetrics.GaugeInfo[Int] = ConsumerMetrics.GaugeInfo[Int](
+  partitionsPausedInLatestPollGauge: GaugeInfo[Int] = GaugeInfo[Int](
     "ziokafka_consumer_partitions_paused_in_latest_poll",
     "The number of partitions paused in the latest poll call (because of backpressure)."
   ),
-  pollLatencyHistogram: ConsumerMetrics.HistogramInfo[Duration] = ConsumerMetrics.HistogramInfo[Duration](
+  pollLatencyHistogram: HistogramInfo[Duration] = HistogramInfo[Duration](
     "ziokafka_consumer_poll_latency_seconds",
     "The duration of a single poll in seconds.",
-    ConsumerMetrics.defaultLatencyBoundaries
+    defaultLatencyBoundaries
   ),
-  pollSizeHistogram: ConsumerMetrics.HistogramInfo[Int] = ConsumerMetrics.HistogramInfo[Int](
+  pollSizeHistogram: HistogramInfo[Int] = HistogramInfo[Int](
     "ziokafka_consumer_poll_size",
     "The number of records fetched by a single poll.",
-    ConsumerMetrics.defaultCountBoundaries
+    defaultCountBoundaries
   ),
   // -----------------------------------------------------
   //
   // Commit metrics
   //
 
-  commitCounter: ConsumerMetrics.CounterInfo =
-    ConsumerMetrics.CounterInfo("ziokafka_consumer_commits", "The number of commits."),
-  commitLatencyHistogram: ConsumerMetrics.HistogramInfo[Duration] = ConsumerMetrics.HistogramInfo[Duration](
+  commitCounter: CounterInfo = CounterInfo("ziokafka_consumer_commits", "The number of commits."),
+  commitLatencyHistogram: HistogramInfo[Duration] = HistogramInfo[Duration](
     "ziokafka_consumer_commit_latency_seconds",
     "The duration of a commit in seconds.",
-    ConsumerMetrics.defaultLatencyBoundaries
+    defaultLatencyBoundaries
   ),
   // -----------------------------------------------------
   //
@@ -77,83 +76,82 @@ final case class ConsumerMetrics(
   // Each runloop cycle zio-kafka aggregates all commit requests into a single aggregated commit.
   //
 
-  aggregatedCommitCounter: ConsumerMetrics.CounterInfo =
-    ConsumerMetrics.CounterInfo("ziokafka_consumer_aggregated_commits", "The number of aggregated commits."),
-  aggregatedCommitLatencyHistogram: ConsumerMetrics.HistogramInfo[Duration] = ConsumerMetrics.HistogramInfo[Duration](
+  aggregatedCommitCounter: CounterInfo =
+    CounterInfo("ziokafka_consumer_aggregated_commits", "The number of aggregated commits."),
+  aggregatedCommitLatencyHistogram: HistogramInfo[Duration] = HistogramInfo[Duration](
     "ziokafka_consumer_aggregated_commit_latency_seconds",
     "The duration of an aggregated commit in seconds.",
-    ConsumerMetrics.defaultLatencyBoundaries
+    defaultLatencyBoundaries
   ),
   /** Note: the metric is an approximation because the first commit to a partition is not included. */
-  aggregatedCommitSizeHistogram: ConsumerMetrics.HistogramInfo[Long] = ConsumerMetrics.HistogramInfo[Long](
+  aggregatedCommitSizeHistogram: HistogramInfo[Long] = HistogramInfo[Long](
     "ziokafka_consumer_aggregated_commit_size",
     "An approximation of the number of records (offsets) per aggregated commit.",
-    ConsumerMetrics.defaultCountBoundaries
+    defaultCountBoundaries
   ),
   // -----------------------------------------------------
   //
   // Rebalance metrics
   //
 
-  rebalanceCounter: ConsumerMetrics.CounterInfo =
-    ConsumerMetrics.CounterInfo("ziokafka_consumer_rebalances", "The number of rebalances."),
-  partitionsCurrentlyAssignedGauge: ConsumerMetrics.GaugeInfo[Int] = ConsumerMetrics.GaugeInfo[Int](
+  rebalanceCounter: CounterInfo = CounterInfo("ziokafka_consumer_rebalances", "The number of rebalances."),
+  partitionsCurrentlyAssignedGauge: GaugeInfo[Int] = GaugeInfo[Int](
     "ziokafka_consumer_partitions_currently_assigned",
     "The number of partitions currently assigned to the consumer."
   ),
-  partitionsAssignedCounter: ConsumerMetrics.CounterInfo = ConsumerMetrics.partitionsToStateCounter("assigned"),
-  partitionsRevokedCounter: ConsumerMetrics.CounterInfo = ConsumerMetrics.partitionsToStateCounter("revoked"),
-  partitionsLostCounter: ConsumerMetrics.CounterInfo = ConsumerMetrics.partitionsToStateCounter("lost"),
+  partitionsAssignedCounter: CounterInfo = partitionsToStateCounter("assigned"),
+  partitionsRevokedCounter: CounterInfo = partitionsToStateCounter("revoked"),
+  partitionsLostCounter: CounterInfo = partitionsToStateCounter("lost"),
   // -----------------------------------------------------
   //
   // Runloop metrics
   //
 
-  pendingRequestsHistogram: ConsumerMetrics.HistogramInfo[Int] = ConsumerMetrics.HistogramInfo[Int](
+  pendingRequestsHistogram: HistogramInfo[Int] = HistogramInfo[Int](
     "ziokafka_consumer_pending_requests",
     "The number of partitions that ran out of records (the queue is empty).",
-    ConsumerMetrics.defaultStreamCountBoundaries
+    defaultStreamCountBoundaries
   ),
-  pendingCommitsHistogram: ConsumerMetrics.HistogramInfo[Int] = ConsumerMetrics.HistogramInfo[Int](
+  pendingCommitsHistogram: HistogramInfo[Int] = HistogramInfo[Int](
     "ziokafka_consumer_pending_commits",
     "The number of commits that are awaiting completion.",
-    ConsumerMetrics.defaultStreamCountBoundaries
+    defaultStreamCountBoundaries
   ),
-  queueSizeHistogram: ConsumerMetrics.HistogramInfo[Int] = ConsumerMetrics.HistogramInfo[Int](
+  queueSizeHistogram: HistogramInfo[Int] = HistogramInfo[Int](
     "ziokafka_consumer_queue_size",
     "The number of records queued for a partition.",
-    ConsumerMetrics.defaultStreamSizeBoundaries
+    defaultStreamSizeBoundaries
   ),
-  queuePollsHistogram: ConsumerMetrics.HistogramInfo[Int] = ConsumerMetrics.HistogramInfo[Int](
+  queuePollsHistogram: HistogramInfo[Int] = HistogramInfo[Int](
     "ziokafka_consumer_queue_polls",
     "The number of polls during which records are idling in a queue.",
-    ConsumerMetrics.defaultQueuePollSizeBoundaries
+    defaultQueuePollSizeBoundaries
   ),
-  allQueueSizeHistogram: ConsumerMetrics.HistogramInfo[Int] = ConsumerMetrics.HistogramInfo[Int](
+  allQueueSizeHistogram: HistogramInfo[Int] = HistogramInfo[Int](
     "ziokafka_consumer_all_queue_size",
     "The total number of records queued for all partitions.",
-    ConsumerMetrics.defaultStreamSizeBoundaries
+    defaultStreamSizeBoundaries
   ),
-  subscriptionStateGauge: ConsumerMetrics.GaugeInfo[Int] = ConsumerMetrics.GaugeInfo[Int](
+  subscriptionStateGauge: GaugeInfo[Int] = GaugeInfo[Int](
     "ziokafka_consumer_subscription_state",
     "Whether the consumer is subscribed (1) or not (0)."
   ),
-  commandQueueSizeHistogram: ConsumerMetrics.HistogramInfo[Int] = ConsumerMetrics.HistogramInfo[Int](
+  commandQueueSizeHistogram: HistogramInfo[Int] = HistogramInfo[Int](
     "ziokafka_consumer_command_queue_size",
     "The number of commands queued in the consumer.",
-    ConsumerMetrics.defaultCommandAndCommitQueueSizeBoundaries
+    defaultCommandAndCommitQueueSizeBoundaries
   ),
-  commitQueueSizeHistogram: ConsumerMetrics.HistogramInfo[Int] = ConsumerMetrics.HistogramInfo[Int](
+  commitQueueSizeHistogram: HistogramInfo[Int] = HistogramInfo[Int](
     "ziokafka_consumer_commit_queue_size",
     "The number of commits queued in the consumer.",
-    ConsumerMetrics.defaultCommandAndCommitQueueSizeBoundaries
+    defaultCommandAndCommitQueueSizeBoundaries
   ),
   // -----------------------------------------------------
   //
   // Poll auth error metrics
   //
 
-  pollAuthErrorCounter: ConsumerMetrics.CounterInfo = ConsumerMetrics.CounterInfo(
+  pollAuthErrorCounter: CounterInfo = CounterInfo(
     "ziokafka_consumer_poll_auth_errors",
     "The number of polls that ended with an authentication or authorization error."
   )
