@@ -13,7 +13,7 @@ import zio.metrics._
  *   the metric labels that are added to each metric
  */
 //noinspection ScalaWeakerAccess
-class ZioMetricsConsumerMetricsObserver(
+final class ZioMetricsConsumerMetricsObserver(
   consumerMetrics: ConsumerMetrics,
   metricLabels: Set[MetricLabel]
 ) extends ConsumerMetricsObserver {
