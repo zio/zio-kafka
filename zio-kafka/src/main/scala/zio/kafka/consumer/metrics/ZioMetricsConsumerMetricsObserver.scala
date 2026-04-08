@@ -189,7 +189,7 @@ final class ZioMetricsConsumerMetricsObserver(
 
 object ZioMetricsConsumerMetricsObserver {
 
-  private implicit class CounterInfoToMetric(val counterInfo: CounterInfo) {
+  private implicit final class CounterInfoToMetric(val counterInfo: CounterInfo) extends AnyVal {
     def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Counter[Int] =
       Metric
         .counterInt(counterInfo.name, counterInfo.description)
