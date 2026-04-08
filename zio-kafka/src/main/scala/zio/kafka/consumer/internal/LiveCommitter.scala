@@ -8,7 +8,7 @@ import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.LiveCommitter.Commit
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent
-import zio.kafka.consumer.metrics.ConsumerMetrics
+import zio.kafka.consumer.metrics.ConsumerMetricsObserver
 
 import java.util.{ Map => JavaMap }
 import scala.collection.mutable
@@ -18,7 +18,7 @@ private[consumer] final class LiveCommitter(
   commitQueue: Queue[Commit],
   commitTimeout: Duration,
   diagnostics: ConsumerDiagnostics,
-  consumerMetrics: ConsumerMetrics,
+  metricsObserver: ConsumerMetricsObserver,
   onCommitAvailable: UIO[Unit],
   committedOffsetsRef: Ref[CommitOffsets],
   pendingCommits: Ref.Synchronized[Chunk[Commit]]
@@ -41,7 +41,7 @@ private[consumer] final class LiveCommitter(
       _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
       endTime = java.lang.System.nanoTime()
       latency = (endTime - startTime).nanoseconds
-      _ <- consumerMetrics.observeCommit(latency)
+      _ <- metricsObserver.observeCommit(latency)
     } yield ()
 
   /**
@@ -99,7 +99,7 @@ private[consumer] final class LiveCommitter(
           endTime <- ZIO.clockWith(_.nanoTime)
           latency = (endTime - startTime).nanoseconds
           offsetIncrease <- committedOffsetsRef.modify(_.addCommits(commits))
-          _              <- consumerMetrics.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
+          _              <- metricsObserver.observeAggregatedCommit(latency, offsetIncrease).when(commits.nonEmpty)
         } yield ()
       )
       .zipLeft(ZIO.foreachDiscard(commits)(_.cont.done(Exit.unit)))
@@ -170,7 +170,7 @@ private[internal] object LiveCommitter {
   def make(
     commitTimeout: Duration,
     diagnostics: ConsumerDiagnostics,
-    consumerMetrics: ConsumerMetrics,
+    metricsObserver: ConsumerMetricsObserver,
     onCommitAvailable: UIO[Unit]
   ): ZIO[Scope, Nothing, LiveCommitter] = for {
     pendingCommits      <- Ref.Synchronized.make(Chunk.empty[Commit])
@@ -180,7 +180,7 @@ private[internal] object LiveCommitter {
     commitQueue,
     commitTimeout,
     diagnostics,
-    consumerMetrics,
+    metricsObserver,
     onCommitAvailable,
     committedOffsetsRef,
     pendingCommits
