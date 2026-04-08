@@ -18,7 +18,7 @@ trait ConsumerMetricsObserver {
   def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit]
   def observeRebalance(currentlyAssignedCount: Int, assignedCount: Int, revokedCount: Int, lostCount: Int): UIO[Unit]
   def observeRunloopMetrics(state: ConsumerMetricsObserver.ConsumerState): UIO[Unit]
-  def observePollAuthError(): UIO[Unit]
+  def observePollAuthError: UIO[Unit]
 }
 
 object ConsumerMetricsObserver {
@@ -42,7 +42,7 @@ object ConsumerMetricsObserver {
       lostCount: Int
     ): UIO[Unit] = ZIO.unit
     override def observeRunloopMetrics(state: ConsumerState): UIO[Unit] = ZIO.unit
-    override def observePollAuthError(): UIO[Unit]                      = ZIO.unit
+    override def observePollAuthError: UIO[Unit]                        = ZIO.unit
   }
 
   final case class ConsumerState(

@@ -33,7 +33,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
       lostCount: Int
     ): UIO[Unit] = ZIO.unit
     override def observeRunloopMetrics(state: ConsumerMetricsObserver.ConsumerState): UIO[Unit] = ZIO.unit
-    override def observePollAuthError(): UIO[Unit]                                              = ZIO.unit
+    override def observePollAuthError: UIO[Unit]                                                = ZIO.unit
   }
 
   def spec: Spec[TestEnvironment with Scope, Throwable] =

@@ -182,7 +182,7 @@ final class ZioMetricsConsumerMetricsObserver(
   private val pollAuthErrorCounter: Metric.Counter[Int] =
     consumerMetrics.pollAuthErrorCounter.toZioMetric(metricLabels)
 
-  def observePollAuthError(): UIO[Unit] =
+  def observePollAuthError: UIO[Unit] =
     pollAuthErrorCounter.increment
 
 }
@@ -204,7 +204,8 @@ object ZioMetricsConsumerMetricsObserver {
         .tagged(metricLabels)
   }
 
-  private implicit final class HistogramDurationInfoToMetric(val histogramInfo: HistogramInfo[Duration]) extends AnyVal {
+  private implicit final class HistogramDurationInfoToMetric(val histogramInfo: HistogramInfo[Duration])
+      extends AnyVal {
     def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Histogram[Duration] =
       Metric
         .histogram(histogramInfo.name, histogramInfo.description, histogramInfo.boundaries)

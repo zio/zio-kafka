@@ -202,7 +202,7 @@ private[consumer] final class Runloop private (
       .retry(
         Schedule.recurWhileZIO[Any, Throwable] {
           case _: AuthorizationException | _: AuthenticationException =>
-            metricsObserver.observePollAuthError().as(true)
+            metricsObserver.observePollAuthError.as(true)
           case _ => ZIO.succeed(false)
         } &&
           settings.authErrorRetrySchedule
