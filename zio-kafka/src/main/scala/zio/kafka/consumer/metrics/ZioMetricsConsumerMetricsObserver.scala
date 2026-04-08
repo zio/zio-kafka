@@ -196,7 +196,7 @@ object ZioMetricsConsumerMetricsObserver {
         .tagged(metricLabels)
   }
 
-  private implicit class GaugeIntInfoToMetric(val gaugeInfo: GaugeInfo[Int]) {
+  private implicit final class GaugeIntInfoToMetric(val gaugeInfo: GaugeInfo[Int]) extends AnyVal {
     def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Gauge[Int] =
       Metric
         .gauge(gaugeInfo.name, gaugeInfo.description)
