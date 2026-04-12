@@ -4,7 +4,6 @@ import zio.{ Chunk, Duration }
 import zio.metrics.MetricKeyType
 import zio.metrics.MetricKeyType.Histogram
 import zio.kafka.metrics.MetricInfo
-import zio.kafka.producer.metrics.ProducerMetrics._
 
 /**
  * A description of all metrics that can be observed by the zio-kafka producer.
@@ -33,7 +32,7 @@ final case class ProducerMetrics(
   produceLatencyHistogram: MetricInfo.Histogram[Duration] = MetricInfo.Histogram[Duration](
     "ziokafka_producer_latency_seconds",
     "The duration of a single produce, from after serialization to acknowledged, in seconds.",
-    defaultProduceLatencyBoundaries
+    ProducerMetrics.defaultProduceLatencyBoundaries
   ),
   produceRecordsCounter: MetricInfo.Counter = MetricInfo.Counter(
     "ziokafka_producer_records",
@@ -42,7 +41,7 @@ final case class ProducerMetrics(
   produceBatchSizeHistogram: MetricInfo.Histogram[Int] = MetricInfo.Histogram[Int](
     "ziokafka_producer_batch_size",
     "The number of records per produce call.",
-    defaultBatchSizeBoundaries
+    ProducerMetrics.defaultBatchSizeBoundaries
   ),
 
   // -----------------------------------------------------
@@ -53,12 +52,12 @@ final case class ProducerMetrics(
   sendQueueSizeHistogram: MetricInfo.Histogram[Int] = MetricInfo.Histogram[Int](
     "ziokafka_producer_send_queue_size",
     "The number of records in the zio-kafka send queue.",
-    defaultSendQueueSizeBoundaries
+    ProducerMetrics.defaultSendQueueSizeBoundaries
   ),
   sendQueueLatencyHistogram: MetricInfo.Histogram[Duration] = MetricInfo.Histogram[Duration](
     "ziokafka_producer_send_queue_latency_seconds",
     "Time in send queue, including waiting for capacity, in seconds.",
-    defaultQueueLatencyBoundaries
+    ProducerMetrics.defaultQueueLatencyBoundaries
   ),
 
   // -----------------------------------------------------
