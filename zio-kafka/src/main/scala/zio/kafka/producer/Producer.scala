@@ -9,7 +9,7 @@ import zio.kafka.diagnostics.Diagnostics
 import zio.kafka.diagnostics.internal.ConcurrentDiagnostics
 import zio.kafka.producer.Producer.{ NoDiagnostics, ProducerDiagnostics }
 import zio.kafka.producer.ProducerLive.NanoTime
-import zio.kafka.producer.internal.{ ProducerMetrics, ZioProducerMetrics }
+import zio.kafka.producer.metrics.{ ProducerMetricsObserver, ZioMetricsProducerMetricsObserver }
 import zio.kafka.serde.Serializer
 import zio.kafka.utils.SslHelper
 import zio.stream.{ ZPipeline, ZStream }
@@ -264,7 +264,7 @@ object Producer {
         Queue.bounded[(Chunk[ByteRecord], NanoTime, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.sendBufferSize
         )
-      metrics  = new ZioProducerMetrics(settings.metricLabels)
+      metrics  = settings.metricsObserver.getOrElse(new ZioMetricsProducerMetricsObserver(settings.metricLabels))
       producer = new ProducerLive(settings, wrappedDiagnostics, javaProducer, runtime, sendQueue, metrics)
       // To prevent shutdown problems, the following fibers need to be interruptable (see #1588):
       _ <- sendQueue.size
@@ -300,7 +300,7 @@ private[producer] final class ProducerLive(
   private[producer] val p: JProducer[Array[Byte], Array[Byte]],
   runtime: Runtime[Any],
   sendQueue: Queue[(Chunk[ByteRecord], NanoTime, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])],
-  producerMetrics: ProducerMetrics
+  producerMetrics: ProducerMetricsObserver
 ) extends Producer {
   import ProducerLive._
 
