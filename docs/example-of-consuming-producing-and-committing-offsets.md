@@ -102,7 +102,7 @@ stream operations:
 1. produce the records
 2. await the acknowledgements and commits offsets
 
-We then use the `buffer` operator between those operation. Buffer allows upstream to run ahead in a separate fiber.
+We then use the `buffer` operator between those operations. Buffer allows upstream to run ahead in a separate fiber.
 
 The following diagram compares the two approaches. The rectangles represent stream operations.
 
