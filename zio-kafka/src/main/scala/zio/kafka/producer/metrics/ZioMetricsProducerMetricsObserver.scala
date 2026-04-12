@@ -1,7 +1,7 @@
 package zio.kafka.producer.metrics
 
 import zio._
-import zio.kafka.producer.metrics.ProducerMetrics.{ CounterInfo, HistogramInfo }
+import zio.kafka.metrics.MetricInfo
 import zio.metrics._
 
 /**
@@ -86,14 +86,14 @@ final class ZioMetricsProducerMetricsObserver(
 
 object ZioMetricsProducerMetricsObserver {
 
-  private implicit final class CounterInfoToMetric(private val counterInfo: CounterInfo) extends AnyVal {
+  private implicit final class CounterInfoToMetric(private val counterInfo: MetricInfo.Counter) extends AnyVal {
     def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Counter[Int] =
       Metric
         .counterInt(counterInfo.name, counterInfo.description)
         .tagged(metricLabels)
   }
 
-  private implicit final class HistogramDurationInfoToMetric(private val histogramInfo: HistogramInfo[Duration])
+  private implicit final class HistogramDurationInfoToMetric(private val histogramInfo: MetricInfo.Histogram[Duration])
       extends AnyVal {
     def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Histogram[Duration] =
       Metric
@@ -102,7 +102,8 @@ object ZioMetricsProducerMetricsObserver {
         .tagged(metricLabels)
   }
 
-  private implicit final class HistogramIntInfoToMetric(private val histogramInfo: HistogramInfo[Int]) extends AnyVal {
+  private implicit final class HistogramIntInfoToMetric(private val histogramInfo: MetricInfo.Histogram[Int])
+      extends AnyVal {
     def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Histogram[Int] =
       Metric
         .histogram(histogramInfo.name, histogramInfo.description, histogramInfo.boundaries)

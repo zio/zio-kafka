@@ -3,6 +3,7 @@ package zio.kafka.producer.metrics
 import zio.{ Chunk, Duration }
 import zio.metrics.MetricKeyType
 import zio.metrics.MetricKeyType.Histogram
+import zio.kafka.metrics.MetricInfo
 import zio.kafka.producer.metrics.ProducerMetrics._
 
 /**
@@ -25,20 +26,20 @@ final case class ProducerMetrics(
   // Produce metrics
   //
 
-  produceCallsCounter: CounterInfo = CounterInfo(
+  produceCallsCounter: MetricInfo.Counter = MetricInfo.Counter(
     "ziokafka_producer_calls",
     "The number of times a produce method is invoked."
   ),
-  produceLatencyHistogram: HistogramInfo[Duration] = HistogramInfo[Duration](
+  produceLatencyHistogram: MetricInfo.Histogram[Duration] = MetricInfo.Histogram[Duration](
     "ziokafka_producer_latency_seconds",
     "The duration of a single produce, from after serialization to acknowledged, in seconds.",
     defaultProduceLatencyBoundaries
   ),
-  produceRecordsCounter: CounterInfo = CounterInfo(
+  produceRecordsCounter: MetricInfo.Counter = MetricInfo.Counter(
     "ziokafka_producer_records",
     "The number of records produced."
   ),
-  produceBatchSizeHistogram: HistogramInfo[Int] = HistogramInfo[Int](
+  produceBatchSizeHistogram: MetricInfo.Histogram[Int] = MetricInfo.Histogram[Int](
     "ziokafka_producer_batch_size",
     "The number of records per produce call.",
     defaultBatchSizeBoundaries
@@ -49,12 +50,12 @@ final case class ProducerMetrics(
   // Queue metrics
   //
 
-  sendQueueSizeHistogram: HistogramInfo[Int] = HistogramInfo[Int](
+  sendQueueSizeHistogram: MetricInfo.Histogram[Int] = MetricInfo.Histogram[Int](
     "ziokafka_producer_send_queue_size",
     "The number of records in the zio-kafka send queue.",
     defaultSendQueueSizeBoundaries
   ),
-  sendQueueLatencyHistogram: HistogramInfo[Duration] = HistogramInfo[Duration](
+  sendQueueLatencyHistogram: MetricInfo.Histogram[Duration] = MetricInfo.Histogram[Duration](
     "ziokafka_producer_send_queue_latency_seconds",
     "Time in send queue, including waiting for capacity, in seconds.",
     defaultQueueLatencyBoundaries
@@ -65,7 +66,7 @@ final case class ProducerMetrics(
   // Auth error metrics
   //
 
-  sendAuthErrorCounter: CounterInfo = CounterInfo(
+  sendAuthErrorCounter: MetricInfo.Counter = MetricInfo.Counter(
     "ziokafka_producer_auth_errors",
     "The number of record sends that resulted in an authentication or authorization error."
   )
@@ -73,9 +74,6 @@ final case class ProducerMetrics(
 
 //noinspection ScalaWeakerAccess
 object ProducerMetrics {
-
-  final case class CounterInfo(name: String, description: String)
-  final case class HistogramInfo[A](name: String, description: String, boundaries: Histogram.Boundaries)
 
   // ----- Default boundaries -----
 
