@@ -89,6 +89,9 @@ out how.
 
 ### Optimizing producer throughput
 
+ℹ️ Know your domain. In cases where messages need to be produced in a certain order, the techniques in this section are
+not suitable.
+
 Let's focus on the producer part of the program, that is, the `mapChunksZIO` operation in the example above. The
 operator pulls a chunk of records from upstream, produces that chunk to Kafka, awaits the acknowledgements, and then the
 process repeats. All these tasks are executed sequentially.
