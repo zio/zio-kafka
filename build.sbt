@@ -215,8 +215,8 @@ lazy val docs = project
   .in(file("zio-kafka-docs"))
   .settings(
     moduleName := "zio-kafka-docs",
-    scalacOptions -= "-Yno-imports",
-    scalacOptions -= "-Xfatal-warnings",
+    // Reset scala options, warning are okay in the docs
+    scalacOptions := Seq("--encoding", "utf8", "--feature"),
     projectName                                := "ZIO Kafka",
     mainModuleName                             := (zioKafka / moduleName).value,
     projectStage                               := ProjectStage.ProductionReady,
