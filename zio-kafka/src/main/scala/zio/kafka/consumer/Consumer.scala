@@ -251,8 +251,13 @@ object Consumer {
 
   case object CommitTimeout extends RuntimeException("Commit timeout") with NoStackTrace
 
+  /** A [[ZSink]] that collects [[Offset]]s into an [[OffsetBatch]]. */
   val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
+
+  /** A [[ZSink]] that merges multiple [[OffsetBatch]]es into a single [[OffsetBatch]]. */
+  val offsetBatchesSink: ZSink[Any, Nothing, OffsetBatch, Nothing, OffsetBatch] =
+    ZSink.foldLeft[OffsetBatch, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
   def live: RLayer[ConsumerSettings, Consumer] =
     ZLayer.scoped {
