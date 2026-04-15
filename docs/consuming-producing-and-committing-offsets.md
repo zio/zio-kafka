@@ -88,11 +88,11 @@ Let's zoom in on the consumer part of the example program.
 
 Method `plainStream` produces a single stream, and chunks from different partitions are processed serially. At the
 cost of making the program more complex, we can increase throughput with per-partition parallel processing. See
-[consuming with more parallelism](consuming-kafka-topics-using-zio-streams#consuming-with-more-parallelism) for more
+[consuming with more parallelism](consuming-kafka-topics-using-zio-streams.md#consuming-with-more-parallelism) for more
 details. On this page, we do not explore this optimization further.
 
 Zio-kafka's prefetching automatically adapts and is usually as good as it can be. Only for very small/large records, or
-for large amounts of topics, you may need to configure it better. Please see [consumer tuning](consumer-tuning) to find
+for large amounts of topics, you may need to configure it better. Please see [consumer tuning](consumer-tuning.md) to find
 out how.
 
 ### Optimizing producer throughput
@@ -174,7 +174,7 @@ stream
 
 Commiting offsets can become the bottleneck in highly optimized zio-kafka programs. This is because high commit rates
 can put a high strain on the broker. Next up, we split off committing to its own fiber as well by using
-`aggregateAsyncWithin`. See [consuming with zio-streams](consuming-kafka-topics-using-zio-streams) to learn how this
+`aggregateAsyncWithin`. See [consuming with zio-streams](consuming-kafka-topics-using-zio-streams.md) to learn how this
 works.
 
 Replace the part after `.buffer()` with:

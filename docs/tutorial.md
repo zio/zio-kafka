@@ -187,7 +187,7 @@ def consumeAndPrintEvents(consumer: Consumer, groupId: String, topic: String, to
 
 For performance reasons, records are always consumed in batches. The `consumeWith` method commits the offsets of consumed records, as soon all records of a batch have been processed.
 
-For more options see [consumer tuning](consumer-tuning).
+For more options see [consumer tuning](consumer-tuning.md).
 
 ### 5. The Complete Example
 
@@ -302,7 +302,7 @@ val consumer: ZIO[Scope, Throwable, Consumer] =
 Notice that the consumer requires a `Scope` in the environment. When this scope closes, the consumer closes its
 connection with the Kafka cluster. An explicit scope can be created with the `ZIO.scoped` method.
 
-For more options see [creating a consumer](creating-a-consumer) and [consumer tuning](consumer-tuning).
+For more options see [creating a consumer](creating-a-consumer.md) and [consumer tuning](consumer-tuning.md).
 
 ### 3. Streaming Consumer API
 
@@ -373,10 +373,10 @@ Notice that because we are using `aggregateAsyncWithin`, the commits run asynchr
 :::caution
 Keeping the chunking structure intact is important.
 
-In the example so far we have used `tap` to print the records as they are consumed. Unfortunately, methods like `tap` and `mapZIO` destroy the chunking structure and lead to much lower throughput. Please read [a warning about mapZIO](avoiding-chunk-breakers) for more details and alternatives.
+In the example so far we have used `tap` to print the records as they are consumed. Unfortunately, methods like `tap` and `mapZIO` destroy the chunking structure and lead to much lower throughput. Please read [a warning about mapZIO](avoiding-chunk-breakers.md) for more details and alternatives.
 :::
 
-For more details see [consuming Kafka topics using ZIO Streams](consuming-kafka-topics-using-zio-streams).
+For more details see [consuming Kafka topics using ZIO Streams](consuming-kafka-topics-using-zio-streams.md).
 
 ### 4. The Complete Streaming Example
 
@@ -514,7 +514,7 @@ object EventKafkaSerde {
 
 As we can see, we use the `String#fromJson` to convert the string to an `Event` object, and we also encode any parsing failure with a `RuntimeException` in the `ZIO` workflow.
 
-See [zio-kafka serialization and deserialization](serialization-and-deserialization) for more details.
+See [zio-kafka serialization and deserialization](serialization-and-deserialization.md) for more details.
 
 ### 2. The Complete JSON Streaming Example
 
