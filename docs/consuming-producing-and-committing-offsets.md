@@ -1,17 +1,25 @@
 ---
-id: example-of-consuming-producing-and-committing-offsets
-title: "Example of Consuming, Producing and Committing Offsets"
+id: consuming-producing-and-committing-offsets
+title: "Consuming, Producing and Committing Offsets"
 ---
 
-This example shows how to:
+Consuming from Kafka and then producing a transformed message back to Kafka, is a regular pattern in systems that use
+Kafka. This page shows an example of an application that does this. Next we discuss how throughput can be improved.
 
-1. consume messages from topic `topic_a`,
-2. transform the received records,
-3. produce the transformed records to topic `topic_b`,
-4. commit the consumer offsets.
+This page is also useful as a deep dive into producing to Kafka with data from other streaming sources.
 
-Note that we need to explicitly commit offsets; with zio-kafka we process records asynchronously with the consumer, and
-therefore, committing offsets automatically is not straightforward.
+# Example application
+
+This is what the example application does:
+
+1. consumes messages from topic `topic_a`,
+2. transforms the received records,
+3. produces the transformed records to topic `topic_b`,
+4. commits the consumer offsets.
+
+The application uses the zio-kafka streaming APIs. We need to explicitly commit offsets; applications that use the
+streaming API process records asynchronously with the consumer, and therefore, committing offsets automatically is not
+possible.
 
 ```scala
 import zio.kafka.consumer._
@@ -44,8 +52,8 @@ for {
       // For every chunk of producerRecords and offsets
       .mapChunksZIO { chunk =>
         val records = chunk.map(_._1)
-        val offsetBatch = OffsetBatch(chunk.map(_._2).toSeq)
-  
+        val offsetBatch = OffsetBatch(chunk.map(_._2))
+
         // produce the chunk of records, when acked by kafka, commit the consumed offsets,
         // returning an empty chunk (`mapChunksZIO` requires this function to return a ZIO[Chunk])
         producer.produceChunk[Any, Int, String](records) *>
@@ -120,7 +128,7 @@ And now in code. Replace the `mapChunksZIO` operator with the following code:
   // For every exposed chunk
   .mapZIO { chunk =>
     val records = chunk.map(_._1)
-    val offsetBatch = OffsetBatch(chunk.map(_._2).toSeq)
+    val offsetBatch = OffsetBatch(chunk.map(_._2))
     // Produce asynchronously
     producer.produceChunkAsync(records, Serde.int, Serde.string)
       .map(await => (await, offsetBatch))
@@ -134,7 +142,7 @@ And now in code. Replace the `mapChunksZIO` operator with the following code:
     // 'await' is a ZIO, run it, and then commit offsets
     await *> offsetBatch.commit
   }               // ZStream[_, _, Unit]
-`````
+```
 
 Method `producer.produceChunkAsync` returns a `Task[Task[]]`. The outer task completes when the records have been sent.
 Completion gives us the inner task, which completes when the acknowledgements are received.
@@ -142,19 +150,43 @@ Completion gives us the inner task, which completes when the acknowledgements ar
 In the code we use `buffer(4)` which allows the program to produce up to 4 extra chunk of records while awaiting
 acknowledgements.
 
-### Optimizing committing consumer offset
+#### Aside, when commits are not needed
+
+When commits are not needed, we can simplify the code a bit:
+
+```scala
+val stream: ZStream[_, _, ProducerRecord] = ???
+
+stream
+  // Expose the chunking structure of the stream
+  .chunks         // ZStream[_, _, Chunk[ProducerRecord]]
+  // Every chunk gets produced asynchronously
+  .mapZIO { records =>
+    producer.produceChunkAsync(records, Serde.int, Serde.string)
+  }               // ZStream[_, _, Task[Chunk[RecordMetadata]]]
+  // Allow the producer to run ahead, producing up to 4 extra chunks
+  .buffer(4)      // ZStream[_, _, Task[Chunk[RecordMetadata]]]
+  // Await acknowledgements per chunk
+  .flattenZIO     // ZStream[_, _, Chunk[RecordMetadata]]
+```
+
+### Optimizing committing consumer offsets
 
 Commiting offsets can become the bottleneck in highly optimized zio-kafka programs. This is because high commit rates
 can put a high strain on the broker. Next up, we split off committing to its own fiber as well by using
-`aggregateAsync`. See [consuming with zio-streams](consuming-kafka-topics-using-zio-streams) to learn how this works.
+`aggregateAsyncWithin`. See [consuming with zio-streams](consuming-kafka-topics-using-zio-streams) to learn how this
+works.
+
+Replace the part after `.buffer()` with:
 
 ```scala
   // Await acknowledgements for a chunk 
   .mapZIO { case (await, offsetBatch) =>
     // 'await' is a ZIO, run it, and then return the offsets
     await.as(offsetBatch)
-  }
-  .aggregateAsync(Consumer.offsetBatches)
-  .mapZIO(_.commit)
+  }                   // ZStream[_, _, OffsetBatch]
+  .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
+                      // ZStream[_, _, OffsetBatch]
+  .mapZIO(_.commit)   // ZStream[_, _, Unit]
 ```
 

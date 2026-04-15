@@ -142,7 +142,7 @@ object ReadmeExample extends ZIOAppDefault {
           .plainStream(Subscription.topics("random"), Serde.long, Serde.string)
           .tap(r => Console.printLine(r.value))
           .map(_.offset)
-          .aggregateAsync(Consumer.offsetBatches)
+          .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
           .mapZIO(_.commit)
           .runDrain
       } yield ()
@@ -152,6 +152,8 @@ object ReadmeExample extends ZIOAppDefault {
     ZIO.raceFirst(producerRun, List(consumerRun))
 }
 ```
+
+Go to the [ZIO Kafka tutorial](https://zio.dev/zio-kafka/tutorial/) for a more gentle introduction.
 
 ## Documentation
 
@@ -165,7 +167,6 @@ If you are reading this from GitHub, the documentation can be found in
 
 ### Articles
 
-- [ZIO Kafka tutorial](https://zio.dev/guides/tutorials/producing-consuming-data-from-kafka-topics/) by the zio-kafka team
 - [ZIO Kafka faster than Java Kafka](https://day-to-day-stuff.blogspot.com/2024/12/zio-kafka-faster-than-java-kafka.html) by Erik van Oosten (December 2024)
 - [Introduction to zio-kafka](https://www.baeldung.com/scala/zio-kafka-intro) by Stefanos Georgakis, Baeldung (January 2023)
 - [How to implement streaming microservices with ZIO 2 and Kafka](https://scalac.io/blog/streaming-microservices-with-zio-and-kafka/) by Jorge Vasquez, Scalac (June 2023)

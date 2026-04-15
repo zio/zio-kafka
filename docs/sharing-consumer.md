@@ -21,7 +21,7 @@ val stream1 = ZIO.serviceWithZIO[Consumer] { consumer =>
   consumer.plainStream(Subscription.topics("topic1"), Serde.string, Serde.string)
     .tap(cr => printLine(s"For topic1, got key: ${cr.record.key}, value: ${cr.record.value}"))
     .map(_.offset)
-    .aggregateAsync(Consumer.offsetBatches)
+    .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
     .mapZIO(_.commit)
     .runDrain
 }
@@ -30,7 +30,7 @@ val stream2 = ZIO.serviceWithZIO[Consumer] { consumer =>
   consumer.plainStream(Subscription.topics("topic2"), Serde.uuid, Serde.int)
     .tap(cr => printLine(s"For topic2, got key: ${cr.record.key}, value: ${cr.record.value}"))
     .map(_.offset)
-    .aggregateAsync(Consumer.offsetBatches)
+    .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
     .mapZIO(_.commit)
     .runDrain
 }
