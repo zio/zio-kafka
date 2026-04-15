@@ -1,10 +1,5 @@
 {
   "name": "@zio.dev/zio-kafka",
   "description": "ZIO Kafka Documentation",
-  "license": "Apache-2.0",
-  "overrides": {
-    "@docusaurus/bundler": {
-      "webpackbar": "^7.0.0"
-    }
-  }
+  "license": "Apache-2.0"
 }
