@@ -83,7 +83,7 @@ Consumer.make(consumerSettings).flatMap { consumer =>
           ZIO.succeed(offset)
       }
     }
-    .aggregateAsync(Consumer.offsetBatches)
+    .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
     .mapZIO(_.commit)
     .runDrain
 }
@@ -119,7 +119,7 @@ Consumer.make(consumerSettings).flatMap { consumer =>
         .flatMap(processMessage)
         .as(offset)
     }
-    .aggregateAsync(Consumer.offsetBatches)
+    .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
     .mapZIO(_.commit)
     .runDrain
 }
