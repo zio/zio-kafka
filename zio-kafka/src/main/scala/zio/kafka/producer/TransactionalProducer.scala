@@ -9,7 +9,7 @@ import zio.Cause.Fail
 import zio._
 import zio.kafka.consumer.{ Consumer, OffsetBatch }
 import zio.kafka.producer.ProducerLive.NanoTime
-import zio.kafka.producer.internal.ZioProducerMetrics
+import zio.kafka.producer.metrics.ZioMetricsProducerMetricsObserver
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -108,7 +108,8 @@ object TransactionalProducer {
         Queue.bounded[(Chunk[ByteRecord], NanoTime, Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit])](
           settings.producerSettings.sendBufferSize
         )
-      metrics = new ZioProducerMetrics(settings.producerSettings.metricLabels)
+      metrics = settings.producerSettings.metricsObserver
+                  .getOrElse(new ZioMetricsProducerMetricsObserver(settings.producerSettings.metricLabels))
       live = new ProducerLive(settings.producerSettings, wrappedDiagnostics, rawProducer, runtime, sendQueue, metrics)
       _ <- sendQueue.size
              .flatMap(metrics.observeSendQueueSize)

@@ -1,7 +1,7 @@
 package zio.kafka.consumer.metrics
 
 import zio._
-import zio.kafka.consumer.metrics.ConsumerMetrics.{ CounterInfo, GaugeInfo, HistogramInfo }
+import zio.kafka.metrics.MetricInfo
 import zio.metrics._
 
 /**
@@ -189,14 +189,14 @@ final class ZioMetricsConsumerMetricsObserver(
 
 object ZioMetricsConsumerMetricsObserver {
 
-  private implicit final class CounterInfoToMetric(private val counterInfo: CounterInfo) extends AnyVal {
+  private implicit final class CounterInfoToMetric(private val counterInfo: MetricInfo.Counter) extends AnyVal {
     def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Counter[Int] =
       Metric
         .counterInt(counterInfo.name, counterInfo.description)
         .tagged(metricLabels)
   }
 
-  private implicit final class GaugeIntInfoToMetric(private val gaugeInfo: GaugeInfo[Int]) extends AnyVal {
+  private implicit final class GaugeIntInfoToMetric(private val gaugeInfo: MetricInfo.Gauge[Int]) extends AnyVal {
     def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Gauge[Int] =
       Metric
         .gauge(gaugeInfo.name, gaugeInfo.description)
@@ -204,7 +204,7 @@ object ZioMetricsConsumerMetricsObserver {
         .tagged(metricLabels)
   }
 
-  private implicit final class HistogramDurationInfoToMetric(private val histogramInfo: HistogramInfo[Duration])
+  private implicit final class HistogramDurationInfoToMetric(private val histogramInfo: MetricInfo.Histogram[Duration])
       extends AnyVal {
     def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Histogram[Duration] =
       Metric
@@ -213,7 +213,8 @@ object ZioMetricsConsumerMetricsObserver {
         .tagged(metricLabels)
   }
 
-  private implicit final class HistogramIntInfoToMetric(private val histogramInfo: HistogramInfo[Int]) extends AnyVal {
+  private implicit final class HistogramIntInfoToMetric(private val histogramInfo: MetricInfo.Histogram[Int])
+      extends AnyVal {
     def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Histogram[Int] =
       Metric
         .histogram(histogramInfo.name, histogramInfo.description, histogramInfo.boundaries)
@@ -221,7 +222,7 @@ object ZioMetricsConsumerMetricsObserver {
         .tagged(metricLabels)
   }
 
-  private implicit final class HistogramLongInfoToMetric(private val histogramInfo: HistogramInfo[Long])
+  private implicit final class HistogramLongInfoToMetric(private val histogramInfo: MetricInfo.Histogram[Long])
       extends AnyVal {
     def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Histogram[Long] =
       Metric
