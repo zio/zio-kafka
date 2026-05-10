@@ -50,7 +50,7 @@ Kafka has a mature Java client for producing and consuming events, but it has a 
 
 ## Getting started
 
-See the [zio-kafka tutorial](https://zio.dev/guides/tutorials/producing-consuming-data-from-kafka-topics/) for a grand tour of the different ways you can use zio-kafka.
+See the [zio-kafka tutorial](docs/tutorial.md) for a grand tour of the different ways you can use zio-kafka.
 
 In order to use this library, we need to add the following line in our `build.sbt` file:
 
@@ -153,7 +153,7 @@ object ReadmeExample extends ZIOAppDefault {
 }
 ```
 
-Go to the [ZIO Kafka tutorial](https://zio.dev/zio-kafka/tutorial/) for a more gentle introduction.
+Read the [ZIO Kafka tutorial](docs/tutorial.md) for a more gentle introduction.
 
 ## Documentation
 
