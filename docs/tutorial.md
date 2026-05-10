@@ -345,7 +345,7 @@ val c: ZIO[Any, Throwable, Unit] =
     .runDrain
 ```
 
-While this works, it is not very performant. The problem with this approach is that we are committing offsets for each record separately. This causes a lot of overhead and slows down the consumption of records. To avoid this, we can aggregate offsets into batches and commit them all at once. This can be done by using the `ZStream#aggregateAsyncWithin` along with the `Consumer.offsetBatches` sink:
+While this works, it is not very performant. The problem with this approach is that we are committing offsets for each record separately. This causes a lot of overhead and slows down the consumption of records. To avoid this, we can aggregate offsets into batches and commit them all at once. This can be done by using the `ZStream#aggregateAsyncWithin` along with the `Consumer.collectOffsets` sink:
 
 ```scala mdoc:compile-only
 import zio._
@@ -363,7 +363,7 @@ val c: ZIO[Any, Throwable, Unit] =
     .tap(e => Console.printLine(e.value))
     .map(_.offset)                           // Get the offset of the record
                                              // Group offsets in an OffsetBatch
-    .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
+    .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis))
     .mapZIO(_.commit)                        // Commit the batch of offsets
     .runDrain
 ```
@@ -433,7 +433,7 @@ object StreamingKafkaApp extends ZIOAppDefault {
             // See the previous section for more info.
             .tap(r => Console.printLine("Consumed: " + r.value))
             .map(_.offset)
-            .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
+            .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis))
             .mapZIO(_.commit)
             .runDrain
         } yield ()
@@ -597,7 +597,7 @@ object JsonStreamingKafkaApp extends ZIOAppDefault {
               )
             }
             .map(_.offset)
-            .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
+            .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis))
             .mapZIO(_.commit)
             .runDrain
         } yield ()

@@ -142,7 +142,7 @@ object ReadmeExample extends ZIOAppDefault {
           .plainStream(Subscription.topics("random"), Serde.long, Serde.string)
           .tap(r => Console.printLine(r.value))
           .map(_.offset)
-          .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
+          .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis))
           .mapZIO(_.commit)
           .runDrain
       } yield ()

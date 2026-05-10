@@ -185,7 +185,7 @@ Replace the part after `.buffer()` with:
     // 'await' is a ZIO, run it, and then return the offsets
     await.as(offsetBatch)
   }                   // ZStream[_, _, OffsetBatch]
-  .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
+  .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis))
                       // ZStream[_, _, OffsetBatch]
   .mapZIO(_.commit)   // ZStream[_, _, Unit]
 ```

@@ -252,14 +252,17 @@ object Consumer {
   case object CommitTimeout extends RuntimeException("Commit timeout") with NoStackTrace
 
   /** A [[zio.stream.ZSink]] that collects [[zio.kafka.consumer.Offset]]s into an [[zio.kafka.consumer.OffsetBatch]]. */
-  val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
+  val collectOffsets: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
 
+  /** Use `collectOffsets` instead. */
+  val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] = collectOffsets
+
   /**
-   * A [[zio.stream.ZSink]] that merges multiple [[zio.kafka.consumer.OffsetBatch]]es into a single
+   * A [[zio.stream.ZSink]] that collects multiple [[zio.kafka.consumer.OffsetBatch]]es by merging them into a single
    * [[zio.kafka.consumer.OffsetBatch]].
    */
-  val offsetBatchesSink: ZSink[Any, Nothing, OffsetBatch, Nothing, OffsetBatch] =
+  val collectBatches: ZSink[Any, Nothing, OffsetBatch, Nothing, OffsetBatch] =
     ZSink.foldLeft[OffsetBatch, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
   def live: RLayer[ConsumerSettings, Consumer] =
@@ -627,7 +630,7 @@ private[consumer] final class ConsumerLive private[consumer] (
                partitionStream.mapChunksZIO(_.mapZIO((c: CommittableRecord[K, V]) => f(c.record).as(c.offset)))
              }
              .provideEnvironment(r)
-             .aggregateAsync(offsetBatches)
+             .aggregateAsync(collectOffsets)
              .mapZIO(_.commitOrRetry(commitRetryPolicy))
              .runDrain
     } yield ()

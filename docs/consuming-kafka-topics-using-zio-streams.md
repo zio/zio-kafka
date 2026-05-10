@@ -14,7 +14,7 @@ consumer
   .plainStream(Subscription.topics("topic150"), Serde.string, Serde.string) // (1)
   .tap(cr => printLine(s"key: ${cr.record.key}, value: ${cr.record.value}")) // (2)
   .map(_.offset) // (3)
-  .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis)) // (4)
+  .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis)) // (4)
   .mapZIO(_.commit) // (5)
   .runDrain
 ```
@@ -48,7 +48,7 @@ record separately. In this approach the commit executes on the same fiber as the
 throughput. Explicitly committing every record is therefore almost never the best approach.
 
 To get the lowest commit latency you can commit continuously; a new commit is started as soon as the previous completes.
-This is done by replacing line (4) with `.aggregateAsync(Consumer.offsetBatches)`. Be aware that registering commits is
+This is done by replacing line (4) with `.aggregateAsync(Consumer.collectOffsets)`. Be aware that registering commits is
 an intensive operation for the kafka brokers. With dozens of consumers continuously committing, the high load may slow
 down everything.
 
@@ -75,7 +75,7 @@ consumer
         .tap(record => printLine(s"key: ${record.key}, value: ${record.value}")) // (2)
         .map(_.offset) // (3)
   }
-  .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis)) // (4)
+  .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis)) // (4)
   .mapZIO(_.commit)  // (5)
   .runDrain
 ```
@@ -132,7 +132,7 @@ ZIO.scoped {
             .tap(record => printLine(s"key: ${record.key}, value: ${record.value}"))
             .map(_.offset)
         }
-        .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
+        .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis))
         .mapZIO(_.commit)
         .runDrain
       }
@@ -158,7 +158,7 @@ ZIO.scoped {
               .tap(record => printLine(s"key: ${record.key}, value: ${record.value}"))
               .map(_.offset)
           }
-          .aggregateAsyncWithin(Consumer.offsetBatches, Schedule.fixed(100.millis))
+          .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis))
           .mapZIO(_.commit)
           .runDrain
           .forkScoped
