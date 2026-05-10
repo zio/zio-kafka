@@ -262,7 +262,7 @@ object Consumer {
    * A [[zio.stream.ZSink]] that collects multiple [[zio.kafka.consumer.OffsetBatch]]es by merging them into a single
    * [[zio.kafka.consumer.OffsetBatch]].
    */
-  val collectBatches: ZSink[Any, Nothing, OffsetBatch, Nothing, OffsetBatch] =
+  val collectOffsetBatches: ZSink[Any, Nothing, OffsetBatch, Nothing, OffsetBatch] =
     ZSink.foldLeft[OffsetBatch, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
   def live: RLayer[ConsumerSettings, Consumer] =
