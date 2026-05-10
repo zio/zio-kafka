@@ -50,7 +50,6 @@ inThisBuild(
     // We only support Scala 2.13+ and 3+. See https://github.com/zio/zio-kafka/releases/tag/v2.7.0
     crossScalaVersions       := List(scala213.value, scala3.value),
     ciEnabledBranches        := Seq("master", "series/0.x"),
-    useCoursier              := false,
     Test / parallelExecution := false,
     Test / fork              := true,
     run / fork               := true,
@@ -215,8 +214,8 @@ lazy val docs = project
   .in(file("zio-kafka-docs"))
   .settings(
     moduleName := "zio-kafka-docs",
-    scalacOptions -= "-Yno-imports",
-    scalacOptions -= "-Xfatal-warnings",
+    // Reset scala options, warning are okay in the docs
+    scalacOptions := Seq("--encoding", "utf8", "--feature"),
     projectName                                := "ZIO Kafka",
     mainModuleName                             := (zioKafka / moduleName).value,
     projectStage                               := ProjectStage.ProductionReady,
@@ -225,7 +224,8 @@ lazy val docs = project
       "This library is heavily inspired and made possible by the research and implementation done in " +
         "[Alpakka Kafka](https://github.com/akka/alpakka-kafka), a library maintained by the Akka team and originally " +
         "written as Reactive Kafka by SoftwareMill.",
-    readmeLicense += s"\n\nCopyright 2021-${java.time.Year.now()} Itamar Ravid and the zio-kafka contributors."
+    readmeLicense += s"\n\nCopyright 2021-${java.time.Year.now()} Itamar Ravid and the zio-kafka contributors.",
+    libraryDependencies += "dev.zio" %% "zio-json" % "0.9.1"
   )
   .enablePlugins(WebsitePlugin)
   .dependsOn(zioKafka, zioKafkaTestkit)
