@@ -359,7 +359,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                             _  <- consumer.stopConsumption.when(nr == 10)
                           } yield if (nr < 10) Seq(record.offset) else Seq.empty
                         }
-                        .transduce(Consumer.offsetBatches)
+                        .transduce(Consumer.collectOffsets)
                         .mapZIO(_.commit)
                         .runDrain *>
                         consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
@@ -392,7 +392,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                             _  <- consumer.stopConsumption.when(nr == 10)
                           } yield record.offset
                         }
-                        .aggregateAsync(Consumer.offsetBatches)
+                        .aggregateAsync(Consumer.collectOffsets)
                         .mapZIO(_.commit)
                         .runDrain *>
                         consumer.committed(Set(new TopicPartition(topic, 0))).map(_.values.head)
@@ -439,7 +439,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                           } yield Seq(record.offset)
                                         }
                                       }
-                                      .aggregateAsync(Consumer.offsetBatches)
+                                      .aggregateAsync(Consumer.collectOffsets)
                                       .mapZIO(batch =>
                                         ZIO.logDebug("Starting batch commit") *> batch.commit
                                           .tapErrorCause(
@@ -514,7 +514,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                               } yield Seq(record.offset)
                                             }
                                           }
-                                          .transduce(Consumer.offsetBatches)
+                                          .transduce(Consumer.collectOffsets)
                                           .mapZIO(batch =>
                                             ZIO.logDebug("Starting batch commit") *> batch.commit
                                               .tapErrorCause(
@@ -767,7 +767,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                         ZStream.fromZIO(stream1PartitionsAssigned.update(_ + 1)) *>
                           partitionStream.map(_.offset)
                       }
-                      .aggregateAsync(Consumer.offsetBatches)
+                      .aggregateAsync(Consumer.collectOffsets)
                       .mapZIO(offsetBatch =>
                         stream1Started.succeed(()) *>
                           offsetBatch.commit.repeatUntilZIO(_ =>
@@ -918,7 +918,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                  .partitionedStream(subscription, Serde.string, Serde.string)
                  .flatMapPar(partitionCount)(_._2.map(_.offset))
                  .take(nrMessages.toLong)
-                 .transduce(Consumer.offsetBatches)
+                 .transduce(Consumer.collectOffsets)
                  .take(1)
                  .mapZIO(_.commit)
                  .runDrain
@@ -943,7 +943,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                        .partitionedStream(subscription, Serde.string, Serde.string)
                        .flatMap(_._2.map(_.offset.withMetadata(metadata)))
                        .take(1)
-                       .transduce(Consumer.offsetBatches)
+                       .transduce(Consumer.collectOffsets)
                        .take(1)
                        .mapZIO(_.commit)
                        .runDrain *>
@@ -1897,7 +1897,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       .plainStream(Subscription.Topics(Set(topic)), Serde.string, Serde.string)
                       .take(11)
                       .map(_.offset)
-                      .aggregateAsync(Consumer.offsetBatches)
+                      .aggregateAsync(Consumer.collectOffsets)
                       .mapZIO(_.commit) // Hangs without timeout
                       .runDrain
                       .exit

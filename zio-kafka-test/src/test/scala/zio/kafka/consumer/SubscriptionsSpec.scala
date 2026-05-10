@@ -272,7 +272,7 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                    .plainStream(Subscription.topics(topic1), Serde.string, Serde.string)
                    .take(40)
                    .transduce(
-                     Consumer.offsetBatches.contramap[CommittableRecord[String, String]](_.offset) <&>
+                     Consumer.collectOffsets.contramap[CommittableRecord[String, String]](_.offset) <&>
                        ZSink.collectAll[CommittableRecord[String, String]]
                    )
                    .mapZIO { case (offsetBatch, records) => offsetBatch.commit.as(records) }
