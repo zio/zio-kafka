@@ -36,19 +36,21 @@ throughput. See [avoiding chunk-breakers](avoiding-chunk-breakers.md) for more i
 ZStream operator `aggregateAsyncWithin` runs upstream in a separate fiber, allowing consuming and committing to run in
 parallel.
 
-For applications that only see a few records per second or less, you can remove line (4) and commit the offset for each
-record separately.
-
-If on the other hand you wish to commit continuously (start a new commit, as soon as the previous completed), replace
-line (4) with `.aggregateAsync(Consumer.offsetBatches)`. Be aware that if many applications do this, the kafka broker
-can get overloaded.
-
 The offset batches are emitted every 100 milliseconds. The delay should be longer than the typical commit-duration in
 your system. For example, lets assume the delay is set to 2ms and a commit operation takes 10ms. Then, when some records
 are consumed, 2ms later `aggregateAsyncWithin` emits an offset batch and starts collecting offsets for the next batch.
 In addition, the commit operation starts. Again 2ms later `aggregateAsyncWithin` tries to emit the next batch. However,
 this will block because the commit is still ongoing. Since `aggregateAsyncWithin` is now blocked, it stops accepting
 offsets from upstream, halting the consumer until the commit completes.
+
+For applications that only see a few records per second or less, you can remove line (4) and commit the offset for each
+record separately. In this approach the commit executes on the same fiber as the rest of the stream. This lowers
+throughput. Explicitly committing every record is therefore almost never the best approach.
+
+To get the lowest commit latency you can commit continuously; a new commit is started as soon as the previous completes.
+This is done by replacing line (4) with `.aggregateAsync(Consumer.offsetBatches)`. Be aware that registering commits is
+an intensive operation for the kafka brokers. With dozens of consumers continuously committing, the high load may slow
+down everything.
 
 (5) All offsets in the `OffsetBatch` are committed. As soon as the commit is done, the next offset batch is pulled
 from upstream.
