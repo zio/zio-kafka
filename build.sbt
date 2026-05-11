@@ -215,7 +215,7 @@ lazy val docs = project
   .settings(
     moduleName := "zio-kafka-docs",
     // Reset scala options, warning are okay in the docs
-    scalacOptions := Seq("--encoding", "utf8", "--feature"),
+    scalacOptions                              := Seq("--encoding", "utf8", "--feature"),
     projectName                                := "ZIO Kafka",
     mainModuleName                             := (zioKafka / moduleName).value,
     projectStage                               := ProjectStage.ProductionReady,
@@ -225,7 +225,7 @@ lazy val docs = project
         "[Alpakka Kafka](https://github.com/akka/alpakka-kafka), a library maintained by the Akka team and originally " +
         "written as Reactive Kafka by SoftwareMill.",
     readmeLicense += s"\n\nCopyright 2021-${java.time.Year.now()} Itamar Ravid and the zio-kafka contributors.",
-    libraryDependencies += "dev.zio" %% "zio-json" % "0.9.1"
+    libraryDependencies += "dev.zio" %% "zio-json" % "0.9.2"
   )
   .enablePlugins(WebsitePlugin)
   .dependsOn(zioKafka, zioKafkaTestkit)
