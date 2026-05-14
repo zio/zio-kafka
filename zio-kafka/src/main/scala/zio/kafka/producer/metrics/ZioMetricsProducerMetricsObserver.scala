@@ -1,7 +1,7 @@
 package zio.kafka.producer.metrics
 
 import zio._
-import zio.kafka.metrics.MetricInfo
+import zio.kafka.metrics.internal.MetricInfoToZioMetric._
 import zio.metrics._
 
 /**
@@ -17,7 +17,6 @@ final class ZioMetricsProducerMetricsObserver(
   producerMetrics: ProducerMetrics,
   metricLabels: Set[MetricLabel]
 ) extends ProducerMetricsObserver {
-  import ZioMetricsProducerMetricsObserver._
 
   /**
    * A [[ProducerMetricsObserver]] implementation that uses zio-metrics to collect observations, using the default
@@ -34,13 +33,13 @@ final class ZioMetricsProducerMetricsObserver(
   // Produce metrics
   //
 
-  private val produceCallsCounter: Metric.Counter[Int] =
+  private val produceCallsCounter: Metric.Counter[Long] =
     producerMetrics.produceCallsCounter.toZioMetric(metricLabels)
 
   private val produceLatencyHistogram: Metric.Histogram[Duration] =
     producerMetrics.produceLatencyHistogram.toZioMetric(metricLabels)
 
-  private val produceRecordsCounter: Metric.Counter[Int] =
+  private val produceRecordsCounter: Metric.Counter[Long] =
     producerMetrics.produceRecordsCounter.toZioMetric(metricLabels)
 
   private val produceBatchSizeHistogram: Metric.Histogram[Int] =
@@ -50,7 +49,7 @@ final class ZioMetricsProducerMetricsObserver(
     for {
       _ <- produceCallsCounter.increment
       _ <- produceLatencyHistogram.update(latency)
-      _ <- produceRecordsCounter.incrementBy(batchSize)
+      _ <- produceRecordsCounter.incrementBy(batchSize.toLong)
       _ <- produceBatchSizeHistogram.update(batchSize)
     } yield ()
 
@@ -76,39 +75,10 @@ final class ZioMetricsProducerMetricsObserver(
   // Auth error metrics
   //
 
-  private val sendAuthErrorCounter: Metric.Counter[Int] =
+  private val sendAuthErrorCounter: Metric.Counter[Long] =
     producerMetrics.sendAuthErrorCounter.toZioMetric(metricLabels)
 
   override def observeSendAuthError(errorCount: Int): UIO[Unit] =
-    sendAuthErrorCounter.incrementBy(errorCount)
-
-}
-
-object ZioMetricsProducerMetricsObserver {
-
-  private implicit final class CounterInfoToMetric(private val counterInfo: MetricInfo.Counter) extends AnyVal {
-    def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Counter[Int] =
-      Metric
-        .counterInt(counterInfo.name, counterInfo.description)
-        .tagged(metricLabels)
-  }
-
-  private implicit final class HistogramDurationInfoToMetric(private val histogramInfo: MetricInfo.Histogram[Duration])
-      extends AnyVal {
-    def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Histogram[Duration] =
-      Metric
-        .histogram(histogramInfo.name, histogramInfo.description, histogramInfo.boundaries)
-        .contramap[Duration](_.toNanos.toDouble / 1e9)
-        .tagged(metricLabels)
-  }
-
-  private implicit final class HistogramIntInfoToMetric(private val histogramInfo: MetricInfo.Histogram[Int])
-      extends AnyVal {
-    def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Histogram[Int] =
-      Metric
-        .histogram(histogramInfo.name, histogramInfo.description, histogramInfo.boundaries)
-        .contramap[Int](_.toDouble)
-        .tagged(metricLabels)
-  }
+    sendAuthErrorCounter.incrementBy(errorCount.toLong)
 
 }

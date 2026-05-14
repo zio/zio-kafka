@@ -1,7 +1,9 @@
 package zio.kafka.metrics
 
 /**
- * Shared metric descriptor types used by consumer and producer metrics.
+ * A metric descriptor.
+ *
+ * Should provide enough information to allow constructing a metric in the used metrics library (e.g. zio-metrics).
  *
  * WARNING: this is an UNSTABLE API and may change in an incompatible way without notice in any zio-kafka version.
  */
