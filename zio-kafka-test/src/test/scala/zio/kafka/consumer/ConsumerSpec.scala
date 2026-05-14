@@ -600,10 +600,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
         test(
           "it's possible to start a new consumption session from a Consumer that had a consumption session stopped previously"
         ) {
-          // NOTE:
-          // When this test fails with the message `100000 was not less than 100000`, it's because
-          // your computer is so fast that the first consumer already consumed all 100000 messages.
           val numberOfMessages: Int           = 100000
+          val stopAfterMessages: Long         = 10L
           val kvs: Iterable[(String, String)] = Iterable.tabulate(numberOfMessages)(i => (s"key-$i", s"msg-$i"))
 
           def test(diagnostics: ConsumerDiagnostics): ZIO[Scope & Kafka, Throwable, TestResult] =
@@ -617,7 +615,9 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
               // Starting a consumption session to start the Runloop
               consumed0 <- ZIO.scoped {
                              for {
-                               consumed <- Ref.make(0L)
+                               consumed          <- Ref.make(0L)
+                               stopFirstStream   <- Promise.make[Nothing, Unit]
+                               resumeFirstStream <- Promise.make[Nothing, Unit]
                                control <-
                                  consumer
                                    .plainStreamWithControl(
@@ -625,12 +625,17 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                      Serde.string,
                                      Serde.string
                                    )
-                               fiber <- control.stream
-                                          .tap(_ => consumed.update(_ + 1))
-                                          .runDrain
-                                          .forkScoped
-                               _         <- ZIO.sleep(200.millis)
+                               // Pause after a small batch so `control.end` wins deterministically without a sleep.
+                               fiber <- control.stream.tap { _ =>
+                                          consumed.updateAndGet(_ + 1).flatMap { count =>
+                                            if (count == stopAfterMessages)
+                                              stopFirstStream.succeed(()) *> resumeFirstStream.await
+                                            else ZIO.unit
+                                          }
+                                        }.runDrain.forkScoped
+                               _         <- stopFirstStream.await
                                _         <- control.end
+                               _         <- resumeFirstStream.succeed(())
                                _         <- fiber.join
                                consumed0 <- consumed.get
                                _         <- ZIO.logDebug(s"consumed0: $consumed0")
