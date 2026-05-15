@@ -2,6 +2,7 @@ package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.ProducerConfig
 import zio._
+import zio.kafka.producer.metrics.ProducerMetricsObserver
 import zio.kafka.security.KafkaCredentialStore
 import zio.metrics.MetricLabel
 
@@ -22,7 +23,8 @@ final case class ProducerSettings(
   authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.stop,
   properties: Map[String, AnyRef] = Map.empty,
   diagnostics: Producer.ProducerDiagnostics = Producer.NoDiagnostics,
-  metricLabels: Set[MetricLabel] = Set.empty
+  metricLabels: Set[MetricLabel] = Set.empty,
+  metricsObserver: Option[ProducerMetricsObserver] = None
 ) {
   def driverSettings: Map[String, AnyRef] = properties
 
@@ -116,9 +118,24 @@ final case class ProducerSettings(
    * {{{
    *   producerSettings.withMetricLabels(Set(MetricLabel("producer-id", producerId)))
    * }}}
+   *
+   * This setting is ignored when an alternative [[ProducerSettings.withMetricsObserver metrics observer]] is set.
    */
   def withMetricsLabels(metricLabels: Set[MetricLabel]): ProducerSettings =
     copy(metricLabels = metricLabels)
+
+  /**
+   * @param observer
+   *   a custom [[zio.kafka.producer.metrics.ProducerMetricsObserver]] implementation for collecting producer metrics.
+   *   When not set, the default zio-metrics based implementation is used.
+   *
+   * Use this to integrate with alternative metrics backends (Dropwizard, Micrometer, etc.) or to customize histogram
+   * boundaries.
+   *
+   * Use [[zio.kafka.producer.metrics.ProducerMetricsObserver.NoOp]] to disable metric collection.
+   */
+  def withMetricsObserver(observer: ProducerMetricsObserver): ProducerSettings =
+    copy(metricsObserver = Some(observer))
 
 }
 

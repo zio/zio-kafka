@@ -1,7 +1,7 @@
 package zio.kafka.consumer.metrics
 
 import zio._
-import zio.kafka.consumer.metrics.ConsumerMetrics.{ CounterInfo, GaugeInfo, HistogramInfo }
+import zio.kafka.metrics.internal.MetricInfoToZioMetric._
 import zio.metrics._
 
 /**
@@ -17,7 +17,6 @@ final class ZioMetricsConsumerMetricsObserver(
   consumerMetrics: ConsumerMetrics,
   metricLabels: Set[MetricLabel]
 ) extends ConsumerMetricsObserver {
-  import ZioMetricsConsumerMetricsObserver._
 
   /**
    * A [[ConsumerMetricsObserver]] implementation that uses zio-metrics to collect observations, using the default
@@ -34,7 +33,7 @@ final class ZioMetricsConsumerMetricsObserver(
   // Poll metrics
   //
 
-  private val pollCounter: Metric.Counter[Int] =
+  private val pollCounter: Metric.Counter[Long] =
     consumerMetrics.pollCounter.toZioMetric(metricLabels)
 
   private val partitionsResumedInLatestPollGauge: Metric.Gauge[Int] =
@@ -63,7 +62,7 @@ final class ZioMetricsConsumerMetricsObserver(
   // Commit metrics
   //
 
-  private val commitCounter: Metric.Counter[Int] =
+  private val commitCounter: Metric.Counter[Long] =
     consumerMetrics.commitCounter.toZioMetric(metricLabels)
 
   private val commitLatencyHistogram: Metric.Histogram[Duration] =
@@ -82,7 +81,7 @@ final class ZioMetricsConsumerMetricsObserver(
   // Each runloop cycle zio-kafka aggregates all commit requests into a single aggregated commit.
   //
 
-  private val aggregatedCommitCounter: Metric.Counter[Int] =
+  private val aggregatedCommitCounter: Metric.Counter[Long] =
     consumerMetrics.aggregatedCommitCounter.toZioMetric(metricLabels)
 
   private val aggregatedCommitLatencyHistogram: Metric.Histogram[Duration] =
@@ -104,19 +103,19 @@ final class ZioMetricsConsumerMetricsObserver(
   // Rebalance metrics
   //
 
-  private val rebalanceCounter: Metric.Counter[Int] =
+  private val rebalanceCounter: Metric.Counter[Long] =
     consumerMetrics.rebalanceCounter.toZioMetric(metricLabels)
 
   private val partitionsCurrentlyAssignedGauge: Metric.Gauge[Int] =
     consumerMetrics.partitionsCurrentlyAssignedGauge.toZioMetric(metricLabels)
 
-  private val partitionsAssignedCounter =
+  private val partitionsAssignedCounter: Metric.Counter[Long] =
     consumerMetrics.partitionsAssignedCounter.toZioMetric(metricLabels)
 
-  private val partitionsRevokedCounter =
+  private val partitionsRevokedCounter: Metric.Counter[Long] =
     consumerMetrics.partitionsRevokedCounter.toZioMetric(metricLabels)
 
-  private val partitionsLostCounter =
+  private val partitionsLostCounter: Metric.Counter[Long] =
     consumerMetrics.partitionsLostCounter.toZioMetric(metricLabels)
 
   override def observeRebalance(
@@ -128,9 +127,9 @@ final class ZioMetricsConsumerMetricsObserver(
     for {
       _ <- rebalanceCounter.increment
       _ <- partitionsCurrentlyAssignedGauge.update(currentlyAssignedCount)
-      _ <- partitionsAssignedCounter.incrementBy(assignedCount)
-      _ <- partitionsRevokedCounter.incrementBy(revokedCount)
-      _ <- partitionsLostCounter.incrementBy(lostCount)
+      _ <- partitionsAssignedCounter.incrementBy(assignedCount.toLong)
+      _ <- partitionsRevokedCounter.incrementBy(revokedCount.toLong)
+      _ <- partitionsLostCounter.incrementBy(lostCount.toLong)
     } yield ()
 
   // -----------------------------------------------------
@@ -179,55 +178,10 @@ final class ZioMetricsConsumerMetricsObserver(
   // Poll auth error metrics
   //
 
-  private val pollAuthErrorCounter: Metric.Counter[Int] =
+  private val pollAuthErrorCounter: Metric.Counter[Long] =
     consumerMetrics.pollAuthErrorCounter.toZioMetric(metricLabels)
 
   def observePollAuthError: UIO[Unit] =
     pollAuthErrorCounter.increment
-
-}
-
-object ZioMetricsConsumerMetricsObserver {
-
-  private implicit final class CounterInfoToMetric(private val counterInfo: CounterInfo) extends AnyVal {
-    def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Counter[Int] =
-      Metric
-        .counterInt(counterInfo.name, counterInfo.description)
-        .tagged(metricLabels)
-  }
-
-  private implicit final class GaugeIntInfoToMetric(private val gaugeInfo: GaugeInfo[Int]) extends AnyVal {
-    def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Gauge[Int] =
-      Metric
-        .gauge(gaugeInfo.name, gaugeInfo.description)
-        .contramap[Int](_.toDouble)
-        .tagged(metricLabels)
-  }
-
-  private implicit final class HistogramDurationInfoToMetric(private val histogramInfo: HistogramInfo[Duration])
-      extends AnyVal {
-    def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Histogram[Duration] =
-      Metric
-        .histogram(histogramInfo.name, histogramInfo.description, histogramInfo.boundaries)
-        .contramap[Duration](_.toNanos.toDouble / 1e9)
-        .tagged(metricLabels)
-  }
-
-  private implicit final class HistogramIntInfoToMetric(private val histogramInfo: HistogramInfo[Int]) extends AnyVal {
-    def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Histogram[Int] =
-      Metric
-        .histogram(histogramInfo.name, histogramInfo.description, histogramInfo.boundaries)
-        .contramap[Int](_.toDouble)
-        .tagged(metricLabels)
-  }
-
-  private implicit final class HistogramLongInfoToMetric(private val histogramInfo: HistogramInfo[Long])
-      extends AnyVal {
-    def toZioMetric(metricLabels: Set[MetricLabel]): Metric.Histogram[Long] =
-      Metric
-        .histogram(histogramInfo.name, histogramInfo.description, histogramInfo.boundaries)
-        .contramap[Long](_.toDouble)
-        .tagged(metricLabels)
-  }
 
 }
