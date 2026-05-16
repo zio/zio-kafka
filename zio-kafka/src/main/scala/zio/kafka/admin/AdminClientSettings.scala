@@ -60,7 +60,7 @@ object AdminClientSettings {
   def apply(bootstrapServers: List[String]): AdminClientSettings =
     AdminClientSettings(
       closeTimeout = 30.seconds,
-      maxConcurrentWriteOperations = 5,
+      maxConcurrentWriteOperations = 1,
       properties = Map.empty
     ).withBootstrapServers(bootstrapServers)
 }
