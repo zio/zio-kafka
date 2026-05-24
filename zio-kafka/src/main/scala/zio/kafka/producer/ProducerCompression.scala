@@ -1,7 +1,8 @@
 package zio.kafka.producer
 
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.record.CompressionType
+
+import java.util.zip.Deflater
 
 abstract sealed class ProducerCompression(name: String, extra: Option[(String, AnyRef)] = None) {
   def properties: Map[String, AnyRef] =
@@ -14,30 +15,30 @@ abstract sealed class ProducerCompression(name: String, extra: Option[(String, A
 object ProducerCompression {
 
   /** Produce kafka records without compression. */
-  case object NoCompression extends ProducerCompression(CompressionType.NONE.name)
+  case object NoCompression extends ProducerCompression("none")
 
   /**
    * Produce kafka records with GZIP compression.
    * @param level
    *   a value between 1 and 9 or -1 (defaults to -1)
    */
-  final case class Gzip(level: Int = CompressionType.GZIP.defaultLevel())
+  final case class Gzip(level: Int = Deflater.DEFAULT_COMPRESSION)
       extends ProducerCompression(
-        CompressionType.GZIP.name,
+        "gzip",
         Some(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG -> Int.box(level))
       )
 
   /** Produce kafka records with Snappy compression. */
-  final case class Snappy() extends ProducerCompression(CompressionType.SNAPPY.name)
+  final case class Snappy() extends ProducerCompression("snappy")
 
   /**
    * Produce kafka records with Lz4 compression.
    * @param level
    *   a value between 1 and 17 (defaults to 9)
    */
-  final case class Lz4(level: Int = CompressionType.LZ4.defaultLevel())
+  final case class Lz4(level: Int = 9)
       extends ProducerCompression(
-        CompressionType.LZ4.name,
+        "lz4",
         Some(ProducerConfig.COMPRESSION_LZ4_LEVEL_CONFIG -> Int.box(level))
       )
 
@@ -47,9 +48,9 @@ object ProducerCompression {
    * @param level
    *   a value between -131072 and 22 (defaults to 3)
    */
-  final case class Zstd(level: Int = CompressionType.ZSTD.defaultLevel())
+  final case class Zstd(level: Int = 3)
       extends ProducerCompression(
-        CompressionType.ZSTD.name,
+        "zstd",
         Some(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG -> Int.box(level))
       )
 }
