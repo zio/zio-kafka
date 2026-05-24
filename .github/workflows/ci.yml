@@ -185,7 +185,7 @@ jobs:
     continue-on-error: false
     needs:
     - ci
-    if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ ((github.event_name == 'release') && (github.event.action == 'published')) || (github.event_name == 'workflow_dispatch') }}
     steps:
     - name: Git Checkout
       uses: actions/checkout@v6
@@ -247,7 +247,7 @@ jobs:
     continue-on-error: false
     needs:
     - release-docs
-    if: ${{ (github.event_name == 'release') && (github.event.action == 'published') }}
+    if: ${{ ((github.event_name == 'release') && (github.event.action == 'published')) || (github.event_name == 'workflow_dispatch') }}
     steps:
     - name: Git Checkout
       uses: actions/checkout@v6
