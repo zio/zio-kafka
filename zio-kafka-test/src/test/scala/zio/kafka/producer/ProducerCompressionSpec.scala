@@ -26,11 +26,11 @@ object ProducerCompressionSpec extends ZIOSpecDefault {
         // refer to it from test code, we can validate the names and defaults as set by the
         // Kafka library.
         assertTrue(
-          compressionName(ProducerCompression.NoCompression) == CompressionType.NONE.name(),
-          compressionName(ProducerCompression.Gzip()) == CompressionType.GZIP.name(),
-          compressionName(ProducerCompression.Snappy()) == CompressionType.SNAPPY.name(),
-          compressionName(ProducerCompression.Lz4()) == CompressionType.LZ4.name(),
-          compressionName(ProducerCompression.Zstd()) == CompressionType.ZSTD.name(),
+          compressionName(ProducerCompression.NoCompression) == CompressionType.NONE.name,
+          compressionName(ProducerCompression.Gzip()) == CompressionType.GZIP.name,
+          compressionName(ProducerCompression.Snappy()) == CompressionType.SNAPPY.name,
+          compressionName(ProducerCompression.Lz4()) == CompressionType.LZ4.name,
+          compressionName(ProducerCompression.Zstd()) == CompressionType.ZSTD.name,
           assertCompressionLevel(
             ProducerCompression.Gzip(),
             ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG,
