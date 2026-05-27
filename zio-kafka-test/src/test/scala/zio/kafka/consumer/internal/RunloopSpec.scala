@@ -2,12 +2,13 @@ package zio.kafka.consumer.internal
 
 import org.apache.kafka.clients.consumer.{ ConsumerRebalanceListener, ConsumerRecord, MockConsumer }
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException }
+import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException, TopicAuthorizationException }
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.Consumer.ConsumerDiagnostics
 import zio.kafka.consumer.diagnostics.DiagnosticEvent
 import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
+import zio.kafka.consumer.metrics.ConsumerMetricsObserver
 import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.kafka.diagnostics.{ Diagnostics, SlidingDiagnostics }
 import zio.metrics.{ MetricState, Metrics }
@@ -181,12 +182,49 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
             authErrorCount.contains(2d)
           )
         }
+      },
+      test("partition stream fails when Runloop crashes after auth retries exhaust with empty dataQueue") {
+        val authException = new TopicAuthorizationException("acl-denied")
+        // recurs(0): no retries, so the Runloop crashes on the first auth exception.
+        // NoOp metricsObserver: this test does not pollute the global auth-error counter that
+        // other tests asserts on, so tests stay independent and can run concurrently.
+        val settings = consumerSettings
+          .withAuthErrorRetrySchedule(Schedule.recurs(0))
+          .withMetricsObserver(ConsumerMetricsObserver.NoOp)
+        withRunloop(settings = settings) { (mockConsumer, partitionsHub, runloop) =>
+          // 1st poll: assign the partition with no records, so the per-partition stream parks on dataQueue.take.
+          mockConsumer.schedulePollTask { () =>
+            mockConsumer.updateEndOffsets(Map(tp10 -> Long.box(0L)).asJava)
+            mockConsumer.rebalance(Seq(tp10).asJava)
+          }
+          // 2nd poll: throw an auth exception. With `recurs(0)` the Runloop crashes immediately.
+          mockConsumer.schedulePollTask { () =>
+            mockConsumer.setPollException(authException)
+          }
+          for {
+            streamStream <- ZStream.fromHubScoped(partitionsHub)
+            _            <- runloop.addSubscription(Subscription.Topics(Set(tp10.topic())))
+            exit <- streamStream
+                      .map(_.exit)
+                      .flattenExitOption
+                      .flattenChunks
+                      .flatMapPar(Int.MaxValue) { case (_, stream) => stream }
+                      .runDrain
+                      .timeout(10.seconds)
+                      .exit
+          } yield assertTrue(
+            // Since runloop informs the partition streams when it crashes, `exit` contains the auth exception.
+            // Without informing the partition streams, this would time out (and not get an auth exception).
+            exit.causeOption.exists(_.squash == authException)
+          )
+        }
       }
     ) @@ withLiveClock
 
   private def withRunloop(
     diagnostics: ConsumerDiagnostics = Diagnostics.NoOp,
-    mockConsumer: BinaryMockConsumer = new BinaryMockConsumer("latest")
+    mockConsumer: BinaryMockConsumer = new BinaryMockConsumer("latest"),
+    settings: ConsumerSettings = consumerSettings
   )(
     f: (BinaryMockConsumer, PartitionsHub, Runloop) => ZIO[Scope, Throwable, TestResult]
   ): ZIO[Scope, Throwable, TestResult] =
@@ -198,9 +236,9 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
         partitionsHub <- ZIO
                            .acquireRelease(Hub.unbounded[Take[Throwable, PartitionAssignment]])(_.shutdown)
                            .provide(ZLayer.succeed(consumerScope))
-        runloopConfig <- RunloopConfig(consumerSettings)
+        runloopConfig <- RunloopConfig(settings)
         runloop <- Runloop.make(
-                     consumerSettings,
+                     settings,
                      runloopConfig,
                      diagnostics,
                      consumerAccess,
