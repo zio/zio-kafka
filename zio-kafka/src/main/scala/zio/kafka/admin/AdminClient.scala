@@ -315,7 +315,7 @@ trait AdminClient {
    * Incrementally update the configuration for the specified resources. Only supported by brokers with version 2.3.0 or
    * higher. Use alterConfigs otherwise.
    *
-   * When `configs` contains an [[AlterConfigOpType.Append]] or an [[AlterConfigOpType.Subtract]], `visibilitySleep` is
+   * When `configs` contains an `AlterConfigOpType.Append` or an `AlterConfigOpType.Subtract`, `visibilitySleep` is
    * used. Otherwise, polling is used to wait until the operation completes.
    *
    * @param visibilitySleep
@@ -332,7 +332,7 @@ trait AdminClient {
    * Incrementally update the configuration for the specified resources async. Only supported by brokers with version
    * 2.3.0 or higher. Use alterConfigsAsync otherwise.
    *
-   * When `configs` contains an [[AlterConfigOpType.Append]] or an [[AlterConfigOpType.Subtract]], `visibilitySleep` is
+   * When `configs` contains an `AlterConfigOpType.Append` or an `AlterConfigOpType.Subtract`, `visibilitySleep` is
    * used. Otherwise, polling is used to wait until the operation completes. This method still returns immediately with
    * the outer task, sleeping/polling happens in the inner task.
    *
