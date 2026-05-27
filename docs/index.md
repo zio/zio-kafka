@@ -41,7 +41,7 @@ Kafka has a mature Java client for producing and consuming events, but it has a 
   - exposes metrics
 - Admin API:
   - exposes all the admin client methods with a ZIO based interface
-  - safer than the wrapped java client by limiting the number of concurrent operations
+  - safer than the wrapped java client by waiting for the operation to be done
 - Proper errors when broker expects SSL (no [OOM crashes](https://issues.apache.org/jira/browse/KAFKA-4090))
 - Test kit with embedded kafka broker
 - Well documented
