@@ -51,6 +51,7 @@ import org.apache.kafka.common.{
 }
 import zio._
 import zio.kafka.admin.acl._
+import zio.kafka.admin.resource.ResourcePatternFilter
 import zio.kafka.utils.SslHelper
 
 import java.util.Optional
@@ -63,7 +64,7 @@ import scala.util.{ Failure, Success, Try }
 /**
  * Kafka Admin client, can be used to create, list, and delete topics, get consumer groups, etc.
  *
- * This admin client is a light wrapper around the java Admin client. See the API of the
+ * This admin client is a wrapper around the java Admin client. See the API of the
  * [[org.apache.kafka.clients.admin.Admin java admin client]] for a full description of the provided operations.
  *
  * Typically constructed as:
@@ -71,6 +72,12 @@ import scala.util.{ Failure, Success, Try }
  *   val settings: AdminClientSettings = AdminClientSettings(bootstrapServers).withCredentials(...)
  *   val adminClient = AdminClient.make(settings)
  * }}}
+ *
+ * Unlike the java Admin client, this client waits until a write operation (e.g. creating or deleting a topic)
+ * completes. For most write operations this is done by polling the broker until we see the effect of the write
+ * operation. If after 5s the effect is still not seen, we assume the write operation succeeded but was undone by
+ * another write operation. For some operations where polling is difficult, we wait for 1s, assuming the operation
+ * completes within that time.
  */
 trait AdminClient {
 
@@ -112,10 +119,15 @@ trait AdminClient {
 
   /**
    * Delete records.
+   *
+   * @param visibilitySleep
+   *   time to wait after getting a confirmation that the command was accepted by the kafka broker. This should be
+   *   enough time for the operation to complete. Set to `Duration.Zero` if you don't care when the operation completes.
    */
   def deleteRecords(
     recordsToDelete: Map[TopicPartition, RecordsToDelete],
-    deleteRecordsOptions: Option[DeleteRecordsOptions] = None
+    deleteRecordsOptions: Option[DeleteRecordsOptions] = None,
+    visibilitySleep: Duration = 1.second
   ): Task[Unit]
 
   /**
@@ -257,13 +269,33 @@ trait AdminClient {
 
   /**
    * Remove the specified members from a consumer group.
+   *
+   * @param visibilitySleep
+   *   time to wait after getting a confirmation that the command was accepted by the kafka broker. This should be
+   *   enough time for the operation to complete. Set to `Duration.Zero` if you don't care when the operation completes.
    */
-  def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit]
+  def removeMembersFromConsumerGroup(
+    groupId: String,
+    membersToRemove: Set[String],
+    visibilitySleep: Duration = 1.second
+  ): Task[Unit]
 
   /**
    * Remove all members from a consumer group.
+   *
+   * Alias for `removeAllMembersFromConsumerGroup` with the default `visibilitySleep`.
    */
-  def removeMembersFromConsumerGroup(groupId: String): Task[Unit]
+  def removeMembersFromConsumerGroup(groupId: String): Task[Unit] =
+    removeAllMembersFromConsumerGroup(groupId)
+
+  /**
+   * Remove all members from a consumer group.
+   *
+   * @param visibilitySleep
+   *   time to wait after getting a confirmation that the command was accepted by the kafka broker. This should be
+   *   enough time for the operation to complete. Set to `Duration.Zero` if you don't care when the operation completes.
+   */
+  def removeAllMembersFromConsumerGroup(groupId: String, visibilitySleep: Duration = 1.second): Task[Unit]
 
   /**
    * Describe the log directories of the specified brokers
@@ -282,19 +314,37 @@ trait AdminClient {
   /**
    * Incrementally update the configuration for the specified resources. Only supported by brokers with version 2.3.0 or
    * higher. Use alterConfigs otherwise.
+   *
+   * When `configs` contains an `AlterConfigOpType.Append` or an `AlterConfigOpType.Subtract`, `visibilitySleep` is
+   * used. Otherwise, polling is used to wait until the operation completes.
+   *
+   * @param visibilitySleep
+   *   time to wait after getting a confirmation that the command was accepted by the kafka broker. This should be
+   *   enough time for the operation to complete. Set to `Duration.Zero` if you don't care when the operation completes.
    */
   def incrementalAlterConfigs(
     configs: Map[ConfigResource, Iterable[AlterConfigOp]],
-    options: AlterConfigsOptions
+    options: AlterConfigsOptions,
+    visibilitySleep: Duration = 1.second
   ): Task[Unit]
 
   /**
    * Incrementally update the configuration for the specified resources async. Only supported by brokers with version
    * 2.3.0 or higher. Use alterConfigsAsync otherwise.
+   *
+   * When `configs` contains an `AlterConfigOpType.Append` or an `AlterConfigOpType.Subtract`, `visibilitySleep` is
+   * used. Otherwise, polling is used to wait until the operation completes. This method still returns immediately with
+   * the outer task, sleeping/polling happens in the inner task.
+   *
+   * @param visibilitySleep
+   *   time to wait (in the inner task) after getting a confirmation that the command was accepted by the kafka broker.
+   *   This should be enough time for the operation to complete. Set to `Duration.Zero` if you don't care when the
+   *   operation completes.
    */
   def incrementalAlterConfigsAsync(
     configs: Map[ConfigResource, Iterable[AlterConfigOp]],
-    options: AlterConfigsOptions
+    options: AlterConfigsOptions,
+    visibilitySleep: Duration = 1.second
   ): Task[Map[ConfigResource, Task[Unit]]]
 
   /*
@@ -340,14 +390,9 @@ object AdminClient {
    *
    * @param adminClient
    *   wrapped java admin client
-   * @param writeOperationSemaphore
-   *   semaphore to limit the number of concurrent admin write operations. Keep the number of permits low to prevent the
-   *   operation to be lost, or not being able to see the effect of the operation. Experimentally, we have established
-   *   that `5` is a good value.
    */
   private final class LiveAdminClient(
-    private val adminClient: JAdmin,
-    private val writeOperationSemaphore: Semaphore
+    private val adminClient: JAdmin
   ) extends AdminClient {
 
     override def createTopics(
@@ -357,20 +402,16 @@ object AdminClient {
       val asJava     = newTopics.map(_.asJava).asJavaCollection
       val topicNames = asJava.asScala.map(_.name()).toIndexedSeq
 
-      withPermit {
-        fromKafkaFutureVoid {
-          ZIO.attempt {
-            options
-              .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts.asJava))
-              .all()
-          }
+      fromKafkaFutureVoid {
+        ZIO.attempt {
+          options
+            .fold(adminClient.createTopics(asJava))(opts => adminClient.createTopics(asJava, opts.asJava))
+            .all()
         }
       } <*
-        ZIO.sleep(50.millis) <*
-        listTopics().repeat(
-          Schedule.exponential(50.millis) &&
-            Schedule.upTo(5.seconds) &&
-            Schedule.recurUntil(topics => topicNames.forall(topics.contains))
+        awaitVisible(
+          listTopics(),
+          (topics: Map[String, TopicListing]) => topicNames.forall(topics.contains)
         )
     }
 
@@ -381,18 +422,21 @@ object AdminClient {
       groupIds: Iterable[String],
       options: Option[DeleteConsumerGroupOptions]
     ): Task[Unit] = {
-      val asJava = groupIds.asJavaCollection
-      withPermit {
-        fromKafkaFutureVoid {
-          ZIO.attempt {
-            options
-              .fold(adminClient.deleteConsumerGroups(asJava))(opts =>
-                adminClient.deleteConsumerGroups(asJava, opts.asJava)
-              )
-              .all()
-          }
+      val asJava      = groupIds.asJavaCollection
+      val groupIdsSet = groupIds.toSet
+      fromKafkaFutureVoid {
+        ZIO.attempt {
+          options
+            .fold(adminClient.deleteConsumerGroups(asJava)) { opts =>
+              adminClient.deleteConsumerGroups(asJava, opts.asJava)
+            }
+            .all()
         }
-      }
+      } <*
+        awaitVisible(
+          listConsumerGroups(),
+          (current: List[ConsumerGroupListing]) => current.forall(g => !groupIdsSet.contains(g.groupId))
+        )
     }
 
     override def deleteTopics(
@@ -401,20 +445,16 @@ object AdminClient {
     ): Task[Unit] = {
       val asJava     = topics.asJavaCollection
       val topicNames = asJava.asScala.toIndexedSeq
-      withPermit {
-        fromKafkaFutureVoid {
-          ZIO.attempt {
-            options
-              .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts.asJava))
-              .all()
-          }
+      fromKafkaFutureVoid {
+        ZIO.attempt {
+          options
+            .fold(adminClient.deleteTopics(asJava))(opts => adminClient.deleteTopics(asJava, opts.asJava))
+            .all()
         }
       } <*
-        ZIO.sleep(50.millis) <*
-        listTopics().repeat(
-          Schedule.exponential(50.millis) &&
-            Schedule.upTo(5.seconds) &&
-            Schedule.recurUntil(topics => topicNames.forall(name => !topics.contains(name)))
+        awaitVisible(
+          listTopics(),
+          (current: Map[String, TopicListing]) => topicNames.forall(name => !current.contains(name))
         )
     }
 
@@ -423,18 +463,17 @@ object AdminClient {
 
     override def deleteRecords(
       recordsToDelete: Map[TopicPartition, RecordsToDelete],
-      deleteRecordsOptions: Option[DeleteRecordsOptions] = None
+      deleteRecordsOptions: Option[DeleteRecordsOptions] = None,
+      visibilitySleep: Duration = 1.second
     ): Task[Unit] = {
       val records = recordsToDelete.map { case (k, v) => k.asJava -> v }.asJava
-      withPermit {
-        fromKafkaFutureVoid {
-          ZIO.attempt {
-            deleteRecordsOptions
-              .fold(adminClient.deleteRecords(records))(opts => adminClient.deleteRecords(records, opts.asJava))
-              .all()
-          }
+      fromKafkaFutureVoid {
+        ZIO.attempt {
+          deleteRecordsOptions
+            .fold(adminClient.deleteRecords(records))(opts => adminClient.deleteRecords(records, opts.asJava))
+            .all()
         }
-      }
+      } <* ZIO.sleep(visibilitySleep)
     }
 
     override def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): Task[Map[String, TopicListing]] =
@@ -550,16 +589,23 @@ object AdminClient {
       newPartitions: Map[String, NewPartitions],
       options: Option[CreatePartitionsOptions] = None
     ): Task[Unit] = {
-      val asJava = newPartitions.map { case (k, v) => k -> v.asJava }.asJava
-      withPermit {
-        fromKafkaFutureVoid {
-          ZIO.attempt {
-            options
-              .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts.asJava))
-              .all()
-          }
+      val asJava        = newPartitions.map { case (k, v) => k -> v.asJava }.asJava
+      val topicNames    = Chunk.fromIterable(newPartitions.keys)
+      val expectedSizes = newPartitions.map { case (name, np) => name -> np.totalCount }
+      fromKafkaFutureVoid {
+        ZIO.attempt {
+          options
+            .fold(adminClient.createPartitions(asJava))(opts => adminClient.createPartitions(asJava, opts.asJava))
+            .all()
         }
-      }
+      } <*
+        awaitVisible(
+          describeTopics(topicNames),
+          (described: Map[String, TopicDescription]) =>
+            expectedSizes.forall { case (name, expected) =>
+              described.get(name).exists(_.partitions.size >= expected)
+            }
+        )
     }
 
     override def listOffsets(
@@ -662,18 +708,25 @@ object AdminClient {
       offsets: Map[TopicPartition, OffsetAndMetadata],
       options: Option[AlterConsumerGroupOffsetsOptions] = None
     ): Task[Unit] = {
-      val asJava = offsets.bimap(_.asJava, _.asJava).asJava
-      withPermit {
-        fromKafkaFutureVoid {
-          ZIO.attempt {
-            options
-              .fold(adminClient.alterConsumerGroupOffsets(groupId, asJava))(opts =>
-                adminClient.alterConsumerGroupOffsets(groupId, asJava, opts.asJava)
-              )
-              .all()
-          }
+      val asJava     = offsets.bimap(_.asJava, _.asJava).asJava
+      val groupSpecs = Map(groupId -> ListConsumerGroupOffsetsSpec(Chunk.fromIterable(offsets.keySet)))
+      val expected   = offsets.view.mapValues(_.offset).toMap
+      fromKafkaFutureVoid {
+        ZIO.attempt {
+          options
+            .fold(adminClient.alterConsumerGroupOffsets(groupId, asJava)) { opts =>
+              adminClient.alterConsumerGroupOffsets(groupId, asJava, opts.asJava)
+            }
+            .all()
         }
-      }
+      } <*
+        awaitVisible(
+          listConsumerGroupOffsets(groupSpecs),
+          (current: Map[String, Map[TopicPartition, OffsetAndMetadata]]) =>
+            expected.forall { case (tp, expectedOffset) =>
+              current.get(groupId).flatMap(_.get(tp)).exists(_.offset == expectedOffset)
+            }
+        )
     }
 
     override def metrics: Task[Map[MetricName, Metric]] =
@@ -728,28 +781,31 @@ object AdminClient {
         }
       ).map(_.asScala.map { case (k, v) => k -> ConsumerGroupDescription.fromJava(v) }.toMap)
 
-    override def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit] = {
+    override def removeMembersFromConsumerGroup(
+      groupId: String,
+      membersToRemove: Set[String],
+      visibilitySleep: Duration = 1.second
+    ): Task[Unit] = {
       val options = new RemoveMembersFromConsumerGroupOptions(
         membersToRemove.map(new MemberToRemove(_)).asJavaCollection
       )
-      withPermit {
-        fromKafkaFuture {
-          ZIO.attempt {
-            adminClient.removeMembersFromConsumerGroup(groupId, options).all()
-          }
+      fromKafkaFutureVoid {
+        ZIO.attempt {
+          adminClient.removeMembersFromConsumerGroup(groupId, options).all()
         }
-      }.unit
+      } <* ZIO.sleep(visibilitySleep)
     }
 
-    override def removeMembersFromConsumerGroup(groupId: String): Task[Unit] = {
+    override def removeAllMembersFromConsumerGroup(
+      groupId: String,
+      visibilitySleep: Duration = 1.second
+    ): Task[Unit] = {
       val options = new RemoveMembersFromConsumerGroupOptions()
-      withPermit {
-        fromKafkaFuture {
-          ZIO.attempt {
-            adminClient.removeMembersFromConsumerGroup(groupId, options).all()
-          }
+      fromKafkaFutureVoid {
+        ZIO.attempt {
+          adminClient.removeMembersFromConsumerGroup(groupId, options).all()
         }
-      }.unit
+      } <* ZIO.sleep(visibilitySleep)
     }
 
     override def describeLogDirs(
@@ -781,28 +837,10 @@ object AdminClient {
 
     override def incrementalAlterConfigs(
       configs: Map[ConfigResource, Iterable[AlterConfigOp]],
-      options: AlterConfigsOptions
+      options: AlterConfigsOptions,
+      visibilitySleep: Duration = 1.second
     ): Task[Unit] =
-      withPermit {
-        fromKafkaFutureVoid {
-          ZIO.attempt {
-            adminClient
-              .incrementalAlterConfigs(
-                configs.map { case (configResource, alterConfigOps) =>
-                  (configResource.asJava, alterConfigOps.map(_.asJava).asJavaCollection)
-                }.asJava,
-                options.asJava
-              )
-              .all()
-          }
-        }
-      }
-
-    override def incrementalAlterConfigsAsync(
-      configs: Map[ConfigResource, Iterable[AlterConfigOp]],
-      options: AlterConfigsOptions
-    ): Task[Map[ConfigResource, Task[Unit]]] =
-      withPermit {
+      fromKafkaFutureVoid {
         ZIO.attempt {
           adminClient
             .incrementalAlterConfigs(
@@ -811,11 +849,35 @@ object AdminClient {
               }.asJava,
               options.asJava
             )
-            .values()
+            .all()
         }
+      } <* awaitConfigsVisible(configs, visibilitySleep)
+
+    override def incrementalAlterConfigsAsync(
+      configs: Map[ConfigResource, Iterable[AlterConfigOp]],
+      options: AlterConfigsOptions,
+      visibilitySleep: Duration = 1.second
+    ): Task[Map[ConfigResource, Task[Unit]]] =
+      ZIO.attempt {
+        adminClient
+          .incrementalAlterConfigs(
+            configs.map { case (configResource, alterConfigOps) =>
+              (configResource.asJava, alterConfigOps.map(_.asJava).asJavaCollection)
+            }.asJava,
+            options.asJava
+          )
+          .values()
       }.map {
-        _.asScala.map { case (configResource, kf) =>
-          (ConfigResource.fromJava(configResource), ZIO.fromCompletionStage(kf.toCompletionStage).unit)
+        _.asScala.map { case (jConfigResource, kf) =>
+          val configResource = ConfigResource.fromJava(jConfigResource)
+          val ops            = configs.getOrElse(configResource, Iterable.empty)
+          (
+            configResource,
+            ZIO.fromCompletionStage(kf.toCompletionStage).unit <* awaitConfigsVisible(
+              Map(configResource -> ops),
+              visibilitySleep
+            )
+          )
         }.toMap
       }
 
@@ -832,62 +894,67 @@ object AdminClient {
       }.map(_.asScala.view.map(AclBinding(_)).toSet)
 
     override def createAcls(acls: Set[AclBinding], options: Option[CreateAclOptions]): Task[Unit] =
-      withPermit {
-        fromKafkaFutureVoid {
-          ZIO.attempt {
-            options
-              .fold(adminClient.createAcls(acls.map(_.asJava).asJava))(opt =>
-                adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava)
-              )
-              .all()
-          }
+      fromKafkaFutureVoid {
+        ZIO.attempt {
+          options
+            .fold(adminClient.createAcls(acls.map(_.asJava).asJava)) { opt =>
+              adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava)
+            }
+            .all()
         }
-      }
+      } <*
+        awaitVisible(
+          describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any), None),
+          (current: Set[AclBinding]) => acls.forall(current.contains)
+        )
 
     override def createAclsAsync(
       acls: Set[AclBinding],
       options: Option[CreateAclOptions]
     ): Task[Map[AclBinding, Task[Unit]]] =
-      withPermit {
-        ZIO.attempt {
-          options
-            .fold(adminClient.createAcls(acls.map(_.asJava).asJava))(opt =>
-              adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava)
-            )
-            .values()
-        }
+      ZIO.attempt {
+        options
+          .fold(adminClient.createAcls(acls.map(_.asJava).asJava)) { opt =>
+            adminClient.createAcls(acls.map(_.asJava).asJava, opt.asJava)
+          }
+          .values()
       }.map {
         _.asScala.view.map { case (k, v) =>
-          (AclBinding(k), ZIO.fromCompletionStage(v.toCompletionStage).unit)
+          val binding = AclBinding(k)
+          val await =
+            awaitVisible(
+              describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any), None),
+              (current: Set[AclBinding]) => current.contains(binding)
+            )
+          (binding, ZIO.fromCompletionStage(v.toCompletionStage).unit <* await)
         }.toMap
       }
 
     override def deleteAcls(filters: Set[AclBindingFilter], options: Option[DeleteAclsOptions]): Task[Set[AclBinding]] =
-      withPermit {
-        fromKafkaFuture {
-          ZIO.attempt {
-            options
-              .fold(adminClient.deleteAcls(filters.map(_.asJava).asJava))(opt =>
-                adminClient.deleteAcls(filters.map(_.asJava).asJava, opt.asJava)
-              )
-              .all()
-          }
+      fromKafkaFuture {
+        ZIO.attempt {
+          options
+            .fold(adminClient.deleteAcls(filters.map(_.asJava).asJava)) { opt =>
+              adminClient.deleteAcls(filters.map(_.asJava).asJava, opt.asJava)
+            }
+            .all()
         }
       }
-        .map(_.asScala.view.map(AclBinding(_)).toSet)
+        .map(_.asScala.view.map(AclBinding(_)).toSet) <*
+        ZIO.foreachDiscard(filters) { filter =>
+          awaitVisible(describeAcls(filter, None), (current: Set[AclBinding]) => current.isEmpty)
+        }
 
     override def deleteAclsAsync(
       filters: Set[AclBindingFilter],
       options: Option[DeleteAclsOptions]
     ): Task[Map[AclBindingFilter, Task[Map[AclBinding, Option[Throwable]]]]] =
-      withPermit {
-        ZIO.attempt {
-          options
-            .fold(adminClient.deleteAcls(filters.map(_.asJava).asJava))(opt =>
-              adminClient.deleteAcls(filters.map(_.asJava).asJava, opt.asJava)
-            )
-            .values()
-        }
+      ZIO.attempt {
+        options
+          .fold(adminClient.deleteAcls(filters.map(_.asJava).asJava)) { opt =>
+            adminClient.deleteAcls(filters.map(_.asJava).asJava, opt.asJava)
+          }
+          .values()
       }.map {
         _.asScala.view.map { case (k, v) =>
           (
@@ -899,13 +966,63 @@ object AdminClient {
                   // FilterResult.binding() is claimed to be nullable but in fact it is not: see DeleteAclsResponse.aclBinding
                   AclBinding(filterRes.binding()) -> Option(filterRes.exception())
                 }.toMap
-              )
+              ) <* awaitVisible(describeAcls(AclBindingFilter(k), None), (current: Set[AclBinding]) => current.isEmpty)
           )
         }.toMap
       }
 
-    private def withPermit[R, E, A](f: => ZIO[R, E, A]): ZIO[R, E, A] =
-      writeOperationSemaphore.withPermit(f)
+    /**
+     * Polls `read` (exponential backoff starting at 50ms) until `ready` reports the change is visible, or 5 seconds
+     * elapses, with a silent success on timeout.
+     */
+    // noinspection SimplifySleepInspection
+    private def awaitVisible[A](read: => Task[A], ready: A => Boolean): Task[Unit] =
+      ZIO.sleep(50.millis) *>
+        read
+          .repeat(
+            Schedule.exponential(50.millis) &&
+              Schedule.upTo(5.seconds) &&
+              Schedule.recurUntil(ready)
+          )
+          .unit
+
+    /**
+     * Visibility check for `incrementalAlterConfigs`. For requests containing only Set and Delete ops it polls
+     * `describeConfigs` until each op's effect is observable. Requests containing Append or Subtract fall back to
+     * `visibilitySleep` because verifying them would require comparing against pre-op state.
+     */
+    private def awaitConfigsVisible(
+      configs: Map[ConfigResource, Iterable[AlterConfigOp]],
+      visibilitySleep: Duration
+    ): Task[Unit] = {
+      val hasAppendOrSubtract = configs.valuesIterator.flatten.exists { op =>
+        op.opType == AlterConfigOpType.Append || op.opType == AlterConfigOpType.Subtract
+      }
+      if (hasAppendOrSubtract) ZIO.sleep(visibilitySleep)
+      else {
+        awaitVisible(
+          describeConfigs(configs.keys.toList),
+          (current: Map[ConfigResource, KafkaConfig]) =>
+            configs.forall { case (resource, ops) =>
+              current.get(resource).exists(config => ops.forall(op => isConfigOpVisible(config, op)))
+            }
+        )
+      }
+    }
+
+    private def isConfigOpVisible(config: KafkaConfig, op: AlterConfigOp): Boolean = {
+      val key = op.configEntry.name()
+      op.opType match {
+        case AlterConfigOpType.Set =>
+          config.entries.get(key).exists { entry =>
+            entry.value() == op.configEntry.value() &&
+            entry.source() != ConfigEntry.ConfigSource.DEFAULT_CONFIG
+          }
+        case AlterConfigOpType.Delete =>
+          config.entries.get(key).forall(_.source() == ConfigEntry.ConfigSource.DEFAULT_CONFIG)
+        case _ => true
+      }
+    }
 
   }
 
@@ -1208,9 +1325,12 @@ object AdminClient {
       override def asJava = JAlterConfigOp.OpType.APPEND
     }
 
-    case object Substract extends AlterConfigOpType {
+    case object Subtract extends AlterConfigOpType {
       override def asJava = JAlterConfigOp.OpType.SUBTRACT
     }
+
+    @deprecated("Use AlterConfigOpType.Subtract", since = "3.6.0")
+    val Substract: AlterConfigOpType.Subtract.type = AlterConfigOpType.Subtract
   }
 
   final case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
@@ -1564,67 +1684,21 @@ object AdminClient {
    *
    * @param settings
    *   the admin client settings
-   * @param writeOperationSemaphore
-   *   a semaphore that is used to limit the number of concurrent write operations (such as create topic, delete topic,
-   *   and delete offsets) from this client, or `None` to construct that semaphore with
-   *   `settings.maxConcurrentWriteOperations`. Keep the number of permits low to prevent the operation to be lost, or
-   *   not being able to see the effect of the operation. Experimentally, we have established that `5` is a good value.
    */
-  def make(
-    settings: AdminClientSettings,
-    writeOperationSemaphore: Option[Semaphore] = None
-  ): ZIO[Scope, Throwable, AdminClient] =
-    for {
-      ws <- writeOperationSemaphore match {
-              case Some(s) => ZIO.succeed(s)
-              case None    => Semaphore.make(settings.maxConcurrentWriteOperations.toLong)
-            }
-      adminClient <- fromScopedJavaClient(javaClientFromSettings(settings), ws)
-    } yield adminClient
+  def make(settings: AdminClientSettings): ZIO[Scope, Throwable, AdminClient] =
+    fromScopedJavaClient(javaClientFromSettings(settings))
 
   /**
    * Make a Kafka [[AdminClient]] by wrapping a provided Java admin client.
    *
    * @param javaClient
    *   the java admin client to wrap
-   * @param writeOperationSemaphore
-   *   a semaphore that is used to limit the number of concurrent write operations (such as create topic, delete topic,
-   *   and delete offsets), from this client. Keep the number of permits low to prevent the operation to be lost, or not
-   *   being able to see the effect of the operation. Experimentally, we have established that `5` is a good value.
-   */
-  def fromJavaClient(javaClient: JAdmin, writeOperationSemaphore: Semaphore): URIO[Any, AdminClient] =
-    ZIO.succeed(new LiveAdminClient(javaClient, writeOperationSemaphore))
-
-  /**
-   * Make a Kafka [[AdminClient]] by wrapping a provided Java admin client. The client allows at most 5 concurrent write
-   * operations (such as create topic, delete topic, and delete offsets).
    */
   def fromJavaClient(javaClient: JAdmin): URIO[Any, AdminClient] =
-    for {
-      writeOperationSemaphore <- Semaphore.make(5)
-      adminClient             <- fromJavaClient(javaClient, writeOperationSemaphore)
-    } yield adminClient
+    ZIO.succeed(new LiveAdminClient(javaClient))
 
   /**
    * Make a Kafka [[AdminClient]] by wrapping a provided Java admin client. The client closes with the provided scope.
-   *
-   * @param writeOperationSemaphore
-   *   a semaphore that is used to limit the number of concurrent write operations (such as create topic, delete topic,
-   *   and delete offsets), from this client. Keep the number of permits low to prevent the operation to be lost, or not
-   *   being able to see the effect of the operation. Experimentally, we have established that `5` is a good value.
-   */
-  def fromScopedJavaClient[R, E](
-    scopedJavaClient: ZIO[R & Scope, E, JAdmin],
-    writeOperationSemaphore: Semaphore
-  ): ZIO[R & Scope, E, AdminClient] =
-    for {
-      javaClient  <- scopedJavaClient
-      adminClient <- fromJavaClient(javaClient, writeOperationSemaphore)
-    } yield adminClient
-
-  /**
-   * Make a Kafka [[AdminClient]] by wrapping a provided Java admin client. The client closes with the provided scope
-   * and allows at most 5 concurrent write operations (such as create topic, delete topic, and delete offsets).
    */
   def fromScopedJavaClient[R, E](scopedJavaClient: ZIO[R & Scope, E, JAdmin]): ZIO[R & Scope, E, AdminClient] =
     for {

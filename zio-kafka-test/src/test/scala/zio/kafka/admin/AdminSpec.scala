@@ -32,7 +32,6 @@ import zio.test.TestAspect._
 import zio.test._
 
 import java.util.UUID
-import java.util.concurrent.TimeoutException
 
 object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
@@ -555,18 +554,12 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
             )
           _ <- client.createAcls(bindings)
           createdAcls <-
-            client
-              .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
-              .repeatWhile(_.isEmpty) // because the createAcls is executed async by the broker
-              .timeoutFail(new TimeoutException())(100.millis)
+            client.describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
           deletedAcls <-
             client
               .deleteAcls(Set(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any)))
           remainingAcls <-
-            client
-              .describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
-              .repeatWhile(_.nonEmpty) // because the deleteAcls is executed async by the broker
-              .timeoutFail(new TimeoutException())(100.millis)
+            client.describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
 
         } yield assert(createdAcls)(equalTo(bindings)) &&
           assert(deletedAcls)(equalTo(bindings)) &&
