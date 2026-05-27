@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1779882763078,
+  "lastUpdate": 1779884186532,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -6682,6 +6682,102 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 570.06309018,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1d20abb4595ff20010f77eceb59362bb1edde314",
+          "message": "Make admin write ops self-verifying; drop the write semaphore (#1706)\n\n## Context\n\nFor a long time this project has been plagued by a concurrency bug in\nthe AdminClient that only manifests itself while running the unit tests\non a compute constraint machine like the GitHub runners.\n\n_Deeper investigation shows that the 'bug' is actually in the kafka\nbroker._\n\nThe KafkaFuture's we get from the kafka client complete when the\ncontroller commits the change to the metadata log, not when the broker's\nin-memory metadata cache (which we read from with an admin read\noperation) has applied that commit. On slower machines the broker hasn't\npulled the metadata update by the time the next read arrives.\n\n**This is not acceptable,** we need to know when a write operation\ncompleted. For example, you can't consume from or publish to a topic\nwhen it was not actually created yet.\n\nIn the past we tried to work around the problem with several approaches:\n- `kafka18818Workaround` a 550ms sleep after each write operation\n- explicit polling for some operations (`createTopics`, `deleteTopics`\nin #1611)\n- limit the number of concurrent writes operations (#1667, #1696 and\n#1697)\n\nOf these only explicit polling works well.\n\n## The workaround: explicit polling\n\nWhere possible, all write operations are followed by polling for the\nresults. The poll is done with exponential backup starting at 50ms.\nAfter 5s we silently give up. In effect, we assume that the write\noperation succeeded, and that there was a subsequent write operation\nthat undid the first.\n\nThe effect of some write operations are expensive to poll. These are\n`deleteRecords`, `removeMembersFromConsumerGroup` and\n`incrementalAlterConfigs` with an Append-or-Subtract op. For these three\ncases we fall back to a `visibilitySleep` that defaults to 1 second.\n\nSince overloading rules do not allow adding a default parameter to the\n`removeMembersFromConsumerGroup` variant that deletes all members,\n`removeAllMembersFromConsumerGroup` was introduced.\n\nAs a bonus, the tests now run in half the time on a fast machine (3.5 to\n1.5 minutes on my laptop).\n\n## Clean up\n\nNow that we poll for the effect, we no longer need the\n`writeOperationSemaphore` feature of the AdminClient that was introduced\nin zio-kafka 3.4.0.\n\nSome tests did result polling, this is no longer needed.\n\n## Source & binary compatibility\n\nThis change is NOT source-compatible and NOT binary-compatible with the\nprevious release. Callers passing a custom `Semaphore` to\n`AdminClient.make` / `AdminClient.fromJavaClient` /\n`AdminClient.fromScopedJavaClient`, or using\n`AdminClientSettings.withMaxConcurrentWriteOperations`, will fail to\ncompile.\n\nWe assume however, that not many users adopted this feature yet.\n\n## References\n\n- #1611 — Await completion of some admin operations (first polling for\ncreateTopics/deleteTopics, replacing the global sleep).\n- #1667 — Limit number of concurrent admin write operations (added the\nsemaphore; removed kafka18818Workaround under the assumption KAFKA-18818\nwas fixed).\n- #1696 — Reduce concurrent admin operations (test-side semaphore 5 →\n1).\n- #1697 — Reduce concurrent admin operations (settings default 5 → 1).\n- KAFKA-18818 — upstream Jira on admin op eventual consistency.\n\n## Also in this PR\n\n`AlterConfigOpType.Substract` has a typo. It is now an alias to the\ncorrectly spelled `AlterConfigOpType.Subtract`.",
+          "timestamp": "2026-05-27T13:55:12+02:00",
+          "tree_id": "7f1fcc99a2d796afaef64061aae485f55771da26",
+          "url": "https://github.com/zio/zio-kafka/commit/1d20abb4595ff20010f77eceb59362bb1edde314"
+        },
+        "date": 1779884102078,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 589.9375518,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 588.4634328,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 77.50815940981684,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 246.462889862,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeqAsync",
+            "value": 18.394271614812027,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeqAsync",
+            "value": 6.8589558429236375,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordPar",
+            "value": 61.793703984260645,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordSeq",
+            "value": 75.81935916340758,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 540.4647193600001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 534.59302082,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 561.2992446200001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 570.3743016000001,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
