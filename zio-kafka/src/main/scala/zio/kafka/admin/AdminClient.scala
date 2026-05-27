@@ -119,10 +119,15 @@ trait AdminClient {
 
   /**
    * Delete records.
+   *
+   * @param visibilitySleep
+   *   time to wait after getting a confirmation that the command was accepted by the kafka broker. This should be
+   *   enough time for the operation to complete. Set to `Duration.Zero` if you don't care when the operation completes.
    */
   def deleteRecords(
     recordsToDelete: Map[TopicPartition, RecordsToDelete],
-    deleteRecordsOptions: Option[DeleteRecordsOptions] = None
+    deleteRecordsOptions: Option[DeleteRecordsOptions] = None,
+    visibilitySleep: Duration = 1.second
   ): Task[Unit]
 
   /**
@@ -264,13 +269,33 @@ trait AdminClient {
 
   /**
    * Remove the specified members from a consumer group.
+   *
+   * @param visibilitySleep
+   *   time to wait after getting a confirmation that the command was accepted by the kafka broker. This should be
+   *   enough time for the operation to complete. Set to `Duration.Zero` if you don't care when the operation completes.
    */
-  def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit]
+  def removeMembersFromConsumerGroup(
+    groupId: String,
+    membersToRemove: Set[String],
+    visibilitySleep: Duration = 1.second
+  ): Task[Unit]
 
   /**
    * Remove all members from a consumer group.
+   *
+   * Alias for `removeAllMembersFromConsumerGroup` with the default `visibilitySleep`.
    */
-  def removeMembersFromConsumerGroup(groupId: String): Task[Unit]
+  def removeMembersFromConsumerGroup(groupId: String): Task[Unit] =
+    removeAllMembersFromConsumerGroup(groupId)
+
+  /**
+   * Remove all members from a consumer group.
+   *
+   * @param visibilitySleep
+   *   time to wait after getting a confirmation that the command was accepted by the kafka broker. This should be
+   *   enough time for the operation to complete. Set to `Duration.Zero` if you don't care when the operation completes.
+   */
+  def removeAllMembersFromConsumerGroup(groupId: String, visibilitySleep: Duration = 1.second): Task[Unit]
 
   /**
    * Describe the log directories of the specified brokers
@@ -289,19 +314,37 @@ trait AdminClient {
   /**
    * Incrementally update the configuration for the specified resources. Only supported by brokers with version 2.3.0 or
    * higher. Use alterConfigs otherwise.
+   *
+   * When `configs` contains an [[AlterConfigOpType.Append]] or an [[AlterConfigOpType.Subtract]], `visibilitySleep` is
+   * used. Otherwise, polling is used to wait until the operation completes.
+   *
+   * @param visibilitySleep
+   *   time to wait after getting a confirmation that the command was accepted by the kafka broker. This should be
+   *   enough time for the operation to complete. Set to `Duration.Zero` if you don't care when the operation completes.
    */
   def incrementalAlterConfigs(
     configs: Map[ConfigResource, Iterable[AlterConfigOp]],
-    options: AlterConfigsOptions
+    options: AlterConfigsOptions,
+    visibilitySleep: Duration = 1.second
   ): Task[Unit]
 
   /**
    * Incrementally update the configuration for the specified resources async. Only supported by brokers with version
    * 2.3.0 or higher. Use alterConfigsAsync otherwise.
+   *
+   * When `configs` contains an [[AlterConfigOpType.Append]] or an [[AlterConfigOpType.Subtract]], `visibilitySleep` is
+   * used. Otherwise, polling is used to wait until the operation completes. This method still returns immediately with
+   * the outer task, sleeping/polling happens in the inner task.
+   *
+   * @param visibilitySleep
+   *   time to wait (in the inner task) after getting a confirmation that the command was accepted by the kafka broker.
+   *   This should be enough time for the operation to complete. Set to `Duration.Zero` if you don't care when the
+   *   operation completes.
    */
   def incrementalAlterConfigsAsync(
     configs: Map[ConfigResource, Iterable[AlterConfigOp]],
-    options: AlterConfigsOptions
+    options: AlterConfigsOptions,
+    visibilitySleep: Duration = 1.second
   ): Task[Map[ConfigResource, Task[Unit]]]
 
   /*
@@ -351,11 +394,6 @@ object AdminClient {
   private final class LiveAdminClient(
     private val adminClient: JAdmin
   ) extends AdminClient {
-
-    /**
-     * Fixed sleep used for admin operations whose effect cannot be cheaply verified via a read-back.
-     */
-    private val visibilityFallbackSleep: Duration = 1.second
 
     override def createTopics(
       newTopics: Iterable[NewTopic],
@@ -425,7 +463,8 @@ object AdminClient {
 
     override def deleteRecords(
       recordsToDelete: Map[TopicPartition, RecordsToDelete],
-      deleteRecordsOptions: Option[DeleteRecordsOptions] = None
+      deleteRecordsOptions: Option[DeleteRecordsOptions] = None,
+      visibilitySleep: Duration = 1.second
     ): Task[Unit] = {
       val records = recordsToDelete.map { case (k, v) => k.asJava -> v }.asJava
       fromKafkaFutureVoid {
@@ -434,7 +473,7 @@ object AdminClient {
             .fold(adminClient.deleteRecords(records))(opts => adminClient.deleteRecords(records, opts.asJava))
             .all()
         }
-      } <* ZIO.sleep(visibilityFallbackSleep)
+      } <* ZIO.sleep(visibilitySleep)
     }
 
     override def listTopics(listTopicsOptions: Option[ListTopicsOptions] = None): Task[Map[String, TopicListing]] =
@@ -742,7 +781,11 @@ object AdminClient {
         }
       ).map(_.asScala.map { case (k, v) => k -> ConsumerGroupDescription.fromJava(v) }.toMap)
 
-    override def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String]): Task[Unit] = {
+    override def removeMembersFromConsumerGroup(
+      groupId: String,
+      membersToRemove: Set[String],
+      visibilitySleep: Duration = 1.second
+    ): Task[Unit] = {
       val options = new RemoveMembersFromConsumerGroupOptions(
         membersToRemove.map(new MemberToRemove(_)).asJavaCollection
       )
@@ -750,16 +793,19 @@ object AdminClient {
         ZIO.attempt {
           adminClient.removeMembersFromConsumerGroup(groupId, options).all()
         }
-      } <* ZIO.sleep(visibilityFallbackSleep)
+      } <* ZIO.sleep(visibilitySleep)
     }
 
-    override def removeMembersFromConsumerGroup(groupId: String): Task[Unit] = {
+    override def removeAllMembersFromConsumerGroup(
+      groupId: String,
+      visibilitySleep: Duration = 1.second
+    ): Task[Unit] = {
       val options = new RemoveMembersFromConsumerGroupOptions()
       fromKafkaFutureVoid {
         ZIO.attempt {
           adminClient.removeMembersFromConsumerGroup(groupId, options).all()
         }
-      } <* ZIO.sleep(visibilityFallbackSleep)
+      } <* ZIO.sleep(visibilitySleep)
     }
 
     override def describeLogDirs(
@@ -791,7 +837,8 @@ object AdminClient {
 
     override def incrementalAlterConfigs(
       configs: Map[ConfigResource, Iterable[AlterConfigOp]],
-      options: AlterConfigsOptions
+      options: AlterConfigsOptions,
+      visibilitySleep: Duration = 1.second
     ): Task[Unit] =
       fromKafkaFutureVoid {
         ZIO.attempt {
@@ -804,11 +851,12 @@ object AdminClient {
             )
             .all()
         }
-      } <* awaitConfigsVisible(configs)
+      } <* awaitConfigsVisible(configs, visibilitySleep)
 
     override def incrementalAlterConfigsAsync(
       configs: Map[ConfigResource, Iterable[AlterConfigOp]],
-      options: AlterConfigsOptions
+      options: AlterConfigsOptions,
+      visibilitySleep: Duration = 1.second
     ): Task[Map[ConfigResource, Task[Unit]]] =
       ZIO.attempt {
         adminClient
@@ -825,7 +873,10 @@ object AdminClient {
           val ops            = configs.getOrElse(configResource, Iterable.empty)
           (
             configResource,
-            ZIO.fromCompletionStage(kf.toCompletionStage).unit <* awaitConfigsVisible(Map(configResource -> ops))
+            ZIO.fromCompletionStage(kf.toCompletionStage).unit <* awaitConfigsVisible(
+              Map(configResource -> ops),
+              visibilitySleep
+            )
           )
         }.toMap
       }
@@ -938,13 +989,16 @@ object AdminClient {
     /**
      * Visibility check for `incrementalAlterConfigs`. For requests containing only Set and Delete ops it polls
      * `describeConfigs` until each op's effect is observable. Requests containing Append or Subtract fall back to
-     * `visibilityFallbackSleep` because verifying them would require comparing against pre-op state.
+     * `visibilitySleep` because verifying them would require comparing against pre-op state.
      */
-    private def awaitConfigsVisible(configs: Map[ConfigResource, Iterable[AlterConfigOp]]): Task[Unit] = {
+    private def awaitConfigsVisible(
+      configs: Map[ConfigResource, Iterable[AlterConfigOp]],
+      visibilitySleep: Duration
+    ): Task[Unit] = {
       val hasAppendOrSubtract = configs.valuesIterator.flatten.exists { op =>
-        op.opType == AlterConfigOpType.Append || op.opType == AlterConfigOpType.Substract
+        op.opType == AlterConfigOpType.Append || op.opType == AlterConfigOpType.Subtract
       }
-      if (hasAppendOrSubtract) ZIO.sleep(visibilityFallbackSleep)
+      if (hasAppendOrSubtract) ZIO.sleep(visibilitySleep)
       else {
         awaitVisible(
           describeConfigs(configs.keys.toList),
@@ -1271,9 +1325,12 @@ object AdminClient {
       override def asJava = JAlterConfigOp.OpType.APPEND
     }
 
-    case object Substract extends AlterConfigOpType {
+    case object Subtract extends AlterConfigOpType {
       override def asJava = JAlterConfigOp.OpType.SUBTRACT
     }
+
+    @deprecated("Use AlterConfigOpType.Subtract", since = "3.6.0")
+    val Substract: AlterConfigOpType.Subtract.type = AlterConfigOpType.Subtract
   }
 
   final case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
