@@ -9,9 +9,6 @@ import zio.stream.ZStream
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent
 
-import java.util.concurrent.TimeoutException
-import scala.util.control.NoStackTrace
-
 abstract class PartitionStream {
   def tp: TopicPartition
   def queueSize: UIO[Int]
@@ -91,12 +88,11 @@ final class PartitionStreamControl private (
   private[internal] def maxStreamPullIntervalExceeded(now: NanoTime): UIO[Boolean] =
     queueInfoRef.get.map(_.deadlineExceeded(now))
 
-  /** To be invoked when the stream is no longer processing. */
-  private[internal] def halt: UIO[Unit] = {
-    val timeOutMessage = s"No records were pulled for more than $maxStreamPullInterval for topic partition $tp."
-    val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
-    interruptionPromise.fail(consumeTimeout).unit
-  }
+  /**
+   * To be invoked when the stream is no longer processing. It fails the stream with the given cause.
+   */
+  private[internal] def halt(cause: Cause[Throwable]): UIO[Unit] =
+    interruptionPromise.failCause(cause).unit
 
   /** To be invoked when the partition was revoked, lost or otherwise needs to be ended. */
   private[internal] def end: ZIO[Any, Nothing, Unit] =

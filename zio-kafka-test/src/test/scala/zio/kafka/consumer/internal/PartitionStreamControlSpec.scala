@@ -8,7 +8,7 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.kafka.diagnostics.Diagnostics
 import zio.test._
 
-import java.util.concurrent.TimeoutException
+import scala.util.control.NoStackTrace
 
 object PartitionStreamControlSpec extends ZIOSpecDefault {
   override def spec: Spec[Any, Throwable] = suite("PartitionStreamControl")(
@@ -67,12 +67,24 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
           exit <- control.offerRecords(records).exit
         } yield assertTrue(exit.isFailure)
       },
-      test("halt completes the stream with a TimeoutException") {
+      test("halt fails the stream with the given cause") {
+        val boom = new RuntimeException("boom") with NoStackTrace
         for {
           control <- createTestControl
-          _       <- control.halt
+          _       <- control.halt(Cause.fail(boom))
           result  <- control.stream.runCollect.exit
-        } yield assertTrue(result.isFailure, result.causeOrNull.squash.isInstanceOf[TimeoutException])
+        } yield assertTrue(result.isFailure, result.causeOrNull.squash == boom)
+      },
+      test("halt unblocks a stream waiting on an empty dataQueue") {
+        val boom = new RuntimeException("boom") with NoStackTrace
+        for {
+          control <- createTestControl
+          fiber   <- control.stream.runCollect.fork
+          // Give the stream fiber time to park on dataQueue.take
+          _      <- ZIO.sleep(500.millis)
+          _      <- control.halt(Cause.fail(boom))
+          result <- fiber.join.exit
+        } yield assertTrue(result.isFailure, result.causeOrNull.squash == boom)
       },
       test("finalizing the stream will set isCompleted") {
         for {

@@ -14,7 +14,9 @@ import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.kafka.consumer.metrics.{ ConsumerMetricsObserver, ZioMetricsConsumerMetricsObserver }
 import zio.stream._
 
+import java.util.concurrent.TimeoutException
 import scala.jdk.CollectionConverters._
+import scala.util.control.NoStackTrace
 
 //noinspection SimplifyWhenInspection,SimplifyUnlessInspection
 private[consumer] final class Runloop private (
@@ -381,13 +383,20 @@ private[consumer] final class Runloop private (
           "interval when processing a batch of records needs more time."
       )
 
+    def haltTimeout(stream: PartitionStreamControl): UIO[Unit] = {
+      val timeOutMessage =
+        s"No records were pulled for more than ${runloopConfig.maxStreamPullInterval} for topic partition ${stream.tp}."
+      val consumeTimeout = new TimeoutException(timeOutMessage) with NoStackTrace
+      stream.halt(Cause.fail(consumeTimeout))
+    }
+
     for {
       now <- Clock.nanoTime
       anyExceeded <- ZIO.foldLeft(streams)(false) { case (acc, stream) =>
                        stream
                          .maxStreamPullIntervalExceeded(now)
                          .tap(ZIO.when(_)(logShutdown(stream)))
-                         .tap(exceeded => if (exceeded) stream.halt else ZIO.unit)
+                         .tap(exceeded => if (exceeded) haltTimeout(stream) else ZIO.unit)
                          .map(acc || _)
                      }
       _ <- shutdown.when(anyExceeded)
@@ -557,7 +566,15 @@ private[consumer] final class Runloop private (
         } yield updatedStateAfterPoll
       }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
-      .onError(cause => partitionsHub.offer(Take.failCause(cause)))
+      // Propagate the failure to active per-partition streams and to any new hub subscribers, then exit cleanly.
+      // The fiber exit status is irrelevant once the failure has been published to all consumers.
+      .catchAllCause { cause =>
+        for {
+          state <- currentStateRef.get
+          _     <- ZIO.foreachDiscard(state.assignedStreams)(_.halt(cause))
+          _     <- partitionsHub.offer(Take.failCause(cause))
+        } yield ()
+      }
   }
 
   def shouldPoll(state: State): UIO[Boolean] =
