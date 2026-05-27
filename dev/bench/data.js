@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1779885216920,
+  "lastUpdate": 1779887989356,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -6678,6 +6678,102 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 574.7134605399999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "e.vanoosten@grons.nl",
+            "name": "Erik van Oosten",
+            "username": "erikvanoosten"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "12304d0d786080d9cc3ede487b92dee8876618bc",
+          "message": "Fix consumer hang when Runloop crashes with empty dataQueue (#1707)\n\nAs reported by @acrow in #1705.\n\nWhen the internal Runloop crashes with a fatal exception (e.g.\n`TopicAuthorizationException` after `authErrorRetrySchedule` is\nexhausted), consumers are supposed to fail with that exception so the\nuser's `.retry(...)` can decide what to do. This works on the first\noccurrence of the exception because records are typically in flight: the\nper-partition stream pulls a chunk, then sees `interruptionPromise` or\nhub failure and propagates the error.\n\nBut on the second occurrence (right after a retry with the same denied\nACL), no records ever arrive. Every per-partition stream is parked on\n`dataQueue.take.raceFirst(interruptionPromise.await)`\n(PartitionStreamControl.scala:161). When the Runloop dies, it does\n`partitionsHub.offer(Take.failCause(cause))` (Runloop.scala:560) — but\nper-partition streams do not subscribe to the hub. Nothing fails\n`interruptionPromise`, nothing offers `EndOfStream` to `dataQueue`, so\nthe partition stream fibers hang forever, hanging the consumer as well.\n\nThe fix is to explicitly halt the active per-partition streams when the\nrunloop crashes.\n\nFixes #1705.",
+          "timestamp": "2026-05-27T14:24:57+02:00",
+          "tree_id": "ec42aac4b4e6ac074cc4d0add7bc6a53d7d3217d",
+          "url": "https://github.com/zio/zio-kafka/commit/12304d0d786080d9cc3ede487b92dee8876618bc"
+        },
+        "date": 1779887988863,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 587.24816136,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 589.54464188,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 75.35618989241758,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 239.33951316000002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeqAsync",
+            "value": 18.951309881326395,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeqAsync",
+            "value": 6.554828190435301,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordPar",
+            "value": 50.202692351015095,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordSeq",
+            "value": 63.924332633678745,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 538.0704824000001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 533.51596254,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 558.4854997400001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 565.258333,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
