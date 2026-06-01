@@ -92,7 +92,9 @@ final class PartitionStreamControl private (
    * To be invoked when the stream is no longer processing. It fails the stream with the given cause.
    */
   private[internal] def halt(cause: Cause[Throwable]): UIO[Unit] =
-    interruptionPromise.failCause(cause).unit
+    interruptionPromise.failCause(cause).ignore *>
+      // Offer a failure element so that dataQueue.take unblocks immediately
+      dataQueue.offer(Exit.fail(cause.failureOption)).unit
 
   /** To be invoked when the partition was revoked, lost or otherwise needs to be ended. */
   private[internal] def end: ZIO[Any, Nothing, Unit] =
@@ -154,7 +156,7 @@ object PartitionStreamControl {
         for {
           _     <- requestData
           _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
-          taken <- dataQueue.take.raceFirst(interruptionPromise.await).mapError(Option.apply).unexit
+          taken <- dataQueue.take.flatMap(exit => exit)
         } yield taken
       notEnded = hasEndedRef.get.negate
 

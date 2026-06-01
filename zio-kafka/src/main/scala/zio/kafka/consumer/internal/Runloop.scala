@@ -32,7 +32,8 @@ private[consumer] final class Runloop private (
   rebalanceCoordinator: RebalanceCoordinator,
   metricsObserver: ConsumerMetricsObserver,
   committer: Committer,
-  groupMetadataRef: Ref[Option[ConsumerGroupMetadata]]
+  groupMetadataRef: Ref[Option[ConsumerGroupMetadata]],
+  runloopDone: Promise[Nothing, Unit]
 ) {
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(
@@ -71,11 +72,14 @@ private[consumer] final class Runloop private (
     offerAndAwaitCommand(RunloopCommand.EndStreamsBySubscription(subscription, _))
 
   private[internal] def offerAndAwaitCommand[E, A](f: Promise[E, A] => RunloopCommand): ZIO[Any, E, A] =
-    for {
-      promise <- Promise.make[E, A]
-      _       <- commandQueue.offer(f(promise))
-      r       <- promise.await
-    } yield r
+    Promise.make[E, A].flatMap { promise =>
+      commandQueue.offer(f(promise)) *>
+        // Complete the promise via runloopDone if the runloop exits before processing it.
+        // This prevents callers (like removeSubscription) from blocking forever.
+        runloopDone.await.flatMap(_ => promise.succeed(().asInstanceOf[A]).unit).forkDaemon.flatMap { completionFiber =>
+          promise.await.ensuring(completionFiber.interrupt.ignore)
+        }
+    }
 
   private def makeRebalanceListener: ConsumerRebalanceListener = {
     // Here we just want to avoid any executor shift if the user provided listener is the noop listener.
@@ -210,7 +214,11 @@ private[consumer] final class Runloop private (
           settings.authErrorRetrySchedule
       )
 
-  private def handlePoll(state: State): Task[State] = {
+  private def handlePoll(
+    state: State,
+    silentPollCountsRef: Ref[Map[String, Int]],
+    silentPollThreshold: Int
+  ): Task[State] = {
     for {
       runningStreamsBeforePoll <- ZIO.filterNot(state.assignedStreams)(_.hasEnded)
       partitionsToFetch        <- settings.fetchStrategy.selectPartitionsToFetch(runningStreamsBeforePoll)
@@ -231,6 +239,34 @@ private[consumer] final class Runloop private (
 
             pullDurationAndRecords <- doPoll(c).timed
             (pollDuration, polledRecords) = pullDurationAndRecords
+
+            // Track consecutive polls where a topic was in partitionsToFetch but returned 0 records.
+            // When the count reaches silentPollThreshold, temporarily pause all OTHER topics and
+            // issue an isolated probe poll. This forces the Kafka FetchCollector to process the
+            // silent topic's buffered fetch response, which surfaces any TopicAuthorizationException
+            // that was previously skipped due to maxPollRecords batching from high-volume topics.
+            polledTopics  = polledRecords.partitions().asScala.map(_.topic()).toSet
+            fetchedTopics = partitionsToFetch.map(_.topic())
+            // Also track subscribed topics that have no assigned streams yet (e.g. ACL DENY before consumer starts)
+            unassignedTopics = state.subscriptionState match {
+                                 case SubscriptionState.Subscribed(_, Subscription.Topics(topics))
+                                     if state.assignedStreams.isEmpty =>
+                                   topics
+                                 case _ => Set.empty[String]
+                               }
+            topicsToTrack = fetchedTopics ++ unassignedTopics
+            updatedCounts <- silentPollCountsRef.updateAndGet { counts =>
+                               topicsToTrack.foldLeft(counts) { (acc, topic) =>
+                                 if (polledTopics.contains(topic)) acc - topic
+                                 else acc + (topic -> (acc.getOrElse(topic, 0) + 1))
+                               }
+                             }
+            silentTopicsToProbe = topicsToTrack.filter(t => updatedCounts.getOrElse(t, 0) >= silentPollThreshold)
+            _ <- ZIO.foreachDiscard(silentTopicsToProbe) { silentTopic =>
+                   // partitionsFor() forces a metadata fetch and throws TopicAuthorizationException
+                   // if the topic is unauthorized — unlike poll() which silently swallows it.
+                   ZIO.attempt(c.partitionsFor(silentTopic))
+                 }
 
             _ <- metricsObserver.observePoll(toResumeCount, toPauseCount, pollDuration, polledRecords.count())
             _ <- diagnostics.emit {
@@ -545,36 +581,51 @@ private[consumer] final class Runloop private (
   private def run(initialState: State): ZIO[Scope, Throwable, Any] = {
     import Runloop.StreamOps
 
-    ZStream
-      .fromQueue(commandQueue)
-      .takeWhile(_ != RunloopCommand.StopRunloop)
-      .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
-        for {
-          _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
-          _ <- consumer.runloopAccess(committer.processQueuedCommits(_))
-          streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
-          stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
+    // Track how many consecutive polls each topic has been in partitionsToFetch but returned no
+    // records. Once a topic exceeds the threshold we call partitionsFor() to force an auth check.
+    val silentPollThreshold = 3
 
-          updatedStateAfterPoll <- shouldPoll(stateAfterCommands).flatMap {
-                                     case true  => handlePoll(stateAfterCommands)
-                                     case false => ZIO.succeed(stateAfterCommands)
-                                   }
-          // Immediately poll again, after processing all new queued commands
-          _ <- ZIO.whenZIO(shouldPoll(updatedStateAfterPoll))(commandQueue.offer(RunloopCommand.Poll))
-          // Save the current state for other parts of Runloop (read-only, for metrics only)
-          _ <- currentStateRef.set(updatedStateAfterPoll)
-        } yield updatedStateAfterPoll
-      }
-      .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
-      // Propagate the failure to active per-partition streams and to any new hub subscribers, then exit cleanly.
-      // The fiber exit status is irrelevant once the failure has been published to all consumers.
-      .catchAllCause { cause =>
-        for {
-          state <- currentStateRef.get
-          _     <- ZIO.foreachDiscard(state.assignedStreams)(_.halt(cause))
-          _     <- partitionsHub.offer(Take.failCause(cause))
-        } yield ()
-      }
+    for {
+      silentPollCountsRef <- Ref.make(Map.empty[String, Int])
+      result <- ZStream
+                  .fromQueue(commandQueue)
+                  .takeWhile(_ != RunloopCommand.StopRunloop)
+                  .runFoldChunksDiscardZIO(initialState) { (state, commands) =>
+                    for {
+                      _ <- ZIO.logDebug(s"Processing ${commands.size} commands: ${commands.mkString(",")}")
+                      _ <- consumer.runloopAccess(committer.processQueuedCommits(_))
+                      streamCommands = commands.collect { case cmd: RunloopCommand.StreamCommand => cmd }
+                      stateAfterCommands <- ZIO.foldLeft(streamCommands)(state)(handleCommand)
+
+                      updatedStateAfterPoll <- shouldPoll(stateAfterCommands).flatMap {
+                                                 case true =>
+                                                   handlePoll(
+                                                     stateAfterCommands,
+                                                     silentPollCountsRef,
+                                                     silentPollThreshold
+                                                   )
+                                                 case false => ZIO.succeed(stateAfterCommands)
+                                               }
+                      // Immediately poll again, after processing all new queued commands
+                      _ <- ZIO.whenZIO(shouldPoll(updatedStateAfterPoll))(commandQueue.offer(RunloopCommand.Poll))
+                      // Save the current state for other parts of Runloop (read-only, for metrics only)
+                      _ <- currentStateRef.set(updatedStateAfterPoll)
+                    } yield updatedStateAfterPoll
+                  }
+                  .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
+                  // Propagate the failure to active per-partition streams and to any new hub subscribers, then exit cleanly.
+                  // The fiber exit status is irrelevant once the failure has been published to all consumers.
+                  .catchAllCause { cause =>
+                    for {
+                      state <- currentStateRef.get
+                      _     <- ZIO.foreachDiscard(state.assignedStreams)(_.halt(cause))
+                      _     <- partitionsHub.offer(Take.failCause(cause))
+                      // Signal runloop done so offerAndAwaitCommand callers don't block forever.
+                      _ <- runloopDone.succeed(())
+                    } yield ()
+                  }
+      _ <- runloopDone.succeed(()).ignore
+    } yield result
   }
 
   def shouldPoll(state: State): UIO[Boolean] =
@@ -658,6 +709,7 @@ object Runloop {
   ): URIO[Scope, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(DiagnosticEvent.RunloopFinalized))
+      runloopDone        <- Promise.make[Nothing, Unit]
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
@@ -694,7 +746,8 @@ object Runloop {
                   metricsObserver = metricsObserver,
                   rebalanceCoordinator = rebalanceCoordinator,
                   committer = committer,
-                  groupMetadataRef = groupMetadataRef
+                  groupMetadataRef = groupMetadataRef,
+                  runloopDone = runloopDone
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
