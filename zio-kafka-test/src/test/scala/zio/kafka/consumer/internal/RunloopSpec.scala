@@ -218,6 +218,31 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
             exit.causeOption.exists(_.squash == authException)
           )
         }
+      },
+      test("removeSubscription does not hang after Runloop crashes") {
+        val authException = new TopicAuthorizationException("acl-denied")
+        val settings = consumerSettings
+          .withAuthErrorRetrySchedule(Schedule.recurs(0))
+          .withMetricsObserver(ConsumerMetricsObserver.NoOp)
+        withRunloop(settings = settings) { (mockConsumer, _, runloop) =>
+          val subscription = Subscription.Topics(Set(tp10.topic()))
+          mockConsumer.schedulePollTask { () =>
+            mockConsumer.setPollException(authException)
+          }
+          for {
+            _ <- runloop.addSubscription(subscription)
+            // Wait for the runloop to crash
+            _ <- ZIO.sleep(2.seconds)
+            // removeSubscription calls offerAndAwaitCommand; without runloopDone it would hang forever
+            exit <- runloop.removeSubscription(subscription).timeout(5.seconds).exit
+          } yield assertTrue(
+            // Should complete promptly (not time out) now that runloopDone unblocks the command promise
+            exit match {
+              case Exit.Success(Some(_)) => true
+              case _                     => false
+            }
+          )
+        }
       }
     ) @@ withLiveClock
 
