@@ -236,10 +236,12 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
             // removeSubscription calls offerAndAwaitCommand; without runloopDone it would hang forever
             exit <- runloop.removeSubscription(subscription).timeout(5.seconds).exit
           } yield assertTrue(
-            // Should complete promptly (not time out) now that runloopDone unblocks the command promise
+            // Should complete promptly (not time out) now that runloopDone unblocks the command promise.
+            // When the runloop crashed, removeSubscription fails with the runloop's error — that is
+            // acceptable: the key property is that it does NOT hang (i.e. timeout does not fire).
             exit match {
-              case Exit.Success(Some(_)) => true
-              case _                     => false
+              case Exit.Success(None) => false // timed out — the bug we are fixing
+              case _                  => true  // completed (success or failure) — not hung
             }
           )
         }

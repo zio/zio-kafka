@@ -93,7 +93,8 @@ final class PartitionStreamControl private (
    */
   private[internal] def halt(cause: Cause[Throwable]): UIO[Unit] =
     interruptionPromise.failCause(cause).ignore *>
-      // Offer a failure element so that dataQueue.take unblocks immediately
+      // Also offer a failure to dataQueue so that a fiber currently waiting on dataQueue.take
+      // can unblock without waiting for the next poll cycle.
       dataQueue.offer(Exit.fail(cause.failureOption)).unit
 
   /** To be invoked when the partition was revoked, lost or otherwise needs to be ended. */
@@ -156,7 +157,7 @@ object PartitionStreamControl {
         for {
           _     <- requestData
           _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
-          taken <- dataQueue.take.flatMap(exit => exit)
+          taken <- dataQueue.take.raceFirst(interruptionPromise.await).mapError(Option.apply).unexit
         } yield taken
       notEnded = hasEndedRef.get.negate
 

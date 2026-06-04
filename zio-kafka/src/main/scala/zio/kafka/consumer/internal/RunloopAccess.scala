@@ -65,7 +65,7 @@ private[consumer] final class RunloopAccess private (
       // starts the Runloop if not already started
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).orDie) <*
+             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).ignore) <*
                diagnostics.emit(DiagnosticEvent.SubscriptionFinalized)
            }
     } yield new StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]] {
