@@ -45,7 +45,7 @@ private[consumer] final class RunloopAccess private (
   /**
    * No need to call `Runloop::stopConsumption` if the Runloop has not been started or has been stopped.
    */
-  def stopConsumption: UIO[Unit] = withRunloopZIO(requireRunning = false)(_.stopConsumption)
+  def stopConsumption: UIO[Unit] = withRunloopZIO(requireRunning = false)(_.stopConsumption.ignore)
 
   /**
    * We're doing all of these things in this method so that the interface of this class is as simple as possible and
@@ -58,23 +58,24 @@ private[consumer] final class RunloopAccess private (
    */
   def subscribe(
     subscription: Subscription
-  ): ZIO[Scope, InvalidSubscriptionUnion, StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]]] =
+  ): ZIO[Scope, Throwable, StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]]] =
     for {
       ended                     <- Promise.make[Nothing, Unit] // For ending the stream of partition streams
       partitionAssignmentStream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).orDie) <*
+             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).ignore) <*
                diagnostics.emit(DiagnosticEvent.SubscriptionFinalized)
            }
     } yield new StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]] {
-      override def stream = partitionAssignmentStream.interruptWhen(
-        ended
-      ) // This also prevents any partitions assigned during a rebalance after initiating the graceful shutdown to be consumed
-      override def end =
-        ended.succeed(()).ignore *> withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription))
-
+      override def stream =
+        // Interrupting also prevents any partitions assigned during a rebalance after initiating the graceful shutdown
+        // to be consumed.
+        partitionAssignmentStream.interruptWhen(ended)
+      override def end: UIO[Unit] =
+        ended.succeed(()).ignore *>
+          withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription).ignore)
     }
 
   def registerExternalCommits(externallyCommittedOffsets: OffsetBatch): Task[Unit] =

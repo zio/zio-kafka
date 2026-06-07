@@ -32,7 +32,8 @@ private[consumer] final class Runloop private (
   rebalanceCoordinator: RebalanceCoordinator,
   metricsObserver: ConsumerMetricsObserver,
   committer: Committer,
-  groupMetadataRef: Ref[Option[ConsumerGroupMetadata]]
+  groupMetadataRef: Ref[Option[ConsumerGroupMetadata]],
+  runloopDone: Promise[Throwable, Nothing]
 ) {
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(
@@ -57,7 +58,7 @@ private[consumer] final class Runloop private (
         )
         .unit
 
-  private[internal] def addSubscription(subscription: Subscription): IO[InvalidSubscriptionUnion, Unit] =
+  private[internal] def addSubscription(subscription: Subscription): Task[Unit] =
     for {
       _ <- ZIO.logDebug(s"Add subscription $subscription")
       _ <- offerAndAwaitCommand(RunloopCommand.AddSubscription(subscription, _))
@@ -67,15 +68,29 @@ private[consumer] final class Runloop private (
   private[internal] def removeSubscription(subscription: Subscription): Task[Unit] =
     offerAndAwaitCommand(RunloopCommand.RemoveSubscription(subscription, _))
 
-  private[internal] def endStreamsBySubscription(subscription: Subscription): UIO[Unit] =
+  private[internal] def endStreamsBySubscription(subscription: Subscription): Task[Unit] =
     offerAndAwaitCommand(RunloopCommand.EndStreamsBySubscription(subscription, _))
 
-  private[internal] def offerAndAwaitCommand[E, A](f: Promise[E, A] => RunloopCommand): ZIO[Any, E, A] =
-    for {
-      promise <- Promise.make[E, A]
-      _       <- commandQueue.offer(f(promise))
-      r       <- promise.await
-    } yield r
+  private[internal] def offerAndAwaitCommand[E <: Throwable, A](f: Promise[E, A] => RunloopCommand): Task[A] =
+    runloopDone.await.raceFirst {
+      for {
+        promise <- Promise.make[E, A]
+        _       <- commandQueue.offer(f(promise))
+        r       <- promise.await
+      } yield r
+    }
+
+//  private[internal] def offerAndAwaitCommand[E <: Throwable, A](f: Promise[E, A] => RunloopCommand): Task[A] =
+//    // If the runloop is already done, skip the commandQueue.offer entirely — the runloop
+//    // is no longer processing commands, and offering to a shutting-down queue can block.
+//    runloopDone.isDone.flatMap {
+//      case true => runloopDone.await
+//      case false =>
+//        Promise.make[E, A].flatMap { promise =>
+//          commandQueue.offer(f(promise)) *>
+//            promise.await.raceFirst(runloopDone.await)
+//        }
+//    }
 
   private def makeRebalanceListener: ConsumerRebalanceListener = {
     // Here we just want to avoid any executor shift if the user provided listener is the noop listener.
@@ -566,18 +581,23 @@ private[consumer] final class Runloop private (
         } yield updatedStateAfterPoll
       }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
-      // Propagate the failure to active per-partition streams and to any new hub subscribers, then exit cleanly.
+      // Propagate the failure to (in order):
+      // - ongoing `removeSubscription` call coming from RunloopAccess (via runloopDone),
+      // - active per-partition streams and,
+      // - to any new hub subscribers, then exit cleanly.
       // The fiber exit status is irrelevant once the failure has been published to all consumers.
       .catchAllCause { cause =>
         for {
           state <- currentStateRef.get
+          _     <- runloopDone.failCause(cause)
           _     <- ZIO.foreachDiscard(state.assignedStreams)(_.halt(cause))
           _     <- partitionsHub.offer(Take.failCause(cause))
         } yield ()
       }
+    // .ensuring(runloopDone.fail(new RuntimeException("Consumer shutting down")).ignore)
   }
 
-  def shouldPoll(state: State): UIO[Boolean] =
+  private def shouldPoll(state: State): UIO[Boolean] =
     committer.pendingCommitCount.map { pendingCommitCount =>
       state.subscriptionState.isSubscribed && (state.pendingRequests.nonEmpty || pendingCommitCount > 0 || state.assignedStreams.isEmpty)
     }
@@ -613,7 +633,7 @@ private[consumer] final class Runloop private (
 }
 
 object Runloop {
-  private implicit final class StreamOps[R, E, A](private val stream: ZStream[R, E, A]) extends AnyVal {
+  private implicit final class StreamOps[R, E <: Throwable, A](private val stream: ZStream[R, E, A]) extends AnyVal {
 
     /**
      * Inlined, simplified and specialized for our needs version of [[ZSink.foldChunksZIO]]
@@ -621,7 +641,9 @@ object Runloop {
      * Code initially inspired by the implementation of [[ZStream.runFoldZIO]] with everything we don't need removed and
      * with chunking added
      */
-    def runFoldChunksDiscardZIO[R1 <: R, E1 >: E, S](s: S)(f: (S, Chunk[A]) => ZIO[R1, E1, S]): ZIO[R1, E1, Unit] = {
+    def runFoldChunksDiscardZIO[R1 <: R, E1 >: E <: Throwable, S](
+      s: S
+    )(f: (S, Chunk[A]) => ZIO[R1, E1, S]): ZIO[R1, E1, Unit] = {
       def reader(s: S): ZChannel[R1, E1, Chunk[A], Any, E1, Nothing, Unit] =
         ZChannel.readWithCause(
           (in: Chunk[A]) => ZChannel.fromZIO(f(s, in)).flatMap(reader),
@@ -658,6 +680,7 @@ object Runloop {
   ): URIO[Scope, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(DiagnosticEvent.RunloopFinalized))
+      runloopDone        <- Promise.make[Throwable, Nothing]
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
@@ -694,7 +717,8 @@ object Runloop {
                   metricsObserver = metricsObserver,
                   rebalanceCoordinator = rebalanceCoordinator,
                   committer = committer,
-                  groupMetadataRef = groupMetadataRef
+                  groupMetadataRef = groupMetadataRef,
+                  runloopDone = runloopDone
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
