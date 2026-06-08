@@ -38,7 +38,8 @@ final case class ConsumerSettings(
   runloopMetricsSchedule: Schedule[Any, Unit, Long] = Schedule.fixed(500.millis),
   authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.recurs(5) && Schedule.spaced(500.millis),
   maxStreamPullIntervalOption: Option[Duration] = None,
-  diagnostics: Consumer.ConsumerDiagnostics = Consumer.NoDiagnostics
+  diagnostics: Consumer.ConsumerDiagnostics = Consumer.NoDiagnostics,
+  emptyPollCountToMetaRefresh: Option[Int] = None
 ) {
 
   /**
@@ -346,6 +347,22 @@ final case class ConsumerSettings(
    */
   def withAuthErrorRetrySchedule(authErrorRetrySchedule: Schedule[Any, Throwable, Any]): ConsumerSettings =
     copy(authErrorRetrySchedule = authErrorRetrySchedule)
+
+  /**
+   * When set, enables a metadata-refresh probe after this many consecutive empty polls for a topic.
+   *
+   * After `n` consecutive polls where a subscribed topic returned no records, `committed()` is called for the assigned
+   * partitions of that topic to force a broker round-trip. This surfaces any
+   * [[org.apache.kafka.common.errors.TopicAuthorizationException]] that `poll()` would otherwise swallow silently when
+   * a READ ACL is denied at runtime.
+   *
+   * Set to `None` (the default) to disable the probe. A value of `3` is a reasonable starting point.
+   *
+   * Note: users subscribing to a very large number of topics may want to set a higher value or leave this disabled,
+   * since each probe issues a request to the broker.
+   */
+  def withEmptyPollCountToMetaRefresh(count: Int): ConsumerSettings =
+    copy(emptyPollCountToMetaRefresh = Some(count))
 
   /**
    * Controls how to consume records produced transactionally.
