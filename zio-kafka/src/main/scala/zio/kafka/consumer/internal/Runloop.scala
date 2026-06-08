@@ -221,7 +221,7 @@ private[consumer] final class Runloop private (
                s" resuming ${partitionsToFetch.size} out of ${state.assignedStreams.size} partitions"
            )
       _ <- currentStateRef.set(state)
-      pollResult <-
+      pollResultAndCounts <-
         consumer.runloopAccess { c =>
           for {
             assignment <- ZIO.attempt(c.assignment())
@@ -231,6 +231,39 @@ private[consumer] final class Runloop private (
 
             pullDurationAndRecords <- doPoll(c).timed
             (pollDuration, polledRecords) = pullDurationAndRecords
+
+            // When emptyPollCountToMetaRefresh is set, track consecutive empty polls per topic.
+            // Once the count reaches the threshold, call committed() to force a broker round-trip
+            // that surfaces any TopicAuthorizationException that poll() would otherwise swallow silently.
+            // All bookkeeping is skipped when the setting is None to avoid overhead for users that
+            // do not use topic-level ACLs.
+            updatedCounts <- settings.emptyPollCountToMetaRefresh match {
+                               case None => ZIO.succeed(state.emptyPollCounts)
+                               case Some(threshold) =>
+                                 val polledTopics  = polledRecords.partitions().asScala.map(_.topic()).toSet
+                                 val fetchedTopics = partitionsToFetch.map(_.topic())
+                                 // Also include subscribed topics with no assigned streams yet
+                                 // (e.g. ACL DENY before the consumer group has joined).
+                                 val unassignedTopics: Set[String] = state.subscriptionState match {
+                                   case SubscriptionState.Subscribed(_, Subscription.Topics(topics))
+                                       if state.assignedStreams.isEmpty =>
+                                     topics
+                                   case _ => Set.empty
+                                 }
+                                 val topicsToTrack = fetchedTopics ++ unassignedTopics
+                                 val counts = topicsToTrack.foldLeft(state.emptyPollCounts) { (acc, topic) =>
+                                   if (polledTopics.contains(topic)) acc - topic
+                                   else acc + (topic -> (acc.getOrElse(topic, 0) + 1))
+                                 }
+                                 val partitionsToProbe = state.assignedStreams
+                                   .map(_.tp)
+                                   .filter(tp => counts.getOrElse(tp.topic(), 0) >= threshold)
+                                 (if (partitionsToProbe.nonEmpty)
+                                    // committed() throws TopicAuthorizationException on DENY READ,
+                                    // unlike poll() which silently returns 0 records.
+                                    ZIO.attempt(c.committed(partitionsToProbe.toSet.asJava)).unit
+                                  else ZIO.unit).as(counts)
+                             }
 
             _ <- metricsObserver.observePoll(toResumeCount, toPauseCount, pollDuration, polledRecords.count())
             _ <- diagnostics.emit {
@@ -344,8 +377,9 @@ private[consumer] final class Runloop private (
                                 assignedStreams = updatedAssignedStreams
                               )
                           }
-          } yield pollresult
+          } yield (pollresult, updatedCounts)
         }
+      (pollResult, updatedCounts) = pollResultAndCounts
       fulfillResult <- offerRecordsToStreams(
                          pollResult.assignedStreams,
                          pollResult.pendingRequests,
@@ -356,7 +390,8 @@ private[consumer] final class Runloop private (
       _ <- checkStreamPullInterval(pollResult.assignedStreams)
     } yield state.copy(
       pendingRequests = fulfillResult.pendingRequests,
-      assignedStreams = pollResult.assignedStreams
+      assignedStreams = pollResult.assignedStreams,
+      emptyPollCounts = updatedCounts
     )
   }
 
@@ -725,7 +760,11 @@ object Runloop {
      * underlying KafkaConsumer.
      */
     assignedStreams: Chunk[PartitionStreamControl],
-    subscriptionState: SubscriptionState
+    subscriptionState: SubscriptionState,
+    // Counts consecutive empty polls per topic. Reset to 0 when the topic returns records.
+    // Entries for topics no longer subscribed are implicitly ignored as they will not appear
+    // in topicsToTrack, so this map does not grow unboundedly.
+    emptyPollCounts: Map[String, Int]
   ) {
     def addRequest(r: RunloopCommand.Request): State = copy(pendingRequests = pendingRequests :+ r)
   }
@@ -734,7 +773,8 @@ object Runloop {
     val initial: State = State(
       pendingRequests = Chunk.empty,
       assignedStreams = Chunk.empty,
-      subscriptionState = SubscriptionState.NotSubscribed
+      subscriptionState = SubscriptionState.NotSubscribed,
+      emptyPollCounts = Map.empty
     )
   }
 
