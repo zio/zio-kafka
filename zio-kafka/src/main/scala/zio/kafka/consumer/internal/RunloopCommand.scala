@@ -32,7 +32,7 @@ object RunloopCommand {
   }
   final case class RemoveSubscription(subscription: Subscription, cont: Promise[Throwable, Unit]) extends StreamCommand
 
-  final case class EndStreamsBySubscription(subscription: Subscription, cont: Promise[Nothing, Unit])
+  final case class EndStreamsBySubscription(subscription: Subscription, cont: Promise[Throwable, Unit])
       extends StreamCommand {
     @inline def succeed: UIO[Unit] = cont.succeed(()).unit
   }
