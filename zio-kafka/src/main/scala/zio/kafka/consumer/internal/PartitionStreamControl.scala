@@ -154,7 +154,7 @@ object PartitionStreamControl {
         for {
           _     <- requestData
           _     <- diagnostics.emit(DiagnosticEvent.Request(tp))
-          taken <- dataQueue.take.raceFirst(interruptionPromise.await).mapError(Option.apply).unexit
+          taken <- dataQueue.take.raceFirst(interruptionPromise.await.mapError(Option.apply)).unexit
         } yield taken
       notEnded = hasEndedRef.get.negate
 
@@ -172,7 +172,8 @@ object PartitionStreamControl {
                  ZStream.repeatZIOOption {
                    // First try to take a chunk of records that are available right now.
                    // When no data is available, request more data and await its arrival.
-                   dataQueue.poll.flatMap {
+                   // Race with interruptionPromise so that halt() unblocks this path immediately.
+                   dataQueue.poll.raceFirst(interruptionPromise.await.mapError(Option.apply)).flatMap {
                      case None       => requestAndAwaitData
                      case Some(exit) => exit
                    }
