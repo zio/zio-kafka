@@ -245,6 +245,58 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
             }
           )
         }
+      },
+      test("removeSubscription does not hang in uninterruptible context after Runloop crashes") {
+        // Simulates ZIO.addFinalizer: removeSubscription is called inside ZIO.uninterruptible.
+        // A raceFirst-based fix would hang here because raceFirst tries to interrupt the losing
+        // fiber, but the interrupt is masked in uninterruptible context.
+        val authException = new TopicAuthorizationException("acl-denied")
+        val settings = consumerSettings
+          .withAuthErrorRetrySchedule(Schedule.recurs(0))
+          .withMetricsObserver(ConsumerMetricsObserver.NoOp)
+        withRunloop(settings = settings) { (mockConsumer, _, runloop) =>
+          val subscription = Subscription.Topics(Set(tp10.topic()))
+          mockConsumer.schedulePollTask { () =>
+            mockConsumer.setPollException(authException)
+          }
+          for {
+            _ <- runloop.addSubscription(subscription)
+            _ <- ZIO.sleep(2.seconds)
+            exit <- ZIO.uninterruptible {
+                      runloop.removeSubscription(subscription)
+                    }.timeout(5.seconds).exit
+          } yield assertTrue(
+            exit match {
+              case Exit.Success(None) => false
+              case _                  => true
+            }
+          )
+        }
+      },
+      test("endStreamsBySubscription does not hang in uninterruptible context after Runloop crashes") {
+        // Simulates StreamControl.end called from ZIO.addFinalizer (uninterruptible context).
+        val authException = new TopicAuthorizationException("acl-denied")
+        val settings = consumerSettings
+          .withAuthErrorRetrySchedule(Schedule.recurs(0))
+          .withMetricsObserver(ConsumerMetricsObserver.NoOp)
+        withRunloop(settings = settings) { (mockConsumer, _, runloop) =>
+          val subscription = Subscription.Topics(Set(tp10.topic()))
+          mockConsumer.schedulePollTask { () =>
+            mockConsumer.setPollException(authException)
+          }
+          for {
+            _ <- runloop.addSubscription(subscription)
+            _ <- ZIO.sleep(2.seconds)
+            exit <- ZIO.uninterruptible {
+                      runloop.endStreamsBySubscription(subscription)
+                    }.timeout(5.seconds).exit
+          } yield assertTrue(
+            exit match {
+              case Exit.Success(None) => false
+              case _                  => true
+            }
+          )
+        }
       }
     ) @@ withLiveClock
 
