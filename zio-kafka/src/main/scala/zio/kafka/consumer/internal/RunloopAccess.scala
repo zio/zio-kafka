@@ -58,14 +58,14 @@ private[consumer] final class RunloopAccess private (
    */
   def subscribe(
     subscription: Subscription
-  ): ZIO[Scope, InvalidSubscriptionUnion, StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]]] =
+  ): ZIO[Scope, Throwable, StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]]] =
     for {
       ended                     <- Promise.make[Nothing, Unit] // For ending the stream of partition streams
       partitionAssignmentStream <- ZStream.fromHubScoped(partitionHub)
       // starts the Runloop if not already started
       _ <- withRunloopZIO(requireRunning = true)(_.addSubscription(subscription))
       _ <- ZIO.addFinalizer {
-             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).orDie) <*
+             withRunloopZIO(requireRunning = false)(_.removeSubscription(subscription).ignore) <*
                diagnostics.emit(DiagnosticEvent.SubscriptionFinalized)
            }
     } yield new StreamControl[Any, Nothing, Take[Throwable, PartitionAssignment]] {
@@ -73,7 +73,9 @@ private[consumer] final class RunloopAccess private (
         ended
       ) // This also prevents any partitions assigned during a rebalance after initiating the graceful shutdown to be consumed
       override def end =
-        ended.succeed(()).ignore *> withRunloopZIO(requireRunning = false)(_.endStreamsBySubscription(subscription))
+        ended.succeed(()).ignore *> withRunloopZIO(requireRunning = false)(
+          _.endStreamsBySubscription(subscription).ignore
+        )
 
     }
 

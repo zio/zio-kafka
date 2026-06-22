@@ -32,7 +32,8 @@ private[consumer] final class Runloop private (
   rebalanceCoordinator: RebalanceCoordinator,
   metricsObserver: ConsumerMetricsObserver,
   committer: Committer,
-  groupMetadataRef: Ref[Option[ConsumerGroupMetadata]]
+  groupMetadataRef: Ref[Option[ConsumerGroupMetadata]],
+  runloopDone: Promise[Throwable, Nothing]
 ) {
   private def newPartitionStream(tp: TopicPartition): UIO[PartitionStreamControl] =
     PartitionStreamControl.newPartitionStream(
@@ -67,14 +68,27 @@ private[consumer] final class Runloop private (
   private[internal] def removeSubscription(subscription: Subscription): Task[Unit] =
     offerAndAwaitCommand(RunloopCommand.RemoveSubscription(subscription, _))
 
-  private[internal] def endStreamsBySubscription(subscription: Subscription): UIO[Unit] =
+  private[internal] def endStreamsBySubscription(subscription: Subscription): Task[Unit] =
     offerAndAwaitCommand(RunloopCommand.EndStreamsBySubscription(subscription, _))
 
   private[internal] def offerAndAwaitCommand[E, A](f: Promise[E, A] => RunloopCommand): ZIO[Any, E, A] =
     for {
       promise <- Promise.make[E, A]
       _       <- commandQueue.offer(f(promise))
-      r       <- promise.await
+      // If the runloop already crashed (runloopDone completed before our offer was processed),
+      // `drainCommandQueue` may have already run and missed our command. Fail the promise now so
+      // `promise.await` below does not block forever. The `asInstanceOf` is safe: all command
+      // error types (InvalidSubscriptionUnion, Throwable) are subtypes of Throwable, and ZIO
+      // stores Cause[E] as-is without type-erased differences at runtime.
+      _ <- runloopDone.isDone.flatMap { done =>
+             if (done)
+               runloopDone.await.exit.flatMap {
+                 case Exit.Failure(cause) => promise.failCause(cause.asInstanceOf[Cause[E]]).unit
+                 case _                   => ZIO.unit
+               }
+             else ZIO.unit
+           }
+      r <- promise.await
     } yield r
 
   private def makeRebalanceListener: ConsumerRebalanceListener = {
@@ -573,13 +587,28 @@ private[consumer] final class Runloop private (
           state <- currentStateRef.get
           _     <- ZIO.foreachDiscard(state.assignedStreams)(_.halt(cause))
           _     <- partitionsHub.offer(Take.failCause(cause))
+          _     <- runloopDone.failCause(cause).ignore
+          _     <- drainCommandQueue(cause)
         } yield ()
       }
+      .zipLeft(runloopDone.fail(new RuntimeException("Consumer shutting down")).ignore)
   }
 
   def shouldPoll(state: State): UIO[Boolean] =
     committer.pendingCommitCount.map { pendingCommitCount =>
       state.subscriptionState.isSubscribed && (state.pendingRequests.nonEmpty || pendingCommitCount > 0 || state.assignedStreams.isEmpty)
+    }
+
+  // Fail all pending promise-bearing commands so that any callers waiting on them are unblocked immediately.
+  private def drainCommandQueue(cause: Cause[Throwable]): UIO[Unit] =
+    commandQueue.takeAll.flatMap { commands =>
+      ZIO.foreachDiscard(commands) {
+        case RunloopCommand.AddSubscription(_, cont) =>
+          cont.failCause(cause.asInstanceOf[Cause[InvalidSubscriptionUnion]]).unit
+        case RunloopCommand.RemoveSubscription(_, cont)       => cont.failCause(cause).unit
+        case RunloopCommand.EndStreamsBySubscription(_, cont) => cont.failCause(cause).unit
+        case _                                                => ZIO.unit
+      }
     }
 
   private def observeRunloopMetrics(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ZIO[Any, Nothing, Unit] = {
@@ -658,6 +687,7 @@ object Runloop {
   ): URIO[Scope, Runloop] =
     for {
       _                  <- ZIO.addFinalizer(diagnostics.emit(DiagnosticEvent.RunloopFinalized))
+      runloopDone        <- Promise.make[Throwable, Nothing]
       commandQueue       <- ZIO.acquireRelease(Queue.unbounded[RunloopCommand])(_.shutdown)
       lastRebalanceEvent <- Ref.Synchronized.make[RebalanceEvent](RebalanceEvent.None)
       initialState = State.initial
@@ -694,7 +724,8 @@ object Runloop {
                   metricsObserver = metricsObserver,
                   rebalanceCoordinator = rebalanceCoordinator,
                   committer = committer,
-                  groupMetadataRef = groupMetadataRef
+                  groupMetadataRef = groupMetadataRef,
+                  runloopDone = runloopDone
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
