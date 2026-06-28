@@ -561,9 +561,11 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           remainingAcls <-
             client.describeAcls(AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any))
 
-        } yield assert(createdAcls)(equalTo(bindings)) &&
-          assert(deletedAcls)(equalTo(bindings)) &&
-          assert(remainingAcls)(equalTo(Set.empty[AclBinding]))
+        } yield assertTrue(
+          createdAcls == bindings,
+          deletedAcls == bindings,
+          remainingAcls == Set.empty[AclBinding]
+        )
       }
     ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock @@ timeout(2.minutes)
 
@@ -589,17 +591,22 @@ object AdminSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
     adminClient
       .describeConsumerGroups(groupId)
       .map(_.head._2)
+      // In many tests the consumer group is created in parallel, the consumer group might not be created yet. This can
+      // result in `GroupIdNotFoundException` errors. We `retry` these errors. Then we use `repeat` to wait until the
+      // consumer group is stable.
+      .retry(Schedule.upTo(5.seconds) && Schedule.spaced(500.millis) && Schedule.recurWhile[Throwable] {
+        case _: org.apache.kafka.common.errors.GroupIdNotFoundException => true
+        case _                                                          => false
+      })
       .repeat(
-        (Schedule.recurs(5) && Schedule.fixed(Duration.fromMillis(500)) && Schedule
-          .recurUntil[ConsumerGroupDescription](
-            _.state == AdminClient.GroupState.Stable
-          )).map(_._3)
+        Schedule.upTo(5.seconds) *> Schedule.spaced(500.millis) *>
+          Schedule.recurUntil[ConsumerGroupDescription](_.state == AdminClient.GroupState.Stable)
       )
-      .flatMap(desc =>
+      .flatMap { desc =>
         if (desc.state == AdminClient.GroupState.Stable) {
           ZIO.succeed(desc)
         } else {
           ZIO.fail(new IllegalStateException(s"Client is not in stable state: $desc"))
         }
-      )
+      }
 }
