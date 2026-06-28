@@ -8,7 +8,7 @@ import zio.kafka.bench.ZioBenchmark.randomThing
 import zio.kafka.bench.comparison.ComparisonBenchmark._
 import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 import zio.kafka.testkit.{ Kafka, KafkaTestUtils }
-import zio.{ Scope => _, _ }
+import zio._
 
 import scala.jdk.CollectionConverters._
 
