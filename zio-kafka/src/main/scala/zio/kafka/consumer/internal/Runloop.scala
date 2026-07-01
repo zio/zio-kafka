@@ -58,7 +58,7 @@ private[consumer] final class Runloop private (
         )
         .unit
 
-  private[internal] def addSubscription(subscription: Subscription): IO[InvalidSubscriptionUnion, Unit] =
+  private[internal] def addSubscription(subscription: Subscription): Task[Unit] =
     for {
       _ <- ZIO.logDebug(s"Add subscription $subscription")
       _ <- offerAndAwaitCommand(RunloopCommand.AddSubscription(subscription, _))
@@ -71,24 +71,16 @@ private[consumer] final class Runloop private (
   private[internal] def endStreamsBySubscription(subscription: Subscription): Task[Unit] =
     offerAndAwaitCommand(RunloopCommand.EndStreamsBySubscription(subscription, _))
 
-  private[internal] def offerAndAwaitCommand[E, A](f: Promise[E, A] => RunloopCommand): ZIO[Any, E, A] =
+  private[internal] def offerAndAwaitCommand[E <: Throwable, A](f: Promise[E, A] => RunloopCommand): Task[A] =
     for {
       promise <- Promise.make[E, A]
       _       <- commandQueue.offer(f(promise))
-      // If the runloop already crashed (runloopDone completed before our offer was processed),
-      // `drainCommandQueue` may have already run and missed our command. Fail the promise now so
-      // `promise.await` below does not block forever. The `asInstanceOf` is safe: all command
-      // error types (InvalidSubscriptionUnion, Throwable) are subtypes of Throwable, and ZIO
-      // stores Cause[E] as-is without type-erased differences at runtime.
-      _ <- runloopDone.isDone.flatMap { done =>
-             if (done)
-               runloopDone.await.exit.flatMap {
-                 case Exit.Failure(cause) => promise.failCause(cause.asInstanceOf[Cause[E]]).unit
-                 case _                   => ZIO.unit
-               }
-             else ZIO.unit
+      // The runloop might not see the offered command when it already completed. In that case we fail the promise
+      // immediately so that `promise.await` does not block forever.
+      r <- runloopDone.isDone.flatMap {
+             case true  => runloopDone.await
+             case false => promise.await
            }
-      r <- promise.await
     } yield r
 
   private def makeRebalanceListener: ConsumerRebalanceListener = {
@@ -544,7 +536,7 @@ private[consumer] final class Runloop private (
 
   /**
    * Poll behavior:
-   *   - Run until the StopRunloop command is received
+   *   - Run on every command until the StopRunloop command is received
    *   - Process all currently queued Commits
    *   - Process all currently queued commands
    *   - Poll the Kafka broker
@@ -553,6 +545,9 @@ private[consumer] final class Runloop private (
    *     - Poll continuously when there are (still) unfulfilled requests or pending commits
    *     - Poll periodically when we are subscribed but do not have assigned streams yet. This happens after
    *       initialization and rebalancing
+   *   - When ending (due to stop command or error):
+   *     - Signal that the runloop is done to prevent new commands
+   *     - Drain remaining commands
    *
    * Note that this method is executed on a dedicated single-thread Executor
    */
@@ -581,35 +576,42 @@ private[consumer] final class Runloop private (
       }
       .tapErrorCause(cause => ZIO.logErrorCause("Error in Runloop", cause))
       // Propagate the failure to active per-partition streams and to any new hub subscribers, then exit cleanly.
-      // The fiber exit status is irrelevant once the failure has been published to all consumers.
       .catchAllCause { cause =>
         for {
           state <- currentStateRef.get
           _     <- ZIO.foreachDiscard(state.assignedStreams)(_.halt(cause))
           _     <- partitionsHub.offer(Take.failCause(cause))
-          _     <- runloopDone.failCause(cause).ignore
           _     <- drainCommandQueue(cause)
         } yield ()
       }
-      .zipLeft(runloopDone.fail(new RuntimeException("Consumer shutting down")).ignore)
+      .zipLeft {
+        drainCommandQueue(Cause.fail(new RuntimeException("Consumer shutting down") with NoStackTrace))
+      }
+    // The fiber exit status is irrelevant; failures are observed via the per-partition streams.
   }
 
-  def shouldPoll(state: State): UIO[Boolean] =
+  private def shouldPoll(state: State): UIO[Boolean] =
     committer.pendingCommitCount.map { pendingCommitCount =>
       state.subscriptionState.isSubscribed && (state.pendingRequests.nonEmpty || pendingCommitCount > 0 || state.assignedStreams.isEmpty)
     }
 
-  // Fail all pending promise-bearing commands so that any callers waiting on them are unblocked immediately.
+  /**
+   * Signal end of runloop and fail all pending command promises still sitting in commandQueue so that callers in
+   * `offerAndAwaitCommand` are not left waiting forever after the runloop exits.
+   */
   private def drainCommandQueue(cause: Cause[Throwable]): UIO[Unit] =
-    commandQueue.takeAll.flatMap { commands =>
-      ZIO.foreachDiscard(commands) {
-        case RunloopCommand.AddSubscription(_, cont) =>
-          cont.failCause(cause.asInstanceOf[Cause[InvalidSubscriptionUnion]]).unit
-        case RunloopCommand.RemoveSubscription(_, cont)       => cont.failCause(cause).unit
-        case RunloopCommand.EndStreamsBySubscription(_, cont) => cont.failCause(cause).unit
-        case _                                                => ZIO.unit
+    runloopDone.failCause(cause).ignore *>
+      commandQueue.takeAll.flatMap { commands =>
+        ZIO.foreachDiscard(commands) {
+          case RunloopCommand.AddSubscription(_, cont)          => cont.failCause(cause).unit
+          case RunloopCommand.RemoveSubscription(_, cont)       => cont.failCause(cause).unit
+          case RunloopCommand.EndStreamsBySubscription(_, cont) => cont.failCause(cause).unit
+          // Explicitly list the other commands to ensure new commands are handled correctly
+          case RunloopCommand.CommitAvailable | RunloopCommand.Poll | RunloopCommand.RemoveAllSubscriptions |
+              RunloopCommand.Request(_) | RunloopCommand.StopAllStreams | RunloopCommand.StopRunloop =>
+            ZIO.unit
+        }
       }
-    }
 
   private def observeRunloopMetrics(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ZIO[Any, Nothing, Unit] = {
     val observe = for {
