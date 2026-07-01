@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782642235770,
+  "lastUpdate": 1782889902872,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -6306,6 +6306,102 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 579.8774901600001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "zhengchunchen@gmail.com",
+            "name": "Jensen",
+            "username": "acrow"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7e060b494a7fd66dac15086af948915dd288ed97",
+          "message": "Fix: removeSubscription hangs after Runloop crashes (#1712)\n\n## Problem\n\nWhen the Runloop crashes (e.g. after `TopicAuthorizationException`\nexhausts retries), scope finalizers for active subscriptions call\n`removeSubscription` → `offerAndAwaitCommand`. At this point the\n`Runloop.make` scope finalizer may be concurrently shutting down\nthe `commandQueue`.  This causes `commandQueue.offer` to block,\nleaving `removeSubscription` hung indefinitely, never aborting the\npartition stream, letting `Consumer.consumeWith` hang forever.\n\n## Fixes\n\n1. Add `runloopDone: Promise[Throwable, Nothing]` that is completed\n(failed with the runloop cause) when the runloop exits.\n`offerAndAwaitCommand` offers the command and then checks\n`runloopDone.isDone` to see if the commands promise will ever be\nfulfilled:\n- If already done → don't wait on the command promise and return\n  `runloopDone.await` directly\n- If not done → wait for `promise.await` (Note: this is wrong (caused\n  by patch requested by maintainer (sorry)), we should race against\n  `runloopDone.await` as well, to be fixed in next PR.)\n\n2. Ensure partition stream control can always end by racing with\n   `interruptionPromise.await` also when polling for more data.\n\n## Also\n\n- `RunloopAccess` changed `removeSubscription.orDie` to `.ignore` since\n  failure is expected when the runloop has already crashed.\n- Small optimization in partition stream control (the `Some` wrapper\n   is only needed in error path).\n- Method `shouldPoll` made private.\n\n## Tests\n\nAdded `RunloopSpec` test: removeSubscription does not hang after Runloop\ncrashes — verifies that `removeSubscription` completes promptly (does not\ntime out) after the runloop crashes.",
+          "timestamp": "2026-07-01T08:52:40+02:00",
+          "tree_id": "5fe05d929133f2b3d30190fa3a9bacbc2cd28f69",
+          "url": "https://github.com/zio/zio-kafka/commit/7e060b494a7fd66dac15086af948915dd288ed97"
+        },
+        "date": 1782889902380,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 591.5821226,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 594.04932026,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 75.1731713952088,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 241.27407334600005,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeqAsync",
+            "value": 18.530221627438376,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeqAsync",
+            "value": 6.537065513098802,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordPar",
+            "value": 50.41231966546418,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordSeq",
+            "value": 64.51813807953548,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 539.8258167399999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 532.66566416,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 557.51566364,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 565.7960267799999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
