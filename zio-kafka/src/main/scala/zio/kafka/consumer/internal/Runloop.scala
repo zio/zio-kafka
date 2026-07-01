@@ -72,16 +72,15 @@ private[consumer] final class Runloop private (
     offerAndAwaitCommand(RunloopCommand.EndStreamsBySubscription(subscription, _))
 
   private[internal] def offerAndAwaitCommand[E <: Throwable, A](f: Promise[E, A] => RunloopCommand): Task[A] =
-    for {
-      promise <- Promise.make[E, A]
-      _       <- commandQueue.offer(f(promise))
-      // The runloop might not see the offered command when it already completed. In that case we fail the promise
-      // immediately so that `promise.await` does not block forever.
-      r <- runloopDone.isDone.flatMap {
-             case true  => runloopDone.await
-             case false => promise.await
-           }
-    } yield r
+    // This can be called from a finalizer (uninterruptible). However, raceFirst in an interruptible region
+    // won't work because we can't interrupt the loser.
+    ZIO.interruptible {
+      for {
+        promise <- Promise.make[E, A]
+        _       <- commandQueue.offer(f(promise))
+        r       <- promise.await.raceFirst(runloopDone.await)
+      } yield r
+    }
 
   private def makeRebalanceListener: ConsumerRebalanceListener = {
     // Here we just want to avoid any executor shift if the user provided listener is the noop listener.
