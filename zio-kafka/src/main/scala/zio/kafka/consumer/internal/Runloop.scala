@@ -247,16 +247,7 @@ private[consumer] final class Runloop private (
                                case Some(threshold) =>
                                  val polledTopics  = polledRecords.partitions().asScala.map(_.topic()).toSet
                                  val fetchedTopics = partitionsToFetch.map(_.topic())
-                                 // Also include subscribed topics with no assigned streams yet
-                                 // (e.g. ACL DENY before the consumer group has joined).
-                                 val unassignedTopics: Set[String] = state.subscriptionState match {
-                                   case SubscriptionState.Subscribed(_, Subscription.Topics(topics))
-                                       if state.assignedStreams.isEmpty =>
-                                     topics
-                                   case _ => Set.empty
-                                 }
-                                 val topicsToTrack = fetchedTopics ++ unassignedTopics
-                                 val counts = topicsToTrack.foldLeft(state.emptyPollCounts) { (acc, topic) =>
+                                 val counts = fetchedTopics.foldLeft(state.emptyPollCounts) { (acc, topic) =>
                                    if (polledTopics.contains(topic)) acc - topic
                                    else acc + (topic -> (acc.getOrElse(topic, 0) + 1))
                                  }
