@@ -784,7 +784,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                       .forkScoped
                   }
                 _ <- stream1Started.await
-                _ <- ZIO.logInfo("Consumer 1 started")
+                _ <- ZIO.logDebug("Consumer 1 started")
                 stream2Control <- ZIO.logAnnotate("stream", "2") {
                                     consumer2
                                       .plainStreamWithControl(
@@ -793,7 +793,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                         Serde.string
                                       )
                                   }
-                _ <- ZIO.logInfo("Consumer 1 start of graceful shutdown")
+                _ <- ZIO.logDebug("Consumer 1 start of graceful shutdown")
                 _ <- stream1Control.end
                 _ <- ZIO.logAnnotate("stream", "2") {
                        stream2Control.stream
@@ -802,7 +802,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                          .tapErrorCause(c => ZIO.logErrorCause("Stream 2 failed", c))
                          .forkScoped
                      }
-                _                              <- ZIO.logInfo("Waiting for consumer 1 to end")
+                _                              <- ZIO.logDebug("Waiting for consumer 1 to end")
                 _                              <- stream1Fiber.join
                 stream1PartitionsAssignedValue <- stream1PartitionsAssigned.get
               } yield stream1PartitionsAssignedValue
