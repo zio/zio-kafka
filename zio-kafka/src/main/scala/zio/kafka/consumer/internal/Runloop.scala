@@ -72,17 +72,17 @@ private[consumer] final class Runloop private (
     offerAndAwaitCommand(RunloopCommand.EndStreamsBySubscription(subscription, _))
 
   private[internal] def offerAndAwaitCommand[A](f: Promise[Throwable, A] => RunloopCommand): Task[A] =
-    // This method can be called from a finalizer (uninterruptible) as well as from regular code. We run the race
-    // in a separate (daemon) fiber that is explicitly interruptible, so that `raceFirst` can abort its losing
-    // await, and then `join` it uninterruptibly. This way a caller's interruption (e.g. the
-    // `runWithGracefulShutdown` finalizer) cannot abort the await before the runloop has processed the command,
-    // while the runloop can still cause us to stop waiting by completing `runloopDone`.
+    // Callable from finalizers (uninterruptible) and regular code. The offer must not be interrupted, and
+    // the caller's interruption must not abort the await before the command is processed. We therefore keep
+    // the whole thing uninterruptible. To avoid hanging forever when the runloop has already exited, a
+    // watcher fiber propagates the runloop's failure onto `promise`. A result already set by the runloop
+    // takes precedence: `failCause` on an already-completed promise is a no-op.
     ZIO.uninterruptible {
       for {
         promise <- Promise.make[Throwable, A]
         _       <- commandQueue.offer(f(promise))
-        fiber   <- ZIO.interruptible(promise.await.raceFirst(runloopDone.await)).forkDaemon
-        r       <- fiber.join
+        watcher <- ZIO.interruptible(runloopDone.await.catchAllCause(promise.failCause)).forkDaemon
+        r       <- promise.await.ensuring(watcher.interrupt)
       } yield r
     }
 
@@ -766,7 +766,11 @@ object Runloop {
       // Run the entire loop on a dedicated thread to avoid executor shifts
 
       executor <- RunloopExecutor.newInstance
-      fiber    <- ZIO.onExecutor(executor)(runloop.run(initialState)).forkScoped
+      fiber <- ZIO
+                 .onExecutor(executor)(runloop.run(initialState))
+                 // Defense in depth: ensure `runloopDone` is completed for _any_ exit.
+                 .onExit(exit => runloopDone.failCause(exit.causeOption.getOrElse(Cause.empty)).ignore)
+                 .forkScoped
       waitForRunloopStop = fiber.join.orDie
 
       _ <- ZIO.addFinalizer(
