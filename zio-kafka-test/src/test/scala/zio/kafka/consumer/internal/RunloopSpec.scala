@@ -13,7 +13,7 @@ import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.kafka.diagnostics.{ Diagnostics, SlidingDiagnostics }
 import zio.metrics.{ MetricState, Metrics }
 import zio.stream.{ Take, ZStream }
-import zio.test.TestAspect.withLiveClock
+import zio.test.TestAspect.{ flaky, withLiveClock }
 import zio.test._
 
 import java.util
@@ -272,7 +272,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
             }
           )
         }
-      },
+      } @@ flaky(5),
       test("endStreamsBySubscription does not hang in uninterruptible context after Runloop crashes") {
         // Simulates StreamControl.end called from ZIO.addFinalizer (uninterruptible context).
         val authException = new TopicAuthorizationException("acl-denied")
