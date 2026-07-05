@@ -15,6 +15,7 @@ const sidebars = {
         "consumer-tuning",
         "avoiding-chunk-breakers",
         "preventing-duplicates",
+        "detecting-authorization-failures",
         "sharing-consumer",
         "serialization-and-deserialization",
         "transactions",

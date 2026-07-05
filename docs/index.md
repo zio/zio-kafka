@@ -30,6 +30,7 @@ Kafka has a mature Java client for producing and consuming events, but it has a 
   - automatic or manual starting offset
   - supports external commits
   - retries after authentication/authorization errors
+  - detects [silent authorization failures](detecting-authorization-failures.md) when a READ ACL is revoked at runtime
   - exposes metrics
   - diagnostics API
 - Producing:
