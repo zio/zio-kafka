@@ -68,6 +68,16 @@ final case class ProducerSettings(
     withProperties(compression.properties)
 
   /**
+   * @param idempotence
+   *   when `true` (the default) the producer writes idempotently: each record is assigned a sequence number so the
+   *   broker can deduplicate retries, guaranteeing exactly-once, in-order delivery per partition. Set to `false` to
+   *   disable sequence tracking (e.g. for tests, or high-throughput producing where occasional duplicates on retry are
+   *   acceptable).
+   */
+  def withIdempotence(idempotence: Boolean): ProducerSettings =
+    withProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, idempotence.toString)
+
+  /**
    * @param sendBufferSize
    *   The maximum number of record chunks that can queue up while waiting for the underlying producer to become
    *   available. Performance critical users that publish a lot of records one by one (instead of in chunks), should
