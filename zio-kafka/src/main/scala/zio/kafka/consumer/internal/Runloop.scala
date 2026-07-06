@@ -259,11 +259,13 @@ private[consumer] final class Runloop private (
                                    .map(_.tp)
                                    .filter(tp => counts.getOrElse(tp.topic(), 0) >= threshold)
                                    .distinctBy(_.topic())
-                                 (if (partitionsToProbe.nonEmpty)
-                                    // committed() throws TopicAuthorizationException on DENY READ,
-                                    // unlike poll() which silently returns 0 records.
-                                    ZIO.attempt(c.committed(partitionsToProbe.toSet.asJava)).unit
-                                  else ZIO.unit).as(counts)
+                                 if (partitionsToProbe.nonEmpty)
+                                   // committed() throws TopicAuthorizationException on DENY READ,
+                                   // unlike poll() which silently returns 0 records.
+                                   ZIO
+                                     .attempt(c.committed(partitionsToProbe.toSet.asJava))
+                                     .as(counts -- partitionsToProbe.map(_.topic()))
+                                 else ZIO.succeed(counts)
                              }
 
             _ <- metricsObserver.observePoll(toResumeCount, toPauseCount, pollDuration, polledRecords.count())
