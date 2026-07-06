@@ -297,6 +297,53 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
             }
           )
         }
+      },
+      test("emptyPollCountToMetaRefresh detects TopicAuthorizationException via committed() after N empty polls") {
+        // Verifies that when poll() silently returns 0 records (as Kafka does on ACL DENY READ),
+        // the runloop detects the authorization failure via committed() after the configured threshold.
+        val authException = new TopicAuthorizationException("acl-denied")
+        // Subclass MockConsumer to make committed() throw on demand.
+        @volatile var throwOnCommitted = false
+        val mockConsumer: BinaryMockConsumer = new BinaryMockConsumer("latest") {
+          override def committed(
+            partitions: java.util.Set[TopicPartition]
+          ): java.util.Map[TopicPartition, org.apache.kafka.clients.consumer.OffsetAndMetadata] =
+            if (throwOnCommitted) throw authException
+            else super.committed(partitions)
+        }
+        val settings = consumerSettings
+          .withAuthErrorRetrySchedule(Schedule.recurs(0))
+          .withMetricsObserver(ConsumerMetricsObserver.NoOp)
+          .withEmptyPollCountToMetaRefresh(3) // probe committed() after 3 consecutive empty polls
+        withRunloop(mockConsumer = mockConsumer, settings = settings) { (_, partitionsHub, runloop) =>
+          // Poll 1: assign tp10 with no records — empty-poll counter reaches 1.
+          mockConsumer.schedulePollTask { () =>
+            mockConsumer.updateEndOffsets(Map(tp10 -> Long.box(0L)).asJava)
+            mockConsumer.rebalance(Seq(tp10).asJava)
+          }
+          // Poll 2: empty — counter reaches 2.
+          mockConsumer.schedulePollTask(() => ())
+          // Poll 3: arm the committed() exception — counter reaches 3 (= threshold),
+          // committed() is called and throws TopicAuthorizationException, crashing the runloop.
+          mockConsumer.schedulePollTask { () =>
+            throwOnCommitted = true
+          }
+          for {
+            streamStream <- ZStream.fromHubScoped(partitionsHub)
+            _            <- runloop.addSubscription(Subscription.Topics(Set(tp10.topic())))
+            exit <- streamStream
+                      .map(_.exit)
+                      .flattenExitOption
+                      .flattenChunks
+                      .flatMapPar(Int.MaxValue) { case (_, stream) => stream }
+                      .runDrain
+                      .timeout(10.seconds)
+                      .exit
+          } yield assertTrue(
+            // The stream should fail with the auth exception surfaced by committed(), not time out.
+            exit.causeOption.exists(_.squash == authException)
+          )
+        }
       }
     ) @@ withLiveClock
 
