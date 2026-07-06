@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783325117230,
+  "lastUpdate": 1783325148369,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -7058,6 +7058,102 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 576.80746402,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "zhengchunchen@live.cn",
+            "name": "Jensen",
+            "username": "acrow"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e4c63e98a172cdd01635937287e0e6e011ac368e",
+          "message": "Feature: opt-in detection of TopicAuthorizationException after silent poll (#1713)\n\n# Problem\n\nWhen a `READ ACL` is revoked at runtime, `poll()` silently returns `0`\nrecords for the affected topic instead of throwing\n`TopicAuthorizationException`. This leaves `Consumer.consumeWith`\nrunning indefinitely with no indication that authorization has been\nlost.\n\n# Fix\n\nAdd `ConsumerSettings.withEmptyPollCountToMetaRefresh(n: Int)`: after n\nconsecutive polls where a subscribed topic returned no records, call\n`committed()` for the assigned partitions of that topic. Method\n`committed()` throws `TopicAuthorizationException` on `DENY READ`,\nunlike `poll()` which swallows it silently.\n\nThe feature is disabled by default (`None`) — there is no overhead for\nusers who do not use topic-level ACLs. All bookkeeping (Set operations,\ncounter updates, committed() calls) is skipped entirely when the setting\nis not set.\n\nThe empty-poll count is tracked in `State.emptyPollCounts: Map[String,\nInt]` per topic, and reset when the topic returns records.\n\n# Notes\n  \n- `committed()` was chosen over `partitionsFor()` because it throws on\n`DENY READ`, while `partitionsFor()` only throws on `DENY DESCRIBE`.\n- Users subscribing to a very large number of low volume topics should\nset a higher threshold or leave this disabled.\n\n---------\n\nCo-authored-by: Erik van Oosten <e.vanoosten@grons.nl>",
+          "timestamp": "2026-07-06T09:46:54+02:00",
+          "tree_id": "4d163c1dc04859d8ad8e3e666a486308711919cf",
+          "url": "https://github.com/zio/zio-kafka/commit/e4c63e98a172cdd01635937287e0e6e011ac368e"
+        },
+        "date": 1783325148033,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 591.64121988,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 593.3175673000002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 79.54192279102564,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 257.72591947999996,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeqAsync",
+            "value": 21.344885287808328,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeqAsync",
+            "value": 6.672603161757344,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordPar",
+            "value": 59.122279010348706,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordSeq",
+            "value": 73.87999596004946,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 540.5171775,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 535.25186532,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 564.24570752,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 569.5563809600002,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
