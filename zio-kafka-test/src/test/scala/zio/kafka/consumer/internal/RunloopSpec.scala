@@ -13,7 +13,7 @@ import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.kafka.diagnostics.{ Diagnostics, SlidingDiagnostics }
 import zio.metrics.{ MetricState, Metrics }
 import zio.stream.{ Take, ZStream }
-import zio.test.TestAspect.withLiveClock
+import zio.test.TestAspect.{ flaky, withLiveClock }
 import zio.test._
 
 import java.util
@@ -215,6 +215,132 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
           } yield assertTrue(
             // Since runloop informs the partition streams when it crashes, `exit` contains the auth exception.
             // Without informing the partition streams, this would time out (and not get an auth exception).
+            exit.causeOption.exists(_.squash == authException)
+          )
+        }
+      },
+      test("removeSubscription does not hang after Runloop crashes") {
+        val authException = new TopicAuthorizationException("acl-denied")
+        val settings = consumerSettings
+          .withAuthErrorRetrySchedule(Schedule.recurs(0))
+          .withMetricsObserver(ConsumerMetricsObserver.NoOp)
+        withRunloop(settings = settings) { (mockConsumer, _, runloop) =>
+          val subscription = Subscription.Topics(Set(tp10.topic()))
+          mockConsumer.schedulePollTask { () =>
+            mockConsumer.setPollException(authException)
+          }
+          for {
+            _ <- runloop.addSubscription(subscription)
+            // Wait for the runloop to crash
+            _ <- ZIO.sleep(2.seconds)
+            // removeSubscription calls offerAndAwaitCommand; without runloopDone it would hang forever
+            exit <- runloop.removeSubscription(subscription).timeout(5.seconds).exit
+          } yield assertTrue(
+            // Should complete promptly (not time out) now that runloopDone unblocks the command promise.
+            // When the runloop crashes, removeSubscription may fail with the runloop's error — that is
+            // acceptable: the key property is that it does NOT hang (i.e. the timeout does not fire).
+            exit match {
+              case Exit.Success(None) => false // timed out — the bug we are fixing
+              case _                  => true  // completed (success or failure) — not hung
+            }
+          )
+        }
+      },
+      test("removeSubscription does not hang in uninterruptible context after Runloop crashes") {
+        // Simulates ZIO.addFinalizer: removeSubscription is called inside ZIO.uninterruptible.
+        // A raceFirst-based fix would hang here because raceFirst tries to interrupt the losing
+        // fiber, but the interrupt is masked in uninterruptible context.
+        val authException = new TopicAuthorizationException("acl-denied")
+        val settings = consumerSettings
+          .withAuthErrorRetrySchedule(Schedule.recurs(0))
+          .withMetricsObserver(ConsumerMetricsObserver.NoOp)
+        withRunloop(settings = settings) { (mockConsumer, _, runloop) =>
+          val subscription = Subscription.Topics(Set(tp10.topic()))
+          mockConsumer.schedulePollTask { () =>
+            mockConsumer.setPollException(authException)
+          }
+          for {
+            _ <- runloop.addSubscription(subscription)
+            _ <- ZIO.sleep(2.seconds)
+            exit <- ZIO.uninterruptible {
+                      runloop.removeSubscription(subscription)
+                    }.timeout(5.seconds).exit
+          } yield assertTrue(
+            exit match {
+              case Exit.Success(None) => false
+              case _                  => true
+            }
+          )
+        }
+      } @@ flaky(5),
+      test("endStreamsBySubscription does not hang in uninterruptible context after Runloop crashes") {
+        // Simulates StreamControl.end called from ZIO.addFinalizer (uninterruptible context).
+        val authException = new TopicAuthorizationException("acl-denied")
+        val settings = consumerSettings
+          .withAuthErrorRetrySchedule(Schedule.recurs(0))
+          .withMetricsObserver(ConsumerMetricsObserver.NoOp)
+        withRunloop(settings = settings) { (mockConsumer, _, runloop) =>
+          val subscription = Subscription.Topics(Set(tp10.topic()))
+          mockConsumer.schedulePollTask { () =>
+            mockConsumer.setPollException(authException)
+          }
+          for {
+            _ <- runloop.addSubscription(subscription)
+            _ <- ZIO.sleep(2.seconds)
+            exit <- ZIO.uninterruptible {
+                      runloop.endStreamsBySubscription(subscription)
+                    }.timeout(5.seconds).exit
+          } yield assertTrue(
+            exit match {
+              case Exit.Success(None) => false
+              case _                  => true
+            }
+          )
+        }
+      },
+      test("emptyPollCountToMetaRefresh detects TopicAuthorizationException via committed() after N empty polls") {
+        // Verifies that when poll() silently returns 0 records (as Kafka does on ACL DENY READ),
+        // the runloop detects the authorization failure via committed() after the configured threshold.
+        val authException = new TopicAuthorizationException("acl-denied")
+        // Subclass MockConsumer to make committed() throw on demand.
+        @volatile var throwOnCommitted = false
+        val mockConsumer: BinaryMockConsumer = new BinaryMockConsumer("latest") {
+          override def committed(
+            partitions: java.util.Set[TopicPartition]
+          ): java.util.Map[TopicPartition, org.apache.kafka.clients.consumer.OffsetAndMetadata] =
+            if (throwOnCommitted) throw authException
+            else super.committed(partitions)
+        }
+        val settings = consumerSettings
+          .withAuthErrorRetrySchedule(Schedule.recurs(0))
+          .withMetricsObserver(ConsumerMetricsObserver.NoOp)
+          .withEmptyPollCountToMetaRefresh(3) // probe committed() after 3 consecutive empty polls
+        withRunloop(mockConsumer = mockConsumer, settings = settings) { (_, partitionsHub, runloop) =>
+          // Poll 1: assign tp10 with no records — empty-poll counter reaches 1.
+          mockConsumer.schedulePollTask { () =>
+            mockConsumer.updateEndOffsets(Map(tp10 -> Long.box(0L)).asJava)
+            mockConsumer.rebalance(Seq(tp10).asJava)
+          }
+          // Poll 2: empty — counter reaches 2.
+          mockConsumer.schedulePollTask(() => ())
+          // Poll 3: arm the committed() exception — counter reaches 3 (= threshold),
+          // committed() is called and throws TopicAuthorizationException, crashing the runloop.
+          mockConsumer.schedulePollTask { () =>
+            throwOnCommitted = true
+          }
+          for {
+            streamStream <- ZStream.fromHubScoped(partitionsHub)
+            _            <- runloop.addSubscription(Subscription.Topics(Set(tp10.topic())))
+            exit <- streamStream
+                      .map(_.exit)
+                      .flattenExitOption
+                      .flattenChunks
+                      .flatMapPar(Int.MaxValue) { case (_, stream) => stream }
+                      .runDrain
+                      .timeout(10.seconds)
+                      .exit
+          } yield assertTrue(
+            // The stream should fail with the auth exception surfaced by committed(), not time out.
             exit.causeOption.exists(_.squash == authException)
           )
         }

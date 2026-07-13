@@ -25,14 +25,13 @@ object RunloopCommand {
   /** Used by a stream to request more records. */
   final case class Request(tp: TopicPartition) extends StreamCommand
 
-  final case class AddSubscription(subscription: Subscription, cont: Promise[InvalidSubscriptionUnion, Unit])
-      extends StreamCommand {
+  final case class AddSubscription(subscription: Subscription, cont: Promise[Throwable, Unit]) extends StreamCommand {
     @inline def succeed: UIO[Unit]                           = cont.succeed(()).unit
     @inline def fail(e: InvalidSubscriptionUnion): UIO[Unit] = cont.fail(e).unit
   }
   final case class RemoveSubscription(subscription: Subscription, cont: Promise[Throwable, Unit]) extends StreamCommand
 
-  final case class EndStreamsBySubscription(subscription: Subscription, cont: Promise[Nothing, Unit])
+  final case class EndStreamsBySubscription(subscription: Subscription, cont: Promise[Throwable, Unit])
       extends StreamCommand {
     @inline def succeed: UIO[Unit] = cont.succeed(()).unit
   }

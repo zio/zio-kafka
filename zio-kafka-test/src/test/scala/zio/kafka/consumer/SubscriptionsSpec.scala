@@ -3,6 +3,7 @@ package zio.kafka.consumer
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
+import zio.kafka.producer.Producer
 import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils
 import zio.kafka.testkit.{ Kafka, KafkaRandom }
@@ -264,7 +265,10 @@ object SubscriptionsSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           _ <- KafkaTestUtils.createCustomTopic(topic1, partitionCount = 48) // Large number of partitions
 
-          producer <- KafkaTestUtils.makeProducer
+          // Idempotence is disabled: this test only needs the records in the topic, and an idempotent producer can
+          // livelock re-sending sequence 0 against the embedded broker (OutOfOrderSequenceException) until the test
+          // times out.
+          producer <- KafkaTestUtils.producerSettings.map(_.withIdempotence(false)).flatMap(Producer.make)
           _        <- KafkaTestUtils.produceMany(producer, topic1, kvs)
 
           recordsConsumed <- Ref.make(Chunk.empty[CommittableRecord[String, String]])
