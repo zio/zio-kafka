@@ -22,11 +22,14 @@ sealed trait ProducerEvent
  */
 object ProducerEvent {
 
+  /** Record value length for records that have no value. */
+  val NoValue = -1
+
   /**
    * Represents key data about a record that was handled by the producer.
    *
    * @param size
-   *   the size of the record's value
+   *   the size of the record's value in bytes, or [[NoValue]] (`-1`) when the record has no value
    */
   final case class ProducedRecord(topic: String, partition: Int, size: Int)
 
