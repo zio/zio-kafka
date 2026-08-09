@@ -622,9 +622,11 @@ private[producer] final class ProducerLive(
       makeDiagnosticsEmitter(Chunk.single(record))
 
     override def makeDiagnosticsEmitter(records: Chunk[ByteRecord]): DiagnosticsEmitter = {
+      def length(recordValue: Array[Byte]): Int =
+        if (recordValue != null) recordValue.length else ProducerEvent.NoValue
       val batchId = batchIds.getAndIncrement()
       val producedRecords =
-        records.map(record => ProducerEvent.ProducedRecord(record.topic(), record.partition(), record.value().length))
+        records.map(record => ProducerEvent.ProducedRecord(record.topic(), record.partition(), length(record.value())))
       new BatchDiagnosticsEmitter(batchId, producedRecords)
     }
   }

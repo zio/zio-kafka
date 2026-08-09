@@ -123,6 +123,25 @@ object ProducerSpec extends ZIOSpecDefault {
             )
           )
         },
+        test("tombstone success") {
+          val mockBehavior = AsyncProducerTestSupport
+            .newMockBehavior[Array[Byte], Array[Byte]]()
+            .sendSucceed()
+            .callbackSucceed()
+          val recordToSend    = makeTombstoneProducerRecord()
+          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", 0, ProducerEvent.NoValue))
+          for {
+            diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
+            _                <- runSingleRecordTest(mockBehavior, recordToSend, diagnostics = diagnostics)
+            diagnosticEvents <- diagnostics.queue.takeAll
+          } yield assertTrue(
+            diagnosticEvents == Chunk(
+              ProducerEvent.RecordsOffered(0, producedRecords),
+              ProducerEvent.RecordsSent(0, producedRecords, Set.empty),
+              ProducerEvent.ProducerFinalized
+            )
+          )
+        },
         test("failure") {
           val mockBehavior = AsyncProducerTestSupport
             .newMockBehavior[Array[Byte], Array[Byte]]()
@@ -544,5 +563,11 @@ object ProducerSpec extends ZIOSpecDefault {
     value: String = "value"
   ): ProducerRecord[Array[Byte], Array[Byte]] =
     new ProducerRecord[Array[Byte], Array[Byte]](topic, key.getBytes, value.getBytes)
+
+  private def makeTombstoneProducerRecord(
+    topic: String = "testTopic",
+    key: String = "key"
+  ): ProducerRecord[Array[Byte], Array[Byte]] =
+    new ProducerRecord[Array[Byte], Array[Byte]](topic, key.getBytes, null)
 
 }
