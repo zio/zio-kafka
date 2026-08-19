@@ -15,6 +15,7 @@ import zio.test.Assertion._
 import zio.test.TestAspect._
 import zio.test._
 
+import scala.jdk.OptionConverters.RichOptional
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
@@ -648,7 +649,13 @@ object ProducerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
             aliceTopicPartition = new TopicPartition(topic, aliceHadMoneyCommittableRecord.partition)
             committedOffset <- consumer2.committed(Set(aliceTopicPartition)).map(_.get(aliceTopicPartition).flatten)
-          } yield assertTrue(committedOffset.exists(_.offset == 1L))
+            recordedEpoch  = aliceHadMoneyCommittableRecord.offset.leaderEpoch.toScala.map(Int.unbox)
+            committedEpoch = committedOffset.flatMap(_.leaderEpoch().toScala.map(Int.unbox))
+          } yield assertTrue(
+            committedOffset.exists(_.offset == 1L),
+            committedEpoch.exists(_ >= 0),
+            recordedEpoch == committedEpoch
+          )
         },
         test("not committing offsets after a failed transaction") {
           for {
