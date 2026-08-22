@@ -12,7 +12,13 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, CommitTimeout, ConsumerDiagnostics, OffsetRetrieval }
+import zio.kafka.consumer.Consumer.{
+  AutoOffsetStrategy,
+  CommitTimeout,
+  ConsumerDiagnostics,
+  OffsetEpoch,
+  OffsetRetrieval
+}
 import zio.kafka.consumer.diagnostics.DiagnosticEvent
 import zio.kafka.consumer.diagnostics.DiagnosticEvent.{ ConsumerFinalized, RunloopFinalized, SubscriptionFinalized }
 import zio.kafka.diagnostics.{ Diagnostics, SlidingDiagnostics }
@@ -35,6 +41,28 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
   override def spec: Spec[TestEnvironment with Scope, Throwable] =
     suite("ConsumerSpec")(
+      suite("OffsetRetrieval.Manual#toExternal")(
+        test("converts Manual to External") {
+          val tp1 = new TopicPartition("topic1", 0)
+          val tp2 = new TopicPartition("topic2", 1)
+          val tps = Set(tp1, tp2)
+          val getManualOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]] =
+            _ => ZIO.succeed(Map(tp1 -> 100L, tp2 -> 200L))
+
+          val manual   = OffsetRetrieval.Manual(getManualOffsets, AutoOffsetStrategy.Earliest)
+          val external = manual.toExternal
+
+          for {
+            externalOffsets <- external.getOffsets(tps)
+          } yield assertTrue(
+            external.defaultStrategy == AutoOffsetStrategy.Earliest,
+            externalOffsets == Map(
+              tp1 -> OffsetEpoch(100L, None),
+              tp2 -> OffsetEpoch(200L, None)
+            )
+          )
+        }
+      ),
       test("make validates ConsumerSettings") {
         val settings = ConsumerSettings(List("host")).withProperty("enable.auto.commit", "true")
         val consumer = Consumer.make(settings).exit
@@ -191,7 +219,8 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                  )
                }
 
-          offsetRetrieval = OffsetRetrieval.Manual(tps => ZIO.attempt(tps.map(_ -> manualOffsetSeek.toLong).toMap))
+          offsetRetrieval =
+            OffsetRetrieval.External(tps => ZIO.succeed(tps.map(_ -> OffsetEpoch(manualOffsetSeek.toLong, None)).toMap))
           consumer <- KafkaTestUtils.makeConsumer(
                         client,
                         Some(group),
@@ -1181,17 +1210,17 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                        }
                        .runCollect
                    }
-            // Start a new consumer with manual offsets. The given offset per partition is:
+            // Start a new consumer with external offsets. The given offset per partition is:
             //  p0: 3, before the current offset => should consume from the given offset
             //  p1: _Maxvalue_, offset out of range (invalid) => should consume using default strategy
             //  p2: _nothing_ given => should consume from the committed offset
             //  p4: _nothing_ given => should consume using default strategy
-            offsetRetrieval = OffsetRetrieval.Manual(
+            offsetRetrieval = OffsetRetrieval.External(
                                 getOffsets = _ =>
                                   ZIO.attempt(
                                     Map(
-                                      new TopicPartition(topic, 0) -> manualOffsetSeek,
-                                      new TopicPartition(topic, 1) -> Long.MaxValue
+                                      new TopicPartition(topic, 0) -> OffsetEpoch(manualOffsetSeek, None),
+                                      new TopicPartition(topic, 1) -> OffsetEpoch(Long.MaxValue, None)
                                     )
                                   ),
                                 defaultStrategy = defaultStrategy

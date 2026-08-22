@@ -388,14 +388,44 @@ object Consumer {
         .flatMap(_.consumeWith[R, R1, K, V](subscription, keyDeserializer, valueDeserializer, commitRetryPolicy)(f))
     }
 
+  /**
+   * A committed offset with leader epoch.
+   *
+   * See ConsumerSettings.withOffsetRetrieval.
+   *
+   * @param offset
+   *   the next offset to consume from
+   * @param leaderEpoch
+   *   the leaderEpoch of the offset (a positive `Int`), or `None` if unknown
+   */
+  final case class OffsetEpoch(offset: Long, leaderEpoch: Option[Int])
+
   /** See ConsumerSettings.withOffsetRetrieval. */
   sealed trait OffsetRetrieval
   object OffsetRetrieval {
+
+    /** Automatic offset retrieval. See ConsumerSettings.withOffsetRetrieval. */
     final case class Auto(reset: AutoOffsetStrategy = AutoOffsetStrategy.Latest) extends OffsetRetrieval
+
+    /** External offset retrieval. See ConsumerSettings.withOffsetRetrieval. */
+    final case class External(
+      getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, OffsetEpoch]],
+      defaultStrategy: AutoOffsetStrategy = AutoOffsetStrategy.Latest
+    ) extends OffsetRetrieval
+
+    /** External offset retrieval. See ConsumerSettings.withOffsetRetrieval. */
+    @deprecated("Use OffsetRetrieval.External instead", "3.8.0")
     final case class Manual(
       getOffsets: Set[TopicPartition] => Task[Map[TopicPartition, Long]],
       defaultStrategy: AutoOffsetStrategy = AutoOffsetStrategy.Latest
-    ) extends OffsetRetrieval
+    ) extends OffsetRetrieval {
+
+      /** Returns a wrapper that converts deprecated `Manual` to `External`. */
+      def toExternal: External = OffsetRetrieval.External(
+        tps => getOffsets(tps).map(_.map { case (tp, offset) => (tp, OffsetEpoch(offset, None)) }),
+        defaultStrategy
+      )
+    }
   }
 
   sealed trait AutoOffsetStrategy { self =>

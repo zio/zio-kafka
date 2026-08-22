@@ -114,21 +114,28 @@ final case class ConsumerSettings(
    *   OffsetRetrieval.Auto(AutoOffsetStrategy.Latest) // the default
    *   OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)
    *   OffsetRetrieval.Auto(AutoOffsetStrategy.None)
-   *   OffsetRetrieval.Manual(getOffsets, defaultStrategy)
+   *   OffsetRetrieval.External(getOffsets, defaultStrategy)
+   *   OffsetRetrieval.Manual(getOffsets, defaultStrategy) // deprecated
    * }}}
    *
    * The `Auto` options make consuming start from the latest committed offset. When no committed offset is available,
    * the given offset strategy is used and consuming starts from the `Latest` offset (the default), the `Earliest`
    * offset, or results in an error for `None`.
    *
-   * The `Manual` option allows fine-grained control over which offset to consume from. The provided `getOffsets`
-   * function should return an offset for each topic-partition that is being assigned. When the returned offset is
-   * smaller than the log start offset or larger than the log end offset, the `defaultStrategy` is used and consuming
-   * starts from the `Latest` offset (the default), the `Earliest` offset, or results in an error for `None`.
+   * The option `External` (and deprecated `Manual`) allows fine-grained control over which offset to start consumption
+   * from. The provided `getOffsets` function should return an offset for each topic-partition that is being assigned.
+   * When the returned offset is smaller than the log start offset or larger than the log end offset, the
+   * `defaultStrategy` is used and consuming starts from the `Latest` offset (the default), the `Earliest` offset, or
+   * results in an error for `None`.
    *
    * When the returned map does ''not'' contain an entry for a topic-partition, the consumer will continue from the last
    * committed offset. When no committed offset is available, the `defaultStrategy` is used and consuming starts from
    * the `Latest` offset (the default), the `Earliest` offset, or results in an error for `None`.
+   *
+   * `External` allows you to optionally provide the `leaderEpoch` (a positive `Int`) together with the offset. It is
+   * recommended you provide the leaderEpoch if you can as it prevents consuming from a broker that is unaware it is no
+   * longer a leader. The older `Manual` works the same as `External`, except that it does not allow you to provide a
+   * leaderEpoch. `Manual` is deprecated and will be removed in a future zio-kaka release.
    *
    * This configuration applies to both subscribed and assigned partitions.
    *
@@ -136,11 +143,12 @@ final case class ConsumerSettings(
    * https://kafka.apache.org/documentation/#consumerconfigs_auto.offset.reset for more information.
    */
   def withOffsetRetrieval(retrieval: OffsetRetrieval): ConsumerSettings = {
-    val resetStrategy = retrieval match {
-      case OffsetRetrieval.Auto(reset)                => reset
-      case OffsetRetrieval.Manual(_, defaultStrategy) => defaultStrategy
+    val (updatedRetrieval, resetStrategy) = retrieval match {
+      case r @ OffsetRetrieval.Auto(reset)                  => (r, reset)
+      case r @ OffsetRetrieval.External(_, defaultStrategy) => (r, defaultStrategy)
+      case r @ OffsetRetrieval.Manual(_, defaultStrategy)   => (r.toExternal, defaultStrategy)
     }
-    copy(offsetRetrieval = retrieval)
+    copy(offsetRetrieval = updatedRetrieval)
       .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, resetStrategy.toConfig)
   }
 
@@ -406,6 +414,12 @@ final case class ConsumerSettings(
         assert(
           commitTimeout.toNanos > 2L * pollTimeout.toNanos,
           s"Commit timeout must be larger than 2 * pollTimeout, saw commitTimeout ${commitTimeout} and pollTimeout ${pollTimeout}."
+        ) ++
+        assert(
+          !offsetRetrieval.isInstanceOf[OffsetRetrieval.Manual],
+          "OffsetRetrieval.Manual is no longer supported. Switch to OffsetRetrieval.External, use " +
+            "OffsetRetrieval.Manual.toExternal to convert an existing Manual implementation, " +
+            "or use ConsumerSettings.withOffsetRetrieval which converts it automatically."
         )
     }
 
