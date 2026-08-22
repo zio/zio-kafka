@@ -58,8 +58,14 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
           )
         }
       },
+      // This test is flaky because Runloop emits the new stream _before_ it emits the associated diagnostics the test
+      // relies on. (Diagnostics are a best-efford feature.) Most of the time the ZIO scheduler lets Runloop emit both
+      // the new stream and the diagnostics before another thread runs. However, in rare cases, this test consumes the
+      // new stream before the diagnostics is emitted. In those cases this test does not see the diagnostics and fails
+      // on an empty `rebalanceEvents`.
+      // Because the problem occurs so rarely, we simply add the `flaky` aspect.
       test(
-        "runloop does not starts a new stream for partition which being revoked right after assignment within the same RebalanceEvent"
+        "runloop does not start a new stream for a partition that was revoked right after assignment within the same RebalanceEvent"
       ) {
         SlidingDiagnostics.make[DiagnosticEvent](100).flatMap { diagnostics =>
           withRunloop(diagnostics) { (mockConsumer, partitionsHub, runloop) =>
@@ -97,7 +103,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
             )
           }
         }
-      },
+      } @@ flaky(3),
       test(
         "runloop continues polling after a lost partition"
       ) {
