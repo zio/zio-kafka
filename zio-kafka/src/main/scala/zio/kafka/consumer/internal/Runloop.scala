@@ -10,12 +10,12 @@ import zio.kafka.consumer.diagnostics.DiagnosticEvent
 import zio.kafka.consumer.internal.ConsumerAccess.ByteArrayKafkaConsumer
 import zio.kafka.consumer.internal.RebalanceCoordinator._
 import zio.kafka.consumer.internal.Runloop._
-import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
 import zio.kafka.consumer.metrics.{ ConsumerMetricsObserver, ZioMetricsConsumerMetricsObserver }
 import zio.stream._
 
 import java.util.concurrent.TimeoutException
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 import scala.util.control.NoStackTrace
 
 //noinspection SimplifyWhenInspection,SimplifyUnlessInspection
@@ -176,14 +176,22 @@ private[consumer] final class Runloop private (
   private def doSeekForNewPartitions(c: ByteArrayKafkaConsumer, tps: Set[TopicPartition]): Task[Set[TopicPartition]] =
     settings.offsetRetrieval match {
       case OffsetRetrieval.Auto(_) => ZIO.succeed(Set.empty)
-      case OffsetRetrieval.Manual(getOffsets, _) =>
+      case OffsetRetrieval.External(getOffsets, _) =>
         if (tps.isEmpty) ZIO.succeed(Set.empty)
         else
-          getOffsets(tps).flatMap { offsets =>
-            ZIO
-              .attempt(offsets.foreach { case (tp, offset) => c.seek(tp, offset) })
-              .as(offsets.keySet)
+          getOffsets(tps).flatMap { offsetEpochs =>
+            ZIO.attempt {
+              // tp = topic-partition, oe = offset-epoch, om = offset and metadata
+              offsetEpochs.foreach { case (tp, oe) =>
+                val om = new OffsetAndMetadata(oe.offset, oe.leaderEpoch.map(Int.box).toJava, "")
+                c.seek(tp, om)
+              }
+            }
+              .as(offsetEpochs.keySet)
           }
+      case _: OffsetRetrieval.Manual =>
+        // ConsumerSettings converts Manual to External, it should not show up here.
+        ZIO.die(new UnsupportedOperationException("OffsetRetrieval.Manual not expected here"))
     }
 
   /**
@@ -676,6 +684,8 @@ private[consumer] final class Runloop private (
 }
 
 object Runloop {
+  type PartitionAssignment = (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])
+
   private implicit final class StreamOps[R, E, A](private val stream: ZStream[R, E, A]) extends AnyVal {
 
     /**

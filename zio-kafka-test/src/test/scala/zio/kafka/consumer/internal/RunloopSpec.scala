@@ -7,7 +7,7 @@ import zio._
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.kafka.consumer.Consumer.ConsumerDiagnostics
 import zio.kafka.consumer.diagnostics.DiagnosticEvent
-import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
+import zio.kafka.consumer.internal.Runloop.PartitionAssignment
 import zio.kafka.consumer.metrics.ConsumerMetricsObserver
 import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.kafka.diagnostics.{ Diagnostics, SlidingDiagnostics }

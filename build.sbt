@@ -1,5 +1,6 @@
 import sbt.Def
 import MimaSettings.mimaSettings
+import org.typelevel.scalacoptions.ScalacOptions
 import scala.sys.process.*
 import scala.util.Try
 
@@ -54,7 +55,6 @@ inThisBuild(
     Test / fork              := true,
     run / fork               := true,
     ciJvmOptions ++= Seq("-Xms6G", "-Xmx6G", "-Xss4M", "-XX:+UseG1GC"),
-    tpolecatExcludeOptions += org.typelevel.scalacoptions.ScalacOptions.lintInferAny,
     scalafixDependencies ++= List(
       "com.github.vovapolu"                      %% "scaluzzi" % "0.1.23",
       "io.github.ghostbuster91.scalafix-unified" %% "unified"  % "0.0.9"
@@ -108,9 +108,8 @@ lazy val root = project
 def stdSettings(prjName: String) = Seq(
   name              := s"$prjName",
   scalafmtOnCompile := !insideCI.value,
-  Compile / compile / scalacOptions ++=
-    optionsOn("2.13")("-Wconf:cat=unused-nowarn:s").value,
-  scalacOptions -= "-Xlint:infer-any",
+  tpolecatExcludeOptions ++= Set(ScalacOptions.lintInferAny, ScalacOptions.deprecation),
+  tpolecatScalacOptions += ScalacOptions.warnOption("conf:cat=deprecation:s"),
   // workaround for bad constant pool issue
   (Compile / doc) := Def.taskDyn {
     val default = (Compile / doc).taskValue
