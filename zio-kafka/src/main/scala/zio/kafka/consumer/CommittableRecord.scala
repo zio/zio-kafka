@@ -42,6 +42,7 @@ final case class CommittableRecord[K, V](
     OffsetImpl(
       topic = record.topic(),
       partition = record.partition(),
+      leaderEpoch = record.leaderEpoch(),
       offset = record.offset(),
       commitHandle = commitHandle,
       consumerGroupMetadata = consumerGroupMetadata,
