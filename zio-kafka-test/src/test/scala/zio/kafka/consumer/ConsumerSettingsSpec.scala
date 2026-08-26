@@ -7,6 +7,7 @@ import org.apache.kafka.clients.consumer.{
   RoundRobinAssignor
 }
 import zio._
+import zio.kafka.consumer.Consumer.OffsetRetrieval
 import zio.kafka.ZIOSpecDefaultSlf4j
 import zio.test._
 import zio.test.Assertion._
@@ -90,6 +91,16 @@ object ConsumerSettingsSpec extends ZIOSpecDefaultSlf4j {
             )
           }
             .reduce(_ && _)
+        },
+        test("rejects OffsetRetrieval.Manual") {
+          assertFailsWithIllegalArgumentException(
+            ConsumerSettings(List("host"))
+              .copy(offsetRetrieval = OffsetRetrieval.Manual(_ => ZIO.succeed(Map.empty)))
+              .validate,
+            "Invalid consumer settings: OffsetRetrieval.Manual is no longer supported. Switch to " +
+              "OffsetRetrieval.External, use OffsetRetrieval.Manual.toExternal to convert an existing Manual " +
+              "implementation, or use ConsumerSettings.withOffsetRetrieval which converts it automatically."
+          )
         },
         test("rejects with multiple problems") {
           assertFailsWithIllegalArgumentException(

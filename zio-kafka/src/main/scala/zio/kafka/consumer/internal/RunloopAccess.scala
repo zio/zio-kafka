@@ -1,14 +1,12 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.consumer.Consumer.ConsumerDiagnostics
 import zio.kafka.consumer.diagnostics.DiagnosticEvent
-import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
-import zio.kafka.consumer.internal.RunloopAccess.PartitionAssignment
+import zio.kafka.consumer.internal.Runloop.PartitionAssignment
 import zio.kafka.consumer._
 import zio.kafka.diagnostics.Diagnostics
-import zio.stream.{ Stream, Take, ZStream }
+import zio.stream.{ Take, ZStream }
 
 private[internal] sealed trait RunloopState
 private[internal] object RunloopState {
@@ -85,8 +83,6 @@ private[consumer] final class RunloopAccess private (
 }
 
 private[consumer] object RunloopAccess {
-  type PartitionAssignment = (TopicPartition, Stream[Throwable, ByteArrayCommittableRecord])
-
   def make(
     settings: ConsumerSettings,
     consumerAccess: ConsumerAccess,
