@@ -26,6 +26,7 @@ import zio.test._
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import scala.jdk.OptionConverters.RichOptional
 import scala.reflect.ClassTag
 
 //noinspection SimplifyAssertInspection
@@ -930,6 +931,41 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           offsets <- consumer.committed((0 until partitionCount).map(new TopicPartition(topic, _)).toSet)
         } yield assert(offsets.values.map(_.map(_.offset)))(forall(isSome(equalTo(nrMessages.toLong / partitionCount))))
       },
+      test("commits an offset with leader epoch") {
+        for {
+          topic  <- randomTopic
+          group  <- randomGroup
+          client <- randomClient
+
+          _        <- KafkaTestUtils.createCustomTopic(topic)
+          producer <- KafkaTestUtils.makeProducer
+          _        <- KafkaTestUtils.produceOne(producer, topic, "key", "msg")
+
+          // Consume messages
+          subscription = Subscription.topics(topic)
+          consumer         <- KafkaTestUtils.makeConsumer(client, Some(group))
+          recordedEpochRef <- Ref.make[Option[Int]](None)
+          _ <- consumer
+                 .plainStream(subscription, Serde.string, Serde.string)
+                 .mapZIO { record =>
+                   val epoch = record.record.leaderEpoch().toScala.map(Int.unbox)
+                   recordedEpochRef.set(epoch).as(record.offset)
+                 }
+                 .take(1)
+                 .transduce(Consumer.collectOffsets)
+                 .take(1)
+                 .mapZIO(_.commit)
+                 .runDrain
+          offsets       <- consumer.committed(Set(new TopicPartition(topic, 0)))
+          recordedEpoch <- recordedEpochRef.get
+          committedEpoch = offsets.values.headOption.flatten.flatMap { om =>
+                             om.leaderEpoch().toScala.map(Int.unbox)
+                           }
+        } yield assertTrue(
+          committedEpoch.exists(_ >= 0),
+          recordedEpoch == committedEpoch
+        )
+      },
       test("commits an offset with metadata") {
         for {
           topic    <- randomTopic
@@ -944,15 +980,15 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
           // Consume messages
           subscription = Subscription.topics(topic)
           consumer <- KafkaTestUtils.makeConsumer(client, Some(group))
-          offsets <- consumer
-                       .partitionedStream(subscription, Serde.string, Serde.string)
-                       .flatMap(_._2.map(_.offset.withMetadata(metadata)))
-                       .take(1)
-                       .transduce(Consumer.collectOffsets)
-                       .take(1)
-                       .mapZIO(_.commit)
-                       .runDrain *>
-                       consumer.committed(Set(new TopicPartition(topic, 0)))
+          _ <- consumer
+                 .partitionedStream(subscription, Serde.string, Serde.string)
+                 .flatMap(_._2.map(_.offset.withMetadata(metadata)))
+                 .take(1)
+                 .transduce(Consumer.collectOffsets)
+                 .take(1)
+                 .mapZIO(_.commit)
+                 .runDrain
+          offsets <- consumer.committed(Set(new TopicPartition(topic, 0)))
         } yield assert(offsets.values.headOption.flatten.map(_.metadata))(isSome(equalTo(metadata)))
       },
       test("access to the java consumer must be fair") {

@@ -4,10 +4,13 @@ import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, OffsetAndMetad
 import org.apache.kafka.common.TopicPartition
 import zio._
 
+import java.util.{ Optional => JOption }
+
 trait Offset {
 
   def topic: String
   def partition: Int
+  def leaderEpoch: JOption[Integer]
   def offset: Long
   def commit: Task[Unit]
   def batch: OffsetBatch
@@ -15,7 +18,9 @@ trait Offset {
   def withMetadata(metadata: String): Offset
 
   private[consumer] def metadata: Option[String]
-  private[consumer] def asJavaOffsetAndMetadata: OffsetAndMetadata = new OffsetAndMetadata(offset, metadata.orNull)
+
+  private[consumer] def asJavaOffsetAndMetadata: OffsetAndMetadata =
+    new OffsetAndMetadata(offset, leaderEpoch, metadata.orNull)
 
   /**
    * Attempts to commit and retries according to the given policy when the commit fails with a
@@ -44,6 +49,7 @@ object Offset {
 private final case class OffsetImpl(
   topic: String,
   partition: Int,
+  leaderEpoch: JOption[Integer],
   offset: Long,
   commitHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
   consumerGroupMetadata: Option[ConsumerGroupMetadata],
