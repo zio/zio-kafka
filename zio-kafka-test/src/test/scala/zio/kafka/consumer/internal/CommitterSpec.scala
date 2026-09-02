@@ -91,7 +91,7 @@ object CommitterSpec extends ZIOSpecDefault {
         _ <- commitFiber.join
       } yield assertCompletes
     },
-    test("adds 1 to the committed last offset") {
+    test("commits the given next-offsets") {
       for {
         commitAvailable <- Promise.make[Nothing, Unit]
         committer <- LiveCommitter.make(
@@ -100,15 +100,16 @@ object CommitterSpec extends ZIOSpecDefault {
                        ConsumerMetricsObserver.NoOp,
                        onCommitAvailable = commitAvailable.succeed(()).unit
                      )
-        tp = new TopicPartition("topic", 0)
-        _                <- committer.commit(Map(tp -> new OffsetAndMetadata(1))).forkScoped
+        tp          = new TopicPartition("topic", 0)
+        nextOffsets = Map(tp -> new OffsetAndMetadata(1))
+        _                <- committer.commit(nextOffsets).forkScoped
         _                <- commitAvailable.await
         committedOffsets <- Promise.make[Nothing, JavaMap[TopicPartition, OffsetAndMetadata]]
         consumer         <- createMockConsumer(offsets => committedOffsets.succeed(offsets.asJava).as(offsets))
         _                <- committer.processQueuedCommits(consumer)
         offsetsCommitted <- committedOffsets.await
       } yield assertTrue(
-        offsetsCommitted == Map(tp -> new OffsetAndMetadata(2)).asJava
+        offsetsCommitted == nextOffsets.asJava
       )
     },
     test("batches commits from multiple partitions and offsets") {
@@ -134,7 +135,7 @@ object CommitterSpec extends ZIOSpecDefault {
         _                <- commitFiber1.join zip commitFiber2.join zip commitFiber3.join
         offsetsCommitted <- committedOffsets.await
       } yield assertTrue(
-        offsetsCommitted == Map(tp -> new OffsetAndMetadata(3), tp2 -> new OffsetAndMetadata(4)).asJava
+        offsetsCommitted == Map(tp -> new OffsetAndMetadata(2), tp2 -> new OffsetAndMetadata(3)).asJava
       )
     },
     test("keeps track of pending commits") {
@@ -173,7 +174,7 @@ object CommitterSpec extends ZIOSpecDefault {
         _                <- committer.processQueuedCommits(consumer)
         _                <- commitFiber.join
         committedOffsets <- committer.getCommittedOffsets
-      } yield assertTrue(committedOffsets.offsets == Map(tp -> 0L))
+      } yield assertTrue(committedOffsets.nextOffsets == Map(tp -> 0L))
     },
     test("clean committed offsets of no-longer assigned partitions") {
       for {
@@ -192,7 +193,7 @@ object CommitterSpec extends ZIOSpecDefault {
         _                <- commitFiber.join
         _                <- committer.keepCommitsForPartitions(Set.empty)
         committedOffsets <- committer.getCommittedOffsets
-      } yield assertTrue(committedOffsets.offsets.isEmpty)
+      } yield assertTrue(committedOffsets.nextOffsets.isEmpty)
     }
   ) @@ TestAspect.withLiveClock @@ TestAspect.nonFlaky(100)
 
