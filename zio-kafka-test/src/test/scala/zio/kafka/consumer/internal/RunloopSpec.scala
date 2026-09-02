@@ -13,7 +13,7 @@ import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.kafka.diagnostics.{ Diagnostics, SlidingDiagnostics }
 import zio.metrics.{ MetricState, Metrics }
 import zio.stream.{ Take, ZStream }
-import zio.test.TestAspect.{ flaky, withLiveClock }
+import zio.test.TestAspect.{ flaky, repeats, timeout, withLiveClock }
 import zio.test._
 
 import java.util
@@ -27,6 +27,7 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
   private val tp10   = new TopicPartition("t1", 0)
   private val tp11   = new TopicPartition("t1", 1)
   private val key123 = "123".getBytes
+  private val key124 = "124".getBytes
 
   private val consumerSettings = ConsumerSettings(List("bootstrap"))
 
@@ -37,27 +38,32 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
           mockConsumer.schedulePollTask { () =>
             mockConsumer.updateEndOffsets(Map(tp10 -> Long.box(0L)).asJava)
             mockConsumer.rebalance(Seq(tp10).asJava)
-            mockConsumer.addRecord(makeConsumerRecord(tp10, key123))
+            mockConsumer.addRecord(makeConsumerRecord(tp10, key123, 10L))
+            mockConsumer.addRecord(makeConsumerRecord(tp10, key124, 11L))
+            // TODO: mockConsumer.addControlRecords(2) as soon as this becomes available
           }
           for {
             streamStream <- ZStream.fromHubScoped(partitionsHub)
             _            <- runloop.addSubscription(Subscription.Topics(Set(tp10.topic())))
-            record <- streamStream
-                        .map(_.exit)
-                        .flattenExitOption
-                        .flattenChunks
-                        .take(1)
-                        .mapZIO { case (_, stream) =>
-                          stream.runHead
-                            .someOrFail(new AssertionError("Expected at least 1 record"))
-                        }
-                        .runHead
-                        .someOrFail(new AssertionError("Expected at least 1 record from the streams"))
+            records <- streamStream
+                         .map(_.exit)
+                         .flattenExitOption
+                         .flattenChunks
+                         .take(1)
+                         .mapZIO { case (_, stream) => stream.take(2).runCollect }
+                         .runCollect
+                         .map(_.flatten)
           } yield assertTrue(
-            record.key sameElements key123
+            records.size == 2,
+            records(0).key sameElements key123,
+            records(0).offset.offset == 10L,
+            records(0).nextOffset.offset() == 11L,
+            records(1).key sameElements key124,
+            records(1).offset.offset == 11L,
+            records(1).nextOffset.offset() == 12L // 14L when control records are added
           )
         }
-      },
+      } @@ timeout(2.seconds),
       // This test is flaky because Runloop emits the new stream _before_ it emits the associated diagnostics the test
       // relies on. (Diagnostics are a best-efford feature.) Most of the time the ZIO scheduler lets Runloop emit both
       // the new stream and the diagnostics before another thread runs. However, in rare cases, this test consumes the
@@ -380,8 +386,12 @@ object RunloopSpec extends ZIOSpecDefaultSlf4j {
       } yield result
     }
 
-  private def makeConsumerRecord(tp: TopicPartition, key: Array[Byte]): ConsumerRecord[Array[Byte], Array[Byte]] =
-    new ConsumerRecord[Array[Byte], Array[Byte]](tp.topic(), tp.partition(), 0L, key, "value".getBytes)
+  private def makeConsumerRecord(
+    tp: TopicPartition,
+    key: Array[Byte],
+    offset: Long = 0L
+  ): ConsumerRecord[Array[Byte], Array[Byte]] =
+    new ConsumerRecord[Array[Byte], Array[Byte]](tp.topic(), tp.partition(), offset, key, "value".getBytes)
 
   private def counterValue(counterName: String)(metrics: Metrics): Option[Double] =
     metrics.metrics
