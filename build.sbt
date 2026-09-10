@@ -38,7 +38,7 @@ lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.6.3"
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
 lazy val _scala213 = "2.13.18"
-lazy val _scala3   = "3.3.8"
+lazy val _scala3   = "3.9.0"
 
 inThisBuild(
   List(
@@ -110,6 +110,16 @@ def stdSettings(prjName: String) = Seq(
   scalafmtOnCompile := !insideCI.value,
   tpolecatExcludeOptions ++= Set(ScalacOptions.lintInferAny, ScalacOptions.deprecation),
   tpolecatScalacOptions += ScalacOptions.warnOption("conf:cat=deprecation:s"),
+  // Since Scala 3.4 the compiler warns about constructs that we cannot change while we still cross-compile
+  // with Scala 2.13: `with` as a type operator, `_` as a wildcard type argument and alphanumeric methods
+  // used infix. `&` and `?` do not exist in Scala 2.13, so those warnings are not actionable here and
+  // -Werror turns them into build failures. Keep the language level at 3.3 until we drop Scala 2.13.
+  scalacOptions ++= {
+    CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((3, _)) => Seq("-source:3.3")
+      case _            => Seq.empty
+    }
+  },
   // workaround for bad constant pool issue
   (Compile / doc) := Def.taskDyn {
     val default = (Compile / doc).taskValue
