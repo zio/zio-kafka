@@ -24,20 +24,20 @@ private[consumer] final class LiveCommitter(
   pendingCommits: Ref.Synchronized[Chunk[Commit]]
 ) extends Committer {
 
-  override def registerExternalCommits(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit] =
+  override def registerExternalCommits(nextOffsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit] =
     committedOffsetsRef.modify {
       // The continuation promise can be `null` because this commit is not actually handled by the consumer.
-      _.addCommits(Chunk(Commit(java.lang.System.nanoTime(), offsets, null)))
+      _.addCommits(Chunk(Commit(java.lang.System.nanoTime(), nextOffsets, null)))
     }.unit
 
   /** This is the implementation behind the user facing api `Offset.commit`. */
-  override def commit(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit] =
+  override def commit(nextOffsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit] =
     for {
       p <- Promise.make[Throwable, Unit]
       startTime = java.lang.System.nanoTime()
-      _ <- commitQueue.offer(Commit(startTime, offsets, p))
+      _ <- commitQueue.offer(Commit(startTime, nextOffsets, p))
       _ <- onCommitAvailable
-      _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(offsets))
+      _ <- diagnostics.emit(DiagnosticEvent.Commit.Started(nextOffsets))
       _ <- p.await.timeoutFail(CommitTimeout)(commitTimeout)
       endTime = java.lang.System.nanoTime()
       latency = (endTime - startTime).nanoseconds
@@ -55,18 +55,14 @@ private[consumer] final class LiveCommitter(
     commits <- commitQueue.takeAll
     _       <- ZIO.logDebug(s"Processing ${commits.size} commits")
     _ <- ZIO.when(commits.nonEmpty || executeOnEmpty) {
-           val offsets = mergeCommitOffsets(commits)
-           val offsetsWithMetaData = offsets.map { case (tp, offset) =>
-             tp -> new OffsetAndMetadata(offset.offset + 1, offset.leaderEpoch, offset.metadata)
-           }
-
+           val nextOffsets = mergeCommitOffsets(commits)
            for {
              _         <- pendingCommits.update(_ ++ commits)
              startTime <- ZIO.clockWith(_.nanoTime)
              _ <- commitAsyncZIO(
                     consumer,
-                    offsetsWithMetaData,
-                    doOnComplete = handleCommitCompletion(commits, offsetsWithMetaData, startTime, _)
+                    nextOffsets,
+                    doOnComplete = handleCommitCompletion(commits, nextOffsets, startTime, _)
                   )
              // We don't wait for the completion of the commit here, because it will only complete once we poll again.
            } yield ()
@@ -76,7 +72,7 @@ private[consumer] final class LiveCommitter(
   private def mergeCommitOffsets(commits: Chunk[Commit]): Map[TopicPartition, OffsetAndMetadata] =
     commits
       .foldLeft(mutable.Map.empty[TopicPartition, OffsetAndMetadata]) { case (acc, commit) =>
-        commit.offsets.foreach { case (tp, offset) =>
+        commit.nextOffsets.foreach { case (tp, offset) =>
           acc += (tp -> acc
             .get(tp)
             .map(current => if (current.offset() > offset.offset()) current else offset)
@@ -126,14 +122,14 @@ private[consumer] final class LiveCommitter(
    */
   private def commitAsyncZIO(
     consumer: ByteArrayKafkaConsumer,
-    offsets: Map[TopicPartition, OffsetAndMetadata],
+    nextOffsets: Map[TopicPartition, OffsetAndMetadata],
     doOnComplete: Either[Exception, Map[TopicPartition, OffsetAndMetadata]] => UIO[Unit]
   ): Task[Unit] =
     for {
       runtime <- ZIO.runtime[Any]
       _ <- ZIO.attempt {
              consumer.commitAsync(
-               offsets.asJava,
+               nextOffsets.asJava,
                new OffsetCommitCallback {
                  override def onComplete(
                    offsets: JavaMap[TopicPartition, OffsetAndMetadata],
@@ -188,7 +184,7 @@ private[internal] object LiveCommitter {
 
   private[internal] final case class Commit(
     createdAt: NanoTime,
-    offsets: Map[TopicPartition, OffsetAndMetadata],
+    nextOffsets: Map[TopicPartition, OffsetAndMetadata],
     cont: Promise[Throwable, Unit]
   ) {
     @inline def isPending: UIO[Boolean] = cont.isDone.negate
