@@ -13,7 +13,7 @@ import zio.kafka.consumer.{ ConsumerSettings, Subscription }
 import zio.kafka.diagnostics.{ Diagnostics, SlidingDiagnostics }
 import zio.metrics.{ MetricState, Metrics }
 import zio.stream.{ Take, ZStream }
-import zio.test.TestAspect.{ flaky, repeats, timeout, withLiveClock }
+import zio.test.TestAspect.{ flaky, timeout, withLiveClock }
 import zio.test._
 
 import java.util
