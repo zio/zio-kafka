@@ -39,3 +39,10 @@ consumer, either via Kafka's rebalancing or via a manual assignment.
 
 Offset retrieval is configured via `ConsumerSettings.withOffsetRetrieval()`. You can find more details in the scaladocs
 of that method.
+
+:::caution
+To prevent off-by-one bugs you should clearly decide to store either the consumed offset, or the next-offset. Read more
+about this on
+the [preventing duplicates](preventing-duplicates.md#be-clear-about-what-offset-you-persist-to-prevent-off-by-one-bugs)
+page.
+:::
