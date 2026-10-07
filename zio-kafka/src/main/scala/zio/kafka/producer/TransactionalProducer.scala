@@ -45,16 +45,12 @@ object TransactionalProducer {
           offsetBatch.consumerGroupMetadata match {
             case None => invalidGroupIdException
             case Some(consumerGroupMetadata) =>
-              val offsets: util.Map[TopicPartition, OffsetAndMetadata] =
-                offsetBatch.offsets.map { case (topicPartition, offset) =>
-                  topicPartition -> new OffsetAndMetadata(offset.offset + 1, offset.leaderEpoch(), offset.metadata)
-                }.asJava
-
+              val offsets: util.Map[TopicPartition, OffsetAndMetadata] = offsetBatch.nextOffsets.asJava
               ZIO.attemptBlocking(live.p.sendOffsetsToTransaction(offsets, consumerGroupMetadata))
           }
         }
 
-      sendOffsetsToTransaction.when(offsetBatch.offsets.nonEmpty) *>
+      sendOffsetsToTransaction.when(offsetBatch.nextOffsets.nonEmpty) *>
         ZIO.attemptBlocking(live.p.commitTransaction()) *>
         consumer.registerExternalCommits(offsetBatch).unit
     }

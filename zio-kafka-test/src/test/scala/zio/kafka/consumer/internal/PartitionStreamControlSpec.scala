@@ -1,6 +1,6 @@
 package zio.kafka.consumer.internal
 
-import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.consumer.{ ConsumerRecord, OffsetAndMetadata }
 import org.apache.kafka.common.TopicPartition
 import zio._
 import zio.kafka.consumer.CommittableRecord
@@ -187,6 +187,7 @@ object PartitionStreamControlSpec extends ZIOSpecDefault {
             Array[Byte](),
             Array[Byte]()
           ),
+          nextOffset = new OffsetAndMetadata(i.toLong + 1),
           commitHandle = _ => ZIO.unit,
           consumerGroupMetadata = None
         )

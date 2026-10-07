@@ -474,7 +474,7 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                         ZIO.logDebug("Starting batch commit") *> batch.commit
                                           .tapErrorCause(
                                             ZIO.logErrorCause(
-                                              s"Error doing commit of batch ${batch.offsets}",
+                                              s"Error doing commit of batch ${batch.nextOffsets}",
                                               _
                                             )
                                           ) *> ZIO.logDebug("Commit done")
@@ -545,15 +545,15 @@ object ConsumerSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                                             }
                                           }
                                           .transduce(Consumer.collectOffsets)
-                                          .mapZIO(batch =>
+                                          .mapZIO { batch =>
                                             ZIO.logDebug("Starting batch commit") *> batch.commit
                                               .tapErrorCause(
                                                 ZIO.logErrorCause(
-                                                  s"Error doing commit of batch ${batch.offsets}",
+                                                  s"Error doing commit of batch ${batch.nextOffsets}",
                                                   _
                                                 )
                                               ) *> ZIO.logDebug("Commit done")
-                                          )
+                                          }
                                           .runDrain
                                       }
                                       .forkScoped

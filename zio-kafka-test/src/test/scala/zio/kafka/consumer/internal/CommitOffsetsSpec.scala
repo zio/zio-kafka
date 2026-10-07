@@ -22,7 +22,7 @@ object CommitOffsetsSpec extends ZIOSpecDefault {
         val (inc, s2) = s1.addCommits(Chunk(makeCommit(Map(tp10 -> 10))))
         assertTrue(
           inc == 0,
-          s2.offsets == Map(tp10 -> 10L)
+          s2.nextOffsets == Map(tp10 -> 10L)
         )
       },
       test("addCommits updates offset when it is higher") {
@@ -30,7 +30,7 @@ object CommitOffsetsSpec extends ZIOSpecDefault {
         val (inc, s2) = s1.addCommits(Chunk(makeCommit(Map(tp10 -> 10))))
         assertTrue(
           inc == 10 - 4,
-          s2.offsets == Map(tp10 -> 10L)
+          s2.nextOffsets == Map(tp10 -> 10L)
         )
       },
       test("addCommits ignores an offset when it is lower") {
@@ -38,7 +38,7 @@ object CommitOffsetsSpec extends ZIOSpecDefault {
         val (inc, s2) = s1.addCommits(Chunk(makeCommit(Map(tp10 -> 5))))
         assertTrue(
           inc == 0,
-          s2.offsets == Map(tp10 -> 10L)
+          s2.nextOffsets == Map(tp10 -> 10L)
         )
       },
       test("addCommits keeps unrelated partitions") {
@@ -46,7 +46,7 @@ object CommitOffsetsSpec extends ZIOSpecDefault {
         val (inc, s2) = s1.addCommits(Chunk(makeCommit(Map(tp11 -> 11))))
         assertTrue(
           inc == 0,
-          s2.offsets == Map(tp10 -> 10L, tp11 -> 11L)
+          s2.nextOffsets == Map(tp10 -> 10L, tp11 -> 11L)
         )
       },
       test("addCommits does it all at once") {
@@ -54,7 +54,7 @@ object CommitOffsetsSpec extends ZIOSpecDefault {
         val (inc, s2) = s1.addCommits(Chunk(makeCommit(Map(tp11 -> 11, tp20 -> 206L, tp21 -> 209L, tp22 -> 220L))))
         assertTrue(
           inc == /* tp10 */ 0 + /* tp11 */ 0 + /* tp20 */ 1 + /* tp21 */ 0 + /* tp22 */ 0,
-          s2.offsets == Map(tp10 -> 10L, tp11 -> 11L, tp20 -> 206L, tp21 -> 210L, tp22 -> 220L)
+          s2.nextOffsets == Map(tp10 -> 10L, tp11 -> 11L, tp20 -> 206L, tp21 -> 210L, tp22 -> 220L)
         )
       },
       test("addCommits adds multiple commits") {
@@ -67,13 +67,13 @@ object CommitOffsetsSpec extends ZIOSpecDefault {
         )
         assertTrue(
           inc == /* tp10 */ 0 + /* tp11 */ 0 + /* tp20 */ 0 + /* tp21 */ 1 + /* tp22 */ 1,
-          s2.offsets == Map(tp10 -> 10L, tp11 -> 11L, tp20 -> 200L, tp21 -> 211L, tp22 -> 221L)
+          s2.nextOffsets == Map(tp10 -> 10L, tp11 -> 11L, tp20 -> 200L, tp21 -> 211L, tp22 -> 221L)
         )
       },
       test("keepPartitions removes some partitions") {
         val s1 = CommitOffsets(Map(tp10 -> 10L, tp20 -> 20L))
         val s2 = s1.keepPartitions(Set(tp10))
-        assertTrue(s2.offsets == Map(tp10 -> 10L))
+        assertTrue(s2.nextOffsets == Map(tp10 -> 10L))
       },
       test("does not 'contain' offset when tp is not present") {
         val s1     = CommitOffsets(Map(tp10 -> 10L))
