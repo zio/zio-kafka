@@ -4,9 +4,16 @@ import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, OffsetAndMetad
 import org.apache.kafka.common.TopicPartition
 import zio._
 
+import scala.math.Ordering.Implicits._
+
 sealed trait OffsetBatch {
-  def offsets: Map[TopicPartition, OffsetAndMetadata]
+
+  /** The committable next offsets. */
+  def nextOffsets: Map[TopicPartition, OffsetAndMetadata]
+
+  /** Commit the next offsets. */
   def commit: Task[Unit]
+
   def add(offset: Offset): OffsetBatch
   def merge(offsets: OffsetBatch): OffsetBatch
   def consumerGroupMetadata: Option[ConsumerGroupMetadata]
@@ -27,41 +34,44 @@ object OffsetBatch {
   def apply(offsets: Iterable[Offset]): OffsetBatch = offsets.foldLeft(empty)(_ add _)
 }
 
+private object OffsetBatchImpl {
+  implicit val offsetAndMetadataOrdering: Ordering[OffsetAndMetadata] =
+    Ordering.by(_.offset())
+}
+
 private final case class OffsetBatchImpl(
-  offsets: Map[TopicPartition, OffsetAndMetadata],
+  nextOffsets: Map[TopicPartition, OffsetAndMetadata],
   commitHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
   consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) extends OffsetBatch {
-  override def commit: Task[Unit] = commitHandle(offsets)
+  import OffsetBatchImpl._
+
+  override def commit: Task[Unit] = commitHandle(nextOffsets)
 
   override def add(offset: Offset): OffsetBatch = {
-    val maxOffsetAndMetadata = offsets.get(offset.topicPartition) match {
-      case Some(existing) if existing.offset > offset.offset => existing
-      case _                                                 => offset.asJavaOffsetAndMetadata
+    val laterOffset = nextOffsets.get(offset.topicPartition) match {
+      case Some(existing) => existing.max(offset.nextOffset)
+      case _              => offset.nextOffset
     }
-
-    copy(
-      offsets = offsets + (offset.topicPartition -> maxOffsetAndMetadata)
-    )
+    copy(nextOffsets = nextOffsets + (offset.topicPartition -> laterOffset))
   }
 
   override def merge(otherOffsets: OffsetBatch): OffsetBatch = {
     val newOffsets = Map.newBuilder[TopicPartition, OffsetAndMetadata]
-    newOffsets ++= offsets
-    otherOffsets.offsets.foreach { case (tp, offset) =>
-      val laterOffset = offsets.get(tp) match {
-        case Some(existing) => if (existing.offset < offset.offset) offset else existing
+    newOffsets ++= nextOffsets
+    otherOffsets.nextOffsets.foreach { case (tp, offset) =>
+      val laterOffset = nextOffsets.get(tp) match {
+        case Some(existing) => existing.max(offset)
         case None           => offset
       }
       newOffsets += tp -> laterOffset
     }
-
-    copy(offsets = newOffsets.result())
+    copy(nextOffsets = newOffsets.result())
   }
 }
 
 case object EmptyOffsetBatch extends OffsetBatch {
-  override val offsets: Map[TopicPartition, OffsetAndMetadata]      = Map.empty
+  override val nextOffsets: Map[TopicPartition, OffsetAndMetadata]  = Map.empty
   override val commit: Task[Unit]                                   = ZIO.unit
   override def add(offset: Offset): OffsetBatch                     = offset.batch
   override def merge(offsets: OffsetBatch): OffsetBatch             = offsets

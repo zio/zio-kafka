@@ -158,9 +158,21 @@ private[consumer] final class Runloop private (
                  val iterator = records.iterator()
                  while (iterator.hasNext) {
                    val consumerRecord = iterator.next()
+                   @inline def simpleNext =
+                     new OffsetAndMetadata(consumerRecord.offset() + 1, consumerRecord.leaderEpoch(), "")
+                   val nextOffset =
+                     if (iterator.hasNext) simpleNext
+                     else {
+                       // Last record in polledRecords (for this partition), extract the actual next offset (KIP-1094)
+                       polledRecords.nextOffsets().get(tp) match {
+                         case null => simpleNext
+                         case next => next
+                       }
+                     }
                    builder +=
                      CommittableRecord[Array[Byte], Array[Byte]](
                        record = consumerRecord,
+                       nextOffset = nextOffset,
                        commitHandle = committer.commit,
                        consumerGroupMetadata = consumerGroupMetadata
                      )
@@ -680,7 +692,7 @@ private[consumer] final class Runloop private (
   }
 
   def registerExternalCommits(offsetBatch: OffsetBatch): Task[Unit] =
-    committer.registerExternalCommits(offsetBatch.offsets)
+    committer.registerExternalCommits(offsetBatch.nextOffsets)
 }
 
 object Runloop {
