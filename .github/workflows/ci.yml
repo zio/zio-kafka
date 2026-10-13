@@ -35,7 +35,7 @@ jobs:
     - name: Install libuv
       run: sudo apt-get update && sudo apt-get install -y libuv1-dev
     - name: Setup Scala
-      uses: actions/setup-java@v5.7.0
+      uses: actions/setup-java@v6.0.1
       with:
         distribution: corretto
         java-version: '17'
@@ -50,6 +50,8 @@ jobs:
       run: sbt --no-colors +publishLocal
     - name: Check website build process
       run: sbt --no-colors docs/clean; sbt --no-colors docs/buildWebsite
+    - name: Check docs build on a fresh ZIO website
+      run: sbt --no-colors docs/checkDocsOnFreshWebsite
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -62,7 +64,7 @@ jobs:
     - name: Install libuv
       run: sudo apt-get update && sudo apt-get install -y libuv1-dev
     - name: Setup Scala
-      uses: actions/setup-java@v5.7.0
+      uses: actions/setup-java@v6.0.1
       with:
         distribution: corretto
         java-version: '17'
@@ -90,7 +92,7 @@ jobs:
     - name: Install libuv
       run: sudo apt-get update && sudo apt-get install -y libuv1-dev
     - name: Setup Scala
-      uses: actions/setup-java@v5.7.0
+      uses: actions/setup-java@v6.0.1
       with:
         distribution: corretto
         java-version: ${{ matrix.java }}
@@ -121,7 +123,7 @@ jobs:
     - name: Install libuv
       run: sudo apt-get update && sudo apt-get install -y libuv1-dev
     - name: Setup Scala
-      uses: actions/setup-java@v5.7.0
+      uses: actions/setup-java@v6.0.1
       with:
         distribution: corretto
         java-version: '17'
@@ -132,12 +134,6 @@ jobs:
       uses: coursier/cache-action@v8.1.1
     - name: Generate Readme
       run: sbt --no-colors docs/generateReadme
-    - name: Commit Changes
-      run: |
-        git config --local user.email "zio-assistant[bot]@users.noreply.github.com"
-        git config --local user.name "ZIO Assistant"
-        git add README.md
-        git commit -m "Update README.md" || echo "No changes to commit"
     - name: Generate Token
       id: generate-token
       uses: zio/generate-github-app-token@v1.0.0
@@ -171,7 +167,7 @@ jobs:
       if: ${{ steps.cpr.outputs.pull-request-number }}
       run: gh pr merge --auto --squash "$PR_URL" || gh pr merge --squash "$PR_URL"
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
         PR_URL: ${{ steps.cpr.outputs.pull-request-url }}
   ci:
     name: ci
@@ -203,7 +199,7 @@ jobs:
     - name: Install libuv
       run: sudo apt-get update && sudo apt-get install -y libuv1-dev
     - name: Setup Scala
-      uses: actions/setup-java@v5.7.0
+      uses: actions/setup-java@v6.0.1
       with:
         distribution: corretto
         java-version: '17'
@@ -234,7 +230,7 @@ jobs:
     - name: Install libuv
       run: sudo apt-get update && sudo apt-get install -y libuv1-dev
     - name: Setup Scala
-      uses: actions/setup-java@v5.7.0
+      uses: actions/setup-java@v6.0.1
       with:
         distribution: corretto
         java-version: '17'

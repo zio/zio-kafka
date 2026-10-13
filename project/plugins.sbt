@@ -1,10 +1,10 @@
-val zioSbtVersion = "0.8.0"
+val zioSbtVersion = "0.8.6"
 
 addSbtPlugin("dev.zio" % "zio-sbt-ecosystem" % zioSbtVersion)
 addSbtPlugin("dev.zio" % "zio-sbt-website"   % zioSbtVersion)
 addSbtPlugin("dev.zio" % "zio-sbt-ci"        % zioSbtVersion)
 
-addSbtPlugin("ch.epfl.scala"  % "sbt-scalafix"        % "0.14.8")
+addSbtPlugin("ch.epfl.scala"  % "sbt-scalafix"        % "0.14.9")
 addSbtPlugin("org.typelevel"  % "sbt-tpolecat"        % "0.5.7")
-addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.11.7")
-addSbtPlugin("com.typesafe"   % "sbt-mima-plugin"     % "1.2.0")
+addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.13.0")
+addSbtPlugin("com.typesafe"   % "sbt-mima-plugin"     % "1.2.1")
