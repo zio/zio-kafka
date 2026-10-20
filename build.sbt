@@ -33,7 +33,7 @@ lazy val kafkaVersion         = "4.3.1"
 lazy val embeddedKafkaVersion = "4.4.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
-lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.6.4"
+lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.6.5"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
@@ -234,7 +234,7 @@ lazy val docs = project
         "[Alpakka Kafka](https://github.com/akka/alpakka-kafka), a library maintained by the Akka team and originally " +
         "written as Reactive Kafka by SoftwareMill.",
     readmeLicense += s"\n\nCopyright 2021-${java.time.Year.now()} Itamar Ravid and the zio-kafka contributors.",
-    libraryDependencies += "dev.zio" %% "zio-json" % "1.1.0"
+    libraryDependencies += "dev.zio" %% "zio-json" % "1.1.1"
   )
   .enablePlugins(WebsitePlugin)
   .dependsOn(zioKafka, zioKafkaTestkit)
