@@ -13,10 +13,10 @@ import scala.collection.mutable
 private[internal] trait Committer {
 
   /** Commits offsets. */
-  def commit(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit]
+  def commit(nextOffsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit]
 
   /** Registers offsets that have been committed externally. */
-  def registerExternalCommits(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit]
+  def registerExternalCommits(nextOffsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit]
 
   /**
    * Takes commits from the queue, commits them and adds them to pending commits
@@ -51,16 +51,16 @@ private[internal] trait Committer {
 }
 
 private[internal] object Committer {
-  final case class CommitOffsets(offsets: Map[TopicPartition, Long]) {
+  final case class CommitOffsets(nextOffsets: Map[TopicPartition, Long]) {
 
     /** Returns an estimate of the total offset increase, and a new `CommitOffsets` with the given offsets added. */
     def addCommits(c: Chunk[Commit]): (Long, CommitOffsets) = {
       val updatedOffsets = mutable.Map.empty[TopicPartition, Long]
-      updatedOffsets.sizeHint(offsets.size)
-      updatedOffsets ++= offsets
+      updatedOffsets.sizeHint(nextOffsets.size)
+      updatedOffsets ++= nextOffsets
       var offsetIncrease = 0L
       c.foreach { commit =>
-        commit.offsets.foreach { case (tp, offsetAndMeta) =>
+        commit.nextOffsets.foreach { case (tp, offsetAndMeta) =>
           val offset = offsetAndMeta.offset()
           val maxOffset = updatedOffsets.get(tp) match {
             case Some(existingOffset) =>
@@ -75,16 +75,16 @@ private[internal] object Committer {
           updatedOffsets += tp -> maxOffset
         }
       }
-      (offsetIncrease, CommitOffsets(offsets = updatedOffsets.toMap))
+      (offsetIncrease, CommitOffsets(nextOffsets = updatedOffsets.toMap))
     }
 
     def keepPartitions(tps: Set[TopicPartition]): CommitOffsets =
-      CommitOffsets(offsets.filter { case (tp, _) => tps.contains(tp) })
+      CommitOffsets(nextOffsets.filter { case (tp, _) => tps.contains(tp) })
 
-    def contains(tp: TopicPartition, offset: Long): Boolean =
-      offsets.get(tp).exists(_ >= offset)
+    def contains(tp: TopicPartition, nextOffset: Long): Boolean =
+      nextOffsets.get(tp).exists(_ >= nextOffset)
 
-    def get(tp: TopicPartition): Option[Long] = offsets.get(tp)
+    def get(tp: TopicPartition): Option[Long] = nextOffsets.get(tp)
   }
 
   private[internal] object CommitOffsets {

@@ -41,7 +41,7 @@ private[internal] class RebalanceCoordinator(
     lastRebalanceEvent.getAndSet(RebalanceEvent.None)
 
   // End streams from the rebalance listener.
-  // When `rebalanceSafeCommits` is enabled, wait for consumed offsets to be committed.
+  // When `rebalanceSafeCommits` is enabled, wait for next-offsets to be committed.
   private def endStreams(streamsToEnd: Chunk[PartitionStreamControl]): Task[Any] =
     ZIO.unless(streamsToEnd.isEmpty) {
       for {
@@ -64,7 +64,7 @@ private[internal] class RebalanceCoordinator(
     def getStreamCompletionStatuses: UIO[Chunk[StreamCompletionStatus]] =
       for {
         committedOffsets           <- committer.getCommittedOffsets
-        latestPendingCommitOffsets <- committer.getPendingCommits.map(_.offsets)
+        latestPendingCommitOffsets <- committer.getPendingCommits
         streamResults <-
           ZIO.foreach(streamsToEnd) { stream =>
             for {
@@ -74,9 +74,10 @@ private[internal] class RebalanceCoordinator(
 
               endOffsetCommitStatus =
                 endOffset match {
-                  case Some(endOffset) if committedOffsets.contains(stream.tp, endOffset.offset) =>
+                  case Some(endOffset) if committedOffsets.contains(stream.tp, endOffset.nextOffset.offset()) =>
                     EndOffsetCommitted
-                  case Some(endOffset) if latestPendingCommitOffsets.get(stream.tp).contains(endOffset.offset) =>
+                  case Some(endOffset)
+                      if latestPendingCommitOffsets.contains(stream.tp, endOffset.nextOffset.offset()) =>
                     EndOffsetCommitPending
                   case _ => EndOffsetNotCommitted
                 }
@@ -84,6 +85,7 @@ private[internal] class RebalanceCoordinator(
               stream.tp,
               isDone,
               lastPulledOffset.map(_.offset),
+              lastPulledOffset.map(_.nextOffset.offset()),
               committedOffsets.get(stream.tp),
               endOffsetCommitStatus
             )
@@ -110,7 +112,8 @@ private[internal] class RebalanceCoordinator(
         completionStatuses <- getStreamCompletionStatuses
         _                  <- logStreamCompletionStatuses(completionStatuses)
       } yield completionStatuses.forall { status =>
-        // A stream is complete when it never got any records, or when it committed the offset of the last consumed record
+        // A stream is complete when it never got any records, or
+        // when it committed the next-offset of the last consumed record
         status.lastPulledOffset.isEmpty || (status.streamEnded && status.endOffsetCommitStatus != EndOffsetNotCommitted)
       }
 
@@ -140,7 +143,7 @@ private[internal] class RebalanceCoordinator(
     // - repeat the above until:
     //   - All streams that were ended have completed their work, and
     //   - we have seen a completed or pending commit for all end-offsets.
-    //     An end-offset of a stream is the offset of the last record given to that stream.
+    //     (An end-offset of a stream is the next-offset of the last record given to that stream.)
     // - Do a single sync commit without any offsets, this has the side effect of blocking until all
     //   preceding async commits are complete (this requires kafka-client 3.6.0 or later).
     //   Because all commits created here (including those from non-ending streams) are now complete, we do not
@@ -230,14 +233,16 @@ private[internal] object RebalanceCoordinator {
     tp: TopicPartition,
     streamEnded: Boolean,
     lastPulledOffset: Option[Long],
+    lastPulledNextOffset: Option[Long],
     lastCommittedOffset: Option[Long],
     endOffsetCommitStatus: EndOffsetCommitStatus
   ) {
     override def toString: String =
       s"$tp: " +
         s"${if (streamEnded) "stream ended" else "stream is running"}, " +
-        s"last pulled offset=${lastPulledOffset.getOrElse("none")}, " +
-        s"last committed offset=${lastCommittedOffset.getOrElse("none")}, " +
+        s"last pulled offset=${lastPulledOffset.getOrElse("none")} " +
+        s"(with committable offset=${lastPulledNextOffset.getOrElse("none")}), " +
+        s"last committed next-offset=${lastCommittedOffset.getOrElse("none")}, " +
         endOffsetCommitStatus
   }
 
