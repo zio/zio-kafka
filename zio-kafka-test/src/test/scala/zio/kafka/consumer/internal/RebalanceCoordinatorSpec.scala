@@ -260,6 +260,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
             Array[Byte](),
             Array[Byte]()
           ),
+          nextOffset = new OffsetAndMetadata(i.toLong + 1),
           commitHandle = _ => ZIO.unit,
           consumerGroupMetadata = None
         )
@@ -279,7 +280,7 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
         committer.commit {
           Map(
             new TopicPartition(record.offset.topic, record.offset.partition) ->
-              new OffsetAndMetadata(record.offset.offset)
+              new OffsetAndMetadata(record.nextOffset.offset())
           )
         }
       }
@@ -294,8 +295,8 @@ object RebalanceCoordinatorSpec extends ZIOSpecDefaultSlf4j {
 }
 
 abstract private class MockCommitter extends Committer {
-  override def commit(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit]                  = ZIO.unit
-  override def registerExternalCommits(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit] = ZIO.unit
+  override def commit(offsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit]                      = ZIO.unit
+  override def registerExternalCommits(nextOffsets: Map[TopicPartition, OffsetAndMetadata]): Task[Unit] = ZIO.unit
 
   override def processQueuedCommits(consumer: ByteArrayKafkaConsumer, executeOnEmpty: Boolean): Task[Unit] = ZIO.unit
 
