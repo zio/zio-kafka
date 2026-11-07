@@ -6,21 +6,42 @@ const sidebars = {
       collapsed: false,
       link: { type: "doc", id: "index" },
       items: [
-        "tutorial",
-        "creating-a-consumer",
-        "consuming-kafka-topics-using-zio-streams",
-        "consuming-producing-and-committing-offsets",
-        "partition-assignment-and-offset-retrieval",
-        "metrics",
-        "consumer-tuning",
-        "avoiding-chunk-breakers",
-        "preventing-duplicates",
-        "detecting-authorization-failures",
-        "sharing-consumer",
-        "serialization-and-deserialization",
-        "transactions",
-        "writing-tests",
-        "migrating-to-zio-kafka-3"
+        {
+          type: "category",
+          label: "Reference",
+          collapsed: true,
+          items: [
+            "partition-assignment-and-offset-retrieval",
+            "serialization-and-deserialization",
+            "consumer-tuning",
+            "transactions",
+            "metrics"
+          ]
+        },
+        {
+          type: "category",
+          label: "Tutorial",
+          collapsed: true,
+          items: [
+            "tutorial"
+          ]
+        },
+        {
+          type: "category",
+          label: "How-to Guides",
+          collapsed: true,
+          items: [
+            "creating-a-consumer",
+            "consuming-kafka-topics-using-zio-streams",
+            "consuming-producing-and-committing-offsets",
+            "sharing-consumer",
+            "preventing-duplicates",
+            "avoiding-chunk-breakers",
+            "detecting-authorization-failures",
+            "writing-tests",
+            "migrating-to-zio-kafka-3"
+          ]
+        }
       ]
     }
   ]
