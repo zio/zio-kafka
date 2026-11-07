@@ -13,6 +13,7 @@ const sidebars = {
           items: [
             "partition-assignment-and-offset-retrieval",
             "serialization-and-deserialization",
+            "consumer-tuning",
             "transactions",
             "metrics"
           ]
@@ -36,7 +37,6 @@ const sidebars = {
             "sharing-consumer",
             "preventing-duplicates",
             "avoiding-chunk-breakers",
-            "consumer-tuning",
             "detecting-authorization-failures",
             "writing-tests",
             "migrating-to-zio-kafka-3"
