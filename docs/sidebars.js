@@ -6,21 +6,56 @@ const sidebars = {
       collapsed: false,
       link: { type: "doc", id: "index" },
       items: [
-        "tutorial",
-        "creating-a-consumer",
-        "consuming-kafka-topics-using-zio-streams",
-        "consuming-producing-and-committing-offsets",
-        "partition-assignment-and-offset-retrieval",
-        "metrics",
-        "consumer-tuning",
-        "avoiding-chunk-breakers",
-        "preventing-duplicates",
-        "detecting-authorization-failures",
-        "sharing-consumer",
-        "serialization-and-deserialization",
-        "transactions",
-        "writing-tests",
-        "migrating-to-zio-kafka-3"
+        {
+          type: "category",
+          label: "Getting Started",
+          collapsed: false,
+          items: [
+            "tutorial",
+            "creating-a-consumer"
+          ]
+        },
+        {
+          type: "category",
+          label: "Consuming",
+          collapsed: false,
+          items: [
+            "consuming-kafka-topics-using-zio-streams",
+            "partition-assignment-and-offset-retrieval",
+            "sharing-consumer",
+            "preventing-duplicates",
+            "avoiding-chunk-breakers"
+          ]
+        },
+        {
+          type: "category",
+          label: "Producing and Serialization",
+          collapsed: false,
+          items: [
+            "consuming-producing-and-committing-offsets",
+            "serialization-and-deserialization",
+            "transactions"
+          ]
+        },
+        {
+          type: "category",
+          label: "Operations",
+          collapsed: false,
+          items: [
+            "consumer-tuning",
+            "metrics",
+            "detecting-authorization-failures"
+          ]
+        },
+        {
+          type: "category",
+          label: "Testing and Migration",
+          collapsed: false,
+          items: [
+            "writing-tests",
+            "migrating-to-zio-kafka-3"
+          ]
+        }
       ]
     }
   ]
