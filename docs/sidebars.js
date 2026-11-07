@@ -8,50 +8,36 @@ const sidebars = {
       items: [
         {
           type: "category",
-          label: "Getting Started",
-          collapsed: false,
+          label: "Reference",
+          collapsed: true,
           items: [
-            "tutorial",
-            "creating-a-consumer"
+            "partition-assignment-and-offset-retrieval",
+            "serialization-and-deserialization",
+            "transactions",
+            "metrics"
           ]
         },
         {
           type: "category",
-          label: "Consuming",
-          collapsed: false,
+          label: "Tutorial",
+          collapsed: true,
           items: [
+            "tutorial"
+          ]
+        },
+        {
+          type: "category",
+          label: "How-to Guides",
+          collapsed: true,
+          items: [
+            "creating-a-consumer",
             "consuming-kafka-topics-using-zio-streams",
-            "partition-assignment-and-offset-retrieval",
+            "consuming-producing-and-committing-offsets",
             "sharing-consumer",
             "preventing-duplicates",
-            "avoiding-chunk-breakers"
-          ]
-        },
-        {
-          type: "category",
-          label: "Producing and Serialization",
-          collapsed: false,
-          items: [
-            "consuming-producing-and-committing-offsets",
-            "serialization-and-deserialization",
-            "transactions"
-          ]
-        },
-        {
-          type: "category",
-          label: "Operations",
-          collapsed: false,
-          items: [
+            "avoiding-chunk-breakers",
             "consumer-tuning",
-            "metrics",
-            "detecting-authorization-failures"
-          ]
-        },
-        {
-          type: "category",
-          label: "Testing and Migration",
-          collapsed: false,
-          items: [
+            "detecting-authorization-failures",
             "writing-tests",
             "migrating-to-zio-kafka-3"
           ]
