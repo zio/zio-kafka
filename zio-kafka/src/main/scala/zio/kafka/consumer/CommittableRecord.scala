@@ -7,6 +7,7 @@ import zio.{ RIO, Task }
 
 final case class CommittableRecord[K, V](
   record: ConsumerRecord[K, V],
+  nextOffset: OffsetAndMetadata,
   private val commitHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
   private val consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) {
@@ -42,22 +43,23 @@ final case class CommittableRecord[K, V](
     OffsetImpl(
       topic = record.topic(),
       partition = record.partition(),
-      leaderEpoch = record.leaderEpoch(),
       offset = record.offset(),
+      nextOffset = nextOffset,
       commitHandle = commitHandle,
-      consumerGroupMetadata = consumerGroupMetadata,
-      metadata = None
+      consumerGroupMetadata = consumerGroupMetadata
     )
 }
 
 object CommittableRecord {
   def apply[K, V](
     record: ConsumerRecord[K, V],
+    nextOffset: OffsetAndMetadata,
     commitHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
     consumerGroupMetadata: Option[ConsumerGroupMetadata]
   ): CommittableRecord[K, V] =
     new CommittableRecord(
       record = record,
+      nextOffset = nextOffset,
       commitHandle = commitHandle,
       consumerGroupMetadata = consumerGroupMetadata
     )

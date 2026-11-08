@@ -6,21 +6,31 @@ import zio._
 
 import java.util.{ Optional => JOption }
 
+/**
+ * The offset of a consumed record.
+ */
 trait Offset {
 
   def topic: String
   def partition: Int
+
+  /** The leader-epoch in which the record was consumed. */
   def leaderEpoch: JOption[Integer]
+
+  /** The consumed record's offset. */
   def offset: Long
+
+  /** The committable next offset. */
+  def nextOffset: OffsetAndMetadata
+
+  /** Commit the next offset. */
   def commit: Task[Unit]
+
   def batch: OffsetBatch
   def consumerGroupMetadata: Option[ConsumerGroupMetadata]
+
+  /** Add metadata to the commit. */
   def withMetadata(metadata: String): Offset
-
-  private[consumer] def metadata: Option[String]
-
-  private[consumer] def asJavaOffsetAndMetadata: OffsetAndMetadata =
-    new OffsetAndMetadata(offset, leaderEpoch, metadata.orNull)
 
   /**
    * Attempts to commit and retries according to the given policy when the commit fails with a
@@ -49,17 +59,19 @@ object Offset {
 private final case class OffsetImpl(
   topic: String,
   partition: Int,
-  leaderEpoch: JOption[Integer],
   offset: Long,
+  nextOffset: OffsetAndMetadata,
   commitHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
-  consumerGroupMetadata: Option[ConsumerGroupMetadata],
-  metadata: Option[String] = None
+  consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) extends Offset {
-  def commit: Task[Unit] = commitHandle(Map(topicPartition -> asJavaOffsetAndMetadata))
+  def leaderEpoch: JOption[Integer] = nextOffset.leaderEpoch()
+  def commit: Task[Unit]            = commitHandle(Map(topicPartition -> nextOffset))
   def batch: OffsetBatch = OffsetBatchImpl(
-    Map(topicPartition -> asJavaOffsetAndMetadata),
+    Map(topicPartition -> nextOffset),
     commitHandle,
     consumerGroupMetadata
   )
-  def withMetadata(metadata: String): OffsetImpl = copy(metadata = Some(metadata))
+  def withMetadata(metadata: String): OffsetImpl =
+    copy(nextOffset = new OffsetAndMetadata(nextOffset.offset(), nextOffset.leaderEpoch(), metadata))
+
 }
