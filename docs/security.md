@@ -142,13 +142,13 @@ The check runs while a client is created, before the Java client exists, in thes
 - `Producer.make` and `Producer.live`.
 - `AdminClient.make`, `AdminClient.live` and `AdminClient.javaClientFromSettings`.
 
-It is skipped when `security.protocol` contains `SSL`, ignoring case, that is for `SSL` and `SASL_SSL`: such a client speaks TLS and is not affected by the bug. It does not run in `TransactionalProducer.make`, `Producer.fromJavaProducer`, `Consumer.fromJavaConsumerWithPermit`, `AdminClient.fromJavaClient` and `AdminClient.fromScopedJavaClient`, because these do not create the Java client from zio-kafka settings themselves. There is no setting to turn the check off; using one of those constructors with a Java client you create yourself is the only way to avoid it.
+It is skipped when `security.protocol` contains `SSL`, ignoring case, that is for `SSL` and `SASL_SSL`: such a client speaks TLS and is not affected by the bug. It does not run in `TransactionalProducer.make` and `TransactionalProducer.live`, which create the Java producer from the settings without the check. It also does not run in `Producer.fromJavaProducer`, `Consumer.fromJavaConsumerWithPermit`, `AdminClient.fromJavaClient` and `AdminClient.fromScopedJavaClient`, because these wrap a Java client that you create yourself. There is no setting to turn the check off.
 
 ### What the Check Does
 
 For a client with a plain-text protocol, the check goes through these steps:
 
-1. It reads `bootstrap.servers`, and fails with `IllegalArgumentException("Empty bootstrapServers list")` when the property is missing or empty.
+1. It reads `bootstrap.servers`, and fails with `IllegalArgumentException("Empty bootstrapServers list")` when the property is missing. This step runs for every protocol, before the `SSL` skip described above. An empty value, such as the one `AdminClientSettings(Nil)` produces, passes this step and fails at the address lookup in step 2 instead.
 2. It resolves every bootstrap server to all of its IP addresses and opens a plain socket to each address, in parallel, on a blocking thread.
 3. On each socket it sends a Kafka `ApiVersions` request, reads the first 5 bytes of the answer, and closes the socket.
 4. If the first byte is a TLS record type, the broker answered with TLS, and the check fails with `IllegalArgumentException("Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled")`.
@@ -159,7 +159,7 @@ Each probe times out after the client's `request.timeout.ms` (30 seconds when it
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | At least one address answers without TLS, none with TLS     | Succeeds; unreachable addresses are ignored                                                            |
 | Any address answers with TLS                                | Fails with the "unexpected SSL packet" error                                                           |
-| Any other error after a connection is open                  | Fails with that error                                                                                  |
+| Any non-timeout error after a connection is open            | Fails with that error                                                                                  |
 | No address can be reached (connection refused or timed out) | Fails with the first connection error, for example a `TimeoutException("Failed to contact <address>")` |
 
 Every failure is wrapped in an `org.apache.kafka.common.KafkaException` with the message `"Failed to create new KafkaAdminClient"`, also when a consumer or producer is being created; the actual reason is the exception's cause. Because the check needs at least one reachable broker, `Consumer.make`, `Producer.make` and `AdminClient.make` with a plain-text protocol fail when none of the bootstrap servers is reachable at startup.
