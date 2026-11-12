@@ -167,7 +167,7 @@ These operations create, inspect and remove topics and their data:
 | `createTopics(newTopics, options = None)`                                                 | `Task[Unit]`                          | `CreateTopicsOptions(validateOnly, timeout)`                                                                                                |
 | `deleteTopic(topic)`                                                                      | `Task[Unit]`                          | Deletes one topic                                                                                                                           |
 | `deleteTopics(topics, options = None)`                                                    | `Task[Unit]`                          | `DeleteTopicsOptions(retryOnQuotaViolation = true, timeout)`                                                                                |
-| `listTopics(listTopicsOptions = None)`                                                    | `Task[Map[String, TopicListing]]`     | `ListTopicsOptions(listInternal = false, timeout)` includes internal topics                                                                 |
+| `listTopics(listTopicsOptions = None)`                                                    | `Task[Map[String, TopicListing]]`     | `ListTopicsOptions(listInternal = false, timeout)`; set `listInternal = true` to include internal topics                                    |
 | `describeTopics(topicNames, options = None)`                                              | `Task[Map[String, TopicDescription]]` | `DescribeTopicsOptions(includeAuthorizedOperations, timeout)`                                                                               |
 | `createPartitions(newPartitions, options = None)`                                         | `Task[Unit]`                          | `newPartitions: Map[String, NewPartitions]`; `CreatePartitionsOptions(validateOnly = false, retryOnQuotaViolation = true, timeout)`         |
 | `deleteRecords(recordsToDelete, deleteRecordsOptions = None, visibilitySleep = 1.second)` | `Task[Unit]`                          | `recordsToDelete: Map[TopicPartition, RecordsToDelete]`, where `RecordsToDelete` is the Java class (`RecordsToDelete.beforeOffset(offset)`) |
@@ -352,7 +352,7 @@ AclBindingFilter ──> ResourcePatternFilter(resourceType, name, patternType)
 The building blocks are:
 
 - `ResourceType`: `Topic`, `Group`, `Cluster`, `TransactionalId`, `DelegationToken`, `User`, `Any` or `Unknown`.
-- `PatternType`: `Literal` (the exact name, or `*` for all), `Prefixed` (every name that starts with `name`), and, for filters only, `Any` and `Match`.
+- `PatternType`: `Literal` (the exact name, or `*` for all), `Prefixed` (every name that starts with `name`), `Unknown`, and, for filters only, `Any` and `Match`.
 - `AclOperation`: `Read`, `Write`, `Create`, `Delete`, `Alter`, `Describe`, `ClusterAction`, `DescribeConfigs`, `AlterConfigs`, `IdempotentWrite`, `CreateTokens`, `DescribeTokens`, `TwoPhaseCommit`, `All`, `Any` or `Unknown`.
 - `AclPermissionType`: `Allow`, `Deny`, `Any` or `Unknown`.
 - `principal` is a Kafka principal such as `"User:alice"` (or `"User:*"`), and `host` is a client host, or `"*"` for any host.
