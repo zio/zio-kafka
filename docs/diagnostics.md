@@ -176,7 +176,7 @@ All offsets in these events are the committed *next* offsets, see [Offsets and C
 
 Some commits produce no `Success` or `Failure` event:
 
-- When the broker rejects a commit because a rebalance is in progress, the consumer silently retries it later.
+- When the broker rejects a commit because a rebalance is in progress, there is no event for the rejection. The consumer silently retries the commit later, without a new `Started` event, and the outcome of that retry produces the `Success` or `Failure` event.
 - When a commit takes longer than the commit timeout, the caller fails with `Consumer.CommitTimeout`, but there is no event for the timeout itself.
 - Commits registered with `Consumer#registerExternalCommits` and offsets committed by a `TransactionalProducer` do not emit commit events at all.
 
@@ -228,7 +228,7 @@ The moment of `RecordsSent` depends on the `acks` producer configuration. With `
 
 The `failed` field of `RecordsSent` holds the indices (into `records`) of the records that failed, together with the records that were not sent because an earlier record failed. When every record succeeded, `failed` is empty.
 
-The `batchId` links the events of one batch. It starts at `0` and increases by one for every batch, separately for each producer. The `RecordsOffered` and `RecordsSent` events of the same batch have the same `batchId` and the same `records`. Batches are sent concurrently, so a `RecordsSent` event can arrive before the `RecordsOffered` event of a later batch, or even of its own batch. The `RecordsOffered` events themselves always arrive in the order in which the batches were offered. An empty batch produces no events.
+The `batchId` links the events of one batch. It starts at `0` and increases by one for every batch, separately for each producer. The `RecordsOffered` and `RecordsSent` events of the same batch have the same `batchId` and the same `records`. Batches are sent concurrently, so the `RecordsSent` events of different batches can arrive in any order, and interleaved with the `RecordsOffered` events of other batches. The `RecordsOffered` event of a batch always arrives before its own `RecordsSent` event, and the `RecordsOffered` events themselves always arrive in the order in which the batches were offered. An empty batch produces no events.
 
 ## Writing Your Own Diagnostics
 
@@ -306,7 +306,7 @@ object SlidingDiagnostics {
   def make[DiagnosticEvent](queueSize: Int = 16): ZIO[Scope, Nothing, QueuingDiagnostics[DiagnosticEvent]]
 }
 
-final case class QueuingDiagnostics[DiagnosticEvent](queue: Queue[DiagnosticEvent])
+final case class QueuingDiagnostics[DiagnosticEvent] private[diagnostics] (queue: Queue[DiagnosticEvent])
   extends Diagnostics[DiagnosticEvent]
 ```
 
