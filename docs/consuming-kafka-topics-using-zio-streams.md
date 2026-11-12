@@ -5,10 +5,13 @@ title: "Consuming Kafka topics using ZIO Streams"
 
 You can stream data from Kafka using the `plainStream` method:
 
-```scala
+```scala mdoc:compile-only
 import zio._
 import zio.Console.printLine
 import zio.kafka.consumer._
+import zio.kafka.serde._
+
+val consumer: Consumer = ??? // see "Creating a zio-kafka Consumer"
 
 consumer
   .plainStream(Subscription.topics("topic150"), Serde.string, Serde.string) // (1)
@@ -32,9 +35,7 @@ throughput. See [avoiding chunk-breakers](avoiding-chunk-breakers.md) for more i
 
 (3) Here we get the offset of the record, so we now have a stream of offsets.
 
-(4) The offsets are aggregated into an `OffsetBatch`. The offset batch keeps the highest seen offset per partition.
-ZStream operator `aggregateAsyncWithin` runs upstream in a separate fiber, allowing consuming and committing to run in
-parallel.
+(4) The offsets are aggregated into an `OffsetBatch`. Per partition, the offset batch keeps the highest next offset (the offset to resume consuming from). ZStream operator `aggregateAsyncWithin` runs upstream in a separate fiber, allowing consuming and committing to run in parallel.
 
 The offset batches are emitted every 100 milliseconds. The delay should be longer than the typical commit-duration in
 your system. For example, lets assume the delay is set to 2ms and a commit operation takes 10ms. Then, when some records
@@ -55,15 +56,21 @@ down everything.
 (5) All offsets in the `OffsetBatch` are committed. As soon as the commit is done, the next offset batch is pulled
 from upstream.
 
+See [offsets and committing](offsets-and-committing.md) for the other ways to commit offsets.
+
 ## Consuming with more parallelism
 
 To process partitions (assigned to the consumer) in parallel, you may use the `partitionedStream` method, which creates
 a nested stream of partitions:
 
-```scala
+```scala mdoc:compile-only
 import zio._
 import zio.Console.printLine
 import zio.kafka.consumer._
+import zio.kafka.serde._
+import zio.stream._
+
+val consumer: Consumer = ??? // see "Creating a zio-kafka Consumer"
 
 consumer
   .partitionedStream(Subscription.topics("topic150"), Serde.string, Serde.string)
@@ -82,9 +89,7 @@ consumer
 
 In this example, each partition is processed in parallel on separate fibers, while a single fiber is doing commits.
 
-(1) When using partitionedStream with `flatMapPar(n)`, it is recommended to set n to `Int.MaxValue`. N must be equal to
-or greater than the number of partitions your consumer subscribes to otherwise there will be unhandled partitions and
-Kafka eventually evicts your consumer.
+(1) When using partitionedStream with `flatMapPar(n)`, it is recommended to set n to `Int.MaxValue`. N must be equal to or greater than the number of partitions your consumer subscribes to, otherwise some partition streams are never pulled. Once such a stream has buffered records and has not been pulled for `maxStreamPullInterval` (by default `max.poll.interval.ms`), zio-kafka fails the stream and shuts down the consumer.
 
 Each time a new partition is assigned to the consumer, a new partition stream is created and the body of the
 `flatMapPar` is executed.
@@ -114,10 +119,13 @@ of the stream gracefully.
 The `StreamControl` can be used with `Consumer.runWithGracefulShutdown`, which can gracefully terminate the stream upon
 fiber interruption. This is useful for a controlled shutdown when your application is terminated:
 
-```scala
+```scala mdoc:compile-only
 import zio.Console.printLine
 import zio.kafka.consumer._
+import zio.kafka.serde._
 import zio._
+
+val consumer: Consumer = ??? // see "Creating a zio-kafka Consumer"
 
 ZIO.scoped {
   for {
@@ -126,7 +134,7 @@ ZIO.scoped {
       Serde.string,
       Serde.string
     )
-    _ <- consumer.runWithGracefulShutdown(control, shutdownTimeout = 30.seconds) { stream =>
+    _ <- Consumer.runWithGracefulShutdown(control, shutdownTimeout = 30.seconds) { stream =>
         stream.flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
           partitionStream
             .tap(record => printLine(s"key: ${record.key}, value: ${record.value}"))
@@ -142,9 +150,13 @@ ZIO.scoped {
 
 For more control over when to end the stream, use the `StreamControl` construct like this:
 
-```scala
+```scala mdoc:compile-only
+import zio._
 import zio.Console.printLine
 import zio.kafka.consumer._
+import zio.kafka.serde._
+
+val consumer: Consumer = ??? // see "Creating a zio-kafka Consumer"
 
 ZIO.scoped {
     for {
@@ -169,5 +181,4 @@ ZIO.scoped {
 }
 ```
 
-As of zio-kafka 3.0, this functionality is experimental. If no issues are reported and the API has good usability, it
-will eventually be marked as stable.
+This functionality is experimental: the API may change in incompatible ways in any zio-kafka version. If no issues are reported and the API has good usability, it will eventually be marked as stable.
