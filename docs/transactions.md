@@ -152,7 +152,7 @@ producedRecordsStream
 ```
 
 Let's work on those question marks. We need to create a transaction.
-Each zio-kafka transaction runs in a ZIO `Scope`; the transaction commits when the scope closes successfully, and is aborted when the scope closes with a failure or interruption (or when you call `Transaction#abort`). We start with the scope:
+Each zio-kafka transaction runs in a ZIO `Scope`; the transaction commits when the scope closes successfully, and is aborted when the scope closes with a failure or interruption (for example after `Transaction#abort`, as long as its failure is not caught inside the scope). We start with the scope:
 
 ```scala
 ZIO.scoped {
@@ -290,7 +290,7 @@ A transaction ends when its scope closes. When the scope closes successfully, zi
 
 A `TransactionalProducer` runs one transaction at a time: `TransactionalProducer#createTransaction` waits until the scope of the previous transaction has closed. Do not keep a `Transaction` after its scope closes; producing with it then fails with `TransactionalProducer.TransactionLeaked`.
 
-To abort a transaction on purpose, call `Transaction#abort`. It fails with `TransactionalProducer.UserInitiatedAbort`, which is not a `Throwable`, so we catch it outside the scope when the abort is expected:
+To abort a transaction on purpose, call `Transaction#abort`. It fails the effect with `TransactionalProducer.UserInitiatedAbort` (not a `Throwable`). The transaction is aborted only if this failure reaches the end of the scope: if you catch it inside the scope, the scope closes successfully and the transaction commits. So we catch it outside the scope when the abort is expected:
 
 ```scala mdoc:compile-only
 import org.apache.kafka.clients.producer.ProducerRecord
