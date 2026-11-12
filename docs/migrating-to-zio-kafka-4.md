@@ -10,6 +10,7 @@ This change is the only one in 4.0.0. The Scala, ZIO and Kafka client versions a
 - Reads `OffsetBatch.offsets`, for example to store offsets outside Kafka.
 - Implements the `Offset` trait, for example as a fake in tests.
 - Constructs a `CommittableRecord` directly, for example in tests.
+- Reads the offsets of `DiagnosticEvent.Commit.Started` in a diagnostics callback.
 - Assumes that a committed offset always equals the last consumed offset plus 1.
 
 If you are still on zio-kafka 2.x, first follow [migrating to zio-kafka 3](migrating-to-zio-kafka-3.md).
@@ -113,7 +114,7 @@ final case class FakeOffset(topic: String, partition: Int, offset: Long, nextOff
 
 ## Pass the Next Offset When Constructing a `CommittableRecord`
 
-`CommittableRecord` has a new second parameter, `nextOffset: OffsetAndMetadata`, both in its constructor and in `CommittableRecord.apply`. Code that builds records by hand, typically tests, must pass it.
+`CommittableRecord` has a new second parameter, `nextOffset: OffsetAndMetadata`, both in its constructor and in `CommittableRecord.apply`. Code that builds records by hand, typically tests, must pass it, and a pattern such as `case CommittableRecord(record, _, _)` needs an extra `_`.
 
 In zio-kafka 3.x, a test record needed only the Kafka record, a commit handle and the group metadata:
 
@@ -152,6 +153,10 @@ This change needs no code changes. `Offset#commit`, `OffsetBatch#commit`, `Consu
 
 Review code, tests and dashboards that assume otherwise. For example, a test that checks `committed == lastConsumedOffset + 1` on a transactional topic can now fail, and a dashboard that showed a lag of 1 on such a topic now shows 0.
 
+## Expect Next Offsets in `Commit.Started` Diagnostic Events
+
+In zio-kafka 3.x, the `DiagnosticEvent.Commit.Started` event carried the consumed offsets, while `Commit.Success` and `Commit.Failure` carried the next offsets. In zio-kafka 4, `Commit.Started` also carries the next offsets, the same values that are committed. If a [diagnostics](diagnostics.md) callback compares or logs the offsets of `Commit.Started`, remove any `+ 1` it applies to them.
+
 ## Checklist
 
 To migrate an application from zio-kafka 3.x to zio-kafka 4:
@@ -160,5 +165,6 @@ To migrate an application from zio-kafka 3.x to zio-kafka 4:
 - [ ] Replace every use of `OffsetBatch.offsets` with `OffsetBatch#nextOffsets`, and remove any `+ 1` applied to its values.
 - [ ] Optionally, replace `record.offset.offset + 1` with `record.nextOffset.offset()` where you store offsets.
 - [ ] Add `Offset#nextOffset` to custom implementations of `Offset`.
-- [ ] Pass the `nextOffset` parameter wherever you construct a `CommittableRecord`.
+- [ ] Pass the `nextOffset` parameter wherever you construct a `CommittableRecord`, and add a field to positional patterns on it.
+- [ ] Remove any `+ 1` applied to the offsets of `DiagnosticEvent.Commit.Started` in diagnostics callbacks.
 - [ ] Check tests and monitoring that compare committed offsets with consumed offsets.
