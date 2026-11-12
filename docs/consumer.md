@@ -560,7 +560,7 @@ The fields and accessors give you the record's data and its position:
 | `partition`, `timestamp`                              | The record's partition number and timestamp.                                                                                                                      |
 | `record`                                              | The underlying Kafka `ConsumerRecord`. Use it for everything else, such as `record.topic()`, `record.headers()` and `record.leaderEpoch()`.                       |
 | `offset`                                              | The record's `Offset`: `offset.offset` is the consumed offset, and `offset.commit` commits it.                                                                    |
-| `nextOffset`                                          | The offset a consumer should resume from after this record. It is usually the record's offset + 1, but larger when transaction control records follow the record. |
+| `nextOffset`                                          | The offset a consumer should resume from after this record. It is usually the record's offset + 1; for the last record of a partition in a poll it is the next offset Kafka reports, which is larger when transaction control records follow the record. |
 | `deserializeWith(keyDeserializer, valueDeserializer)` | Deserializes a record of raw bytes, keeping the headers.                                                                                                          |
 
 The headers of a record are only available through `record.headers()`; see [record headers](record-headers.md). How `offset` and `nextOffset` relate to committing is explained in [Offsets and Committing](offsets-and-committing.md).
