@@ -3,7 +3,7 @@ id: offsets-and-committing
 title: "Offsets and Committing"
 ---
 
-Kafka remembers how far a consumer group has read each partition by storing a *committed offset* per partition. When a consumer restarts, or when a partition moves to another consumer during a rebalance, consumption continues from that committed offset. zio-kafka never commits on its own (Kafka's `enable.auto.commit` is not supported, and `Consumer.make` fails when you set it), so your program decides when an offset is committed. This page explains what an offset is in zio-kafka, how to commit offsets one by one or in batches, how to retry failed commits, and how commits relate to external storage and transactions.
+Kafka remembers how far a consumer group has read each partition by storing a *committed offset* per partition. When a consumer restarts, or when a partition moves to another consumer during a rebalance, consumption continues from that committed offset. zio-kafka never commits on its own (Kafka's `enable.auto.commit` is not supported, and `Consumer.make` fails when you set it to `true`), so your program decides when an offset is committed. This page explains what an offset is in zio-kafka, how to commit offsets one by one or in batches, how to retry failed commits, and how commits relate to external storage and transactions.
 
 The core types are `Offset`, the position of one consumed record, and `OffsetBatch`, the combined positions of many records, at most one per partition. You get an `Offset` from a `CommittableRecord`, the record type that the [consumer](consumer.md) streams emit:
 
@@ -54,7 +54,7 @@ The diagram shows how the types relate:
 
 In Kafka you never commit the offset of the record you processed. You commit the *next offset*: the offset from which a consumer should continue reading. If you processed the record at offset 42, you commit 43.
 
-Most of the time the next offset is the record's offset plus one. It can be larger when a partition contains *control records*. A transactional producer writes such a control record (a transaction marker) when it commits or aborts a transaction. Control records occupy an offset but are never delivered to your program. In the diagram, the record at offset 44 is followed by a control record at offset 45:
+Most of the time the next offset is the record's offset plus one. It can be larger when a partition contains *control records*. A transactional producer writes such a control record (a transaction marker) when it commits or aborts a transaction. Control records occupy an offset but are never delivered to your program. In the diagram, the record at offset 44 is the last record that a poll returned for partition 0, and it is followed by a control record at offset 45:
 
 ```
   offset          40     41     42     43     44     45     46
@@ -63,7 +63,7 @@ Most of the time the next offset is the record's offset plus one. It can be larg
                └──────┴──────┴──────┴──────┴──────┴──────┴──────┘
 
   record at 42:  Offset#offset = 42   Offset#nextOffset.offset() = 43
-  record at 44:  Offset#offset = 44   Offset#nextOffset.offset() = 46  (skips the control record)
+  record at 44:  Offset#offset = 44   Offset#nextOffset.offset() = 46  (last record of its poll; skips the control record)
 ```
 
 zio-kafka gives you both values, so you don't have to compute the next offset yourself. `Offset#offset` (a `Long`) is the offset of the consumed record. `Offset#nextOffset` (a Kafka `OffsetAndMetadata`) is the offset to commit; it also carries the leader epoch and, optionally, metadata. The same value is available directly on the record as `CommittableRecord#nextOffset`.
