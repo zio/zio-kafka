@@ -19,7 +19,13 @@ $ git clone https://github.com/zio/zio-quickstarts.git
 $ cd zio-quickstarts/zio-quickstart-kafka
 ```
 
-And finally, run the application using sbt:
+Start a Kafka broker with the `docker-compose.yml` that ships with the project (see [Setting Up The Kafka Cluster](#setting-up-the-kafka-cluster) for what it contains):
+
+```bash
+$ docker compose up -d
+```
+
+Then run the application using sbt:
 
 ```bash
 $ sbt run
@@ -195,7 +201,7 @@ def consumeAndPrintEvents(bootstrapServers: List[String], groupId: String, topic
   }
 ```
 
-For performance reasons, records are always consumed in batches. `Consumer.consumeWith` commits the offsets of processed records in the background. Offsets of records that are processed while a commit is in progress are combined into the next commit. Failed commits are retried according to the `commitRetryPolicy` parameter (by default `Schedule.exponential(1.second) && Schedule.recurs(3)`).
+For performance reasons, records are always consumed in batches. `Consumer.consumeWith` commits the offsets of processed records in the background. Offsets of records that are processed while a commit is in progress are combined into the next commit. Commits that fail with a temporary error (a `RetriableCommitFailedException` or a commit timeout) are retried according to the `commitRetryPolicy` parameter (by default `Schedule.exponential(1.second) && Schedule.recurs(3)`). Any other commit failure, or a failure that remains after the retries, fails `consumeWith`.
 
 For more options see [consumer tuning](consumer-tuning.md).
 
@@ -634,7 +640,7 @@ object JsonStreamingKafkaApp extends ZIOAppDefault {
 
 In this tutorial we first learned how to create a producer and consumer for Kafka using the ZIO workflow with zio-kafka. Then we learned how to do the same with zio-streams. We also learned how to create a custom serializer and deserializer for the Kafka records and how to produce and consume JSON data using the zio-json library.
 
-All the source code associated with this article is available on the [ZIO Quickstart](http://github.com/zio/zio-quickstarts) project on GitHub.
+Runnable versions of these applications are in the [ZIO Quickstart](https://github.com/zio/zio-quickstarts) project on GitHub. Note that the quickstart may pin an older zio-kafka version than the one used on this page.
 
 More information:
 
