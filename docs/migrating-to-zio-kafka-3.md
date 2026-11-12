@@ -11,7 +11,9 @@ Zio-kafka 3.0.0 brings a number of backwards incompatible changes:
 4. Diagnostics set via consumer settings, 
 5. `restartStreamOnRebalancing` mode is no longer supported.
 
-This document helps you migrate from zio-kafka 2 to zio-kafka 3.
+This document helps you migrate from zio-kafka 2 to zio-kafka 3. To upgrade further, from zio-kafka 3 to zio-kafka 4, see [Migrating to zio-kafka 4](migrating-to-zio-kafka-4.md).
+
+In the examples below, code marked as zio-kafka 2.x shows the old API; it is not meant to compile with zio-kafka 3.
 
 # 1. Deprecations
 
@@ -27,11 +29,12 @@ done. Otherwise, read on.
 ## Consumer, Producer and TransactionalProducer accessor methods
 
 Accessor methods are little helper methods that look up a service from the environment, and then forward your call to
-that service. Accessor methods have not been recommended for some time and are now deprecated. The
+that service. Accessor methods have not been recommended for some time; they were deprecated in zio-kafka 2.11 and have
+been removed in zio-kafka 3.0. The
 [ZIO service pattern](https://zio.dev/reference/service-pattern/) provides a much cleaner approach for accessing
 services.
 
-All accessor methods provided by zio-kafka are deprecated in zio-kafka 2.11 and will be removed in zio-kafka 3.0. If
+All accessor methods provided by zio-kafka were deprecated in zio-kafka 2.11 and have been removed in zio-kafka 3.0. If
 you use these accessor methods follow one of these approaches:
 
 ### Use the ZIO Service pattern
@@ -41,31 +44,35 @@ this pattern, using it for zio-kafka services as well will be easy. See [ZIO ser
 
 Here is an example with a `Consumer`, but it works the same with `Producer` and `TransactionalProducer`. We get the
 `Consumer` from the environment in the layer with the `ZIO.service` method, and then inject it into the service class.
-The service now uses the consumer directly: with `consumer` instead of `Consumer`.
+The service now uses the consumer directly, with `consumer` instead of `Consumer`:
 
-```scala
-import zio.kafka.consumer.Consumer
+```scala mdoc:compile-only
+import zio._
+import zio.kafka.consumer.{ Consumer, Subscription }
+import zio.kafka.serde.Serde
 
 trait Service {
-    def someMethod: ZIO[Any, Throwable, String]
+  def someMethod: ZIO[Any, Throwable, String]
 }
 
 object Service {
-  
+
   def layer: ZLayer[Consumer, Throwable, Service] = ZLayer {
-      for {
-        consumer <- ZIO.service[Consumer]
-      } yield ServiceLive(consumer)
+    for {
+      consumer <- ZIO.service[Consumer]
+    } yield ServiceLive(consumer)
   }
-  
+
 }
 
 case class ServiceLive(consumer: Consumer) extends Service {
 
-  override def someMethod: ZIO[Any, Throwable, String] = {
+  override def someMethod: ZIO[Any, Throwable, String] =
     // use `consumer`, not `Consumer`:
-    consumer.plainStream(/*...*/).runHead
-  }
+    consumer
+      .plainStream(Subscription.topics("my-topic"), Serde.string, Serde.string)
+      .runHead
+      .map(_.fold("")(_.value))
 }
 ```
 
@@ -95,17 +102,19 @@ for {
 Zio-kafka provides a `zio-kafka-testkit` library to help you test your code using zio-kafka. Several methods in the
 `KafkaTestUtils` class have been replaced:
 
-- The `produce*` and `scheduledProduce*` methods, which get a producer from the environment, have been deprecated.
-  Each of these methods now has a variant with an explicit producer parameter.
+- The `produce*` and `scheduledProduce*` methods, which get a producer from the environment, were deprecated in
+  zio-kafka 2.11 and have been removed in zio-kafka 3.0. Each of these methods now only exists as a variant with an
+  explicit producer parameter.
 - All methods that produce a layer (e.g. `consumer`, `producer`) have _not_ been deprecated, but they have been given a
-  more convenient alternative: `makeConsumer`, `makeProducer`, etc.
-- The `withAdmin`, `withSaslAdmin`, `withSslAdmin` methods are deprecated and are replaced by `makeAdminClient`,
+  more convenient alternative: `makeConsumer`, `makeProducer`, etc. The exception is `minimalConsumer()`, which is
+  deprecated since zio-kafka 3.0.0; use `Consumer.live` instead.
+- The `withAdmin`, `withSaslAdmin`, `withSslAdmin` methods have been removed and are replaced by `makeAdminClient`,
   `makeSaslAdminClient` and `makeSslAdminClient`.
 
-Here is a typical example and the new version:
+Here is a typical zio-kafka 2.x test suite:
 
 ```scala
-// Old
+// Old (zio-kafka 2.x)
 override def spec: Spec[TestEnvironment, Any] =
   suite("old example suite")(
     test("uses a producer") {
@@ -116,23 +125,33 @@ override def spec: Spec[TestEnvironment, Any] =
   )
     .provideSome[Kafka](KafkaTestUtils.producer)
     .provideShared(Kafka.embedded)
+```
 
-// New
-// Added `Scope`:
-override def spec: Spec[TestEnvironment & Scope, Any] =
-  suite("new example suite")(
-    test("uses a producer") {
-      for {
-        // Make a producer explicitly (instead of via a layer):
-        producer <- KafkaTestUtils.makeProducer
-        // Notice explicit producer parameter:
-        _ <- KafkaTestUtils.produceOne(producer, "topic", "key", "message")
-      } yield assertCompletes
-    }
-    // Producer layer removed.
-    .provideSomeShared[Scope](Kafka.embedded)
-    // Using `provideSomeShared[Scope]` instead of `provideShared`
-  )
+In zio-kafka 3.x, the same suite looks like this:
+
+```scala mdoc:compile-only
+import zio._
+import zio.kafka.testkit.{ Kafka, KafkaTestUtils }
+import zio.test._
+
+object NewExampleSpec extends ZIOSpecDefault {
+  // New (zio-kafka 3.x)
+  // Added `Scope`:
+  override def spec: Spec[TestEnvironment & Scope, Any] =
+    suite("new example suite")(
+      test("uses a producer") {
+        for {
+          // Make a producer explicitly (instead of via a layer):
+          producer <- KafkaTestUtils.makeProducer
+          // Notice explicit producer parameter:
+          _ <- KafkaTestUtils.produceOne(producer, "topic", "key", "message")
+        } yield assertCompletes
+      }
+    )
+      // Producer layer removed.
+      // Using `provideSomeShared[Scope]` instead of `provideShared`:
+      .provideSomeShared[Scope](Kafka.embedded)
+}
 ```
 
 `KafkaTestUtils.makeProducer` and the other `make*` methods require a `Scope` in the environment. This scope is
@@ -140,19 +159,27 @@ normally provided by the test framework (notice how `Scope` was added to the typ
 smaller scope can be given with the `ZIO.scoped` method. See also [writing tests](writing-tests.md) for details on how
 to provide more layers.
 
-Here is an example of how to rewrite code that uses one of the deprecated `with*Admin` methods:
+Here is code that uses one of the removed `with*Admin` methods:
 
 ```scala
-// Old
+// Old (zio-kafka 2.x)
 KafkaTestUtils.withAdmin { adminClient =>
   adminClient.method() // Use the admin client...
 }
+```
 
-// New
-for {
-  adminClient <- KafkaTestUtils.makeAdminClient
-  _           <- adminClient.method() // Use the admin client...
-} yield ()
+In zio-kafka 3.x, we make the admin client explicitly instead:
+
+```scala mdoc:compile-only
+import zio._
+import zio.kafka.testkit.{ Kafka, KafkaTestUtils }
+
+// New (zio-kafka 3.x)
+val useAdminClient: ZIO[Scope & Kafka, Throwable, Unit] =
+  for {
+    adminClient <- KafkaTestUtils.makeAdminClient
+    _           <- adminClient.listTopics() // Use the admin client...
+  } yield ()
 ```
 
 # 2. Kafka 4.x
@@ -163,12 +190,15 @@ Starting with 3.0.0, zio-kafka is based on the kafka 4.0.0 client. This has a nu
   depend on an embedded kafka broker and the kafka brokers no longer support it.
 * `ConsumerGroupState` (used in the admin client) was renamed to `GroupState`, unfortunately without a deprecation
   cycle.
-* Due to [KAFKA-18818](https://issues.apache.org/jira/browse/KAFKA-18818) we add a 550ms delay after operations like
-  `createTopic`, `deleteTopic` and `createACL` in the admin client.
+* Due to [KAFKA-18818](https://issues.apache.org/jira/browse/KAFKA-18818), admin operations are eventually consistent.
+  zio-kafka 3.0 and 3.1 added a fixed 550ms delay after operations like `createTopic`, `deleteTopic` and `createAcls`
+  in the admin client. Later releases replaced this delay step by step. Since zio-kafka 3.6.0, the admin client polls
+  the broker until the change is visible (for at most 5 seconds), and operations whose effect it cannot check accept a
+  `visibilitySleep` parameter (default 1 second).
 * Two deprecated methods of kafka's admin client were removed. Their equivalent in zio-kafka were unfortunately not
   deprecated yet but had to be removed as well:
   * `AdminClient.alterConfigs` was removed, use `AdminClient.incrementalAlterConfigs` instead.
-  * `AdminClient.alterConfigsAsync` was removed, use `AdminClient.incrementalAlterConfigs` instead.
+  * `AdminClient.alterConfigsAsync` was removed, use `AdminClient.incrementalAlterConfigsAsync` instead.
 
 There may be more changes that affect you. See the [Kafka 4.0.0 release announcement](https://kafka.apache.org/blog#apache_kafka_400_release_announcement) for more details.
 
@@ -201,18 +231,27 @@ For zio-kafka 3.x simply remove the line marked with `// 1` and you are done.
 
 ### Migrate uses of `Consumer.make` with diagnostics
 
-Rewrite your code following this example:
+In zio-kafka 2.x, the diagnostics were the second argument of `Consumer.make`:
 
 ```scala
 // zio-kafka 2.x
 val diagnostics = ???
 val settings = ConsumerSettings(bootstrap)
 val consumer = Consumer.make(settings, diagnostics)
+```
+
+Rewrite your code so that the diagnostics are part of the settings:
+
+```scala mdoc:compile-only
+import zio._
+import zio.kafka.consumer.{ Consumer, ConsumerSettings }
+
+val bootstrap = List("localhost:9092")
 
 // zio-kafka 3.x
-val diagnostics = ???
-val settings = ConsumerSettings(bootstrap).withDiagnostics(diagnostics)
-val consumer = Consumer.make(settings)
+val diagnostics: Consumer.ConsumerDiagnostics = ???
+val settings                                  = ConsumerSettings(bootstrap).withDiagnostics(diagnostics)
+val consumer: ZIO[Scope, Throwable, Consumer] = Consumer.make(settings)
 ```
 
 ## Migrate a layers app with diagnostics
@@ -233,12 +272,19 @@ The cleanest solution is to merge the code that constructs `diagnosticsLayer` in
 
 The other option is to apply a 'quick fix' that transforms the two layers into a single layer:
 
-```scala
+```scala mdoc:compile-only
+import zio._
+import zio.kafka.consumer.{ Consumer, ConsumerSettings }
+
+val consumerSettingsLayer: ZLayer[Any, Throwable, ConsumerSettings]        = ???
+val diagnosticsLayer: ZLayer[Any, Throwable, Consumer.ConsumerDiagnostics] = ???
+val program: ZIO[Consumer, Throwable, Unit]                                = ???
+
 // zio-kafka 3.x
-.provide(
+program.provide(
   (consumerSettingsLayer ++ diagnosticsLayer) >>> ZLayer {
     for {
-      settings <- ZIO.service[ConsumerSettings]
+      settings    <- ZIO.service[ConsumerSettings]
       diagnostics <- ZIO.service[Consumer.ConsumerDiagnostics]
     } yield settings.withDiagnostics(diagnostics)
   },
