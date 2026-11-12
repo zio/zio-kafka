@@ -62,7 +62,7 @@ object ProducerApp extends ZIOAppDefault {
 
 ## Creating a Producer
 
-A producer holds network connections and a background fiber, so every constructor returns it inside a `Scope` (or a layer, which manages the scope for you). When the scope closes, the producer stops its background fibers and closes the underlying Java producer.
+A producer holds network connections and a background fiber, so every constructor returns it inside a `Scope` (or a layer, which manages the scope for you). When the scope closes, the producer stops its background fibers. `Producer.make` and `Producer.live` also close the underlying Java producer; with `Producer.fromJavaProducer` you close it yourself.
 
 ### Producer.make
 
@@ -176,7 +176,7 @@ For streaming applications that also commit consumer offsets, [Consuming, Produc
 
 ### Byte Arrays or Serializers
 
-Every produce method except `Producer#produceChunkAsyncWithFailures` comes in two forms. One takes `ProducerRecord[Array[Byte], Array[Byte]]` values that are already serialized. The other takes a `ProducerRecord[K, V]` plus a key `Serializer[R, K]` and a value `Serializer[R, V]`, and serializes the record before sending it; serialization runs as part of the effect and can use the environment `R`. The single-record methods also accept `topic`, `key` and `value` directly instead of a `ProducerRecord`:
+Every produce method except `Producer#produceChunkAsyncWithFailures` and `Producer#produceAll` comes in two forms. One takes `ProducerRecord[Array[Byte], Array[Byte]]` values that are already serialized. The other takes a `ProducerRecord[K, V]` plus a key `Serializer[R, K]` and a value `Serializer[R, V]`, and serializes the record before sending it; serialization runs as part of the effect and can use the environment `R`. The single-record methods also accept `topic`, `key` and `value` directly instead of a `ProducerRecord`:
 
 ```scala
 trait Producer {
@@ -313,11 +313,13 @@ trait Producer {
 }
 
 object Producer {
-  case object PublishOmittedException extends RuntimeException with NoStackTrace
+  case object PublishOmittedException
+      extends RuntimeException("Publish omitted due to a publish error for a previous record in the chunk")
+      with NoStackTrace
 }
 ```
 
-When sending a record fails, the producer does not attempt the records after it in the same chunk; their result is `Left(Producer.PublishOmittedException)`. This variant accepts only byte-array records, because a failing serializer cannot be reported per record. Serialize the records first, for example with `Serializer#serialize`. To log which records of a chunk failed:
+When a record fails while the chunk is still being handed to the Java producer, the producer does not attempt the remaining records of the chunk; their result is `Left(Producer.PublishOmittedException)`. Records handed over before the failure was reported are still sent and get their own result. This variant accepts only byte-array records, because a failing serializer cannot be reported per record. Serialize the records first, for example with `Serializer#serialize`. To log which records of a chunk failed:
 
 ```scala mdoc:compile-only
 import zio._
@@ -387,7 +389,7 @@ val settings: ProducerSettings =
     .withAuthErrorRetrySchedule(Schedule.recurs(5) && Schedule.spaced(500.millis))
 ```
 
-For a chunk, only the failed and omitted records are sent again, so a retry can change the order in which records are written. See [Detecting Authorization Failures](detecting-authorization-failures.md) for more on authorization errors.
+For a chunk, only the failed and omitted records are sent again, so a retry can change the order in which records are written. For detecting revoked read access on the consumer side, see [Detecting Authorization Failures](detecting-authorization-failures.md).
 
 ## Other Operations
 
