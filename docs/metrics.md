@@ -131,10 +131,12 @@ acknowledges records.
 
 | Type      | Name                                | Description                                                                             |
 |-----------|-------------------------------------|-----------------------------------------------------------------------------------------|
-| counter   | `ziokafka_producer_calls`           | The number of times a produce method is invoked.                                        |
+| counter   | `ziokafka_producer_calls`           | The number of produce calls that completed successfully.                                |
 | histogram | `ziokafka_producer_latency_seconds` | The duration of a single produce, from after serialization to acknowledged, in seconds. |
 | counter   | `ziokafka_producer_records`         | The number of records produced.                                                         |
 | histogram | `ziokafka_producer_batch_size`      | The number of records per produce call.                                                 |
+
+These metrics are only updated for produce calls in which every record was produced successfully.
 
 ### Queue metrics
 
@@ -146,7 +148,7 @@ acknowledges records.
 The capacity of the send queue is set with `ProducerSettings#withSendBufferSize`.
 
 :::note
-In zio-kafka 4.0.0, `ziokafka_producer_send_queue_latency_seconds` is not recorded correctly (the measured duration has the wrong sign), so its values do not reflect the actual time spent in the send queue.
+Since zio-kafka 4.0.0, `ziokafka_producer_send_queue_latency_seconds` is not recorded correctly (the measured duration has the wrong sign), so its values do not reflect the actual time spent in the send queue.
 :::
 
 ### Send metrics
