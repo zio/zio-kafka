@@ -87,6 +87,8 @@ The other option is to replace all accessor methods of `Consumer`, `Producer` an
 - `Producer.method(...)` => `ZIO.serviceWithZIO[Producer](_.method(...))`
 - `TransactionalProducer.method(...)` => `ZIO.serviceWithZIO[TransactionalProducer](_.method(...))`
 
+The accessors that return a stream or a pipeline need a different replacement. For `Consumer.plainStream`, `Consumer.partitionedStream` and `Consumer.partitionedAssignmentStream`, use `ZStream.serviceWithStream[Consumer](_.plainStream(...))` (and likewise for the other two). For `Producer.produceAll`, get the producer with `ZIO.service[Producer]` and use the `Producer#produceAll` pipeline.
+
 Or, alternatively, use `ZIO.service`.
 
 For example: `Consumer.method(...)` is transformed to:
