@@ -19,6 +19,8 @@ zio-metrics backend to access and process the observed values.
 
 By default, no tags are added. Tags can be configured via `ConsumerSettings.withMetricsLabels` / `ProducerSettings.withMetricsLabels`.
 
+To send these metrics to another backend, change histogram boundaries, or turn metrics off, see [Metrics Observers](metrics-observers.md).
+
 Like the zio-metrics we follow Prometheus conventions. This means that:
 
 - durations are expressed in seconds,
