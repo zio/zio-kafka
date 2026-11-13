@@ -1,6 +1,6 @@
 ---
 id: migrating-to-zio-kafka-3
-title: "Migrating to zio-kafka 3"
+title: "Migrating to ZIO Kafka 3"
 ---
 
 ZIO Kafka 3.0.0 brings a number of backwards incompatible changes:

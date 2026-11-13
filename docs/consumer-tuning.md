@@ -1,6 +1,6 @@
 ---
 id: consumer-tuning
-title: "Tuning the consumer"
+title: "Tuning the Consumer"
 ---
 
 ZIO Kafka's consumer can be tuned for:

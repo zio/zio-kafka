@@ -1,6 +1,6 @@
 ---
 id: sharing-consumer
-title: "Sharing a Consumer between multiple streams"
+title: "Sharing a Consumer between Multiple Streams"
 ---
 
 Often in a single application, you want to consume from multiple Kafka topics and process each topic in a distinct way. With `zio-kafka` you can use a single `Consumer` instance for multiple streams from different topics. It is not only easier to create a single `Consumer` layer instead of one for each topic, but it may be more resource efficient as well. The underlying Apache Kafka consumer, its thread pool and communication with the Kafka brokers will be shared, resulting in less resource consumption compared to when you create a Consumer instance for every topic.

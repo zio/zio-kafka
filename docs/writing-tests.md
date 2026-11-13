@@ -1,6 +1,6 @@
 ---
 id: writing-tests
-title: "Writing Tests with the `zio-kafka-testkit` library"
+title: "Writing Tests with the `zio-kafka-testkit` Library"
 ---
 
 ZIO Kafka provides a `zio-kafka-testkit` library to help you test your code using zio-kafka.

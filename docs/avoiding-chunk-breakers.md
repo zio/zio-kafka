@@ -1,6 +1,6 @@
 ---
 id: avoiding-chunk-breakers
-title: "Avoiding chunk-breakers"
+title: "Avoiding Chunk-Breakers"
 ---
 
 ## A warning about `mapZIO` and other chunk-breakers

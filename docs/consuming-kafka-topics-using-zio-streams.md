@@ -1,6 +1,6 @@
 ---
 id: consuming-kafka-topics-using-zio-streams
-title: "Consuming Kafka topics using ZIO Streams"
+title: "Consuming Kafka Topics Using ZIO Streams"
 ---
 
 You can stream data from Kafka using the `plainStream` method:

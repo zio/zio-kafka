@@ -1,6 +1,6 @@
 ---
 id: preventing-duplicates
-title: "Preventing duplicates"
+title: "Preventing Duplicates"
 ---
 
 In zio-kafka processing of records runs asynchronously with partition management. This brings substantial performance

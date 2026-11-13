@@ -1,6 +1,6 @@
 ---
 id: creating-a-consumer
-title: "Creating a zio-kafka Consumer"
+title: "Creating a ZIO Kafka Consumer"
 ---
 
 Create a consumer with `Consumer.make`, passing some `ConsumerSettings`:

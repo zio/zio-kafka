@@ -1,6 +1,6 @@
 ---
 id: tutorial
-title: "Tutorial: How to Produce/Consume Data To/From Kafka Topics?"
+title: "Tutorial: How to Produce/Consume Data to/from Kafka Topics?"
 sidebar_label: "Tutorial"
 ---
 

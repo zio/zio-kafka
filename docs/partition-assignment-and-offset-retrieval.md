@@ -1,6 +1,6 @@
 ---
 id: partition-assignment-and-offset-retrieval
-title: "Partition Assignment And Offset Retrieval"
+title: "Partition Assignment and Offset Retrieval"
 ---
 
 ## Consumer partition assignment

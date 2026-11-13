@@ -1,6 +1,6 @@
 ---
 id: migrating-to-zio-kafka-4
-title: "Migrating to zio-kafka 4"
+title: "Migrating to ZIO Kafka 4"
 ---
 
 zio-kafka 4.0.0 changes how offsets are committed. Before 4.0, zio-kafka committed the offset of the last consumed record plus 1. Since KIP-1094, the Kafka client reports the actual _next offset_ of a partition, which skips the invisible control records that transactional producers write. zio-kafka 4.0 attaches this next offset to every record and commits it. As a result, consumer lag can now go down to 0, where before a consumer of a transactional topic always showed some lag.
