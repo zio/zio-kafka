@@ -6,7 +6,7 @@ title: "Avoiding chunk-breakers"
 ## A warning about `mapZIO` and other chunk-breakers
 
 ZIO streams are not just a simple sequence of elements. The elements are grouped into chunks, which makes many
-operations faster. Zio-kafka helps with this by guaranteeing that all records (for a given partition), fetched together
+operations faster. ZIO Kafka helps with this by guaranteeing that all records (for a given partition), fetched together
 from the broker, are in the same chunk.
 
 Be careful when using `mapZIO`, `tap` and some other stream operators that break the chunking structure of the stream

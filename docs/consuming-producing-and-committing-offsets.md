@@ -71,7 +71,7 @@ stream's chunks, and to make sure that the chunking structure stays intact. (See
 chunk-breakers](avoiding-chunk-breakers.md) for more information.)
 
 The program above uses a zio-kafka consumer as stream source. Kafka consumers poll the broker to get new records.
-Zio-kafka guarantees that all records that were received in a poll for a given partition, are in the same stream chunk.
+ZIO Kafka guarantees that all records that were received in a poll for a given partition, are in the same stream chunk.
 This is ideal; partitions can be processed in parallel, and we can process as many records as are available.
 
 By default, the zio-kafka consumer does pre-fetching. The result is that as soon as the stream processed a chunk of
@@ -92,7 +92,7 @@ cost of making the program more complex, we can increase throughput with per-par
 [consuming with more parallelism](consuming-kafka-topics-using-zio-streams.md#consuming-with-more-parallelism) for more
 details. On this page, we do not explore this optimization further.
 
-Zio-kafka's prefetching automatically adapts and is usually as good as it can be. Only for very small/large records, or for large numbers of partitions, you may need to configure it better. Please see [consumer tuning](consumer-tuning.md) to find out how.
+ZIO Kafka's prefetching automatically adapts and is usually as good as it can be. Only for very small/large records, or for large numbers of partitions, you may need to configure it better. Please see [consumer tuning](consumer-tuning.md) to find out how.
 
 ### Optimizing producer throughput
 

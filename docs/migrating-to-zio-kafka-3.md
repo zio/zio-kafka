@@ -3,7 +3,7 @@ id: migrating-to-zio-kafka-3
 title: "Migrating to zio-kafka 3"
 ---
 
-Zio-kafka 3.0.0 brings a number of backwards incompatible changes:
+ZIO Kafka 3.0.0 brings a number of backwards incompatible changes:
 
 1. Removal of all deprecated methods, _including accessor methods,_
 2. Kafka 4.x
@@ -17,7 +17,7 @@ In the examples below, code marked as zio-kafka 2.x shows the old API; it is not
 
 ## 1. Deprecations
 
-Zio-kafka 3.0.0 removes everything that was deprecated in the zio-kafka 2.x series. In particular, this includes
+ZIO Kafka 3.0.0 removes everything that was deprecated in the zio-kafka 2.x series. In particular, this includes
 accessor methods. To prepare for zio-kafka 3.0, _you should always first migrate to zio-kafka 2.12.0_ and solve all
 deprecation issues, using this page as a guide.
 
@@ -99,9 +99,9 @@ for {
 } yield () 
 ```
 
-### Zio-test-kit
+### ZIO Kafka Testkit
 
-Zio-kafka provides a `zio-kafka-testkit` library to help you test your code using zio-kafka. Several methods in the
+ZIO Kafka provides a `zio-kafka-testkit` library to help you test your code using zio-kafka. Several methods in the
 `KafkaTestUtils` class have been replaced:
 
 - The `produce*` and `scheduledProduce*` methods, which get a producer from the environment, were deprecated in

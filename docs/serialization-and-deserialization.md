@@ -3,7 +3,7 @@ id: serialization-and-deserialization
 title: "Serialization and Deserialization"
 ---
 
-Zio-kafka deserializes incoming data and serializes outgoing data (both keys and values) from byte arrays to any
+ZIO Kafka deserializes incoming data and serializes outgoing data (both keys and values) from byte arrays to any
 other type and back. This works by passing a key and value `Deserializer` to the stream methods of the
 [consumer](consumer.md) (for example `Consumer#plainStream`), and a key and value `Serializer` to the `produce*` methods
 of the [producer](producer.md).

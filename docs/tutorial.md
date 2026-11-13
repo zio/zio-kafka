@@ -6,7 +6,7 @@ sidebar_label: "Tutorial"
 
 ## Introduction
 
-Kafka is a distributed, fault-tolerant, message-oriented event-store platform. It is used as a message broker for distributed applications. Zio-kafka is a library that provides a way to consume and produce data from Kafka topics, and it also supports the ability to have streaming consumers and producers.
+Kafka is a distributed, fault-tolerant, message-oriented event-store platform. It is used as a message broker for distributed applications. ZIO Kafka is a library that provides a way to consume and produce data from Kafka topics, and it also supports the ability to have streaming consumers and producers.
 
 In this tutorial, we will learn how to use zio-streams and zio-kafka to produce and consume data from Kafka topics.
 
@@ -44,13 +44,13 @@ libraryDependencies ++= Seq(
 )
 ```
 
-Zio-kafka depends on zio and zio-streams, so these two libraries are added to the project as well.
+ZIO Kafka depends on zio and zio-streams, so these two libraries are added to the project as well.
 
-1. **Zio-kafka** is a ZIO native client for Apache Kafka. It provides a high-level streaming API on top of the Java client. So we can produce and consume events using the declarative concurrency model of zio-streams.
+1. **ZIO Kafka** is a ZIO native client for Apache Kafka. It provides a high-level streaming API on top of the Java client. So we can produce and consume events using the declarative concurrency model of zio-streams.
 
-2. **Zio-streams** introduces a high-level API for working with streams of values. It is designated to work in a highly concurrent environment. It has seamless integration with ZIO, so we have the ability to use all the features of the ZIO along with the streams, e.g. `Scope`, `Schedule`, `ZLayer`, `Queue`, `Hub` etc. To learn more about zio-stream, there is a comprehensive section on that [here](https://zio.dev/reference/stream/).
+2. **ZIO Streams** introduces a high-level API for working with streams of values. It is designated to work in a highly concurrent environment. It has seamless integration with ZIO, so we have the ability to use all the features of the ZIO along with the streams, e.g. `Scope`, `Schedule`, `ZLayer`, `Queue`, `Hub` etc. To learn more about zio-stream, there is a comprehensive section on that [here](https://zio.dev/reference/stream/).
 
-3. **Zio-json** is a library to serialize and deserialize data from/to JSON data type. We will be using this library to serialize and deserialize data when reading and writing JSON data from/to Kafka topics.
+3. **ZIO JSON** is a library to serialize and deserialize data from/to JSON data type. We will be using this library to serialize and deserialize data when reading and writing JSON data from/to Kafka topics.
 
 ## Setting Up The Kafka Cluster
 
@@ -145,7 +145,7 @@ connection with the Kafka cluster. An explicit scope can be created with the `ZI
 
 ### 3. Producing records
 
-Zio-kafka has several producers that can be used to produce data on Kafka topics. In this example, we will be using the `Producer.produce` method:
+ZIO Kafka has several producers that can be used to produce data on Kafka topics. In this example, we will be using the `Producer.produce` method:
 
 ```scala
 trait Producer {
@@ -181,7 +181,7 @@ def produceRecord(producer: Producer, topic: String, key: Long, value: String): 
 
 ### 4. Creating a Consumer
 
-Zio-kafka provides several ways to consume data from Kafka topics. In this example, we will use the `Consumer.consumeWith` function.
+ZIO Kafka provides several ways to consume data from Kafka topics. In this example, we will use the `Consumer.consumeWith` function.
 
 The following helper function creates a ZIO workflow that if we run it, runs forever and consumes records from the given topic and prints them to the console, and then commits the offsets of the consumed records:
 
@@ -257,7 +257,7 @@ object SimpleKafkaApp extends ZIOAppDefault {
 }
 ```
 
-## Zio-kafka With Zio-streams
+## ZIO Kafka With ZIO Streams
 
 As we said before, to write producers and consumers using the zio-kafka library, we have two choices:
 

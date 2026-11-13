@@ -3,7 +3,7 @@ id: writing-tests
 title: "Writing Tests with the `zio-kafka-testkit` library"
 ---
 
-Zio-kafka provides a `zio-kafka-testkit` library to help you test your code using zio-kafka.
+ZIO Kafka provides a `zio-kafka-testkit` library to help you test your code using zio-kafka.
 
 To add it in your project, add the following dependency in your `build.sbt`:
 
@@ -63,7 +63,7 @@ See further below for more options, such as connecting to an external Kafka clus
 Note that any services that are _not_ provided at this line, must be given as type parameter to `provideSomeShared`. In
 this case we are not providing a `Scope` (it is provided by the test framework).
 
-(5) Zio-kafka requires a live clock.
+(5) ZIO Kafka requires a live clock.
 
 ### Producer layer
 
@@ -128,7 +128,7 @@ More details about this `ZIOSpecWithKafka` trait [below](#ziospecwithkafka-trait
 
 ## Considerations for sharing Kafka between tests
 
-Zio tests by default all run concurrently. Tests may interfere with each other through the shared Kafka resource. The
+ZIO tests by default all run concurrently. Tests may interfere with each other through the shared Kafka resource. The
 best way to prevent interference is by making sure each test uses a different topic. If this is not feasible, we can use
 the `TestAspect.sequential` aspect from zio-test to run the tests one by one:
 

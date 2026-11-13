@@ -26,7 +26,7 @@ a partition.
 
 For this to work correctly, your program must process a chunk (of up to `max.poll.records` records) within the
 configured max-rebalance-duration. The clock starts the moment the chunk is pushed into the stream and ends when the
-commits for these records complete. Zio-kafka uses `commit-timeout` as the worse case time to commit. Therefore, with
+commits for these records complete. ZIO Kafka uses `commit-timeout` as the worse case time to commit. Therefore, with
 the default settings, your program has 2 minutes and 45 seconds until the offsets should be committed.
 
 It is probably clear now that your program should commit the offsets of consumed records. The most straightforward way

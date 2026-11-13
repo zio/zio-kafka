@@ -5,7 +5,7 @@ title: "Record Headers"
 
 A Kafka record carries an optional list of **headers** next to its key and value. Each header has a `String` key and an `Array[Byte]` value (which may be `null`). Headers keep the order in which they are added, and several headers can share a key. Applications use them for metadata that does not belong in the payload, such as a content type, a schema version, a trace id or the name of the producing service.
 
-Zio-kafka has no header type of its own. It uses the Kafka client's `org.apache.kafka.common.header.Headers` and `Header` interfaces directly, and passes them along at every step:
+ZIO Kafka has no header type of its own. It uses the Kafka client's `org.apache.kafka.common.header.Headers` and `Header` interfaces directly, and passes them along at every step:
 
 - When producing, the headers of a `ProducerRecord` are written with the record.
 - When consuming, `CommittableRecord#record` returns the Kafka `ConsumerRecord`, whose `headers()` method returns the headers.
