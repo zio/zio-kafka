@@ -26,14 +26,7 @@ const sidebars = {
             "security"
           ]
         },
-        {
-          type: "category",
-          label: "Tutorials",
-          collapsed: false,
-          items: [
-            "tutorial"
-          ]
-        },
+        "tutorial",
         {
           type: "category",
           label: "How-to Guides",
