@@ -1,6 +1,6 @@
 ---
 id: metrics
-title: "Zio-Kafka Metrics"
+title: "Metrics"
 ---
 
 Zio-kafka exposes all the metrics of the wrapped Java based consumer and producer, plus some more metrics about the
