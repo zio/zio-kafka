@@ -148,7 +148,7 @@ These metrics are only updated for produce calls in which every record was produ
 The capacity of the send queue is set with `ProducerSettings#withSendBufferSize`.
 
 :::note
-Since zio-kafka 4.0.0, `ziokafka_producer_send_queue_latency_seconds` is not recorded correctly (the measured duration has the wrong sign), so its values do not reflect the actual time spent in the send queue.
+`ziokafka_producer_send_queue_latency_seconds` is not recorded correctly (the measured duration has the wrong sign, a bug present since zio-kafka 3.0.0), so its values do not reflect the actual time spent in the send queue.
 :::
 
 ### Send metrics
