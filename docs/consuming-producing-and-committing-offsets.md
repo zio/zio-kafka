@@ -8,7 +8,7 @@ Kafka. This page shows an example of an application that does this. Next we disc
 
 This page is also useful as a deep dive into producing to Kafka with data from other streaming sources.
 
-# Example application
+## Example application
 
 This is what the example application does:
 
