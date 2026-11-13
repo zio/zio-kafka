@@ -1,20 +1,22 @@
 ---
 id: writing-tests
-title: "Writing Tests with the `zio-kafka-testkit` library"
+title: "Writing Tests with the `zio-kafka-testkit` Library"
 ---
 
-Zio-kafka provides a `zio-kafka-testkit` library to help you test your code using zio-kafka.
+ZIO Kafka provides a `zio-kafka-testkit` library to help you test your code using zio-kafka.
 
 To add it in your project, add the following dependency in your `build.sbt`:
 
 ```scala
-libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "<latest-version>" % Test
+libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "@VERSION@" % Test
 ```
 
 Let's study some examples of tests you can write with the `zio-kafka-testkit` and `zio-test` and let's see what this
 library provides you.
 
 ## Testing a producer
+
+This suite creates a producer and produces one record to an embedded Kafka broker:
 
 ```scala mdoc:compile-only
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -32,7 +34,7 @@ object ProducerSpec extends ZIOSpecDefault {
         test("minimal example") {
           for {
             producer <- KafkaTestUtils.makeProducer // (1)
-            _ <- producer.produce(new ProducerRecord("topic", "boo", "baa"), Serde.string, Serde.string) // (3)
+            _ <- producer.produce(new ProducerRecord("topic", "boo", "baa"), Serde.string, Serde.string) // (2)
           } yield assertCompletes // (3)
         }
         // ... more tests ...
@@ -61,7 +63,7 @@ See further below for more options, such as connecting to an external Kafka clus
 Note that any services that are _not_ provided at this line, must be given as type parameter to `provideSomeShared`. In
 this case we are not providing a `Scope` (it is provided by the test framework).
 
-(5) Zio-kafka requires a live clock.
+(5) ZIO Kafka requires a live clock.
 
 ### Producer layer
 
@@ -91,15 +93,29 @@ suite("producer test suite")(
 We can also share one embedded `Kafka` instance between different test suites (i.e. between different test files) by
 mixing in the `ZIOSpecWithKafka` trait, this looks like this:
 
-```scala
+```scala mdoc:compile-only
+import org.apache.kafka.clients.producer.ProducerRecord
+import zio._
+import zio.kafka.producer.Producer
+import zio.kafka.serde.Serde
+import zio.kafka.testkit.{ Kafka, KafkaTestUtils, ZIOSpecWithKafka }
+import zio.test.TestAspect.{ timeout, withLiveClock }
+import zio.test._
+
 object ProducerSpec extends ZIOSpecWithKafka { // (1)
   override def spec: Spec[TestEnvironment & Scope & Kafka, Any] =
     (
       suite("Producer test suite")(
-        // ... tests ...
+        test("minimal example") {
+          for {
+            producer <- ZIO.service[Producer]
+            _        <- producer.produce(new ProducerRecord("topic", "boo", "baa"), Serde.string, Serde.string)
+          } yield assertCompletes
+        }
+        // ... more tests ...
       )
-        .provideSome[Scope & Kafka](/* ...other layers... */) // (2)
-      )
+        .provideSome[Scope & Kafka](KafkaTestUtils.producer) // (2)
+    ) @@ withLiveClock @@ timeout(2.minutes)
 }
 ```
 
@@ -112,9 +128,9 @@ More details about this `ZIOSpecWithKafka` trait [below](#ziospecwithkafka-trait
 
 ## Considerations for sharing Kafka between tests
 
-Zio tests by default all run concurrently. Tests may interfere with each other through the shared Kafka resource. The
+ZIO tests by default all run concurrently. Tests may interfere with each other through the shared Kafka resource. The
 best way to prevent interference is by making sure each test uses a different topic. If this is not feasible, we can use
-the `sequential` aspect from zio-test to run the tests one by one.
+the `TestAspect.sequential` aspect from zio-test to run the tests one by one:
 
 ```scala
 import zio.test.TestAspect.sequential
@@ -126,6 +142,8 @@ suite("test suite")(
 
 ## Testing a consumer
 
+This suite produces records to a new topic and checks that a consumer reads them back:
+
 ```scala mdoc:compile-only
 import zio._
 import zio.kafka.consumer.Subscription
@@ -133,7 +151,7 @@ import zio.kafka.serde.Serde
 import zio.kafka.testkit.KafkaTestUtils
 import zio.kafka.testkit._
 import zio.test.Assertion.hasSameElements
-import zio.test.TestAspect.{timeout, withLiveClock}
+import zio.test.TestAspect.{timeout, withLiveClock, withLiveRandom}
 import zio.test._
 
 object ConsumerSpec extends ZIOSpecDefault {
@@ -164,7 +182,7 @@ object ConsumerSpec extends ZIOSpecDefault {
         }
       )
         .provideSomeShared[Scope](Kafka.embedded) // (6)
-      ) @@ withLiveClock @@ timeout(2.minutes)
+      ) @@ withLiveClock @@ withLiveRandom @@ timeout(2.minutes) // (7)
 }
 ```
 
@@ -185,6 +203,8 @@ Be careful with the `take` method, due to pre-fetching, the consumer may have fe
 
 (6) Similarly as in the producer test above, we provide the `Kafka.embedded` layer.
 
+(7) Besides a live clock, this suite needs `withLiveRandom`. The default `TestRandom` of zio-test starts every test with the same fixed seed, so without `withLiveRandom` every test would generate the same "random" topic, client and group names. The `KafkaRandom` trait (see [below](#kafkarandom-trait)) avoids this problem as well.
+
 ## More consumer options
 
 If we want to share a consumer between tests, we can use the `KafkaTestUtils.consumer` layer and provide it with the
@@ -195,7 +215,7 @@ If we want to share a consumer between tests, we can use the `KafkaTestUtils.con
 ### `Kafka` service
 
 This trait represents a Kafka instance in your tests. It is used to provide the bootstrap servers to the constructor
-methods in `KafkaTestUtils`.
+methods in `KafkaTestUtils`:
 
 ```scala
 trait Kafka {
@@ -215,6 +235,11 @@ object Kafka {
   val embedded: ZLayer[Any, Throwable, Kafka]
 
   /**
+   * Like `embedded`, with extra or overridden broker properties.
+   */
+  def embeddedWith(customBrokerProps: Ports => Map[String, String]): ZLayer[Any, Throwable, Kafka]
+
+  /**
    * Will connect to a Kafka instance running on localhost:9092 (with Docker, for example).
    */
   val local: ULayer[Kafka]
@@ -226,12 +251,18 @@ object Kafka {
 
   /**
    * Creates an in-memory Kafka instance with a random port and SSL authentication configured.
+   * Note: this broker does not actually work for clients; it only supports testing
+   * zio-kafka's SSL check before connecting.
    */
   val sslEmbedded: ZLayer[Any, Throwable, Kafka]
+
+  final case class Sasl(value: Kafka)
 }
 ```
 
-The in-memory Kafka instances are created using [embedded-kafka](https://github.com/embeddedkafka/embedded-kafka).
+The in-memory Kafka instances are created using [embedded-kafka](https://github.com/embeddedkafka/embedded-kafka). When the embedded broker cannot start, the layer fails with `EmbeddedKafkaStartException` (a `RuntimeException` from `zio.kafka.testkit`), whose `cause` holds the original error.
+
+`Kafka.saslEmbedded` and `Kafka.sslEmbedded` also have `saslEmbeddedWith` and `sslEmbeddedWith` variants that accept custom broker properties. The `Ports` argument of these functions holds the `kafkaPort` and `controllerPort` of the embedded broker. `Kafka.saslEmbedded` provides a `Kafka.Sasl` (a wrapper around a `Kafka`) instead of a `Kafka`, so helpers that require a `Kafka`, such as `KafkaTestUtils.makeProducer`, cannot use it. Use the SASL helpers instead, such as `KafkaTestUtils.makeSaslAdminClient`, which logs in as user `admin` with password `admin-secret` by default.
 
 ### `KafkaTestUtils` utilities
 
@@ -243,6 +274,22 @@ It also provides several functions to produce records, and more.
 Each utility function is documented in the source code. Please have a look at the source code for more details.     
 You can also look at `zio-kafka` tests in the `zio-kafka-test` module to have examples on how to use these utilities.
 
+The main groups of `KafkaTestUtils` functions are:
+
+| Utilities                                                                             | Purpose                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `producerSettings`, `makeProducer`, `producer`                                        | Producer settings, a scoped `Producer`, or a `Producer` layer.                                                                                                                                           |
+| `consumerSettings`, `makeConsumer`, `consumer`                                        | Consumer settings tuned for tests (for example a 100 ms poll timeout and a 3 second session timeout), a scoped `Consumer`, or a `Consumer` layer.                                                        |
+| `transactionalProducerSettings`, `makeTransactionalProducer`, `transactionalProducer` | A `TransactionalProducer` for [transactions](transactions.md). Tests that run in parallel need different transactional ids; the variants without a transactional id use the fixed id `test-transaction`. |
+| `transactionalConsumerSettings`, `makeTransactionalConsumer`, `transactionalConsumer` | A consumer that only reads committed records (`withReadCommitted()`), for checking what a transaction produced.                                                                                          |
+| `produceOne`, `produceMany`, `scheduledProduce`                                       | Produce records with `String` keys and values, using an explicit `Producer`.                                                                                                                             |
+| `consumeWithStrings`                                                                  | Consume records with `String` keys and values with `Consumer.consumeWith`.                                                                                                                               |
+| `adminSettings`, `makeAdminClient`, `createCustomTopic`                               | An `AdminClient` for the `Kafka` instance, and a shortcut to create a topic with a given number of partitions.                                                                                           |
+| `saslAdminSettings`, `makeSaslAdminClient`                                            | An `AdminClient` that connects with `SASL_PLAINTEXT`. Requires a `Kafka.Sasl`, provided by `Kafka.saslEmbedded`.                                                                                         |
+| `sslAdminSettings`, `makeSslAdminClient`                                              | An `AdminClient` that connects with `SSL`.                                                                                                                                                               |
+
+The `make*` functions require a `Scope` and a `Kafka` (or `Kafka.Sasl`) in the environment. The consumer you pass to `KafkaTestUtils.makeTransactionalProducer` must have rebalance-safe-commits enabled, for example `KafkaTestUtils.makeConsumer(clientId, rebalanceSafeCommits = true)`.
+
 ### `ZIOSpecWithKafka` trait
 
 This trait can be used if you want to share one Kafka instance between different test suites.    
@@ -250,21 +297,32 @@ This allows you to speed up your tests by booting a Kafka instance only once for
 
 Usage example:
 
-```scala
+```scala mdoc:compile-only
+import zio._
+import zio.kafka.testkit.{ Kafka, KafkaTestUtils, ZIOSpecWithKafka }
+import zio.test.TestAspect.{ timeout, withLiveClock }
+import zio.test._
+
 // In `src/test/scala/io/example/producer/ProducerSpec.scala`
 object ProducerSpec extends ZIOSpecWithKafka { // Note `ZIOSpecWithKafka`
   override def spec: Spec[TestEnvironment & Scope & Kafka, Any] =
     suite("Producer test suite")(
-      // ... tests ...
-    ) @@ timeout(2.minutes)
+      test("makes a producer") {
+        KafkaTestUtils.makeProducer.as(assertCompletes)
+      }
+      // ... more tests ...
+    ) @@ withLiveClock @@ timeout(2.minutes)
 }
 
 // In `src/test/scala/io/example/consumer/ConsumerSpec.scala`
 object ConsumerSpec extends ZIOSpecWithKafka { // Note `ZIOSpecWithKafka`
   override def spec: Spec[TestEnvironment & Scope & Kafka, Any] =
     suite("Consumer test suite")(
-      // ... tests ...
-    ) @@ timeout(2.minutes)
+      test("makes a consumer") {
+        KafkaTestUtils.makeConsumer(clientId = "client").as(assertCompletes)
+      }
+      // ... more tests ...
+    ) @@ withLiveClock @@ timeout(2.minutes)
 }
 ```
 
@@ -276,10 +334,11 @@ See related zio-test documentation: https://zio.dev/reference/test/sharing-layer
 The `KafkaRandom` trait provides a few methods to generate random values.
 To use it, you need to mix it in your test suite, like this:
 
-```scala
+```scala mdoc:compile-only
 import zio.kafka.testkit.Kafka
 import zio.kafka.testkit.KafkaRandom
 import zio.kafka.testkit.KafkaTestUtils
+import zio.test.TestAspect.withLiveClock
 import zio.test._
 import zio._
 
@@ -295,9 +354,10 @@ object MyServiceSpec extends ZIOSpecDefault with KafkaRandom {
           topic    <- randomTopic  // Comes from `KafkaRandom`
           clientId <- randomClient // Comes from `KafkaRandom`
           groupId  <- randomGroup  // Comes from `KafkaRandom`
-          // ... 
+          _        <- KafkaTestUtils.createCustomTopic(topic)
+          // ...
         } yield assertCompletes
       }
-    ).provideSomeShared[Scope](Kafka.embedded)
+    ).provideSomeShared[Scope](Kafka.embedded) @@ withLiveClock
 }
 ```
