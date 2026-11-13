@@ -23,6 +23,7 @@ const sidebars = {
             "admin-client",
             "diagnostics",
             "metrics",
+            "metrics-observers",
             "security"
           ]
         },
