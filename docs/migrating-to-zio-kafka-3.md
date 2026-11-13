@@ -193,8 +193,8 @@ Starting with 3.0.0, zio-kafka is based on the kafka 4.0.0 client. This has a nu
 * `ConsumerGroupState` (used in the admin client) was renamed to `GroupState`, unfortunately without a deprecation
   cycle.
 * Due to [KAFKA-18818](https://issues.apache.org/jira/browse/KAFKA-18818), admin operations are eventually consistent.
-  zio-kafka 3.0 and 3.1 added a fixed 550ms delay after operations like `createTopic`, `deleteTopic` and `createAcls`
-  in the admin client. Later releases replaced this delay step by step. Since zio-kafka 3.6.0, the admin client polls
+  zio-kafka 3.0 to 3.3 added a fixed 550ms delay after operations like `createTopic`, `deleteTopic` and `createAcls`
+  in the admin client; 3.4 removed it, after earlier releases had already replaced it for some operations. Since zio-kafka 3.6.0, the admin client polls
   the broker until the change is visible (for at most 5 seconds), and operations whose effect it cannot check accept a
   `visibilitySleep` parameter (default 1 second).
 * Two deprecated methods of kafka's admin client were removed. Their equivalent in zio-kafka were unfortunately not
