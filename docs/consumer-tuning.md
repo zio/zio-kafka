@@ -99,7 +99,7 @@ To detect stalled consumers, Kafka revokes a partition when a consumer does not 
 it will be assigned to another consumer.
 
 In zio-kafka a stream needs to pull data within the max stream pull interval (`ConsumerSettings#withMaxStreamPullInterval`,
-since zio-kafka 2.9.0), which defaults to `max.poll.interval.ms` (in versions 2.5.1 up to 2.8.x it is always the max poll
+since zio-kafka 2.9.0), which defaults to `max.poll.interval.ms` (in versions 2.6.0 up to 2.8.x it is always the max poll
 interval). If this doesn't happen, the stream is interrupted with a failure and the whole consumer shuts down.
 
 To prevent the above failure states, either decrease `max.poll.records` (so that time between polling gets shorter),
