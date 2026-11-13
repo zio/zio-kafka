@@ -260,7 +260,7 @@ object Kafka {
 }
 ```
 
-The in-memory Kafka instances are created using [embedded-kafka](https://github.com/embeddedkafka/embedded-kafka).
+The in-memory Kafka instances are created using [embedded-kafka](https://github.com/embeddedkafka/embedded-kafka). When the embedded broker cannot start, the layer fails with `EmbeddedKafkaStartException` (a `RuntimeException` from `zio.kafka.testkit`), whose `cause` holds the original error.
 
 `Kafka.saslEmbedded` and `Kafka.sslEmbedded` also have `saslEmbeddedWith` and `sslEmbeddedWith` variants that accept custom broker properties. The `Ports` argument of these functions holds the `kafkaPort` and `controllerPort` of the embedded broker. `Kafka.saslEmbedded` provides a `Kafka.Sasl` (a wrapper around a `Kafka`) instead of a `Kafka`, so helpers that require a `Kafka`, such as `KafkaTestUtils.makeProducer`, cannot use it. Use the SASL helpers instead, such as `KafkaTestUtils.makeSaslAdminClient`, which logs in as user `admin` with password `admin-secret` by default.
 
