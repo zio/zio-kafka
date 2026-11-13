@@ -3,7 +3,7 @@ id: partition-assignment-and-offset-retrieval
 title: "Partition Assignment And Offset Retrieval"
 ---
 
-# Consumer partition assignment
+## Consumer partition assignment
 
 `zio-kafka` offers several ways to control which Kafka topics and partitions are assigned to your application.
 
@@ -17,7 +17,7 @@ The example `Subscription.manual("my_topic" -> 1, "my_topic" -> 2)` subscribes t
 
 `Subscription.pattern` also accepts a `java.util.regex.Pattern`. The overload that takes a `String`, `Subscription.pattern("topic.*")`, returns a `Task[Subscription]` that fails when the pattern is not a valid regular expression.
 
-# Consumer starting offsets / offset retrieval
+## Consumer starting offsets / offset retrieval
 
 By default `zio-kafka` starts streaming a partition from the last committed offset for the active consumer group, or
 else the latest offset on the partition in case no offset has yet been committed.
