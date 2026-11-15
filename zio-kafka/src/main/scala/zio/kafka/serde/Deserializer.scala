@@ -69,6 +69,8 @@ object Deserializer extends Serdes {
 
   /**
    * Create a Deserializer from a Kafka Deserializer.
+   *
+   * Note: the wrapped `deserializer` is never closed.
    */
   def fromKafkaDeserializer[A](
     deserializer: KafkaDeserializer[A],

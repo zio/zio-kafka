@@ -101,11 +101,8 @@ object SslHelper {
         .mapError(kafkaException)
   }
 
-  /**
-   * Mimic behaviour of KafkaAdminClient.createInternal
-   */
   private def kafkaException(e: Throwable): KafkaException =
-    new KafkaException("Failed to create new KafkaAdminClient", e)
+    new KafkaException("Failed to connect to Kafka", e)
 
   /**
    * Let's take some time here to discuss the algorithm of this function as it's a bit tricky and uses obscure Java

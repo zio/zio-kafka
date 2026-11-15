@@ -311,7 +311,7 @@ final case class ConsumerSettings(
    * the consumer group id could be used as a label:
    *
    * {{{
-   *   consumerSettings.withMetricLabels(Set(MetricLabel("group-id", groupId)))
+   *   consumerSettings.withMetricsLabels(Set(MetricLabel("group-id", groupId)))
    * }}}
    *
    * This setting is ignored when an alternative [[ConsumerSettings.withMetricsObserver metrics observer]] is set.
@@ -359,8 +359,8 @@ final case class ConsumerSettings(
   /**
    * When set, enables a metadata-refresh probe after this many consecutive empty polls for a topic.
    *
-   * After `n` consecutive polls where a subscribed topic returned no records, `committed()` is called for the assigned
-   * partitions of that topic to force a broker round-trip. This surfaces any
+   * After `n` consecutive polls where a subscribed topic returned no records, `committed()` is called for one of the
+   * assigned partitions of that topic to force a broker round-trip. This surfaces any
    * [[org.apache.kafka.common.errors.TopicAuthorizationException]] that `poll()` would otherwise swallow silently when
    * a READ ACL is denied at runtime.
    *

@@ -42,7 +42,7 @@ object ReadmeExample extends ZIOAppDefault {
               .withGroupId("group")
           )
         _ <- consumer
-          .plainStream(Subscription.topics("random"), Serde.long, Serde.string)
+          .plainStream(Subscription.topics("random-topic"), Serde.long, Serde.string)
           .tap(r => Console.printLine(r.value))
           .map(_.offset)
           .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis))
