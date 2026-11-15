@@ -56,6 +56,8 @@ object Serializer extends Serdes {
 
   /**
    * Create a Serializer from a Kafka Serializer.
+   *
+   * Note: the wrapped `serializer` is never closed.
    */
   def fromKafkaSerializer[A](
     serializer: KafkaSerializer[A],

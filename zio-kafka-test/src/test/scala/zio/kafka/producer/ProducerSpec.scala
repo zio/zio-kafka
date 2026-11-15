@@ -109,8 +109,8 @@ object ProducerSpec extends ZIOSpecDefault {
             .newMockBehavior[Array[Byte], Array[Byte]]()
             .sendSucceed()
             .callbackSucceed()
-          val recordToSend    = makeProducerRecord()
-          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", 0, 5))
+          val recordToSend    = makeProducerRecord(partition = Some(2))
+          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", 2, 5))
           for {
             diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
             _                <- runSingleRecordTest(mockBehavior, recordToSend, diagnostics = diagnostics)
@@ -129,7 +129,7 @@ object ProducerSpec extends ZIOSpecDefault {
             .sendSucceed()
             .callbackSucceed()
           val recordToSend    = makeTombstoneProducerRecord()
-          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", 0, ProducerEvent.NoValue))
+          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", -1, ProducerEvent.NoValue))
           for {
             diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
             _                <- runSingleRecordTest(mockBehavior, recordToSend, diagnostics = diagnostics)
@@ -147,7 +147,7 @@ object ProducerSpec extends ZIOSpecDefault {
             .newMockBehavior[Array[Byte], Array[Byte]]()
             .sendFail(new RuntimeException())
           val recordToSend    = makeProducerRecord()
-          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", 0, 5))
+          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", -1, 5))
           for {
             diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
             _                <- runSingleRecordTest(mockBehavior, recordToSend, diagnostics = diagnostics)
@@ -165,7 +165,7 @@ object ProducerSpec extends ZIOSpecDefault {
             .newMockBehavior[Array[Byte], Array[Byte]]()
             .sendFail(authException)
           val recordToSend    = makeProducerRecord()
-          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", 0, 5))
+          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", -1, 5))
           for {
             diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
             _                <- runSingleRecordTest(mockBehavior, recordToSend, diagnostics = diagnostics)
@@ -444,7 +444,7 @@ object ProducerSpec extends ZIOSpecDefault {
             .sendSucceed()
             .callbackSucceed()
           val recordsToSend   = Chunk.single(makeProducerRecord())
-          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", 0, 5))
+          val producedRecords = Chunk(ProducerEvent.ProducedRecord("testTopic", -1, 5))
           for {
             diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
             _                <- runChunkTest(mockBehavior, recordsToSend, diagnostics = diagnostics)
@@ -465,13 +465,13 @@ object ProducerSpec extends ZIOSpecDefault {
             .callbackSucceed()
           val recordsToSend = Chunk(
             makeProducerRecord(value = "10 bytes.."),
-            makeProducerRecord(value = "7 bytes"),
-            makeProducerRecord(value = "5 byt")
+            makeProducerRecord(value = "7 bytes", partition = Some(1)),
+            makeProducerRecord(value = "5 byt", partition = Some(2))
           )
           val producedRecords = Chunk(
-            ProducerEvent.ProducedRecord("testTopic", 0, 10),
-            ProducerEvent.ProducedRecord("testTopic", 0, 7),
-            ProducerEvent.ProducedRecord("testTopic", 0, 5)
+            ProducerEvent.ProducedRecord("testTopic", -1, 10),
+            ProducerEvent.ProducedRecord("testTopic", 1, 7),
+            ProducerEvent.ProducedRecord("testTopic", 2, 5)
           )
           for {
             diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
@@ -497,9 +497,9 @@ object ProducerSpec extends ZIOSpecDefault {
             makeProducerRecord(value = "5 byt")
           )
           val producedRecords = Chunk(
-            ProducerEvent.ProducedRecord("testTopic", 0, 10),
-            ProducerEvent.ProducedRecord("testTopic", 0, 7),
-            ProducerEvent.ProducedRecord("testTopic", 0, 5)
+            ProducerEvent.ProducedRecord("testTopic", -1, 10),
+            ProducerEvent.ProducedRecord("testTopic", -1, 7),
+            ProducerEvent.ProducedRecord("testTopic", -1, 5)
           )
           for {
             diagnostics      <- SlidingDiagnostics.make[ProducerEvent](100)
@@ -559,10 +559,11 @@ object ProducerSpec extends ZIOSpecDefault {
 
   private def makeProducerRecord(
     topic: String = "testTopic",
+    partition: Option[Int] = None,
     key: String = "key",
     value: String = "value"
   ): ProducerRecord[Array[Byte], Array[Byte]] =
-    new ProducerRecord[Array[Byte], Array[Byte]](topic, key.getBytes, value.getBytes)
+    new ProducerRecord[Array[Byte], Array[Byte]](topic, partition.map(Int.box).orNull, key.getBytes, value.getBytes)
 
   private def makeTombstoneProducerRecord(
     topic: String = "testTopic",

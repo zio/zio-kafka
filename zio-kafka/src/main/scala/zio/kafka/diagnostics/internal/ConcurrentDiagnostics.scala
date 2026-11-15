@@ -10,6 +10,8 @@ object ConcurrentDiagnostics {
    * @return
    *   a `Diagnostics` that runs the wrapped `Diagnostics` concurrently in a separate fiber. Events are emitting to the
    *   fiber via an unbounded queue. Upon finalization, `finalEvent` is emitted as the last event.
+   *
+   * When the wrapped `Diagnostics` throws or dies, the returned `Diagnostics` eventually dies as well.
    */
   def make[DiagnosticEvent](
     wrapped: Diagnostics[DiagnosticEvent],
@@ -20,6 +22,10 @@ object ConcurrentDiagnostics {
       fib   <- ZStream.fromQueue(queue).tap(wrapped.emit(_)).takeUntil(_ == finalEvent).runDrain.forkScoped
       _     <- ZIO.addFinalizer(queue.offer(finalEvent) *> fib.await)
     } yield new Diagnostics[DiagnosticEvent] {
-      override def emit(event: => DiagnosticEvent): UIO[Unit] = queue.offer(event).unit
+      override def emit(event: => DiagnosticEvent): UIO[Unit] =
+        fib.poll.flatMap {
+          case Some(Exit.Failure(cause)) => ZIO.failCause(cause)
+          case _                         => queue.offer(event).unit
+        }
     }
 }

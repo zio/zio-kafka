@@ -130,7 +130,7 @@ acknowledges records.
 
 | Type      | Name                                | Description                                                                             |
 |-----------|-------------------------------------|-----------------------------------------------------------------------------------------|
-| counter   | `ziokafka_producer_calls`           | The number of times a produce method is invoked.                                        |
+| counter   | `ziokafka_producer_calls`           | The number of times a produce method succeeded.                                        |
 | histogram | `ziokafka_producer_latency_seconds` | The duration of a single produce, from after serialization to acknowledged, in seconds. |
 | counter   | `ziokafka_producer_records`         | The number of records produced.                                                         |
 | histogram | `ziokafka_producer_batch_size`      | The number of records per produce call.                                                 |
@@ -139,7 +139,7 @@ acknowledges records.
 
 | Type      | Name                                           | Description                                                     |
 |-----------|------------------------------------------------|-----------------------------------------------------------------|
-| histogram | `ziokafka_producer_send_queue_size`            | The number of records in the zio-kafka send queue.              |
+| histogram | `ziokafka_producer_send_queue_size`            | The number of record batches in the zio-kafka send queue.       |
 | histogram | `ziokafka_producer_send_queue_latency_seconds` | Time in send queue, including waiting for capacity, in seconds. |
 
 ### Send metrics

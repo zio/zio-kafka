@@ -347,12 +347,13 @@ private[producer] final class ProducerLive(
                 _   <- done.succeed(recordMetaData)
               } yield ()
             case Left(error @ (_: AuthorizationException | _: AuthenticationException)) =>
-              driver
-                .next(retryAfterAuthException)
-                .foldZIO(
-                  _ => diagEm.emitSingleFailure() *> done.fail(error).unit, // schedule say "no"
-                  _ => loop(startNanos, done, driver).unit                  // start retry
-                )
+              producerMetrics.observeSendAuthError(1) *>
+                driver
+                  .next(retryAfterAuthException)
+                  .foldZIO(
+                    _ => diagEm.emitSingleFailure() *> done.fail(error).unit, // schedule say "no"
+                    _ => loop(startNanos, done, driver).unit                  // start retry
+                  )
             case Left(error) =>
               diagEm.emitSingleFailure() *> done.fail(error).unit
           }
@@ -532,7 +533,7 @@ private[producer] final class ProducerLive(
   private def observeTake(startNanos: NanoTime): UIO[Unit] =
     for {
       now <- Clock.nanoTime
-      _   <- producerMetrics.observeSendQueueTake((startNanos - now).nanos)
+      _   <- producerMetrics.observeSendQueueTake((now - startNanos).nanos)
     } yield ()
 
   /**
@@ -622,11 +623,18 @@ private[producer] final class ProducerLive(
       makeDiagnosticsEmitter(Chunk.single(record))
 
     override def makeDiagnosticsEmitter(records: Chunk[ByteRecord]): DiagnosticsEmitter = {
+      def partition(partition: Integer): Int =
+        if (partition == null) ProducerEvent.NoPartition else Int.unbox(partition)
       def length(recordValue: Array[Byte]): Int =
         if (recordValue != null) recordValue.length else ProducerEvent.NoValue
       val batchId = batchIds.getAndIncrement()
-      val producedRecords =
-        records.map(record => ProducerEvent.ProducedRecord(record.topic(), record.partition(), length(record.value())))
+      val producedRecords = records.map { record =>
+        ProducerEvent.ProducedRecord(
+          record.topic(),
+          partition(record.partition()),
+          length(record.value())
+        )
+      }
       new BatchDiagnosticsEmitter(batchId, producedRecords)
     }
   }
