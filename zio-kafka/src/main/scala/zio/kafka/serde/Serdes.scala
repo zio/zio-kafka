@@ -18,41 +18,41 @@ import java.util.UUID
  */
 
 private[zio] trait Serdes {
-  val longOption: Serde[Any, Option[Long]]     = Serdes.longOption
-  val intOption: Serde[Any, Option[Int]]       = Serdes.intOption
-  val shortOption: Serde[Any, Option[Short]]   = Serdes.shortOption
-  val floatOption: Serde[Any, Option[Float]]   = Serdes.floatOption
-  val doubleOption: Serde[Any, Option[Double]] = Serdes.doubleOption
+  def longOption: Serde[Any, Option[Long]]     = Serdes.longOption
+  def intOption: Serde[Any, Option[Int]]       = Serdes.intOption
+  def shortOption: Serde[Any, Option[Short]]   = Serdes.shortOption
+  def floatOption: Serde[Any, Option[Float]]   = Serdes.floatOption
+  def doubleOption: Serde[Any, Option[Double]] = Serdes.doubleOption
 
   /** $simplePrimitiveDeserialization */
-  val long: Serde[Any, Long] = Serdes.long
+  def long: Serde[Any, Long] = Serdes.long
 
   /** $simplePrimitiveDeserialization */
-  val int: Serde[Any, Int] = Serdes.int
+  def int: Serde[Any, Int] = Serdes.int
 
   /** $simplePrimitiveDeserialization */
-  val short: Serde[Any, Short] = Serdes.short
+  def short: Serde[Any, Short] = Serdes.short
 
   /** $simplePrimitiveDeserialization */
-  val float: Serde[Any, Float] = Serdes.float
+  def float: Serde[Any, Float] = Serdes.float
 
   /** $simplePrimitiveDeserialization */
-  val double: Serde[Any, Double] = Serdes.double
+  def double: Serde[Any, Double] = Serdes.double
 
   /** $nullDeserialization */
-  val string: Serde[Any, String] = Serdes.string
+  def string: Serde[Any, String] = Serdes.string
 
   /** $nullDeserialization */
-  val bytes: Serde[Any, Bytes] = Serdes.bytes
+  def bytes: Serde[Any, Bytes] = Serdes.bytes
 
   /** $nullDeserialization */
-  val byteBuffer: Serde[Any, ByteBuffer] = Serdes.byteBuffer
+  def byteBuffer: Serde[Any, ByteBuffer] = Serdes.byteBuffer
 
   /** $nullDeserialization */
-  val uuid: Serde[Any, UUID] = Serdes.uuid
+  def uuid: Serde[Any, UUID] = Serdes.uuid
 
   /** $nullDeserialization */
-  val byteArray: Serde[Any, Array[Byte]] = Serdes.byteArray
+  def byteArray: Serde[Any, Array[Byte]] = Serdes.byteArray
 }
 
 private[zio] object Serdes {
