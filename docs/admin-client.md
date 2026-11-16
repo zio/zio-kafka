@@ -43,7 +43,7 @@ A request made with `validateOnly = true` changes nothing, so `createTopic`, `cr
 
 ## Creating an Admin Client
 
-An `AdminClient` holds a network connection that must be closed when you are done with it. `AdminClient.make`, `AdminClient.live` and `AdminClient.fromScopedJavaClient` close it automatically when their scope ends. With `AdminClient.fromJavaClient` you close the Java client yourself. All constructors are in the `AdminClient` companion object:
+An `AdminClient` holds a network connection that must be closed when you are done with it. `AdminClient.make` and `AdminClient.live` close it automatically when their scope ends. With `AdminClient.fromScopedJavaClient`, the scoped effect you pass must close the Java client, for example by creating it with `ZIO.acquireRelease`. With `AdminClient.fromJavaClient` you close the Java client yourself. All constructors are in the `AdminClient` companion object:
 
 ```scala
 object AdminClient {
@@ -99,7 +99,7 @@ val clusterId: ZIO[AdminClient, Throwable, String] =
 The other constructors work with a Java `Admin` client:
 
 - `AdminClient.fromJavaClient(javaClient)` wraps a Java client that you created. You must close the Java client yourself.
-- `AdminClient.fromScopedJavaClient(effect)` wraps the Java client that a scoped effect creates. The client is closed when the scope ends.
+- `AdminClient.fromScopedJavaClient(effect)` wraps the Java client that a scoped effect creates. It does not close the client itself: create the client with `ZIO.acquireRelease` in that effect so that it is closed when the scope ends.
 - `AdminClient.javaClientFromSettings(settings)` creates a Java client from settings and closes it when the scope ends. `AdminClient.make` uses it. Use it when you also need the Java client, for example for an operation that zio-kafka does not wrap.
 
 `AdminClient.fromJavaClient` and `AdminClient.fromScopedJavaClient` do not run the [SSL endpoint check](security.md#ssl-endpoint-check); `AdminClient.javaClientFromSettings` (and so `AdminClient.make`) does.
