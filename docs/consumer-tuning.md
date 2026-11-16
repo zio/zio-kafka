@@ -198,7 +198,7 @@ topics.
 
 ## Using metrics to tune the consumer
 
-Zio-Kafka exposes [metrics](metrics.md) that can be used to further tune the consumer. To interpret these metrics you need to know how zio-kafka works internally.
+Zio-kafka exposes [metrics](metrics.md) that can be used to further tune the consumer. To interpret these metrics you need to know how zio-kafka works internally.
 
 ![](consumer-internals.svg)
 
