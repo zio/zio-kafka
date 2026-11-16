@@ -246,7 +246,7 @@ The `describeCluster*` operations (`describeClusterNodes`, `describeClusterContr
 
 ### Access Control Lists
 
-`describeAcls`, `createAcls` and `deleteAcls`, and their `*Async` variants, need a broker with an authorizer configured; `deleteAcls` returns the bindings it deleted. They use the types from the `zio.kafka.admin.acl` and `zio.kafka.admin.resource` packages. An ACL is an `AclBinding(pattern, entry)` that binds a resource pattern to an access control entry:
+`describeAcls`, `createAcls` and `deleteAcls` (the last two also have `*Async` variants) need a broker with an authorizer configured; `deleteAcls` returns the bindings it deleted. They use the types from the `zio.kafka.admin.acl` and `zio.kafka.admin.resource` packages. An ACL is an `AclBinding(pattern, entry)` that binds a resource pattern to an access control entry:
 
 ```
 AclBinding ──> ResourcePattern(resourceType, name, patternType)
