@@ -5,7 +5,7 @@ title: "Partition Assignment and Offset Retrieval"
 
 ## Consumer partition assignment
 
-`zio-kafka` offers several ways to control which Kafka topics and partitions are assigned to your application.
+Zio-kafka offers several ways to control which Kafka topics and partitions are assigned to your application.
 
 | Use case                                           | Method                                                  |
 |----------------------------------------------------|---------------------------------------------------------|
