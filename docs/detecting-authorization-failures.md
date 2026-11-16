@@ -5,12 +5,12 @@ title: "Detecting Authorization Failures"
 
 When a Kafka consumer's `READ` access control list (ACL) is revoked at runtime, the Apache Kafka broker stops sending
 records to the consumer for the affected topic. However, the underlying Java Kafka consumer client's `poll()` method
-silently returns zero records instead of throwing an error. In a standard stream setup, this causes ZIO-Kafka's consumer
+silently returns zero records instead of throwing an error. In a standard stream setup, this causes zio-kafka's consumer
 stream (such as `plainStream`, `partitionedStream` or `consumeWith`) to run indefinitely in a silent, zombie-like state, without any
 indication that authorization was lost.
 
-To detect these silent authorization losses, ZIO-Kafka provides an _opt-in_ metadata-refresh probe. By configuring
-`ConsumerSettings.withEmptyPollCountToMetaRefresh(n)`, you instruct ZIO-Kafka to count consecutive empty polls for each
+To detect these silent authorization losses, zio-kafka provides an _opt-in_ metadata-refresh probe. By configuring
+`ConsumerSettings.withEmptyPollCountToMetaRefresh(n)`, you instruct zio-kafka to count consecutive empty polls for each
 topic that is being fetched (topics whose partitions are all paused because of back-pressure are not counted). (We define 'empty poll' as a `poll()` operation resulting in zero records for a topic.) Once a topic
 reaches `n` consecutive polls that return no records, the consumer issues a `committed()` request to the broker for one
 of the assigned partitions of that topic. Afterwards the counter for that topic is reset, so the probe repeats every `n`
