@@ -41,7 +41,7 @@ On this page we assume you're using [ZIO service pattern](https://zio.dev/refere
 `Consumer` and `TransactionalProducer` are created as a layer.
 
 First we create the `Consumer` layer.
-Note that rebalance-safe-commits must be enabled (see the background section below for more information). The consumer must also use a partition assignor that revokes all partitions during a rebalance, so the `CooperativeStickyAssignor` is not supported. When rebalance-safe-commits is enabled, zio-kafka uses the `RangeAssignor` unless you configure another assignor. `TransactionalProducer.make` fails with an `IllegalArgumentException` when the consumer does not meet these requirements.
+Note that rebalance-safe-commits must be enabled (see the background section below for more information). The consumer must also use a partition assignor that revokes all partitions during a rebalance, so the `CooperativeStickyAssignor` is not supported. When rebalance-safe-commits is enabled, zio-kafka uses the `RangeAssignor` unless you configure another assignor. `TransactionalProducer.make` fails with an `IllegalArgumentException` when rebalance-safe-commits is off or the `CooperativeStickyAssignor` is configured. It cannot detect other incremental rebalance protocols, such as a custom cooperative assignor or the `consumer` group protocol (`group.protocol=consumer`), so do not use those with a transactional producer either.
 Since the default `maxRebalanceDuration` is quite high, you may also consider setting it to a lower duration, one in
 which you are sure all records of a poll can be processed:
 
