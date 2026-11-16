@@ -57,18 +57,23 @@ The producer methods that take a `ProducerRecord[Array[Byte], Array[Byte]]` have
 
 The `Serde` companion object provides ready-made serdes for common types. All of them have environment `Any` and, except for `Serde.byteArray`, delegate to a serializer and a deserializer from Kafka's `org.apache.kafka.common.serialization` package:
 
-| Serde              | Scala type                            | Kafka classes behind it                           |
-| ------------------ | ------------------------------------- | ------------------------------------------------- |
-| `Serde.string`     | `String`                              | `StringSerializer` / `StringDeserializer`         |
-| `Serde.int`        | `Int`                                 | `IntegerSerializer` / `IntegerDeserializer`       |
-| `Serde.long`       | `Long`                                | `LongSerializer` / `LongDeserializer`             |
-| `Serde.short`      | `Short`                               | `ShortSerializer` / `ShortDeserializer`           |
-| `Serde.float`      | `Float`                               | `FloatSerializer` / `FloatDeserializer`           |
-| `Serde.double`     | `Double`                              | `DoubleSerializer` / `DoubleDeserializer`         |
-| `Serde.uuid`       | `java.util.UUID`                      | `UUIDSerializer` / `UUIDDeserializer`             |
-| `Serde.bytes`      | `org.apache.kafka.common.utils.Bytes` | `BytesSerializer` / `BytesDeserializer`           |
-| `Serde.byteBuffer` | `java.nio.ByteBuffer`                 | `ByteBufferSerializer` / `ByteBufferDeserializer` |
-| `Serde.byteArray`  | `Array[Byte]`                         | none, a pass-through                              |
+| Serde                | Scala type                            | Kafka classes behind it                           |
+| -------------------- | ------------------------------------- | ------------------------------------------------- |
+| `Serde.string`       | `String`                              | `StringSerializer` / `StringDeserializer`         |
+| `Serde.int`          | `Int`                                 | `IntegerSerializer` / `IntegerDeserializer`       |
+| `Serde.long`         | `Long`                                | `LongSerializer` / `LongDeserializer`             |
+| `Serde.short`        | `Short`                               | `ShortSerializer` / `ShortDeserializer`           |
+| `Serde.float`        | `Float`                               | `FloatSerializer` / `FloatDeserializer`           |
+| `Serde.double`       | `Double`                              | `DoubleSerializer` / `DoubleDeserializer`         |
+| `Serde.intOption`    | `Option[Int]`                         | `IntegerSerializer` / `IntegerDeserializer`       |
+| `Serde.longOption`   | `Option[Long]`                        | `LongSerializer` / `LongDeserializer`             |
+| `Serde.shortOption`  | `Option[Short]`                       | `ShortSerializer` / `ShortDeserializer`           |
+| `Serde.floatOption`  | `Option[Float]`                       | `FloatSerializer` / `FloatDeserializer`           |
+| `Serde.doubleOption` | `Option[Double]`                      | `DoubleSerializer` / `DoubleDeserializer`         |
+| `Serde.uuid`         | `java.util.UUID`                      | `UUIDSerializer` / `UUIDDeserializer`             |
+| `Serde.bytes`        | `org.apache.kafka.common.utils.Bytes` | `BytesSerializer` / `BytesDeserializer`           |
+| `Serde.byteBuffer`   | `java.nio.ByteBuffer`                 | `ByteBufferSerializer` / `ByteBufferDeserializer` |
+| `Serde.byteArray`    | `Array[Byte]`                         | none, a pass-through                              |
 
 ZIO Kafka never calls `configure` on these Kafka classes, so they use Kafka's defaults; for example, `Serde.string` and `Serde.uuid` always use UTF-8. To use another configuration, wrap a Kafka serde yourself, as shown in [From Kafka Serdes](#from-kafka-serdes). `Serde.byteArray` returns its input unchanged and cannot fail. The other serdes catch exceptions from the Kafka code and turn them into failures, such as a `Serde.int` deserializer that receives anything other than 4 bytes.
 
@@ -302,9 +307,17 @@ For a complete example of creating a custom serde with ZIO JSON, see the [Produc
 
 ## Handling Missing Data
 
-A Kafka key or value can be `null`: many records have no key, and a tombstone record, which marks a key as deleted in a compacted topic, has a `null` value. The built-in serdes handle `null` poorly. `Serde.string` and the other reference-type serdes return a `null` value, and the numeric serdes, such as `Serde.long`, silently turn Kafka's `null` into `0` (Scala unboxes a `null` number to zero), so a tombstone or a missing key looks like a real zero.
+A Kafka key or value can be `null`: many records have no key, and a tombstone record, which marks a key as deleted in a compacted topic, has a `null` value. The plain built-in serdes handle `null` poorly. `Serde.string` and the other reference-type serdes return a `null` value, and the numeric serdes, such as `Serde.long`, silently turn Kafka's `null` into `0` (Scala unboxes a `null` number to zero), so a tombstone or a missing key looks like a real zero.
 
-To handle missing data, use `Serializer#asOption`, `Deserializer#asOption` or `Serde#asOption`:
+For numeric keys and values that can be `null`, use the option variants `Serde.intOption`, `Serde.longOption`, `Serde.shortOption`, `Serde.floatOption` and `Serde.doubleOption`. They deserialize `null` to `None` and serialize `None` to `null`:
+
+```scala mdoc
+unsafeRun(Serde.longOption.deserialize("users", new RecordHeaders, null))
+
+unsafeRun(Serde.longOption.serialize("users", new RecordHeaders, None))
+```
+
+For any other serde, use `Serializer#asOption`, `Deserializer#asOption` or `Serde#asOption`; `Serde.longOption` behaves the same as `Serde.long.asOption`:
 
 ```scala
 trait Serializer[-R, -A] {
