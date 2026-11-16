@@ -61,7 +61,7 @@ ProducerSettings#metricsObserver
         │
         ▼
 ┌───────────────────────────┐     observeProduce           each fully acknowledged produce call
-│  ProducerMetricsObserver  │ ◄── observeSendAuthError     each chunk send with auth errors
+│  ProducerMetricsObserver  │ ◄── observeSendAuthError     each send with auth errors
 └───────────────────────────┘     observeSendQueueTake     each batch the send fiber takes
                                   observeSendQueueSize     every 10 seconds
 ```
@@ -226,9 +226,9 @@ The producer calls `ProducerMetricsObserver#observeProduce` once per produce cal
 
 `ProducerMetricsObserver#observeSendQueueSize` receives the number of batches (produce calls, not records) in the send queue. A background fiber samples it every 10 seconds; this interval is not configurable. The capacity of the queue is set with `ProducerSettings#withSendBufferSize`.
 
-`ProducerMetricsObserver#observeSendQueueTake` runs each time the send fiber takes a batch from the queue. `latency` should be the time the batch spent in the queue, including waiting for queue capacity. Currently, the producer passes a negative duration here (see the note on the [Metrics](metrics.md) page), so a custom observer cannot rely on this value.
+`ProducerMetricsObserver#observeSendQueueTake` runs each time the send fiber takes a batch from the queue. `latency` is the time the batch spent in the queue, including waiting for queue capacity.
 
-`ProducerMetricsObserver#observeSendAuthError` runs when a chunk produce call (`Producer#produceChunk` and its variants, including `Producer#produceAll`) gets authentication or authorization errors for some of its records and no other error. `errorCount` is the number of records that failed with such an error. The producer calls it before it asks `ProducerSettings#authErrorRetrySchedule` whether to retry those records, so it also runs with the default schedule, `Schedule.stop`, which never retries. Single-record produce calls (`Producer#produce`, `Producer#produceAsync`) do not call it.
+`ProducerMetricsObserver#observeSendAuthError` runs when a send attempt gets authentication or authorization errors. For a single-record produce call (`Producer#produce`, `Producer#produceAsync`), it runs with `errorCount` 1 each time the record fails with such an error. For a chunk produce call (`Producer#produceChunk` and its variants, including `Producer#produceAll`), it runs when some records fail with such an error and no record fails with another error; `errorCount` is the number of records that failed with an authentication or authorization error. In both cases the producer calls it before it asks `ProducerSettings#authErrorRetrySchedule` whether to retry, so it also runs with the default schedule, `Schedule.stop`, which never retries.
 
 ## The Default Observers
 
