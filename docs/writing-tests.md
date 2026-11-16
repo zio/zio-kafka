@@ -266,27 +266,7 @@ The in-memory Kafka instances are created using [embedded-kafka](https://github.
 
 ### `KafkaTestUtils` utilities
 
-This object provides several utilities to simplify writing your tests, like constructing a `Producer`, a `Consumer`,
-or an `AdminClient`.
-
-It also provides several functions to produce records, and more.
-
-Each utility function is documented in the source code. Please have a look at the source code for more details.     
-You can also look at `zio-kafka` tests in the `zio-kafka-test` module to have examples on how to use these utilities.
-
-The main groups of `KafkaTestUtils` functions are:
-
-| Utilities                                                                             | Purpose                                                                                                                                                                                                  |
-| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `producerSettings`, `makeProducer`, `producer`                                        | Producer settings, a scoped `Producer`, or a `Producer` layer.                                                                                                                                           |
-| `consumerSettings`, `makeConsumer`, `consumer`                                        | Consumer settings tuned for tests (for example a 100 ms poll timeout and a 3 second session timeout), a scoped `Consumer`, or a `Consumer` layer.                                                        |
-| `transactionalProducerSettings`, `makeTransactionalProducer`, `transactionalProducer` | A `TransactionalProducer` for [transactions](transactions.md). Tests that run in parallel need different transactional ids; the variants without a transactional id use the fixed id `test-transaction`. |
-| `transactionalConsumerSettings`, `makeTransactionalConsumer`, `transactionalConsumer` | A consumer that only reads committed records (`withReadCommitted()`), for checking what a transaction produced.                                                                                          |
-| `produceOne`, `produceMany`, `scheduledProduce`                                       | Produce records with `String` keys and values, using an explicit `Producer`.                                                                                                                             |
-| `consumeWithStrings`                                                                  | Consume records with `String` keys and values with `Consumer.consumeWith`.                                                                                                                               |
-| `adminSettings`, `makeAdminClient`, `createCustomTopic`                               | An `AdminClient` for the `Kafka` instance, and a shortcut to create a topic with a given number of partitions.                                                                                           |
-| `saslAdminSettings`, `makeSaslAdminClient`                                            | An `AdminClient` that connects with `SASL_PLAINTEXT`. Requires a `Kafka.Sasl`, provided by `Kafka.saslEmbedded`.                                                                                         |
-| `sslAdminSettings`, `makeSslAdminClient`                                              | An `AdminClient` that connects with `SSL`.                                                                                                                                                               |
+This object provides utilities to simplify writing your tests: settings, scoped values and layers for a `Producer`, a `Consumer`, a `TransactionalProducer`, a read-committed transactional consumer and an `AdminClient` (also over SASL and SSL), helpers that produce and consume records with `String` keys and values, and `KafkaTestUtils.createCustomTopic`. Each one is documented in the [`KafkaTestUtils` API docs](https://javadoc.io/doc/dev.zio/zio-kafka-testkit_2.13/latest/zio/kafka/testkit/KafkaTestUtils$.html), and the tests in the `zio-kafka-test` module show them in use. The consumer settings are tuned for tests, for example with a 100 ms poll timeout and a 3 second session timeout. Tests that run in parallel need different transactional ids, because the transactional helpers without a transactional id parameter use the fixed id `test-transaction`.
 
 The `make*` functions require a `Scope` and a `Kafka` (or `Kafka.Sasl`) in the environment. The consumer you pass to `KafkaTestUtils.makeTransactionalProducer` must have rebalance-safe-commits enabled, for example `KafkaTestUtils.makeConsumer(clientId, rebalanceSafeCommits = true)`.
 
