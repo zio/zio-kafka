@@ -176,7 +176,7 @@ object Consumer {
 }
 ```
 
-`Consumer.collectOffsets` adds each `Offset` to a batch with `OffsetBatch#add`, and `Consumer.collectOffsetBatches` merges each incoming `OffsetBatch` with `OffsetBatch#merge`. `Consumer.offsetBatches` is an older name for `Consumer.collectOffsets`; prefer `Consumer.collectOffsets`.
+`Consumer.collectOffsets` adds each `Offset` to a batch with `OffsetBatch#add`, and `Consumer.collectOffsetBatches` merges each incoming `OffsetBatch` with `OffsetBatch#merge`. `Consumer.offsetBatches` is an alias of `Consumer.collectOffsets`; both names are supported.
 
 Combine these sinks with `ZStream#aggregateAsync` or `ZStream#aggregateAsyncWithin`. Both run the upstream on a separate fiber: while a commit is in progress, the offsets of newly processed records are collected into the next batch, so consuming and committing run in parallel.
 
