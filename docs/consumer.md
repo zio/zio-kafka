@@ -206,7 +206,7 @@ These settings control zio-kafka itself. The defaults below are the values from 
 | `withMaxRebalanceDuration(duration)`   | 3/5 of `max.poll.interval.ms` (3 minutes)           | Upper bound on how long rebalance-safe commits hold up a rebalance.                                                                |
 | `withMaxStreamPullInterval(duration)`  | `max.poll.interval.ms`                              | How long a partition stream may go without pulling records before zio-kafka fails it and shuts down the consumer.                  |
 | `withRebalanceListener(listener)`      | `RebalanceListener.noop`                            | Your callbacks for partition assignment changes; see [Rebalance Listener](#rebalance-listener).                                    |
-| `withPartitionPreFetchBufferLimit(n)`  | 1024                                                | Per-partition pre-fetch buffer; `withoutPartitionPreFetching` sets it to 0. `withFetchStrategy` replaces the whole fetch strategy. |
+| `withPartitionPreFetchBufferLimit(n)`  | 1024                                                | Per-partition pre-fetch buffer; `withoutPartitionPreFetching` sets it to 0. `withFetchStrategy` replaces the whole fetch strategy, see [Writing a Custom Fetch Strategy](consumer-tuning.md#writing-a-custom-fetch-strategy). |
 | `tuneForHighThroughput`                | —                                                   | Sets poll timeout 500 ms, `max.poll.records` 2000 and pre-fetch limit 4096.                                                        |
 | `tuneForLowLatency`                    | —                                                   | Sets poll timeout 50 ms, `max.poll.records` 100 and pre-fetch limit 512.                                                           |
 | `withAuthErrorRetrySchedule(schedule)` | `Schedule.recurs(5) && Schedule.spaced(500.millis)` | Retries of polls that fail with an authorization or authentication error.                                                          |
@@ -482,7 +482,7 @@ trait Consumer {
 }
 ```
 
-`Consumer.collectOffsets` folds `Offset`s into a batch, and `Consumer.collectOffsetBatches` merges batches (`Consumer.offsetBatches` is an older alias of `Consumer.collectOffsets`). `Consumer.CommitTimeout` is the error of a commit that does not complete within `commitTimeout`. `Consumer#registerExternalCommits` tells the consumer about offsets you stored outside Kafka, so that rebalance-safe commits can wait for them; a `TransactionalProducer` calls it for you. [Offsets and Committing](offsets-and-committing.md) covers all of these, and [transactions](transactions.md) covers committing inside a transaction.
+`Consumer.collectOffsets` folds `Offset`s into a batch, and `Consumer.collectOffsetBatches` merges batches (`Consumer.offsetBatches` is an alias of `Consumer.collectOffsets`). `Consumer.CommitTimeout` is the error of a commit that does not complete within `commitTimeout`. `Consumer#registerExternalCommits` tells the consumer about offsets you stored outside Kafka, so that rebalance-safe commits can wait for them; a `TransactionalProducer` calls it for you. [Offsets and Committing](offsets-and-committing.md) covers all of these, and [transactions](transactions.md) covers committing inside a transaction.
 
 ## Rebalance Listener
 
