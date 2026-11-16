@@ -42,7 +42,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 ".getMessage",
                 _.getMessage,
                 equalTo(
-                  "Failed to create new KafkaAdminClient"
+                  "Failed to connect to Kafka"
                 )
               ) &&
                 hasField(
@@ -76,7 +76,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 ".getMessage",
                 _.getMessage,
                 equalTo(
-                  "Failed to create new KafkaAdminClient"
+                  "Failed to connect to Kafka"
                 )
               ) &&
                 hasField(
@@ -100,7 +100,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
                 ".getMessage",
                 _.getMessage,
                 equalTo(
-                  "Failed to create new KafkaAdminClient"
+                  "Failed to connect to Kafka"
                 )
               ) &&
                 hasField(
@@ -123,7 +123,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
         assertZIO(result.exit)(
           fails(
-            isSubtype[KafkaException](hasMessage(equalTo("Failed to create new KafkaAdminClient"))) &&
+            isSubtype[KafkaException](hasMessage(equalTo("Failed to connect to Kafka"))) &&
               hasThrowableCause(
                 isSubtype[IllegalArgumentException](
                   hasMessage(equalTo("Empty bootstrapServers list"))
@@ -177,7 +177,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           assertZIO(result.exit)(
             fails(
-              isSubtype[KafkaException](hasMessage(equalTo("Failed to create new KafkaAdminClient"))) &&
+              isSubtype[KafkaException](hasMessage(equalTo("Failed to connect to Kafka"))) &&
                 hasThrowableCause(
                   isSubtype[IllegalArgumentException](
                     hasMessage(
@@ -210,7 +210,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
           assertZIO(result.exit)(
             fails(
-              isSubtype[KafkaException](hasMessage(equalTo("Failed to create new KafkaAdminClient"))) &&
+              isSubtype[KafkaException](hasMessage(equalTo("Failed to connect to Kafka"))) &&
                 hasThrowableCause(isSubtype[java.net.ConnectException](hasMessage(equalTo("Connection refused. 💥!"))))
             )
           )
@@ -248,7 +248,7 @@ object SslHelperSpec extends ZIOSpecDefaultSlf4j with KafkaRandom {
 
             assertZIO(result.exit)(
               fails(
-                isSubtype[KafkaException](hasMessage(equalTo("Failed to create new KafkaAdminClient"))) &&
+                isSubtype[KafkaException](hasMessage(equalTo("Failed to connect to Kafka"))) &&
                   hasThrowableCause(
                     isSubtype[java.util.concurrent.TimeoutException](
                       hasMessage(equalTo(s"Failed to contact /10.255.255.1:$port"))

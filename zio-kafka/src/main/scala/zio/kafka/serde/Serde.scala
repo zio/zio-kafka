@@ -72,6 +72,8 @@ object Serde extends Serdes {
 
   /**
    * Create a Serde from a Kafka Serde.
+   *
+   * Note: the wrapped `serde` is never closed.
    */
   def fromKafkaSerde[A](serde: KafkaSerde[A], props: Map[String, AnyRef], isKey: Boolean): Task[Serde[Any, A]] =
     ZIO

@@ -2,7 +2,6 @@ package zio.kafka.consumer.fetch
 
 import org.apache.kafka.common.TopicPartition
 import zio.{ Chunk, ZIO }
-import zio.kafka.consumer.internal.PartitionStream
 
 import scala.collection.mutable
 

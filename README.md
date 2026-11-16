@@ -56,8 +56,8 @@ Kafka has a mature Java client for producing and consuming events, but it has a 
 To use zio-kafka, add the following lines to your `build.sbt` file:
 
 ```scala
-libraryDependencies += "dev.zio" %% "zio-kafka"         % "4.0.0"
-libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "4.0.0" % Test
+libraryDependencies += "dev.zio" %% "zio-kafka"         % "4.1.0"
+libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "4.1.0" % Test
 ```
 
 The [Getting Started](docs/getting-started.md) page walks through running a local Kafka broker and writing a first producer and consumer. For a longer tour of the different ways you can use zio-kafka, read the [zio-kafka tutorial](docs/tutorial.md).

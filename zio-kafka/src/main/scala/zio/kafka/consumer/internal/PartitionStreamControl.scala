@@ -8,11 +8,7 @@ import zio.kafka.consumer.internal.Runloop.ByteArrayCommittableRecord
 import zio.stream.ZStream
 import zio._
 import zio.kafka.consumer.diagnostics.DiagnosticEvent
-
-abstract class PartitionStream {
-  def tp: TopicPartition
-  def queueSize: UIO[Int]
-}
+import zio.kafka.consumer.fetch.PartitionStream
 
 /**
  * Provides control and information over a stream that consumes from a partition.
