@@ -3,7 +3,7 @@ id: serialization-and-deserialization
 title: "Serialization and Deserialization"
 ---
 
-Kafka stores keys and values as plain byte arrays. ZIO Kafka converts them to and from your own types with three types from the `zio.kafka.serde` package: a `Serializer` turns a value into bytes when producing, a `Deserializer` turns bytes into a value when consuming, and a `Serde` is both at once. All three are effectful: they return a ZIO effect, so a conversion can fail with a `Throwable`, use the ZIO environment, or call another service, such as a schema registry.
+Kafka stores keys and values as plain byte arrays. Zio-kafka converts them to and from your own types with three types from the `zio.kafka.serde` package: a `Serializer` turns a value into bytes when producing, a `Deserializer` turns bytes into a value when consuming, and a `Serde` is both at once. All three are effectful: they return a ZIO effect, so a conversion can fail with a `Throwable`, use the ZIO environment, or call another service, such as a schema registry.
 
 The core types have this shape:
 
@@ -31,7 +31,7 @@ Serdes are not part of the `Consumer` or `Producer` themselves. You pass a key a
 A typical application uses them like this:
 
 1. Pick a built-in serde such as `Serde.string`, or build one: from functions, from an existing Kafka serde, or by transforming another serde.
-2. Pass a key and a value deserializer to a [consumer](consumer.md) stream method: `Consumer#plainStream`, `Consumer#partitionedStream`, `Consumer#partitionedAssignmentStream`, their `WithControl` variants, or `Consumer#consumeWith` (and `Consumer.consumeWith`). ZIO Kafka reads every record from Kafka as raw bytes and runs your deserializers on each record inside the stream, with `CommittableRecord#deserializeWith`. A failed deserialization fails the stream.
+2. Pass a key and a value deserializer to a [consumer](consumer.md) stream method: `Consumer#plainStream`, `Consumer#partitionedStream`, `Consumer#partitionedAssignmentStream`, their `WithControl` variants, or `Consumer#consumeWith` (and `Consumer.consumeWith`). Zio-kafka reads every record from Kafka as raw bytes and runs your deserializers on each record inside the stream, with `CommittableRecord#deserializeWith`. A failed deserialization fails the stream.
 3. Pass a key and a value serializer to a [producer](producer.md) method: `Producer#produce`, `Producer#produceAsync`, `Producer#produceChunk`, `Producer#produceChunkAsync`, or the `Producer#produceAll` pipeline. In a [transaction](transactions.md), `Transaction#produce`, `Transaction#produceChunk` and `Transaction#produceChunkBatch` take serializers in the same way. Serialization runs in the calling fiber before the record is handed to the producer. A failed serialization fails the call, and nothing is sent; for the chunk methods, all records are serialized first, so one failure means no record of the chunk is sent.
 
 The diagram shows how the types relate and where they are used:
@@ -75,7 +75,7 @@ The `Serde` companion object provides ready-made serdes for common types. All of
 | `Serde.byteBuffer`   | `java.nio.ByteBuffer`                 | `ByteBufferSerializer` / `ByteBufferDeserializer` |
 | `Serde.byteArray`    | `Array[Byte]`                         | none, a pass-through                              |
 
-ZIO Kafka never calls `configure` on these Kafka classes, so they use Kafka's defaults; for example, `Serde.string` and `Serde.uuid` always use UTF-8. To use another configuration, wrap a Kafka serde yourself, as shown in [From Kafka Serdes](#from-kafka-serdes). `Serde.byteArray` returns its input unchanged and cannot fail. The other serdes catch exceptions from the Kafka code and turn them into failures, such as a `Serde.int` deserializer that receives anything other than 4 bytes.
+Zio-kafka never calls `configure` on these Kafka classes, so they use Kafka's defaults; for example, `Serde.string` and `Serde.uuid` always use UTF-8. To use another configuration, wrap a Kafka serde yourself, as shown in [From Kafka Serdes](#from-kafka-serdes). `Serde.byteArray` returns its input unchanged and cannot fail. The other serdes catch exceptions from the Kafka code and turn them into failures, such as a `Serde.int` deserializer that receives anything other than 4 bytes.
 
 The `Serializer` and `Deserializer` companion objects contain the same set of serdes (`Serializer.string`, `Deserializer.long`, and so on), also typed as `Serde`. They are distinct instances from the ones on `Serde`, though, and only `Serde.byteArray` enables the consumer's byte-array shortcut described in [Deserialization in the Consumer Stream](#deserialization-in-the-consumer-stream), so prefer the `Serde` versions.
 
@@ -150,7 +150,7 @@ val pointSerde: Serde[Any, Point] = Serde(pointDeserializer)(pointSerializer)
 
 ### From Kafka Serdes
 
-Many serialization formats already have an implementation for the Kafka Java client: a class implementing `org.apache.kafka.common.serialization.Serializer`, `Deserializer` or `Serde`. Third-party serdes, such as the Avro serdes that work with a schema registry, are usually distributed this way. Three constructors turn them into ZIO Kafka serdes:
+Many serialization formats already have an implementation for the Kafka Java client: a class implementing `org.apache.kafka.common.serialization.Serializer`, `Deserializer` or `Serde`. Third-party serdes, such as the Avro serdes that work with a schema registry, are usually distributed this way. Three constructors turn them into zio-kafka serdes:
 
 ```scala
 object Serializer {
@@ -214,7 +214,7 @@ val program: ZIO[Scope, Throwable, Unit] =
   } yield ()
 ```
 
-ZIO Kafka never calls `close` on a wrapped Kafka object. If it holds resources, such as a connection to a schema registry, keep a reference to it and close it yourself, for example with `ZIO.acquireRelease`. If its calls block on network I/O, run it on the blocking thread pool, see [Running on the Blocking Thread Pool](#running-on-the-blocking-thread-pool).
+Zio-kafka never calls `close` on a wrapped Kafka object. If it holds resources, such as a connection to a schema registry, keep a reference to it and close it yourself, for example with `ZIO.acquireRelease`. If its calls block on network I/O, run it on the blocking thread pool, see [Running on the Blocking Thread Pool](#running-on-the-blocking-thread-pool).
 
 ## Custom Data Type Serdes
 
@@ -349,7 +349,7 @@ Ideally, a serde can not fail serializing and deserializing. This is for example
 
 By default, a consumer stream fails if it encounters a deserialization error in the serde. The resulting error does not always show that the serde is the cause.
 
-There are three ways to improve this, described in the sections below: fall back to another deserializer with `Deserializer#orElse`, wrap the result of the deserializer in a `Try` with `Deserializer#asTry`, or consume with `Serde.byteArray` and do the deserialization in the consumer stream (or serialize before handing the data to ZIO Kafka), so that you can handle failures any way you want.
+There are three ways to improve this, described in the sections below: fall back to another deserializer with `Deserializer#orElse`, wrap the result of the deserializer in a `Try` with `Deserializer#asTry`, or consume with `Serde.byteArray` and do the deserialization in the consumer stream (or serialize before handing the data to zio-kafka), so that you can handle failures any way you want.
 
 ### Falling Back to Another Deserializer
 
@@ -434,7 +434,7 @@ object Serde {
 }
 ```
 
-The ZIO Kafka consumer methods take their deserializers as explicit arguments, so you rarely need it. It is defined on `Serde`, not on `Deserializer`, so it is not found automatically; import it to use it:
+The zio-kafka consumer methods take their deserializers as explicit arguments, so you rarely need it. It is defined on `Serde`, not on `Deserializer`, so it is not found automatically; import it to use it:
 
 ```scala mdoc:compile-only
 import zio.kafka.serde._
@@ -448,7 +448,7 @@ val tryDeserializer: Deserializer[Any, Try[String]] = implicitly[Deserializer[An
 
 ### Deserialization in the Consumer Stream
 
-In this approach we provide ZIO Kafka with the `Serde.byteArray` serde (which is a pass-through serde) and do the deserialization in the consumer stream. The deserialization can be done with regular ZIO operators.
+In this approach we provide zio-kafka with the `Serde.byteArray` serde (which is a pass-through serde) and do the deserialization in the consumer stream. The deserialization can be done with regular ZIO operators.
 
 This approach provides more freedom at the cost of having to write more code. It also allows for optimizations such as operating on chunks of records (see [avoiding chunk-breakers](avoiding-chunk-breakers.md)), and more contextual failure handling. When both the key and the value deserializer are `Serde.byteArray`, the consumer recognizes that exact instance and skips the deserialization step entirely. Other instances, such as `Deserializer.byteArray`, do not trigger this shortcut.
 

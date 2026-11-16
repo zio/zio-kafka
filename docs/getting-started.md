@@ -16,7 +16,7 @@ To follow along, you need:
 
 ## Adding the Dependencies
 
-zio-kafka is published for Scala 2.13 and Scala 3. Add the library, and the test kit for your tests, to your `build.sbt` file:
+Zio-kafka is published for Scala 2.13 and Scala 3. Add the library, and the test kit for your tests, to your `build.sbt` file:
 
 ```scala
 libraryDependencies += "dev.zio" %% "zio-kafka"         % "@VERSION@"

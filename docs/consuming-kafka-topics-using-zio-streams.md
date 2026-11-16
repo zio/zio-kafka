@@ -108,7 +108,7 @@ shutdown. When interrupted, some records may be 'in-flight', e.g. being processe
 stream user code. Those records will be processed partly and their offsets may not be committed. For fast shutdown in an
 at-least-once processing scenario this is fine.
 
-zio-kafka also supports a _graceful shutdown_, where the fetching of records for the subscribed topics/partitions is
+Zio-kafka also supports a _graceful shutdown_, where the fetching of records for the subscribed topics/partitions is
 stopped, the streams are ended and all downstream stages are completed, allowing in-flight records to be fully
 processed.
 

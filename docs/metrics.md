@@ -3,7 +3,7 @@ id: metrics
 title: "Metrics"
 ---
 
-ZIO Kafka exposes all the metrics of the wrapped Java based consumer and producer, plus some more metrics about the
+Zio-kafka exposes all the metrics of the wrapped Java based consumer and producer, plus some more metrics about the
 zio-kafka consumer and producer themselves.
 
 ## Java client metrics
@@ -12,7 +12,7 @@ The metrics from the Java metrics can be obtained via the `Consumer#metrics` and
 return a live view on the internal metrics of the consumer/producer. We currently do not expose these metrics elsewhere,
 a PR to copy them to the zio-metrics API is welcome.
 
-## ZIO Kafka Metrics
+## Zio-kafka Metrics
 
 The zio-kafka consumer and producer collect some additional metrics using the zio-metrics API. This allows any
 zio-metrics backend to access and process the observed values.
@@ -30,7 +30,7 @@ Like the zio-metrics we follow Prometheus conventions. This means that:
 Each histogram defines 10 bucket boundaries (zio-metrics ignores a boundary of `0` and adds a `+Inf` bucket). To reach a decent range while keeping sufficient accuracy at the low end, most
 bucket boundaries use an exponential series based on 𝑒.
 
-## ZIO Kafka Consumer Metrics
+## Zio-kafka Consumer Metrics
 
 To interpret the metrics you need to know how zio-kafka works internally.
 
@@ -117,7 +117,7 @@ Here is an example dashboard that could be built with these metrics:
 
 ![metrics-dashboard.png](metrics-dashboard.png)
 
-## ZIO Kafka Producer Metrics
+## Zio-kafka Producer Metrics
 
 To understand the producer metrics it is useful to know how the producer works.
 

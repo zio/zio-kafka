@@ -3,7 +3,7 @@ id: offsets-and-committing
 title: "Offsets and Committing"
 ---
 
-Kafka remembers how far a consumer group has read each partition by storing a *committed offset* per partition. When a consumer restarts, or when a partition moves to another consumer during a rebalance, consumption continues from that committed offset. zio-kafka never commits on its own (Kafka's `enable.auto.commit` is not supported, and `Consumer.make` fails when you set it to `true`), so your program decides when an offset is committed. This page explains what an offset is in zio-kafka, how to commit offsets one by one or in batches, how to retry failed commits, and how commits relate to external storage and transactions.
+Kafka remembers how far a consumer group has read each partition by storing a *committed offset* per partition. When a consumer restarts, or when a partition moves to another consumer during a rebalance, consumption continues from that committed offset. Zio-kafka never commits on its own (Kafka's `enable.auto.commit` is not supported, and `Consumer.make` fails when you set it to `true`), so your program decides when an offset is committed. This page explains what an offset is in zio-kafka, how to commit offsets one by one or in batches, how to retry failed commits, and how commits relate to external storage and transactions.
 
 The core types are `Offset`, the position of one consumed record, and `OffsetBatch`, the combined positions of many records, at most one per partition. You get an `Offset` from a `CommittableRecord`, the record type that the [consumer](consumer.md) streams emit:
 
@@ -66,7 +66,7 @@ Most of the time the next offset is the record's offset plus one. It can be larg
   record at 44:  Offset#offset = 44   Offset#nextOffset.offset() = 46  (last record of its poll; skips the control record)
 ```
 
-zio-kafka gives you both values, so you don't have to compute the next offset yourself. `Offset#offset` (a `Long`) is the offset of the consumed record. `Offset#nextOffset` (a Kafka `OffsetAndMetadata`) is the offset to commit; it also carries the leader epoch and, optionally, metadata. The same value is available directly on the record as `CommittableRecord#nextOffset`.
+Zio-kafka gives you both values, so you don't have to compute the next offset yourself. `Offset#offset` (a `Long`) is the offset of the consumed record. `Offset#nextOffset` (a Kafka `OffsetAndMetadata`) is the offset to commit; it also carries the leader epoch and, optionally, metadata. The same value is available directly on the record as `CommittableRecord#nextOffset`.
 
 For most records `Offset#nextOffset` is `Offset#offset + 1`. For the last record of each partition in a poll, zio-kafka uses the position that the Kafka consumer reports, which already skips any control records that follow the record. As a result, committing the offsets of all processed records moves the committed offset past the control records, and the consumer lag of a transactionally written topic can reach 0.
 

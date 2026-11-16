@@ -4,7 +4,7 @@ title: "Security: TLS and Credentials"
 sidebar_label: "Security"
 ---
 
-zio-kafka clients connect to Kafka through the Java clients, so encryption (TLS) and authentication (mutual TLS or SASL) are configured with the usual Java client properties. zio-kafka adds two things on top: `KafkaCredentialStore`, which turns PEM-encoded certificates into the TLS properties, and an SSL endpoint check that catches a client configured for plain text that connects to a TLS listener, a mistake that otherwise crashes the application with an `OutOfMemoryError`.
+Zio-kafka clients connect to Kafka through the Java clients, so encryption (TLS) and authentication (mutual TLS or SASL) are configured with the usual Java client properties. Zio-kafka adds two things on top: `KafkaCredentialStore`, which turns PEM-encoded certificates into the TLS properties, and an SSL endpoint check that catches a client configured for plain text that connects to a TLS listener, a mistake that otherwise crashes the application with an `OutOfMemoryError`.
 
 ## Security Protocols
 
@@ -132,7 +132,7 @@ The `PLAIN` mechanism works the same way, with `sasl.mechanism` set to `PLAIN` a
 
 ## SSL Endpoint Check
 
-A long-standing Kafka client bug ([KAFKA-4090](https://issues.apache.org/jira/browse/KAFKA-4090)) makes a client that uses a plain-text protocol (`PLAINTEXT` or `SASL_PLAINTEXT`) against a TLS listener read the broker's TLS handshake bytes as the size of a response. It then tries to allocate a buffer of that size, and the application dies with an `OutOfMemoryError`. zio-kafka protects against this with `zio.kafka.utils.SslHelper.validateEndpoint`, which probes the brokers before the Java client is created and turns the mismatch into an ordinary error.
+A long-standing Kafka client bug ([KAFKA-4090](https://issues.apache.org/jira/browse/KAFKA-4090)) makes a client that uses a plain-text protocol (`PLAINTEXT` or `SASL_PLAINTEXT`) against a TLS listener read the broker's TLS handshake bytes as the size of a response. It then tries to allocate a buffer of that size, and the application dies with an `OutOfMemoryError`. Zio-kafka protects against this with `zio.kafka.utils.SslHelper.validateEndpoint`, which probes the brokers before the Java client is created and turns the mismatch into an ordinary error.
 
 ### When the Check Runs
 

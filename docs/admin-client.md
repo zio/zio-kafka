@@ -19,7 +19,7 @@ final case class AdminClientSettings(closeTimeout: Duration, properties: Map[Str
 
 ## Write Operations Wait Until They Are Visible
 
-The Java admin client completes a write operation as soon as the broker accepts it, but the change is not yet visible to the next read: a topic that was just created may be missing from `listTopics` for a while (see [KAFKA-18818](https://issues.apache.org/jira/browse/KAFKA-18818)). zio-kafka hides this. Its write operations only complete once the change is visible, using one of two strategies:
+The Java admin client completes a write operation as soon as the broker accepts it, but the change is not yet visible to the next read: a topic that was just created may be missing from `listTopics` for a while (see [KAFKA-18818](https://issues.apache.org/jira/browse/KAFKA-18818)). Zio-kafka hides this. Its write operations only complete once the change is visible, using one of two strategies:
 
 - **Polling:** after the broker accepts the request, zio-kafka waits 50 ms and then repeatedly reads the state back, with exponential backoff starting at 50 ms, until the change shows up. If it does not show up within 5 seconds, the operation still succeeds: zio-kafka assumes that the write succeeded and was undone by another write.
 - **Fixed sleep:** where polling is impractical, the operation sleeps for its `visibilitySleep` parameter (default 1 second) after the broker accepts the request. Pass `Duration.Zero` when you don't care when the operation takes effect.
@@ -408,7 +408,7 @@ def describeEach(admin: AdminClient, topics: List[String]): Task[Map[ConfigResou
 
 ## Using the Java Admin Client Directly
 
-zio-kafka wraps most, but not all, operations of the Java `Admin` interface. For an operation it does not wrap, create the Java client with `AdminClient.javaClientFromSettings` and convert its `KafkaFuture` results with the public helpers `AdminClient.fromKafkaFuture` and `AdminClient.fromKafkaFutureVoid`. To describe the cluster's feature flags, which zio-kafka does not wrap:
+Zio-kafka wraps most, but not all, operations of the Java `Admin` interface. For an operation it does not wrap, create the Java client with `AdminClient.javaClientFromSettings` and convert its `KafkaFuture` results with the public helpers `AdminClient.fromKafkaFuture` and `AdminClient.fromKafkaFutureVoid`. To describe the cluster's feature flags, which zio-kafka does not wrap:
 
 ```scala mdoc:compile-only
 import org.apache.kafka.clients.admin.FeatureMetadata

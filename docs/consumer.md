@@ -392,7 +392,7 @@ If `withStream` does not finish within `shutdownTimeout`, zio-kafka logs an erro
 
 ### Multiple Subscriptions on One Consumer
 
-You can run several streams on one `Consumer`, each with its own subscription and deserializers. zio-kafka subscribes the Kafka consumer to the union of all active subscriptions, and each stream receives only the partitions that match its own subscription. When a stream completes, its subscription is removed from the union.
+You can run several streams on one `Consumer`, each with its own subscription and deserializers. Zio-kafka subscribes the Kafka consumer to the union of all active subscriptions, and each stream receives only the partitions that match its own subscription. When a stream completes, its subscription is removed from the union.
 
 All subscriptions on one consumer must be of the same kind: all `Topics`, all `Pattern`, or all `Manual`. Two `Pattern` subscriptions are combined into one regular expression. Starting a stream whose subscription is of a different kind fails that stream with `InvalidSubscriptionUnion`, which lists the subscriptions that could not be combined. When subscriptions overlap, for example `Subscription.topics("a", "b")` and `Subscription.topics("b", "c")`, the records of topic `b` are divided over both streams in a non-deterministic way.
 
@@ -524,7 +524,7 @@ val settings: ConsumerSettings =
     .withRebalanceListener(listener)
 ```
 
-zio-kafka runs your listener after its own rebalance handling. By the time your `onRevoked` runs, zio-kafka has told the streams of the revoked partitions to end and, with rebalance-safe commits enabled, has waited (up to `maxRebalanceDuration`) for their offsets to be committed.
+Zio-kafka runs your listener after its own rebalance handling. By the time your `onRevoked` runs, zio-kafka has told the streams of the revoked partitions to end and, with rebalance-safe commits enabled, has waited (up to `maxRebalanceDuration`) for their offsets to be committed.
 
 :::warning
 The callbacks run inside the Kafka consumer's poll, while zio-kafka holds exclusive access to the Kafka consumer. Polling for all partitions waits until the callback completes, so keep callbacks short. Do not call `Consumer` methods or commit offsets from a callback: they need that same access and cannot complete until the callback returns. A failing callback makes the poll fail, so handle errors inside the callback.

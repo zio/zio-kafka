@@ -1,9 +1,9 @@
 ---
 id: migrating-to-zio-kafka-4
-title: "Migrating to ZIO Kafka 4"
+title: "Migrating to zio-kafka 4"
 ---
 
-zio-kafka 4.0.0 changes how offsets are committed. Before 4.0, zio-kafka committed the offset of the last consumed record plus 1. Since KIP-1094, the Kafka client reports the actual _next offset_ of a partition, which skips the invisible control records that transactional producers write. zio-kafka 4.0 attaches this next offset to every record and commits it. As a result, consumer lag can now go down to 0, where before a consumer of a transactional topic always showed some lag.
+Zio-kafka 4.0.0 changes how offsets are committed. Before 4.0, zio-kafka committed the offset of the last consumed record plus 1. Since KIP-1094, the Kafka client reports the actual _next offset_ of a partition, which skips the invisible control records that transactional producers write. Zio-kafka 4.0 attaches this next offset to every record and commits it. As a result, consumer lag can now go down to 0, where before a consumer of a transactional topic always showed some lag.
 
 This change is the only one in 4.0.0. The Scala, ZIO and Kafka client versions are the same as in zio-kafka 3.8.2, and 4.0.0 removes no deprecated APIs. Most applications only need to update the dependency. You need to change code if it:
 
@@ -169,9 +169,9 @@ To migrate an application from zio-kafka 3.x to zio-kafka 4:
 - [ ] Remove any `+ 1` applied to the offsets of `DiagnosticEvent.Commit.Started` in diagnostics callbacks.
 - [ ] Check tests and monitoring that compare committed offsets with consumed offsets.
 
-## Upgrading From ZIO Kafka 4.0 to 4.1
+## Upgrading From zio-kafka 4.0 to 4.1
 
-zio-kafka 4.1.0 fixes a number of small problems and adds a few APIs; most applications only need to update the dependency. Check the following points:
+Zio-kafka 4.1.0 fixes a number of small problems and adds a few APIs; most applications only need to update the dependency. Check the following points:
 
 - **Producer diagnostics:** `ProducerEvent.ProducedRecord#partition` is now `ProducerEvent.NoPartition` (`-1`) for a record that leaves the partition choice to the Kafka partitioner. In 4.0 it was `0`, which could not be told apart from a record sent to partition `0`. Update [diagnostics](diagnostics.md) callbacks that group or filter by this field.
 - **Custom fetch strategies:** `PartitionStream`, the type a `FetchStrategy` receives, moved from an internal package to `zio.kafka.consumer.fetch.PartitionStream`. Change the import of a custom `FetchStrategy`, see [Writing a Custom Fetch Strategy](consumer-tuning.md#writing-a-custom-fetch-strategy).
@@ -180,4 +180,4 @@ zio-kafka 4.1.0 fixes a number of small problems and adds a few APIs; most appli
 - **Metrics:** `ziokafka_producer_send_queue_latency_seconds` now records the actual (positive) time a batch spends in the send queue; in 4.0 the values had the wrong sign. `ziokafka_producer_auth_errors` now also counts authentication and authorization errors of single-record produce calls. Review dashboards and alerts built on these metrics, see [Metrics](metrics.md).
 - **Admin client:** `createTopic`, `createTopics`, `createPartitions` and `incrementalAlterConfigs` with `validateOnly = true` no longer wait for the change to become visible, so they return sooner. See [Admin Client](admin-client.md).
 
-zio-kafka 4.1.0 also adds the serdes `Serde.intOption`, `Serde.longOption`, `Serde.shortOption`, `Serde.floatOption` and `Serde.doubleOption`, which turn a `null` key or value into `None` (see [Handling Missing Data](serialization-and-deserialization.md#handling-missing-data)).
+Zio-kafka 4.1.0 also adds the serdes `Serde.intOption`, `Serde.longOption`, `Serde.shortOption`, `Serde.floatOption` and `Serde.doubleOption`, which turn a `null` key or value into `None` (see [Handling Missing Data](serialization-and-deserialization.md#handling-missing-data)).
