@@ -223,11 +223,11 @@ The events do not contain the records themselves. Each record is summarized by a
 
 The producer emits three kinds of events:
 
-| Event                                   | Emitted when                                                       |
-| --------------------------------------- | ------------------------------------------------------------------ |
-| `RecordsOffered(batchId, records)`      | A batch of records is added to the producer's internal send queue. |
-| `RecordsSent(batchId, records, failed)` | Sending all records of the batch completed, successfully or not.   |
-| `ProducerFinalized`                     | The producer closes. It is always the last event.                  |
+| Event                                   | Emitted when                                                                                                                                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `RecordsOffered(batchId, records)`      | A batch of records is about to be offered to the producer's internal send queue. The offer can still wait for space, or never happen if the produce call is interrupted. |
+| `RecordsSent(batchId, records, failed)` | Sending all records of the batch completed, successfully or not.                                                                                                         |
+| `ProducerFinalized`                     | The producer closes. It is always the last event.                                                                                                                        |
 
 The moment of `RecordsSent` depends on the `acks` producer configuration. With `acks=0` it is emitted as soon as all records are added to the socket buffer, with any other value it is emitted after the broker acknowledged the records. When the producer retries records after an authentication or authorization error (see `ProducerSettings#withAuthErrorRetrySchedule`), `RecordsSent` is emitted once, after the last attempt.
 

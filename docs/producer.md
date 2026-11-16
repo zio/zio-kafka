@@ -446,7 +446,7 @@ val settings: ProducerSettings =
 
 ### Diagnostics and Metrics
 
-`ProducerSettings#withDiagnostics` registers a callback for `ProducerEvent`s: `ProducerEvent.RecordsOffered` when a batch enters the send queue, `ProducerEvent.RecordsSent` when the broker has handled it (with the indices of failed records), and `ProducerEvent.ProducerFinalized` when the producer closes. Events of the same batch share a `batchId`. The callback runs in a separate fiber, and unhandled events queue up in memory, so it must keep up. See [Diagnostics](diagnostics.md) for the full event model.
+`ProducerSettings#withDiagnostics` registers a callback for `ProducerEvent`s: `ProducerEvent.RecordsOffered` just before a batch is offered to the send queue, `ProducerEvent.RecordsSent` when the broker has handled it (with the indices of failed records), and `ProducerEvent.ProducerFinalized` when the producer closes. Events of the same batch share a `batchId`. The callback runs in a separate fiber, and unhandled events queue up in memory, so it must keep up. See [Diagnostics](diagnostics.md) for the full event model.
 
 The producer records zio-kafka metrics such as produce latency, batch size and send queue size through ZIO metrics. When an application runs several producers, label their metrics with `ProducerSettings#withMetricsLabels`. To send metrics elsewhere, or to turn them off with `ProducerMetricsObserver.NoOp`, use `ProducerSettings#withMetricsObserver`; labels are then ignored. To label a producer's metrics:
 
