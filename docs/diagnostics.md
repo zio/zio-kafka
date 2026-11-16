@@ -111,7 +111,11 @@ val transactionalProducerSettings: TransactionalProducerSettings =
 The queue between zio-kafka and your `Diagnostics` is unbounded. Because `Diagnostics#emit` runs on a separate fiber, a slow implementation does not slow down consuming or producing, but events pile up in memory when it cannot keep up. A busy consumer emits a `Poll` event for every poll and a `Request` event for every data request, so a slow implementation eventually leads to out-of-memory errors. Keep `Diagnostics#emit` fast: filter out the events you don't need, and hand expensive work to another fiber or a bounded queue. `SlidingDiagnostics` (below) is bounded by design.
 :::
 
-A slow `Diagnostics#emit` also delays shutdown, because closing the consumer or producer waits until every queued event has been handled. Make sure it doesn't die with a defect either: the delivering fiber stops at the first defect, and later events are no longer delivered.
+A slow `Diagnostics#emit` also delays shutdown, because closing the consumer or producer waits until every queued event has been handled.
+
+:::warning[Never Throw or Die in Emit]
+When `Diagnostics#emit` throws an exception or dies with a defect, the fiber that delivers the events stops. From then on, every attempt of the consumer or producer to emit an event dies with that same defect, so the problem surfaces instead of events piling up in memory unnoticed. Consumer streams fail with the defect, and so do commits. New produce calls die, and a produce call that is already waiting for its acknowledgement may never complete. Events emitted between the defect and the moment zio-kafka notices it are lost. Keep the body of `Diagnostics#emit` inside a ZIO effect (for example `ZIO.suspend { ... }`) and recover from every failure and defect with `catchAllCause`.
+:::
 
 ## Consumer Events
 
@@ -202,7 +206,8 @@ The producer emits subtypes of the sealed trait `zio.kafka.producer.ProducerEven
 sealed trait ProducerEvent
 
 object ProducerEvent {
-  val NoValue = -1
+  val NoPartition = -1
+  val NoValue     = -1
 
   final case class ProducedRecord(topic: String, partition: Int, size: Int)
 
@@ -214,7 +219,7 @@ object ProducerEvent {
 }
 ```
 
-The events do not contain the records themselves. Each record is summarized by a `ProducedRecord` that holds the topic, the partition from the `ProducerRecord`, and the size of the serialized value in bytes. For a record without a value (a tombstone), `size` is `ProducerEvent.NoValue` (`-1`). The partition is the one set on the `ProducerRecord`, not the partition the Kafka partitioner picks. It is `0` for records that leave the partition choice to the partitioner.
+The events do not contain the records themselves. Each record is summarized by a `ProducedRecord` that holds the topic, the partition from the `ProducerRecord`, and the size of the serialized value in bytes. For a record without a value (a tombstone), `size` is `ProducerEvent.NoValue` (`-1`). The partition is the one set on the `ProducerRecord`, not the partition the Kafka partitioner picks. For records that leave the partition choice to the partitioner, it is `ProducerEvent.NoPartition` (`-1`), so you can tell them apart from records sent to partition `0`.
 
 The producer emits three kinds of events:
 
