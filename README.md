@@ -14,7 +14,7 @@ programs that use the Java Kafka client directly (see section [Performance](#per
 
 Apache Kafka is a distributed event streaming platform that acts as a distributed publish-subscribe messaging system. It enables us to build distributed streaming data pipelines and event-driven applications.
 
-Kafka has a mature Java client for producing and consuming events, but it has a low-level API. ZIO Kafka is a ZIO native client for Apache Kafka. It has a high-level streaming API on top of the Java client. So we can produce and consume events using the declarative concurrency model of zio-streams. In addition, zio-kafka supports an even higher level API where you only write the processing part and the rest is handled by zio-kafka.
+Kafka has a mature Java client for producing and consuming events, but it has a low-level API. Zio-kafka is a ZIO native client for Apache Kafka. It has a high-level streaming API on top of the Java client. So we can produce and consume events using the declarative concurrency model of zio-streams. In addition, zio-kafka supports an even higher level API where you only write the processing part and the rest is handled by zio-kafka.
 
 ## Features
 
@@ -119,7 +119,7 @@ Want to see your company here? [Submit a PR](https://github.com/zio/zio-kafka/ed
 Often, _zio-kafka programs consume with a higher throughput_ than programs that use the java-kafka client directly.
 Read on for the details.
 
-zio-kafka makes it easy to process partitions in parallel: `Consumer.consumeWith` does so by default, and with the streaming API you can use `Consumer#partitionedStream` with `ZStream#flatMapPar`. The default java-kafka client does not provide parallel processing. Of course, there is some overhead in buffering records and distributing them to the fibers that need them. On 2024-11-23, we estimated that zio-kafka consumes faster than the java-kafka client when processing takes more than ~1.2ms per 1000 records. The precise time depends on many factors. Please see [this article](https://day-to-day-stuff.blogspot.com/2024/12/zio-kafka-faster-than-java-kafka.html) for more details.
+Zio-kafka makes it easy to process partitions in parallel: `Consumer.consumeWith` does so by default, and with the streaming API you can use `Consumer#partitionedStream` with `ZStream#flatMapPar`. The default java-kafka client does not provide parallel processing. Of course, there is some overhead in buffering records and distributing them to the fibers that need them. On 2024-11-23, we estimated that zio-kafka consumes faster than the java-kafka client when processing takes more than ~1.2ms per 1000 records. The precise time depends on many factors. Please see [this article](https://day-to-day-stuff.blogspot.com/2024/12/zio-kafka-faster-than-java-kafka.html) for more details.
 
 If you do not care for the convenient ZStream based API that zio-kafka brings, and latency is of absolute importance,
 using the java based Kafka client directly is still the better choice.
