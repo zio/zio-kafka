@@ -168,7 +168,7 @@ Partition streams ask the consumer for records, and the consumer polls the Kafka
 
 ### Committing
 
-Committing produces a `Started` event when a commit is requested, followed later by a `Success` or a `Failure` event:
+Committing produces a `Started` event when a commit is requested, and a `Success` or a `Failure` event when it completes. `Started` is emitted just after the commit is queued, so occasionally it arrives after its own `Success` or `Failure`:
 
 | Event                            | Emitted when                                                                   |
 | -------------------------------- | ------------------------------------------------------------------------------ |
@@ -233,7 +233,7 @@ The moment of `RecordsSent` depends on the `acks` producer configuration. With `
 
 The `failed` field of `RecordsSent` holds the indices (into `records`) of the records that failed, together with the records that were not sent because an earlier record failed. When every record succeeded, `failed` is empty.
 
-The `batchId` links the events of one batch. It starts at `0` and increases by one for every batch, separately for each producer. The `RecordsOffered` and `RecordsSent` events of the same batch have the same `batchId` and the same `records`. Batches are sent concurrently, so the `RecordsSent` events of different batches can arrive in any order, and interleaved with the `RecordsOffered` events of other batches. The `RecordsOffered` event of a batch always arrives before its own `RecordsSent` event, and the `RecordsOffered` events themselves always arrive in the order in which the batches were offered. An empty batch produces no events.
+The `batchId` links the events of one batch. It starts at `0` and increases by one for every batch, separately for each producer. The `RecordsOffered` and `RecordsSent` events of the same batch have the same `batchId` and the same `records`. Batches are sent concurrently, so the `RecordsSent` events of different batches can arrive in any order, and interleaved with the `RecordsOffered` events of other batches. The `RecordsOffered` event of a batch always arrives before its own `RecordsSent` event, When several fibers produce concurrently, the order of the `RecordsOffered` events (and of the `batchId`s) can differ from the order in which the batches enter the send queue. An empty batch produces no events.
 
 ## Writing Your Own Diagnostics
 
