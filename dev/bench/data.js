@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794809431504,
+  "lastUpdate": 1794830133662,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -6098,6 +6098,102 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 571.6619704399999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "khajavi@gmail.com",
+            "name": "Milad Khajavi",
+            "username": "khajavi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8397ae44492d7f36582ec63cd1001645edbeb133",
+          "message": "docs: getting started, reference pages (producer, admin client, diagnostics, offsets, headers) and sidebar structure (#1817)\n\n## What this PR does\n\nIt reorganises and completes the zio-kafka documentation on zio.dev. It\nadds reference pages for the parts of the library that had none, and it\nfixes the factual mistakes found in the existing pages. Besides `docs/`\nand the generated `README.md`, the only change is one line in\n`build.sbt`: the docs project now depends on `zio-sbt-source`, so pages\ncan embed example files (Getting Started embeds `ReadmeExample.scala`).\nNo library code is touched.\n\n### New sidebar structure\n\nThe sidebar now reads top to bottom as:\n\n1. **Introduction** (`index`): what zio-kafka is, features (each linked\nto its page), installation, resources.\n2. **Getting Started** (`getting-started`, new): dependencies, a local\nKRaft broker with Docker, a first producer and consumer.\n3. **Reference**: Consumer, Partition assignment and offset retrieval,\nConsumer tuning, Offsets and committing, Producer, Transactions,\nSerialization and deserialization, Record headers, Admin client,\nDiagnostics, Metrics, Metrics observers, Security.\n4. **Tutorial**: the existing tutorial, as a plain sidebar item (a\nsingle page gets no category).\n5. **How-to Guides**: the existing guides, plus a new \"Migrating to\nzio-kafka 4\" guide.\n\nAll categories are expanded (`collapsed: false`).\n\n**No doc id changed**, so zio.dev needs no redirects. Only sidebar\nlabels and groups move.\n\n### New pages\n\n| Page | Covers |\n| ---------------------------- |\n------------------------------------------------------------------------------------------------------------------------\n|\n| `getting-started` | Install, Scala 3 testkit note, snapshots, Docker\nbroker, first program |\n| `consumer` | Construction, important settings, stream kinds,\n`consumeWith`, metadata queries, `RebalanceListener`,\n`CommittableRecord` |\n| `offsets-and-committing` | `Offset`, `OffsetBatch`, offset vs next\noffset, batching commits, `commitOrRetry`, external and transactional\ncommits |\n| `producer` | Every produce variant, error handling, all\n`ProducerSettings`, compression |\n| `record-headers` | Adding and reading headers, header-aware serdes |\n| `admin-client` | How writes wait for visibility, every operation\ngrouped by task, model types, `*Async` variants |\n| `diagnostics` | `Diagnostics`, consumer and producer events and when\nthey fire, `SlidingDiagnostics` |\n| `metrics-observers` |\n`ConsumerMetricsObserver`/`ProducerMetricsObserver` callbacks and when\nthey run, default observers, metric descriptors and boundaries, custom\nbackends |\n| `security` | TLS/SASL configuration, `KafkaCredentialStore`, the SSL\nendpoint check |\n| `migrating-to-zio-kafka-4` | The 4.0.0 breaking change\n(`OffsetBatch#nextOffsets`, `Offset#nextOffset`, `CommittableRecord`),\nwith before/after code |\n\n### Mistakes fixed in existing pages\n\nAn audit of every page against the source found 62 confirmed mistakes.\nThe main cause: about 68 of the 80 Scala examples were plain code\nblocks, which mdoc never compiled, so they had drifted from the API. All\nrunnable examples are now `mdoc:compile-only` and are checked by the\nbuild from now on. Pseudo-code, signature listings and the \"zio-kafka\n2.x\" side of the 3.x migration guide stay plain on purpose.\n\nExamples of what was wrong:\n\n- The index example produced to `random-topic` but consumed from\n`random`, so it never printed anything.\n- Pages used the `Serdes` object, which is `private[zio]` (use `Serde`).\n- `Producer.make(settings, serde, serde)` and\n`consumer.runWithGracefulShutdown` don't exist.\n- Layers were built with `ZLayer { ... make ... }`, which doesn't\ncompile; `ZLayer.scoped` is needed.\n- \"Since zio-kafka 3.9.0\": there is no 3.9.0 release, the feature\nshipped in 4.0.0.\n- `commitTimeout` defaults to 15 s, not 10 s.\n- The metrics page had broken source links, wrong metric types, and said\n`send_queue_size` counts records (it counts batches).\n- The 3.x migration guide described a 550 ms admin delay that later\nreleases removed.\n- A transaction was said to commit whenever its scope closes; it only\ncommits on success.\n\nThere is one commit per page, so each fix can be reviewed on its own.\n\n### After review\n\n- Prose follows the existing naming convention again: \"zio-kafka\", and\n\"Zio-kafka\" at the start of a sentence. \"ZIO Kafka\" stays only in the\nindex and Getting Started titles, the index's opening line and quoted\narticle titles.\n- Tables that only restated the scaladoc are gone: the admin client\noperations, the consumer/producer/admin settings, consumer metadata\nqueries, `CommittableRecord` members, the produce variants and\ncompression levels, the metrics-observer fields/callbacks/boundaries,\nthe testkit helpers and the built-in serdes. Their guidance is kept as\nprose with links to the API docs on javadoc.io, about 320 lines less to\nmaintain. Exact values such as the `tuneFor*` settings are now only in\nthe scaladoc.\n\n### Verification\n\n- `sbt docs/mdoc`: 0 errors (3 harmless \"outer reference\" warnings for\ncase classes defined in mdoc blocks).\n- `sbt docs/generateReadme`: README regenerated and committed.\n- `sbt fmt`, `sbt check`, `sbt lint` (including `mimaCheck`): pass.\n- `git diff origin/master --stat`: `docs/`, `README.md` and one line in\n`build.sbt`.\n- Every page got a second, independent review pass against the source (6\nreviewers). They found 27 more defects, each fixed in a separate commit.\n- A final fact-check of all 25 pages (6 more agents) found 3 small\ndiscrepancies (version history details), also fixed.\n- A member-by-member coverage check of every public type led to the new\nMetrics Observers page and a full rewrite of Serialization and\nDeserialization as a complete reference for `Serde`, `Serializer` and\n`Deserializer`; both were fact-checked clean.\n\n### Library issues found while checking the docs\n\nMost of the issues found while checking these docs against the code were\nfixed in #1819 (released in v4.1.0), and the docs describe the v4.1.0\nbehaviour. Fixed there: the reversed send-queue latency sign, auth\nerrors on the single-record path not being counted, the null\nproducer-diagnostics partition (now `-1`), the missing SSL check in\n`TransactionalProducer`, the misleading SSL error message, silent\ndiagnostics failures, `validateOnly` waits in the admin client, the\n`offsetBatches` alias, the README example topic, the internal\n`PartitionStream` in `FetchStrategy`, the nullable numeric serdes (now\ndocumented, with new `Serde.longOption` etc.), the unclosed wrapped\nKafka serdes (now documented), and several stale scaladocs.\n\nStill open (#1823, not yet merged, fixes items 1 and 4 but not item 3;\nsee the comment on this PR):\n\n1. `consumer/Consumer.scala:550, 582`: the byte-array fast path only\nrecognises `Serde.byteArray` by identity. `Deserializer.byteArray` is a\nseparate instance (each companion mixes in the `Serdes` trait), so it\ndoes not get the fast path. The serdes page says so.\n2. A custom `Offset` implementation cannot build a real `OffsetBatch`:\n`OffsetBatch.apply` calls `offset.batch`, and `OffsetBatchImpl` is\nprivate.\n3. New in v4.1.0 (`producer/Producer.scala`, single-record path ~line\n345 and chunk path ~470-515): the produce continuation calls\n`diagEm.emitSuccess()`/`emitFailures` before `done.succeed`. Since #1819\na dead user `Diagnostics` makes that emit die, so `done` is never\ncompleted and a produce call already waiting for its acknowledgement\nhangs forever (the continuation's result is discarded by\n`runtime.unsafe.run`, line 565). Completing `done` first, or ignoring\nemit failures there, would fix it. The diagnostics page warns about it.\n4. `admin/AdminClient.scala` ~line 876: `incrementalAlterConfigsAsync`\nstill waits for visibility when `validateOnly = true`, unlike the sync\n`incrementalAlterConfigs` (line 854, `.unless(options.validateOnly)`).\n5. `consumer/ConsumerSettings.scala`: `tuneForHighThroughput`,\n`tuneForLowLatency` and `withPartitionPreFetchBufferLimit` replace any\nconfigured `FetchStrategy` with a `QueueSizeBasedFetchStrategy`, so\ncalling them after `withFetchStrategy` silently drops a custom strategy.\nThe consumer-tuning page warns about the call order.\n6. Outside this repo: `zio/zio-quickstarts` (which the tutorial points\nto) still uses zio-kafka 2.10.0, and the v4.0.0 release notes name\n`OffsetBatch#offset`/`nextOffset`, while the real names are\n`offsets`/`nextOffsets`.\n\n### Follow-ups outside this repo\n\n- The zio.dev ecosystem plugin collapses nested categories unless the\nproject is listed in `expandedProjects` (zio/zio\n`website/plugins/zio-ecosystem-docusaurus/index.ts`). The docs go live\nafter a release and a `@zio.dev/zio-kafka` bump.\n\n---\n\n— Written by AI, posted at @khajavi's request.",
+          "timestamp": "2026-11-16T15:07:35+03:30",
+          "tree_id": "29075318f70b46e302237cc0472e150d6fe13e2b",
+          "url": "https://github.com/zio/zio-kafka/commit/8397ae44492d7f36582ec63cd1001645edbeb133"
+        },
+        "date": 1794830132877,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 583.16563382,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 584.1806813,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 64.45560279895098,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 220.43991124000001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeqAsync",
+            "value": 13.006321625866429,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeqAsync",
+            "value": 6.601666688271489,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordPar",
+            "value": 25.41827709844637,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordSeq",
+            "value": 34.94991860007865,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 533.0255438599999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 531.6754643799999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 557.1374795600001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 563.4729872799999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
