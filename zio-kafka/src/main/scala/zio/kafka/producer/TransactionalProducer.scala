@@ -10,6 +10,7 @@ import zio._
 import zio.kafka.consumer.{ Consumer, OffsetBatch }
 import zio.kafka.producer.ProducerLive.NanoTime
 import zio.kafka.producer.metrics.ZioMetricsProducerMetricsObserver
+import zio.kafka.utils.SslHelper
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -86,6 +87,7 @@ object TransactionalProducer {
 
   def make(settings: TransactionalProducerSettings, consumer: Consumer): ZIO[Scope, Throwable, TransactionalProducer] =
     for {
+      _                  <- SslHelper.validateEndpoint(settings.producerSettings.driverSettings)
       _                  <- consumer.consumerSettings.validateForTransactional
       wrappedDiagnostics <- Producer.makeConcurrentDiagnostics(settings.producerSettings.diagnostics)
       rawProducer <- ZIO.acquireRelease(

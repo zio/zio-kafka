@@ -412,7 +412,7 @@ object AdminClient {
         awaitVisible(
           listTopics(),
           (topics: Map[String, TopicListing]) => topicNames.forall(topics.contains)
-        )
+        ).unless(options.exists(_.validateOnly))
     }
 
     override def createTopic(newTopic: NewTopic, validateOnly: Boolean = false): Task[Unit] =
@@ -605,7 +605,7 @@ object AdminClient {
             expectedSizes.forall { case (name, expected) =>
               described.get(name).exists(_.partitions.size >= expected)
             }
-        )
+        ).unless(options.exists(_.validateOnly))
     }
 
     override def listOffsets(
@@ -851,7 +851,7 @@ object AdminClient {
             )
             .all()
         }
-      } <* awaitConfigsVisible(configs, visibilitySleep)
+      } <* awaitConfigsVisible(configs, visibilitySleep).unless(options.validateOnly)
 
     override def incrementalAlterConfigsAsync(
       configs: Map[ConfigResource, Iterable[AlterConfigOp]],
@@ -873,10 +873,8 @@ object AdminClient {
           val ops            = configs.getOrElse(configResource, Iterable.empty)
           (
             configResource,
-            ZIO.fromCompletionStage(kf.toCompletionStage).unit <* awaitConfigsVisible(
-              Map(configResource -> ops),
-              visibilitySleep
-            )
+            ZIO.fromCompletionStage(kf.toCompletionStage).unit <*
+              awaitConfigsVisible(Map(configResource -> ops), visibilitySleep).unless(options.validateOnly)
           )
         }.toMap
       }

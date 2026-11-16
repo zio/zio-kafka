@@ -2,7 +2,6 @@ package zio.kafka.consumer.fetch
 
 import org.apache.kafka.common.TopicPartition
 import zio.kafka.ZIOSpecDefaultSlf4j
-import zio.kafka.consumer.internal.PartitionStream
 import zio.test.{ assertTrue, Spec, TestEnvironment }
 import zio._
 

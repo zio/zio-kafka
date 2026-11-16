@@ -27,7 +27,7 @@ final case class ProducerMetrics(
 
   produceCallsCounter: MetricInfo.Counter = MetricInfo.Counter(
     "ziokafka_producer_calls",
-    "The number of times a produce method is invoked."
+    "The number of times a produce method succeeded."
   ),
   produceLatencyHistogram: MetricInfo.Histogram[Duration] = MetricInfo.Histogram[Duration](
     "ziokafka_producer_latency_seconds",
@@ -51,7 +51,7 @@ final case class ProducerMetrics(
 
   sendQueueSizeHistogram: MetricInfo.Histogram[Int] = MetricInfo.Histogram[Int](
     "ziokafka_producer_send_queue_size",
-    "The number of records in the zio-kafka send queue.",
+    "The number of record batches in the zio-kafka send queue.",
     ProducerMetrics.defaultSendQueueSizeBoundaries
   ),
   sendQueueLatencyHistogram: MetricInfo.Histogram[Duration] = MetricInfo.Histogram[Duration](

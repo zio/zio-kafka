@@ -255,7 +255,7 @@ object Consumer {
   val collectOffsets: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] =
     ZSink.foldLeft[Offset, OffsetBatch](OffsetBatch.empty)(_ add _)
 
-  /** Use `collectOffsets` instead. */
+  /** Alias for `collectOffsets`. */
   val offsetBatches: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch] = collectOffsets
 
   /**
@@ -345,9 +345,9 @@ object Consumer {
    * val settings: ConsumerSettings = ???
    * val subscription = Subscription.Topics(Set("my-kafka-topic"))
    *
-   * val consumerIO = Consumer.consumeWith(settings, subscription, Serdes.string, Serdes.string) { record =>
+   * val consumerIO = Consumer.consumeWith(settings, subscription, Serde.string, Serde.string) { record =>
    *   // Process the received record here
-   *   putStrLn(s"Received record: \${record.key()}: \${record.value()}")
+   *   Console.printLine(s"Received record: \${record.key()}: \${record.value()}")
    * }
    * }}}
    *
@@ -365,9 +365,9 @@ object Consumer {
    *   Function that returns the effect to execute for each message. It is passed the
    *   [[org.apache.kafka.clients.consumer.ConsumerRecord]].
    * @tparam R
-   *   Environment for the consuming effect
-   * @tparam R1
    *   Environment for the deserializers
+   * @tparam R1
+   *   Environment for the consuming effect
    * @tparam K
    *   Type of keys (an implicit `Deserializer` should be in scope)
    * @tparam V
@@ -547,7 +547,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
-    val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
+    val onlyByteArraySerdes: Boolean = isOnlyByteArraySerdes(keyDeserializer, valueDeserializer)
 
     ZStream.unwrapScoped {
       for {
@@ -579,7 +579,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     Throwable,
     Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
   ]] = {
-    val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
+    val onlyByteArraySerdes: Boolean = isOnlyByteArraySerdes(keyDeserializer, valueDeserializer)
     for {
       streamControl <- runloopAccess.subscribe(subscription)
     } yield streamControl.map(
@@ -596,6 +596,12 @@ private[consumer] final class ConsumerLive private[consumer] (
       }
     )
   }
+
+  private def isOnlyByteArraySerdes[V, K, R](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ) =
+    (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
 
   override def partitionedStream[R, K, V](
     subscription: Subscription,

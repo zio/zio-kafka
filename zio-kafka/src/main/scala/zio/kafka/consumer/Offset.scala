@@ -34,7 +34,7 @@ trait Offset {
 
   /**
    * Attempts to commit and retries according to the given policy when the commit fails with a
-   * RetriableCommitFailedException
+   * RetriableCommitFailedException or commit timeout.
    */
   final def commitOrRetry[R](policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
     Offset.commitOrRetry(commit, policy)

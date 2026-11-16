@@ -126,7 +126,7 @@ final case class ProducerSettings(
    * a producer-id that can be used as a label:
    *
    * {{{
-   *   producerSettings.withMetricLabels(Set(MetricLabel("producer-id", producerId)))
+   *   producerSettings.withMetricsLabels(Set(MetricLabel("producer-id", producerId)))
    * }}}
    *
    * This setting is ignored when an alternative [[ProducerSettings.withMetricsObserver metrics observer]] is set.

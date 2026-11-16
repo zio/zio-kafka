@@ -22,12 +22,17 @@ sealed trait ProducerEvent
  */
 object ProducerEvent {
 
+  /** Partition id for records with unspecified target partition. */
+  val NoPartition = -1
+
   /** Record value length for records that have no value. */
   val NoValue = -1
 
   /**
    * Represents key data about a record that was handled by the producer.
    *
+   * @param partition
+   *   the partition to which the record will be sent, or [[NoPartition]] (`-1`) if no partition was specified
    * @param size
    *   the size of the record's value in bytes, or [[NoValue]] (`-1`) when the record has no value
    */
