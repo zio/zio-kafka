@@ -363,15 +363,17 @@ def settings(store: OffsetStore): ConsumerSettings =
 def consumeWithExternalCommits(consumer: Consumer, store: OffsetStore): Task[Unit] =
   consumer
     .plainStream(Subscription.topics("my-topic"), Serde.string, Serde.string)
-    .mapZIO { record =>
-      val next = record.nextOffset
-      store.save(record.offset.topicPartition, OffsetEpoch(next.offset(), next.leaderEpoch().toScala.map(_.intValue))) *>
-        consumer.registerExternalCommits(OffsetBatch(record.offset))
+    .mapChunksZIO { records =>
+      // Process the records here, then store the highest next offset per partition once per chunk.
+      val batch = OffsetBatch(records.map(_.offset))
+      ZIO.foreachDiscard(batch.nextOffsets) { case (tp, next) =>
+        store.save(tp, OffsetEpoch(next.offset(), next.leaderEpoch().toScala.map(_.intValue)))
+      } *> consumer.registerExternalCommits(batch).as(records)
     }
     .runDrain
 ```
 
-In a real program, save the offset in the same database transaction as the processing results.
+The example stores and registers offsets once per chunk instead of once per record. In a real program, save the offsets in the same database transaction as the processing results.
 
 ## Transactional Commits
 
