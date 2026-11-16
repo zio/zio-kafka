@@ -90,7 +90,58 @@ val settings = ConsumerSettings(List("localhost:9092"))
   )
 ```
 
-You can also write a custom `FetchStrategy`.
+You can also write a custom `FetchStrategy`, see [Writing a Custom Fetch Strategy](#writing-a-custom-fetch-strategy).
+
+## Writing a Custom Fetch Strategy
+
+A fetch strategy decides, before every poll, which partitions may receive records. It implements a single method:
+
+```scala
+package zio.kafka.consumer.fetch
+
+trait FetchStrategy {
+  def selectPartitionsToFetch(streams: Chunk[PartitionStream]): ZIO[Any, Nothing, Set[TopicPartition]]
+}
+
+abstract class PartitionStream {
+  def tp: TopicPartition
+  def queueSize: UIO[Int]
+}
+```
+
+The consumer passes one `PartitionStream` for every partition stream that has not ended. `PartitionStream#tp` is the Kafka `TopicPartition` of the stream, and `PartitionStream#queueSize` is the number of records that are buffered for it and not yet pulled by your program. The consumer resumes the partitions in the returned set and pauses all other assigned partitions for the next poll.
+
+A paused partition receives no records, even when its stream is waiting for them, so make sure every partition is selected again eventually. The built-in strategies select a partition whenever its queue size is at or below a limit, which always includes partitions with an empty queue. The method runs before every poll, so keep it fast.
+
+The following strategy gives one topic a larger buffer than the others, so that its partitions keep more records ready:
+
+```scala mdoc:compile-only
+import org.apache.kafka.common.TopicPartition
+import zio._
+import zio.kafka.consumer.ConsumerSettings
+import zio.kafka.consumer.fetch.{ FetchStrategy, PartitionStream }
+
+final case class PriorityTopicFetchStrategy(
+  priorityTopic: String,
+  priorityLimit: Int = 4096,
+  defaultLimit: Int = 256
+) extends FetchStrategy {
+  override def selectPartitionsToFetch(streams: Chunk[PartitionStream]): ZIO[Any, Nothing, Set[TopicPartition]] =
+    ZIO
+      .filter(streams) { stream =>
+        val limit = if (stream.tp.topic() == priorityTopic) priorityLimit else defaultLimit
+        stream.queueSize.map(_ <= limit)
+      }
+      .map(_.map(_.tp).toSet)
+}
+
+val settings: ConsumerSettings =
+  ConsumerSettings(List("localhost:9092"))
+    .withGroupId("orders-service")
+    .withFetchStrategy(PriorityTopicFetchStrategy(priorityTopic = "payments"))
+```
+
+`PartitionStream` is part of the public API since zio-kafka 4.1.0; in earlier versions, a custom fetch strategy had to depend on an internal type.
 
 ## Long-running processes / slow consumers
 
