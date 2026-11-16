@@ -59,7 +59,7 @@ val highThroughputSettings = ConsumerSettings(bootstrapServers).tuneForHighThrou
 val lowLatencySettings = ConsumerSettings(bootstrapServers).tuneForLowLatency
 ```
 
-Currently, `ConsumerSettings#tuneForHighThroughput` sets `pollTimeout` to `500ms`, `max.poll.records` to `2000` and `partitionPreFetchBufferLimit` to `4096`, while `ConsumerSettings#tuneForLowLatency` sets them to `50ms`, `100` and `512`. Both methods replace the configured `FetchStrategy` with a `QueueSizeBasedFetchStrategy`, and so does `ConsumerSettings#withPartitionPreFetchBufferLimit`. Call them before `ConsumerSettings#withFetchStrategy`, otherwise a custom fetch strategy is silently discarded.
+The scaladoc of `ConsumerSettings#tuneForHighThroughput` and `ConsumerSettings#tuneForLowLatency` lists the exact values they set. Both methods replace the configured `FetchStrategy` with a `QueueSizeBasedFetchStrategy`, and so does `ConsumerSettings#withPartitionPreFetchBufferLimit`. Call them before `ConsumerSettings#withFetchStrategy`, otherwise a custom fetch strategy is silently discarded.
 
 ## Small and large records
 
