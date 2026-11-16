@@ -223,7 +223,7 @@ The following strategy can help you get to this state:
 3. Observe metric `ziokafka_consumer_queue_polls` which gives the number of polls during which records are idling in
    the queue.
 4. Increase `partitionPreFetchBufferLimit` in steps until most measurements of the `ziokafka_consumer_queue_polls`
-   histogram are in the lowest bucket (`le="1.0"`; zio-metrics ignores the `0` bucket boundary).
+   histogram are in the lowest bucket (`le="1.0"`; zio-metrics ignores the `0` bucket boundary, so this bucket counts both 0 and 1 idle polls).
 
 During this process, it is useful to observe metric `ziokafka_consumer_queue_size` (number of records in the queues) to
 see if the queues are indeed increasing in size.
