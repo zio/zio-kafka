@@ -81,61 +81,9 @@ When you are done, `docker compose down` stops and removes the container.
 
 ## Writing a Producer and a Consumer
 
-The following application produces a record with a random number every two seconds, and at the same time consumes those records, prints them and commits their offsets:
+The following application, one of the examples in the zio-kafka repository, produces a record with a random number every two seconds, and at the same time consumes those records, prints them and commits their offsets:
 
-```scala mdoc:compile-only
-import zio._
-import zio.kafka.consumer._
-import zio.kafka.producer.{ Producer, ProducerSettings }
-import zio.kafka.serde._
-import zio.stream.ZStream
-
-object GettingStartedApp extends ZIOAppDefault {
-
-  private val producerRun: ZIO[Any, Throwable, Unit] =
-    ZIO.scoped {
-      for {
-        producer <-
-          Producer.make(
-            ProducerSettings(List("localhost:9092"))
-          )
-        _ <- ZStream
-          .fromSchedule(Schedule.fixed(2.seconds))
-          .mapZIO(_ => Random.nextIntBetween(0, Int.MaxValue))
-          .mapZIO { random =>
-            producer.produce[Any, Long, String](
-              topic = "random",
-              key = (random % 4).toLong,
-              value = random.toString,
-              keySerializer = Serde.long,
-              valueSerializer = Serde.string
-            )
-          }
-          .runDrain
-      } yield ()
-    }
-
-  private val consumerRun: ZIO[Any, Throwable, Unit] =
-    ZIO.scoped {
-      for {
-        consumer <-
-          Consumer.make(
-            ConsumerSettings(List("localhost:9092"))
-              .withGroupId("group")
-          )
-        _ <- consumer
-          .plainStream(Subscription.topics("random"), Serde.long, Serde.string)
-          .tap(r => Console.printLine(r.value))
-          .map(_.offset)
-          .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis))
-          .mapZIO(_.commit)
-          .runDrain
-      } yield ()
-    }
-
-  override def run: ZIO[Any, Throwable, Unit] =
-    ZIO.raceFirst(producerRun, List(consumerRun))
-}
+```scala mdoc:embed:zio-kafka-example/src/main/scala/zio/kafka/example/ReadmeExample.scala
 ```
 
 Run it with `sbt run`. After a few seconds, the consumer prints a new random number every two seconds. Stop the program with `Ctrl+C`.
@@ -148,13 +96,13 @@ The application has two independent parts, a producer and a consumer, that both 
 
 `Producer.make` creates a `Producer` from a `ProducerSettings`. It needs a `Scope`: when the scope closes, the producer is closed and disconnects from Kafka. `ZIO.scoped` provides that scope and closes it when `producerRun` ends.
 
-`ZStream.fromSchedule` emits an element every two seconds. For each element, we draw a random number and call `Producer#produce` to send a record to the `random` topic. Kafka stores keys and values as bytes, so `Producer#produce` takes a serializer for the key and one for the value. Here the key is a `Long` (the random number modulo 4) and the value is a `String`, so we use the built-in `Serde.long` and `Serde.string`. `Producer#produce` completes when the broker has acknowledged the record. The broker creates the `random` topic automatically the first time a record is sent to it, because Kafka brokers allow automatic topic creation by default.
+`ZStream.fromSchedule` emits an element every two seconds. For each element, we draw a random number and call `Producer#produce` to send a record to the `random-topic` topic. Kafka stores keys and values as bytes, so `Producer#produce` takes a serializer for the key and one for the value. Here the key is a `Long` (the random number modulo 4) and the value is a `String`, so we use the built-in `Serde.long` and `Serde.string`. `Producer#produce` completes when the broker has acknowledged the record. The broker creates the `random-topic` topic automatically the first time a record is sent to it, because Kafka brokers allow automatic topic creation by default.
 
 ### The Consumer
 
 `Consumer.make` creates a `Consumer` from a `ConsumerSettings`. Like the producer, it lives as long as its `Scope`. `ConsumerSettings#withGroupId` sets the consumer group: consumers in the same group share the partitions of a topic, and Kafka remembers per group which records were already processed.
 
-`Consumer#plainStream` subscribes to the `random` topic and returns a `ZStream` of `CommittableRecord`s, with keys and values deserialized by `Serde.long` and `Serde.string`. For each record we print the value, then keep only its offset (`CommittableRecord#offset`).
+`Consumer#plainStream` subscribes to the `random-topic` topic and returns a `ZStream` of `CommittableRecord`s, with keys and values deserialized by `Serde.long` and `Serde.string`. For each record we print the value, then keep only its offset (`CommittableRecord#offset`).
 
 Committing an offset tells Kafka that the group has processed the record, so it is not delivered to this group again after a restart. Committing every record separately is slow, so `ZStream#aggregateAsyncWithin` with the `Consumer.collectOffsets` sink merges the offsets into an `OffsetBatch` every 100 milliseconds, and `OffsetBatch#commit` commits each batch in one call.
 
