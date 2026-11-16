@@ -176,45 +176,7 @@ val settings: ConsumerSettings =
     .withProperty("fetch.min.bytes", "1024")
 ```
 
-### Identity and Kafka Properties
-
-These methods set Kafka client properties. Any Kafka consumer property can be set with `ConsumerSettings#withProperty` or `ConsumerSettings#withProperties`:
-
-| Method                               | Kafka property         | Notes                                                                                                                  |
-| ------------------------------------ | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `ConsumerSettings(bootstrapServers)` | `bootstrap.servers`    | Also available as `withBootstrapServers(servers)`.                                                                     |
-| `withGroupId(groupId)`               | `group.id`             | Needed for `Topics` and `Pattern` subscriptions and for committing to Kafka. A `Manual` subscription works without it. |
-| `withClientId(clientId)`             | `client.id`            | Shows up in broker logs and client metrics.                                                                            |
-| `withGroupInstanceId(id)`            | `group.instance.id`    | Enables static group membership.                                                                                       |
-| `withMaxPollRecords(n)`              | `max.poll.records`     | Kafka's default is 500.                                                                                                |
-| `withMaxPollInterval(duration)`      | `max.poll.interval.ms` | Kafka's default is 5 minutes.                                                                                          |
-| `withReadCommitted(readCommitted)`   | `isolation.level`      | `true` (the parameter's default) reads only committed transactional records. Kafka's own default reads all records.    |
-| `withCredentials(store)`             | security properties    | Adds the properties of a `KafkaCredentialStore`; see [Security](security.md).                                          |
-| `withProperty(key, value)`           | any                    | `withProperties(kvs*)` and `withProperties(map)` add several at once.                                                  |
-
-### zio-kafka Settings
-
-These settings control zio-kafka itself. The defaults below are the values from `ConsumerSettings`' constructor:
-
-| Method                                 | Default                                             | What it controls                                                                                                                   |
-| -------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `withPollTimeout(duration)`            | 50 ms                                               | Maximum time one poll blocks waiting for records.                                                                                  |
-| `withCommitTimeout(duration)`          | 15 seconds                                          | Maximum time zio-kafka waits for a commit; a commit that takes longer fails with `Consumer.CommitTimeout`.                         |
-| `withCloseTimeout(duration)`           | 30 seconds                                          | Maximum time to wait for the Kafka consumer to close.                                                                              |
-| `withOffsetRetrieval(retrieval)`       | `OffsetRetrieval.Auto(AutoOffsetStrategy.Latest)`   | Where a newly assigned partition starts consuming. Also sets Kafka's `auto.offset.reset`.                                          |
-| `withRebalanceSafeCommits(value)`      | `false`                                             | Holds up a rebalance until consumed records of revoked partitions are committed.                                                   |
-| `withMaxRebalanceDuration(duration)`   | 3/5 of `max.poll.interval.ms` (3 minutes)           | Upper bound on how long rebalance-safe commits hold up a rebalance.                                                                |
-| `withMaxStreamPullInterval(duration)`  | `max.poll.interval.ms`                              | How long a partition stream may go without pulling records before zio-kafka fails it and shuts down the consumer.                  |
-| `withRebalanceListener(listener)`      | `RebalanceListener.noop`                            | Your callbacks for partition assignment changes; see [Rebalance Listener](#rebalance-listener).                                    |
-| `withPartitionPreFetchBufferLimit(n)`  | 1024                                                | Per-partition pre-fetch buffer; `withoutPartitionPreFetching` sets it to 0. `withFetchStrategy` replaces the whole fetch strategy, see [Writing a Custom Fetch Strategy](consumer-tuning.md#writing-a-custom-fetch-strategy). |
-| `tuneForHighThroughput`                | —                                                   | Sets poll timeout 500 ms, `max.poll.records` 2000 and pre-fetch limit 4096.                                                        |
-| `tuneForLowLatency`                    | —                                                   | Sets poll timeout 50 ms, `max.poll.records` 100 and pre-fetch limit 512.                                                           |
-| `withAuthErrorRetrySchedule(schedule)` | `Schedule.recurs(5) && Schedule.spaced(500.millis)` | Retries of polls that fail with an authorization or authentication error.                                                          |
-| `withEmptyPollCountToMetaRefresh(n)`   | disabled                                            | Probes for silent authorization failures after `n` empty polls of a topic.                                                         |
-| `withMetricsLabels(labels)`            | no labels                                           | Labels added to every zio-kafka consumer metric.                                                                                   |
-| `withMetricsObserver(observer)`        | zio-metrics based observer                          | Replaces how metrics are collected; `ConsumerMetricsObserver.NoOp` disables them.                                                  |
-| `withRunloopMetricsSchedule(schedule)` | `Schedule.fixed(500.millis)`                        | How often queue sizes and similar runloop metrics are measured.                                                                    |
-| `withDiagnostics(diagnostics)`         | `Consumer.NoDiagnostics`                            | A callback receiving consumer life-cycle events; see [Diagnostics](diagnostics.md).                                                |
+Any Kafka consumer property can be set with `ConsumerSettings#withProperty` or `ConsumerSettings#withProperties`; the common ones, such as `group.id`, `client.id`, `max.poll.records` and `isolation.level`, also have their own `with*` method. A group id is needed for `Topics` and `Pattern` subscriptions and for committing to Kafka; a `Manual` subscription works without it. The other settings control zio-kafka itself, for example the poll and commit timeouts, the offset retrieval strategy (by default `OffsetRetrieval.Auto(AutoOffsetStrategy.Latest)`, so a partition without a committed offset starts at its end), rebalance-safe commits, pre-fetching, metrics and diagnostics. For every setting and its default, see the [`ConsumerSettings` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/consumer/ConsumerSettings.html).
 
 Related pages explain when to change these settings: [consumer tuning](consumer-tuning.md) for poll, pre-fetch and slow-consumer settings, [partition assignment and offset retrieval](partition-assignment-and-offset-retrieval.md) for `OffsetRetrieval`, [preventing duplicates](preventing-duplicates.md) for rebalance-safe commits, [detecting authorization failures](detecting-authorization-failures.md) for the authorization settings, and [metrics](metrics.md) for the metrics settings.
 
@@ -412,39 +374,7 @@ To end a single subscription and leave the others running, use the `StreamContro
 
 ## Querying Metadata and Offsets
 
-The `Consumer` forwards a set of read-only queries to the Kafka consumer, converting Java collections to Scala ones. Every query that takes a `timeout` defaults to `Duration.Infinity`. The queries share the Kafka consumer with the polling loop, so each one waits until the current poll completes:
-
-```scala
-trait Consumer {
-  val consumerSettings: ConsumerSettings
-  def assignment: Task[Set[TopicPartition]]
-  def subscription: Task[Set[String]]
-  def committed(partitions: Set[TopicPartition], timeout: Duration = Duration.Infinity): Task[Map[TopicPartition, Option[OffsetAndMetadata]]]
-  def beginningOffsets(partitions: Set[TopicPartition], timeout: Duration = Duration.Infinity): Task[Map[TopicPartition, Long]]
-  def endOffsets(partitions: Set[TopicPartition], timeout: Duration = Duration.Infinity): Task[Map[TopicPartition, Long]]
-  def offsetsForTimes(timestamps: Map[TopicPartition, Long], timeout: Duration = Duration.Infinity): Task[Map[TopicPartition, OffsetAndTimestamp]]
-  def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): Task[Long]
-  def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]]
-  def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): Task[List[PartitionInfo]]
-  def metrics: Task[Map[MetricName, Metric]]
-}
-```
-
-The queries answer these questions:
-
-| Query              | Returns                                                                                                                                          |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `consumerSettings` | The settings used to create this consumer.                                                                                                       |
-| `assignment`       | The partitions currently assigned to this consumer. It changes on every rebalance, unless the subscription is `Manual`.                          |
-| `subscription`     | The topic names the Kafka consumer is subscribed to.                                                                                             |
-| `committed`        | The last committed offset per partition, or `None` when the group has not committed for that partition.                                          |
-| `beginningOffsets` | The first available offset per partition.                                                                                                        |
-| `endOffsets`       | The offset after the last record per partition.                                                                                                  |
-| `offsetsForTimes`  | Per partition, the earliest offset whose timestamp is at or after the given timestamp. Partitions without such a record are left out of the map. |
-| `position`         | The offset of the next record the Kafka consumer fetches for an assigned partition.                                                              |
-| `listTopics`       | All topics the client may see, with their partitions.                                                                                            |
-| `partitionsFor`    | The partitions of one topic; empty when Kafka returns no partition information for it.                                                           |
-| `metrics`          | The Kafka client's own metrics. For zio-kafka's metrics, see [metrics](metrics.md).                                                              |
+The `Consumer` forwards a set of read-only queries to the Kafka consumer, converting Java collections to Scala ones: `Consumer#assignment`, `Consumer#subscription`, `Consumer#committed`, `Consumer#beginningOffsets`, `Consumer#endOffsets`, `Consumer#offsetsForTimes`, `Consumer#position`, `Consumer#listTopics`, `Consumer#partitionsFor` and `Consumer#metrics` (the Kafka client's own metrics; for zio-kafka's metrics, see [metrics](metrics.md)). Every query that takes a `timeout` defaults to `Duration.Infinity`. The queries share the Kafka consumer with the polling loop, so each one waits until the current poll completes. `Consumer#committed` returns `None` for a partition the group has not committed, and `Consumer#offsetsForTimes` leaves out partitions that have no record at or after the given timestamp. For the signatures, see the [`Consumer` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/consumer/Consumer.html).
 
 Except for `Consumer#position`, the queries do not need the partitions to be assigned to this consumer, so they also work for monitoring. To compute the lag of a consumer group per partition:
 
@@ -552,16 +482,7 @@ final case class CommittableRecord[K, V](
 }
 ```
 
-The fields and accessors give you the record's data and its position:
-
-| Member                                                | Description                                                                                                                                                       |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `key`, `value`                                        | The deserialized key and value.                                                                                                                                   |
-| `partition`, `timestamp`                              | The record's partition number and timestamp.                                                                                                                      |
-| `record`                                              | The underlying Kafka `ConsumerRecord`. Use it for everything else, such as `record.topic()`, `record.headers()` and `record.leaderEpoch()`.                       |
-| `offset`                                              | The record's `Offset`: `offset.offset` is the consumed offset, and `offset.commit` commits it.                                                                    |
-| `nextOffset`                                          | The offset a consumer should resume from after this record. It is usually the record's offset + 1; for the last record of a partition in a poll it is the next offset Kafka reports, which is larger when transaction control records follow the record. |
-| `deserializeWith(keyDeserializer, valueDeserializer)` | Deserializes a record of raw bytes, keeping the headers.                                                                                                          |
+Besides `key`, `value`, `partition` and `timestamp`, use `record`, the underlying Kafka `ConsumerRecord`, for everything else, such as `record.topic()` and `record.leaderEpoch()`. `offset.offset` is the consumed offset, and `offset.commit` commits it. `nextOffset` is the offset a consumer should resume from after this record: usually the record's offset + 1, but for the last record of a partition in a poll it is the next offset Kafka reports, which is larger when transaction control records follow the record. For every member, see the [`CommittableRecord` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/consumer/CommittableRecord.html).
 
 The headers of a record are only available through `record.headers()`; see [record headers](record-headers.md). How `offset` and `nextOffset` relate to committing is explained in [Offsets and Committing](offsets-and-committing.md).
 
