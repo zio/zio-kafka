@@ -224,8 +224,19 @@ lazy val docs = project
   .settings(
     moduleName := "zio-kafka-docs",
     // Reset scala options, warning are okay in the docs
-    scalacOptions                              := Seq("--encoding", "utf8", "--feature"),
-    projectName                                := "ZIO Kafka",
+    scalacOptions := Seq("--encoding", "utf8", "--feature"),
+    projectName   := "ZIO Kafka",
+    readmeBanner := {
+      val logoBase = "https://raw.githubusercontent.com/zio/zio-kafka/master/brand"
+      // <picture> lets GitHub swap the logo per theme: the light logo's wordmark is near-black,
+      // which would be invisible on GitHub's dark canvas without the dark variant.
+      s"""|
+          |<picture>
+          |  <source media="(prefers-color-scheme: dark)" srcset="$logoBase/zio-kafka-logo-dark.svg">
+          |  <img alt="ZIO Kafka" src="$logoBase/zio-kafka-logo-light.svg" width="520">
+          |</picture>
+          |""".stripMargin
+    },
     mainModuleName                             := (zioKafka / moduleName).value,
     projectStage                               := ProjectStage.ProductionReady,
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioKafka),
