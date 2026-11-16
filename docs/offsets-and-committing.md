@@ -82,7 +82,7 @@ For most records `Offset#nextOffset` is `Offset#offset + 1`. For the last record
 trait Offset {
   def topic: String
   def partition: Int
-  def topicPartition: TopicPartition
+  lazy val topicPartition: TopicPartition
   def leaderEpoch: java.util.Optional[Integer]
 
   def offset: Long
