@@ -18,6 +18,44 @@ import java.util.UUID
  */
 
 private[zio] trait Serdes {
+  def longOption: Serde[Any, Option[Long]]     = Serdes.longOption
+  def intOption: Serde[Any, Option[Int]]       = Serdes.intOption
+  def shortOption: Serde[Any, Option[Short]]   = Serdes.shortOption
+  def floatOption: Serde[Any, Option[Float]]   = Serdes.floatOption
+  def doubleOption: Serde[Any, Option[Double]] = Serdes.doubleOption
+
+  /** $simplePrimitiveDeserialization */
+  def long: Serde[Any, Long] = Serdes.long
+
+  /** $simplePrimitiveDeserialization */
+  def int: Serde[Any, Int] = Serdes.int
+
+  /** $simplePrimitiveDeserialization */
+  def short: Serde[Any, Short] = Serdes.short
+
+  /** $simplePrimitiveDeserialization */
+  def float: Serde[Any, Float] = Serdes.float
+
+  /** $simplePrimitiveDeserialization */
+  def double: Serde[Any, Double] = Serdes.double
+
+  /** $nullDeserialization */
+  def string: Serde[Any, String] = Serdes.string
+
+  /** $nullDeserialization */
+  def bytes: Serde[Any, Bytes] = Serdes.bytes
+
+  /** $nullDeserialization */
+  def byteBuffer: Serde[Any, ByteBuffer] = Serdes.byteBuffer
+
+  /** $nullDeserialization */
+  def uuid: Serde[Any, UUID] = Serdes.uuid
+
+  /** $nullDeserialization */
+  def byteArray: Serde[Any, Array[Byte]] = Serdes.byteArray
+}
+
+private[zio] object Serdes {
   val longOption: Serde[Any, Option[Long]] =
     inmapOption(convertPrimitiveSerde(KafkaSerdes.Long()), Long2long, long2Long)
   val intOption: Serde[Any, Option[Int]] =
@@ -29,31 +67,15 @@ private[zio] trait Serdes {
   val doubleOption: Serde[Any, Option[Double]] =
     inmapOption(convertPrimitiveSerde(KafkaSerdes.Double()), Double2double, double2Double)
 
-  /** $simplePrimitiveDeserialization */
-  val long: Serde[Any, Long] = convertPrimitiveSerde(KafkaSerdes.Long()).inmap(Long2long)(long2Long)
-
-  /** $simplePrimitiveDeserialization */
-  val int: Serde[Any, Int] = convertPrimitiveSerde(KafkaSerdes.Integer()).inmap(Integer2int)(int2Integer)
-
-  /** $simplePrimitiveDeserialization */
-  val short: Serde[Any, Short] = convertPrimitiveSerde(KafkaSerdes.Short()).inmap(Short2short)(short2Short)
-
-  /** $simplePrimitiveDeserialization */
-  val float: Serde[Any, Float] = convertPrimitiveSerde(KafkaSerdes.Float()).inmap(Float2float)(float2Float)
-
-  /** $simplePrimitiveDeserialization */
+  val long: Serde[Any, Long]     = convertPrimitiveSerde(KafkaSerdes.Long()).inmap(Long2long)(long2Long)
+  val int: Serde[Any, Int]       = convertPrimitiveSerde(KafkaSerdes.Integer()).inmap(Integer2int)(int2Integer)
+  val short: Serde[Any, Short]   = convertPrimitiveSerde(KafkaSerdes.Short()).inmap(Short2short)(short2Short)
+  val float: Serde[Any, Float]   = convertPrimitiveSerde(KafkaSerdes.Float()).inmap(Float2float)(float2Float)
   val double: Serde[Any, Double] = convertPrimitiveSerde(KafkaSerdes.Double()).inmap(Double2double)(double2Double)
-
-  /** $nullDeserialization */
   val string: Serde[Any, String] = convertPrimitiveSerde(KafkaSerdes.String())
-
-  /** $nullDeserialization */
-  val bytes: Serde[Any, Bytes] = convertPrimitiveSerde(KafkaSerdes.Bytes())
-
-  /** $nullDeserialization */
+  val bytes: Serde[Any, Bytes]   = convertPrimitiveSerde(KafkaSerdes.Bytes())
   val byteBuffer: Serde[Any, ByteBuffer] = convertPrimitiveSerde(KafkaSerdes.ByteBuffer())
 
-  /** $nullDeserialization */
   val uuid: Serde[Any, UUID] = convertPrimitiveSerde(KafkaSerdes.UUID())
 
   /**

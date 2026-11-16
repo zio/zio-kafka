@@ -343,7 +343,7 @@ private[producer] final class ProducerLive(
               for {
                 end <- Clock.nanoTime
                 _   <- producerMetrics.observeProduce((end - startNanos).nanos, 1)
-                _   <- diagEm.emitSuccess()
+                _   <- diagEm.emitSuccess(done)
                 _   <- done.succeed(recordMetaData)
               } yield ()
             case Left(error @ (_: AuthorizationException | _: AuthenticationException)) =>
@@ -351,11 +351,11 @@ private[producer] final class ProducerLive(
                 driver
                   .next(retryAfterAuthException)
                   .foldZIO(
-                    _ => diagEm.emitSingleFailure() *> done.fail(error).unit, // schedule say "no"
-                    _ => loop(startNanos, done, driver).unit                  // start retry
+                    _ => diagEm.emitSingleFailure(done) *> done.fail(error).unit, // schedule say "no"
+                    _ => loop(startNanos, done, driver).unit                      // start retry
                   )
             case Left(error) =>
-              diagEm.emitSingleFailure() *> done.fail(error).unit
+              diagEm.emitSingleFailure(done) *> done.fail(error).unit
           }
         }
 
@@ -468,17 +468,20 @@ private[producer] final class ProducerLive(
           val continuation: Chunk[Either[Throwable, RecordMetadata]] => UIO[Unit] = { results =>
             if (results.forall(_.isRight)) {
               // All records were successfully published, we're done
-              observeProduce(startNanos) *>
-                diagEm.emitSuccess() *> {
+              for {
+                _ <- observeProduce(startNanos)
+                _ <- diagEm.emitSuccess(done)
+                _ <- {
                   if (recordIndices.size == totalRecordCount) {
                     // Optimization (not allocating `finalResults`) for when everything goes well first time
-                    done.succeed(results).unit
+                    done.succeed(results)
                   } else {
                     // Copy results of this attempt to the final results
                     storeResults(recordIndices, results)
                     complete(done)
                   }
                 }
+              } yield ()
             } else {
               // Copy results of this attempt to the final results
               storeResults(recordIndices, results)
@@ -491,7 +494,7 @@ private[producer] final class ProducerLive(
                 case _ => true
               }
               if (hasFatalError) {
-                diagEm.emitFailures(finalResults) *> complete(done)
+                diagEm.emitFailures(finalResults, done) *> complete(done)
               } else {
                 producerMetrics.observeSendAuthError(
                   results.count {
@@ -503,7 +506,7 @@ private[producer] final class ProducerLive(
                   driver
                     .next(retryAfterAuthException)
                     .foldZIO(
-                      _ => diagEm.emitFailures(finalResults) *> complete(done), // Schedule says no
+                      _ => diagEm.emitFailures(finalResults, done) *> complete(done), // Schedule says no
                       _ => retryFailedRecords(results)
                     )
               }
@@ -639,21 +642,38 @@ private[producer] final class ProducerLive(
     }
   }
 
+  // Developer notes
+  // ---------------
+  // The methods in the BatchDiagnosticsEmitter all potentially invoke a user's Diagnostics implementation. When that
+  // Diagnostics throws or dies we want the failure to propagate. This is an issue when the diagnostics is invoked
+  // inside the producer's continuation as the continuation is called from inside the kafka callback. We fix this by
+  // failing the `done` promise directly. `emitOffer` is not called from the continuation and does not need this
+  // protection.
+  //
   private class BatchDiagnosticsEmitter(batchId: Long, producedRecords: Chunk[ProducerEvent.ProducedRecord])
       extends DiagnosticsEmitter {
     override def emitOffer(): ZIO[Any, Nothing, Unit] =
       diagnostics.emit(ProducerEvent.RecordsOffered(batchId, producedRecords))
 
-    override def emitSuccess(): ZIO[Any, Nothing, Unit] =
-      diagnostics.emit(ProducerEvent.RecordsSent(batchId, producedRecords, Set.empty))
+    override def emitSuccess[A, B](done: Promise[A, B]): ZIO[Any, Nothing, Unit] =
+      diagnostics
+        .emit(ProducerEvent.RecordsSent(batchId, producedRecords, Set.empty))
+        .foldCauseZIO(c => done.failCause(c) *> ZIO.refailCause(c), _ => ZIO.unit)
 
-    override def emitSingleFailure(): ZIO[Any, Nothing, Unit] =
-      diagnostics.emit(ProducerEvent.RecordsSent(batchId, producedRecords, set0))
+    override def emitSingleFailure[A, B](done: Promise[A, B]): ZIO[Any, Nothing, Unit] =
+      diagnostics
+        .emit(ProducerEvent.RecordsSent(batchId, producedRecords, set0))
+        .foldCauseZIO(c => done.failCause(c) *> ZIO.refailCause(c), _ => ZIO.unit)
 
-    override def emitFailures(finalResults: Array[_ <: Either[_, _]]): ZIO[Any, Nothing, Unit] = {
+    override def emitFailures[A, B](
+      finalResults: Array[_ <: Either[_, _]],
+      done: Promise[A, B]
+    ): ZIO[Any, Nothing, Unit] = {
       val failed     = BitSet.empty ++ finalResults.zipWithIndex.filter(_._1.isLeft).map(_._2)
       val recordSent = ProducerEvent.RecordsSent(batchId, producedRecords, failed)
-      diagnostics.emit(recordSent)
+      diagnostics
+        .emit(recordSent)
+        .foldCauseZIO(c => done.failCause(c) *> ZIO.refailCause(c), _ => ZIO.unit)
     }
   }
 
@@ -671,14 +691,17 @@ private object EmptyDiagnosticsEmitterMaker extends DiagnosticsEmitterMaker {
 
 private abstract class DiagnosticsEmitter {
   def emitOffer(): ZIO[Any, Nothing, Unit]
-  def emitSuccess(): ZIO[Any, Nothing, Unit]
-  def emitSingleFailure(): ZIO[Any, Nothing, Unit]
-  def emitFailures(finalResults: Array[_ <: Either[_, _]]): ZIO[Any, Nothing, Unit]
+  def emitSuccess[A, B](done: Promise[A, B]): ZIO[Any, Nothing, Unit]
+  def emitSingleFailure[A, B](done: Promise[A, B]): ZIO[Any, Nothing, Unit]
+  def emitFailures[A, B](finalResults: Array[_ <: Either[_, _]], done: Promise[A, B]): ZIO[Any, Nothing, Unit]
 }
 
 private object EmptyDiagnosticsEmitter extends DiagnosticsEmitter {
-  override def emitOffer(): ZIO[Any, Nothing, Unit]                                          = ZIO.unit
-  override def emitSuccess(): ZIO[Any, Nothing, Unit]                                        = ZIO.unit
-  override def emitSingleFailure(): ZIO[Any, Nothing, Unit]                                  = ZIO.unit
-  override def emitFailures(finalResults: Array[_ <: Either[_, _]]): ZIO[Any, Nothing, Unit] = ZIO.unit
+  override def emitOffer(): ZIO[Any, Nothing, Unit]                                  = ZIO.unit
+  override def emitSuccess[A, B](done: Promise[A, B]): ZIO[Any, Nothing, Unit]       = ZIO.unit
+  override def emitSingleFailure[A, B](done: Promise[A, B]): ZIO[Any, Nothing, Unit] = ZIO.unit
+  override def emitFailures[A, B](
+    finalResults: Array[_ <: Either[_, _]],
+    done: Promise[A, B]
+  ): ZIO[Any, Nothing, Unit] = ZIO.unit
 }

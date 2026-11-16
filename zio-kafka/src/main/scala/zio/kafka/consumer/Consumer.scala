@@ -547,7 +547,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     keyDeserializer: Deserializer[R, K],
     valueDeserializer: Deserializer[R, V]
   ): Stream[Throwable, Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]] = {
-    val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
+    val onlyByteArraySerdes: Boolean = isOnlyByteArraySerdes(keyDeserializer, valueDeserializer)
 
     ZStream.unwrapScoped {
       for {
@@ -579,7 +579,7 @@ private[consumer] final class ConsumerLive private[consumer] (
     Throwable,
     Chunk[(TopicPartition, ZStream[R, Throwable, CommittableRecord[K, V]])]
   ]] = {
-    val onlyByteArraySerdes: Boolean = (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
+    val onlyByteArraySerdes: Boolean = isOnlyByteArraySerdes(keyDeserializer, valueDeserializer)
     for {
       streamControl <- runloopAccess.subscribe(subscription)
     } yield streamControl.map(
@@ -596,6 +596,12 @@ private[consumer] final class ConsumerLive private[consumer] (
       }
     )
   }
+
+  private def isOnlyByteArraySerdes[V, K, R](
+    keyDeserializer: Deserializer[R, K],
+    valueDeserializer: Deserializer[R, V]
+  ) =
+    (keyDeserializer eq Serde.byteArray) && (valueDeserializer eq Serde.byteArray)
 
   override def partitionedStream[R, K, V](
     subscription: Subscription,
