@@ -39,7 +39,7 @@ The table lists which operations wait and how:
 | `deleteRecords`                                                       | Sleeps `visibilitySleep`                                                                                                        |
 | `removeMembersFromConsumerGroup`, `removeAllMembersFromConsumerGroup` | Sleeps `visibilitySleep`                                                                                                        |
 
-Two consequences follow. First, a request made with `validateOnly = true` changes nothing, so the polling runs until its 5-second limit before the call returns. Second, the waiting uses the ZIO `Clock`; in a ZIO Test spec that uses `TestClock`, add `@@ TestAspect.withLiveClock` (see [Writing Tests](writing-tests.md)).
+A request made with `validateOnly = true` changes nothing, so `createTopic`, `createTopics`, `createPartitions` and `incrementalAlterConfigs` skip the waiting when `validateOnly` is set and return as soon as the broker has validated the request. `incrementalAlterConfigsAsync` does not skip it: with `validateOnly = true` its inner effects still wait as described above, which for a `Set` op usually means polling until the 5-second limit, because the validated change never shows up. The waiting uses the ZIO `Clock`; in a ZIO Test spec that uses `TestClock`, add `@@ TestAspect.withLiveClock` (see [Writing Tests](writing-tests.md)).
 
 ## Creating an Admin Client
 
