@@ -1,0 +1,33 @@
+/* ZIO Kafka brand tokens. Light by default, dark through prefers-color-scheme. */
+:root {
+  --zk-bg: #FFFFFF;           /* paper */
+  --zk-surface: #F4F5F8;      /* snow: panels, code */
+  --zk-line: #E3E6EC;         /* borders, never text */
+  --zk-text: #101521;         /* ink */
+  --zk-text-2: #566074;       /* slate */
+  --zk-accent: #E8590C;       /* signal orange: hub, buttons, 24 px+ type (3.58:1 on white) */
+  --zk-link: #C2410C;         /* orange 700: orange as text (5.18:1) */
+  --zk-on-accent: #101521;    /* labels on orange (5.09:1) */
+  --zk-tile: #101521;         /* symbol tile */
+  --zk-tint: #FFD3B8;         /* peach: fills, highlights */
+  --zk-code-keyword: #C2410C;
+  --zk-code-string: #7C2D12;
+  --zk-font-sans: "Sora", system-ui, sans-serif;
+  --zk-font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --zk-radius-tile: 22%;      /* 26 of 120 units */
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --zk-bg: #101521;         /* ink */
+    --zk-surface: #171C28;    /* ink 800 */
+    --zk-line: #232833;       /* ink 700 */
+    --zk-text: #F4F5F8;       /* snow */
+    --zk-text-2: #A7AEBD;     /* mist */
+    --zk-accent: #FF8A4C;     /* orange 400 (7.81:1 on ink) */
+    --zk-link: #FF8A4C;
+    --zk-on-accent: #101521;
+    --zk-tile: #2A3245;       /* charcoal */
+    --zk-code-keyword: #FF8A4C;
+    --zk-code-string: #FFD3B8; /* peach */
+  }
+}

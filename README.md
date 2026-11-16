@@ -2,7 +2,10 @@
 [//]: # (So please do not edit it manually. Instead, change "docs/index.md" file or sbt setting keys)
 [//]: # (e.g. "readmeDocumentation" and "readmeSupport".)
 
-# ZIO Kafka
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/zio/zio-kafka/master/brand/zio-kafka-logo-dark.svg">
+  <img alt="ZIO Kafka" src="https://raw.githubusercontent.com/zio/zio-kafka/master/brand/zio-kafka-logo-light.svg" width="520">
+</picture>
 
 [ZIO Kafka](https://github.com/zio/zio-kafka) is a Kafka client for ZIO. It provides a purely functional, streams-based interface to the Kafka
 client and integrates effortlessly with ZIO and zio-streams. Often zio-kafka programs have a _higher_ throughput than
