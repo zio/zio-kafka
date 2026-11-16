@@ -181,19 +181,7 @@ object ConsumerMetricsObserver {
 }
 ```
 
-The pending requests, the partition streams and the subscription come from the runloop state as of its most recent cycle; the queue sizes and commit counts are read when the snapshot is taken:
-
-| Field                          | Meaning                                                                                 |
-| ------------------------------ | --------------------------------------------------------------------------------------- |
-| `pendingRequestCount`          | The number of partition streams that ran out of records and requested more.             |
-| `assignedPartitionCount`       | The number of assigned partitions that have a stream.                                   |
-| `perPartitionQueueSizes`       | For each partition stream, the number of records waiting in its queue.                  |
-| `perPartitionOutstandingPolls` | For each partition stream, the number of polls during which records idled in its queue. |
-| `isSubscribed`                 | Whether the consumer has at least one subscription.                                     |
-| `commandQueueSize`             | The number of commands waiting for the runloop.                                         |
-| `commitQueueSize`              | The number of commit requests waiting to be merged into the next aggregated commit.     |
-| `pendingCommitCount`           | The number of commit requests sent to the broker and awaiting completion.               |
-| `totalQueueSize`               | The sum of `perPartitionQueueSizes`.                                                    |
+The pending requests, the partition streams and the subscription come from the runloop state as of its most recent cycle; the queue sizes and commit counts are read when the snapshot is taken. The field names mostly speak for themselves, but a few need a word of explanation: `pendingRequestCount` is the number of partition streams that ran out of records and requested more, `perPartitionOutstandingPolls` counts, per partition stream, the polls during which records idled in its queue, `commitQueueSize` is the number of commit requests waiting to be merged into the next aggregated commit, and `pendingCommitCount` is the number of commits sent to the broker and awaiting completion.
 
 To sample the runloop less often, for example every 5 seconds, change the schedule in the consumer settings:
 
@@ -253,25 +241,7 @@ The default observers convert every descriptor into a ZIO metric with the same n
 - A `MetricInfo.Histogram[Duration]` becomes a `Metric.histogram` with the descriptor's boundaries, and records the duration in seconds.
 - A `MetricInfo.Histogram[Int]` or `MetricInfo.Histogram[Long]` becomes a `Metric.histogram` with the descriptor's boundaries.
 
-The table below shows which descriptors each consumer callback updates in the default observer. Counters such as `partitionsAssignedCounter` grow by the matching count, the gauges are set to the latest value, and `ConsumerMetricsObserver#observeRunloopMetrics` adds one observation per partition stream to `queueSizeHistogram` and `queuePollsHistogram`; it does not record `assignedPartitionCount`:
-
-| Callback                  | `ConsumerMetrics` fields                                                                                                                                                                                                |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `observePoll`             | `pollCounter`, `partitionsResumedInLatestPollGauge`, `partitionsPausedInLatestPollGauge`, `pollLatencyHistogram`, `pollSizeHistogram`                                                                                   |
-| `observePollAuthError`    | `pollAuthErrorCounter`                                                                                                                                                                                                  |
-| `observeCommit`           | `commitCounter`, `commitLatencyHistogram`                                                                                                                                                                               |
-| `observeAggregatedCommit` | `aggregatedCommitCounter`, `aggregatedCommitLatencyHistogram`, `aggregatedCommitSizeHistogram`                                                                                                                          |
-| `observeRebalance`        | `rebalanceCounter`, `partitionsCurrentlyAssignedGauge`, `partitionsAssignedCounter`, `partitionsRevokedCounter`, `partitionsLostCounter`                                                                                |
-| `observeRunloopMetrics`   | `queuePollsHistogram`, `queueSizeHistogram`, `allQueueSizeHistogram`, `pendingRequestsHistogram`, `pendingCommitsHistogram`, `subscriptionStateGauge` (1 or 0), `commandQueueSizeHistogram`, `commitQueueSizeHistogram` |
-
-The default producer observer works the same way:
-
-| Callback               | `ProducerMetrics` fields                                                                                                      |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `observeProduce`       | `produceCallsCounter`, `produceLatencyHistogram`, `produceRecordsCounter` (grows by `batchSize`), `produceBatchSizeHistogram` |
-| `observeSendQueueSize` | `sendQueueSizeHistogram`                                                                                                      |
-| `observeSendQueueTake` | `sendQueueLatencyHistogram`                                                                                                   |
-| `observeSendAuthError` | `sendAuthErrorCounter` (grows by `errorCount`)                                                                                |
+Each callback updates the descriptors named after it, for example `ConsumerMetricsObserver#observePoll` updates `pollCounter`, `pollLatencyHistogram` and the other poll descriptors, and `ProducerMetricsObserver#observeProduce` updates the `produce*` descriptors. Counters such as `partitionsAssignedCounter`, `produceRecordsCounter` (by `batchSize`) and `sendAuthErrorCounter` (by `errorCount`) grow by the matching count, and the gauges are set to the latest value. `ConsumerMetricsObserver#observeRunloopMetrics` adds one observation per partition stream to `queueSizeHistogram` and `queuePollsHistogram`, sets `subscriptionStateGauge` to 1 or 0, and does not record `assignedPartitionCount`.
 
 ## Metric Descriptors
 
@@ -298,23 +268,10 @@ object MetricInfo {
 
 The type parameter of `Gauge` and `Histogram` is the type of the measured value (`Int`, `Long` or `Duration`); `MetricInfo` stores no value itself. The boundaries are ZIO's `Histogram.Boundaries`, usually built with `Histogram.Boundaries.fromChunk`, `Histogram.Boundaries.linear` or `Histogram.Boundaries.exponential`. Latency boundaries are in seconds, because the default observers record durations in seconds.
 
-The companion objects define the default boundaries as methods, so you can reuse them. Most follow an exponential series based on 𝑒:
-
-| Boundaries                                                   | Used by                                                                              | Declared values                                                      |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `ConsumerMetrics.defaultLatencyBoundaries`                   | `pollLatencyHistogram`, `commitLatencyHistogram`, `aggregatedCommitLatencyHistogram` | 0.01, 0.03, 0.08, 0.21, 0.55, 1.49, 4.04, 10.97, 29.81, 81.04        |
-| `ConsumerMetrics.defaultCountBoundaries`                     | `pollSizeHistogram`, `aggregatedCommitSizeHistogram`                                 | 1, 3, 8, 21, 55, 149, 404, 1097, 2981, 8104                          |
-| `ConsumerMetrics.defaultStreamCountBoundaries`               | `pendingRequestsHistogram`, `pendingCommitsHistogram`                                | 0, 1, 3, 8, 21, 55, 149, 404, 1097, 2981                             |
-| `ConsumerMetrics.defaultStreamSizeBoundaries`                | `queueSizeHistogram`, `allQueueSizeHistogram`                                        | 0, 100, 272, 739, 2009, 5460, 14842, 40343, 109664, 298096           |
-| `ConsumerMetrics.defaultQueuePollSizeBoundaries`             | `queuePollsHistogram`                                                                | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9                                         |
-| `ConsumerMetrics.defaultCommandAndCommitQueueSizeBoundaries` | `commandQueueSizeHistogram`, `commitQueueSizeHistogram`                              | same as `ConsumerMetrics.defaultStreamCountBoundaries`               |
-| `ProducerMetrics.defaultProduceLatencyBoundaries`            | `produceLatencyHistogram`                                                            | 0.01, 0.03, 0.08, 0.21, 0.55, 1.49, 4.04, 10.97, 29.81, 81.04        |
-| `ProducerMetrics.defaultBatchSizeBoundaries`                 | `produceBatchSizeHistogram`                                                          | 1, 3, 8, 21, 55, 149, 404, 1097, 2981, 8104                          |
-| `ProducerMetrics.defaultSendQueueSizeBoundaries`             | `sendQueueSizeHistogram`                                                             | 0, 10, 28, 74, 201, 546, 1485, 4035, 10967, 29810                    |
-| `ProducerMetrics.defaultQueueLatencyBoundaries`              | `sendQueueLatencyHistogram`                                                          | 0.001, 0.003, 0.008, 0.021, 0.055, 0.149, 0.404, 1.097, 2.981, 8.104 |
+The companion objects define the default boundaries as methods, such as `ConsumerMetrics.defaultLatencyBoundaries`, so you can reuse them. Most follow an exponential series based on 𝑒. For every default and the histograms that use it, see the [`ConsumerMetrics`](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/consumer/metrics/ConsumerMetrics$.html) and [`ProducerMetrics`](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/producer/metrics/ProducerMetrics$.html) API docs.
 
 :::note
-`Histogram.Boundaries.fromChunk` drops every boundary that is not greater than 0 and appends `Double.MaxValue` as the last boundary (the `+Inf` bucket). The `0` in the declared values therefore never reaches `Boundaries#values`, for the default observer and for a custom observer that reads the descriptor alike. The lowest bucket of those histograms is the first positive boundary, and it also counts the value 0.
+`Histogram.Boundaries.fromChunk` drops every boundary that is not greater than 0 and appends `Double.MaxValue` as the last boundary (the `+Inf` bucket). The `0` that several default series start with therefore never reaches `Boundaries#values`, for the default observer and for a custom observer that reads the descriptor alike. The lowest bucket of those histograms is the first positive boundary, and it also counts the value 0.
 :::
 
 ## Common Patterns
