@@ -66,7 +66,7 @@ ProducerSettings#metricsObserver
                                   observeSendQueueSize     every 10 seconds
 ```
 
-Every callback returns `UIO[Unit]` and runs inside the consumer's or producer's own processing. The scaladoc of both traits warns that these methods hold up the consumer or producer: return quickly, keep blocking I/O out of the callback, and handle every error inside it.
+Every callback returns `UIO[Unit]`. Most callbacks run inside the consumer's or producer's own processing (the poll loop, commit handling, or a produce call), so the scaladoc of both traits asks them to return quickly. `ConsumerMetricsObserver#observeRunloopMetrics` and `ProducerMetricsObserver#observeSendQueueSize` are the exception: they run on their own fibers, on a schedule.
 
 ## Installing an Observer
 
