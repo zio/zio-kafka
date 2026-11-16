@@ -55,25 +55,7 @@ The producer methods that take a `ProducerRecord[Array[Byte], Array[Byte]]` have
 
 ## Built-in Serdes
 
-The `Serde` companion object provides ready-made serdes for common types. All of them have environment `Any` and, except for `Serde.byteArray`, delegate to a serializer and a deserializer from Kafka's `org.apache.kafka.common.serialization` package:
-
-| Serde                | Scala type                            | Kafka classes behind it                           |
-| -------------------- | ------------------------------------- | ------------------------------------------------- |
-| `Serde.string`       | `String`                              | `StringSerializer` / `StringDeserializer`         |
-| `Serde.int`          | `Int`                                 | `IntegerSerializer` / `IntegerDeserializer`       |
-| `Serde.long`         | `Long`                                | `LongSerializer` / `LongDeserializer`             |
-| `Serde.short`        | `Short`                               | `ShortSerializer` / `ShortDeserializer`           |
-| `Serde.float`        | `Float`                               | `FloatSerializer` / `FloatDeserializer`           |
-| `Serde.double`       | `Double`                              | `DoubleSerializer` / `DoubleDeserializer`         |
-| `Serde.intOption`    | `Option[Int]`                         | `IntegerSerializer` / `IntegerDeserializer`       |
-| `Serde.longOption`   | `Option[Long]`                        | `LongSerializer` / `LongDeserializer`             |
-| `Serde.shortOption`  | `Option[Short]`                       | `ShortSerializer` / `ShortDeserializer`           |
-| `Serde.floatOption`  | `Option[Float]`                       | `FloatSerializer` / `FloatDeserializer`           |
-| `Serde.doubleOption` | `Option[Double]`                      | `DoubleSerializer` / `DoubleDeserializer`         |
-| `Serde.uuid`         | `java.util.UUID`                      | `UUIDSerializer` / `UUIDDeserializer`             |
-| `Serde.bytes`        | `org.apache.kafka.common.utils.Bytes` | `BytesSerializer` / `BytesDeserializer`           |
-| `Serde.byteBuffer`   | `java.nio.ByteBuffer`                 | `ByteBufferSerializer` / `ByteBufferDeserializer` |
-| `Serde.byteArray`    | `Array[Byte]`                         | none, a pass-through                              |
+The `Serde` companion object provides ready-made serdes for common types: `Serde.string`, `Serde.int`, `Serde.long`, `Serde.short`, `Serde.float`, `Serde.double`, their option variants `Serde.intOption`, `Serde.longOption`, `Serde.shortOption`, `Serde.floatOption` and `Serde.doubleOption`, and `Serde.uuid`, `Serde.bytes`, `Serde.byteBuffer` and `Serde.byteArray`. All of them have environment `Any` and, except for `Serde.byteArray`, delegate to a serializer and a deserializer from Kafka's `org.apache.kafka.common.serialization` package. For their types, see the [`Serde` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/serde/Serde$.html).
 
 Zio-kafka never calls `configure` on these Kafka classes, so they use Kafka's defaults; for example, `Serde.string` and `Serde.uuid` always use UTF-8. To use another configuration, wrap a Kafka serde yourself, as shown in [From Kafka Serdes](#from-kafka-serdes). `Serde.byteArray` returns its input unchanged and cannot fail. The other serdes catch exceptions from the Kafka code and turn them into failures, such as a `Serde.int` deserializer that receives anything other than 4 bytes.
 
