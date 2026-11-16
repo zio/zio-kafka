@@ -82,12 +82,11 @@ class Face:
 
 
 SORA = Face(SANS, 600)
-JBM = Face(MONO, 500)
 EM = 100.0
 
 
 def z_mark(x, base, rings, hub):
-    """Board lockup: the mark is 0.82 em square, its box 0.045 em below the baseline."""
+    """Board lockup: the mark is 0.82 em square, its box 0.045 em below the baseline (rings span Sora's 0.73 em caps)."""
     k = 0.82 * EM / 120
     top = base + 0.045 * EM - 0.82 * EM
     return f'<g transform="translate({x:.3f} {top:.3f}) scale({k:.5f})">{ring_z(rings, hub)}</g>', x + 0.82 * EM
@@ -99,17 +98,18 @@ def logo(text, hub, stacked=False):
     m, x = z_mark(0, base, text, hub)
     parts.append(m)
     x += 0.02 * EM
-    d_io, x = JBM.outline("IO", EM, x, base, -0.04)
+    # One typeface: "IO" and "Kafka" are both Sora 600, so the wordmark reads as one name.
+    d_io, x = SORA.outline("IO", EM, x, base, -0.025)
     parts.append(f'<path d="{d_io}" fill="{text}"/>')
     if stacked:
         # Each line is a line-height: 1 box, 0.14 em apart; the baseline sits where the font's half-leading puts it.
-        line1_top = base - (JBM.ascent - (JBM.ascent + JBM.descent - 1) / 2) * EM
+        line1_top = base - (SORA.ascent - (SORA.ascent + SORA.descent - 1) / 2) * EM
         line2_top = line1_top + 1.14 * EM
         base2 = line2_top + (SORA.ascent - (SORA.ascent + SORA.descent - 1) / 2) * EM
         d_k, x2 = SORA.outline("Kafka", EM, 0, base2, -0.025)
         right, bottom = max(x, x2), base2 + 0.22 * EM
     else:
-        x += 0.28 * EM
+        x += 0.24 * EM
         d_k, x = SORA.outline("Kafka", EM, x, base, -0.025)
         right, bottom = x, base + 0.22 * EM
     parts.append(f'<path d="{d_k}" fill="{text}"/>')

@@ -1,11 +1,11 @@
 # ZIO Kafka brand
 
-Final identity: the Z of ZIO drawn as linked rings. Six rings sit on a three-column grid, top row and bottom row, joined by short links along the rows and two diagonals, with a bigger hub ring in the centre in signal orange. Rings are records and partitions, links are the flow, the hub is the consumer. It nods loosely to Apache Kafka's ring-and-spoke logo without tracing it. In the full logo the ring Z is the Z of "ZIO", followed by "IO" in JetBrains Mono and "Kafka" in Sora.
+Final identity: the Z of ZIO drawn as linked rings. Six rings sit on a three-column grid, top row and bottom row, joined by short links along the rows and two diagonals, with a bigger hub ring in the centre in signal orange. Rings are records and partitions, links are the flow, the hub is the consumer. It nods loosely to Apache Kafka's ring-and-spoke logo without tracing it. In the full logo the ring Z is the Z of "ZIO", followed by "IO Kafka" in Sora: one typeface for the whole name, so the ring Z alone marks the ZIO part.
 
 ## Files
 
 **Logo and mark**
-- `zio-kafka-logo-light.svg`, `zio-kafka-logo-dark.svg`: full logo, horizontal (the default). The ring Z at 0.82 em, "IO" in JetBrains Mono 500 at −4% tracking, a 0.28 em space, "Kafka" in Sora 600 at −2.5% tracking. Text converted to outlines.
+- `zio-kafka-logo-light.svg`, `zio-kafka-logo-dark.svg`: full logo, horizontal (the default). The ring Z at 0.82 em, "IO" in Sora 600, a 0.24 em space, "Kafka" in Sora 600, both at −2.5% tracking. Text converted to outlines.
 - `zio-kafka-logo-stacked-light.svg`, `zio-kafka-logo-stacked-dark.svg`: "ZIO" over "Kafka", for square spaces and covers.
 - `zio-kafka-mark-light.svg`, `zio-kafka-mark-dark.svg`: the bare ring Z, for building a lockup in live type.
 - `zio-kafka-mark-mono.svg`: one colour (`currentColor`), for stamps, engraving and single-ink print.
@@ -58,7 +58,7 @@ Orange belongs in the hub and in one accent per layout, not as a large field beh
 
 ## Rebuild
 
-Needs `uv`, headless Chromium, and the two open-source fonts from the Google Fonts repository: `Sora[wght].ttf` (`ofl/sora`) and `JetBrainsMono[wght].ttf` (`ofl/jetbrainsmono`).
+Needs `uv`, headless Chromium, and the two open-source fonts from the Google Fonts repository (Sora for the logo and text, JetBrains Mono for code on the boards): `Sora[wght].ttf` (`ofl/sora`) and `JetBrainsMono[wght].ttf` (`ofl/jetbrainsmono`).
 
 ```bash
 uv run --with fonttools --with uharfbuzz python tools/build_brand.py \
