@@ -3,7 +3,7 @@ id: admin-client
 title: "Admin Client"
 ---
 
-`AdminClient` manages a Kafka cluster from ZIO: it creates and deletes topics, reads and changes configuration, inspects and resets consumer groups, lists offsets, describes the cluster, and manages access control lists (ACLs). It wraps the Java [`Admin`](https://kafka.apache.org/documentation/#adminapi) client, turns every Kafka future into a ZIO effect, and replaces Java collections and nullable values with Scala collections, `Option` and small case classes. The main types are `AdminClient`, `AdminClientSettings`, the model case classes nested in the `AdminClient` companion object (`NewTopic`, `ConfigResource`, `OffsetSpec`, and so on), and the ACL types in the `zio.kafka.admin.acl` and `zio.kafka.admin.resource` packages.
+`AdminClient` manages a Kafka cluster from ZIO: it creates and deletes topics, reads and changes configuration, inspects and resets consumer groups, lists offsets, describes the cluster, and manages access control lists (ACLs). It wraps the Java [`Admin`](https://kafka.apache.org/documentation/#adminapi) client, turns every Kafka future into a ZIO effect, and replaces Java collections and nullable values with Scala collections, `Option` and small case classes. Unlike the Java client, a write operation (for example creating a topic) completes only after its effect is visible, wherever that is possible; see [Write Operations Wait Until They Are Visible](#write-operations-wait-until-they-are-visible). The main types are `AdminClient`, `AdminClientSettings`, the model case classes nested in the `AdminClient` companion object (`NewTopic`, `ConfigResource`, `OffsetSpec`, and so on), and the ACL types in the `zio.kafka.admin.acl` and `zio.kafka.admin.resource` packages.
 
 The shape of the two entry points is:
 
@@ -43,7 +43,7 @@ A request made with `validateOnly = true` changes nothing, so `createTopic`, `cr
 
 ## Creating an Admin Client
 
-An `AdminClient` holds a network connection, so every constructor ties it to a `Scope` or leaves closing to you. All constructors live in the `AdminClient` companion object:
+An `AdminClient` holds a network connection that must be closed when you are done with it. `AdminClient.make`, `AdminClient.live` and `AdminClient.fromScopedJavaClient` close it automatically when their scope ends. With `AdminClient.fromJavaClient` you close the Java client yourself. All constructors are in the `AdminClient` companion object:
 
 ```scala
 object AdminClient {
@@ -81,7 +81,7 @@ val topicNames: ZIO[Any, Throwable, Set[String]] =
   }
 ```
 
-`AdminClient.live` builds the same client as a layer from an `AdminClientSettings` in the environment, so the rest of the application can depend on `AdminClient` as a service:
+Alternatively, you can provide an `AdminClient` as a ZIO layer. `AdminClient.live` builds the client from an `AdminClientSettings` in the environment, so the rest of the application can depend on `AdminClient` as a service:
 
 ```scala mdoc:compile-only
 import zio._
@@ -96,7 +96,13 @@ val clusterId: ZIO[AdminClient, Throwable, String] =
   ZIO.serviceWithZIO[AdminClient](_.describeClusterId())
 ```
 
-The remaining constructors wrap a Java `Admin` that you create yourself. `AdminClient.fromJavaClient` only wraps it: you stay responsible for closing it. `AdminClient.fromScopedJavaClient` wraps a Java client that a scoped effect creates and closes. `AdminClient.javaClientFromSettings` is the scoped effect `AdminClient.make` uses; it is useful when you also need the raw Java client, for example for an operation zio-kafka does not wrap. Neither `AdminClient.fromJavaClient` nor `AdminClient.fromScopedJavaClient` runs the SSL endpoint check by itself.
+The other constructors work with a Java `Admin` client:
+
+- `AdminClient.fromJavaClient(javaClient)` wraps a Java client that you created. You must close the Java client yourself.
+- `AdminClient.fromScopedJavaClient(effect)` wraps the Java client that a scoped effect creates. The client is closed when the scope ends.
+- `AdminClient.javaClientFromSettings(settings)` creates a Java client from settings and closes it when the scope ends. `AdminClient.make` uses it. Use it when you also need the Java client, for example for an operation that zio-kafka does not wrap.
+
+`AdminClient.fromJavaClient` and `AdminClient.fromScopedJavaClient` do not run the [SSL endpoint check](security.md#ssl-endpoint-check); `AdminClient.javaClientFromSettings` (and so `AdminClient.make`) does.
 
 ## AdminClientSettings
 
@@ -104,7 +110,7 @@ The remaining constructors wrap a Java `Admin` that you create yourself. `AdminC
 
 | Member                                                  | Description                                                                       |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `AdminClientSettings.apply(bootstrapServers)`           | Sets `bootstrap.servers` and a close timeout of 30 seconds                        |
+| `AdminClientSettings(bootstrapServers)`                 | Sets `bootstrap.servers` and a close timeout of 30 seconds                        |
 | `AdminClientSettings#withBootstrapServers(servers)`     | Replaces `bootstrap.servers`                                                      |
 | `AdminClientSettings#withProperty(key, value)`          | Adds or replaces one Java client property                                         |
 | `AdminClientSettings#withProperties(kvs)`               | Adds or replaces several properties, as varargs pairs or as a `Map`               |
