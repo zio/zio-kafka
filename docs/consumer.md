@@ -376,7 +376,7 @@ To end a single subscription and leave the others running, use the `StreamContro
 
 The `Consumer` forwards a set of read-only queries to the Kafka consumer, converting Java collections to Scala ones: `Consumer#assignment`, `Consumer#subscription`, `Consumer#committed`, `Consumer#beginningOffsets`, `Consumer#endOffsets`, `Consumer#offsetsForTimes`, `Consumer#position`, `Consumer#listTopics`, `Consumer#partitionsFor` and `Consumer#metrics` (the Kafka client's own metrics; for zio-kafka's metrics, see [metrics](metrics.md)). Every query that takes a `timeout` defaults to `Duration.Infinity`. The queries share the Kafka consumer with the polling loop, so each one waits until the current poll completes. `Consumer#committed` returns `None` for a partition the group has not committed, and `Consumer#offsetsForTimes` leaves out partitions that have no record at or after the given timestamp. For the signatures, see the [`Consumer` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/consumer/Consumer.html).
 
-Except for `Consumer#position`, the queries do not need the partitions to be assigned to this consumer, so they also work for monitoring. To compute the lag of a consumer group per partition:
+Except for `Consumer#position`, the queries do not need the partitions to be assigned to this consumer, so they also work for monitoring. To compute the lag of a consumer group for the partitions it has committed:
 
 ```scala mdoc:compile-only
 import org.apache.kafka.common.TopicPartition
@@ -387,14 +387,14 @@ def lag(consumer: Consumer, topic: String): Task[Map[TopicPartition, Long]] =
   for {
     partitions <- consumer.partitionsFor(topic, timeout = 10.seconds)
     tps         = partitions.map(p => new TopicPartition(p.topic(), p.partition())).toSet
-    beginnings <- consumer.beginningOffsets(tps, timeout = 10.seconds)
     ends       <- consumer.endOffsets(tps, timeout = 10.seconds)
     committed  <- consumer.committed(tps, timeout = 10.seconds)
-  } yield ends.map { case (tp, end) =>
-    val start = committed.get(tp).flatten.map(_.offset()).getOrElse(beginnings(tp))
-    tp -> (end - start)
+  } yield ends.flatMap { case (tp, end) =>
+    committed.get(tp).flatten.map(c => tp -> (end - c.offset()))
   }
 ```
+
+Partitions without a committed offset are left out: where a consumer starts on them depends on its offset retrieval setting (by default the end of the partition, see [Consumer Settings](#consumer-settings)).
 
 ## Committing Offsets
 
