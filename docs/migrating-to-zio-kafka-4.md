@@ -20,8 +20,8 @@ If you are still on zio-kafka 2.x, first follow [migrating to zio-kafka 3](migra
 To upgrade, change the version of zio-kafka (and of the testkit, if you use it) in `build.sbt`:
 
 ```scala
-libraryDependencies += "dev.zio" %% "zio-kafka"         % "@VERSION@"
-libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "@VERSION@" % Test
+libraryDependencies += "dev.zio" %% "zio-kafka"         % "4.1.0"
+libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "4.1.0" % Test
 ```
 
 As with any major release, zio-kafka 4 is not binary compatible with zio-kafka 3. A library that was compiled against zio-kafka 3 and uses the APIs below needs a release built against zio-kafka 4.
@@ -161,7 +161,7 @@ In zio-kafka 3.x, the `DiagnosticEvent.Commit.Started` event carried the consume
 
 To migrate an application from zio-kafka 3.x to zio-kafka 4:
 
-- [ ] Update `zio-kafka` and `zio-kafka-testkit` to `@VERSION@`.
+- [ ] Update `zio-kafka` and `zio-kafka-testkit` to the latest 4.x release (4.1.0 at the time of writing).
 - [ ] Replace every use of `OffsetBatch.offsets` with `OffsetBatch#nextOffsets`, and remove any `+ 1` applied to its values.
 - [ ] Optionally, replace `record.offset.offset + 1` with `record.nextOffset.offset()` where you store offsets.
 - [ ] Add `Offset#nextOffset` to custom implementations of `Offset`.
