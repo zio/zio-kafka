@@ -140,9 +140,10 @@ The check runs while a client is created, before the Java client exists, in thes
 
 - `Consumer.make` and `Consumer.live`.
 - `Producer.make` and `Producer.live`.
+- `TransactionalProducer.make` and `TransactionalProducer.live`, using the properties of the wrapped `ProducerSettings`.
 - `AdminClient.make`, `AdminClient.live` and `AdminClient.javaClientFromSettings`.
 
-It is skipped when `security.protocol` contains `SSL`, ignoring case, that is for `SSL` and `SASL_SSL`: such a client speaks TLS and is not affected by the bug. It does not run in `TransactionalProducer.make` and `TransactionalProducer.live`, which create the Java producer from the settings without the check. It also does not run in `Producer.fromJavaProducer`, `Consumer.fromJavaConsumerWithPermit`, `AdminClient.fromJavaClient` and `AdminClient.fromScopedJavaClient`, because these wrap a Java client that you create yourself. There is no setting to turn the check off.
+It is skipped when `security.protocol` contains `SSL`, ignoring case, that is for `SSL` and `SASL_SSL`: such a client speaks TLS and is not affected by the bug. It does not run in `Producer.fromJavaProducer`, `Consumer.fromJavaConsumerWithPermit`, `AdminClient.fromJavaClient` and `AdminClient.fromScopedJavaClient`, because these wrap a Java client that you create yourself. There is no setting to turn the check off.
 
 ### What the Check Does
 
@@ -162,7 +163,7 @@ Each probe times out after the client's `request.timeout.ms` (30 seconds when it
 | Any non-timeout error after a connection is open            | Fails with that error                                                                                  |
 | No address can be reached (connection refused or timed out) | Fails with the first connection error, for example a `TimeoutException("Failed to contact <address>")` |
 
-Every failure is wrapped in an `org.apache.kafka.common.KafkaException` with the message `"Failed to create new KafkaAdminClient"`, also when a consumer or producer is being created; the actual reason is the exception's cause. Because the check needs at least one reachable broker, `Consumer.make`, `Producer.make` and `AdminClient.make` with a plain-text protocol fail when none of the bootstrap servers is reachable at startup.
+Every failure is wrapped in an `org.apache.kafka.common.KafkaException` with the message `"Failed to connect to Kafka"`, for every kind of client; the actual reason is the exception's cause. Because the check needs at least one reachable broker, `Consumer.make`, `Producer.make`, `TransactionalProducer.make` and `AdminClient.make` with a plain-text protocol fail when none of the bootstrap servers is reachable at startup.
 
 To log the real reason when a client cannot be created:
 
