@@ -168,3 +168,16 @@ To migrate an application from zio-kafka 3.x to zio-kafka 4:
 - [ ] Pass the `nextOffset` parameter wherever you construct a `CommittableRecord`, and add a field to positional patterns on it.
 - [ ] Remove any `+ 1` applied to the offsets of `DiagnosticEvent.Commit.Started` in diagnostics callbacks.
 - [ ] Check tests and monitoring that compare committed offsets with consumed offsets.
+
+## Upgrading From ZIO Kafka 4.0 to 4.1
+
+zio-kafka 4.1.0 fixes a number of small problems and adds a few APIs; most applications only need to update the dependency. Check the following points:
+
+- **Producer diagnostics:** `ProducerEvent.ProducedRecord#partition` is now `ProducerEvent.NoPartition` (`-1`) for a record that leaves the partition choice to the Kafka partitioner. In 4.0 it was `0`, which could not be told apart from a record sent to partition `0`. Update [diagnostics](diagnostics.md) callbacks that group or filter by this field.
+- **Custom fetch strategies:** `PartitionStream`, the type a `FetchStrategy` receives, moved from an internal package to `zio.kafka.consumer.fetch.PartitionStream`. Change the import of a custom `FetchStrategy`, see [Writing a Custom Fetch Strategy](consumer-tuning.md#writing-a-custom-fetch-strategy).
+- **SSL endpoint check:** `TransactionalProducer.make` and `TransactionalProducer.live` now run the same SSL endpoint check as the other clients, so with a plain-text protocol they fail when no bootstrap server is reachable at startup. The `KafkaException` of a failed check now has the message `"Failed to connect to Kafka"` instead of `"Failed to create new KafkaAdminClient"`; update code or alerts that match on the old message. See [Security](security.md#ssl-endpoint-check).
+- **Failing diagnostics:** when a `Diagnostics` implementation throws or dies, the consumer or producer now fails with that defect, instead of queueing events in memory without bound. See [Diagnostics](diagnostics.md).
+- **Metrics:** `ziokafka_producer_send_queue_latency_seconds` now records the actual (positive) time a batch spends in the send queue; in 4.0 the values had the wrong sign. `ziokafka_producer_auth_errors` now also counts authentication and authorization errors of single-record produce calls. Review dashboards and alerts built on these metrics, see [Metrics](metrics.md).
+- **Admin client:** `createTopic`, `createTopics`, `createPartitions` and `incrementalAlterConfigs` with `validateOnly = true` no longer wait for the change to become visible, so they return sooner. See [Admin Client](admin-client.md).
+
+zio-kafka 4.1.0 also adds the serdes `Serde.intOption`, `Serde.longOption`, `Serde.shortOption`, `Serde.floatOption` and `Serde.doubleOption`, which turn a `null` key or value into `None` (see [Handling Missing Data](serialization-and-deserialization.md#handling-missing-data)).
