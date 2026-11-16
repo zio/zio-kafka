@@ -873,10 +873,8 @@ object AdminClient {
           val ops            = configs.getOrElse(configResource, Iterable.empty)
           (
             configResource,
-            ZIO.fromCompletionStage(kf.toCompletionStage).unit <* awaitConfigsVisible(
-              Map(configResource -> ops),
-              visibilitySleep
-            )
+            ZIO.fromCompletionStage(kf.toCompletionStage).unit <*
+              awaitConfigsVisible(Map(configResource -> ops), visibilitySleep).unless(options.validateOnly)
           )
         }.toMap
       }
