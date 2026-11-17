@@ -153,7 +153,7 @@ In each runloop cycle, the consumer merges all queued commit requests into one a
 
 ### Rebalancing
 
-When the rebalance listener runs during a poll, the runloop updates its partition streams after that poll and then calls `ConsumerMetricsObserver#observeRebalance` once. When the listener runs more than once during the same poll, the consumer merges those events into one call. The arguments are:
+When Kafka changes the consumer's partition assignment during a poll, the runloop updates its partition streams after that poll and then calls `ConsumerMetricsObserver#observeRebalance` once. When the assignment changes more than once during the same poll, the consumer merges those events into one call. The arguments are:
 
 - `currentlyAssignedCount` is the number of partitions assigned to the consumer after the rebalance.
 - `assignedCount` is the number of newly assigned partitions.

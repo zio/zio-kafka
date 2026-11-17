@@ -414,52 +414,6 @@ trait Consumer {
 
 `Consumer.collectOffsets` folds `Offset`s into a batch, and `Consumer.collectOffsetBatches` merges batches (`Consumer.offsetBatches` is an alias of `Consumer.collectOffsets`). `Consumer.CommitTimeout` is the error of a commit that does not complete within `commitTimeout`. `Consumer#registerExternalCommits` tells the consumer about offsets you stored outside Kafka, so that rebalance-safe commits can wait for them; a `TransactionalProducer` calls it for you. [Offsets and Committing](offsets-and-committing.md) covers all of these, and [transactions](transactions.md) covers committing inside a transaction.
 
-## Rebalance Listener
-
-A `RebalanceListener` runs your effects when the consumer group changes the partitions assigned to this consumer. It is a ZIO wrapper around Kafka's `ConsumerRebalanceListener`:
-
-```scala
-final case class RebalanceListener(
-  onAssigned: Set[TopicPartition] => Task[Unit],
-  onRevoked: Set[TopicPartition] => Task[Unit],
-  onLost: Set[TopicPartition] => Task[Unit]
-) {
-  def ++(that: RebalanceListener): RebalanceListener
-  def runOnExecutor(executor: Executor): RebalanceListener
-}
-
-object RebalanceListener {
-  def apply(onAssigned: Set[TopicPartition] => Task[Unit], onRevoked: Set[TopicPartition] => Task[Unit]): RebalanceListener
-  val noop: RebalanceListener
-}
-```
-
-Kafka calls `onAssigned` with the partitions newly given to this consumer, `onRevoked` with partitions taken away in an orderly rebalance, and `onLost` with partitions the consumer lost without a chance to commit, for example after its session timed out. The two-argument `RebalanceListener.apply` uses `onRevoked` for lost partitions too. `RebalanceListener#++` combines two listeners so that both run, one after the other, and `RebalanceListener#runOnExecutor` runs the callbacks on the given `Executor`. Register a listener with `ConsumerSettings#withRebalanceListener`:
-
-```scala mdoc:compile-only
-import org.apache.kafka.common.TopicPartition
-import zio._
-import zio.kafka.consumer._
-
-val listener: RebalanceListener =
-  RebalanceListener(
-    onAssigned = (assigned: Set[TopicPartition]) => ZIO.logInfo(s"Assigned: ${assigned.mkString(", ")}"),
-    onRevoked = (revoked: Set[TopicPartition]) => ZIO.logInfo(s"Revoked: ${revoked.mkString(", ")}"),
-    onLost = (lost: Set[TopicPartition]) => ZIO.logWarning(s"Lost: ${lost.mkString(", ")}")
-  )
-
-val settings: ConsumerSettings =
-  ConsumerSettings(List("localhost:9092"))
-    .withGroupId("my-group")
-    .withRebalanceListener(listener)
-```
-
-Zio-kafka runs your listener after its own rebalance handling. By the time your `onRevoked` runs, zio-kafka has told the streams of the revoked partitions to end and, with rebalance-safe commits enabled, has waited (up to `maxRebalanceDuration`) for their offsets to be committed.
-
-:::warning
-The callbacks run inside the Kafka consumer's poll, while zio-kafka holds exclusive access to the Kafka consumer. Polling for all partitions waits until the callback completes, so keep callbacks short. Do not call `Consumer` methods or commit offsets from a callback: they need that same access and cannot complete until the callback returns. A failing callback makes the poll fail, so handle errors inside the callback.
-:::
-
 ## CommittableRecord
 
 A `CommittableRecord[K, V]` is what the consumer streams emit: a deserialized Kafka `ConsumerRecord` together with what is needed to commit it. Its commit handle and consumer group metadata are private:
