@@ -367,7 +367,7 @@ A produce effect can fail at two moments. With the serializer overloads, seriali
 
 For chunks, `Producer#produceChunk`, `Producer#produceChunkAsync` and `Producer#produceAll` fail with the first error of the chunk. The other records of that chunk may or may not be written: records sent before the failure is noticed can succeed, and the remaining ones are not attempted. When you need to know which records were written, use `Producer#produceChunkAsyncWithFailures`.
 
-The Java producer already retries transient errors according to Kafka's `retries` and `delivery.timeout.ms` properties. On top of that, zio-kafka can retry records that fail with an `AuthorizationException` or `AuthenticationException`, which some brokers report while access rights are still being set up. The retry is off by default (`Schedule.stop`); enable it with `ProducerSettings#withAuthErrorRetrySchedule`:
+The Java producer already retries transient errors according to Kafka's `retries` and `delivery.timeout.ms` properties. On top of that, zio-kafka can retry records that fail with an `AuthorizationException` or `AuthenticationException`, which some brokers report when they can't check your access quickly enough, for example because the broker or the identity system is overloaded. The retry is off by default because it can cause re-ordering of records when sending chunks; enable it with `ProducerSettings#withAuthErrorRetrySchedule`:
 
 ```scala mdoc:compile-only
 import zio._
@@ -380,7 +380,7 @@ val settings: ProducerSettings =
     .withAuthErrorRetrySchedule(Schedule.recurs(5) && Schedule.spaced(500.millis))
 ```
 
-For a chunk, only the failed and omitted records are sent again, so a retry can change the order in which records are written. For detecting revoked read access on the consumer side, see [Detecting Authorization Failures](detecting-authorization-failures.md).
+Re-ordering of chunks can happen because only the failed and omitted records are sent again. For detecting revoked read access on the consumer side, see [Detecting Authorization Failures](detecting-authorization-failures.md).
 
 ## Other Operations
 
