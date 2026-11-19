@@ -64,10 +64,10 @@ A larger `pollTimeout` also lowers the authorization work on the broker, because
 
 ## Handle the Failure
 
-When the probe or a poll fails, the consumer stops and every stream of the consumer fails with the error. The error is an `AuthorizationException` (a `TopicAuthorizationException` for a revoked topic permission), so your program can recognize it and raise an alert before it fails, or let the application restart with fresh credentials. To log an alert and let the program fail:
+When the probe or a poll fails, the consumer stops and every stream of the consumer fails with the error. The error is an `AuthorizationException` (a `TopicAuthorizationException` for a revoked topic permission) or, for a poll that keeps failing authentication, an `AuthenticationException`, so your program can recognize it and raise an alert before it fails, or let the application restart with fresh credentials. To log an alert for both kinds and let the program fail:
 
 ```scala mdoc:compile-only
-import org.apache.kafka.common.errors.AuthorizationException
+import org.apache.kafka.common.errors.{ AuthenticationException, AuthorizationException }
 import zio._
 import zio.kafka.consumer._
 import zio.kafka.serde.Serde
@@ -84,11 +84,12 @@ def run(settings: ConsumerSettings): Task[Unit] =
   ZIO
     .scoped(Consumer.make(settings).flatMap(consume))
     .tapError {
-      case e: AuthorizationException => ZIO.logError(s"Lost access to Kafka: ${e.getMessage}")
-      case _                         => ZIO.unit
+      case e: AuthorizationException  => ZIO.logError(s"Lost access to Kafka: ${e.getMessage}")
+      case e: AuthenticationException => ZIO.logError(s"Kafka rejected our credentials: ${e.getMessage}")
+      case _                          => ZIO.unit
     }
 ```
 
 ## Verify the Result
 
-To check the setup, run the consumer against a cluster with ACLs, for example a staging cluster or the SASL broker that `Kafka.saslEmbedded` from `zio-kafka-testkit` starts (see [Writing Tests](writing-tests.md)). Once the consumer runs, remove its `READ` permission on the topic, for example with Kafka's `kafka-acls.sh --remove` or with `AdminClient#deleteAcls` (see [Admin Client](admin-client.md)). Within about `n` polls of the topic going quiet, the stream fails with a `TopicAuthorizationException` and the alert appears in the log. Without the probe, the same consumer keeps running and logs nothing.
+To check the setup, run the consumer against a cluster with ACLs, for example a staging cluster or the SASL broker that `Kafka.saslEmbedded` from `zio-kafka-testkit` starts (see [Test Producers and Consumers with the Test Kit](writing-tests.md)). Once the consumer runs, remove its `READ` permission on the topic, for example with Kafka's `kafka-acls.sh --remove` or with `AdminClient#deleteAcls` (see [Admin Client](admin-client.md)). Within about `n` polls of the topic going quiet, the stream fails with a `TopicAuthorizationException` and the alert appears in the log. Without the probe, the same consumer keeps running and logs nothing.
