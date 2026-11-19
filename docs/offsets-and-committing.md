@@ -3,7 +3,7 @@ id: offsets-and-committing
 title: "Offsets and Committing"
 ---
 
-Kafka remembers how far a consumer group has read each partition by storing a *committed offset* per partition. When a consumer restarts, or when a partition moves to another consumer during a rebalance, consumption continues from that committed offset. Zio-kafka never commits on its own (Kafka's `enable.auto.commit` is not supported, and `Consumer.make` fails when you set it to `true`), so your program decides when an offset is committed. This page explains what an offset is in zio-kafka, how to commit offsets one by one or in batches, how to retry failed commits, and how commits relate to external storage and transactions.
+Kafka remembers how far a consumer group has read each partition by storing a *committed offset* per partition. When a consumer restarts, or when a partition moves to another consumer during a rebalance, consumption continues from that committed offset. Zio-kafka never commits on its own (Kafka's `enable.auto.commit` is not supported, and `Consumer.make` fails when you set it to `true`), so your program decides when an offset is committed. This page is the reference for what an offset is in zio-kafka, how offsets are committed one by one or in batches, how failed commits are retried, and how commits relate to external storage and transactions.
 
 The core types are `Offset`, the position of one consumed record, and `OffsetBatch`, the combined positions of many records, at most one per partition. You get an `Offset` from a `CommittableRecord`, the record type that the [consumer](consumer.md) streams emit:
 
@@ -116,7 +116,7 @@ def process(key: String, value: String): Task[Unit] = ZIO.logInfo(s"$key -> $val
 def consumeAndCommitEach(consumer: Consumer): Task[Unit] =
   consumer
     .plainStream(Subscription.topics("my-topic"), Serde.string, Serde.string)
-    .mapZIO(record => process(record.key, record.value) *> record.offset.commit)
+    .mapZIOChunked(record => process(record.key, record.value) *> record.offset.commit)
     .runDrain
 ```
 
@@ -178,64 +178,15 @@ object Consumer {
 
 `Consumer.collectOffsets` adds each `Offset` to a batch with `OffsetBatch#add`, and `Consumer.collectOffsetBatches` merges each incoming `OffsetBatch` with `OffsetBatch#merge`. `Consumer.offsetBatches` is an alias of `Consumer.collectOffsets`; both names are supported.
 
-Combine these sinks with `ZStream#aggregateAsync` or `ZStream#aggregateAsyncWithin`. Both run the upstream on a separate fiber: while a commit is in progress, the offsets of newly processed records are collected into the next batch, so consuming and committing run in parallel.
-
-### Batching a Plain Stream
-
-With `ZStream#aggregateAsync`, a new commit starts as soon as the previous commit completes. To process records and commit their offsets in batches:
-
-```scala mdoc:compile-only
-import zio._
-import zio.kafka.consumer._
-import zio.kafka.serde.Serde
-
-def process(key: String, value: String): Task[Unit] = ZIO.logInfo(s"$key -> $value")
-
-def consumeAndCommitInBatches(consumer: Consumer): Task[Unit] =
-  consumer
-    .plainStream(Subscription.topics("my-topic"), Serde.string, Serde.string)
-    .mapChunksZIO(records => ZIO.foreach(records)(record => process(record.key, record.value).as(record.offset)))
-    .aggregateAsync(Consumer.collectOffsets)
-    .mapZIO(_.commit)
-    .runDrain
-```
-
-The example processes records with `ZStream#mapChunksZIO` to keep the stream's chunks intact (see [Avoiding Chunk Breakers](avoiding-chunk-breakers.md)).
-
-Committing continuously gives the lowest commit latency, but with many consumers the steady stream of commits can load the brokers. `ZStream#aggregateAsyncWithin` with a schedule limits the commit rate. To emit at most one batch every 100 milliseconds, replace the aggregation line with:
+Combine these sinks with `ZStream#aggregateAsync` or `ZStream#aggregateAsyncWithin`. Both run the upstream on a separate fiber: while a commit is in progress, the offsets of newly processed records are collected into the next batch, so consuming and committing run in parallel. The end of such a stream looks like this:
 
 ```scala
-.aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis))
+  .map(_.offset)                            // ZStream[R, Throwable, Offset]
+  .aggregateAsync(Consumer.collectOffsets)  // ZStream[R, Throwable, OffsetBatch]
+  .mapZIO(_.commit)                         // ZStream[R, Throwable, Unit]
 ```
 
-Choose an interval that is longer than a typical commit. The trade-offs are explained in [Consuming Kafka Topics Using ZIO Streams](consuming-kafka-topics-using-zio-streams.md).
-
-### Batching a Partitioned Stream
-
-With `Consumer#partitionedStream`, each partition has its own stream, and you merge the partition streams before committing. When each partition stream emits one `OffsetBatch` per processed chunk, aggregate the batches with `Consumer.collectOffsetBatches`:
-
-```scala mdoc:compile-only
-import zio._
-import zio.kafka.consumer._
-import zio.kafka.serde.Serde
-
-def processChunk(records: Chunk[CommittableRecord[String, String]]): Task[Unit] =
-  ZIO.logInfo(s"Processing ${records.size} records")
-
-def consumePartitions(consumer: Consumer): Task[Unit] =
-  consumer
-    .partitionedStream(Subscription.topics("my-topic"), Serde.string, Serde.string)
-    .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
-      partitionStream.mapChunksZIO { records =>
-        processChunk(records).as(Chunk.single(OffsetBatch(records.map(_.offset))))
-      }
-    }
-    .aggregateAsync(Consumer.collectOffsetBatches)
-    .mapZIO(_.commit)
-    .runDrain
-```
-
-Each partition stream processes its chunks sequentially, partitions are processed in parallel, and all their offsets are committed together.
+Use `Consumer.collectOffsets` when the stream carries one `Offset` per record, and `Consumer.collectOffsetBatches` when it already carries an `OffsetBatch` per chunk, for example after `ZStream#mapChunksZIO`. [Consume Topics with ZIO Streams](consuming-kafka-topics-using-zio-streams.md) shows complete programs for a plain and a partitioned stream and explains how to choose between `ZStream#aggregateAsync` and a commit interval with `ZStream#aggregateAsyncWithin`.
 
 ## Retrying Commits
 
@@ -261,7 +212,7 @@ The commit timeout is set with `ConsumerSettings#withCommitTimeout` and defaults
 
 ## Committing With consumeWith
 
-`Consumer.consumeWith` (and the `Consumer#consumeWith` instance method) runs your effect for each record and commits for you. Partitions are processed in parallel. After the effect for a record completes, the record's offset joins a batch: offsets are aggregated with `ZStream#aggregateAsync(Consumer.collectOffsets)` while the previous commit is still running, and each batch is committed with `OffsetBatch#commitOrRetry`.
+`Consumer.consumeWith` (and the `Consumer#consumeWith` instance method) runs your effect for each record and commits for you; see [consumeWith](consumer.md#consumewith) for how it processes records. After the effect for a record completes, the record's offset joins a batch: offsets are aggregated with `ZStream#aggregateAsync(Consumer.collectOffsets)` while the previous commit is still running, and each batch is committed with `OffsetBatch#commitOrRetry`.
 
 The retry schedule is the `commitRetryPolicy` parameter, with the default `Schedule.exponential(1.second) && Schedule.recurs(3)`. To use a different policy:
 
@@ -321,16 +272,11 @@ The offset that `Consumer#committed` returns is a next offset, the offset from w
 
 When you commit an offset only after the record has been processed, as all examples on this page do, you get *at-least-once* processing: every record is processed, but some records may be processed more than once. Records whose processing finished but whose offset was not yet committed are consumed again after a crash, a restart or a rebalance. Committing *before* processing gives at-most-once processing instead: records whose processing was interrupted are lost.
 
-Rebalances are a common source of duplicates, because a partition can move to another consumer while its last offsets are still being committed. Enable rebalance-safe commits with `ConsumerSettings#withRebalanceSafeCommits` to hold up a rebalance until the offsets of all consumed records are committed, for at most the duration set by `ConsumerSettings#withMaxRebalanceDuration`. See [Preventing Duplicates](preventing-duplicates.md) for the details and the timing constraints. For exactly-once processing from Kafka to Kafka, use [transactions](transactions.md).
+Rebalances are a common source of duplicates, because a partition can move to another consumer while its last offsets are still being committed. Enable rebalance-safe commits with `ConsumerSettings#withRebalanceSafeCommits` to hold up a rebalance until the offsets of all consumed records are committed, for at most the duration set by `ConsumerSettings#withMaxRebalanceDuration`. See [Prevent Duplicates After a Rebalance](preventing-duplicates.md) for the details and the timing constraints. For exactly-once processing from Kafka to Kafka, use [transactions](transactions.md).
 
 ## External Commits
 
-Instead of committing to Kafka, you can store offsets in an external system, for example in the same database transaction that stores the processing results. Then the database is the source of truth for the consumer's progress, and two things need to be wired up:
-
-1. When partitions are assigned, the consumer must start from the stored offsets. Configure this with `OffsetRetrieval.External`, see [Partition Assignment and Offset Retrieval](partition-assignment-and-offset-retrieval.md).
-2. When rebalance-safe commits are enabled, the consumer must know about the external commits, otherwise it waits in vain for commits to Kafka. Report every external commit with `Consumer#registerExternalCommits`.
-
-`Consumer#registerExternalCommits` takes an `OffsetBatch` and only records it as committed in the consumer; it does not commit anything to Kafka:
+Instead of committing to Kafka, you can store offsets in an external system, for example in the same database transaction that stores the processing results. The database is then the source of truth for the consumer's progress. Two settings work with it: `OffsetRetrieval.External` makes a newly assigned partition start from the stored offset (see [Partition Assignment and Offset Retrieval](partition-assignment-and-offset-retrieval.md#consumer-starting-offsets--offset-retrieval)), and with rebalance-safe commits on, `Consumer#registerExternalCommits` tells the consumer which offsets you stored, so it does not wait in vain for commits to Kafka:
 
 ```scala
 trait Consumer {
@@ -338,72 +284,8 @@ trait Consumer {
 }
 ```
 
-Store the next offset (`CommittableRecord#nextOffset`) rather than the consumed offset. Then your `OffsetRetrieval.External` function returns the stored value as is. To store offsets in an external store and resume from them:
-
-```scala mdoc:compile-only
-import org.apache.kafka.common.TopicPartition
-import zio._
-import zio.kafka.consumer._
-import zio.kafka.consumer.Consumer.{ OffsetEpoch, OffsetRetrieval }
-import zio.kafka.serde.Serde
-
-import scala.jdk.OptionConverters._
-
-trait OffsetStore {
-  def save(partition: TopicPartition, nextOffset: OffsetEpoch): Task[Unit]
-  def load(partitions: Set[TopicPartition]): Task[Map[TopicPartition, OffsetEpoch]]
-}
-
-def settings(store: OffsetStore): ConsumerSettings =
-  ConsumerSettings(List("localhost:9092"))
-    .withGroupId("my-group")
-    .withRebalanceSafeCommits(true)
-    .withOffsetRetrieval(OffsetRetrieval.External(store.load))
-
-def consumeWithExternalCommits(consumer: Consumer, store: OffsetStore): Task[Unit] =
-  consumer
-    .plainStream(Subscription.topics("my-topic"), Serde.string, Serde.string)
-    .mapChunksZIO { records =>
-      // Process the records here, then store the highest next offset per partition once per chunk.
-      val batch = OffsetBatch(records.map(_.offset))
-      ZIO.foreachDiscard(batch.nextOffsets) { case (tp, next) =>
-        store.save(tp, OffsetEpoch(next.offset(), next.leaderEpoch().toScala.map(_.intValue)))
-      } *> consumer.registerExternalCommits(batch).as(records)
-    }
-    .runDrain
-```
-
-The example stores and registers offsets once per chunk instead of once per record. In a real program, save the offsets in the same database transaction as the processing results.
+`Consumer#registerExternalCommits` only records the batch as committed inside the consumer; it does not commit anything to Kafka. Store the next offset (`Offset#nextOffset`) rather than the consumed offset, so that `OffsetRetrieval.External` can return the stored value as is. [Commit to an External System](preventing-duplicates.md#commit-to-an-external-system) shows a complete program that stores offsets, registers them and resumes from them.
 
 ## Transactional Commits
 
-With a `TransactionalProducer`, consumed offsets are committed as part of a Kafka transaction, together with the records the transaction produces. You don't call `OffsetBatch#commit` yourself. Instead, you pass the offsets to the transaction: `Transaction#produce` and `Transaction#produceChunk` take an `offset: Option[Offset]`, and `Transaction#produceChunkBatch` takes an `OffsetBatch`. When the transaction commits, the producer sends the collected offsets to the broker, using the batch's consumer group metadata, and registers them with the consumer as external commits. A transactional producer therefore requires rebalance-safe commits on its consumer.
-
-To copy records to another topic and commit their offsets in one transaction per chunk:
-
-```scala mdoc:compile-only
-import org.apache.kafka.clients.producer.ProducerRecord
-import zio._
-import zio.kafka.consumer._
-import zio.kafka.producer._
-import zio.kafka.serde.Serde
-
-def copyTransactionally(consumer: Consumer, producer: TransactionalProducer): Task[Unit] =
-  consumer
-    .plainStream(Subscription.topics("input-topic"), Serde.string, Serde.string)
-    .mapChunksZIO { records =>
-      ZIO.scoped {
-        producer.createTransaction.flatMap { transaction =>
-          transaction.produceChunkBatch(
-            records.map(record => new ProducerRecord("output-topic", record.key, record.value)),
-            Serde.string,
-            Serde.string,
-            OffsetBatch(records.map(_.offset))
-          )
-        }
-      }.as(Chunk.empty[Unit])
-    }
-    .runDrain
-```
-
-See [Transactions](transactions.md) for the setup of the consumer and the transactional producer.
+With a `TransactionalProducer`, consumed offsets are committed as part of a Kafka transaction, together with the records the transaction produces. You don't call `OffsetBatch#commit` yourself. Instead, you pass the offsets to the transaction: `Transaction#produce` and `Transaction#produceChunk` take an `offset: Option[Offset]`, and `Transaction#produceChunkBatch` takes an `OffsetBatch`. The offsets are committed when the transaction commits, using the consumer group metadata that `Offset#consumerGroupMetadata` and `OffsetBatch#consumerGroupMetadata` carry, and the producer registers them with the consumer as external commits. A transactional producer therefore requires rebalance-safe commits on its consumer. [Transactions](transactions.md) walks through a complete consume-transform-produce program.
