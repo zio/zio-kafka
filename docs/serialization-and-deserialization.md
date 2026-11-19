@@ -5,17 +5,13 @@ title: "Serialization and Deserialization"
 
 Kafka stores keys and values as plain byte arrays while your application probably needs a higher-level type. Serialization and deserialization is the process of converting byte arrays to and from application types.
 
-## Two ways to do serialization and deserialization
+## Two Ways to Do Serialization and Deserialization
 
-Broadly, there are 2 ways to do serialization and deserialization:
-
-1. Use zio-kafka's serde support.
-1. Serialize/deserialize in your own application.
+Broadly, there are two ways to do serialization and deserialization: use zio-kafka's serde support, or serialize and deserialize in your own application.
 
 Zio-kafka provides many common serde (named after SERialization plus DEserialization) implementations. The type conversion is done inside zio-kafka; it is therefore a convenient way to get serialization and deserialization out of the box.
 
-There are however also downsides to zio-kafka's serde support: it disallows performance optimization such as operating on chunks of records with pure functions (reducing work for the ZIO scheduler), failure handling is harder, and scoped resources are not automatically closed.
-We can work around these downsides and improve throughput, especially in the consumer. We therefore also discuss [deserialization in the consumer stream](#deserialization-in-the-consumer-stream).
+There are however also downsides to zio-kafka's serde support: it disallows performance optimization such as operating on chunks of records with pure functions (reducing work for the ZIO scheduler), failure handling is harder, and scoped resources are not automatically closed. We can work around these downsides and improve throughput, especially in the consumer. We therefore also discuss [deserialization in the consumer stream](#deserialization-in-the-consumer-stream).
 
 ## Serde
 
