@@ -224,7 +224,10 @@ val abortedTransaction: Task[Unit] =
       _  <- tx.produce(new ProducerRecord("my-output-topic", "key", "value"), Serde.string, Serde.string, None)
       _  <- tx.abort // the record above is never visible to read_committed consumers
     } yield ()
-  }.catchSome { case UserInitiatedAbort => ZIO.unit }
+  }.catchAll {
+    case UserInitiatedAbort => ZIO.unit  // expected: the transaction was aborted on purpose
+    case e: Throwable       => ZIO.fail(e)
+  }
 ```
 
 ## Integration
