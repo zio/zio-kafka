@@ -258,11 +258,11 @@ val newProtocolSettings: ConsumerSettings =
 
 With `group.protocol=consumer`, several group settings move to the broker:
 
-| Classic client setting          | With `group.protocol=consumer`                                          |
-| ------------------------------- | ----------------------------------------------------------------------- |
+| Classic client setting          | With `group.protocol=consumer`                                           |
+| ------------------------------- | ------------------------------------------------------------------------ |
 | `partition.assignment.strategy` | broker assignor, chosen with the client property `group.remote.assignor` |
-| `session.timeout.ms`            | broker setting `group.consumer.session.timeout.ms`                      |
-| `heartbeat.interval.ms`         | broker setting `group.consumer.heartbeat.interval.ms`                   |
+| `session.timeout.ms`            | broker setting `group.consumer.session.timeout.ms`                       |
+| `heartbeat.interval.ms`         | broker setting `group.consumer.heartbeat.interval.ms`                    |
 
 The Kafka client refuses to start with a `ConfigException` when one of the three classic settings in the table is set together with `group.protocol=consumer`. Since rebalance-safe commits set `partition.assignment.strategy`, keep `group.protocol` at `classic` when you enable rebalance-safe commits, and therefore also when you use a transactional producer. The other settings on this page, including `max.poll.interval.ms` and `group.instance.id`, work with both protocols.
 
