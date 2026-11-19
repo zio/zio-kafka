@@ -52,8 +52,8 @@ def produceWithHeaders(producer: Producer): Task[RecordMetadata] = {
 
 Headers work the same with every produce method of the [Producer](producer.md), including the chunk variants and `Producer#produceAll`, and with the [transactional producer](transactions.md): `Transaction#produce`, `Transaction#produceChunk` and `Transaction#produceChunkBatch` send records through the same code path.
 
-:::warning
-Create a new `ProducerRecord` for every send. When you produce a byte-array record, the Kafka client marks that record's headers read-only, so a later `Headers#add` on it throws an `IllegalStateException`. With the serializer overloads, zio-kafka sends a copy, but a serializer that adds headers changes the record you pass in (see [Header-Aware Serializers and Deserializers](#header-aware-serializers-and-deserializers)).
+:::warning[Build a New Record for Every Send]
+When the Kafka client sends a record, it makes the record's `Headers` read-only, and a later `Headers#add` on them throws an `IllegalStateException`. The produce methods that take serializers send a new `ProducerRecord` with the serialized key and value, but that record shares the `Headers` object of the record you passed in, so your record's headers become read-only too. Producing the same `ProducerRecord` again therefore fails as soon as something adds a header to it, for example a serializer that adds headers (see [Header-Aware Serializers and Deserializers](#header-aware-serializers-and-deserializers)). Build a new `ProducerRecord` for every send.
 :::
 
 ## Reading Headers When Consuming
@@ -102,80 +102,34 @@ def sources(consumer: Consumer): ZStream[Any, Throwable, (String, Offset)] =
 
 ## Header-Aware Serializers and Deserializers
 
-Every `Serializer` and `Deserializer` receives the topic and the headers along with the value, so the encoding of a record can depend on its headers. The function-based constructors make this explicit:
+Every `Serializer` and `Deserializer` receives the topic and the headers along with the value, so the encoding of a record can depend on its headers. The function-based constructors `Serializer.apply` and `Deserializer.apply`, described in [From Functions](serialization-and-deserialization.md#from-functions), pass the headers to your function as the second parameter.
 
-```scala
-object Serializer {
-  def apply[R, A](ser: (String, Headers, A) => RIO[R, Array[Byte]]): Serializer[R, A]
-}
+A serializer may also add headers. When producing with a serializer, zio-kafka runs the key serializer and then the value serializer on the record's headers, and writes the record with the headers as they are afterwards. A deserializer receives the headers of the consumed record, so it can choose how to decode the bytes. The pair below writes a `content-type` header and reads it back, to tell JSON from plain text:
 
-object Deserializer {
-  def apply[R, A](deser: (String, Headers, Array[Byte]) => RIO[R, A]): Deserializer[R, A]
-}
-```
-
-A serializer may also add headers. When producing with a serializer, zio-kafka runs the key serializer and then the value serializer on the record's headers, and writes the record with the headers as they are afterwards. The serializer below encodes a `Greeting` as JSON and records that in a `content-type` header. The deserializer reads the header and accepts both the JSON format and an older `name:message` text format, which it assumes when the header is missing:
-
-```scala mdoc:silent
+```scala mdoc:compile-only
 import zio._
-import zio.json._
 import zio.kafka.serde._
 import java.nio.charset.StandardCharsets.UTF_8
 
-final case class Greeting(name: String, message: String)
-
-object Greeting {
-  implicit val encoder: JsonEncoder[Greeting] = DeriveJsonEncoder.gen[Greeting]
-  implicit val decoder: JsonDecoder[Greeting] = DeriveJsonDecoder.gen[Greeting]
-}
-
 val ContentTypeHeader = "content-type"
 
-val greetingSerializer: Serializer[Any, Greeting] =
-  Serializer { (_, headers, greeting) =>
+val jsonTextSerializer: Serializer[Any, String] =
+  Serializer { (_, headers, json) =>
     ZIO.attempt {
       headers.add(ContentTypeHeader, "application/json".getBytes(UTF_8))
-      greeting.toJson.getBytes(UTF_8)
+      json.getBytes(UTF_8)
     }
   }
 
-val greetingDeserializer: Deserializer[Any, Greeting] =
+val contentTypeDeserializer: Deserializer[Any, (Option[String], String)] =
   Deserializer { (_, headers, data) =>
     val contentType = Option(headers.lastHeader(ContentTypeHeader))
       .flatMap(header => Option(header.value()))
       .map(new String(_, UTF_8))
-    val text = new String(data, UTF_8)
-
-    contentType match {
-      case Some("application/json") =>
-        ZIO.fromEither(text.fromJson[Greeting]).mapError(new RuntimeException(_))
-      case Some("text/plain") | None =>
-        text.split(":", 2) match {
-          case Array(name, message) => ZIO.succeed(Greeting(name, message))
-          case _                    => ZIO.fail(new RuntimeException(s"Invalid greeting: $text"))
-        }
-      case Some(other) =>
-        ZIO.fail(new RuntimeException(s"Unsupported content type: $other"))
-    }
+    ZIO.succeed((contentType, new String(data, UTF_8)))
   }
-
-val greetingSerde: Serde[Any, Greeting] = Serde(greetingDeserializer)(greetingSerializer)
 ```
 
-Because the serializer changes the headers of the `ProducerRecord` you pass in, producing the same record object twice adds the header twice; create a new record for every send. The predefined serdes such as `Serde.string` ignore headers. See [Serialization and Deserialization](serialization-and-deserialization.md) for more ways to build serdes.
+Because such a serializer adds a header to the `ProducerRecord` you pass in, produce a new record for every send, as explained in the warning under [Adding Headers When Producing](#adding-headers-when-producing). The predefined serdes such as `Serde.string` ignore headers. See [Serialization and Deserialization](serialization-and-deserialization.md) for more ways to build serdes.
 
-## Headers in CommittableRecord#deserializeWith
-
-`CommittableRecord#deserializeWith` turns a record of byte arrays into a typed record. It passes the record's headers to both deserializers, and the new record keeps the same headers. This is useful when you consume with `Serde.byteArray` and deserialize inside the stream, where you can handle failures per record. Reusing `greetingDeserializer` from the previous section:
-
-```scala mdoc:silent
-import zio.stream._
-import zio.kafka.consumer._
-
-def greetings(consumer: Consumer): ZStream[Any, Throwable, CommittableRecord[String, Greeting]] =
-  consumer
-    .plainStream(Subscription.topics("greetings"), Serde.byteArray, Serde.byteArray)
-    .mapChunksZIO(records => ZIO.foreach(records)(_.deserializeWith(Serde.string, greetingDeserializer)))
-```
-
-The deserializers you pass to `Consumer#plainStream` and the other stream methods go through `CommittableRecord#deserializeWith` as well, so they receive the headers in the same way.
+The deserializers you pass to `Consumer#plainStream` and the other stream methods receive the record's headers. So do the deserializers you pass to `CommittableRecord#deserializeWith`, which deserializes a record of raw bytes later in the stream and keeps its headers; see [CommittableRecord](consumer.md#committablerecord).
