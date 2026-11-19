@@ -233,7 +233,7 @@ The moment of `RecordsSent` depends on the `acks` producer configuration. With `
 
 The `failed` field of `RecordsSent` holds the indices (into `records`) of the records that failed, together with the records that were not sent because an earlier record failed. When every record succeeded, `failed` is empty.
 
-The `batchId` links the events of one batch. It starts at `0` and increases by one for every batch, separately for each producer. The `RecordsOffered` and `RecordsSent` events of the same batch have the same `batchId` and the same `records`. Batches are sent concurrently, so the `RecordsSent` events of different batches can arrive in any order, and interleaved with the `RecordsOffered` events of other batches. The `RecordsOffered` event of a batch always arrives before its own `RecordsSent` event, When several fibers produce concurrently, the order of the `RecordsOffered` events (and of the `batchId`s) can differ from the order in which the batches enter the send queue. An empty batch produces no events.
+The `batchId` links the events of one batch. It starts at `0` and increases by one for every batch, separately for each producer. The `RecordsOffered` and `RecordsSent` events of the same batch have the same `batchId` and the same `records`. Batches are sent concurrently, so the `RecordsSent` events of different batches can arrive in any order, and interleaved with the `RecordsOffered` events of other batches. The `RecordsOffered` event of a batch always arrives before its own `RecordsSent` event. When several fibers produce concurrently, the order of the `RecordsOffered` events (and of the `batchId`s) can differ from the order in which the batches enter the send queue. An empty batch produces no events.
 
 ## Writing Your Own Diagnostics
 
@@ -263,14 +263,9 @@ val logRebalances: Consumer.ConsumerDiagnostics = new Diagnostics[DiagnosticEven
         ZIO.unit
     }
 }
-
-val settings: ConsumerSettings =
-  ConsumerSettings(List("localhost:9092"))
-    .withGroupId("my-group")
-    .withDiagnostics(logRebalances)
 ```
 
-The example also logs failed commits, because they often accompany a rebalance.
+The example also logs failed commits, because they often accompany a rebalance. Install it with `ConsumerSettings#withDiagnostics`, as shown in [Configuring Diagnostics](#configuring-diagnostics).
 
 ### Counting Failed Producer Records
 
@@ -291,16 +286,9 @@ def countFailures(failedRecords: Ref[Long]): Producer.ProducerDiagnostics =
           ZIO.unit
       }
   }
-
-val producerWithFailureCount: ZIO[Scope, Throwable, (Producer, Ref[Long])] =
-  for {
-    failedRecords <- Ref.make(0L)
-    settings = ProducerSettings(List("localhost:9092")).withDiagnostics(countFailures(failedRecords))
-    producer <- Producer.make(settings)
-  } yield (producer, failedRecords)
 ```
 
-To feed such a count into your monitoring system, increment a ZIO metric instead of a `Ref`.
+Create the `Ref` before the producer, and pass `countFailures(failedRecords)` to `ProducerSettings#withDiagnostics`. To feed such a count into your monitoring system, increment a ZIO metric instead of a `Ref`.
 
 ## SlidingDiagnostics
 
@@ -346,4 +334,4 @@ val rebalances: ZIO[Scope, Throwable, Chunk[DiagnosticEvent.Rebalance]] =
   } yield events.collect { case rebalance: DiagnosticEvent.Rebalance => rebalance }
 ```
 
-Because the consumer has closed when `Queue#takeAll` runs, `events` ends with `DiagnosticEvent.ConsumerFinalized`. Choose a `queueSize` that is large enough for the events you want to inspect: the consumer also emits `Poll` and `Request` events, and those push older events out of a small queue.
+Because the consumer has closed when `Queue#takeAll` runs, `events` ends with `DiagnosticEvent.ConsumerFinalized`. In a test that uses the [test kit](testkit.md#consumers), pass the diagnostics to the `diagnostics` parameter of `KafkaTestUtils.makeConsumer` instead of building the settings yourself. Choose a `queueSize` that is large enough for the events you want to inspect: the consumer also emits `Poll` and `Request` events, and those push older events out of a small queue.
