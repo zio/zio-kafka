@@ -8,10 +8,7 @@ In this guide we tune a zio-kafka consumer for high throughput, low latency, low
 
 ## Don't Mix Up the Two Poll Settings
 
-Two settings with similar names are involved in most tuning decisions:
-
-- `pollTimeout` (zio-kafka) is how long one poll of the Kafka consumer may take.
-- `max.poll.interval.ms` (Kafka) is the longest time allowed between two polls.
+Two settings with similar names are involved in most tuning decisions: `pollTimeout` (zio-kafka) is how long one poll of the Kafka consumer may take, while `max.poll.interval.ms` (Kafka) is the longest time allowed between two polls.
 
 ## Choose Between Throughput and Latency
 
@@ -36,7 +33,7 @@ val lowLatencySettings = ConsumerSettings(bootstrapServers).tuneForLowLatency
 
 ## Adjust for Small and Large Records
 
-Kafka’s performance is not very sensitive to record size. However, when records become very small (< 100 bytes) it might be beneficial to increase `max.poll.records` and `partitionPreFetchBufferLimit`. Similarly, when records are very large (> 100Kb), `max.poll.records` can be decreased. Also, pre-fetching can be limited by decreasing `partitionPreFetchBufferLimit` or even disabled by using `ConsumerSettings#withoutPartitionPreFetching`.
+Kafka's performance is not very sensitive to record size. However, when records become very small (< 100 bytes) it might be beneficial to increase `max.poll.records` and `partitionPreFetchBufferLimit`. Similarly, when records are very large (> 100Kb), `max.poll.records` can be decreased. Also, pre-fetching can be limited by decreasing `partitionPreFetchBufferLimit` or even disabled by using `ConsumerSettings#withoutPartitionPreFetching`.
 
 ## Limit Memory With Many Partitions
 
@@ -149,10 +146,7 @@ Zio-kafka exposes [metrics](metrics.md) that can be used to further tune the con
 
 The runloop is at the heart of every zio-kafka consumer. It creates a stream for each partition, which is the stream your application eventually consumes from. When the stream starts, and every time its records queue is empty, it sends a request for data to the runloop. The request makes the runloop poll. Partitions whose queue size is at or below the `FetchStrategy`'s limit are resumed, so the next poll may receive records for them. Any received records are put in the records queue. When the queue reaches a certain size (as determined by the configured `FetchStrategy`), the partition is paused. Meanwhile, the stream reads from the queue and emits the records to your application.
 
-An optimally configured consumer has the following properties:
-
-- The streams never have to wait for new records, which gives high throughput.
-- Most of the time, the record queues are empty, which gives low latency and low heap usage.
+An optimally configured consumer has two properties: the streams never have to wait for new records, which gives high throughput, and most of the time the record queues are empty, which gives low latency and low heap usage.
 
 To get to this state, follow these steps:
 
