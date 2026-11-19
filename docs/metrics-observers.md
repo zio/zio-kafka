@@ -112,6 +112,28 @@ val withObserver: ConsumerSettings =
 
 When no observer is set, every consumer and producer creates its own default observer when it starts, in `Consumer.make`, `Producer.make` and the other constructors, including those of `TransactionalProducer`. An observer is just a value, so you can share one instance between several consumers; they then report into the same metrics. When an application runs several consumers or producers with the default observer, give each one distinct labels, or their measurements land in the same ZIO metrics.
 
+`ConsumerMetricsObserver.NoOp` and `ProducerMetricsObserver.NoOp` implement every callback as `ZIO.unit`. Installing them turns off zio-kafka's own metrics, which is useful in tests or when you do not export metrics at all:
+
+```scala mdoc:compile-only
+import zio.kafka.consumer.ConsumerSettings
+import zio.kafka.consumer.metrics.ConsumerMetricsObserver
+import zio.kafka.producer.ProducerSettings
+import zio.kafka.producer.metrics.ProducerMetricsObserver
+
+val bootstrapServers = List("localhost:9092")
+
+val consumerSettings: ConsumerSettings =
+  ConsumerSettings(bootstrapServers)
+    .withGroupId("orders-service")
+    .withMetricsObserver(ConsumerMetricsObserver.NoOp)
+
+val producerSettings: ProducerSettings =
+  ProducerSettings(bootstrapServers)
+    .withMetricsObserver(ProducerMetricsObserver.NoOp)
+```
+
+`NoOp` only silences the zio-kafka metrics. The Java client metrics stay available through `Consumer#metrics` and `Producer#metrics`. With the consumer `NoOp`, the runloop still runs its sampling fiber on `ConsumerSettings#runloopMetricsSchedule`, but every snapshot is discarded.
+
 ## ConsumerMetricsObserver
 
 `ConsumerMetricsObserver` has six callbacks, each called from a different place in the consumer:
@@ -268,17 +290,73 @@ object MetricInfo {
 
 The type parameter of `Gauge` and `Histogram` is the type of the measured value (`Int`, `Long` or `Duration`); `MetricInfo` stores no value itself. The boundaries are ZIO's `Histogram.Boundaries`, usually built with `Histogram.Boundaries.fromChunk`, `Histogram.Boundaries.linear` or `Histogram.Boundaries.exponential`. Latency boundaries are in seconds, because the default observers record durations in seconds.
 
-The companion objects define the default boundaries as methods, such as `ConsumerMetrics.defaultLatencyBoundaries`, so you can reuse them. Most follow an exponential series based on 𝑒. For every default and the histograms that use it, see the [`ConsumerMetrics`](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/consumer/metrics/ConsumerMetrics$.html) and [`ProducerMetrics`](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/producer/metrics/ProducerMetrics$.html) API docs.
+### ConsumerMetrics Fields
+
+`ConsumerMetrics` has one field per consumer metric. The [Metrics](metrics.md#zio-kafka-consumer-metrics) page describes what each metric measures:
+
+| Field                                | Kind                  | Metric name                                           | Default boundaries                                           |
+| ------------------------------------ | --------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
+| `pollCounter`                        | `Counter`             | `ziokafka_consumer_polls`                             |                                                              |
+| `partitionsResumedInLatestPollGauge` | `Gauge[Int]`          | `ziokafka_consumer_partitions_resumed_in_latest_poll` |                                                              |
+| `partitionsPausedInLatestPollGauge`  | `Gauge[Int]`          | `ziokafka_consumer_partitions_paused_in_latest_poll`  |                                                              |
+| `pollLatencyHistogram`               | `Histogram[Duration]` | `ziokafka_consumer_poll_latency_seconds`              | `ConsumerMetrics.defaultLatencyBoundaries`                   |
+| `pollSizeHistogram`                  | `Histogram[Int]`      | `ziokafka_consumer_poll_size`                         | `ConsumerMetrics.defaultCountBoundaries`                     |
+| `commitCounter`                      | `Counter`             | `ziokafka_consumer_commits`                           |                                                              |
+| `commitLatencyHistogram`             | `Histogram[Duration]` | `ziokafka_consumer_commit_latency_seconds`            | `ConsumerMetrics.defaultLatencyBoundaries`                   |
+| `aggregatedCommitCounter`            | `Counter`             | `ziokafka_consumer_aggregated_commits`                |                                                              |
+| `aggregatedCommitLatencyHistogram`   | `Histogram[Duration]` | `ziokafka_consumer_aggregated_commit_latency_seconds` | `ConsumerMetrics.defaultLatencyBoundaries`                   |
+| `aggregatedCommitSizeHistogram`      | `Histogram[Long]`     | `ziokafka_consumer_aggregated_commit_size`            | `ConsumerMetrics.defaultCountBoundaries`                     |
+| `rebalanceCounter`                   | `Counter`             | `ziokafka_consumer_rebalances`                        |                                                              |
+| `partitionsCurrentlyAssignedGauge`   | `Gauge[Int]`          | `ziokafka_consumer_partitions_currently_assigned`     |                                                              |
+| `partitionsAssignedCounter`          | `Counter`             | `ziokafka_consumer_partitions_assigned`               |                                                              |
+| `partitionsRevokedCounter`           | `Counter`             | `ziokafka_consumer_partitions_revoked`                |                                                              |
+| `partitionsLostCounter`              | `Counter`             | `ziokafka_consumer_partitions_lost`                   |                                                              |
+| `pendingRequestsHistogram`           | `Histogram[Int]`      | `ziokafka_consumer_pending_requests`                  | `ConsumerMetrics.defaultStreamCountBoundaries`               |
+| `pendingCommitsHistogram`            | `Histogram[Int]`      | `ziokafka_consumer_pending_commits`                   | `ConsumerMetrics.defaultStreamCountBoundaries`               |
+| `queueSizeHistogram`                 | `Histogram[Int]`      | `ziokafka_consumer_queue_size`                        | `ConsumerMetrics.defaultStreamSizeBoundaries`                |
+| `queuePollsHistogram`                | `Histogram[Int]`      | `ziokafka_consumer_queue_polls`                       | `ConsumerMetrics.defaultQueuePollSizeBoundaries`             |
+| `allQueueSizeHistogram`              | `Histogram[Int]`      | `ziokafka_consumer_all_queue_size`                    | `ConsumerMetrics.defaultStreamSizeBoundaries`                |
+| `subscriptionStateGauge`             | `Gauge[Int]`          | `ziokafka_consumer_subscription_state`                |                                                              |
+| `commandQueueSizeHistogram`          | `Histogram[Int]`      | `ziokafka_consumer_command_queue_size`                | `ConsumerMetrics.defaultCommandAndCommitQueueSizeBoundaries` |
+| `commitQueueSizeHistogram`           | `Histogram[Int]`      | `ziokafka_consumer_commit_queue_size`                 | `ConsumerMetrics.defaultCommandAndCommitQueueSizeBoundaries` |
+| `pollAuthErrorCounter`               | `Counter`             | `ziokafka_consumer_poll_auth_errors`                  |                                                              |
+
+### ProducerMetrics Fields
+
+`ProducerMetrics` has one field per producer metric. The [Metrics](metrics.md#zio-kafka-producer-metrics) page describes what each metric measures:
+
+| Field                       | Kind                  | Metric name                                    | Default boundaries                                |
+| --------------------------- | --------------------- | ---------------------------------------------- | ------------------------------------------------- |
+| `produceCallsCounter`       | `Counter`             | `ziokafka_producer_calls`                      |                                                   |
+| `produceLatencyHistogram`   | `Histogram[Duration]` | `ziokafka_producer_latency_seconds`            | `ProducerMetrics.defaultProduceLatencyBoundaries` |
+| `produceRecordsCounter`     | `Counter`             | `ziokafka_producer_records`                    |                                                   |
+| `produceBatchSizeHistogram` | `Histogram[Int]`      | `ziokafka_producer_batch_size`                 | `ProducerMetrics.defaultBatchSizeBoundaries`      |
+| `sendQueueSizeHistogram`    | `Histogram[Int]`      | `ziokafka_producer_send_queue_size`            | `ProducerMetrics.defaultSendQueueSizeBoundaries`  |
+| `sendQueueLatencyHistogram` | `Histogram[Duration]` | `ziokafka_producer_send_queue_latency_seconds` | `ProducerMetrics.defaultQueueLatencyBoundaries`   |
+| `sendAuthErrorCounter`      | `Counter`             | `ziokafka_producer_auth_errors`                |                                                   |
+
+### Default Histogram Boundaries
+
+The companion objects `ConsumerMetrics` and `ProducerMetrics` define the default boundaries as methods, so you can reuse them in your own descriptors. Most follow an exponential series based on 𝑒:
+
+| Method                                                       | Boundaries                                                                   |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `ConsumerMetrics.defaultLatencyBoundaries`                   | 0.01, 0.03, 0.08, 0.21, 0.55, 1.49, 4.04, 10.97, 29.81, 81.04 seconds        |
+| `ConsumerMetrics.defaultCountBoundaries`                     | 1, 3, 8, 21, 55, 149, 404, 1097, 2981, 8104                                  |
+| `ConsumerMetrics.defaultStreamCountBoundaries`               | 0, 1, 3, 8, 21, 55, 149, 404, 1097, 2981                                     |
+| `ConsumerMetrics.defaultStreamSizeBoundaries`                | 0, 100, 272, 739, 2009, 5460, 14842, 40343, 109664, 298096                   |
+| `ConsumerMetrics.defaultQueuePollSizeBoundaries`             | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9                                                 |
+| `ConsumerMetrics.defaultCommandAndCommitQueueSizeBoundaries` | the same as `ConsumerMetrics.defaultStreamCountBoundaries`                   |
+| `ProducerMetrics.defaultProduceLatencyBoundaries`            | 0.01, 0.03, 0.08, 0.21, 0.55, 1.49, 4.04, 10.97, 29.81, 81.04 seconds        |
+| `ProducerMetrics.defaultBatchSizeBoundaries`                 | 1, 3, 8, 21, 55, 149, 404, 1097, 2981, 8104                                  |
+| `ProducerMetrics.defaultSendQueueSizeBoundaries`             | 0, 10, 28, 74, 201, 546, 1485, 4035, 10967, 29810                            |
+| `ProducerMetrics.defaultQueueLatencyBoundaries`              | 0.001, 0.003, 0.008, 0.021, 0.055, 0.149, 0.404, 1.097, 2.981, 8.104 seconds |
 
 :::note
 `Histogram.Boundaries.fromChunk` drops every boundary that is not greater than 0 and appends `Double.MaxValue` as the last boundary (the `+Inf` bucket). The `0` that several default series start with therefore never reaches `Boundaries#values`, for the default observer and for a custom observer that reads the descriptor alike. The lowest bucket of those histograms is the first positive boundary, and it also counts the value 0.
 :::
 
-## Common Patterns
-
-The examples below cover the usual reasons to touch this API. All of them only build settings and observers; nothing connects to Kafka until the settings are passed to `Consumer.make` or `Producer.make`.
-
-### Customizing Histogram Boundaries
+### Changing Descriptors
 
 When the default buckets are too coarse for your workload, copy the default descriptors, replace the boundaries you need, and pass the result to the default observer. Here, polls usually take a few milliseconds, so the poll latency histogram gets boundaries from 1 ms to 512 ms, doubling each step:
 
@@ -310,142 +388,56 @@ val settings: ConsumerSettings =
 
 The same approach renames a metric: copy the `MetricInfo` with a different `name`. For the producer, copy `ProducerMetrics()` and pass it to `ZioMetricsProducerMetricsObserver`.
 
-### Adding Logging to the Default Observer
+## Custom Observers
 
-An observer can delegate to another observer and do extra work around it. This one keeps all the default ZIO metrics, and also logs slow polls and every rebalance:
+A custom observer implements every callback of `ConsumerMetricsObserver` or `ProducerMetricsObserver`. Two kinds are common: one that wraps another observer and adds work around it, and one that sends the measurements to a metrics library other than ZIO metrics. Install either with `ConsumerSettings#withMetricsObserver` or `ProducerSettings#withMetricsObserver`, as shown in [Installing an Observer](#installing-an-observer); because it replaces the default observer, labels go into the constructor of any `ZioMetrics*Observer` it wraps, not into `withMetricsLabels`.
+
+To keep all the default ZIO metrics of a producer and also log slow produce calls, wrap the default observer and delegate every callback to it:
 
 ```scala mdoc:compile-only
 import zio._
-import zio.kafka.consumer.ConsumerSettings
-import zio.kafka.consumer.metrics.{ ConsumerMetricsObserver, ZioMetricsConsumerMetricsObserver }
-import zio.kafka.consumer.metrics.ConsumerMetricsObserver.ConsumerState
+import zio.kafka.producer.ProducerSettings
+import zio.kafka.producer.metrics.{ ProducerMetricsObserver, ZioMetricsProducerMetricsObserver }
 import zio.metrics.MetricLabel
 
-final class LoggingConsumerMetricsObserver(underlying: ConsumerMetricsObserver, slowPoll: Duration)
-    extends ConsumerMetricsObserver {
+final class SlowProduceLogger(underlying: ProducerMetricsObserver, slow: Duration) extends ProducerMetricsObserver {
+  override def observeProduce(latency: Duration, batchSize: Int): UIO[Unit] =
+    underlying.observeProduce(latency, batchSize) *>
+      ZIO.logWarning(s"Slow produce: ${latency.toMillis} ms for $batchSize records").when(latency > slow).unit
 
-  override def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int): UIO[Unit] =
-    underlying.observePoll(resumedCount, pausedCount, latency, pollSize) *>
-      ZIO
-        .logWarning(s"Slow poll: ${latency.toMillis} ms for $pollSize records")
-        .when(latency > slowPoll)
-        .unit
-
-  override def observeRebalance(
-    currentlyAssignedCount: Int,
-    assignedCount: Int,
-    revokedCount: Int,
-    lostCount: Int
-  ): UIO[Unit] =
-    underlying.observeRebalance(currentlyAssignedCount, assignedCount, revokedCount, lostCount) *>
-      ZIO.logInfo(
-        s"Rebalance: $assignedCount assigned, $revokedCount revoked, $lostCount lost, $currentlyAssignedCount now assigned"
-      )
-
-  override def observeCommit(latency: Duration): UIO[Unit] =
-    underlying.observeCommit(latency)
-
-  override def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit] =
-    underlying.observeAggregatedCommit(latency, commitSize)
-
-  override def observeRunloopMetrics(state: ConsumerState): UIO[Unit] =
-    underlying.observeRunloopMetrics(state)
-
-  override def observePollAuthError: UIO[Unit] =
-    underlying.observePollAuthError
+  override def observeSendQueueSize(size: Int): UIO[Unit]         = underlying.observeSendQueueSize(size)
+  override def observeSendQueueTake(latency: Duration): UIO[Unit] = underlying.observeSendQueueTake(latency)
+  override def observeSendAuthError(errorCount: Int): UIO[Unit]   = underlying.observeSendAuthError(errorCount)
 }
 
-val labels = Set(MetricLabel("group-id", "orders-service"))
-
-val settings: ConsumerSettings =
-  ConsumerSettings(List("localhost:9092"))
-    .withGroupId("orders-service")
-    .withMetricsObserver(
-      new LoggingConsumerMetricsObserver(new ZioMetricsConsumerMetricsObserver(labels), slowPoll = 1.second)
-    )
+val settings: ProducerSettings =
+  ProducerSettings(List("localhost:9092")).withMetricsObserver(
+    new SlowProduceLogger(new ZioMetricsProducerMetricsObserver(Set(MetricLabel("producer", "orders"))), 1.second)
+  )
 ```
 
-Because a custom observer replaces the default one, the labels go into the `ZioMetricsConsumerMetricsObserver` constructor, not into `withMetricsLabels`. `ZIO.logInfo` and `ZIO.logWarning` are cheap with ZIO's default logger; with a logging backend that writes synchronously, keep the extra work in the callback small.
-
-### Bridging to Another Metrics Backend
-
-To send zio-kafka metrics to a library other than ZIO metrics, implement the trait and translate each callback into calls on that library. The example below uses a small in-memory registry as a stand-in for that library, and reads the metric names from `ProducerMetrics` so the exported names match the standard ones. It records counters and keeps the latest value of each histogram as a gauge, to stay short:
+To send the measurements to another metrics library, translate each callback into calls on that library, and take the metric names from the descriptors so that they match the standard names. In the observer below, a `Ref` of counters stands in for that library:
 
 ```scala mdoc:compile-only
 import zio._
 import zio.kafka.metrics.MetricInfo
-import zio.kafka.producer.{ Producer, ProducerSettings }
 import zio.kafka.producer.metrics.{ ProducerMetrics, ProducerMetricsObserver }
 
-// Stand-in for the API of another metrics library
-final class Registry(counters: Ref[Map[String, Long]], gauges: Ref[Map[String, Double]]) {
-  def increment(metric: MetricInfo, by: Long): UIO[Unit] =
-    counters.update(m => m.updated(metric.name, m.getOrElse(metric.name, 0L) + by))
-
-  def set(metric: MetricInfo, value: Double): UIO[Unit] =
-    gauges.update(_.updated(metric.name, value))
-}
-
-object Registry {
-  val make: UIO[Registry] =
-    for {
-      counters <- Ref.make(Map.empty[String, Long])
-      gauges   <- Ref.make(Map.empty[String, Double])
-    } yield new Registry(counters, gauges)
-}
-
-final class RegistryProducerMetricsObserver(registry: Registry, metrics: ProducerMetrics)
+final class CountingProducerObserver(counters: Ref[Map[String, Long]], metrics: ProducerMetrics)
     extends ProducerMetricsObserver {
+  private def add(metric: MetricInfo, n: Long): UIO[Unit] =
+    counters.update(m => m.updated(metric.name, m.getOrElse(metric.name, 0L) + n))
 
   override def observeProduce(latency: Duration, batchSize: Int): UIO[Unit] =
-    registry.increment(metrics.produceCallsCounter, 1L) *>
-      registry.increment(metrics.produceRecordsCounter, batchSize.toLong) *>
-      registry.set(metrics.produceLatencyHistogram, latency.toNanos.toDouble / 1e9)
+    add(metrics.produceCallsCounter, 1L) *> add(metrics.produceRecordsCounter, batchSize.toLong)
 
-  override def observeSendQueueSize(size: Int): UIO[Unit] =
-    registry.set(metrics.sendQueueSizeHistogram, size.toDouble)
-
-  override def observeSendQueueTake(latency: Duration): UIO[Unit] =
-    ZIO.unit
-
-  override def observeSendAuthError(errorCount: Int): UIO[Unit] =
-    registry.increment(metrics.sendAuthErrorCounter, errorCount.toLong)
+  override def observeSendQueueSize(size: Int): UIO[Unit]         = ZIO.unit
+  override def observeSendQueueTake(latency: Duration): UIO[Unit] = ZIO.unit
+  override def observeSendAuthError(errorCount: Int): UIO[Unit]   = add(metrics.sendAuthErrorCounter, errorCount.toLong)
 }
-
-val producer: ZIO[Scope, Throwable, Producer] =
-  for {
-    registry <- Registry.make
-    settings = ProducerSettings(List("localhost:9092"))
-                 .withMetricsObserver(new RegistryProducerMetricsObserver(registry, ProducerMetrics()))
-    producer <- Producer.make(settings)
-  } yield producer
 ```
 
-Each callback only updates a `Ref`, which keeps it fast. With a real library, prefer its non-blocking update calls; if an update can block, hand the measurement to a queue that another fiber drains, so the producer never waits for the metrics backend.
-
-### Disabling Metrics
-
-`ConsumerMetricsObserver.NoOp` and `ProducerMetricsObserver.NoOp` implement every callback as `ZIO.unit`. Installing them turns off zio-kafka's own metrics, which is useful in tests or when you do not export metrics at all:
-
-```scala mdoc:compile-only
-import zio.kafka.consumer.ConsumerSettings
-import zio.kafka.consumer.metrics.ConsumerMetricsObserver
-import zio.kafka.producer.ProducerSettings
-import zio.kafka.producer.metrics.ProducerMetricsObserver
-
-val bootstrapServers = List("localhost:9092")
-
-val consumerSettings: ConsumerSettings =
-  ConsumerSettings(bootstrapServers)
-    .withGroupId("orders-service")
-    .withMetricsObserver(ConsumerMetricsObserver.NoOp)
-
-val producerSettings: ProducerSettings =
-  ProducerSettings(bootstrapServers)
-    .withMetricsObserver(ProducerMetricsObserver.NoOp)
-```
-
-`NoOp` only silences the zio-kafka metrics. The Java client metrics stay available through `Consumer#metrics` and `Producer#metrics`. With the consumer `NoOp`, the runloop still runs its sampling fiber on `ConsumerSettings#runloopMetricsSchedule`, but every snapshot is discarded.
+Most callbacks run inside the consumer's or producer's own processing, so keep them fast. With a real library, prefer its non-blocking update calls; if an update can block, hand the measurement to a queue that another fiber drains, so the consumer or producer never waits for the metrics backend. A consumer observer works the same way, with the six `ConsumerMetricsObserver` callbacks.
 
 ## Related Pages
 
