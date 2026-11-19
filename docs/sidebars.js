@@ -1,51 +1,74 @@
 const sidebars = {
   sidebar: [
+    "index",
+    "getting-started",
     {
       type: "category",
-      label: "ZIO Kafka",
+      label: "Reference",
       collapsed: false,
-      link: { type: "doc", id: "index" },
       items: [
-        "getting-started",
         {
           type: "category",
-          label: "Reference",
+          label: "Consumer",
           collapsed: false,
           items: [
             "consumer",
+            "consumer-settings",
             "partition-assignment-and-offset-retrieval",
-            "consumer-tuning",
-            "offsets-and-committing",
-            "producer",
-            "transactions",
-            "serialization-and-deserialization",
-            "record-headers",
-            "admin-client",
-            "diagnostics",
-            "metrics",
-            "metrics-observers",
-            "security"
+            "offsets-and-committing"
           ]
         },
-        "tutorial",
         {
           type: "category",
-          label: "How-to Guides",
+          label: "Producer",
           collapsed: false,
-          items: [
-            "creating-a-consumer",
-            "consuming-kafka-topics-using-zio-streams",
-            "consuming-producing-and-committing-offsets",
-            "sharing-consumer",
-            "preventing-duplicates",
-            "avoiding-chunk-breakers",
-            "detecting-authorization-failures",
-            "writing-tests",
-            "migrating-to-zio-kafka-4",
-            "migrating-to-zio-kafka-3"
-          ]
-        }
+          items: ["producer", "transactional-producer"]
+        },
+        {
+          type: "category",
+          label: "Serialization",
+          collapsed: false,
+          items: ["serialization-and-deserialization", "record-headers"]
+        },
+        "admin-client",
+        "security",
+        {
+          type: "category",
+          label: "Observability",
+          collapsed: false,
+          items: ["diagnostics", "metrics", "metrics-observers"]
+        },
+        "testkit"
       ]
+    },
+    {
+      type: "category",
+      label: "Tutorials",
+      collapsed: true,
+      items: ["tutorial", "transactions"]
+    },
+    {
+      type: "category",
+      label: "How-to Guides",
+      collapsed: true,
+      items: [
+        "creating-a-consumer",
+        "consuming-kafka-topics-using-zio-streams",
+        "sharing-consumer",
+        "preventing-duplicates",
+        "consumer-tuning",
+        "consuming-producing-and-committing-offsets",
+        "avoiding-chunk-breakers",
+        "connecting-to-a-secured-cluster",
+        "detecting-authorization-failures",
+        "writing-tests"
+      ]
+    },
+    {
+      type: "category",
+      label: "Migration Guides",
+      collapsed: true,
+      items: ["migrating-to-zio-kafka-4", "migrating-to-zio-kafka-3"]
     }
   ]
 };
