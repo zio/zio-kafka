@@ -1,12 +1,24 @@
 ---
 id: preventing-duplicates
-title: "Preventing Duplicates"
+title: "Prevent Duplicates After a Rebalance"
+sidebar_label: "Prevent Duplicates After a Rebalance"
 ---
 
-In zio-kafka processing of records runs asynchronously with partition management. This brings substantial performance
-advantages but causes some records to be consumed and processed _twice_ when a rebalance occurs. To prevent this,
-since version 2.7.1 zio-kafka supports a new mode in which we prevent duplicates due to rebalances. You can enable it
-as follows:
+In this guide we configure a zio-kafka consumer so that a rebalance does not make another consumer process the same records again. We enable rebalance-safe commits, size the timeouts so that the consumer can keep its promise, and then cover the two cases where offsets are not committed to Kafka directly: commits to an external database and commits through a transactional producer.
+
+## The Problem
+
+A rebalance moves partitions from one consumer of a group to another, for example when an instance of your service starts or stops. The consumer that takes over a partition continues from the last committed offset. In zio-kafka, processing runs asynchronously from partition management: when a partition is revoked, its stream may still be processing records, or committing their offsets. Every record whose offset is not committed when the new owner starts is processed a second time, possibly at the same time on both consumers.
+
+Committing more often makes the window smaller but does not close it. Since version 2.7.1, zio-kafka can close it: with *rebalance-safe commits*, the consumer holds up the rebalance until the offsets of all records it consumed from the revoked partitions are committed.
+
+## Prerequisites
+
+This guide assumes a consumer that commits offsets, as described in [Consume Topics with ZIO Streams](consuming-kafka-topics-using-zio-streams.md), and a group id. Rebalance-safe commits need Kafka's classic group protocol, which is the default; see [The Consumer Group Protocol](consumer-settings.md#the-consumer-group-protocol).
+
+## Enable Rebalance-Safe Commits
+
+Rebalance-safe commits are off by default. To turn them on, together with the two timeouts they depend on:
 
 ```scala mdoc:compile-only
 import zio._
@@ -15,120 +27,99 @@ import zio.kafka.consumer.ConsumerSettings
 val consumerSettings: ConsumerSettings =
   ConsumerSettings(List("localhost:9092"))
     .withGroupId("group")
-    .withRebalanceSafeCommits(true)       // enable rebalance-safe-commits mode
-    .withMaxRebalanceDuration(30.seconds) // defaults to 3 minutes
-    .withCommitTimeout(15.seconds)        // defaults to 15 seconds
+    .withRebalanceSafeCommits(true)       // hold up rebalances until commits are done
+    .withMaxRebalanceDuration(30.seconds) // default: 3/5 of max.poll.interval.ms
+    .withCommitTimeout(15.seconds)        // default: 15 seconds
 ```
 
-With rebalance-safe-commits mode enabled, rebalances are held up for up to max-rebalance-duration to wait for pending
-commits to be completed. Once pending commits are completed, it is safe for another consumer in the group to take over
-a partition.
+During a rebalance, the consumer now waits for the streams of revoked partitions to process their records and commit the offsets, for at most the max rebalance duration. Once the commits are done, another consumer can safely take over the partitions. While the rebalance waits, no stream of this consumer receives new records, not even the streams of partitions that are not revoked.
 
-For this to work correctly, your program must process a chunk (of up to `max.poll.records` records) within the
-configured max-rebalance-duration. The clock starts the moment the chunk is pushed into the stream and ends when the
-commits for these records complete. Zio-kafka uses `commit-timeout` as the worse case time to commit. Therefore, with
-the default settings, your program has 2 minutes and 45 seconds until the offsets should be committed.
+When rebalance-safe commits are on and you do not set `partition.assignment.strategy`, zio-kafka configures Kafka's `RangeAssignor` (since zio-kafka 3.2.0), which revokes all partitions in every rebalance. If your consumer handles fewer than 10 times the minimum record rate computed in the next section, keep the `RangeAssignor` and do not switch to a cooperative assignor; [PR 1576](https://github.com/zio/zio-kafka/pull/1576) explains why.
 
-It is probably clear now that your program should commit the offsets of consumed records. The most straightforward way
-is to commit to the kafka brokers. This is done by calling `Offset#commit` on the offset of consumed records (see
-[offsets and committing](offsets-and-committing.md)). However, there are more options: external commits and transactional producing.
+## Size the Timeouts
 
-### Commit to an external system
+The rebalance can only wait so long, so your program must process and commit a chunk of records within a fixed budget. The wait starts with the rebalance, and in the worst case a full chunk (up to `max.poll.records` records) has just been pushed into the stream at that moment. Zio-kafka reserves the commit timeout for the final commit, so the time left to process the chunk is the max rebalance duration minus the commit timeout.
 
-When you commit to an external system (e.g. by writing to a relational database) the zio-kafka consumer needs to know
-about those commits before it can work in rebalance-safe-commits mode. Inform zio-kafka about external commits by
-invoking method `Consumer#registerExternalCommits(offsetBatch: OffsetBatch)` (available since zio-kafka 2.10.0).
+With the defaults, `max.poll.interval.ms` is 5 minutes, so the max rebalance duration is 3/5 of that, 3 minutes. Minus the 15-second commit timeout, your program has 2 minutes and 45 seconds to process and commit 500 records, about 3 records per second. **This is a hard threshold.** Leave plenty of head-room for busy services, network delays, garbage collection and CPU contention.
 
-Here is what this could look like:
-
-```scala mdoc:compile-only
-import zio._
-import zio.kafka.consumer._
-import zio.kafka.serde._
-
-trait Database {
-  def store(offset: Offset): Task[Unit]
-}
-
-def consumeAndStore(consumer: Consumer, database: Database): Task[Unit] =
-  consumer
-    .plainStream(Subscription.topics("topic2000"), Serde.string, Serde.string)
-    .mapZIO { record =>
-      database.store(record.offset) *> // <-- the external commit
-        consumer.registerExternalCommits(OffsetBatch(record.offset))
-    }
-    .runDrain
-```
-
-See [starting offsets](partition-assignment-and-offset-retrieval.md#consumer-starting-offsets--offset-retrieval)
-for letting a consumer start consuming a partition from the offset you persisted after a rebalance.
-
-#### Be clear about what offset you persist to prevent off-by-one bugs!
-
-In the example above `record.offset` represents the offset of the consumed record. However, in Kafka you always commit
-the _next offset_. It represents the record's offset another consumer should continue from after a rebalance.
-Normally the _next offset_ is the offset of the consumed record `+ 1`. The difference can be a bit larger when Kafka
-placed some 'control records' on the partition. Since it is fine to consume control records multiple times (they are
-invisible), adding `1` to get the next offset is fine. Since zio-kafka 4.0.0 it is also possible to get the exact
-next-offset with `record.nextOffset` (also available as `record.offset.nextOffset`).
-
-:::caution
-You should decide on what offset you want to persist per partition, either the _consumed offset_, or the _next offset_.
-:::
-
-Unless there are good reasons to do otherwise, we recommend you persist the 'next offset'.
-
-**Persisting the consumed offset**
-
-- Per partition, persist the offset `record.offset.offset` (ideally persist `record.offset.leaderEpoch` as well).
-- From your `OffsetRetrieval.External` implementation, return the persisted offset + 1 (ideally, also include the
-  persisted leader-epoch).
-
-**Persisting the next offset**
-
-- Per partition, persist the offset `record.offset.offset + 1`, or better yet: `record.nextOffset.offset()` (ideally
-  persist `record.nextOffset.leaderEpoch()` as well).
-- From your `OffsetRetrieval.External` implementation, return the persisted offset (ideally, also include the persisted
-  leader-epoch).
-
-### Commit with a transactional producer
-
-Transactional producing is described in [transactions](transactions.md).
-
-## Long-running processes / slow consumers
-
-When rebalance-safe-commits mode is enabled, consumers have tighter dead-lines. Besides a suitable `max.poll.records`
-and `max.poll.interval.ms` (see [consumer tuning](consumer-tuning.md#long-running-processes--slow-consumers)), a
-consumer must also be able to process `max.poll.records` within `maxRebalanceDuration`, with some margin to complete
-commits.
-
-With the default values of `500` for `max.poll.records`, 3 minutes for `maxRebalanceDuration` (which is 3/5 of 5
-minutes for `max.poll.interval.ms`), and 15 seconds for `commitTimeout`, a consumer must be able to process and commit
-`500` records in 2 minutes, 45 seconds (_3 records per second_). **This is a hard threshold.** Change the settings such
-that there is sufficient head-room for busy services, network delays, garbage collections or reduced CPU capacity due to
-other processes.
-
-When rebalance-safe-commits mode is enabled, zio-kafka configures the Range Assignor by default (since zio-kafka 3.2.0). In case the consumer can handle less than 10 times the minimum records per second, it is important to keep the Range Assignor: do not override `partition.assignment.strategy` with a cooperative assignor (see [PR 1576](https://github.com/zio/zio-kafka/pull/1576) for an extensive explanation).
-
-Settings described in this section can be changed as follows:
+For a slow consumer, lower `max.poll.records` and raise `max.poll.interval.ms` and the max rebalance duration. The max rebalance duration is only useful between the commit timeout and `max.poll.interval.ms`: a lower value ends the wait at once, and a higher value makes Kafka consider the consumer dead and reassign its partitions. To give a consumer that takes several seconds per record enough time:
 
 ```scala mdoc:compile-only
 import zio._
 import zio.kafka.consumer.ConsumerSettings
 
-val bootstrapServers = List("localhost:9092")
-
-val settings = ConsumerSettings(bootstrapServers)
-  .withRebalanceSafeCommits(true)
-  .withMaxPollRecords(1)
-  .withMaxPollInterval(15.minutes)
-  .withMaxRebalanceDuration(4.minutes)
-  .withCommitTimeout(10.seconds)
+val slowConsumerSettings: ConsumerSettings =
+  ConsumerSettings(List("localhost:9092"))
+    .withGroupId("group")
+    .withRebalanceSafeCommits(true)
+    .withMaxPollRecords(1)
+    .withMaxPollInterval(15.minutes)
+    .withMaxRebalanceDuration(4.minutes)
+    .withCommitTimeout(10.seconds)
 ```
 
-## More information
+[Tune the Consumer](consumer-tuning.md#long-running-processes--slow-consumers) explains how `max.poll.records` and `max.poll.interval.ms` relate to slow processing in general.
 
-There is more information in the scaladocs of `ConsumerSettings` and the description of
-[pull request #1098](https://github.com/zio/zio-kafka/pull/1098) that introduced this feature.
-You can also watch the presentation
-[Making ZIO-Kafka Safer And Faster](https://www.youtube.com/watch?v=MJoRwEyyVxM). The relevant part starts at 10:24.
+## Commit to an External System
+
+When you store offsets in an external system, such as a relational database, instead of committing them to Kafka, the consumer cannot see those commits and would wait in vain during a rebalance. Report every external commit with `Consumer#registerExternalCommits` (since zio-kafka 2.10.0), and let the consumer resume from the stored offsets with `OffsetRetrieval.External` (see [Partition Assignment and Offset Retrieval](partition-assignment-and-offset-retrieval.md#consumer-starting-offsets--offset-retrieval)).
+
+The following program stores the highest next offset per partition once per chunk, registers the same batch with the consumer, and resumes from the stored offsets after a rebalance:
+
+```scala mdoc:compile-only
+import org.apache.kafka.common.TopicPartition
+import zio._
+import zio.kafka.consumer._
+import zio.kafka.consumer.Consumer.{ OffsetEpoch, OffsetRetrieval }
+import zio.kafka.serde.Serde
+
+import scala.jdk.OptionConverters._
+
+trait OffsetStore {
+  def save(partition: TopicPartition, nextOffset: OffsetEpoch): Task[Unit]
+  def load(partitions: Set[TopicPartition]): Task[Map[TopicPartition, OffsetEpoch]]
+}
+
+def settings(store: OffsetStore): ConsumerSettings =
+  ConsumerSettings(List("localhost:9092"))
+    .withGroupId("my-group")
+    .withRebalanceSafeCommits(true)
+    .withOffsetRetrieval(OffsetRetrieval.External(store.load))
+
+def consumeWithExternalCommits(consumer: Consumer, store: OffsetStore): Task[Unit] =
+  consumer
+    .plainStream(Subscription.topics("my-topic"), Serde.string, Serde.string)
+    .mapChunksZIO { records =>
+      // Process the records here, then store the highest next offset per partition.
+      val batch = OffsetBatch(records.map(_.offset))
+      ZIO.foreachDiscard(batch.nextOffsets) { case (tp, next) =>
+        store.save(tp, OffsetEpoch(next.offset(), next.leaderEpoch().toScala.map(_.intValue)))
+      } *> consumer.registerExternalCommits(batch).as(records)
+    }
+    .runDrain
+```
+
+In a real program, save the offsets in the same database transaction as the processing results, so that results and progress never disagree.
+
+### Choose Which Offset to Persist
+
+Kafka commits the *next offset*, the offset from which a consumer continues, not the offset of the processed record; [Kafka Commits the Next Offset](offsets-and-committing.md#kafka-commits-the-next-offset) explains the difference. Decide which of the two you persist, and keep your `OffsetRetrieval.External` function consistent with it, or you introduce an off-by-one bug:
+
+- To persist the next offset (recommended, and what the program above does), store `record.nextOffset.offset()` and its `leaderEpoch()`, and return the stored values as they are.
+- To persist the consumed offset, store `record.offset.offset` and `record.offset.leaderEpoch`, and return the stored offset plus 1.
+
+Storing the leader epoch is optional, but it prevents consuming from a broker that no longer leads the partition. `OffsetEpoch` takes it as an `Option[Int]`, `None` when it is unknown.
+
+## Commit With a Transactional Producer
+
+A [transactional producer](transactions.md) commits the consumed offsets as part of its transaction and registers them with the consumer for you, so no extra code is needed. It requires rebalance-safe commits, and the timing rules above apply to it as well.
+
+## Verify the Result
+
+To check that rebalances no longer cause duplicates, run two instances of your service and log the topic, partition and offset of every record each instance processes. Start the second instance while the first is busy, which triggers a rebalance, and then stop it again. With rebalance-safe commits, no partition and offset pair appears in the logs of both instances. With rebalance-safe commits off, a few pairs usually do.
+
+The [diagnostics](diagnostics.md) events `DiagnosticEvent.Rebalance` and `DiagnosticEvent.Commit` show when each rebalance and commit happened, which helps when a rebalance still takes longer than expected.
+
+## More Information
+
+The Scaladoc of `ConsumerSettings#withRebalanceSafeCommits` and the description of [pull request #1098](https://github.com/zio/zio-kafka/pull/1098), which introduced this feature, have more background. The presentation [Making ZIO-Kafka Safer And Faster](https://www.youtube.com/watch?v=MJoRwEyyVxM) covers it from 10:24.
