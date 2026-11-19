@@ -87,7 +87,7 @@ import zio._
 import zio.kafka.consumer.ConsumerSettings
 import zio.kafka.consumer.fetch.{ FetchStrategy, PartitionStream }
 
-final case class PriorityTopicFetchStrategy(
+case class PriorityTopicFetchStrategy(
   priorityTopic: String,
   priorityLimit: Int = 4096,
   defaultLimit: Int = 256

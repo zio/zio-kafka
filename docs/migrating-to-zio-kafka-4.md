@@ -101,7 +101,7 @@ import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, OffsetAndMetad
 import zio._
 import zio.kafka.consumer.{ Offset, OffsetBatch }
 
-final case class FakeOffset(topic: String, partition: Int, offset: Long, nextOffset: OffsetAndMetadata)
+case class FakeOffset(topic: String, partition: Int, offset: Long, nextOffset: OffsetAndMetadata)
     extends Offset {
   def leaderEpoch: Optional[Integer]                       = nextOffset.leaderEpoch()
   def commit: Task[Unit]                                   = ZIO.unit

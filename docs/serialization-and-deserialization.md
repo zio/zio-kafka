@@ -140,7 +140,7 @@ import zio._
 import zio.kafka.serde._
 import java.nio.charset.StandardCharsets.UTF_8
 
-final case class Point(x: Int, y: Int)
+case class Point(x: Int, y: Int)
 
 val pointDeserializer: Deserializer[Any, Point] =
   Deserializer { (_, _, data) =>
@@ -295,7 +295,7 @@ val instantSerde: Serde[Any, Instant] =
 import zio._
 import zio.kafka.serde._
 
-final case class OrderId(value: String)
+case class OrderId(value: String)
 
 val orderIdSerde: Serde[Any, OrderId] =
   Serde.string.inmapZIO { text =>
@@ -472,7 +472,7 @@ import zio._
 import zio.kafka.consumer._
 import zio.kafka.serde._
 
-final case class Message(text: String)
+case class Message(text: String)
 
 def parse(bytes: Array[Byte]): Either[String, Message] = ???
 def processMessages(messages: Chunk[Message]): Task[Unit] = ???
