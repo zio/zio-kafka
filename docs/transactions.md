@@ -51,7 +51,7 @@ To produce records transactionally, we need a `Consumer` and a `TransactionalPro
 
 ### Creating the Consumer
 
-First we create the `Consumer` layer. Rebalance-safe commits must be enabled; the [How It All Works](#how-it-all-works) section explains why. Since the default `maxRebalanceDuration` is quite high, we also set it to a lower duration, one in which we are sure all records of a poll can be processed:
+First we create the `Consumer` layer. Rebalance-safe commits must be enabled; the [How It All Works](#how-it-all-works) section explains why. Since the default `ConsumerSettings#maxRebalanceDuration` is quite high, we also set it to a lower duration, one in which we are sure all records of a poll can be processed:
 
 ```scala mdoc:compile-only
 import zio._
@@ -70,9 +70,9 @@ val consumerLayer: ZLayer[Any, Throwable, Consumer] = ZLayer.scoped {
 
 The code above:
 
-- `withGroupId` gives the consumer a group; a transaction commits the offsets of that group.
-- `withRebalanceSafeCommits(true)` makes the consumer hold up a rebalance until every consumed record is committed. `TransactionalProducer.make` refuses a consumer without it.
-- `withMaxRebalanceDuration(30.seconds)` limits how long a rebalance is held up.
+- `ConsumerSettings#withGroupId` gives the consumer a group; a transaction commits the offsets of that group.
+- `ConsumerSettings#withRebalanceSafeCommits(true)` makes the consumer hold up a rebalance until every consumed record is committed. `TransactionalProducer.make` refuses a consumer without it.
+- `ConsumerSettings#withMaxRebalanceDuration(30.seconds)` limits how long a rebalance is held up.
 
 The consumer has a few more requirements, such as its partition assignor and group protocol; zio-kafka's defaults meet them. [Consumer Requirements](transactional-producer.md#consumer-requirements) lists them all.
 
@@ -162,7 +162,7 @@ producedRecordsStream
   }
 ```
 
-Let's work on those question marks. We need to create a transaction. Each zio-kafka transaction runs in a ZIO `Scope`: the transaction commits when the scope closes successfully, and is aborted when the scope closes with a failure or an interruption. We start with the scope:
+Let's work on those question marks. We need to create a transaction. Each zio-kafka transaction runs in a ZIO `Scope` and ends when that scope closes (see [How a Transaction Ends](transactional-producer.md#how-a-transaction-ends)). We start with the scope:
 
 ```scala
 ZIO.scoped {
@@ -322,4 +322,4 @@ In this tutorial, you learned:
 
 - **Want the API details?** The [Transactional Producer](transactional-producer.md) reference documents `TransactionalProducer`, `Transaction` and `TransactionalProducerSettings`, including how to abort a transaction.
 - **Want to know more about rebalances?** [Preventing Duplicates](preventing-duplicates.md) explains rebalance-safe commits.
-- **Writing tests?** [Writing Tests](writing-tests.md) shows how to create a transactional producer against an embedded broker.
+- **Writing tests?** [Test Producers and Consumers with the Test Kit](writing-tests.md) shows how to create a transactional producer against an embedded broker.
