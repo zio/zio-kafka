@@ -254,8 +254,8 @@ object KafkaTestUtils {
     allowAutoCreateTopics: Boolean = true,
     diagnostics: ConsumerDiagnostics = Diagnostics.NoOp,
     rebalanceSafeCommits: Boolean = false,
-    properties: Map[String, String] = Map.empty,
-    rebalanceListener: RebalanceListener = RebalanceListener.noop
+    properties: Map[String, String] = Map.empty
+    // ...
   ): ZIO[Scope & Kafka, Throwable, Consumer]
 
   def transactionalConsumer(/* same parameters as makeTransactionalConsumer */): ZLayer[Kafka, Throwable, Consumer]
