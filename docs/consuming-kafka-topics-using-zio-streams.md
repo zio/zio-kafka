@@ -60,10 +60,7 @@ def consumeChunks(consumer: Consumer): Task[Unit] =
 
 The schedule of `ZStream#aggregateAsyncWithin` sets how often a commit starts. Choose an interval that is longer than a typical commit in your system. For example, with an interval of 2 ms and commits that take 10 ms, `ZStream#aggregateAsyncWithin` emits a batch 2 ms after the first records arrive, and the commit starts. Another 2 ms later it tries to emit the next batch, but it has to wait because the commit is still running. While it waits, it stops accepting offsets from upstream, which halts the consumer until the commit completes.
 
-There are two alternatives, each with its own trade-off:
-
-- For the lowest commit latency, commit continuously: replace step (3) with `ZStream#aggregateAsync(Consumer.collectOffsets)`, which starts a new commit as soon as the previous one completes. Committing is expensive for the Kafka brokers, so with dozens of consumers committing continuously the load may slow everything down.
-- For applications that see only a few records per second, drop steps (3) and (4) and commit each record with `Offset#commit` after processing it. The commit then runs on the same fiber as the processing, which lowers throughput, so this is almost never the best choice for busier topics.
+There are two alternatives, each with its own trade-off. For the lowest commit latency, commit continuously: replace step (3) with `ZStream#aggregateAsync(Consumer.collectOffsets)`, which starts a new commit as soon as the previous one completes. Committing is expensive for the Kafka brokers, so with dozens of consumers committing continuously the load may slow everything down. For applications that see only a few records per second, drop steps (3) and (4) and commit each record with `Offset#commit` after processing it. The commit then runs on the same fiber as the processing, which lowers throughput, so this is almost never the best choice for busier topics.
 
 [Offsets and Committing](offsets-and-committing.md) describes the commit API, including retries and commit metadata.
 
