@@ -66,13 +66,13 @@ val app: ZIO[Scope, Throwable, Unit] = for {
 
 To analyze throughput performance of a zio-streams program, it is important to find out the characteristics of the stream's chunks, and to make sure that the chunking structure stays intact. (See [Keep Stream Chunks Intact](avoiding-chunk-breakers.md).)
 
-The program above uses a zio-kafka consumer as stream source. Kafka consumers poll the broker to get new records. Zio-kafka guarantees that all records that were received in a poll for a given partition, are in the same stream chunk. This is ideal; partitions can be processed in parallel, and we can process as many records as are available.
+The program above uses a zio-kafka consumer as stream source. Kafka consumers poll the broker to get new records, and zio-kafka puts all records received in a poll for a given partition in the same stream chunk. This is ideal; partitions can be processed in parallel, and we can process as many records as are available.
 
 By default, the zio-kafka consumer does pre-fetching. The result is that as soon as the stream processed a chunk of records, the next chunk of records is already available. This increases throughput compared to having to wait for the next poll.
 
-The next operation —`map`— keeps the chunking structure intact. Nothing to improve here.
+The next operation, `map`, keeps the chunking structure intact. Nothing to improve here.
 
-The next operation —`mapChunksZIO`— also keeps the chunking structure intact. In this operator, we produce a chunk of records. Once they are acknowledged by the Kafka broker, we commit the offsets of the consumed records.
+The next operation, `mapChunksZIO`, also keeps the chunking structure intact. In this operator, we produce a chunk of records. Once they are acknowledged by the Kafka broker, we commit the offsets of the consumed records.
 
 ## Optimize Consumer Throughput
 
