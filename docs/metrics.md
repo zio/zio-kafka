@@ -3,42 +3,49 @@ id: metrics
 title: "Metrics"
 ---
 
-Zio-kafka exposes all the metrics of the wrapped Java based consumer and producer, plus some more metrics about the
-zio-kafka consumer and producer themselves.
+Zio-kafka exposes all the metrics of the wrapped Java consumer and producer, plus metrics about the zio-kafka consumer and producer themselves. This page lists both kinds and explains how to read them. To change where the zio-kafka metrics go, add labels, change histogram boundaries or turn the metrics off, see [Metrics Observers](metrics-observers.md).
 
-## Java client metrics
+## Java Client Metrics
 
-The metrics from the Java metrics can be obtained via the `Consumer#metrics` and `Producer#metrics` methods. Both
-return a live view on the internal metrics of the consumer/producer. We currently do not expose these metrics elsewhere,
-a PR to copy them to the zio-metrics API is welcome.
+`Consumer#metrics` and `Producer#metrics` return the metrics of the wrapped Java client as a `Task[Map[MetricName, Metric]]`, using Kafka's `org.apache.kafka.common.MetricName` and `Metric` classes. The map is a snapshot of the metrics that the client has registered at the time of the call; metrics that the client registers later, for example for a partition it is assigned afterwards, are missing from it. Each `Metric` in the map stays connected to the client: `Metric#metricValue` returns the current value every time you call it. To log the current value of every metric of a consumer:
+
+```scala mdoc:compile-only
+import zio._
+import zio.kafka.consumer.Consumer
+
+def logClientMetrics(consumer: Consumer): Task[Unit] =
+  consumer.metrics.flatMap { metrics =>
+    ZIO.foreachDiscard(metrics) { case (name, metric) =>
+      ZIO.logDebug(s"${name.group()}/${name.name()} ${name.tags()}: ${metric.metricValue()}")
+    }
+  }
+```
+
+`AdminClient#metrics` does the same for the admin client, with zio-kafka's own `MetricName` and `Metric` types; see [Admin Client](admin-client.md). Zio-kafka does not copy the Java client metrics into ZIO metrics.
 
 ## Zio-kafka Metrics
 
-The zio-kafka consumer and producer collect some additional metrics using the zio-metrics API. This allows any
-zio-metrics backend to access and process the observed values.
+The zio-kafka consumer and producer record additional metrics with the ZIO metrics API, so any ZIO metrics backend can access and export them. By default, they carry no labels; [Installing an Observer](metrics-observers.md#installing-an-observer) shows how to add them, which matters when an application runs several consumers or producers.
 
-By default, no tags are added. Tags can be configured via `ConsumerSettings.withMetricsLabels` / `ProducerSettings.withMetricsLabels`.
+Like ZIO metrics, zio-kafka follows Prometheus conventions:
 
-To send these metrics to another backend, change histogram boundaries, or turn metrics off, see [Metrics Observers](metrics-observers.md).
+- Durations are expressed in seconds.
+- Counters can only increase.
+- Metric names use snake_case and end with the unit name where possible.
 
-Like the zio-metrics we follow Prometheus conventions. This means that:
-
-- durations are expressed in seconds,
-- counters can only increase,
-- metric names use snake_case and end with the unit name where possible.
-
-Each histogram defines 10 bucket boundaries (zio-metrics ignores a boundary of `0` and adds a `+Inf` bucket). To reach a decent range while keeping sufficient accuracy at the low end, most
-bucket boundaries use an exponential series based on 𝑒.
+Each histogram has its own default bucket boundaries, mostly an exponential series based on 𝑒 that reaches a wide range while keeping accuracy at the low end. [Default Histogram Boundaries](metrics-observers.md#default-histogram-boundaries) lists them.
 
 ## Zio-kafka Consumer Metrics
 
-To interpret the metrics you need to know how zio-kafka works internally.
+To interpret the consumer metrics you need to know how the zio-kafka consumer works internally. The runloop polls the Java consumer and puts the fetched records in one queue per partition. Each partition stream takes records from its queue, and asks the runloop for more when the queue is empty. Commit requests go through a commit queue, and the runloop combines them into aggregated commits:
 
 ![](consumer-internals.svg)
 
-See the [tuning guide](consumer-tuning.md#using-metrics-to-tune-the-consumer) for more details on the internals.
+See [Using Metrics to Tune the Consumer](consumer-tuning.md#using-metrics-to-tune-the-consumer) for how to use these metrics to tune the consumer.
 
-### Poll metrics
+### Poll Metrics
+
+The runloop updates these metrics after every poll:
 
 | Type      | Name                                                  | Description                                                                        |
 |-----------|-------------------------------------------------------|------------------------------------------------------------------------------------|
@@ -50,15 +57,12 @@ See the [tuning guide](consumer-tuning.md#using-metrics-to-tune-the-consumer) fo
 | counter   | `ziokafka_consumer_poll_auth_errors`                  | The number of polls that ended with an authentication or authorization error.      |
 
 :::note
-Note that `ziokafka_consumer_poll_auth_errors` only tracks errors surfaced directly during `poll()` calls. Silent
-runtime authorization failures (such as a revoked `READ` ACL) are silently swallowed by `poll()` and will not increment
-this metric. To detect and surface these failures as exceptions, configure the empty-poll metadata-refresh probe (
-see [Detecting Authorization Failures](detecting-authorization-failures.md)).
+`ziokafka_consumer_poll_auth_errors` only counts errors that `poll()` itself throws. Some authorization failures, such as a revoked `READ` ACL, make `poll()` return no records without an error, so they do not increment this metric. To detect them, configure the empty-poll probe described in [Detecting Authorization Failures](detecting-authorization-failures.md).
 :::
 
-### Partition stream metrics
+### Partition Stream Metrics
 
-These metrics are sampled periodically, by default every 500ms (see `ConsumerSettings#withRunloopMetricsSchedule`).
+These metrics are sampled periodically, by default every 500ms (see `ConsumerSettings#withRunloopMetricsSchedule`):
 
 | Type      | Name                                 | Description                                                            |
 |-----------|--------------------------------------|------------------------------------------------------------------------|
@@ -67,10 +71,9 @@ These metrics are sampled periodically, by default every 500ms (see `ConsumerSet
 | histogram | `ziokafka_consumer_all_queue_size`   | The total number of records queued for all partitions.                 |
 | histogram | `ziokafka_consumer_queue_polls`      | The number of polls during which records are idling in a queue.        |
 
-### Commit metrics
+### Commit Metrics
 
-These metrics measure the separate commit requests issued through zio-kafka's api. Metric
-`ziokafka_consumer_pending_commits` is sampled periodically, like the partition stream metrics.
+These metrics measure the separate commit requests issued through zio-kafka's API. `ziokafka_consumer_pending_commits` is sampled periodically, like the partition stream metrics:
 
 | Type      | Name                                       | Description                                         |
 |-----------|--------------------------------------------|-----------------------------------------------------|
@@ -78,10 +81,9 @@ These metrics measure the separate commit requests issued through zio-kafka's ap
 | counter   | `ziokafka_consumer_commits`                | The number of commits.                              |
 | histogram | `ziokafka_consumer_commit_latency_seconds` | The duration of a commit in seconds.                |
 
+### Aggregated Commit Metrics
 
-### Aggregated commit metrics
-
-In each runloop cycle zio-kafka combines all outstanding commit requests into 1 aggregated commit. These metrics are for the aggregated commits.
+In each runloop cycle zio-kafka combines all outstanding commit requests into 1 aggregated commit. These metrics are for the aggregated commits:
 
 | Type      | Name                                                  | Description                                                                |
 |-----------|-------------------------------------------------------|----------------------------------------------------------------------------|
@@ -89,19 +91,21 @@ In each runloop cycle zio-kafka combines all outstanding commit requests into 1 
 | histogram | `ziokafka_consumer_aggregated_commit_latency_seconds` | The duration of an aggregated commit in seconds.                           |
 | histogram | `ziokafka_consumer_aggregated_commit_size`            | An approximation of the number of records (offsets) per aggregated commit. |
 
-### Rebalance metrics
+### Rebalance Metrics
+
+The runloop updates these metrics after each poll during which the partition assignment changed:
 
 | Type    | Name                                              | Description                                                  |
 |---------|---------------------------------------------------|--------------------------------------------------------------|
 | counter | `ziokafka_consumer_rebalances`                    | The number of rebalances.                                    |
 | gauge   | `ziokafka_consumer_partitions_currently_assigned` | The number of partitions currently assigned to the consumer. |
 | counter | `ziokafka_consumer_partitions_assigned`           | The number of partitions assigned to the consumer.           |
-| counter | `ziokafka_consumer_partitions_revoked`            | The number of partitions revoked to the consumer.            |
-| counter | `ziokafka_consumer_partitions_lost`               | The number of partitions lost to the consumer.               |
+| counter | `ziokafka_consumer_partitions_revoked`            | The number of partitions revoked from the consumer.          |
+| counter | `ziokafka_consumer_partitions_lost`               | The number of partitions lost by the consumer.               |
 
-### Runloop metrics
+### Runloop Metrics
 
-These metrics are sampled periodically, by default every 500ms (see `ConsumerSettings#withRunloopMetricsSchedule`).
+These metrics are sampled periodically, by default every 500ms (see `ConsumerSettings#withRunloopMetricsSchedule`):
 
 | Type      | Name                                   | Description                                        |
 |-----------|----------------------------------------|----------------------------------------------------|
@@ -109,27 +113,23 @@ These metrics are sampled periodically, by default every 500ms (see `ConsumerSet
 | histogram | `ziokafka_consumer_command_queue_size` | The number of commands queued in the consumer.     |
 | histogram | `ziokafka_consumer_commit_queue_size`  | The number of commits queued in the consumer.      |
 
-See [ConsumerMetrics.scala](https://github.com/zio/zio-kafka/blob/master/zio-kafka/src/main/scala/zio/kafka/consumer/metrics/ConsumerMetrics.scala) for the exact details.
+[Metric Descriptors](metrics-observers.md#metric-descriptors) maps every consumer metric to its field in `ConsumerMetrics`.
 
-## Example
+## Example Dashboard
 
-Here is an example dashboard that could be built with these metrics:
+The dashboard below shows the consumer metrics of one application over a day, grouped into polls, commits, runloop internals and rebalances. It shows, for example, the poll rate next to the poll latency and the number of records per poll, the size of the command queue, and the moment the consumer got its partitions assigned:
 
 ![metrics-dashboard.png](metrics-dashboard.png)
 
 ## Zio-kafka Producer Metrics
 
-To understand the producer metrics it is useful to know how the producer works.
-
-When you call the producer it first serializes the given batch of records (a single record is treated like a batch of
-one). The batch is then offered to an internal send queue. Once the queue accepts the batch, the `produce*Async` methods
-return immediately. The `produce` and `produceChunk` methods return later, when all acknowledgements are in. Once the fiber is ready
-for it, it pulls a batch from the queue and sends the records to the Kafka broker one by one. Meanwhile, the broker
-acknowledges records.
+To understand the producer metrics it helps to know how the producer works. Every produce call serializes its records and offers them as one batch (a single record is a batch of one) to an internal send queue. A background fiber takes the batches from the queue and sends their records to the Kafka broker, which acknowledges them. See [Producer](producer.md) for the details:
 
 ![](producer-internals.svg)
 
-### Producer metrics
+### Producer Metrics
+
+These metrics are only updated for produce calls in which every record was produced successfully:
 
 | Type      | Name                                | Description                                                                             |
 |-----------|-------------------------------------|-----------------------------------------------------------------------------------------|
@@ -138,9 +138,9 @@ acknowledges records.
 | counter   | `ziokafka_producer_records`         | The number of records produced.                                                         |
 | histogram | `ziokafka_producer_batch_size`      | The number of records per produce call.                                                 |
 
-These metrics are only updated for produce calls in which every record was produced successfully.
+### Queue Metrics
 
-### Queue metrics
+The send queue metrics show whether the send fiber keeps up with the produce calls:
 
 | Type      | Name                                           | Description                                                                                  |
 |-----------|------------------------------------------------|----------------------------------------------------------------------------------------------|
@@ -149,10 +149,12 @@ These metrics are only updated for produce calls in which every record was produ
 
 The capacity of the send queue is set with `ProducerSettings#withSendBufferSize`.
 
-### Send metrics
+### Send Metrics
+
+The producer counts the sends that the broker rejected for security reasons:
 
 | Type    | Name                            | Description                                                                           |
 |---------|---------------------------------|---------------------------------------------------------------------------------------|
 | counter | `ziokafka_producer_auth_errors` | The number of record sends that resulted in an authentication or authorization error. |
 
-See [ProducerMetrics.scala](https://github.com/zio/zio-kafka/blob/master/zio-kafka/src/main/scala/zio/kafka/producer/metrics/ProducerMetrics.scala) for the exact details.
+[Metric Descriptors](metrics-observers.md#metric-descriptors) maps every producer metric to its field in `ProducerMetrics`.
