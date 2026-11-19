@@ -145,7 +145,7 @@ object Kafka {
 
 ## KafkaTestUtils
 
-`KafkaTestUtils` is an object with three kinds of helpers: settings, clients (producers, consumers and admin clients), and helpers that produce or consume records. Every helper reads the broker address from the `Kafka` (or `Kafka.Sasl`) in its environment. The helpers whose names start with `make`, such as `KafkaTestUtils.makeProducer`, return a scoped effect (`ZIO[Scope & Kafka, Throwable, ...]`) that closes the client when the scope ends. The helpers named after a client, such as `KafkaTestUtils.producer`, return a `ZLayer` instead, for sharing one client between tests. The scaladoc of these layers recommends the `make*` effects, which give each test its own client.
+`KafkaTestUtils` is an object with three kinds of helpers: settings, clients (producers, consumers and admin clients), and helpers that produce or consume records. Every helper reads the broker address from the `Kafka` (or `Kafka.Sasl`) in its environment. The helpers that create a client directly, such as `KafkaTestUtils.makeProducer`, return a scoped effect (`ZIO[Scope & Kafka, Throwable, ...]`) that closes the client when the scope ends. The helpers named after a client, such as `KafkaTestUtils.producer`, return a `ZLayer` instead, for sharing one client between tests. The scaladoc of these layers recommends the scoped effects, which give each test its own client.
 
 ### Settings
 
@@ -204,7 +204,7 @@ object KafkaTestUtils {
 
 The parameters map to the `ConsumerSettings` method of the same name. `clientInstanceId` sets the group instance id (`ConsumerSettings#withGroupInstanceId`), for static membership. `max.poll.records` defaults to 100, lower than Kafka's default of 500; the source notes that higher values can hide concurrency bugs. `properties` is applied last, so it can override any of the values above.
 
-`KafkaTestUtils.transactionalConsumerSettings` calls `KafkaTestUtils.consumerSettings` with a required group id and then sets `ConsumerSettings#withReadCommitted`, so the consumer only reads records of committed transactions. Note that the group id comes first here, and the client id first in the other consumer helpers.
+`KafkaTestUtils.transactionalConsumerSettings` calls `KafkaTestUtils.consumerSettings` with a required group id and then sets `ConsumerSettings#withReadCommitted`, so the consumer only reads records of committed transactions. The group id comes first here, and the client id comes first in the other consumer helpers.
 
 `KafkaTestUtils.saslAdminSettings` adds the `SASL_PLAINTEXT`, `PLAIN` and JAAS properties for the given user, as listed under [Secured Embedded Brokers](#secured-embedded-brokers). `KafkaTestUtils.sslAdminSettings` adds `security.protocol=SSL` and the test kit's key store and trust store.
 
