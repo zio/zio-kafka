@@ -31,7 +31,7 @@ You create a `Diagnostics` and put it in the settings. When the consumer or prod
 2. Pass it to `ConsumerSettings#withDiagnostics` or `ProducerSettings#withDiagnostics`.
 3. While running, the consumer or producer places every event in an unbounded in-memory queue.
 4. A separate fiber takes the events from that queue, in order, and calls your `Diagnostics#emit` for each of them, one at a time.
-5. When the consumer or producer closes, it emits a final event (`DiagnosticEvent.ConsumerFinalized` or `ProducerEvent.ProducerFinalized`), waits until your `Diagnostics` has handled every queued event including the final one. The fiber ends after the final event.
+5. When the consumer or producer closes, it emits a final event (`DiagnosticEvent.ConsumerFinalized` or `ProducerEvent.ProducerFinalized`) and waits until your `Diagnostics` has handled every queued event including the final one. The fiber ends after the final event.
 
 The diagram shows the flow of events from the consumer or producer to your callback:
 
