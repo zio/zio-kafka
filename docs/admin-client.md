@@ -11,7 +11,7 @@ The shape of the two entry points is:
 trait AdminClient {
   def createTopic(newTopic: AdminClient.NewTopic, validateOnly: Boolean = false): Task[Unit]
   def listTopics(listTopicsOptions: Option[AdminClient.ListTopicsOptions] = None): Task[Map[String, AdminClient.TopicListing]]
-  // ... about 40 more operations
+  // ... 36 more operations
 }
 
 final case class AdminClientSettings(closeTimeout: Duration, properties: Map[String, AnyRef])
@@ -39,7 +39,7 @@ The table lists which operations wait and how:
 | `deleteRecords`                                                       | Sleeps `visibilitySleep`                                                                                                        |
 | `removeMembersFromConsumerGroup`, `removeAllMembersFromConsumerGroup` | Sleeps `visibilitySleep`                                                                                                        |
 
-A request made with `validateOnly = true` changes nothing, so `createTopic`, `createTopics`, `createPartitions` and `incrementalAlterConfigs` skip the waiting when `validateOnly` is set and return as soon as the broker has validated the request. `incrementalAlterConfigsAsync` does not skip it: with `validateOnly = true` its inner effects still wait as described above, which for a `Set` op usually means polling until the 5-second limit, because the validated change never shows up. The waiting uses the ZIO `Clock`; in a ZIO Test spec that uses `TestClock`, add `@@ TestAspect.withLiveClock` (see [Writing Tests](writing-tests.md)).
+A request made with `validateOnly = true` changes nothing, so `createTopic`, `createTopics`, `createPartitions`, `incrementalAlterConfigs` and `incrementalAlterConfigsAsync` skip the waiting when `validateOnly` is set and return as soon as the broker has validated the request. The waiting uses the ZIO `Clock`; in a ZIO Test spec that uses `TestClock`, add `@@ TestAspect.withLiveClock` (see [Writing Tests](writing-tests.md)).
 
 ## Creating an Admin Client
 
@@ -106,9 +106,30 @@ The other constructors work with a Java `Admin` client:
 
 ## AdminClientSettings
 
-`AdminClientSettings` holds the Java client properties and the close timeout. Construct it from the bootstrap servers, which also sets a close timeout of 30 seconds, and refine it with the `with*` methods, which keeps your code source compatible with future releases. The close timeout has no `with` method; change it with `copy`. For every member, see the [`AdminClientSettings` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/admin/AdminClientSettings.html).
+`AdminClientSettings` holds the Java client properties and the close timeout:
 
-Any [Java admin client configuration](https://kafka.apache.org/documentation/#adminclientconfigs) can be set as a property, and `AdminClientSettings#withCredentials` adds the TLS properties of a `KafkaCredentialStore` (see [Security](security.md)). To set a client id and a shorter request timeout, and to close faster:
+```scala
+final case class AdminClientSettings(closeTimeout: Duration, properties: Map[String, AnyRef]) {
+  def driverSettings: Map[String, AnyRef]
+  def withBootstrapServers(servers: List[String]): AdminClientSettings
+  def withProperty(key: String, value: AnyRef): AdminClientSettings
+  def withProperties(kvs: (String, AnyRef)*): AdminClientSettings
+  def withProperties(kvs: Map[String, AnyRef]): AdminClientSettings
+  def withCredentials(credentialsStore: KafkaCredentialStore): AdminClientSettings
+}
+
+object AdminClientSettings {
+  def apply(bootstrapServers: List[String]): AdminClientSettings
+}
+```
+
+Construct it with `AdminClientSettings.apply(bootstrapServers)`, which sets a close timeout of 30 seconds and no other property, and refine it with the `with*` methods, which keeps your code source compatible with future releases:
+
+- `AdminClientSettings#withBootstrapServers` replaces the `bootstrap.servers` property.
+- `AdminClientSettings#withProperty` and the two `AdminClientSettings#withProperties` overloads set any [Java admin client configuration](https://kafka.apache.org/documentation/#adminclientconfigs); a property set later replaces one with the same key set earlier.
+- `AdminClientSettings#withCredentials` adds the TLS properties of a `KafkaCredentialStore` (see [Security](security.md)).
+
+The close timeout has no `with` method; change it with `copy`. `AdminClientSettings#driverSettings` returns the properties passed to the Java client, the same map as `properties`. To set a client id and a shorter request timeout, and to close faster:
 
 ```scala mdoc:compile-only
 import org.apache.kafka.clients.admin.AdminClientConfig
@@ -124,7 +145,7 @@ val settings: AdminClientSettings =
 
 ## How the Types Work Together
 
-Every operation takes zio-kafka model values and returns zio-kafka model values; the Java types stay inside the wrapper. Most operations also accept an optional options value (`Option[...Options] = None`) that carries a request `timeout` and operation-specific flags:
+Every operation takes zio-kafka model values and returns zio-kafka model values; apart from a few Java classes such as `ConfigEntry` and `RecordsToDelete`, the Java types stay inside the wrapper. Many operations also accept an options value with operation-specific flags, usually as `Option[...Options] = None` (see [Options](#options)). The types connect as follows:
 
 ```
 AdminClientSettings ──> AdminClient.make / AdminClient.live ──> AdminClient
@@ -142,16 +163,56 @@ A typical admin task follows the same steps:
 
 1. Build `AdminClientSettings` and create the client with `AdminClient.make` or `AdminClient.live`.
 2. Describe the target with model values: a `NewTopic`, a `ConfigResource`, a `TopicPartition` with an `OffsetSpec`, an `AclBinding`.
-3. Call the operation. Write operations return once the change is visible; read operations return Scala maps keyed by topic name, `TopicPartition`, `ConfigResource` or group id.
+3. Call the operation. Write operations return once the change is visible; read operations return Scala collections of model values, most often a `Map` keyed by topic name, `TopicPartition`, `ConfigResource`, group id or broker id.
 4. Close the scope, which closes the client.
 
 :::note[Name clashes]
-The `AdminClient` companion defines its own `TopicPartition`, `OffsetAndMetadata`, `Node`, `Metric` and `IsolationLevel`, which clash with the Java classes of the same name. Import the model types you need by name, for example `import zio.kafka.admin.AdminClient.{ NewTopic, TopicPartition }`, rather than with a wildcard.
+Most model types in the `AdminClient` companion, for example `TopicPartition`, `OffsetAndMetadata`, `Node`, `NewTopic`, `ConfigResource`, `MetricName`, `IsolationLevel` and the `*Options` classes, have the same name as a Java class in `org.apache.kafka.clients.admin` or `org.apache.kafka.common`. Import the model types you need by name, for example `import zio.kafka.admin.AdminClient.{ NewTopic, TopicPartition }`, rather than with a wildcard.
 :::
+
+## Options
+
+The options classes carry a request timeout and operation-specific flags. The classes are nested in the `AdminClient` companion, except the three ACL ones, which are in `zio.kafka.admin.acl`:
+
+| Options class                      | Fields (default)                                                         | Used by                                                   |
+| ---------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `CreateTopicsOptions`              | `validateOnly`, `timeout`                                                | `createTopics`                                            |
+| `CreatePartitionsOptions`          | `validateOnly` (`false`), `retryOnQuotaViolation` (`true`), `timeout`    | `createPartitions`                                        |
+| `DeleteTopicsOptions`              | `retryOnQuotaViolation` (`true`), `timeout`                              | `deleteTopics`                                            |
+| `DeleteRecordsOptions`             | `timeout`                                                                | `deleteRecords`                                           |
+| `ListTopicsOptions`                | `listInternal` (`false`), `timeout`                                      | `listTopics`                                              |
+| `DescribeTopicsOptions`            | `includeAuthorizedOperations`, `timeout`                                 | `describeTopics`                                          |
+| `DescribeConfigsOptions`           | `includeSynonyms` (`false`), `includeDocumentation` (`false`), `timeout` | `describeConfigs`, `describeConfigsAsync`                 |
+| `AlterConfigsOptions`              | `validateOnly` (`false`), `timeout` (`None`)                             | `incrementalAlterConfigs`, `incrementalAlterConfigsAsync` |
+| `DescribeClusterOptions`           | `includeAuthorizedOperations`, `timeout`                                 | `describeClusterNodes` and the other `describeCluster*`   |
+| `ListOffsetsOptions`               | `isolationLevel` (`IsolationLevel.ReadUncommitted`), `timeout`           | `listOffsets`, `listOffsetsAsync`                         |
+| `ListConsumerGroupsOptions`        | `states`                                                                 | `listConsumerGroups`                                      |
+| `ListGroupsOptions`                | `groupStates`, `groupTypes`, `protocolTypes` (all `Set.empty`)           | `listGroups`                                              |
+| `DescribeConsumerGroupsOptions`    | `includeAuthorizedOperations`, `timeout`                                 | `describeConsumerGroups`                                  |
+| `ListConsumerGroupOffsetsOptions`  | `requireStable`                                                          | `listConsumerGroupOffsets`                                |
+| `AlterConsumerGroupOffsetsOptions` | `timeout`                                                                | `alterConsumerGroupOffsets`                               |
+| `DeleteConsumerGroupOptions`       | `timeout`                                                                | `deleteConsumerGroups`                                    |
+| `CreateAclOptions`                 | `timeout`                                                                | `createAcls`, `createAclsAsync`                           |
+| `DeleteAclsOptions`                | `timeout`                                                                | `deleteAcls`, `deleteAclsAsync`                           |
+| `DescribeAclOptions`               | `timeout`                                                                | `describeAcls`                                            |
+
+`timeout` is an `Option[Duration]`; `None` uses the client's `default.api.timeout.ms`. Except in `AlterConfigsOptions`, the `timeout` field has no default value, so pass `timeout = None` explicitly when you only want to set a flag. `ListConsumerGroupOffsetsOptions#requireStable` asks for stable offsets only: offsets that a still-open transaction commits are not returned until the transaction completes. `ListConsumerGroupsOptions#states` and `ListGroupsOptions#groupStates` filter by `GroupState`, and an empty set lists groups in every state. Most operations take the options as `Option[...Options] = None`; the `describeConsumerGroups` overload with options takes an `Option` without a default, `incrementalAlterConfigs`, `incrementalAlterConfigsAsync` and one `listConsumerGroupOffsets` overload take them without the `Option`, and `createTopic`, `deleteTopic`, `describeLogDirs`, `describeLogDirsAsync`, `metrics` and the `remove*MembersFromConsumerGroup` operations take none. To describe a topic's configuration including the synonyms of every entry:
+
+```scala mdoc:compile-only
+import zio._
+import zio.kafka.admin.AdminClient
+import zio.kafka.admin.AdminClient.{ ConfigResource, ConfigResourceType, DescribeConfigsOptions, KafkaConfig }
+
+def describeWithSynonyms(admin: AdminClient, topic: String): Task[Map[ConfigResource, KafkaConfig]] =
+  admin.describeConfigs(
+    List(ConfigResource(ConfigResourceType.Topic, topic)),
+    Some(DescribeConfigsOptions(includeSynonyms = true, timeout = None))
+  )
+```
 
 ## Operations by Task
 
-The operations group naturally by the part of the cluster they manage. Every operation returns a `Task` (`ZIO[Any, Throwable, *]`), and a Kafka error, such as a `TopicExistsException` or a `GroupNotEmptyException`, becomes the failure of that task. The sections below show one task per group; for every operation, its parameters and its options type, see the [`AdminClient` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/admin/AdminClient.html), and for the model case classes, the [`AdminClient` companion API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/admin/AdminClient$.html).
+The operations group naturally by the part of the cluster they manage. Every operation returns a `Task` (`ZIO[Any, Throwable, *]`), and a Kafka error, such as a `TopicExistsException` or a `GroupNotEmptyException`, becomes the failure of that task. The sections below show short examples per group; for the full parameter list of every operation, see the [`AdminClient` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/admin/AdminClient.html), and for the model case classes, the [`AdminClient` companion API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/admin/AdminClient$.html).
 
 ### Topics
 
@@ -197,7 +258,30 @@ Because `incrementalAlterConfigs` polls until the `Set` is visible, the `describ
 
 ### Consumer Groups
 
-`listConsumerGroups`, `listGroups`, `describeConsumerGroups`, `listConsumerGroupOffsets`, `alterConsumerGroupOffsets`, `deleteConsumerGroups` and the `remove*MembersFromConsumerGroup` operations list, inspect, reset and delete consumer groups. `listConsumerGroups` returns consumer groups only, while `listGroups` returns groups of every type. A group must be empty before `deleteConsumerGroups` can delete it, and must have no active members before `alterConsumerGroupOffsets` can change its offsets; `removeMembersFromConsumerGroup` removes static members by their group instance id. As always in Kafka, a committed `OffsetAndMetadata` holds the offset of the *next* record the group will read.
+`listConsumerGroups`, `listGroups`, `describeConsumerGroups`, `listConsumerGroupOffsets`, `alterConsumerGroupOffsets`, `deleteConsumerGroups` and the `remove*MembersFromConsumerGroup` operations list, inspect, reset and delete consumer groups:
+
+```scala
+trait AdminClient {
+  def listConsumerGroups(options: Option[ListConsumerGroupsOptions] = None): Task[List[ConsumerGroupListing]]
+  def listGroups(options: Option[ListGroupsOptions] = None): Task[List[GroupListing]]
+  def describeConsumerGroups(groupIds: String*): Task[Map[String, ConsumerGroupDescription]]
+  def describeConsumerGroups(groupIds: List[String], options: Option[DescribeConsumerGroupsOptions]): Task[Map[String, ConsumerGroupDescription]]
+  def listConsumerGroupOffsets(groupId: String, options: Option[ListConsumerGroupOffsetsOptions] = None): Task[Map[TopicPartition, OffsetAndMetadata]]
+  def listConsumerGroupOffsets(groupSpecs: Map[String, ListConsumerGroupOffsetsSpec]): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]]
+  def listConsumerGroupOffsets(groupSpecs: Map[String, ListConsumerGroupOffsetsSpec], options: ListConsumerGroupOffsetsOptions): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]]
+  def alterConsumerGroupOffsets(groupId: String, offsets: Map[TopicPartition, OffsetAndMetadata], options: Option[AlterConsumerGroupOffsetsOptions] = None): Task[Unit]
+  def deleteConsumerGroups(groupIds: Iterable[String], options: Option[DeleteConsumerGroupOptions] = None): Task[Unit]
+  def removeMembersFromConsumerGroup(groupId: String, membersToRemove: Set[String], visibilitySleep: Duration = 1.second): Task[Unit]
+  def removeMembersFromConsumerGroup(groupId: String): Task[Unit]
+  def removeAllMembersFromConsumerGroup(groupId: String, visibilitySleep: Duration = 1.second): Task[Unit]
+}
+```
+
+`listConsumerGroups` returns consumer groups only, while `listGroups` returns groups of every type. `describeConsumerGroups` takes the group ids either as varargs or as a list with options; set `DescribeConsumerGroupsOptions#includeAuthorizedOperations` to fill `ConsumerGroupDescription#authorizedOperations`, which is otherwise empty. The single-group `listConsumerGroupOffsets` returns every committed offset of one group. The two overloads that take a `Map[String, ListConsumerGroupOffsetsSpec]` look up several groups in one request; a `ListConsumerGroupOffsetsSpec(partitions)` lists the partitions to look up for that group, and the result is keyed by group id. As always in Kafka, a committed `OffsetAndMetadata` holds the offset of the *next* record the group will read.
+
+A group must be empty before `deleteConsumerGroups` can delete it, and must have no active members before `alterConsumerGroupOffsets` can change its offsets. `removeMembersFromConsumerGroup(groupId, membersToRemove)` removes static members by their group instance id. `removeAllMembersFromConsumerGroup` removes every member of the group, dynamic members included, and `removeMembersFromConsumerGroup(groupId)` is an alias for it.
+
+A group's state is a `GroupState`: `Unknown`, `PreparingRebalance`, `CompletingRebalance`, `Stable`, `Dead`, `Empty`, `Assigning`, `Reconciling` or `NotReady`. `GroupListing#groupType` is a `GroupType`: `Unknown`, `Consumer`, `Classic`, `Share` or `Streams`. Both are sealed traits in the `AdminClient` companion.
 
 To compute the lag of every partition a consumer group has committed offsets for, combine the group's committed offsets with the partitions' end offsets:
 
@@ -215,30 +299,33 @@ def consumerLag(admin: AdminClient, groupId: String): Task[Map[TopicPartition, L
   }
 ```
 
-To rewind a group to the start of its partitions, for example to reprocess a topic after a bug fix, stop all members of the group first and then alter its offsets:
+To read the committed offset of one partition for two groups in one request:
 
 ```scala mdoc:compile-only
 import zio._
 import zio.kafka.admin.AdminClient
-import zio.kafka.admin.AdminClient.{ GroupState, OffsetAndMetadata, OffsetSpec }
+import zio.kafka.admin.AdminClient.{ ListConsumerGroupOffsetsSpec, OffsetAndMetadata, TopicPartition }
 
-def rewindGroup(admin: AdminClient, groupId: String): Task[Unit] =
-  for {
-    description <- admin.describeConsumerGroups(groupId).map(_(groupId))
-    _ <- ZIO.fail(new IllegalStateException(s"Group $groupId still has members"))
-           .unless(description.state == GroupState.Empty)
-    committed <- admin.listConsumerGroupOffsets(groupId)
-    earliest  <- admin.listOffsets(committed.map { case (tp, _) => tp -> OffsetSpec.EarliestSpec })
-    _ <- admin.alterConsumerGroupOffsets(
-           groupId,
-           earliest.map { case (tp, info) => tp -> OffsetAndMetadata(info.offset) }
-         )
-  } yield ()
+def offsetsOfTwoGroups(admin: AdminClient): Task[Map[String, Map[TopicPartition, OffsetAndMetadata]]] = {
+  val spec = ListConsumerGroupOffsetsSpec(Chunk(TopicPartition("orders", 0)))
+  admin.listConsumerGroupOffsets(Map("billing" -> spec, "shipping" -> spec))
+}
+```
+
+To move a group back to an offset, for example to reprocess a partition after a bug fix, stop all members of the group first and then alter its offsets:
+
+```scala mdoc:compile-only
+import zio._
+import zio.kafka.admin.AdminClient
+import zio.kafka.admin.AdminClient.{ OffsetAndMetadata, TopicPartition }
+
+def rewindPartition(admin: AdminClient, groupId: String, partition: TopicPartition, offset: Long): Task[Unit] =
+  admin.alterConsumerGroupOffsets(groupId, Map(partition -> OffsetAndMetadata(offset)))
 ```
 
 ### Offsets
 
-`listOffsets` and `listOffsetsAsync` look up offsets in the partitions themselves, independently of any consumer group. Each partition, given as the zio-kafka admin `TopicPartition` case class rather than the Java one, comes with an `OffsetSpec`: `OffsetSpec.EarliestSpec` (the first offset still in the log), `OffsetSpec.LatestSpec` (the offset the next produced record will get), or `OffsetSpec.TimestampSpec(timestamp)` (the first offset whose timestamp is at or after `timestamp`, in epoch milliseconds). The isolation level in `ListOffsetsOptions` defaults to `IsolationLevel.ReadUncommitted`; with `IsolationLevel.ReadCommitted`, `LatestSpec` returns the last stable offset, which excludes records of open transactions, so use it for topics written by a [transactional producer](transactions.md).
+`listOffsets` and `listOffsetsAsync` look up offsets in the partitions themselves, independently of any consumer group. Each partition, given as the zio-kafka admin `TopicPartition` case class rather than the Java one, comes with an `OffsetSpec`: `OffsetSpec.EarliestSpec` (the first offset still in the log), `OffsetSpec.LatestSpec` (the offset the next produced record will get), or `OffsetSpec.TimestampSpec(timestamp)` (the first offset whose timestamp is at or after `timestamp`, in epoch milliseconds). The isolation level in `ListOffsetsOptions` defaults to `IsolationLevel.ReadUncommitted`; with `IsolationLevel.ReadCommitted`, `LatestSpec` returns the last stable offset, which excludes records of open transactions, so use it for topics written by a [transactional producer](transactional-producer.md).
 
 ### Cluster
 
@@ -256,7 +343,18 @@ AclBindingFilter ──> ResourcePatternFilter(resourceType, name, patternType)
                  └─> AccessControlEntryFilter(principal, host, operation, permissionType)
 ```
 
-A `PatternType.Literal` pattern matches the exact name (or `*` for all), and `PatternType.Prefixed` matches every name that starts with it. The `principal` is a Kafka principal such as `"User:alice"` (or `"User:*"`), and `host` is a client host, or `"*"` for any host. `AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any)` selects every ACL.
+A `PatternType.Literal` pattern matches the exact name (or `*` for all), and `PatternType.Prefixed` matches every name that starts with it. The `principal` is a Kafka principal such as `"User:alice"` (or `"User:*"`), and `host` is a client host, or `"*"` for any host.
+
+The enumerations are sealed traits with one case object per value:
+
+| Type                | Package                    | Values                                                                                                                                                                                                       |
+| ------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ResourceType`      | `zio.kafka.admin.resource` | `Topic`, `Group`, `Cluster`, `TransactionalId`, `DelegationToken`, `User`, `Any`, `Unknown`                                                                                                                  |
+| `PatternType`       | `zio.kafka.admin.resource` | `Literal`, `Prefixed`, `Match`, `Any`, `Unknown`                                                                                                                                                             |
+| `AclOperation`      | `zio.kafka.admin.acl`      | `All`, `Read`, `Write`, `Create`, `Delete`, `Alter`, `Describe`, `ClusterAction`, `DescribeConfigs`, `AlterConfigs`, `IdempotentWrite`, `CreateTokens`, `DescribeTokens`, `TwoPhaseCommit`, `Any`, `Unknown` |
+| `AclPermissionType` | `zio.kafka.admin.acl`      | `Allow`, `Deny`, `Any`, `Unknown`                                                                                                                                                                            |
+
+A binding uses concrete values. The `Any` values, and `PatternType.Match`, are for filters: `Any` matches every value, and `PatternType.Match` matches every pattern that applies to the filter's name, whether literal, wildcard or prefixed. In a filter, a `null` principal, host or resource name also matches anything; that is how `ResourcePatternFilter.Any` and `AccessControlEntryFilter.Any` are built, and `AclBindingFilter(ResourcePatternFilter.Any, AccessControlEntryFilter.Any)` selects every ACL. `Unknown` stands for a value this version of zio-kafka does not know.
 
 To let a principal read every topic whose name starts with a prefix, and then list the ACLs on that prefix:
 
@@ -289,7 +387,7 @@ def allowReadOnPrefix(admin: AdminClient, principal: String, prefix: String): Ta
 Several operations come in two flavours: `describeConfigs` and `describeConfigsAsync`, `incrementalAlterConfigs` and `incrementalAlterConfigsAsync`, `listOffsets` and `listOffsetsAsync`, `describeLogDirs` and `describeLogDirsAsync`, `createAcls` and `createAclsAsync`, `deleteAcls` and `deleteAclsAsync`. The plain variant waits for the whole request and fails if any part of it fails. The `*Async` variant returns a nested effect, `Task[Map[K, Task[V]]]`:
 
 - The outer effect sends the request and completes as soon as the Java client returns its per-item futures, without waiting for the broker's answer.
-- Each inner effect waits for the result of one item (one config resource, partition, broker, ACL binding or filter). For `incrementalAlterConfigsAsync`, `createAclsAsync` and `deleteAclsAsync`, the inner effect also does the visibility wait described above.
+- Each inner effect waits for the result of one item (one config resource, partition, broker, ACL binding or filter). For `incrementalAlterConfigsAsync`, `createAclsAsync` and `deleteAclsAsync`, the inner effect also does the visibility wait described above. The inner effect of `deleteAclsAsync` returns, for each binding the filter matched, `None` when it was deleted or `Some(error)` when its deletion failed.
 
 This gives you a result, or a failure, per item: one missing topic does not fail the lookup of the others. The request is sent when the outer effect runs, so not running an inner effect does not cancel anything. To describe the configuration of several topics and keep a separate outcome for each:
 
@@ -330,4 +428,4 @@ Operations called this way get none of zio-kafka's visibility waiting.
 
 - [Security](security.md) for TLS and SASL settings and the SSL endpoint check that `AdminClient.make` runs.
 - [Writing Tests](writing-tests.md) for the testkit helpers that create admin clients against an embedded broker.
-- [Transactions](transactions.md) for when `IsolationLevel.ReadCommitted` matters.
+- [Transactional Producer](transactional-producer.md) for when `IsolationLevel.ReadCommitted` matters.
