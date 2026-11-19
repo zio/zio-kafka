@@ -272,7 +272,7 @@ The offset that `Consumer#committed` returns is a next offset, the offset from w
 
 When you commit an offset only after the record has been processed, as all examples on this page do, you get *at-least-once* processing: every record is processed, but some records may be processed more than once. Records whose processing finished but whose offset was not yet committed are consumed again after a crash, a restart or a rebalance. Committing *before* processing gives at-most-once processing instead: records whose processing was interrupted are lost.
 
-Rebalances are a common source of duplicates, because a partition can move to another consumer while its last offsets are still being committed. Enable rebalance-safe commits with `ConsumerSettings#withRebalanceSafeCommits` to hold up a rebalance until the offsets of all consumed records are committed, for at most the duration set by `ConsumerSettings#withMaxRebalanceDuration`. See [Prevent Duplicates After a Rebalance](preventing-duplicates.md) for the details and the timing constraints. For exactly-once processing from Kafka to Kafka, use [transactions](transactions.md).
+Rebalances can still cause duplicates. [Prevent Duplicates After a Rebalance](preventing-duplicates.md) explains rebalance-safe commits (`ConsumerSettings#withRebalanceSafeCommits` and `ConsumerSettings#withMaxRebalanceDuration`), and [transactions](transactions.md) cover exactly-once processing from Kafka to Kafka.
 
 ## External Commits
 
