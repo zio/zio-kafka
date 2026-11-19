@@ -375,7 +375,7 @@ Keeping the chunking structure intact is important.
 In the example so far we have used `tap` to print the records as they are consumed. Unfortunately, methods like `tap` and `mapZIO` destroy the chunking structure and lead to much lower throughput. Please read [a warning about mapZIO](avoiding-chunk-breakers.md) for more details and alternatives.
 :::
 
-For more details see [consuming Kafka topics using ZIO Streams](consuming-kafka-topics-using-zio-streams.md).
+For more details see [Consume Topics with ZIO Streams](consuming-kafka-topics-using-zio-streams.md).
 
 ### 4. The Complete Streaming Example
 

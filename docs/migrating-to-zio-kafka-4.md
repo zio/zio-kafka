@@ -28,7 +28,7 @@ As with any major release, zio-kafka 4 is not binary compatible with zio-kafka 3
 
 ## Replace `OffsetBatch.offsets` With `OffsetBatch#nextOffsets`
 
-`OffsetBatch.offsets` is gone. Its replacement, `OffsetBatch#nextOffsets`, holds per partition the offset to commit, which is the next offset, not the consumed offset. This affects you if you combine offsets into a batch and then store them outside Kafka, as described in [preventing duplicates](preventing-duplicates.md).
+`OffsetBatch.offsets` is gone. Its replacement, `OffsetBatch#nextOffsets`, holds per partition the offset to commit, which is the next offset, not the consumed offset. This affects you if you combine offsets into a batch and then store them outside Kafka, as described in [Prevent Duplicates After a Rebalance](preventing-duplicates.md).
 
 In zio-kafka 3.x, the batch held consumed offsets, so code that stored offsets added 1:
 

@@ -16,7 +16,7 @@ To follow along, you need:
 
 ## Adding the Dependencies
 
-Add the `zio-kafka` library to your `build.sbt` file as shown in [Installation](index.md#installation). For your tests, also add the `zio-kafka-testkit` module listed under [Modules](index.md#modules); it provides an embedded Kafka broker and test helpers, see [Writing Tests](writing-tests.md).
+Add the `zio-kafka` library to your `build.sbt` file as shown in [Installation](index.md#installation). For your tests, also add the `zio-kafka-testkit` module listed under [Modules](index.md#modules); it provides an embedded Kafka broker and test helpers, see [Test Producers and Consumers with the Test Kit](writing-tests.md).
 
 Two situations need extra build settings: using the test kit on Scala 3, and trying out unreleased versions.
 
@@ -102,7 +102,7 @@ Committing an offset tells Kafka that the group has processed the record, so it 
 By default a new consumer group starts reading at the end of the topic. Records produced before the consumer joined are skipped, but because the producer keeps producing, new records soon arrive. See [Partition Assignment and Offset Retrieval](partition-assignment-and-offset-retrieval.md) to start from the beginning of the topic instead.
 
 :::note
-`ZStream#tap` is used here to keep the example short. It breaks the chunking structure of the stream and lowers throughput. See [Avoiding Chunk Breakers](avoiding-chunk-breakers.md) for alternatives.
+`ZStream#tap` is used here to keep the example short. It breaks the chunking structure of the stream and lowers throughput. See [Keep Stream Chunks Intact](avoiding-chunk-breakers.md) for alternatives.
 :::
 
 ### Running Both
@@ -117,4 +117,4 @@ From here, you can continue with:
 - [Consumer](consumer.md), for the consumer APIs in depth.
 - [Producer](producer.md), for all the ways to produce records.
 - [Offsets and Committing](offsets-and-committing.md), for how offsets work and how to commit them safely.
-- [Writing Tests](writing-tests.md), for testing your zio-kafka code with the embedded Kafka broker from the test kit.
+- [Test Producers and Consumers with the Test Kit](writing-tests.md), for testing your zio-kafka code with the embedded Kafka broker from the test kit.

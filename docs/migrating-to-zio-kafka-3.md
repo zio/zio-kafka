@@ -158,7 +158,7 @@ object NewExampleSpec extends ZIOSpecDefault {
 
 `KafkaTestUtils.makeProducer` and the other `make*` methods require a `Scope` in the environment. This scope is
 normally provided by the test framework (notice how `Scope` was added to the type parameter of `Spec`). If needed, a
-smaller scope can be given with the `ZIO.scoped` method. See also [writing tests](writing-tests.md) for details on how
+smaller scope can be given with the `ZIO.scoped` method. See also [Test Producers and Consumers with the Test Kit](writing-tests.md) for details on how
 to provide more layers.
 
 Here is code that uses one of the removed `with*Admin` methods:

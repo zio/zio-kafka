@@ -77,7 +77,7 @@ libraryDependencies ++= Seq(
 )
 ```
 
-On Scala 3 the test kit needs one extra build setting, see [Using the Test Kit With Scala 3](getting-started.md#using-the-test-kit-with-scala-3). See [Test Kit](testkit.md) for its API and [Writing Tests](writing-tests.md) for how to use it.
+On Scala 3 the test kit needs one extra build setting, see [Using the Test Kit With Scala 3](getting-started.md#using-the-test-kit-with-scala-3). See [Test Kit](testkit.md) for its API and [Test Producers and Consumers with the Test Kit](writing-tests.md) for how to use it.
 
 ## Documentation
 
