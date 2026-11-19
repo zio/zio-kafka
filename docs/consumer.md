@@ -37,7 +37,7 @@ This page is the reference for the `Consumer` API. [Consumer Settings](consumer-
 
 ## Usage
 
-To consume a topic, we create a consumer from `ConsumerSettings`, stream its records, and commit their offsets in batches:
+To consume a topic, we create a consumer from `ConsumerSettings` and stream its records:
 
 ```scala mdoc:compile-only
 import zio._
@@ -55,15 +55,13 @@ val program: Task[Unit] =
       consumer <- Consumer.make(settings)
       _ <- consumer
              .plainStream(Subscription.topics("my-topic"), Serde.string, Serde.string)
-             .mapZIOChunked(record => ZIO.logInfo(s"${record.key}: ${record.value}").as(record.offset))
-             .aggregateAsync(Consumer.collectOffsets)
-             .mapZIO(_.commit)
+             .mapZIOChunked(record => ZIO.logInfo(s"${record.key}: ${record.value}"))
              .runDrain
     } yield ()
   }
 ```
 
-`ZStream#mapZIOChunked` processes the records one by one but keeps the stream's chunks intact (see [Keep Stream Chunks Intact](avoiding-chunk-breakers.md)). `Consumer.collectOffsets` merges the offsets that arrive while a commit is running into one `OffsetBatch`, so committing does not slow down the stream. [Consume Topics with ZIO Streams](consuming-kafka-topics-using-zio-streams.md) explains how to choose the commit rate, and [Offsets and Committing](offsets-and-committing.md) covers the commit API.
+`ZStream#mapZIOChunked` processes the records one by one but keeps the stream's chunks intact (see [Keep Stream Chunks Intact](avoiding-chunk-breakers.md)). The program does not commit offsets. [Consume Topics with ZIO Streams](consuming-kafka-topics-using-zio-streams.md) shows how to commit them in batches and choose the commit rate, and [Offsets and Committing](offsets-and-committing.md) covers the commit API.
 
 ## Creating a Consumer
 
@@ -202,7 +200,7 @@ trait Consumer {
 }
 ```
 
-With a `Topics` or `Pattern` subscription the outer stream emits again on every rebalance: new partition streams start, and the streams of revoked partitions complete. With a `Manual` subscription there are no rebalances. To process every partition in parallel and commit from a single place:
+With a `Topics` or `Pattern` subscription the outer stream emits again on every rebalance: new partition streams start, and the streams of revoked partitions complete. With a `Manual` subscription there are no rebalances. To process every partition in parallel:
 
 ```scala mdoc:compile-only
 import zio._
@@ -213,11 +211,8 @@ def processPartitions(consumer: Consumer): Task[Unit] =
   consumer
     .partitionedStream(Subscription.topics("my-topic"), Serde.string, Serde.string)
     .flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
-      partitionStream
-        .mapZIOChunked(record => ZIO.logInfo(s"$topicPartition: ${record.value}").as(record.offset))
+      partitionStream.mapZIOChunked(record => ZIO.logInfo(s"$topicPartition: ${record.value}"))
     }
-    .aggregateAsync(Consumer.collectOffsets)
-    .mapZIO(_.commit)
     .runDrain
 ```
 
@@ -340,18 +335,18 @@ trait Consumer {
 
 Each member returns the following:
 
-| Member                      | Returns                                                                                                                                                                  |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Consumer#consumerSettings` | The settings this consumer was created with. It is a plain value, not an effect.                                                                                        |
-| `Consumer#assignment`       | The partitions currently assigned to this consumer, over all its subscriptions. With `Topics` and `Pattern` subscriptions it changes at every rebalance.                 |
-| `Consumer#subscription`     | The topic names the Kafka consumer is subscribed to, for the union of all active `Topics` or `Pattern` subscriptions. It is empty for `Manual` subscriptions.            |
-| `Consumer#committed`        | The committed offset of each partition for the consumer group, as a next offset, or `None` when the group has not committed one.                                        |
-| `Consumer#position`         | The offset of the next record this consumer fetches from the partition. The partition must be assigned to this consumer.                                                |
-| `Consumer#beginningOffsets` | The first offset that is still available in each partition.                                                                                                              |
-| `Consumer#endOffsets`       | The offset the next record written to each partition gets. With `isolation.level=read_committed`, it is the end of the last committed transaction instead.              |
-| `Consumer#offsetsForTimes`  | For each partition, the earliest offset whose record timestamp is at or after the given timestamp (in epoch milliseconds). Partitions without such a record are left out. |
-| `Consumer#partitionsFor`    | The partitions of a topic, with their leaders and replicas. It is empty when Kafka returns no metadata for the topic.                                                    |
-| `Consumer#listTopics`       | Every topic the consumer is allowed to describe, with its partitions.                                                                                                    |
+| Member                      | Returns                                                                                                                                                                     |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Consumer#consumerSettings` | The settings this consumer was created with. It is a plain value, not an effect.                                                                                            |
+| `Consumer#assignment`       | The partitions currently assigned to this consumer, over all its subscriptions. With `Topics` and `Pattern` subscriptions it changes at every rebalance.                    |
+| `Consumer#subscription`     | The topic names the Kafka consumer is subscribed to, for the union of all active `Topics` or `Pattern` subscriptions. It is empty for `Manual` subscriptions.               |
+| `Consumer#committed`        | The committed offset of each partition for the consumer group, as a next offset, or `None` when the group has not committed one.                                            |
+| `Consumer#position`         | The offset of the next record this consumer fetches from the partition. The partition must be assigned to this consumer.                                                    |
+| `Consumer#beginningOffsets` | The first offset that is still available in each partition.                                                                                                                 |
+| `Consumer#endOffsets`       | The offset the next record written to each partition gets. With `isolation.level=read_committed`, it is the last stable offset instead.                                     |
+| `Consumer#offsetsForTimes`  | For each partition, the earliest offset whose record timestamp is at or after the given timestamp (in epoch milliseconds). Partitions without such a record are left out.   |
+| `Consumer#partitionsFor`    | The partitions of a topic, with their leaders and replicas. It is empty when Kafka returns no metadata for the topic.                                                       |
+| `Consumer#listTopics`       | Every topic the consumer is allowed to describe, with its partitions.                                                                                                       |
 | `Consumer#metrics`          | The Kafka client's own metrics, as a map taken when the effect runs; each `Metric` reports its current value when read. For zio-kafka's metrics, see [Metrics](metrics.md). |
 
 Every query that takes a `timeout` defaults to `Duration.Infinity`. The queries share the Kafka consumer with the polling loop, so each one waits until the current poll completes.
@@ -378,21 +373,7 @@ Partitions without a committed offset are left out: where a consumer starts on t
 
 ## Committing Offsets
 
-Records are committed through their `Offset`, not through the `Consumer`. The `Consumer` companion provides the sinks that combine offsets into an `OffsetBatch`, and the service accepts commits made elsewhere:
-
-```scala
-object Consumer {
-  val collectOffsets: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch]
-  val collectOffsetBatches: ZSink[Any, Nothing, OffsetBatch, Nothing, OffsetBatch]
-  case object CommitTimeout extends RuntimeException
-}
-
-trait Consumer {
-  def registerExternalCommits(offsetBatch: OffsetBatch): Task[Unit]
-}
-```
-
-`Consumer.collectOffsets` folds `Offset`s into a batch, and `Consumer.collectOffsetBatches` merges batches (`Consumer.offsetBatches` is an alias of `Consumer.collectOffsets`). `Consumer.CommitTimeout` is the error of a commit that does not complete within the commit timeout (`ConsumerSettings#withCommitTimeout`). `Consumer#registerExternalCommits` tells the consumer about offsets you stored outside Kafka, so that rebalance-safe commits can wait for them; a `TransactionalProducer` calls it for you. [Offsets and Committing](offsets-and-committing.md) covers all of these, and [Transactions](transactions.md) covers committing inside a transaction.
+Records are committed through their `Offset`, not through the `Consumer`. [Offsets and Committing](offsets-and-committing.md) covers `Offset`, `OffsetBatch`, the `Consumer.collectOffsets` and `Consumer.collectOffsetBatches` sinks, `Consumer.CommitTimeout` and `Consumer#registerExternalCommits`, and [Transactions](transactions.md) covers committing inside a transaction.
 
 ## CommittableRecord
 
@@ -416,7 +397,7 @@ final case class CommittableRecord[K, V](
 }
 ```
 
-Besides `key`, `value`, `partition` and `timestamp`, use `record`, the underlying Kafka `ConsumerRecord`, for everything else, such as `record.topic()` and `record.leaderEpoch()`. `offset.offset` is the consumed offset, and `offset.commit` commits it. `nextOffset` is the offset a consumer should resume from after this record: usually the record's offset + 1, but for the last record of a partition in a poll it is the next offset Kafka reports, which is larger when transaction control records follow the record. For every member, see the [`CommittableRecord` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/consumer/CommittableRecord.html).
+Besides `CommittableRecord#key`, `CommittableRecord#value`, `CommittableRecord#partition` and `CommittableRecord#timestamp`, use `record`, the underlying Kafka `ConsumerRecord`, for everything else, such as `record.topic()` and `record.leaderEpoch()`. `Offset#offset` is the consumed offset, and `Offset#commit` commits it. `nextOffset` is the offset a consumer should resume from after this record: usually the record's offset + 1, but for the last record of a partition in a poll it is the next offset Kafka reports, which is larger when transaction control records follow the record. For every member, see the [`CommittableRecord` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/consumer/CommittableRecord.html).
 
 The headers of a record are only available through `record.headers()`; see [Record Headers](record-headers.md). How `offset` and `nextOffset` relate to committing is explained in [Offsets and Committing](offsets-and-committing.md).
 
