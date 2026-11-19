@@ -21,7 +21,7 @@ This guide assumes a project that already depends on zio-kafka (see [Getting Sta
 
 ## Connect With Mutual TLS From PEM Strings
 
-With mutual TLS, the client verifies the brokers with a CA certificate, and the brokers authenticate the client by its certificate. `KafkaCredentialStore.fromPemStrings` turns the three PEM strings into the TLS properties, and the `withCredentials` method of each settings type adds them. To read the PEM strings from environment variables and use the same credentials for a consumer, a producer and an admin client:
+With mutual TLS, the client verifies the brokers with a CA certificate, and the brokers authenticate the client by its certificate. `KafkaCredentialStore.fromPemStrings` turns the three PEM strings into the TLS properties, and `ConsumerSettings#withCredentials`, `ProducerSettings#withCredentials` and `AdminClientSettings#withCredentials` add them. To read the PEM strings from environment variables and use the same credentials for a consumer, a producer and an admin client:
 
 ```scala mdoc:compile-only
 import zio._
@@ -52,7 +52,7 @@ val settings: Task[(ConsumerSettings, ProducerSettings, AdminClientSettings)] =
   }
 ```
 
-The private key must be in PKCS#8 format. If it is encrypted, also set its password with `withProperty("ssl.key.password", password)`. For a transactional producer, add the credentials to the `ProducerSettings` you pass to `TransactionalProducerSettings`.
+The private key must be in PKCS#8 format. If it is encrypted, also set its password with the `ssl.key.password` property. For a transactional producer, add the credentials to the `ProducerSettings` you pass to `TransactionalProducerSettings`.
 
 ## Connect With One-Way TLS
 
@@ -102,10 +102,9 @@ The `PLAIN` mechanism works the same way, with `sasl.mechanism` set to `PLAIN` a
 
 ## Verify the Connection
 
-To find out at startup whether the settings work, create an admin client with the same properties and list the topics. A successful call proves that the client reached a broker, completed the TLS handshake and authenticated. When creating the client fails, zio-kafka wraps the reason in a `KafkaException` with the message `"Failed to connect to Kafka"`, so we log the exception's cause:
+To find out at startup whether the settings work, create an admin client with the same properties and list the topics. A successful call proves that the client reached a broker, completed the TLS handshake and authenticated. When the endpoint check fails, zio-kafka wraps the reason in a `KafkaException` with the message `"Failed to connect to Kafka"`; other failures, such as an authentication error from `listTopics`, arrive without that wrapper. So we log the exception's cause when it has one, and the exception itself otherwise:
 
 ```scala mdoc:compile-only
-import org.apache.kafka.common.KafkaException
 import zio._
 import zio.kafka.admin.{ AdminClient, AdminClientSettings }
 
@@ -116,13 +115,12 @@ def verifyConnection(settings: AdminClientSettings): Task[Unit] =
       topics <- admin.listTopics()
       _      <- ZIO.logInfo(s"Connected, ${topics.size} topics visible")
     } yield ()
-  }.tapSomeError {
-    case e: KafkaException if e.getCause != null =>
-      ZIO.logError(s"Cannot connect to Kafka: ${e.getCause.getMessage}")
+  }.tapError { e =>
+    ZIO.logError(s"Cannot connect to Kafka: ${Option(e.getCause).getOrElse(e).getMessage}")
   }
 ```
 
-`listTopics` only returns the topics your principal may describe, so a small count is not an error. The same `tapSomeError` works around `Producer.make` and `Consumer.make`. When the check passes but consuming or producing later fails with an `AuthorizationException`, the connection works and the principal is missing an ACL; [Admin Client](admin-client.md#access-control-lists) shows how to grant one.
+`listTopics` only returns the topics your principal may describe, so a small count is not an error. The same `tapError` works around `Producer.make` and `Consumer.make`. When the check passes but consuming or producing later fails with an `AuthorizationException`, the connection works and the principal is missing an ACL; [Admin Client](admin-client.md#access-control-lists) shows how to grant one.
 
 ## Going Further
 
