@@ -3,7 +3,7 @@ id: transactional-producer
 title: "Transactional Producer"
 ---
 
-`TransactionalProducer` is the **zio-kafka client for exactly-once consume-transform-produce**: it produces records and commits the offsets of the consumed records that led to them in one Kafka transaction. Consumers that read with `isolation.level=read_committed` then see either all records of a transaction, together with its offset commit, or none of them. A transaction is a `Transaction` value that lives in a ZIO `Scope`: it commits when the scope closes successfully and aborts otherwise. The producer is configured with `TransactionalProducerSettings` and works together with a zio-kafka `Consumer`. For a step-by-step introduction, read the [transactions tutorial](transactions.md).
+`TransactionalProducer` is the **zio-kafka client for exactly-once consume-transform-produce**: it produces records and commits the offsets of the consumed records that led to them in one Kafka transaction. Consumers that read with `isolation.level=read_committed` then see either all records of a transaction, together with its offset commit, or none of them. A transaction is a `Transaction` value that lives in a ZIO `Scope`: it commits when the scope closes successfully and aborts otherwise. The producer is configured with `TransactionalProducerSettings` and works together with a zio-kafka [`Consumer`](consumer.md). For a step-by-step introduction, read the [transactions tutorial](transactions.md).
 
 `TransactionalProducer`:
 
@@ -33,53 +33,11 @@ final case class TransactionalProducerSettings private (producerSettings: Produc
 
 ## Usage
 
-To copy every record of one topic to another topic exactly once, we produce each chunk of consumed records in a transaction that also carries the chunk's offsets:
-
-```scala mdoc:compile-only
-import org.apache.kafka.clients.producer.ProducerRecord
-import zio._
-import zio.kafka.consumer._
-import zio.kafka.producer._
-import zio.kafka.serde.Serde
-
-val bootstrapServers = List("localhost:9092")
-
-val copyTopic: ZIO[Consumer & TransactionalProducer, Throwable, Unit] =
-  for {
-    consumer <- ZIO.service[Consumer]
-    producer <- ZIO.service[TransactionalProducer]
-    _ <- consumer
-           .plainStream(Subscription.topics("input"), Serde.string, Serde.string)
-           .mapChunksZIO { records =>
-             ZIO.scoped {
-               for {
-                 tx <- producer.createTransaction
-                 _ <- tx.produceChunkBatch(
-                        records.map(r => new ProducerRecord("output", r.key, r.value)),
-                        Serde.string,
-                        Serde.string,
-                        OffsetBatch(records.map(_.offset))
-                      )
-               } yield Chunk.empty[Unit]
-             }.uninterruptible
-           }
-           .runDrain
-  } yield ()
-
-val program: Task[Unit] =
-  copyTopic.provide(
-    ZLayer.succeed(ConsumerSettings(bootstrapServers).withGroupId("copier").withRebalanceSafeCommits(true)),
-    Consumer.live,
-    ZLayer.succeed(TransactionalProducerSettings(bootstrapServers, "copier-0")),
-    TransactionalProducer.live
-  )
-```
-
-The [transactions tutorial](transactions.md#producing-transactional-records) builds this program step by step and explains each choice.
+To produce records in a transaction, we create a `Transaction` in a `Scope` with `TransactionalProducer#createTransaction`, produce with it, and close the scope to commit it; see [Producing in a Transaction](#producing-in-a-transaction) for the methods and [How a Transaction Ends](#how-a-transaction-ends) for commit and abort. The [transactions tutorial](transactions.md#putting-it-all-together) builds a complete consume-transform-produce program, including the consumer and producer layers.
 
 ## TransactionalProducerSettings
 
-`TransactionalProducerSettings` wraps a `ProducerSettings` and adds Kafka's `transactional.id` property to it. Its constructor is private, and it has no `with*` methods of its own: configure a `ProducerSettings` first (see [ProducerSettings](producer.md#producersettings)) and pass it to one of the three `apply` overloads, each of which sets `transactional.id`:
+`TransactionalProducerSettings` wraps a `ProducerSettings` and adds Kafka's `transactional.id` property to it. Its constructor is private, and it has no `with*` methods of its own: configure a `ProducerSettings` first (see [ProducerSettings](producer.md#producersettings)) and pass it to one of the three `TransactionalProducerSettings.apply` overloads, each of which sets `transactional.id`:
 
 ```scala
 object TransactionalProducerSettings {
@@ -237,4 +195,4 @@ These pages work together with `TransactionalProducer`:
 - [Transactions Tutorial](transactions.md) builds a complete exactly-once application and explains how Kafka transactions work.
 - [Producer](producer.md) documents `ProducerSettings`, which `TransactionalProducerSettings` wraps, and the produce methods that `Transaction` mirrors.
 - [Offsets and Committing](offsets-and-committing.md) covers `Offset` and `OffsetBatch`.
-- [Writing Tests](writing-tests.md) shows the testkit helpers that create a transactional producer against an embedded broker.
+- [Test Producers and Consumers with the Test Kit](writing-tests.md) shows the testkit helpers that create a transactional producer against an embedded broker.
