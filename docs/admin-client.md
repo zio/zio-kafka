@@ -39,7 +39,7 @@ The table lists which operations wait and how:
 | `deleteRecords`                                                       | Sleeps `visibilitySleep`                                                                                                        |
 | `removeMembersFromConsumerGroup`, `removeAllMembersFromConsumerGroup` | Sleeps `visibilitySleep`                                                                                                        |
 
-A request made with `validateOnly = true` changes nothing, so `createTopic`, `createTopics`, `createPartitions`, `incrementalAlterConfigs` and `incrementalAlterConfigsAsync` skip the waiting when `validateOnly` is set and return as soon as the broker has validated the request. The waiting uses the ZIO `Clock`; in a ZIO Test spec that uses `TestClock`, add `@@ TestAspect.withLiveClock` (see [Writing Tests](writing-tests.md)).
+A request made with `validateOnly = true` changes nothing, so `createTopic`, `createTopics`, `createPartitions`, `incrementalAlterConfigs` and `incrementalAlterConfigsAsync` skip the waiting when `validateOnly` is set and return as soon as the broker has validated the request. The waiting uses the ZIO `Clock`; in a ZIO Test spec that uses `TestClock`, add `@@ TestAspect.withLiveClock` (see [Test Producers and Consumers with the Test Kit](writing-tests.md)).
 
 ## Creating an Admin Client
 
@@ -216,7 +216,7 @@ The operations group naturally by the part of the cluster they manage. Every ope
 
 ### Topics
 
-`createTopic`, `createTopics`, `deleteTopic`, `deleteTopics`, `listTopics`, `describeTopics`, `createPartitions` and `deleteRecords` create, inspect and remove topics and their data. A `NewTopic` describes a topic to create and `NewPartitions` raises a topic's partition count; `listTopics` leaves out internal topics unless `ListTopicsOptions#listInternal` is set, and `TopicDescription#authorizedOperations` is `None` unless the request set `includeAuthorizedOperations = true`. `deleteRecords` takes the Java `RecordsToDelete` class, for example `RecordsToDelete.beforeOffset(offset)`.
+`AdminClient#createTopic`, `AdminClient#createTopics`, `AdminClient#deleteTopic`, `AdminClient#deleteTopics`, `AdminClient#listTopics`, `AdminClient#describeTopics`, `AdminClient#createPartitions` and `AdminClient#deleteRecords` create, inspect and remove topics and their data. A `NewTopic` describes a topic to create and `NewPartitions` raises a topic's partition count; `listTopics` leaves out internal topics unless `ListTopicsOptions#listInternal` is set, and `TopicDescription#authorizedOperations` is `None` unless the request set `includeAuthorizedOperations = true`. `deleteRecords` takes the Java `RecordsToDelete` class, for example `RecordsToDelete.beforeOffset(offset)`.
 
 To add partitions to an existing topic and then read back its partition leaders:
 
@@ -234,7 +234,7 @@ def growTopic(admin: AdminClient, topic: String, partitions: Int): Task[Map[Int,
 
 ### Configuration
 
-`describeConfigs` and `incrementalAlterConfigs`, and their `*Async` variants, read and change the configuration of topics, brokers and other resources. A `ConfigResource` names the resource; for a broker, its name is the broker id as a string, for example `"0"`. Each change is an `AlterConfigOp`: `AlterConfigOpType.Set` sets a value, `Delete` reverts it to the default, and `Append` and `Subtract` add to or remove from a list-valued config. The `AlterConfigsOptions` parameter of `incrementalAlterConfigs` is required, but `AlterConfigsOptions()` is enough in most cases. The result, a `KafkaConfig`, maps each config name to a Java `ConfigEntry`.
+`AdminClient#describeConfigs` and `AdminClient#incrementalAlterConfigs`, and their `*Async` variants, read and change the configuration of topics, brokers and other resources. A `ConfigResource` names the resource; for a broker, its name is the broker id as a string, for example `"0"`. Each change is an `AlterConfigOp`: `AlterConfigOpType.Set` sets a value, `Delete` reverts it to the default, and `Append` and `Subtract` add to or remove from a list-valued config. The `AlterConfigsOptions` parameter of `incrementalAlterConfigs` is required, but `AlterConfigsOptions()` is enough in most cases. The result, a `KafkaConfig`, maps each config name to a Java `ConfigEntry`.
 
 To set a topic's retention and read the new value back:
 
@@ -258,7 +258,7 @@ Because `incrementalAlterConfigs` polls until the `Set` is visible, the `describ
 
 ### Consumer Groups
 
-`listConsumerGroups`, `listGroups`, `describeConsumerGroups`, `listConsumerGroupOffsets`, `alterConsumerGroupOffsets`, `deleteConsumerGroups` and the `remove*MembersFromConsumerGroup` operations list, inspect, reset and delete consumer groups:
+`AdminClient#listConsumerGroups`, `AdminClient#listGroups`, `AdminClient#describeConsumerGroups`, `AdminClient#listConsumerGroupOffsets`, `AdminClient#alterConsumerGroupOffsets`, `AdminClient#deleteConsumerGroups` and the `AdminClient#removeMembersFromConsumerGroup` and `AdminClient#removeAllMembersFromConsumerGroup` operations list, inspect, reset and delete consumer groups:
 
 ```scala
 trait AdminClient {
@@ -325,11 +325,11 @@ def rewindPartition(admin: AdminClient, groupId: String, partition: TopicPartiti
 
 ### Offsets
 
-`listOffsets` and `listOffsetsAsync` look up offsets in the partitions themselves, independently of any consumer group. Each partition, given as the zio-kafka admin `TopicPartition` case class rather than the Java one, comes with an `OffsetSpec`: `OffsetSpec.EarliestSpec` (the first offset still in the log), `OffsetSpec.LatestSpec` (the offset the next produced record will get), or `OffsetSpec.TimestampSpec(timestamp)` (the first offset whose timestamp is at or after `timestamp`, in epoch milliseconds). The isolation level in `ListOffsetsOptions` defaults to `IsolationLevel.ReadUncommitted`; with `IsolationLevel.ReadCommitted`, `LatestSpec` returns the last stable offset, which excludes records of open transactions, so use it for topics written by a [transactional producer](transactional-producer.md).
+`AdminClient#listOffsets` and `AdminClient#listOffsetsAsync` look up offsets in the partitions themselves, independently of any consumer group. Each partition, given as the zio-kafka admin `TopicPartition` case class rather than the Java one, comes with an `OffsetSpec`: `OffsetSpec.EarliestSpec` (the first offset still in the log), `OffsetSpec.LatestSpec` (the offset the next produced record will get), or `OffsetSpec.TimestampSpec(timestamp)` (the first offset whose timestamp is at or after `timestamp`, in epoch milliseconds). The isolation level in `ListOffsetsOptions` defaults to `IsolationLevel.ReadUncommitted`; with `IsolationLevel.ReadCommitted`, `LatestSpec` returns the last stable offset, which excludes records of open transactions, so use it for topics written by a [transactional producer](transactional-producer.md).
 
 ### Cluster
 
-The `describeCluster*` operations (`describeClusterNodes`, `describeClusterController`, `describeClusterId` and `describeClusterAuthorizedOperations`), `describeLogDirs` and `metrics` describe the brokers, their log directories and the client itself. `describeClusterAuthorizedOperations` returns an empty set unless `DescribeClusterOptions#includeAuthorizedOperations` is set. A `Node` describes a broker, with `Option` fields where Kafka uses empty or negative placeholders. `metrics` returns the Java admin client's own metrics; see [Metrics](metrics.md) for the consumer and producer metrics zio-kafka publishes.
+The `describeCluster*` operations (`AdminClient#describeClusterNodes`, `AdminClient#describeClusterController`, `AdminClient#describeClusterId` and `AdminClient#describeClusterAuthorizedOperations`), `AdminClient#describeLogDirs` and `AdminClient#metrics` describe the brokers, their log directories and the client itself. `describeClusterAuthorizedOperations` returns an empty set unless `DescribeClusterOptions#includeAuthorizedOperations` is set. A `Node` describes a broker, with `Option` fields where Kafka uses empty or negative placeholders. `metrics` returns the Java admin client's own metrics; see [Metrics](metrics.md) for the consumer and producer metrics zio-kafka publishes.
 
 ### Access Control Lists
 
@@ -427,5 +427,5 @@ Operations called this way get none of zio-kafka's visibility waiting.
 ## See Also
 
 - [Security](security.md) for TLS and SASL settings and the SSL endpoint check that `AdminClient.make` runs.
-- [Writing Tests](writing-tests.md) for the testkit helpers that create admin clients against an embedded broker.
+- [Test Producers and Consumers with the Test Kit](writing-tests.md) for the testkit helpers that create admin clients against an embedded broker.
 - [Transactional Producer](transactional-producer.md) for when `IsolationLevel.ReadCommitted` matters.
