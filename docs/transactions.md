@@ -1,25 +1,38 @@
 ---
 id: transactions
-title: "Transactions"
+title: "Tutorial: Exactly-Once Processing with Transactions"
+sidebar_label: "Transactions Tutorial"
 ---
 
-> This document describes Kafka transactions for zio-kafka version 3.0.0 and later.
+Welcome! This tutorial is for zio-kafka users who already know how to consume and produce records, for example from the [zio-kafka tutorial](tutorial.md), and now want to process records exactly once. You don't need any prior experience with Kafka transactions to follow along.
 
-## What are Kafka Transactions?
+## Learning Objectives
 
-[Kafka transactions](https://www.confluent.io/blog/transactions-apache-kafka/) are different from what you may know from
-relational databases. In Kafka a transaction means that your program consumes some records, then produces some other
-records (to the same broker) and then by committing the _consumed_ records the transaction is committed, and the
-produced records become available to other consumers.
+By the end of this tutorial, you will understand:
 
-I can imagine that went a bit fast, here is a more gentle introduction with more background:
-[Kafka Transactions Explained (Twice!)](https://www.warpstream.com/blog/kafka-transactions-explained-twice).
+- What a Kafka transaction is and how it differs from a database transaction
+- How a `Consumer` and a `TransactionalProducer` work together
+- How to produce the records of a consumed chunk, and commit the chunk's offsets, in one transaction
+- Why zio-kafka needs rebalance-safe commits to make transactions succeed
 
-## A warning about consuming transactional records
+We'll learn these concepts through:
 
-By default, produced records become immediately visible for consumers, even if they are produced in a not yet committed
-Kafka transaction! To prevent reading transactional records before they are committed, you need to configure every
-consumer with the `isolation.level` property set to `read_committed`. For example as follows:
+1. What Are Kafka Transactions?
+2. A Warning About Consuming Transactional Records
+3. Producing Transactional Records
+4. How It All Works
+
+We recommend reading from top to bottom. The API details of every type used here are on the [Transactional Producer](transactional-producer.md) reference page.
+
+## What Are Kafka Transactions?
+
+[Kafka transactions](https://www.confluent.io/blog/transactions-apache-kafka/) are different from what you may know from relational databases. In Kafka, a transaction means that your program consumes some records, produces some other records to the same Kafka cluster, and then commits the offsets of the _consumed_ records as part of the transaction. When the transaction commits, the produced records become available to other consumers, and the consumed records count as processed, all at once.
+
+For a gentler introduction with more background, read [Kafka Transactions Explained (Twice!)](https://www.warpstream.com/blog/kafka-transactions-explained-twice).
+
+## A Warning About Consuming Transactional Records
+
+By default, produced records become immediately visible to consumers, even if they are produced in a not yet committed Kafka transaction! To prevent reading transactional records before they are committed, configure every consumer of the output topics with the `isolation.level` property set to `read_committed`, for example with `ConsumerSettings#withReadCommitted`:
 
 ```scala mdoc:compile-only
 import zio.kafka.consumer.ConsumerSettings
@@ -32,18 +45,13 @@ val settings = ConsumerSettings(bootstrapServers)
   .withReadCommitted(true) // Only read committed records
 ```
 
-## Producing transactional records
+## Producing Transactional Records
 
-In order to produce records transactionally, we need a `Consumer` and a `TransactionalProducer` that will work together
-to safely commit transactions.
+To produce records transactionally, we need a `Consumer` and a `TransactionalProducer` that work together to safely commit transactions. In this tutorial we use the [ZIO service pattern](https://zio.dev/reference/service-pattern/), so the `Consumer` and the `TransactionalProducer` are created as layers. The program we build copies every record of an input topic to an output topic, exactly once.
 
-On this page we assume you're using [ZIO service pattern](https://zio.dev/reference/service-pattern/) and that the
-`Consumer` and `TransactionalProducer` are created as a layer.
+### Creating the Consumer
 
-First we create the `Consumer` layer.
-Note that rebalance-safe-commits must be enabled (see the background section below for more information). The consumer must also use a partition assignor that revokes all partitions during a rebalance, so the `CooperativeStickyAssignor` is not supported. When rebalance-safe-commits is enabled, zio-kafka uses the `RangeAssignor` unless you configure another assignor. `TransactionalProducer.make` fails with an `IllegalArgumentException` when rebalance-safe-commits is off or the `CooperativeStickyAssignor` is configured. It cannot detect other incremental rebalance protocols, such as a custom cooperative assignor or the `consumer` group protocol (`group.protocol=consumer`), so do not use those with a transactional producer either.
-Since the default `maxRebalanceDuration` is quite high, you may also consider setting it to a lower duration, one in
-which you are sure all records of a poll can be processed:
+First we create the `Consumer` layer. Rebalance-safe commits must be enabled; the [How It All Works](#how-it-all-works) section explains why. Since the default `maxRebalanceDuration` is quite high, we also set it to a lower duration, one in which we are sure all records of a poll can be processed:
 
 ```scala mdoc:compile-only
 import zio._
@@ -60,8 +68,17 @@ val consumerLayer: ZLayer[Any, Throwable, Consumer] = ZLayer.scoped {
 }
 ```
 
-Now we can create the `TransactionalProducer` layer.
-Note that the producer connects (and must connect) to the same brokers as the consumer:
+The code above:
+
+- `withGroupId` gives the consumer a group; a transaction commits the offsets of that group.
+- `withRebalanceSafeCommits(true)` makes the consumer hold up a rebalance until every consumed record is committed. `TransactionalProducer.make` refuses a consumer without it.
+- `withMaxRebalanceDuration(30.seconds)` limits how long a rebalance is held up.
+
+The consumer has a few more requirements, such as its partition assignor and group protocol; zio-kafka's defaults meet them. [Consumer Requirements](transactional-producer.md#consumer-requirements) lists them all.
+
+### Creating the Transactional Producer
+
+Now we can create the `TransactionalProducer` layer. The producer must connect to the same Kafka cluster as the consumer:
 
 ```scala mdoc:compile-only
 import zio._
@@ -74,7 +91,7 @@ val bootstrapBrokers = List("localhost:9092")
 
 val producerLayer: ZLayer[Consumer, Throwable, TransactionalProducer] =
   ZLayer.scoped {
-    // See text below for a better transactionalId
+    // See the next section for a better transactionalId
     val transactionalId = UUID.randomUUID().toString
     val producerSettings = ProducerSettings(bootstrapBrokers)
     val transactionalProducerSettings = TransactionalProducerSettings(producerSettings, transactionalId)
@@ -86,20 +103,17 @@ val producerLayer: ZLayer[Consumer, Throwable, TransactionalProducer] =
   }
 ```
 
-Notice that the `producerLayer` requires a `Consumer`. The producer coordinates with the consumer to make sure
-that transactions are accepted by the brokers. The consumer does this by holding up rebalances until all records
-consumed before the rebalance are committed by the producer. (Again, see the background section below for more
-information.)
+Notice that the `producerLayer` requires a `Consumer`. The producer coordinates with the consumer to make sure that the brokers accept its transactions: the consumer holds up rebalances until the producer has committed all records consumed before the rebalance.
 
-The `transactionalId` uniquely identifies a producer and is (ideally) retained across restarts. It allows the Kafka
-brokers to identify zombies, producers that are accidentally still running. Records produced by a zombie are rejected.
-For a more complete description see [Kafka’s transactional.id – your first guess is probably wrong. It’s actually all about zombies](https://community.ibm.com/community/user/integration/blogs/kim-clark1/2024/06/19/kafka-transactionalid).
+### Choosing a Transactional Id
 
-Ideally, the `transactionalId` is stable and is provided by the environment. For example, the first producer uses a
-`transactionalId` that ends with `0`, the second producer uses a `transactionalId` that ends with `1` and so on.
+The `transactionalId` uniquely identifies a producer and is, ideally, retained across restarts. It allows the Kafka brokers to identify zombies, producers that are accidentally still running. Records produced by a zombie are rejected. For a more complete description, see [Kafka’s transactional.id – your first guess is probably wrong. It’s actually all about zombies](https://community.ibm.com/community/user/integration/blogs/kim-clark1/2024/06/19/kafka-transactionalid).
 
-With these in place we can look at the application logic of consuming and producing. In this example we use the
-`plainStream` method to consume records with a `Long` value and an `Int` key:
+Ideally, the `transactionalId` is stable and is provided by the environment. For example, the first instance of the application uses a `transactionalId` that ends with `0`, the second instance one that ends with `1`, and so on. The random id of the previous section keeps the examples short, but gives up this protection.
+
+### Consuming and Mapping Records
+
+With these in place we can look at the application logic of consuming and producing. In this example we use `Consumer#plainStream` to consume records with an `Int` key and a `Long` value:
 
 ```scala mdoc:compile-only
 import zio.kafka.consumer.{ Consumer, Subscription }
@@ -111,8 +125,7 @@ val consumedRecordsStream = consumer
   .plainStream(Subscription.topics("my-input-topic"), Serde.int, Serde.long)
 ```
 
-For each consumed records, we then create a `ProducerRecord` with a `String` value containing `Copy of <input value>`.
-Note, that we also keep the offset of the consumed record so that we can commit it later:
+For each consumed record, we then create a `ProducerRecord` with a `String` value containing `Copy of <input value>`. Notice that we also keep the offset of the consumed record, so that we can commit it later:
 
 ```scala mdoc:compile-only
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -136,13 +149,11 @@ val producedRecordsStream = consumedRecordsStream
   }
 ```
 
-Typically, to optimize throughput, we want to produce records in batches. The underlying chunking structure of the
-consumer stream is ideal for that because zio-kafka guarantees that each chunk in the stream contains records that
-were fetched together from the broker. However, we need to be careful to retain the chunking structure. For example, we
-should not use `ZStream#mapZIO` because it results in a stream where each chunk contains only a single item. Therefore, we use
-`ZStream#mapChunksZIO` instead (see also [avoiding chunk-breakers](avoiding-chunk-breakers.md)).
+To optimize throughput, we want to produce records in batches. The chunks of the consumer stream are ideal for that, because zio-kafka guarantees that each chunk contains records that were fetched together from the broker. We must be careful to keep the chunks intact, though. For example, we should not use `ZStream#mapZIO`, because it results in a stream where each chunk contains only a single item. Therefore, we use `ZStream#mapChunksZIO` instead (see also [avoiding chunk-breakers](avoiding-chunk-breakers.md)).
 
-These new records can now be produced. Let's build it up slowly:
+### Producing in a Transaction
+
+These new records can now be produced. Let's build it up slowly, starting with an empty `ZStream#mapChunksZIO` (this outline does not compile yet):
 
 ```scala
 producedRecordsStream
@@ -151,8 +162,7 @@ producedRecordsStream
   }
 ```
 
-Let's work on those question marks. We need to create a transaction.
-Each zio-kafka transaction runs in a ZIO `Scope`; the transaction commits when the scope closes successfully, and is aborted when the scope closes with a failure or interruption (for example after `Transaction#abort`, as long as its failure is not caught inside the scope). We start with the scope:
+Let's work on those question marks. We need to create a transaction. Each zio-kafka transaction runs in a ZIO `Scope`: the transaction commits when the scope closes successfully, and is aborted when the scope closes with a failure or an interruption. We start with the scope:
 
 ```scala
 ZIO.scoped {
@@ -160,8 +170,7 @@ ZIO.scoped {
 }
 ```
 
-We also want to try to complete the transaction, even when the program is shutting down.
-Therefore, we add `ZIO#uninterruptible` and get:
+We also want to complete the transaction, even when the program is shutting down. Therefore, we add `ZIO#uninterruptible`:
 
 ```scala
 ZIO
@@ -171,7 +180,7 @@ ZIO
   .uninterruptible
 ```
 
-Now we can fill in the 'transaction stuff': we create the transaction and use it to produce some records:
+Now we can fill in the "transaction stuff": we create the transaction and use it to produce the records:
 
 ```scala mdoc:compile-only
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -200,10 +209,11 @@ val transactionStuff =
   } yield Chunk.empty
 ```
 
-Notice how we pass the offsets of the consumed records. When the transaction commits, these offsets are committed with it.
-`Transaction#produce` and `Transaction#produceChunk` work the same way, but take an `Option[Offset]` instead of an `OffsetBatch`.
+Notice how we pass the offsets of the consumed records to `Transaction#produceChunkBatch`. When the transaction commits, these offsets are committed with it, so the copied records and the progress of the consumer become visible together.
 
-Putting it all together we get:
+### Putting It All Together
+
+Putting it all together we get the complete application. Compared to the snippets above, it builds the layers from settings with `Consumer.live` and `TransactionalProducer.live`, and logs when a transaction completes:
 
 ```scala mdoc:compile-only
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -284,59 +294,32 @@ object Transactional extends ZIOAppDefault {
 }
 ```
 
-## How a Transaction Ends
+What happens when a transaction fails, and how to abort one on purpose, is described in [How a Transaction Ends](transactional-producer.md#how-a-transaction-ends).
 
-A transaction ends when its scope closes. When the scope closes successfully, zio-kafka commits the transaction, including the collected offsets. When the scope closes with a failure or an interruption, zio-kafka aborts the transaction. Committing and aborting are each retried up to 5 times; when they keep failing, the effect dies.
+## How It All Works
 
-A `TransactionalProducer` runs one transaction at a time: `TransactionalProducer#createTransaction` waits until the scope of the previous transaction has closed. Do not keep a `Transaction` after its scope closes; producing with it then fails with `TransactionalProducer.TransactionLeaked`.
+Kafka must ensure that each record is processed only once, even though a partition can be revoked and assigned to another consumer while the original consumer knows nothing about it. In this situation, the original consumer happily continues producing records, while another consumer is doing the same thing with the same records.
 
-To abort a transaction on purpose, call `Transaction#abort`. It fails the effect with `TransactionalProducer.UserInitiatedAbort` (not a `Throwable`). The transaction is aborted only if this failure reaches the end of the scope: if you catch it inside the scope, the scope closes successfully and the transaction commits. So we catch it outside the scope when the abort is expected:
+Kafka prevents this by validating the group epoch. The group epoch is a number that increases after every rebalance. When the transactional producer commits a transaction with the offsets of consumed records, it also includes the group epoch in which the records were consumed. If the broker detects a commit with a group epoch that is not equal to the current epoch, it rejects the commit.
 
-```scala mdoc:compile-only
-import org.apache.kafka.clients.producer.ProducerRecord
-import zio._
-import zio.kafka.producer.TransactionalProducer
-import zio.kafka.producer.TransactionalProducer.UserInitiatedAbort
-import zio.kafka.serde.Serde
+In addition, to prevent an old consumer from continuing to poll into the next epoch without participating in the rebalance, consumers polling within the wrong group epoch are "fenced". The broker rejects the commits of a fenced consumer.
 
-val transactionalProducer: TransactionalProducer = ???
+Zio-kafka prevents these rejected commits. The `TransactionalProducer` informs the `Consumer` which offsets were committed, and when a rebalance starts, the consumer holds it up until all records consumed so far are committed. This feature is called rebalance-safe commits. Because of it, every transaction commits in the same group epoch as the epoch in which its records were consumed, and the brokers accept the transaction.
 
-val abortedTransaction =
-  ZIO.scoped {
-    for {
-      tx <- transactionalProducer.createTransaction
-      _  <- tx.produce(new ProducerRecord("my-output-topic", "key", "value"), Serde.string, Serde.string, None)
-      _  <- tx.abort // the record above is never visible to read_committed consumers
-    } yield ()
-  }.catchSome { case UserInitiatedAbort => ZIO.unit }
-```
+When a zio-kafka consumer misses a rebalance and continues polling, nothing can be done: the broker rejects its transactions, and zio-kafka gives up after a few retries (see [How a Transaction Ends](transactional-producer.md#how-a-transaction-ends)). In these cases the consumer, or more simply the whole program, should restart.
 
-## Technical background - How does it all work?
+## What You've Learned
 
-Kafka must ensure that each record is only processed once, even though a partition can be revoked, assigned to another
-consumer, all while the original consumer knows nothing about this. In this situation the original consumer will happily
-continue producing records even though another consumer is doing the same thing with the same records.
+In this tutorial, you learned:
 
-Kafka does this by validating the group epoch. The group epoch is a number that gets increased after every rebalance.
-When the transactional producer commits a transaction with the offsets of consumed records, it also includes the group
-epoch of when the records were consumed. If the broker detects a commit with a group epoch that is not equal to the
-current epoch, it will reject the commit.
+- That a Kafka transaction commits produced records together with the offsets of the consumed records
+- That consumers of transactional topics need `read_committed` to skip uncommitted records
+- How to create a rebalance-safe `Consumer` and a `TransactionalProducer` that work together
+- How to produce each chunk of a consumer stream in its own transaction with `Transaction#produceChunkBatch`
+- Why rebalance-safe commits make the brokers accept zio-kafka's transactions
 
-In addition, to prevent an old consumer from continuing to poll into the next epoch without participating in the
-rebalance, consumers polling within the wrong group epoch are 'fenced'. The broker rejects the commits of a fenced
-consumer.
+## Where to Go Next
 
-### How zio-kafka helps
-
-With zio-kafka you can use ZIO scopes to define the transaction boundaries. Within the scope you can produce records one
-by one, all in 1 batch or in multiple batches. Once the scope closes successfully, the records are committed together with all
-collected offsets. If the scope fails, the transaction is aborted.
-
-In addition, zio-kafka prevents failed commits. The `TransactionalProducer` informs the `Consumer` which offsets were
-committed. When a rebalance starts, the consumer holds it up until all records consumed so far are committed. (This
-feature is called rebalance-safe-commits.) Because of this, every transaction commits in the same group epoch as the
-epoch in which the records were consumed, and the brokers can accept the transaction.
-
-When a zio-kafka consumer misses a rebalance and continues polling, there is nothing that can be done. The broker rejects
-its transactions; zio-kafka retries the commit 5 times and then the effect dies. In these cases the consumer (or perhaps
-simpler, the whole program) should restart.
+- **Want the API details?** The [Transactional Producer](transactional-producer.md) reference documents `TransactionalProducer`, `Transaction` and `TransactionalProducerSettings`, including how to abort a transaction.
+- **Want to know more about rebalances?** [Preventing Duplicates](preventing-duplicates.md) explains rebalance-safe commits.
+- **Writing tests?** [Writing Tests](writing-tests.md) shows how to create a transactional producer against an embedded broker.
