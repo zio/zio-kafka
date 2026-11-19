@@ -103,10 +103,10 @@ It is skipped when the `security.protocol` property is a `String` that contains 
 
 For a client with a plain-text protocol, the check goes through these steps:
 
-1. It reads `bootstrap.servers`, and fails with `IllegalArgumentException("Empty bootstrapServers list")` when the property is missing. This step runs for every protocol, before the `SSL` skip described above. An empty value, such as the one `AdminClientSettings(Nil)` produces, passes this step and fails at the address lookup in step 2 instead.
+1. It reads `bootstrap.servers`, and fails with a `KafkaException` caused by `IllegalArgumentException("Empty bootstrapServers list")` when the property is missing. This step runs for every protocol, before the `SSL` skip described above. An empty value, such as the one `AdminClientSettings(Nil)` produces, passes this step and fails at the address lookup in step 2 instead.
 2. It resolves every bootstrap server to all of its IP addresses and opens a plain socket to each address, in parallel, on a blocking thread.
 3. On each socket it sends a Kafka `ApiVersions` request, reads the first 5 bytes of the answer, and closes the socket.
-4. If the first byte is a TLS record type, the broker answered with TLS, and the check fails with `IllegalArgumentException("Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled")`.
+4. If the first byte is a TLS record type, the broker answered with TLS, and the check fails with a `KafkaException` caused by `IllegalArgumentException("Received an unexpected SSL packet from the server. Please ensure the client is properly configured with SSL enabled")`.
 
 Each probe times out after the client's `request.timeout.ms` (30 seconds when it is not set or not a positive number). The overall outcome is:
 
