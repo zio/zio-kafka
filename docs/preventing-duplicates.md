@@ -105,8 +105,7 @@ In a real program, save the offsets in the same database transaction as the proc
 
 Kafka commits the *next offset*, the offset from which a consumer continues, not the offset of the processed record; [Kafka Commits the Next Offset](offsets-and-committing.md#kafka-commits-the-next-offset) explains the difference. Decide which of the two you persist, and keep your `OffsetRetrieval.External` function consistent with it, or you introduce an off-by-one bug:
 
-- To persist the next offset (recommended, and what the program above does), store `record.nextOffset.offset()` and its `leaderEpoch()`, and return the stored values as they are.
-- To persist the consumed offset, store `record.offset.offset` and `record.offset.leaderEpoch`, and return the stored offset plus 1.
+To persist the next offset (recommended, and what the program above does), store `record.nextOffset.offset()` and its `leaderEpoch()`, and return the stored values as they are. To persist the consumed offset instead, store `record.offset.offset` and `record.offset.leaderEpoch`, and return the stored offset plus 1.
 
 Storing the leader epoch is optional, but it prevents consuming from a broker that no longer leads the partition. `OffsetEpoch` takes it as an `Option[Int]`, `None` when it is unknown.
 
