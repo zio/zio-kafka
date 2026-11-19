@@ -372,7 +372,7 @@ Notice that because we are using `aggregateAsyncWithin`, the commits run asynchr
 :::caution
 Keeping the chunking structure intact is important.
 
-In the example so far we have used `tap` to print the records as they are consumed. Unfortunately, methods like `tap` and `mapZIO` destroy the chunking structure and lead to much lower throughput. Please read [a warning about mapZIO](avoiding-chunk-breakers.md) for more details and alternatives.
+In the example so far we have used `tap` to print the records as they are consumed. Unfortunately, methods like `tap` and `mapZIO` destroy the chunking structure and lead to much lower throughput. Please read [Keep Stream Chunks Intact](avoiding-chunk-breakers.md) for more details and alternatives.
 :::
 
 For more details see [Consume Topics with ZIO Streams](consuming-kafka-topics-using-zio-streams.md).

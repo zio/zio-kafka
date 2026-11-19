@@ -321,5 +321,5 @@ In this tutorial, you learned:
 ## Where to Go Next
 
 - **Want the API details?** The [Transactional Producer](transactional-producer.md) reference documents `TransactionalProducer`, `Transaction` and `TransactionalProducerSettings`, including how to abort a transaction.
-- **Want to know more about rebalances?** [Preventing Duplicates](preventing-duplicates.md) explains rebalance-safe commits.
+- **Want to know more about rebalances?** [Prevent Duplicates After a Rebalance](preventing-duplicates.md) explains rebalance-safe commits.
 - **Writing tests?** [Test Producers and Consumers with the Test Kit](writing-tests.md) shows how to create a transactional producer against an embedded broker.

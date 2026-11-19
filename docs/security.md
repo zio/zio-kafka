@@ -152,6 +152,6 @@ def checkedJavaProducer(props: Map[String, AnyRef]): ZIO[Scope, Throwable, Kafka
 - [Admin Client](admin-client.md) for managing ACLs with `AdminClient#createAcls` and related operations.
 - [Connect to a Secured Cluster](connecting-to-a-secured-cluster.md) for complete TLS and SASL settings and how to verify a connection.
 - [Consumer Settings](consumer-settings.md#authorization-errors) for how a consumer retries authorization errors, and [Producer](producer.md#error-handling) for the producer's retry schedule.
-- [Detecting Authorization Failures](detecting-authorization-failures.md) for making a consumer notice that its read access was revoked.
+- [Detect Silent Authorization Failures](detecting-authorization-failures.md) for making a consumer notice that its read access was revoked.
 - [Test Against a Secured Broker](writing-tests.md#test-against-a-secured-broker) for the testkit's embedded brokers with SASL and TLS listeners.
 - The Kafka documentation on [security](https://kafka.apache.org/documentation/#security) for broker-side setup and every client property.

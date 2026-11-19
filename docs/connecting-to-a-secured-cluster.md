@@ -126,5 +126,5 @@ def verifyConnection(settings: AdminClientSettings): Task[Unit] =
 
 - [Security](security.md) is the reference for the security protocols, `KafkaCredentialStore` and the SSL endpoint check.
 - [Consumer Settings](consumer-settings.md#authorization-errors) and [Producer](producer.md#error-handling) describe how the clients retry authorization errors.
-- [Detecting Authorization Failures](detecting-authorization-failures.md) makes a consumer notice that its read access was revoked.
+- [Detect Silent Authorization Failures](detecting-authorization-failures.md) makes a consumer notice that its read access was revoked.
 - [Test Against a Secured Broker](writing-tests.md#test-against-a-secured-broker) shows the testkit's embedded broker with a SASL listener.

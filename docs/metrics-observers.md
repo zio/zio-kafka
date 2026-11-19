@@ -160,7 +160,7 @@ The runloop calls `ConsumerMetricsObserver#observePoll` once after every success
 - `latency` is the duration of the poll, including any retries after authentication or authorization errors.
 - `pollSize` is the number of records the poll returned.
 
-`ConsumerMetricsObserver#observePollAuthError` takes no arguments. The consumer calls it every time a poll fails with an `AuthorizationException` or `AuthenticationException`, while it decides whether to retry the poll according to `ConsumerSettings#authErrorRetrySchedule` (by default 5 retries, 500 ms apart). Only errors thrown by `poll` itself count; see [Detecting Authorization Failures](detecting-authorization-failures.md) for failures that `poll` does not report.
+`ConsumerMetricsObserver#observePollAuthError` takes no arguments. The consumer calls it every time a poll fails with an `AuthorizationException` or `AuthenticationException`, while it decides whether to retry the poll according to `ConsumerSettings#authErrorRetrySchedule` (by default 5 retries, 500 ms apart). Only errors thrown by `poll` itself count; see [Detect Silent Authorization Failures](detecting-authorization-failures.md) for failures that `poll` does not report.
 
 ### Committing
 
@@ -446,4 +446,4 @@ Metrics observers sit next to several other parts of zio-kafka:
 - [Metrics](metrics.md) lists every metric name with its type and description, and explains how to read them.
 - [Consumer](consumer.md) and [Producer](producer.md) describe `ConsumerSettings` and `ProducerSettings`, including their metrics settings, and the internals the callbacks report on.
 - [Diagnostics](diagnostics.md) is the event-based counterpart: it hands you each individual event with full details on a separate fiber, while metrics observers receive numeric measurements inline, meant to become counters, gauges and histograms.
-- [Consumer Tuning](consumer-tuning.md) shows how to use the consumer metrics to tune the consumer.
+- [Tune the Consumer](consumer-tuning.md) shows how to use the consumer metrics to tune the consumer.

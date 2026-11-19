@@ -171,7 +171,7 @@ Waiting for an acknowledgement costs a network round trip, so a method that wait
 | You need to know which records of a chunk failed             | `Producer#produceChunkAsyncWithFailures`                                     |
 | The records are the elements of a `ZStream`                  | `Producer#produceAll`                                                        |
 
-For streaming applications that also commit consumer offsets, [Consuming, Producing and Committing Offsets](consuming-producing-and-committing-offsets.md) shows how to combine `Producer#produceChunkAsync` with `ZStream#buffer` to keep the producer busy while acknowledgements arrive.
+For streaming applications that also commit consumer offsets, [Consume, Produce and Commit at High Throughput](consuming-producing-and-committing-offsets.md) shows how to combine `Producer#produceChunkAsync` with `ZStream#buffer` to keep the producer busy while acknowledgements arrive.
 
 ### Byte Arrays or Serializers
 
@@ -375,7 +375,7 @@ def produceStream(producer: Producer): Task[Unit] =
     .runDrain
 ```
 
-Operators such as `ZStream#mapZIO` and `ZStream#tap` turn a stream into chunks of one record, which makes `Producer#produceAll` send one record per request. See [Avoiding Chunk Breakers](avoiding-chunk-breakers.md).
+Operators such as `ZStream#mapZIO` and `ZStream#tap` turn a stream into chunks of one record, which makes `Producer#produceAll` send one record per request. See [Keep Stream Chunks Intact](avoiding-chunk-breakers.md).
 
 ## Error Handling
 
@@ -396,7 +396,7 @@ val settings: ProducerSettings =
     .withAuthErrorRetrySchedule(Schedule.recurs(5) && Schedule.spaced(500.millis))
 ```
 
-Re-ordering of chunks can happen because only the failed and omitted records are sent again. For detecting revoked read access on the consumer side, see [Detecting Authorization Failures](detecting-authorization-failures.md).
+Re-ordering of chunks can happen because only the failed and omitted records are sent again. For detecting revoked read access on the consumer side, see [Detect Silent Authorization Failures](detecting-authorization-failures.md).
 
 ## Other Operations
 

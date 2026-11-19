@@ -57,7 +57,7 @@ The runloop updates these metrics after every poll:
 | counter   | `ziokafka_consumer_poll_auth_errors`                  | The number of polls that ended with an authentication or authorization error.      |
 
 :::note
-`ziokafka_consumer_poll_auth_errors` only counts errors that `poll()` itself throws. Some authorization failures, such as a revoked `READ` ACL, make `poll()` return no records without an error, so they do not increment this metric. To detect them, configure the empty-poll probe described in [Detecting Authorization Failures](detecting-authorization-failures.md).
+`ziokafka_consumer_poll_auth_errors` only counts errors that `poll()` itself throws. Some authorization failures, such as a revoked `READ` ACL, make `poll()` return no records without an error, so they do not increment this metric. To detect them, configure the empty-poll probe described in [Detect Silent Authorization Failures](detecting-authorization-failures.md).
 :::
 
 ### Partition Stream Metrics

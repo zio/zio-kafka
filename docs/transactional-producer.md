@@ -121,7 +121,7 @@ Kafka accepts a transaction's offsets only when they are committed in the same c
 - The consumer must have a group id. Without one, committing a transaction with offsets fails with an `InvalidGroupIdException`, and after the retries described in [How a Transaction Ends](#how-a-transaction-ends) the effect dies.
 - The consumer and the producer must connect to the same Kafka cluster, because the offsets are committed to the consumer group's coordinator as part of the transaction.
 
-A rebalance waits at most `ConsumerSettings#maxRebalanceDuration` for the commits. Its default is long, so consider a lower value, one in which every record of a poll can be processed. See [Preventing Duplicates](preventing-duplicates.md) for how rebalance-safe commits work.
+A rebalance waits at most `ConsumerSettings#maxRebalanceDuration` for the commits. Its default is long, so consider a lower value, one in which every record of a poll can be processed. See [Prevent Duplicates After a Rebalance](preventing-duplicates.md) for how rebalance-safe commits work.
 
 Consumers that read the topics a transactional producer writes to should use `ConsumerSettings#withReadCommitted`; otherwise they also see records of open and aborted transactions.
 
