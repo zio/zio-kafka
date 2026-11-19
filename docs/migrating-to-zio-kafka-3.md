@@ -196,19 +196,20 @@ Starting with 3.0.0, zio-kafka is based on the kafka 4.0.0 client. This has a nu
   Zio-kafka 3.0 to 3.3 added a fixed 550ms delay after operations like `createTopic`, `deleteTopic` and `createAcls`
   in the admin client; 3.4 removed it, after earlier releases had already replaced it for some operations. Since zio-kafka 3.6.0, the admin client polls
   the broker until the change is visible (for at most 5 seconds), and operations whose effect it cannot check accept a
-  `visibilitySleep` parameter (default 1 second).
+  `visibilitySleep` parameter (default 1 second); see
+  [Write Operations Wait Until They Are Visible](admin-client.md#write-operations-wait-until-they-are-visible).
 * Two deprecated methods of kafka's admin client were removed. Their equivalent in zio-kafka were unfortunately not
   deprecated yet but had to be removed as well:
-  * `AdminClient.alterConfigs` was removed, use `AdminClient.incrementalAlterConfigs` instead.
-  * `AdminClient.alterConfigsAsync` was removed, use `AdminClient.incrementalAlterConfigsAsync` instead.
+  * `AdminClient#alterConfigs` was removed, use `AdminClient#incrementalAlterConfigs` instead.
+  * `AdminClient#alterConfigsAsync` was removed, use `AdminClient#incrementalAlterConfigsAsync` instead.
 
 There may be more changes that affect you. See the [Kafka 4.0.0 release announcement](https://kafka.apache.org/blog#apache_kafka_400_release_announcement) for more details.
 
 ## 3. Changes in the transactional producer
 
 The transactional producer is now much easier to use. The zio-kafka 2.x transactional API is so complicated that we
-expect only a few very experienced users to make use of it. Therefore, only the new API is described in
-[transactions](transactions.md).
+expect only a few very experienced users to make use of it. Therefore, only the new API is described, in the
+[Transactional Producer](transactional-producer.md) reference and the [transactions tutorial](transactions.md).
 
 ## 4. Diagnostics set via consumer settings
 
