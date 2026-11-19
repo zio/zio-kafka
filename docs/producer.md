@@ -196,7 +196,7 @@ package object producer {
 Use a full `ProducerRecord` when you need to set the partition, the timestamp or [record headers](record-headers.md). The serializers receive the record's headers and may read or add to them. See [Serialization and Deserialization](serialization-and-deserialization.md) for the predefined serdes such as `Serde.string` and `Serde.long`.
 
 :::note
-Because `ProducerRecord` is a Java class, give its type parameters explicitly when the compiler cannot infer them, for example `new ProducerRecord[Array[Byte], Array[Byte]](topic, key, value)`. Build a new `ProducerRecord` for every send instead of reusing one: once a record is sent, the Kafka client marks its headers read-only. This also applies to the serializer overloads, because the serialized record they send shares the headers of the record you pass in, so a second send of the same record fails as soon as a serializer tries to add a header.
+Because `ProducerRecord` is a Java class, give its type parameters explicitly when the compiler cannot infer them, for example `new ProducerRecord[Array[Byte], Array[Byte]](topic, key, value)`. Build a new `ProducerRecord` for every send instead of reusing one: once a byte-array record is sent, the Kafka client marks its headers read-only, and with the serializer overloads a header-adding serializer would add its header again on every send. See [Adding Headers When Producing](record-headers.md#adding-headers-when-producing).
 :::
 
 ### Producing One Record and Waiting
@@ -534,7 +534,7 @@ val settings: ProducerSettings =
 
 `ProducerSettings#withDiagnostics` registers a callback for `ProducerEvent`s: `ProducerEvent.RecordsOffered` just before a batch is offered to the send queue, `ProducerEvent.RecordsSent` when the broker has handled it (with the indices of failed records), and `ProducerEvent.ProducerFinalized` when the producer closes. Events of the same batch share a `batchId`. The callback runs in a separate fiber, and unhandled events queue up in memory, so it must keep up. See [Diagnostics](diagnostics.md) for the full event model.
 
-The producer records zio-kafka metrics such as produce latency, batch size and send queue size through ZIO metrics. When an application runs several producers, label their metrics with `ProducerSettings#withMetricsLabels`. To send metrics elsewhere, or to turn them off with `ProducerMetricsObserver.NoOp`, use `ProducerSettings#withMetricsObserver`; labels are then ignored. To label a producer's metrics:
+The producer records zio-kafka metrics such as produce latency, batch size and send queue size through ZIO metrics. When an application runs several producers, label their metrics with `ProducerSettings#withMetricsLabels`. To send the metrics elsewhere or turn them off, see [Installing an Observer](metrics-observers.md#installing-an-observer). To label a producer's metrics:
 
 ```scala mdoc:compile-only
 import zio.kafka.producer._
