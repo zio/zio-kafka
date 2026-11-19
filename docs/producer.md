@@ -501,11 +501,11 @@ abstract sealed class ProducerCompression {
 }
 
 object ProducerCompression {
-  case object NoCompression                                            extends ProducerCompression
-  final case class Gzip(level: Int = Deflater.DEFAULT_COMPRESSION)    extends ProducerCompression
-  final case class Snappy()                                            extends ProducerCompression
-  final case class Lz4(level: Int = 9)                                 extends ProducerCompression
-  final case class Zstd(level: Int = 3)                                extends ProducerCompression
+  case object NoCompression                                         extends ProducerCompression
+  final case class Gzip(level: Int = Deflater.DEFAULT_COMPRESSION) extends ProducerCompression
+  final case class Snappy()                                         extends ProducerCompression
+  final case class Lz4(level: Int = 9)                              extends ProducerCompression
+  final case class Zstd(level: Int = 3)                             extends ProducerCompression
 }
 ```
 
@@ -555,4 +555,4 @@ These pages build on `Producer`:
 - [Record Headers](record-headers.md) explains how to attach metadata to produced records.
 - [Transactional Producer](transactional-producer.md) covers `TransactionalProducer`, which produces records and commits consumer offsets atomically, and the [transactions tutorial](transactions.md) builds a complete exactly-once application with it.
 - [Consumer](consumer.md) and [Offsets and Committing](offsets-and-committing.md) cover the reading side of consume-transform-produce applications.
-- [Writing Tests](writing-tests.md) shows how to create a producer against an embedded Kafka broker with the testkit.
+- [Test Producers and Consumers with the Test Kit](writing-tests.md) shows how to create a producer against an embedded Kafka broker with the testkit.
