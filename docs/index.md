@@ -56,7 +56,9 @@ Kafka has a mature Java client for producing and consuming events, but it has a 
 To use zio-kafka, add the following lines to your `build.sbt` file:
 
 ```scala
+// ZIO Kafka client (JVM)
 libraryDependencies += "dev.zio" %% "zio-kafka"         % "@VERSION@"
+// Testkit for running tests against an embedded Kafka broker (JVM)
 libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "@VERSION@" % Test
 ```
 

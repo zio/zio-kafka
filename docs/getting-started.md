@@ -19,7 +19,9 @@ To follow along, you need:
 Zio-kafka is published for Scala 2.13 and Scala 3. Add the library, and the test kit for your tests, to your `build.sbt` file:
 
 ```scala
+// ZIO Kafka client (JVM)
 libraryDependencies += "dev.zio" %% "zio-kafka"         % "@VERSION@"
+// Testkit for running tests against an embedded Kafka broker (JVM)
 libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "@VERSION@" % Test
 ```
 
