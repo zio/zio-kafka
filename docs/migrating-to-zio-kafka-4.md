@@ -28,7 +28,7 @@ As with any major release, zio-kafka 4 is not binary compatible with zio-kafka 3
 
 ## Replace `OffsetBatch.offsets` With `OffsetBatch#nextOffsets`
 
-`OffsetBatch.offsets` is gone. Its replacement, `OffsetBatch#nextOffsets`, holds per partition the offset to commit, which is the next offset, not the consumed offset. This affects you if you combine offsets into a batch and then store them outside Kafka, as described in [preventing duplicates](preventing-duplicates.md).
+`OffsetBatch.offsets` is gone. Its replacement, `OffsetBatch#nextOffsets`, holds per partition the offset to commit, which is the next offset, not the consumed offset. This affects you if you combine offsets into a batch and then store them outside Kafka, as described in [Prevent Duplicates After a Rebalance](preventing-duplicates.md).
 
 In zio-kafka 3.x, the batch held consumed offsets, so code that stored offsets added 1:
 
@@ -101,7 +101,7 @@ import org.apache.kafka.clients.consumer.{ ConsumerGroupMetadata, OffsetAndMetad
 import zio._
 import zio.kafka.consumer.{ Offset, OffsetBatch }
 
-final case class FakeOffset(topic: String, partition: Int, offset: Long, nextOffset: OffsetAndMetadata)
+case class FakeOffset(topic: String, partition: Int, offset: Long, nextOffset: OffsetAndMetadata)
     extends Offset {
   def leaderEpoch: Optional[Integer]                       = nextOffset.leaderEpoch()
   def commit: Task[Unit]                                   = ZIO.unit
@@ -161,7 +161,7 @@ In zio-kafka 3.x, the `DiagnosticEvent.Commit.Started` event carried the consume
 
 To migrate an application from zio-kafka 3.x to zio-kafka 4:
 
-- [ ] Update `zio-kafka` and `zio-kafka-testkit` to the latest 4.x release (4.1.0 at the time of writing).
+- [ ] Update `zio-kafka` and `zio-kafka-testkit` to the latest 4.x release.
 - [ ] Replace every use of `OffsetBatch.offsets` with `OffsetBatch#nextOffsets`, and remove any `+ 1` applied to its values.
 - [ ] Optionally, replace `record.offset.offset + 1` with `record.nextOffset.offset()` where you store offsets.
 - [ ] Add `Offset#nextOffset` to custom implementations of `Offset`.
@@ -178,6 +178,6 @@ Zio-kafka 4.1.0 fixes a number of small problems and adds a few APIs; most appli
 - **SSL endpoint check:** `TransactionalProducer.make` and `TransactionalProducer.live` now run the same SSL endpoint check as the other clients, so with a plain-text protocol they fail when no bootstrap server is reachable at startup. The `KafkaException` of a failed check now has the message `"Failed to connect to Kafka"` instead of `"Failed to create new KafkaAdminClient"`; update code or alerts that match on the old message. See [Security](security.md#ssl-endpoint-check).
 - **Failing diagnostics:** when a `Diagnostics` implementation throws or dies, the consumer or producer now fails with that defect, instead of queueing events in memory without bound. See [Diagnostics](diagnostics.md).
 - **Metrics:** `ziokafka_producer_send_queue_latency_seconds` now records the actual (positive) time a batch spends in the send queue; in 4.0 the values had the wrong sign. `ziokafka_producer_auth_errors` now also counts authentication and authorization errors of single-record produce calls. Review dashboards and alerts built on these metrics, see [Metrics](metrics.md).
-- **Admin client:** `createTopic`, `createTopics`, `createPartitions` and `incrementalAlterConfigs` with `validateOnly = true` no longer wait for the change to become visible, so they return sooner. See [Admin Client](admin-client.md).
+- **Admin client:** `createTopic`, `createTopics`, `createPartitions`, `incrementalAlterConfigs` and `incrementalAlterConfigsAsync` with `validateOnly = true` no longer wait for the change to become visible, so they return sooner. See [Write Operations Wait Until They Are Visible](admin-client.md#write-operations-wait-until-they-are-visible).
 
 Zio-kafka 4.1.0 also adds the serdes `Serde.intOption`, `Serde.longOption`, `Serde.shortOption`, `Serde.floatOption` and `Serde.doubleOption`, which turn a `null` key or value into `None` (see [Handling Missing Data](serialization-and-deserialization.md#handling-missing-data)).

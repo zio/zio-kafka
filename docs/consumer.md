@@ -33,11 +33,11 @@ object Consumer {
 }
 ```
 
-The how-to guides walk through common tasks step by step: [creating a consumer](creating-a-consumer.md), [consuming Kafka topics using ZIO Streams](consuming-kafka-topics-using-zio-streams.md) and [sharing a consumer between streams](sharing-consumer.md). This page is the reference for the whole API.
+This page is the reference for the `Consumer` API. [Consumer Settings](consumer-settings.md) lists every setting, and the how-to guides walk through common tasks: [Create a Consumer](creating-a-consumer.md), [Consume Topics with ZIO Streams](consuming-kafka-topics-using-zio-streams.md) and [Share One Consumer Between Several Streams](sharing-consumer.md).
 
 ## Usage
 
-To consume a topic, we create a consumer from `ConsumerSettings`, stream its records, and commit their offsets in batches:
+To consume a topic, we create a consumer from `ConsumerSettings` and stream its records:
 
 ```scala mdoc:compile-only
 import zio._
@@ -55,16 +55,13 @@ val program: Task[Unit] =
       consumer <- Consumer.make(settings)
       _ <- consumer
              .plainStream(Subscription.topics("my-topic"), Serde.string, Serde.string)
-             .tap(record => ZIO.logInfo(s"${record.key}: ${record.value}"))
-             .map(_.offset)
-             .aggregateAsync(Consumer.collectOffsets)
-             .mapZIO(_.commit)
+             .mapZIOChunked(record => ZIO.logInfo(s"${record.key}: ${record.value}"))
              .runDrain
     } yield ()
   }
 ```
 
-`Consumer.collectOffsets` merges the offsets that arrive while a commit is running into one `OffsetBatch`, so committing does not slow down the stream. See [Offsets and Committing](offsets-and-committing.md) for the details.
+`ZStream#mapZIOChunked` processes the records one by one but keeps the stream's chunks intact (see [Keep Stream Chunks Intact](avoiding-chunk-breakers.md)). The program does not commit offsets. [Consume Topics with ZIO Streams](consuming-kafka-topics-using-zio-streams.md) shows how to commit them in batches and choose the commit rate, and [Offsets and Committing](offsets-and-committing.md) covers the commit API.
 
 ## Creating a Consumer
 
@@ -72,7 +69,7 @@ A `Consumer` needs a `Scope`, because it owns a connection to the Kafka cluster 
 
 ### Consumer.make
 
-`Consumer.make` creates a consumer from settings. It validates the settings first and fails with an `IllegalArgumentException` when they are invalid (see [Settings Validation](#settings-validation)):
+`Consumer.make` creates a consumer from settings. It validates the settings first and fails with an `IllegalArgumentException` when they are invalid (see [Settings Validation](consumer-settings.md#settings-validation)):
 
 ```scala
 object Consumer {
@@ -80,22 +77,19 @@ object Consumer {
 }
 ```
 
-When the scope closes, zio-kafka stops consuming and closes the Kafka consumer, giving it at most `closeTimeout` (30 seconds by default) to close. The [creating a consumer](creating-a-consumer.md) guide shows how to use it with `ZIO.scoped` and `ZLayer.scoped`.
+When the scope closes, zio-kafka stops consuming and closes the Kafka consumer, giving it at most the close timeout (30 seconds by default) to close.
 
 ### Consumer.live
 
 `Consumer.live` is a layer that reads `ConsumerSettings` from the environment and produces a `Consumer`. It is the natural choice when the settings come from another layer, for example from configuration:
 
-```scala mdoc:compile-only
-import zio._
-import zio.kafka.consumer._
-
-val settingsLayer: ULayer[ConsumerSettings] =
-  ZLayer.succeed(ConsumerSettings(List("localhost:9092")).withGroupId("my-group"))
-
-val consumerLayer: TaskLayer[Consumer] =
-  settingsLayer >>> Consumer.live
+```scala
+object Consumer {
+  def live: RLayer[ConsumerSettings, Consumer]
+}
 ```
+
+[Create a Consumer](creating-a-consumer.md) shows both methods in a program, with `ZIO.scoped`, `ZLayer.scoped` and `Consumer.live`.
 
 ### Consumer.fromJavaConsumerWithPermit
 
@@ -159,44 +153,15 @@ Because finalizers run in reverse order, the scope closes the zio-kafka consumer
 
 ## Consumer Settings
 
-`ConsumerSettings` is an immutable case class holding the Kafka client properties plus zio-kafka's own settings. Build it with `ConsumerSettings(bootstrapServers)` followed by `with*` methods; the Scaladoc recommends this style to stay source compatible with future releases:
+`ConsumerSettings` is an immutable case class holding the Kafka client properties plus zio-kafka's own settings. Build it with `ConsumerSettings(bootstrapServers)` followed by `with*` methods, for example `ConsumerSettings#withGroupId`. Any Kafka consumer property can be set with `ConsumerSettings#withProperty`; the zio-kafka settings include the poll and commit timeouts, the offset retrieval strategy (by default, a partition without a committed offset starts at its end), rebalance-safe commits, pre-fetching, metrics and diagnostics.
 
-```scala mdoc:compile-only
-import zio._
-import zio.kafka.consumer._
-import zio.kafka.consumer.Consumer.{ AutoOffsetStrategy, OffsetRetrieval }
-
-val settings: ConsumerSettings =
-  ConsumerSettings(List("localhost:9092"))
-    .withGroupId("orders-service")
-    .withClientId("orders-service-1")
-    .withOffsetRetrieval(OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest))
-    .withRebalanceSafeCommits(true)
-    .withMaxPollInterval(10.minutes)
-    .withProperty("fetch.min.bytes", "1024")
-```
-
-Any Kafka consumer property can be set with `ConsumerSettings#withProperty` or `ConsumerSettings#withProperties`; the common ones, such as `group.id`, `client.id`, `max.poll.records` and `isolation.level`, also have their own `with*` method. A group id is needed for `Topics` and `Pattern` subscriptions and for committing to Kafka; a `Manual` subscription works without it. The other settings control zio-kafka itself, for example the poll and commit timeouts, the offset retrieval strategy (by default `OffsetRetrieval.Auto(AutoOffsetStrategy.Latest)`, so a partition without a committed offset starts at its end), rebalance-safe commits, pre-fetching, metrics and diagnostics. For every setting and its default, see the [`ConsumerSettings` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/consumer/ConsumerSettings.html).
-
-Related pages explain when to change these settings: [consumer tuning](consumer-tuning.md) for poll, pre-fetch and slow-consumer settings, [partition assignment and offset retrieval](partition-assignment-and-offset-retrieval.md) for `OffsetRetrieval`, [preventing duplicates](preventing-duplicates.md) for rebalance-safe commits, [detecting authorization failures](detecting-authorization-failures.md) for the authorization settings, and [metrics](metrics.md) for the metrics settings.
-
-:::note
-When rebalance-safe commits are enabled and you do not set `partition.assignment.strategy` yourself, zio-kafka configures Kafka's `RangeAssignor`, which revokes all partitions during a rebalance.
-:::
-
-### Settings Validation
-
-`Consumer.make` checks the settings before it connects. It fails with an `IllegalArgumentException` listing every problem when:
-
-- `enable.auto.commit` is set to `true` (zio-kafka pre-fetches records, so auto commit could commit records you have not processed; zio-kafka always disables it).
-- `commitTimeout` is not larger than twice `pollTimeout`.
-- The settings contain the deprecated `OffsetRetrieval.Manual` directly instead of `OffsetRetrieval.External`. `ConsumerSettings#withOffsetRetrieval` converts `Manual` to `External` for you.
+[Consumer Settings](consumer-settings.md) lists every setting with its default, explains the checks that `Consumer.make` runs on them, and covers Kafka 4's `consumer` group protocol.
 
 ## Consuming Records
 
-Every way to consume takes a `Subscription` and a key and a value `Deserializer`. A subscription names topics (`Subscription.topics("a", "b")`), a topic pattern (`Subscription.pattern("orders-.*".r)`), or a fixed set of partitions (`Subscription.manual("a" -> 0)`); [partition assignment and offset retrieval](partition-assignment-and-offset-retrieval.md) covers them in detail. Deserializers are described in [serialization and deserialization](serialization-and-deserialization.md).
+Every way to consume takes a `Subscription` and a key and a value `Deserializer`. A subscription names topics (`Subscription.topics("a", "b")`), a topic pattern (`Subscription.pattern("orders-.*".r)`), or a fixed set of partitions (`Subscription.manual("a" -> 0)`); [Partition Assignment and Offset Retrieval](partition-assignment-and-offset-retrieval.md) lists every constructor. Deserializers are described in [Serialization and Deserialization](serialization-and-deserialization.md).
 
-All streams emit records of one partition in order, and the records fetched for a partition in one poll land in the same chunk. Use chunk-preserving operators to keep processing fast, as explained in [avoiding chunk breakers](avoiding-chunk-breakers.md).
+All streams emit records of one partition in order, and the records fetched for a partition in one poll land in the same chunk. Operators such as `ZStream#mapZIO` and `ZStream#tap` split those chunks into single records and lower throughput, so the examples on this page use chunk-preserving operators such as `ZStream#mapZIOChunked` and `ZStream#mapChunksZIO`. [Keep Stream Chunks Intact](avoiding-chunk-breakers.md) lists the alternatives.
 
 ### Plain Stream
 
@@ -235,7 +200,7 @@ trait Consumer {
 }
 ```
 
-With a `Topics` or `Pattern` subscription the outer stream emits again on every rebalance: new partition streams start, and the streams of revoked partitions complete. With a `Manual` subscription there are no rebalances. To process every partition in parallel and commit from a single place:
+With a `Topics` or `Pattern` subscription the outer stream emits again on every rebalance: new partition streams start, and the streams of revoked partitions complete. With a `Manual` subscription there are no rebalances. To process every partition in parallel:
 
 ```scala mdoc:compile-only
 import zio._
@@ -246,16 +211,12 @@ def processPartitions(consumer: Consumer): Task[Unit] =
   consumer
     .partitionedStream(Subscription.topics("my-topic"), Serde.string, Serde.string)
     .flatMapPar(Int.MaxValue) { case (topicPartition, partitionStream) =>
-      partitionStream
-        .tap(record => ZIO.logInfo(s"$topicPartition: ${record.value}"))
-        .map(_.offset)
+      partitionStream.mapZIOChunked(record => ZIO.logInfo(s"$topicPartition: ${record.value}"))
     }
-    .aggregateAsync(Consumer.collectOffsets)
-    .mapZIO(_.commit)
     .runDrain
 ```
 
-Use `Int.MaxValue` (or at least the number of partitions you can be assigned) as the parallelism of `flatMapPar`. A partition stream that is never pulled stops making progress, and after `maxStreamPullInterval` zio-kafka fails it and shuts down the consumer. The [consuming Kafka topics using ZIO Streams](consuming-kafka-topics-using-zio-streams.md) guide explains these patterns further.
+Use `Int.MaxValue` (or at least the number of partitions you can be assigned) as the parallelism of `flatMapPar`. A partition stream that is never pulled stops making progress, and after the max stream pull interval (`ConsumerSettings#withMaxStreamPullInterval`) zio-kafka fails it and shuts down the consumer. [Consume Topics with ZIO Streams](consuming-kafka-topics-using-zio-streams.md#consuming-with-more-parallelism) shows this pattern step by step.
 
 ### consumeWith
 
@@ -300,11 +261,11 @@ val program: Task[Unit] =
   }
 ```
 
-Delivery is at least once: a record whose effect has run may not have its offset committed yet when the stream stops. See [committing with consumeWith](offsets-and-committing.md#committing-with-consumewith).
+Delivery is at least once: a record whose effect has run may not have its offset committed yet when the stream stops. See [Committing With consumeWith](offsets-and-committing.md#committing-with-consumewith).
 
 ### Streams With Control
 
-Each stream method has a `*WithControl` variant that returns a `StreamControl` instead of a bare stream. A `StreamControl` lets you stop fetching records for one subscription and let the stream finish its in-flight records, which makes a graceful shutdown possible. The `*WithControl` methods and `Consumer.runWithGracefulShutdown` are experimental: they may change or disappear in any zio-kafka release. Their signatures:
+Each of the three stream methods has a `*WithControl` variant that returns a `StreamControl` instead of a bare stream. A `StreamControl` lets you stop fetching records for one subscription and let the stream finish its in-flight records, which makes a graceful shutdown possible. The `*WithControl` methods and `Consumer.runWithGracefulShutdown` are experimental: they may change or disappear in any zio-kafka release. Their signatures:
 
 ```scala
 trait Consumer {
@@ -327,30 +288,7 @@ object Consumer {
 
 The `Scope` controls the subscription: zio-kafka unsubscribes when the scope ends. `StreamControl#end` stops fetching records for the subscription's partitions and ends the stream, but does not unsubscribe until the scope ends. Run `StreamControl#stream` at most once; running it twice divides the chunks over both runs. `StreamControl#map` transforms the stream while keeping `StreamControl#end`.
 
-`Consumer.runWithGracefulShutdown` runs `withStream` on the controlled stream. When the surrounding fiber is interrupted, for example at application shutdown, it calls `StreamControl#end` and waits up to `shutdownTimeout` for `withStream` to finish processing and committing:
-
-```scala mdoc:compile-only
-import zio._
-import zio.kafka.consumer._
-import zio.kafka.serde.Serde
-
-def runGracefully(consumer: Consumer): Task[Any] =
-  ZIO.scoped {
-    for {
-      control <- consumer.plainStreamWithControl(Subscription.topics("my-topic"), Serde.string, Serde.string)
-      result <- Consumer.runWithGracefulShutdown(control, shutdownTimeout = 30.seconds) { stream =>
-                  stream
-                    .tap(record => ZIO.logInfo(record.value))
-                    .map(_.offset)
-                    .aggregateAsync(Consumer.collectOffsets)
-                    .mapZIO(_.commit)
-                    .runDrain
-                }
-    } yield result
-  }
-```
-
-If `withStream` does not finish within `shutdownTimeout`, zio-kafka logs an error and gives up waiting; some in-flight records may not have been processed. The [controlled shutdown](consuming-kafka-topics-using-zio-streams.md#controlled-shutdown-experimental) section of the streams guide shows how to call `StreamControl#end` yourself.
+`Consumer.runWithGracefulShutdown` runs `withStream` on the controlled stream. When the surrounding fiber is interrupted, for example at application shutdown, it calls `StreamControl#end` and waits up to `shutdownTimeout` for `withStream` to finish processing and committing. If `withStream` does not finish in time, zio-kafka logs an error and gives up waiting; some in-flight records may not have been processed. The [Controlled Shutdown](consuming-kafka-topics-using-zio-streams.md#controlled-shutdown-experimental) section of the streams guide shows both `Consumer.runWithGracefulShutdown` and calling `StreamControl#end` yourself.
 
 ### Multiple Subscriptions on One Consumer
 
@@ -358,7 +296,7 @@ You can run several streams on one `Consumer`, each with its own subscription an
 
 All subscriptions on one consumer must be of the same kind: all `Topics`, all `Pattern`, or all `Manual`. Two `Pattern` subscriptions are combined into one regular expression. Starting a stream whose subscription is of a different kind fails that stream with `InvalidSubscriptionUnion`, which lists the subscriptions that could not be combined. When subscriptions overlap, for example `Subscription.topics("a", "b")` and `Subscription.topics("b", "c")`, the records of topic `b` are divided over both streams in a non-deterministic way.
 
-Settings such as `max.poll.records` and the offset retrieval strategy apply to all subscriptions together. The [sharing a consumer](sharing-consumer.md) guide has a full example.
+Settings such as `max.poll.records` and the offset retrieval strategy apply to all subscriptions together. [Share One Consumer Between Several Streams](sharing-consumer.md) has a full example.
 
 ### Stopping Consumption
 
@@ -374,7 +312,44 @@ To end a single subscription and leave the others running, use the `StreamContro
 
 ## Querying Metadata and Offsets
 
-The `Consumer` forwards a set of read-only queries to the Kafka consumer, converting Java collections to Scala ones: `Consumer#assignment`, `Consumer#subscription`, `Consumer#committed`, `Consumer#beginningOffsets`, `Consumer#endOffsets`, `Consumer#offsetsForTimes`, `Consumer#position`, `Consumer#listTopics`, `Consumer#partitionsFor` and `Consumer#metrics` (the Kafka client's own metrics; for zio-kafka's metrics, see [metrics](metrics.md)). Every query that takes a `timeout` defaults to `Duration.Infinity`. The queries share the Kafka consumer with the polling loop, so each one waits until the current poll completes. `Consumer#committed` returns `None` for a partition the group has not committed, and `Consumer#offsetsForTimes` leaves out partitions that have no record at or after the given timestamp. For the signatures, see the [`Consumer` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/consumer/Consumer.html).
+The `Consumer` forwards a set of read-only queries to the Kafka consumer and converts the Java results to Scala collections:
+
+```scala
+trait Consumer {
+  val consumerSettings: ConsumerSettings
+
+  def assignment: Task[Set[TopicPartition]]
+  def subscription: Task[Set[String]]
+
+  def committed(partitions: Set[TopicPartition], timeout: Duration = Duration.Infinity): Task[Map[TopicPartition, Option[OffsetAndMetadata]]]
+  def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): Task[Long]
+  def beginningOffsets(partitions: Set[TopicPartition], timeout: Duration = Duration.Infinity): Task[Map[TopicPartition, Long]]
+  def endOffsets(partitions: Set[TopicPartition], timeout: Duration = Duration.Infinity): Task[Map[TopicPartition, Long]]
+  def offsetsForTimes(timestamps: Map[TopicPartition, Long], timeout: Duration = Duration.Infinity): Task[Map[TopicPartition, OffsetAndTimestamp]]
+
+  def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): Task[List[PartitionInfo]]
+  def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]]
+  def metrics: Task[Map[MetricName, Metric]]
+}
+```
+
+Each member returns the following:
+
+| Member                      | Returns                                                                                                                                                                     |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Consumer#consumerSettings` | The settings this consumer was created with. It is a plain value, not an effect.                                                                                            |
+| `Consumer#assignment`       | The partitions currently assigned to this consumer, over all its subscriptions. With `Topics` and `Pattern` subscriptions it changes at every rebalance.                    |
+| `Consumer#subscription`     | The topic names the Kafka consumer is subscribed to, for the union of all active `Topics` or `Pattern` subscriptions. It is empty for `Manual` subscriptions.               |
+| `Consumer#committed`        | The committed offset of each partition for the consumer group, as a next offset, or `None` when the group has not committed one.                                            |
+| `Consumer#position`         | The offset of the next record this consumer fetches from the partition. The partition must be assigned to this consumer.                                                    |
+| `Consumer#beginningOffsets` | The first offset that is still available in each partition.                                                                                                                 |
+| `Consumer#endOffsets`       | The offset the next record written to each partition gets. With `isolation.level=read_committed`, it is the last stable offset instead.                                     |
+| `Consumer#offsetsForTimes`  | For each partition, the earliest offset whose record timestamp is at or after the given timestamp (in epoch milliseconds). Partitions without such a record are left out.   |
+| `Consumer#partitionsFor`    | The partitions of a topic, with their leaders and replicas. It is empty when Kafka returns no metadata for the topic.                                                       |
+| `Consumer#listTopics`       | Every topic the consumer is allowed to describe, with its partitions.                                                                                                       |
+| `Consumer#metrics`          | The Kafka client's own metrics, as a map taken when the effect runs; each `Metric` reports its current value when read. For zio-kafka's metrics, see [Metrics](metrics.md). |
+
+Every query that takes a `timeout` defaults to `Duration.Infinity`. The queries share the Kafka consumer with the polling loop, so each one waits until the current poll completes.
 
 Except for `Consumer#position`, the queries do not need the partitions to be assigned to this consumer, so they also work for monitoring. To compute the lag of a consumer group for the partitions it has committed:
 
@@ -394,25 +369,11 @@ def lag(consumer: Consumer, topic: String): Task[Map[TopicPartition, Long]] =
   }
 ```
 
-Partitions without a committed offset are left out: where a consumer starts on them depends on its offset retrieval setting (by default the end of the partition, see [Consumer Settings](#consumer-settings)).
+Partitions without a committed offset are left out: where a consumer starts on them depends on its offset retrieval setting (by default the end of the partition, see [Consumer Settings](consumer-settings.md#starting-offsets-and-isolation)).
 
 ## Committing Offsets
 
-Records are committed through their `Offset`, not through the `Consumer`. The `Consumer` companion provides the sinks that combine offsets into an `OffsetBatch`, and the service accepts commits made elsewhere:
-
-```scala
-object Consumer {
-  val collectOffsets: ZSink[Any, Nothing, Offset, Nothing, OffsetBatch]
-  val collectOffsetBatches: ZSink[Any, Nothing, OffsetBatch, Nothing, OffsetBatch]
-  case object CommitTimeout extends RuntimeException
-}
-
-trait Consumer {
-  def registerExternalCommits(offsetBatch: OffsetBatch): Task[Unit]
-}
-```
-
-`Consumer.collectOffsets` folds `Offset`s into a batch, and `Consumer.collectOffsetBatches` merges batches (`Consumer.offsetBatches` is an alias of `Consumer.collectOffsets`). `Consumer.CommitTimeout` is the error of a commit that does not complete within `commitTimeout`. `Consumer#registerExternalCommits` tells the consumer about offsets you stored outside Kafka, so that rebalance-safe commits can wait for them; a `TransactionalProducer` calls it for you. [Offsets and Committing](offsets-and-committing.md) covers all of these, and [transactions](transactions.md) covers committing inside a transaction.
+Records are committed through their `Offset`, not through the `Consumer`. [Offsets and Committing](offsets-and-committing.md) covers `Offset`, `OffsetBatch`, the `Consumer.collectOffsets` and `Consumer.collectOffsetBatches` sinks, `Consumer.CommitTimeout` and `Consumer#registerExternalCommits`, and [Transactions](transactions.md) covers committing inside a transaction.
 
 ## CommittableRecord
 
@@ -436,9 +397,9 @@ final case class CommittableRecord[K, V](
 }
 ```
 
-Besides `key`, `value`, `partition` and `timestamp`, use `record`, the underlying Kafka `ConsumerRecord`, for everything else, such as `record.topic()` and `record.leaderEpoch()`. `offset.offset` is the consumed offset, and `offset.commit` commits it. `nextOffset` is the offset a consumer should resume from after this record: usually the record's offset + 1, but for the last record of a partition in a poll it is the next offset Kafka reports, which is larger when transaction control records follow the record. For every member, see the [`CommittableRecord` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/consumer/CommittableRecord.html).
+Besides `CommittableRecord#key`, `CommittableRecord#value`, `CommittableRecord#partition` and `CommittableRecord#timestamp`, use `record`, the underlying Kafka `ConsumerRecord`, for everything else, such as `record.topic()` and `record.leaderEpoch()`. `Offset#offset` is the consumed offset, and `Offset#commit` commits it. `nextOffset` is the offset a consumer should resume from after this record: usually the record's offset + 1, but for the last record of a partition in a poll it is the next offset Kafka reports, which is larger when transaction control records follow the record. For every member, see the [`CommittableRecord` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/consumer/CommittableRecord.html).
 
-The headers of a record are only available through `record.headers()`; see [record headers](record-headers.md). How `offset` and `nextOffset` relate to committing is explained in [Offsets and Committing](offsets-and-committing.md).
+The headers of a record are only available through `record.headers()`; see [Record Headers](record-headers.md). How `offset` and `nextOffset` relate to committing is explained in [Offsets and Committing](offsets-and-committing.md).
 
 `CommittableRecord#deserializeWith` lets you defer deserialization, for example to handle a deserialization failure per record. When both deserializers of a stream are `Serde.byteArray`, zio-kafka skips deserialization entirely, so you can deserialize inside the stream instead:
 
@@ -450,9 +411,10 @@ import zio.kafka.serde.Serde
 def consumeRaw(consumer: Consumer): Task[Unit] =
   consumer
     .plainStream(Subscription.topics("my-topic"), Serde.byteArray, Serde.byteArray)
-    .mapChunksZIO(_.mapZIO(_.deserializeWith(Serde.string, Serde.string)))
-    .tap(record => ZIO.logInfo(s"partition ${record.partition}, offset ${record.offset.offset}: ${record.value}"))
-    .map(_.offset)
+    .mapZIOChunked(_.deserializeWith(Serde.string, Serde.string))
+    .mapZIOChunked { record =>
+      ZIO.logInfo(s"partition ${record.partition}, offset ${record.offset.offset}: ${record.value}").as(record.offset)
+    }
     .aggregateAsync(Consumer.collectOffsets)
     .mapZIO(_.commit)
     .runDrain
