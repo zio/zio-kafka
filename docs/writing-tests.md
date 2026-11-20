@@ -8,6 +8,7 @@ Zio-kafka provides a `zio-kafka-testkit` library to help you test your code usin
 To add it in your project, add the following dependency in your `build.sbt`:
 
 ```scala
+// Testkit for running tests against an embedded Kafka broker (JVM)
 libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "@VERSION@" % Test
 ```
 

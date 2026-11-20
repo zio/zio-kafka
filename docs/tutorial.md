@@ -38,10 +38,11 @@ The project contains several applications (`SimpleKafkaApp`, `StreamingKafkaApp`
 In this tutorial, we will be using the following dependencies. So, let's add them to the `build.sbt` file:
 
 ```scala
-libraryDependencies ++= Seq(
-  "dev.zio" %% "zio-kafka" % "@VERSION@",
-  "dev.zio" %% "zio-json"  % "1.1.2"
-)
+// ZIO Kafka client (JVM)
+libraryDependencies += "dev.zio" %% "zio-kafka" % "@VERSION@"
+
+// ZIO JSON: JSON encoding and decoding (JVM)
+libraryDependencies += "dev.zio" %% "zio-json" % "1.1.2"
 ```
 
 Zio-kafka depends on zio and zio-streams, so these two libraries are added to the project as well.
