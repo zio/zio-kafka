@@ -785,7 +785,10 @@ object Runloop {
                 )
       _ <- ZIO.logDebug("Starting Runloop")
 
-      _ <- runloop.observeRunloopMetrics(settings.runloopMetricsSchedule).forkScoped
+      _ <- runloop
+             .observeRunloopMetrics(settings.runloopMetricsSchedule)
+             .forkScoped
+             .unless(metricsObserver eq ConsumerMetricsObserver.NoOp)
 
       // Run the entire loop on a dedicated thread to avoid executor shifts
 

@@ -336,6 +336,10 @@ final case class ConsumerSettings(
    * @param runloopMetricsSchedule
    *   The schedule at which the runloop metrics are measured. Example runloop metrics are queue sizes and number of
    *   outstanding commits. The default is to measure every 500ms.
+   *
+   * The runloop starts a fiber that collects the metrics on the given schedule. This fiber is not started when
+   * `metricsObserver` exactly equals [[ConsumerMetricsObserver.NoOp]]. Another option is set the schedule to
+   * `Schedule.stop`.
    */
   def withRunloopMetricsSchedule(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ConsumerSettings =
     copy(runloopMetricsSchedule = runloopMetricsSchedule)
