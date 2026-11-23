@@ -339,7 +339,7 @@ final case class ConsumerSettings(
    *
    * The runloop starts a fiber that collects the metrics on the given schedule. This fiber is not started when
    * {{{metricsObserver}}} exactly equals [[zio.kafka.consumer.metrics.ConsumerMetricsObserver.NoOp]]. Another option is
-   * set the schedule to {{{Schedule.stop}}}.
+   * to set the schedule to {{{Schedule.stop}}}.
    */
   def withRunloopMetricsSchedule(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ConsumerSettings =
     copy(runloopMetricsSchedule = runloopMetricsSchedule)
