@@ -338,8 +338,8 @@ final case class ConsumerSettings(
    *   outstanding commits. The default is to measure every 500ms.
    *
    * The runloop starts a fiber that collects the metrics on the given schedule. This fiber is not started when
-   * {{{metricsObserver}}} exactly equals [[zio.kafka.consumer.metrics.ConsumerMetricsObserver.NoOp]]. Another option is
-   * to set the schedule to {{{Schedule.stop}}}.
+   * `metricsObserver` exactly equals [[zio.kafka.consumer.metrics.ConsumerMetricsObserver.NoOp]]. Another option is to
+   * set the schedule to `Schedule.stop`.
    */
   def withRunloopMetricsSchedule(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ConsumerSettings =
     copy(runloopMetricsSchedule = runloopMetricsSchedule)
@@ -353,9 +353,9 @@ final case class ConsumerSettings(
    * This setting helps with failed polls due to too slow authorization or authentication in the broker. You may also
    * consider increasing `pollTimeout` to reduce auth-work on the broker.
    *
-   * Set to {{{Schedule.stop}}} to fail the consumer on the first auth error.
+   * Set to `Schedule.stop` to fail the consumer on the first auth error.
    *
-   * The default is {{{Schedule.recurs(5) && Schedule.spaced(500.millis)}}} which is, to retry 5 times, spaced by 500ms.
+   * The default is `Schedule.recurs(5) && Schedule.spaced(500.millis)` which is, to retry 5 times, spaced by 500ms.
    */
   def withAuthErrorRetrySchedule(authErrorRetrySchedule: Schedule[Any, Throwable, Any]): ConsumerSettings =
     copy(authErrorRetrySchedule = authErrorRetrySchedule)
