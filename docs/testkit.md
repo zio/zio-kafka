@@ -31,6 +31,7 @@ For a step-by-step guide to writing tests with these parts, see [Test Producers 
 Add the test kit to the test dependencies in your `build.sbt`:
 
 ```scala
+// Testkit for running tests against an embedded Kafka broker (JVM)
 libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "@VERSION@" % Test
 ```
 

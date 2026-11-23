@@ -33,7 +33,7 @@ lazy val kafkaVersion         = "4.4.0"
 lazy val embeddedKafkaVersion = "4.4.0" // Should be the same as kafkaVersion, except for the patch part
 
 lazy val kafkaClients = "org.apache.kafka" % "kafka-clients"   % kafkaVersion
-lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.6.7"
+lazy val logback      = "ch.qos.logback"   % "logback-classic" % "1.6.8"
 
 enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
 
@@ -174,7 +174,7 @@ lazy val zioKafkaTest =
       libraryDependencies ++= Seq(
         kafkaClients,
         logback                    % Test,
-        "dev.zio"                 %% "zio-logging-slf4j" % "2.5.4" % Test,
+        "dev.zio"                 %% "zio-logging-slf4j" % "2.5.5" % Test,
         "io.github.embeddedkafka" %% "embedded-kafka"    % embeddedKafkaVersion
       )
     )
@@ -202,7 +202,7 @@ lazy val zioKafkaExample =
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                 %% "zio"                % zioVersion.value,
-        "dev.zio"                 %% "zio-logging-slf4j2" % "2.5.4",
+        "dev.zio"                 %% "zio-logging-slf4j2" % "2.5.5",
         "io.github.embeddedkafka" %% "embedded-kafka"     % embeddedKafkaVersion,
         logback,
         "dev.zio" %% "zio-test" % zioVersion.value % Test
@@ -246,7 +246,7 @@ lazy val docs = project
         "written as Reactive Kafka by SoftwareMill.",
     readmeLicense += s"\n\nCopyright 2021-${java.time.Year.now()} Itamar Ravid and the zio-kafka contributors.",
     libraryDependencies += "dev.zio" %% "zio-json"       % "1.1.3",
-    libraryDependencies += "dev.zio" %% "zio-sbt-source" % "0.8.9" // mdoc:embed for example files
+    libraryDependencies += "dev.zio" %% "zio-sbt-source" % "0.8.12" // mdoc:embed for example files
   )
   .enablePlugins(WebsitePlugin)
   .dependsOn(zioKafka, zioKafkaTestkit)

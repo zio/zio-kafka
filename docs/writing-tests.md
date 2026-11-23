@@ -9,7 +9,14 @@ The tests use the `zio-kafka-testkit` module. Its `Kafka.embedded` layer starts 
 
 ## Prerequisites
 
-Add `zio-kafka-testkit` to your test dependencies, as shown in [Test Kit installation](testkit.md#installation). On Scala 3, also apply the build setting in [Using the Test Kit With Scala 3](getting-started.md#using-the-test-kit-with-scala-3). The examples assume that you know how to write a ZIO Test spec, and how to create a [Producer](producer.md) and a [Consumer](consumer.md).
+Add `zio-kafka-testkit` to your test dependencies in `build.sbt`:
+
+```scala
+// Testkit for running tests against an embedded Kafka broker (JVM)
+libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "@VERSION@" % Test
+```
+
+On Scala 3, also apply the build setting in [Using the Test Kit With Scala 3](getting-started.md#using-the-test-kit-with-scala-3). The examples assume that you know how to write a ZIO Test spec, and how to create a [Producer](producer.md) and a [Consumer](consumer.md).
 
 ## Test a Producer
 

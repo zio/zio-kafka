@@ -20,7 +20,9 @@ If you are still on zio-kafka 2.x, first follow [migrating to zio-kafka 3](migra
 To upgrade, change the version of zio-kafka (and of the testkit, if you use it) in `build.sbt`:
 
 ```scala
+// ZIO Kafka client (JVM)
 libraryDependencies += "dev.zio" %% "zio-kafka"         % "4.1.0"
+// Testkit for running tests against an embedded Kafka broker (JVM)
 libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "4.1.0" % Test
 ```
 
