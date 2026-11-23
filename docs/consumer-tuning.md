@@ -1,54 +1,24 @@
 ---
 id: consumer-tuning
-title: "Tuning the Consumer"
+title: "Tune the Consumer"
+sidebar_label: "Tune the Consumer"
 ---
 
-Zio-kafka's consumer can be tuned for:
+In this guide we tune a zio-kafka consumer for high throughput, low latency, low memory use, or slow processing. All tuning happens in `ConsumerSettings`; [Consumer Settings](consumer-settings.md) lists every setting with its default. We start from one of the two presets, adjust for record size and partition count, give slow processing enough time, and finally use zio-kafka's metrics to fine-tune pre-fetching.
 
-* throughput
-* latency
-* memory usage
-* long-running processes / slow consumers
+## Don't Mix Up the Two Poll Settings
 
-All tuning is done via `ConsumerSettings` (see [consumer](consumer.md)):
+Two settings with similar names are involved in most tuning decisions: `pollTimeout` (zio-kafka) is how long one poll of the Kafka consumer may take, while `max.poll.interval.ms` (Kafka) is the longest time allowed between two polls.
 
-```scala mdoc:compile-only
-import zio.kafka.consumer.ConsumerSettings
+## Choose Between Throughput and Latency
 
-val bootstrapServers = List("localhost:9092")
-val groupId          = "my-group"
-val properties       = Map[String, AnyRef]("fetch.min.bytes" -> "1")
+The Kafka client can be tuned for either high throughput or low latency, unfortunately not both. The most important settings for tuning throughput and latency are:
 
-val settings = ConsumerSettings(bootstrapServers)
-  .withGroupId(groupId)
-  .withProperties(properties)
-```
+- Zio-kafka's `pollTimeout` (`ConsumerSettings#withPollTimeout`) is the maximum time to block while polling the Kafka consumer. The default of 50 ms is good for low latency; set it higher, for example to 500 ms, for better throughput.
+- Kafka's [`max.poll.records`](https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records) (`ConsumerSettings#withMaxPollRecords`) is the maximum number of records a poll returns, 500 by default. Set it higher for more throughput, or lower for lower latency.
+- Zio-kafka's `partitionPreFetchBufferLimit` (`ConsumerSettings#withPartitionPreFetchBufferLimit`): when a partition has at most this many records buffered, zio-kafka pre-fetches more records for it. The default, 1024, is twice the default `max.poll.records` of 500, rounded to the nearest power of 2.
 
-Read on for more details.
-
-## Names
-
-Two very similarly named settings are relevant. Don't mix them up:
-
-* `pollTimeout` — how long a poll may take
-* `max.poll.interval.ms` — the maximum time between polls
-
-## Throughput and latency
-
-The kafka client can be tuned for either high throughput or low latency, unfortunately not both.
-The most important settings for tuning throughput and latency are:
-
-* zio-kafka's `pollTimeout` — This is the maximum time to block while polling the Kafka consumer. Zio-kafka's default
-  is `50ms` which is good for low latency applications. Set this higher, e.g. `500ms` for better throughput.
-* kafka's [configuration `max.poll.records`](https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records) — The maximum number of records a poll will return. Kafka defaults
-  this to `500`. You can set this higher for more throughput, or lower for lower latency.
-* zio-kafka's fetch-strategy `partitionPreFetchBufferLimit` — when the number of records in a partition queue is
-  at or below this value, zio-kafka will start to pre-fetch and buffer more records from Kafka. The default value for
-  this parameter is `1024`; 2 * the default `max.poll.records` of 500, rounded to the nearest power of 2.
-
-Zio-kafka provides 2 methods that set these settings for 2 common use cases: `ConsumerSettings.tuneForHighThroughput`
-and `ConsumerSettings.tuneForLowLatency`.
-Note that their implementation may vary over time. You can use them as follows:
+Zio-kafka provides two presets that set these settings for the two common cases, `ConsumerSettings#tuneForHighThroughput` and `ConsumerSettings#tuneForLowLatency`. To start from one of them:
 
 ```scala mdoc:compile-only
 import zio.kafka.consumer.ConsumerSettings
@@ -59,26 +29,19 @@ val highThroughputSettings = ConsumerSettings(bootstrapServers).tuneForHighThrou
 val lowLatencySettings = ConsumerSettings(bootstrapServers).tuneForLowLatency
 ```
 
-The scaladoc of `ConsumerSettings#tuneForHighThroughput` and `ConsumerSettings#tuneForLowLatency` lists the exact values they set. Both methods replace the configured `FetchStrategy` with a `QueueSizeBasedFetchStrategy`, and so does `ConsumerSettings#withPartitionPreFetchBufferLimit`. Call them before `ConsumerSettings#withFetchStrategy`, otherwise a custom fetch strategy is silently discarded.
+[Creating Settings](consumer-settings.md#creating-settings) lists the values each preset sets; they may change in later releases. Both presets replace the configured `FetchStrategy` with a `QueueSizeBasedFetchStrategy`, and so does `ConsumerSettings#withPartitionPreFetchBufferLimit`. Call them before `ConsumerSettings#withFetchStrategy`, otherwise a custom fetch strategy is silently discarded.
 
-## Small and large records
+## Adjust for Small and Large Records
 
-Kafka’s performance is not very sensitive to record size. However, when records become very small (< 100 bytes) it
-might be beneficial to increase `max.poll.records` and `partitionPreFetchBufferLimit`. Similarly, when records are
-very large (> 100Kb), `max.poll.records` can be decreased. Also, pre-fetching can be limited by decreasing
-`partitionPreFetchBufferLimit` or even disabled by using `ConsumerSettings#withoutPartitionPreFetching`.
+Kafka's performance is not very sensitive to record size. However, when records become very small (< 100 bytes) it might be beneficial to increase `max.poll.records` and `partitionPreFetchBufferLimit`. Similarly, when records are very large (> 100Kb), `max.poll.records` can be decreased. Also, pre-fetching can be limited by decreasing `partitionPreFetchBufferLimit` or even disabled by using `ConsumerSettings#withoutPartitionPreFetching`.
 
-## High number of partitions
+## Limit Memory With Many Partitions
 
-When a lot of partitions need to be consumed, we need to take into account that heap is needed to store the records in
-the partition queues. A very rough estimate for the maximum amount of heap needed is given by: `average record size` *
-`number of partitions` * max(`partitionPreFetchBufferLimit`, `max.poll.records`).
+When a lot of partitions need to be consumed, we need to take into account that heap is needed to store the records in the partition queues. A very rough estimate for the maximum amount of heap needed is given by: `average record size` * `number of partitions` * max(`partitionPreFetchBufferLimit`, `max.poll.records`).
 
 The total can be tuned by changing the `partitionPreFetchBufferLimit`, `max.poll.records` settings.
 
-Another option is to use a different `FetchStrategy`, for example the built-in
-`zio.kafka.consumer.fetch.ManyPartitionsQueueSizeBasedFetchStrategy` (since zio-kafka 2.8.1), which also caps the total
-queue size over all partitions:
+Another option is to use a different `FetchStrategy`, for example the built-in `zio.kafka.consumer.fetch.ManyPartitionsQueueSizeBasedFetchStrategy` (since zio-kafka 2.8.1), which also caps the total queue size over all partitions. When more partitions are eligible for pre-fetching than the total cap allows, it picks a random selection on every poll, so that no partition is starved:
 
 ```scala mdoc:compile-only
 import zio.kafka.consumer.ConsumerSettings
@@ -121,7 +84,7 @@ import zio._
 import zio.kafka.consumer.ConsumerSettings
 import zio.kafka.consumer.fetch.{ FetchStrategy, PartitionStream }
 
-final case class PriorityTopicFetchStrategy(
+case class PriorityTopicFetchStrategy(
   priorityTopic: String,
   priorityLimit: Int = 4096,
   defaultLimit: Int = 256
@@ -143,26 +106,17 @@ val settings: ConsumerSettings =
 
 `PartitionStream` is part of the public API since zio-kafka 4.1.0; in earlier versions, a custom fetch strategy had to depend on an internal type.
 
-## Long-running processes / slow consumers
+## Long-Running Processes / Slow Consumers
 
-To detect stalled consumers, Kafka revokes a partition when a consumer does not poll within the max poll interval (see
-[configuration `max.poll.interval.ms`](https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms)). The default max poll interval is 5 minutes. After a partition is revoked,
-it will be assigned to another consumer.
+To detect stalled consumers, Kafka removes a consumer from its group when it does not poll within the max poll interval ([`max.poll.interval.ms`](https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms), 5 minutes by default), and assigns its partitions to other consumers.
 
-In zio-kafka a stream needs to pull data within the max stream pull interval (`ConsumerSettings#withMaxStreamPullInterval`,
-since zio-kafka 2.9.0), which defaults to `max.poll.interval.ms` (in versions 2.6.0 up to 2.8.x it is always the max poll
-interval). If this doesn't happen, the stream is interrupted with a failure and the whole consumer shuts down.
+In addition, a zio-kafka partition stream that has records waiting must pull them within the max stream pull interval (`ConsumerSettings#withMaxStreamPullInterval`), which defaults to `max.poll.interval.ms`. If it does not, zio-kafka fails the stream and shuts down the whole consumer.
 
-To prevent the above failure states, either decrease `max.poll.records` (so that time between polling gets shorter),
-and/or increase `max.poll.interval.ms` (so that the time between polls may be longer).
+To prevent both failures, decrease `max.poll.records` (so that time between polling gets shorter), and/or increase `max.poll.interval.ms` (so that the time between polls may be longer).
 
-To see if your application must be configured with a lower `max.poll.records` and/or a higher `max.poll.interval.ms`
-value we need to consider the maximum duration between polls. If processing is sequential, we can obtain this maximum by
-multiplying `max.poll.records` with the maximum duration to process a single record. To also accommodate things like
-long garbage collections and buffering, configuration `max.poll.interval.ms` should be substantially higher than the
-maximum processing time.
+To decide whether your application needs a lower `max.poll.records` or a higher `max.poll.interval.ms`, we need to consider the maximum duration between polls. If processing is sequential, we can obtain this maximum by multiplying `max.poll.records` with the maximum duration to process a single record. To also accommodate things like long garbage collections and buffering, configuration `max.poll.interval.ms` should be substantially higher than the maximum processing time.
 
-`max.poll.records`, `max.poll.interval.ms` and the max stream pull interval can be set with:
+To let a consumer spend up to 15 minutes on a single record:
 
 ```scala mdoc:compile-only
 import zio._
@@ -174,60 +128,33 @@ val settings = ConsumerSettings(List("localhost:9092"))
   .withMaxStreamPullInterval(15.minutes)
 ```
 
-On older zio-kafka versions `ConsumerSettings#withMaxPollInterval` is not available. Use the following instead:
+Two more settings need attention when processing is slow.
 
-```scala mdoc:compile-only
-import zio._
-import zio.kafka.consumer.ConsumerSettings
+### Slow Processing With Rebalance-Safe Commits
 
-val settings = ConsumerSettings(List("localhost:9092"))
-  .withProperty("max.poll.interval.ms", 15.minutes.toMillis.toString)
-```
+When rebalance-safe commits are enabled, a consumer must also process and commit a full poll of records within the max rebalance duration. [Size the Timeouts](preventing-duplicates.md#size-the-timeouts) shows how to calculate that budget.
 
-### Long-running processes and `rebalance-safe-commits`
+### Quiet Topics and Silent Authorization Failure Detection
 
-When `rebalance-safe-commits` is enabled, additional settings are needed for long-running processes. See
-[preventing duplicates](preventing-duplicates.md) for more details.
+On topics with long idle periods, a low threshold for silent authorization failure detection (`ConsumerSettings#withEmptyPollCountToMetaRefresh`) triggers many offset-fetch requests. [Detect Silent Authorization Failures](detecting-authorization-failures.md#choose-a-threshold) explains how to choose the threshold.
 
-### Long-running processes and silent authorization failures
-
-When topics are quiet or experience long idle periods, configuring a low threshold for silent authorization failure
-detection (`emptyPollCountToMetaRefresh`) can trigger excessive offset-fetch requests.
-See [detecting authorization failures](detecting-authorization-failures.md) for how to tune this setting for low-volume
-topics.
-
-## Using metrics to tune the consumer
+## Using Metrics to Tune the Consumer
 
 Zio-kafka exposes [metrics](metrics.md) that can be used to further tune the consumer. To interpret these metrics you need to know how zio-kafka works internally.
 
 ![](consumer-internals.svg)
 
-The runloop is at the heart of every zio-kafka consumer.
-It creates a zstream for each partition, eventually this is the zstream your applications consumes from.
-When the zstream starts, and every time the records queue is empty, it sends a request for data to the runloop.
-The request makes the runloop poll. Partitions whose queue size is at or below the `FetchStrategy`'s limit are resumed, so the next poll may receive records for them.
-Any received records are put in the records queue.
-When the queue reaches a certain size (as determined by the configured `FetchStrategy`), the partition is paused.
-Meanwhile, the zstream reads from the queue and emits the records to your application.
+The runloop is at the heart of every zio-kafka consumer. It creates a stream for each partition, which is the stream your application eventually consumes from. When the stream starts, and every time its records queue is empty, it sends a request for data to the runloop. The request makes the runloop poll. Partitions whose queue size is at or below the `FetchStrategy`'s limit are resumed, so the next poll may receive records for them. Any received records are put in the records queue. When the queue reaches a certain size (as determined by the configured `FetchStrategy`), the partition is paused. Meanwhile, the stream reads from the queue and emits the records to your application.
 
-An optimally configured consumer has the following properties:
+An optimally configured consumer has two properties: the streams never have to wait for new records, which gives high throughput, and most of the time the record queues are empty, which gives low latency and low heap usage.
 
-- the zstreams never have to wait for new records (to get high throughput),
-- most of the time, the record queues are empty (to get low latency and low heap usage).
+To get to this state, follow these steps:
 
-The following strategy can help you get to this state:
-
-1. First make sure that `pollTimeout` and `max.poll.records` make sense for the latency and throughput requirements
-   of your application.
+1. First make sure that `pollTimeout` and `max.poll.records` make sense for the latency and throughput requirements of your application.
 2. Configure `partitionPreFetchBufferLimit` to `0` (`ConsumerSettings#withPartitionPreFetchBufferLimit(0)`).
-3. Observe metric `ziokafka_consumer_queue_polls` which gives the number of polls during which records are idling in
-   the queue.
-4. Increase `partitionPreFetchBufferLimit` in steps until most measurements of the `ziokafka_consumer_queue_polls`
-   histogram are in the lowest bucket (`le="1.0"`; zio-metrics ignores the `0` bucket boundary, so this bucket counts both 0 and 1 idle polls).
+3. Observe metric `ziokafka_consumer_queue_polls` which gives the number of polls during which records are idling in the queue.
+4. Increase `partitionPreFetchBufferLimit` in steps until most measurements of the `ziokafka_consumer_queue_polls` histogram are in the lowest bucket (`le="1.0"`; zio-metrics ignores the `0` bucket boundary, so this bucket counts both 0 and 1 idle polls).
 
-During this process, it is useful to observe metric `ziokafka_consumer_queue_size` (number of records in the queues) to
-see if the queues are indeed increasing in size.
+During this process, it is useful to observe metric `ziokafka_consumer_queue_size` (number of records in the queues) to see if the queues are indeed increasing in size.
 
-When many (hundreds of) partitions need to be consumed, the metric `ziokafka_consumer_all_queue_size` should also be
-observed as increasing `partitionPreFetchBufferLimit` can lead to high heap usage. (See 'High number of partitions'
-above.)
+When many (hundreds of) partitions need to be consumed, the metric `ziokafka_consumer_all_queue_size` should also be observed as increasing `partitionPreFetchBufferLimit` can lead to high heap usage (see [Limit Memory With Many Partitions](#limit-memory-with-many-partitions)).

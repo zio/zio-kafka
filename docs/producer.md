@@ -3,7 +3,7 @@ id: producer
 title: "Producer"
 ---
 
-`Producer` is the **zio-kafka client for writing records to Kafka**. It wraps the Java `KafkaProducer` in a ZIO-friendly API: every produce call is an effect, serialization uses zio-kafka's effectful [`Serializer`](serialization-and-deserialization.md), and the producer's lifetime is tied to a `Scope` so it is always closed. The fundamental operations are `Producer#produce`, `Producer#produceAsync` and their chunk-based variants `Producer#produceChunk` and `Producer#produceChunkAsync`.
+`Producer` is the **zio-kafka client for writing records to Kafka**. It wraps the Java `KafkaProducer` in a ZIO-friendly API: every produce call is an effect, serialization uses zio-kafka's effectful [`Serializer`](serialization-and-deserialization.md), and the producer's lifetime is tied to a `Scope`: when the scope closes, the producer stops, and it also closes the Java producer unless you supplied that one yourself. The fundamental operations are `Producer#produce`, `Producer#produceAsync` and their chunk-based variants `Producer#produceChunk` and `Producer#produceChunkAsync`.
 
 `Producer`:
 
@@ -161,9 +161,17 @@ The produce methods differ in two ways: whether they take one record or a chunk,
 
 ### Choosing a Produce Method
 
-Waiting for an acknowledgement costs a network round trip. A method that waits for every record before sending the next one is easy to reason about but slow. The async variants let you send many records and wait for all their acknowledgements once, and the chunk variants put a whole batch into the send queue in one step. As a rule of thumb, use `Producer#produce` for low volumes or when each record must be confirmed before the next, `Producer#produceAsync` when records arrive one at a time and throughput matters, `Producer#produceChunk` or `Producer#produceChunkAsync` when you already have a batch (the async one gives the highest throughput, because sending one chunk overlaps with waiting for the acknowledgement of another), `Producer#produceChunkAsyncWithFailures` when you need to know which records of a chunk failed, and `Producer#produceAll` to produce every element of a `ZStream`.
+Waiting for an acknowledgement costs a network round trip, so a method that waits for every record before sending the next one is easy to reason about but slow. The async variants let you send many records and wait for all their acknowledgements once, and the chunk variants put a whole batch into the send queue in one step:
 
-For streaming applications that also commit consumer offsets, [Consuming, Producing and Committing Offsets](consuming-producing-and-committing-offsets.md) shows how to combine `Producer#produceChunkAsync` with `ZStream#buffer` to keep the producer busy while acknowledgements arrive.
+| Situation                                                    | Method                                                                       |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| Low volume, or each record must be confirmed before the next | `Producer#produce`                                                           |
+| Records arrive one at a time and throughput matters          | `Producer#produceAsync`                                                      |
+| You already have a batch of records                          | `Producer#produceChunk`, or `Producer#produceChunkAsync` for most throughput |
+| You need to know which records of a chunk failed             | `Producer#produceChunkAsyncWithFailures`                                     |
+| The records are the elements of a `ZStream`                  | `Producer#produceAll`                                                        |
+
+For streaming applications that also commit consumer offsets, [Consume, Produce and Commit at High Throughput](consuming-producing-and-committing-offsets.md) shows how to combine `Producer#produceChunkAsync` with `ZStream#buffer` to keep the producer busy while acknowledgements arrive.
 
 ### Byte Arrays or Serializers
 
@@ -177,10 +185,18 @@ trait Producer {
 }
 ```
 
+The `zio.kafka.producer` package defines `ByteRecord` as a type alias for `ProducerRecord[Array[Byte], Array[Byte]]`, the record type of the byte-array forms:
+
+```scala
+package object producer {
+  type ByteRecord = ProducerRecord[Array[Byte], Array[Byte]]
+}
+```
+
 Use a full `ProducerRecord` when you need to set the partition, the timestamp or [record headers](record-headers.md). The serializers receive the record's headers and may read or add to them. See [Serialization and Deserialization](serialization-and-deserialization.md) for the predefined serdes such as `Serde.string` and `Serde.long`.
 
 :::note
-Because `ProducerRecord` is a Java class, give its type parameters explicitly when the compiler cannot infer them, for example `new ProducerRecord[Array[Byte], Array[Byte]](topic, key, value)`. Build a new `ProducerRecord` for every send instead of reusing one: the Kafka client marks the headers of a sent byte-array record read-only, and a serializer may add headers to the record you pass in.
+Because `ProducerRecord` is a Java class, give its type parameters explicitly when the compiler cannot infer them, for example `new ProducerRecord[Array[Byte], Array[Byte]](topic, key, value)`. Build a new `ProducerRecord` for every send instead of reusing one: once a byte-array record is sent, the Kafka client marks its headers read-only, and with the serializer overloads a header-adding serializer would add its header again on every send. See [Adding Headers When Producing](record-headers.md#adding-headers-when-producing).
 :::
 
 ### Producing One Record and Waiting
@@ -359,7 +375,7 @@ def produceStream(producer: Producer): Task[Unit] =
     .runDrain
 ```
 
-Operators such as `ZStream#mapZIO` and `ZStream#tap` turn a stream into chunks of one record, which makes `Producer#produceAll` send one record per request. See [Avoiding Chunk Breakers](avoiding-chunk-breakers.md).
+Operators such as `ZStream#mapZIO` and `ZStream#tap` turn a stream into chunks of one record, which makes `Producer#produceAll` send one record per request. See [Keep Stream Chunks Intact](avoiding-chunk-breakers.md).
 
 ## Error Handling
 
@@ -380,7 +396,7 @@ val settings: ProducerSettings =
     .withAuthErrorRetrySchedule(Schedule.recurs(5) && Schedule.spaced(500.millis))
 ```
 
-Re-ordering of chunks can happen because only the failed and omitted records are sent again. For detecting revoked read access on the consumer side, see [Detecting Authorization Failures](detecting-authorization-failures.md).
+Re-ordering of chunks can happen because only the failed and omitted records are sent again. For detecting revoked read access on the consumer side, see [Detect Silent Authorization Failures](detecting-authorization-failures.md).
 
 ## Other Operations
 
@@ -406,7 +422,53 @@ def partitionCount(producer: Producer, topic: String): Task[Int] =
 
 ## ProducerSettings
 
-`ProducerSettings` is an immutable case class holding the Kafka client properties plus zio-kafka's own options. Build it with `ProducerSettings.apply(bootstrapServers)` and refine it with the `with*` methods; this stays source compatible when new fields are added. Any Kafka producer property can be set with `ProducerSettings#withProperty` or `ProducerSettings#withProperties`, and the common ones, such as `client.id`, `linger.ms`, `compression.type` and `enable.idempotence`, also have their own `with*` method. The zio-kafka options include the close timeout, the size of the send queue (`ProducerSettings#withSendBufferSize`, counted in chunks, one per produce call, not in records), the retry schedule for authorization errors (see [Error Handling](#error-handling)), diagnostics and metrics. For every setting and its default, see the [`ProducerSettings` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/producer/ProducerSettings.html).
+`ProducerSettings` is an immutable case class holding the Kafka client properties plus zio-kafka's own options:
+
+```scala
+final case class ProducerSettings(
+  closeTimeout: Duration = 30.seconds,
+  sendBufferSize: Int = 4096,
+  authErrorRetrySchedule: Schedule[Any, Throwable, Any] = Schedule.stop,
+  properties: Map[String, AnyRef] = Map.empty,
+  diagnostics: Producer.ProducerDiagnostics = Producer.NoDiagnostics,
+  metricLabels: Set[MetricLabel] = Set.empty,
+  metricsObserver: Option[ProducerMetricsObserver] = None
+)
+
+object ProducerSettings {
+  def apply(bootstrapServers: List[String]): ProducerSettings
+}
+```
+
+Build it with `ProducerSettings.apply(bootstrapServers)` and refine it with the `with*` methods; this stays source compatible when new fields are added. `ProducerSettings()` without arguments has no bootstrap servers, which is enough for `Producer.fromJavaProducer`, because that constructor does not use the Kafka properties. The settings fall into two groups, zio-kafka's own options and the Kafka properties passed to the Java producer.
+
+### Zio-kafka Options
+
+These options configure zio-kafka itself and are not passed to the Java producer:
+
+| Field                    | Method                                        | Default                           | Meaning                                                                                                             |
+| ------------------------ | --------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `closeTimeout`           | `ProducerSettings#withCloseTimeout`           | 30 seconds                        | How long `Producer.make` waits for the Java producer to close when the scope ends                                   |
+| `sendBufferSize`         | `ProducerSettings#withSendBufferSize`         | `4096`                            | Capacity of the send queue, counted in chunks (one per produce call), not in records                                |
+| `authErrorRetrySchedule` | `ProducerSettings#withAuthErrorRetrySchedule` | `Schedule.stop` (no retry)        | How to retry records that fail with an authorization or authentication error, see [Error Handling](#error-handling) |
+| `diagnostics`            | `ProducerSettings#withDiagnostics`            | `Producer.NoDiagnostics`          | Callback for `ProducerEvent`s, see [Diagnostics and Metrics](#diagnostics-and-metrics)                              |
+| `metricLabels`           | `ProducerSettings#withMetricsLabels`          | `Set.empty`                       | Labels added to zio-kafka's producer metrics                                                                        |
+| `metricsObserver`        | `ProducerSettings#withMetricsObserver`        | `None` (the ZIO metrics observer) | Where zio-kafka's producer metrics go                                                                               |
+
+### Kafka Properties
+
+The `properties` field holds the [Kafka producer configuration](https://kafka.apache.org/documentation/#producerconfigs). `ProducerSettings#withProperty` sets one property, and the two `ProducerSettings#withProperties` overloads, one taking `(String, AnyRef)` pairs and one taking a `Map[String, AnyRef]`, set several; a property set later replaces one with the same key set earlier. The common properties also have their own method:
+
+| Method                                  | Kafka property                                 | Kafka default                          |
+| --------------------------------------- | ---------------------------------------------- | -------------------------------------- |
+| `ProducerSettings#withBootstrapServers` | `bootstrap.servers`                            | None; `ProducerSettings.apply` sets it |
+| `ProducerSettings#withClientId`         | `client.id`                                    | Generated by the Kafka client          |
+| `ProducerSettings#withLinger`           | `linger.ms`                                    | 5 ms (0 ms before Kafka 4.0)           |
+| `ProducerSettings#withCompression`      | `compression.type` and the codec's level       | `none`                                 |
+| `ProducerSettings#withIdempotence`      | `enable.idempotence`                           | `true`                                 |
+| `ProducerSettings#withCredentials`      | `security.protocol` and the `ssl.*` properties | None, see [Security](security.md)      |
+
+Higher `linger.ms` values give larger batches, which also improves compression, at the cost of latency. With idempotence enabled, the broker discards duplicates caused by the client's own retries. A [transactional producer](transactional-producer.md) requires idempotence, so do not call `ProducerSettings#withIdempotence(false)` on settings you wrap in `TransactionalProducerSettings`.
 
 `ProducerSettings#driverSettings` returns the properties passed to the Java producer. To see which Kafka properties the `with*` methods set:
 
@@ -427,13 +489,37 @@ The resulting driver properties are:
 exampleSettings.driverSettings
 ```
 
-Higher `linger.ms` values give larger batches, which also improves compression, at the cost of latency. With idempotence enabled (Kafka's default), the broker discards duplicates caused by the client's own retries. For transactional producing, wrap the settings in `TransactionalProducerSettings`, see [Transactions](transactions.md).
+For transactional producing, wrap the settings in `TransactionalProducerSettings`, see [Transactional Producer](transactional-producer.md).
 
 ### Compression
 
-`ProducerCompression` selects the codec for `ProducerSettings#withCompression`. Kafka compresses whole batches, so better batching (see `ProducerSettings#withLinger`) gives a better compression ratio. The codecs are `NoCompression`, `Gzip`, `Snappy`, `Lz4` and `Zstd`; `Gzip`, `Lz4` and `Zstd` accept a compression level as a constructor argument. For the valid levels and their defaults, see the [`ProducerCompression` API docs](https://javadoc.io/doc/dev.zio/zio-kafka_2.13/latest/zio/kafka/producer/ProducerCompression$.html).
+`ProducerCompression` selects the codec for `ProducerSettings#withCompression`. Kafka compresses whole batches, so better batching (see `ProducerSettings#withLinger`) gives a better compression ratio. `ProducerCompression` is a sealed class with one case per codec:
 
-To compress with LZ4 at its default level:
+```scala
+abstract sealed class ProducerCompression {
+  def properties: Map[String, AnyRef]
+}
+
+object ProducerCompression {
+  case object NoCompression                                         extends ProducerCompression
+  final case class Gzip(level: Int = Deflater.DEFAULT_COMPRESSION) extends ProducerCompression
+  final case class Snappy()                                         extends ProducerCompression
+  final case class Lz4(level: Int = 9)                              extends ProducerCompression
+  final case class Zstd(level: Int = 3)                             extends ProducerCompression
+}
+```
+
+The levels are the codec's own:
+
+| Codec           | `compression.type` | Level property           | Valid levels  | Default level |
+| --------------- | ------------------ | ------------------------ | ------------- | ------------- |
+| `NoCompression` | `none`             | None                     | None          | None          |
+| `Gzip(level)`   | `gzip`             | `compression.gzip.level` | 1 to 9, or -1 | -1            |
+| `Snappy()`      | `snappy`           | None                     | None          | None          |
+| `Lz4(level)`    | `lz4`              | `compression.lz4.level`  | 1 to 17       | 9             |
+| `Zstd(level)`   | `zstd`             | `compression.zstd.level` | -131072 to 22 | 3             |
+
+`ProducerCompression#properties` returns the Kafka properties of a codec, which is what `ProducerSettings#withCompression` adds to the settings. `Snappy` is a case class without parameters, so write `ProducerCompression.Snappy()`. To compress with LZ4 at its default level:
 
 ```scala mdoc:compile-only
 import zio.kafka.producer._
@@ -448,7 +534,7 @@ val settings: ProducerSettings =
 
 `ProducerSettings#withDiagnostics` registers a callback for `ProducerEvent`s: `ProducerEvent.RecordsOffered` just before a batch is offered to the send queue, `ProducerEvent.RecordsSent` when the broker has handled it (with the indices of failed records), and `ProducerEvent.ProducerFinalized` when the producer closes. Events of the same batch share a `batchId`. The callback runs in a separate fiber, and unhandled events queue up in memory, so it must keep up. See [Diagnostics](diagnostics.md) for the full event model.
 
-The producer records zio-kafka metrics such as produce latency, batch size and send queue size through ZIO metrics. When an application runs several producers, label their metrics with `ProducerSettings#withMetricsLabels`. To send metrics elsewhere, or to turn them off with `ProducerMetricsObserver.NoOp`, use `ProducerSettings#withMetricsObserver`; labels are then ignored. To label a producer's metrics:
+The producer records zio-kafka metrics such as produce latency, batch size and send queue size through ZIO metrics. When an application runs several producers, label their metrics with `ProducerSettings#withMetricsLabels`. To send the metrics elsewhere or turn them off, see [Installing an Observer](metrics-observers.md#installing-an-observer). To label a producer's metrics:
 
 ```scala mdoc:compile-only
 import zio.kafka.producer._
@@ -467,6 +553,6 @@ See [Metrics](metrics.md) for the list of metrics.
 These pages build on `Producer`:
 
 - [Record Headers](record-headers.md) explains how to attach metadata to produced records.
-- [Transactions](transactions.md) covers `TransactionalProducer`, which produces records and commits consumer offsets atomically.
+- [Transactional Producer](transactional-producer.md) covers `TransactionalProducer`, which produces records and commits consumer offsets atomically, and the [transactions tutorial](transactions.md) builds a complete exactly-once application with it.
 - [Consumer](consumer.md) and [Offsets and Committing](offsets-and-committing.md) cover the reading side of consume-transform-produce applications.
-- [Writing Tests](writing-tests.md) shows how to create a producer against an embedded Kafka broker with the testkit.
+- [Test Producers and Consumers with the Test Kit](writing-tests.md) shows how to create a producer against an embedded Kafka broker with the testkit.

@@ -19,7 +19,7 @@ $ git clone https://github.com/zio/zio-quickstarts.git
 $ cd zio-quickstarts/zio-quickstart-kafka
 ```
 
-Start a Kafka broker with the `docker-compose.yml` that ships with the project (see [Setting Up The Kafka Cluster](#setting-up-the-kafka-cluster) for what it contains):
+Start a Kafka broker with the `docker-compose.yml` that ships with the project (see [Setting Up The Kafka Cluster](#setting-up-the-kafka-cluster)):
 
 ```bash
 $ docker compose up -d
@@ -42,7 +42,7 @@ In this tutorial, we will be using the following dependencies. So, let's add the
 libraryDependencies += "dev.zio" %% "zio-kafka" % "@VERSION@"
 
 // ZIO JSON: JSON encoding and decoding (JVM)
-libraryDependencies += "dev.zio" %% "zio-json" % "1.1.2"
+libraryDependencies += "dev.zio" %% "zio-json" % "1.1.3"
 ```
 
 Zio-kafka depends on zio and zio-streams, so these two libraries are added to the project as well.
@@ -55,35 +55,7 @@ Zio-kafka depends on zio and zio-streams, so these two libraries are added to th
 
 ## Setting Up The Kafka Cluster
 
-Before we start, we need to set up a Kafka cluster. To start a kafka cluster for testing purposes we can use the following `docker-compose.yml` file:
-
-```yaml
-services:
-  broker:
-    image: apache/kafka:4.4.0
-    container_name: broker
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:29093
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-```
-
-Now we can run the `docker compose up -d` command to start the Kafka cluster:
-
-```bash
-$ docker compose up -d
-```
+Before we start, we need a running Kafka broker. Follow [Running a Local Kafka Broker](getting-started.md#running-a-local-kafka-broker) in the Getting Started guide: it gives a `docker-compose.yml` for a single-node cluster and starts it with `docker compose up -d`. The examples in this tutorial connect to that broker at `localhost:9092`.
 
 ## Writing a Simple Producer and Consumer Using ZIO Workflows
 
@@ -116,6 +88,7 @@ The companion object of `Serde` trait contains a set of built-in serializers and
 - `Serde.short`
 - `Serde.float`
 - `Serde.double`
+- `Serde.longOption`, `Serde.intOption`, `Serde.shortOption`, `Serde.floatOption` and `Serde.doubleOption`, which turn a missing key or value into `None`
 - `Serde.bytes`
 - `Serde.string`
 - `Serde.byteArray`
@@ -146,7 +119,7 @@ connection with the Kafka cluster. An explicit scope can be created with the `ZI
 
 ### 3. Producing records
 
-Zio-kafka has several producers that can be used to produce data on Kafka topics. In this example, we will be using the `Producer.produce` method:
+A `Producer` has several methods to produce data on Kafka topics. In this example, we will be using the `Producer#produce` method:
 
 ```scala
 trait Producer {
@@ -160,9 +133,9 @@ trait Producer {
 }
 ```
 
-Notice how the type parameters of `produce` method ensure that the value's type, corresponds to the type produced by the value's `Serializer` (and the same for the key and the `Serializer` for the key).
+Notice how the type parameters of `Producer#produce` ensure that the value's type, corresponds to the type produced by the value's `Serializer` (and the same for the key and the `Serializer` for the key).
 
-Here is a helper function that shows how we could use the `produce` method:
+Here is a helper function that shows how we could use `Producer#produce`:
 
 ```scala mdoc:compile-only
 import org.apache.kafka.clients.producer.RecordMetadata
@@ -269,18 +242,18 @@ In this section we show zio-kafka's seamless integration with zio-streams.
 
 ### 1. Streaming Producer API
 
-With zio-kafka's `Producer.produceAll` we get a `ZPipeline`. It takes streams of `ProducerRecord[K, V]`, produces these records to a Kafka topic, and then returns a stream of `RecordMetadata`:
+With zio-kafka's `Producer#produceAll` we get a `ZPipeline`. It takes streams of `ProducerRecord[K, V]`, produces these records to a Kafka topic, and then returns a stream of `RecordMetadata`:
 
 ```scala
 trait Producer {
-  def produceAll[R, K, V](
+  final def produceAll[R, K, V](
     keySerializer: Serializer[R, K],
     valueSerializer: Serializer[R, V]
   ): ZPipeline[R, Throwable, ProducerRecord[K, V], RecordMetadata]
 }
 ```
 
-Here is an example that uses `Producer.produceAll`:
+Here is an example that uses `Producer#produceAll`:
 
 ```scala mdoc:compile-only
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -303,7 +276,7 @@ val produceRecords: ZIO[Any, Throwable, Unit] =
     .runDrain
 ```
 
-For performance reasons, method `produceAll` produces records in batches, every chunk of the input stream results in a batch. Once all acknowledges are received, the next batch is produced.
+For performance reasons, `Producer#produceAll` produces records in batches: every chunk of the input stream results in a batch. Once all acknowledgements are received, the next batch is produced (see [Producing a Stream](producer.md#producing-a-stream)).
 
 See [this page](consuming-producing-and-committing-offsets.md) for tips that can increase producing throughput.
 
@@ -330,7 +303,7 @@ For more options see [creating a consumer](creating-a-consumer.md) and [consumer
 
 ### 3. Streaming Consumer API
 
-The `Consumer.plainStream` method gives a `ZStream` that, when run, consumes records from a Kafka topic and gives a stream of `CommittableRecord[K, V]`:
+The `Consumer#plainStream` method gives a `ZStream` that, when run, consumes records from a Kafka topic and gives a stream of `CommittableRecord[K, V]`:
 
 ```scala
 trait Consumer {
@@ -400,10 +373,10 @@ Notice that because we are using `aggregateAsyncWithin`, the commits run asynchr
 :::caution
 Keeping the chunking structure intact is important.
 
-In the example so far we have used `tap` to print the records as they are consumed. Unfortunately, methods like `tap` and `mapZIO` destroy the chunking structure and lead to much lower throughput. Please read [a warning about mapZIO](avoiding-chunk-breakers.md) for more details and alternatives.
+In the example so far we have used `tap` to print the records as they are consumed. Unfortunately, methods like `tap` and `mapZIO` destroy the chunking structure and lead to much lower throughput. Please read [Keep Stream Chunks Intact](avoiding-chunk-breakers.md) for more details and alternatives.
 :::
 
-For more details see [consuming Kafka topics using ZIO Streams](consuming-kafka-topics-using-zio-streams.md).
+For more details see [Consume Topics with ZIO Streams](consuming-kafka-topics-using-zio-streams.md).
 
 ### 4. The Complete Streaming Example
 
@@ -540,7 +513,7 @@ object EventKafkaSerde {
 }
 ```
 
-As we can see, we use the `String#fromJson` to convert the string to an `Event` object, and we also encode any parsing failure with a `RuntimeException` in the `ZIO` workflow.
+We use `String#fromJson` to convert the string to an `Event` object, and we also encode any parsing failure with a `RuntimeException` in the `ZIO` workflow.
 
 See [zio-kafka serialization and deserialization](serialization-and-deserialization.md) for more details.
 
