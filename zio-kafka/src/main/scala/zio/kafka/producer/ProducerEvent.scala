@@ -2,6 +2,9 @@ package zio.kafka.producer
 
 import zio._
 
+/**
+ * A diagnostic event of the [[Producer]]. See the companion object for the events and when they are emitted.
+ */
 sealed trait ProducerEvent
 
 /**
@@ -12,7 +15,8 @@ sealed trait ProducerEvent
  *
  * For each batch the [[RecordsOffered]] event is emitted first, followed by the [[RecordsSent]] event. Since batches
  * are queued in the producer and sending one batch might go faster than the previous, the two event types can come in
- * any order. However, the [[RecordsOffered]] events are always in the order the batches were offered.
+ * any order. The [[RecordsOffered]] events of batches that are offered from one fiber are in the order the batches were
+ * offered.
  *
  * To associate events to a batch you can use the `batchId` field. This is an ever-increasing number that is unique per
  * producer and starts at 0. When a [[RecordsOffered]] and a [[RecordsSent]] event are for the same batch, the `batchId`

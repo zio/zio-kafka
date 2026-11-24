@@ -19,10 +19,33 @@ import scala.collection.immutable.BitSet
 import scala.jdk.CollectionConverters._
 import scala.util.control.{ NoStackTrace, NonFatal }
 
+/**
+ * A Kafka producer. The produce methods come in variants that wait for the broker's acknowledgement (`produce`,
+ * `produceChunk`), and variants that return after the records are enqueued and give the acknowledgement as a second
+ * effect (`produceAsync`, `produceChunkAsync`, `produceChunkAsyncWithFailures`). Variants that take serializers
+ * serialize the key and value of each record first.
+ *
+ * {{{
+ * import org.apache.kafka.clients.producer.ProducerRecord
+ * import zio._
+ * import zio.kafka.serde.Serde
+ *
+ * val produced: Task[Unit] =
+ *   ZIO.scoped {
+ *     for {
+ *       producer <- Producer.make(ProducerSettings(List("localhost:9092")))
+ *       _ <- producer.produce(new ProducerRecord("orders", "order-1", "created"), Serde.string, Serde.string)
+ *     } yield ()
+ *   }
+ * }}}
+ *
+ * @see
+ *   [[https://zio.dev/zio-kafka/producer/ Producer]]
+ */
 trait Producer {
 
   /**
-   * Produces a single record and await broker acknowledgement.
+   * Produces a single record and awaits broker acknowledgement.
    *
    * Use `produceAsync` to avoid the round-trip-time penalty for each record.
    */
@@ -31,7 +54,7 @@ trait Producer {
   ): Task[RecordMetadata]
 
   /**
-   * Produces a single record and await broker acknowledgement.
+   * Produces a single record and awaits broker acknowledgement.
    *
    * Use `produceAsync` to avoid the round-trip-time penalty for each record.
    */
@@ -42,7 +65,7 @@ trait Producer {
   ): RIO[R, RecordMetadata]
 
   /**
-   * Produces a single record and await broker acknowledgement.
+   * Produces a single record and awaits broker acknowledgement.
    *
    * Use `produceAsync` to avoid the round-trip-time penalty for each record.
    */
@@ -143,9 +166,7 @@ trait Producer {
    *   1. The outer layer describes the enqueueing of all the records to the Producer's internal buffer.
    *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
    *
-   * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
-   * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
-   * entire chunk.
+   * The chunk is enqueued as a whole. Awaiting the inner layer guarantees the transmission of the entire chunk.
    *
    * When publishing any of the records fails, the whole batch fails even though some records might have been published.
    * Use [[produceChunkAsyncWithFailures]] to get results per record.
@@ -160,9 +181,7 @@ trait Producer {
    *   1. The outer layer describes the enqueueing of all the records to the Producer's internal buffer.
    *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
    *
-   * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
-   * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
-   * entire chunk.
+   * The chunk is enqueued as a whole. Awaiting the inner layer guarantees the transmission of the entire chunk.
    *
    * When publishing any of the records fails, the whole batch fails even though some records might have been published.
    * Use [[produceChunkAsyncWithFailures]] to get results per record.
@@ -179,15 +198,14 @@ trait Producer {
    *   1. The outer layer describes the enqueueing of all the records to the Producer's internal buffer.
    *   1. The inner layer describes receiving an acknowledgement from the broker for the transmission of the records.
    *
-   * It is possible that for chunks that exceed the producer's internal buffer size, the outer layer will also signal
-   * the transmission of part of the chunk. Regardless, awaiting the inner layer guarantees the transmission of the
-   * entire chunk.
+   * The chunk is enqueued as a whole. Awaiting the inner layer guarantees the transmission of the entire chunk.
    *
    * This variant of `produceChunkAsync` more accurately reflects that individual records within the Chunk can fail to
    * publish, rather than the failure being at the level of the Chunk.
    *
-   * When attempt to send a record into buffer for publication fails, the following records in the chunk are not
-   * published. This is indicated with a [[Producer.PublishOmittedException]].
+   * When sending a record fails (handing it to the Kafka producer throws, or its acknowledgement is an error), the
+   * records after it in the chunk that were not yet handed to the Kafka producer are not published. This is indicated
+   * with a [[Producer.PublishOmittedException]].
    *
    * This variant does not accept serializers as they may also fail independently of each record and this is not
    * reflected in the return type.
@@ -202,17 +220,21 @@ trait Producer {
   def partitionsFor(topic: String): Task[Chunk[PartitionInfo]]
 
   /**
-   * Flushes the producer's internal buffer. This will guarantee that all records currently buffered will be transmitted
-   * to the broker.
+   * Flushes the buffer of the underlying Kafka producer. This waits until all records that were already handed to the
+   * Kafka producer have been transmitted to the broker. Records that are still waiting in the zio-kafka send queue are
+   * not covered.
    */
   def flush: Task[Unit]
 
   /**
-   * Expose internal producer metrics
+   * Returns the metrics of the underlying Kafka producer.
    */
   def metrics: Task[Map[MetricName, Metric]]
 }
 
+/**
+ * Creates producers, and holds the types that producers use.
+ */
 object Producer {
 
   /** A callback for producer diagnostic events. */
@@ -221,10 +243,17 @@ object Producer {
   /** A diagnostics implementation that does nothing. */
   val NoDiagnostics: ProducerDiagnostics = zio.kafka.diagnostics.Diagnostics.NoOp
 
+  /**
+   * The result of a record that was not published because publishing an earlier record in the same chunk failed. See
+   * [[Producer.produceChunkAsyncWithFailures]].
+   */
   case object PublishOmittedException
       extends RuntimeException("Publish omitted due to a publish error for a previous record in the chunk")
       with NoStackTrace
 
+  /**
+   * A layer that creates a [[Producer]] with [[make]], using the `ProducerSettings` from the environment.
+   */
   val live: RLayer[ProducerSettings, Producer] =
     ZLayer.scoped {
       for {
@@ -233,6 +262,11 @@ object Producer {
       } yield producer
     }
 
+  /**
+   * Creates a [[Producer]]. It first runs [[zio.kafka.utils.SslHelper.validateEndpoint]] on the properties of the
+   * settings, then creates the Kafka producer. The Kafka producer is closed when the scope closes, waiting at most
+   * `closeTimeout` of the settings.
+   */
   def make(settings: ProducerSettings): ZIO[Scope, Throwable, Producer] =
     for {
       _ <- SslHelper.validateEndpoint(settings.driverSettings)
