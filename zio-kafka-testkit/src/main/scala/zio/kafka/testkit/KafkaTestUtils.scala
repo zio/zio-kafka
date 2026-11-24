@@ -14,6 +14,28 @@ import zio.stream.ZStream
 import java.io.File
 import java.nio.file.{ Files, StandardCopyOption }
 
+/**
+ * Helpers to create producers, consumers and admin clients for tests, and to produce and consume records, against a
+ * [[Kafka]] broker.
+ *
+ * {{{
+ * import zio._
+ * import zio.kafka.testkit.{ Kafka, KafkaTestUtils }
+ *
+ * val adminTopics: Task[Set[String]] =
+ *   ZIO
+ *     .scoped {
+ *       for {
+ *         admin  <- KafkaTestUtils.makeAdminClient
+ *         topics <- admin.listTopics()
+ *       } yield topics.keySet
+ *     }
+ *     .provide(Kafka.embedded)
+ * }}}
+ *
+ * @see
+ *   [[https://zio.dev/zio-kafka/writing-tests/ Test Producers and Consumers with the Test Kit]]
+ */
 object KafkaTestUtils {
 
   // -----------------------------------------------------------------------------------------
