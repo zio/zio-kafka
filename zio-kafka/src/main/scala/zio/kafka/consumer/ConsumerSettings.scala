@@ -16,12 +16,14 @@ import scala.jdk.CollectionConverters._
  *
  * To stay source compatible with future releases, you are recommended to construct the settings as follows:
  * {{{
- *   ConsumerSettings(bootstrapServers)
- *     .tuneForHighThroughput
- *     .withGroupId(groupId)
- *     .withProperties(properties)
- *     .... etc.
+ * ConsumerSettings(List("localhost:9092"))
+ *   .tuneForHighThroughput
+ *   .withGroupId("my-group")
+ *   .withProperties("security.protocol" -> "SSL")
  * }}}
+ *
+ * @see
+ *   [[https://zio.dev/zio-kafka/consumer/ Consumer]]
  */
 final case class ConsumerSettings(
   properties: Map[String, AnyRef] = Map.empty,
@@ -78,9 +80,14 @@ final case class ConsumerSettings(
       .withMaxPollRecords(100)
       .withFetchStrategy(QueueSizeBasedFetchStrategy(partitionPreFetchBufferLimit = 512))
 
+  /** Sets `bootstrap.servers` to the given servers, joined with commas. It replaces the servers set before. */
   def withBootstrapServers(servers: List[String]): ConsumerSettings =
     withProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, servers.mkString(","))
 
+  /**
+   * The maximum time that closing the Kafka consumer may take when the scope of the consumer closes. The default is 30
+   * seconds.
+   */
   def withCloseTimeout(timeout: Duration): ConsumerSettings =
     copy(closeTimeout = timeout)
 
@@ -93,15 +100,18 @@ final case class ConsumerSettings(
   def withCommitTimeout(timeout: Duration): ConsumerSettings =
     copy(commitTimeout = timeout)
 
+  /** Sets Kafka's `client.id`, a name that identifies this client in broker logs and in the Kafka client's metrics. */
   def withClientId(clientId: String): ConsumerSettings =
     withProperty(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
 
+  /** Sets Kafka's `group.id`, the consumer group that this consumer belongs to. */
   def withGroupId(groupId: String): ConsumerSettings =
     withProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
 
   private[consumer] def hasGroupId: Boolean =
     properties.contains(ConsumerConfig.GROUP_ID_CONFIG)
 
+  /** Sets Kafka's `group.instance.id`, the unique id of this consumer in its group (static membership). */
   def withGroupInstanceId(groupInstanceId: String): ConsumerSettings =
     withProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
 
@@ -110,6 +120,7 @@ final case class ConsumerSettings(
    *
    * The options are:
    * {{{
+   *   // no-check: sketch, getOffsets and defaultStrategy are placeholders
    *   import zio.kafka.consumer.Consumer._
    *   OffsetRetrieval.Auto(AutoOffsetStrategy.Latest) // the default
    *   OffsetRetrieval.Auto(AutoOffsetStrategy.Earliest)
@@ -135,7 +146,7 @@ final case class ConsumerSettings(
    * `External` allows you to optionally provide the `leaderEpoch` together with the offset. It is recommended you
    * provide the leaderEpoch if you can as it prevents consuming from a broker that is unaware it is no longer a leader.
    * The older `Manual` works the same as `External`, except that it does not allow you to provide a leaderEpoch.
-   * `Manual` is deprecated and will be removed in a future zio-kaka release.
+   * `Manual` is deprecated and will be removed in a future zio-kafka release.
    *
    * This configuration applies to both subscribed and assigned partitions.
    *
@@ -199,15 +210,24 @@ final case class ConsumerSettings(
   def withMaxPollRecords(maxPollRecords: Int): ConsumerSettings =
     withProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
 
+  /** Sets a Kafka consumer property. It replaces a value that was set before for the same key. */
   def withProperty(key: String, value: AnyRef): ConsumerSettings =
     copy(properties = properties + (key -> value))
 
+  /** Sets the given Kafka consumer properties. They replace values that were set before for the same keys. */
   def withProperties(kvs: (String, AnyRef)*): ConsumerSettings =
     withProperties(kvs.toMap)
 
+  /** Sets the given Kafka consumer properties. They replace values that were set before for the same keys. */
   def withProperties(kvs: Map[String, AnyRef]): ConsumerSettings =
     copy(properties = properties ++ kvs)
 
+  /**
+   * Sets a listener that is called when partitions are assigned to, revoked from, or lost by this consumer. It replaces
+   * the listener set before.
+   *
+   * The Kafka consumer calls the listener while it polls, and waits until its effects are done.
+   */
   def withRebalanceListener(listener: RebalanceListener): ConsumerSettings =
     copy(rebalanceListener = listener)
 
@@ -260,14 +280,15 @@ final case class ConsumerSettings(
    * In this time zio-kafka awaits processing of records and the completion of commits.
    *
    * By default, this value is set to 3/5 of `maxPollInterval` which by default calculates to 3 minutes. Only values
-   * between `commitTimeout` and `maxPollInterval` are useful. Lower values will make the rebalance callback be done
-   * immediately, higher values lead to lost partitions.
+   * between `commitTimeout` and `maxPollInterval` are useful. Lower values make zio-kafka stop waiting for
+   * commits right away, higher values lead to lost partitions.
    *
    * See [[#withRebalanceSafeCommits]] for more information.
    */
   def withMaxRebalanceDuration(value: Duration): ConsumerSettings =
     copy(maxRebalanceDuration = Some(value))
 
+  /** Sets the properties of the given credential store, for example the TLS key store and trust store. */
   def withCredentials(credentialsStore: KafkaCredentialStore): ConsumerSettings =
     withProperties(credentialsStore.properties)
 
@@ -311,6 +332,9 @@ final case class ConsumerSettings(
    * the consumer group id could be used as a label:
    *
    * {{{
+   * import zio.metrics.MetricLabel
+   *
+   * def labelled(consumerSettings: ConsumerSettings, groupId: String): ConsumerSettings =
    *   consumerSettings.withMetricsLabels(Set(MetricLabel("group-id", groupId)))
    * }}}
    *
@@ -339,7 +363,7 @@ final case class ConsumerSettings(
    *
    * The runloop starts a fiber that collects the metrics on the given schedule. This fiber is not started when
    * `metricsObserver` exactly equals [[zio.kafka.consumer.metrics.ConsumerMetricsObserver.NoOp]]. Another option is to
-   * set the schedule to `Schedule.stop`.
+   * set the schedule to `Schedule.stop`, which measures once and then stops.
    */
   def withRunloopMetricsSchedule(runloopMetricsSchedule: Schedule[Any, Unit, Long]): ConsumerSettings =
     copy(runloopMetricsSchedule = runloopMetricsSchedule)
@@ -363,12 +387,12 @@ final case class ConsumerSettings(
   /**
    * When set, enables a metadata-refresh probe after this many consecutive empty polls for a topic.
    *
-   * After `n` consecutive polls where a subscribed topic returned no records, `committed()` is called for one of the
-   * assigned partitions of that topic to force a broker round-trip. This surfaces any
-   * [[org.apache.kafka.common.errors.TopicAuthorizationException]] that `poll()` would otherwise swallow silently when
-   * a READ ACL is denied at runtime.
+   * After `n` consecutive polls that returned no records for a topic, even though its partitions were resumed for the
+   * poll, `committed()` is called for one of the assigned partitions of that topic to force a broker round-trip. This
+   * surfaces any [[org.apache.kafka.common.errors.TopicAuthorizationException]] that `poll()` would otherwise swallow
+   * silently when a READ ACL is denied at runtime.
    *
-   * Set to `None` (the default) to disable the probe. A value of `3` is a reasonable starting point.
+   * The probe is disabled by default. A value of `3` is a reasonable starting point.
    *
    * Note: users subscribing to a very large number of topics may want to set a higher value or leave this disabled,
    * since each probe issues a request to the broker.
@@ -475,9 +499,13 @@ final case class ConsumerSettings(
 
 }
 
+/** Constructors for [[ConsumerSettings]]. */
 object ConsumerSettings {
+
+  /** The default commit timeout: 15 seconds. See [[ConsumerSettings.withCommitTimeout]]. */
   val defaultCommitTimeout: Duration = 15.seconds
 
+  /** Creates settings with the given bootstrap servers. All other settings have their default value. */
   def apply(bootstrapServers: List[String]): ConsumerSettings =
     new ConsumerSettings().withBootstrapServers(bootstrapServers)
 }
