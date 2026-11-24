@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795505335243,
+  "lastUpdate": 1795532683438,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -6570,6 +6570,102 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 577.29998604,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "khajavi@gmail.com",
+            "name": "Milad Khajavi",
+            "username": "khajavi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "554910889a27a0d1c7600633dafe77877fbe8040",
+          "message": "docs(zio-kafka): Scaladoc for AdminClient and AdminClientSettings (#1843)\n\n## What\n\nAdds Scaladoc to all 177 undocumented public members of `AdminClient`\nand `AdminClientSettings`. Comments only: no code changes.\n\n- Rewrote the two existing examples (the `AdminClient` class doc and the\n`AdminClientSettings` doc) so they compile on Scala 2.13.18 and 3.9.0.\nTheir result comments come from a real run.\n- Fixed comments that did not match the code. Examples:\n`incrementalAlterConfigs` pointed to `alterConfigs` and\n`alterConfigsAsync`, which zio-kafka does not have. The \"after 5s\" wait\nis really a polling limit, and the call then succeeds.\n- Coverage of the `zio-kafka` module: 220 to 397 of 713 public members\n(55.7%). Both files are now fully documented.\n\n## Bug found while writing (not fixed here)\n\nEvery admin options class converts its timeout with\n`timeout.toMillis.toInt`. A timeout longer than about 24.8 days\n(`Int.MaxValue` milliseconds) overflows. A 30-day timeout makes the\nrequest fail at once with `TimeoutException`. `Duration.Infinity` also\nbecomes about 24 days.\n\nThe `@param timeout` comments state this behaviour as a plain fact. The\nsame pattern is in three `acl/*Options` files, which this PR does not\ntouch; they will be covered in a later part of the rollout.\n\n## How it was checked\n\n- Comments-only check: PASS (2 files, 0 code changes, no directive\ncomments added or removed).\n- Snippet checker: both examples compile on 2.13.18 and 3.9.0.\n- Doc warnings: 2.13.18 has 0 before and after. 3.9.0 has 2 before and\nafter, both pre-existing classpath messages.\n- `fmt` and `check` pass on 2.13.18. Scaladoc drift: none (no copies of\nthese files).\n- Probes (scala-cli, outside the repo) for the timing, overflow, and\nexample-output claims.\n\n## Not yet done\n\n- A second, fresh-context fact-check review of this diff has not run\nyet. This is why the PR is a draft.\n- The rest of the zio-kafka Scaladoc rollout (waves for consumer,\nproducer, serde, testkit and the remaining admin files) will land in\nthis branch later.\n\nWritten by an LLM",
+          "timestamp": "2026-11-24T18:15:12+03:30",
+          "tree_id": "019d8666c54f4888a685d87539b0d3a803d31254",
+          "url": "https://github.com/zio/zio-kafka/commit/554910889a27a0d1c7600633dafe77877fbe8040"
+        },
+        "date": 1795532682721,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 598.6812304999999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 597.2634734200001,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 85.24034648666665,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 264.63534336,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeqAsync",
+            "value": 24.23399488699524,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeqAsync",
+            "value": 6.649359333086656,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordPar",
+            "value": 54.873430008514624,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordSeq",
+            "value": 70.45285799880553,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 540.5773500399999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 534.372577,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 563.8288815399999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 569.70273912,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
