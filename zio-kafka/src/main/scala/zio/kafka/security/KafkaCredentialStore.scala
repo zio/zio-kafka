@@ -5,7 +5,7 @@ package zio.kafka.security
  * it to the settings of a client with `withCredentials`.
  *
  * @see
- *   [[https://zio.dev/zio-kafka/connecting-to-a-secured-cluster/ Connect to a Secured Cluster]]
+ *   [[https://zio.dev/zio-kafka/security/ Security: TLS and Credentials]]
  */
 sealed trait KafkaCredentialStore {
 
