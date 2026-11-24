@@ -67,7 +67,7 @@ final case class ProducerSettings(
     copy(properties = properties ++ kvs)
 
   /**
-   * Sets the Kafka properties of the given credential store, for example the properties for SASL or SSL. Properties
+   * Sets the Kafka properties of the given credential store, for example the TLS key store and trust store. Properties
    * that were already set with the same key are replaced.
    */
   def withCredentials(credentialsStore: KafkaCredentialStore): ProducerSettings =
@@ -132,7 +132,7 @@ final case class ProducerSettings(
    * For example, to retry 5 times, spaced by 500ms, you can set this to
    * {{{Schedule.recurs(5) && Schedule.spaced(500.millis)}}}
    *
-   * The default is `Schedule.stop` which is, to fail the producer on the first auth error.
+   * The default is `Schedule.stop`: a produce call fails on the first auth error.
    */
   def withAuthErrorRetrySchedule(authErrorRetrySchedule: Schedule[Any, Throwable, Any]): ProducerSettings =
     copy(authErrorRetrySchedule = authErrorRetrySchedule)
