@@ -13,9 +13,11 @@ import java.nio.channels.{ FileChannel, SocketChannel }
 import scala.jdk.CollectionConverters._
 import scala.util.control.{ NoStackTrace, NonFatal }
 
+//noinspection SimplifyUnlessInspection,SimplifyWhenInspection
 /**
- * This function validates that your Kafka client (Admin, Consumer, or Producer) configurations are valid for the Kafka
- * Cluster you want to contact.
+ * This object validates that your Kafka client (Admin, Consumer, or Producer) configurations are valid for the Kafka
+ * Cluster you want to contact: it checks that a client that is not configured for SSL does not connect to a server that
+ * expects SSL, see `validateEndpoint`.
  *
  * This function protects you against this long-standing bug in kafka-clients that leads to crash your app with an OOM.
  * More details, see: https://issues.apache.org/jira/browse/KAFKA-4090
@@ -23,7 +25,6 @@ import scala.util.control.{ NoStackTrace, NonFatal }
  * Credits for this work go to Nick Pavlov (https://github.com/gurinderu), Guillaume Bécan (https://github.com/gbecan)
  * and the Conduktor (https://www.conduktor.io/) devs team.
  */
-//noinspection SimplifyUnlessInspection,SimplifyWhenInspection
 object SslHelper {
 
   /**
@@ -32,6 +33,21 @@ object SslHelper {
   private final case class ConnectionError(cause: Throwable) extends NoStackTrace
 
   // ⚠️ Must not do anything else than calling `doValidateEndpoint`. The algorithm of this function must be completely contained in `doValidateEndpoint`.
+  /**
+   * Checks that the Kafka servers in `props` do not expect TLS when the client is not configured for it.
+   *
+   * The check is skipped when `security.protocol` is a `String` that contains `SSL`, ignoring case. It reads the comma
+   * separated `bootstrap.servers` and uses `request.timeout.ms` as the time limit per server, 30 seconds when it is
+   * absent, invalid or not positive.
+   *
+   * It succeeds when no server answered with TLS and at least one server could be contacted. It fails with a
+   * `org.apache.kafka.common.KafkaException` with the message "Failed to connect to Kafka", and a cause such as
+   *   - an `IllegalArgumentException` when a server answers with TLS, or when `bootstrap.servers` is empty,
+   *   - a `java.net.ConnectException` or a `java.util.concurrent.TimeoutException` when no server could be contacted.
+   *
+   * @see
+   *   [[https://zio.dev/zio-kafka/security/ Security: TLS and Credentials]]
+   */
   def validateEndpoint(props: Map[String, AnyRef]): IO[KafkaException, Unit] =
     doValidateEndpoint(SocketChannel.open)(props)
 
