@@ -181,6 +181,7 @@ final class ZioMetricsConsumerMetricsObserver(
   private val pollAuthErrorCounter: Metric.Counter[Long] =
     consumerMetrics.pollAuthErrorCounter.toZioMetric(metricLabels)
 
+  /** Increments the counter `pollAuthErrorCounter`. */
   def observePollAuthError: UIO[Unit] =
     pollAuthErrorCounter.increment
 

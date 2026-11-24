@@ -150,34 +150,41 @@ final case class ConsumerMetrics(
 )
 
 //noinspection ScalaWeakerAccess
+/** The default histogram boundaries of [[ConsumerMetrics]]. */
 object ConsumerMetrics {
 
   // ----- Default boundaries -----
 
   // 0.01,0.03,0.08,0.21,0.55,1.49,4.04,10.97,29.81,81.04 in seconds
   // 10,30,80,210,550,1490,4040,10970,29810,81040 in milliseconds
+  /** Boundaries for durations in seconds: 0.01, 0.03, 0.08, 0.21, 0.55, 1.49, 4.04, 10.97, 29.81 and 81.04. */
   def defaultLatencyBoundaries: Histogram.Boundaries =
     MetricKeyType.Histogram.Boundaries.fromChunk(
       Chunk.iterate(0.01, 10)(_ * Math.E).map(d => Math.ceil(d * 100.0) / 100.0)
     )
 
   // 1,3,8,21,55,149,404,1097,2981,8104
+  /** Boundaries for counts: 1, 3, 8, 21, 55, 149, 404, 1097, 2981 and 8104. */
   def defaultCountBoundaries: Histogram.Boundaries =
     MetricKeyType.Histogram.Boundaries.fromChunk(Chunk.iterate(1.0, 10)(_ * Math.E).map(Math.ceil))
 
   // 0,1,3,8,21,55,149,404,1097,2981
+  /** Boundaries for the number of partitions or commits: 1, 3, 8, 21, 55, 149, 404, 1097 and 2981. */
   def defaultStreamCountBoundaries: Histogram.Boundaries =
     MetricKeyType.Histogram.Boundaries.fromChunk(Chunk(0.0) ++ Chunk.iterate(1.0, 9)(_ * Math.E).map(Math.ceil))
 
   // 0,100,272,739,2009,5460,14842,40343,109664,298096
+  /** Boundaries for numbers of queued records: 100, 272, 739, 2009, 5460, 14842, 40343, 109664 and 298096. */
   def defaultStreamSizeBoundaries: Histogram.Boundaries =
     MetricKeyType.Histogram.Boundaries.fromChunk(Chunk(0.0) ++ Chunk.iterate(100.0, 9)(_ * Math.E).map(Math.ceil))
 
   // 0,1,2,3,4,5,6,7,8,9
+  /** Boundaries for the number of polls that records idle in a queue: 1, 2, 3, 4, 5, 6, 7, 8 and 9. */
   def defaultQueuePollSizeBoundaries: Histogram.Boundaries =
     MetricKeyType.Histogram.Boundaries.fromChunk(Chunk[Double](0, 1, 2, 3, 4, 5, 6, 7, 8, 9))
 
   // 0,1,3,8,21,55,149,404,1097,2981
+  /** Boundaries for the size of the command queue and the commit queue. They equal `defaultStreamCountBoundaries`. */
   def defaultCommandAndCommitQueueSizeBoundaries: Histogram.Boundaries =
     defaultStreamCountBoundaries
 
