@@ -9,12 +9,14 @@ import org.apache.kafka.common.resource.{ ResourcePatternFilter => JResourcePatt
  * same value.
  */
 final case class ResourcePatternFilter(resourceType: ResourceType, name: String, patternType: PatternType) {
+
   /** Converts to the Java `ResourcePatternFilter`. */
   def asJava: JResourcePatternFilter = new JResourcePatternFilter(resourceType.asJava, name, patternType.asJava)
 }
 
 /** Predefined filters, and the conversion from the Java `ResourcePatternFilter`. */
 object ResourcePatternFilter {
+
   /**
    * A filter that matches any resource pattern: `Any` for the resource type and the pattern type, and a `null` name.
    */

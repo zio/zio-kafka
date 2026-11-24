@@ -38,6 +38,7 @@ final case class CommittableRecord[K, V](
   private val commitHandle: Map[TopicPartition, OffsetAndMetadata] => Task[Unit],
   private val consumerGroupMetadata: Option[ConsumerGroupMetadata]
 ) {
+
   /**
    * Deserializes the key and the value of this record, which must be byte arrays, with the given deserializers.
    *

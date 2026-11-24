@@ -9,6 +9,7 @@ import org.apache.kafka.clients.admin.{ DeleteAclsOptions => JDeleteAclsOptions 
  * milliseconds (about 24.8 days) overflows.
  */
 final case class DeleteAclsOptions(timeout: Option[Duration]) {
+
   /** Converts to the Java `DeleteAclsOptions`. */
   def asJava: JDeleteAclsOptions = {
     val jopts = new JDeleteAclsOptions()

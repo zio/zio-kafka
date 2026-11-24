@@ -13,6 +13,7 @@ import zio._
  * WARNING: this is an UNSTABLE API and may change in an incompatible way without notice in any zio-kafka version.
  */
 trait ConsumerMetricsObserver {
+
   /**
    * Called after every poll of the Kafka consumer.
    *
@@ -26,6 +27,7 @@ trait ConsumerMetricsObserver {
    *   the number of records that the poll returned
    */
   def observePoll(resumedCount: Int, pausedCount: Int, latency: Duration, pollSize: Int): UIO[Unit]
+
   /**
    * Called when a commit requested by the user (for example with `Offset#commit`) completed successfully. It is not
    * called for a commit that fails or times out.
@@ -34,6 +36,7 @@ trait ConsumerMetricsObserver {
    *   the time between the request and the completion of the commit
    */
   def observeCommit(latency: Duration): UIO[Unit]
+
   /**
    * Called when a commit to the Kafka broker completed successfully. The consumer combines the commits that are waiting
    * into one aggregated commit.
@@ -45,6 +48,7 @@ trait ConsumerMetricsObserver {
    *   0.
    */
   def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit]
+
   /**
    * Called when a poll changed the partition assignment.
    *
@@ -58,6 +62,7 @@ trait ConsumerMetricsObserver {
    *   the number of lost partitions
    */
   def observeRebalance(currentlyAssignedCount: Int, assignedCount: Int, revokedCount: Int, lostCount: Int): UIO[Unit]
+
   /**
    * Called repeatedly, on the schedule set with [[zio.kafka.consumer.ConsumerSettings.withRunloopMetricsSchedule]],
    * with a snapshot of the state of the consumer.
@@ -127,6 +132,7 @@ object ConsumerMetricsObserver {
     commitQueueSize: Int,
     pendingCommitCount: Int
   ) {
+
     /** The total number of records that are queued for all partitions. */
     val totalQueueSize: Int = perPartitionQueueSizes.sum
   }

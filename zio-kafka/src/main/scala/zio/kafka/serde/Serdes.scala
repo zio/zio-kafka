@@ -18,6 +18,7 @@ import java.util.UUID
  */
 
 private[zio] trait Serdes {
+
   /** A serde for `Long` values that deserializes `null` data as `None`, and serializes `None` as `null`. */
   def longOption: Serde[Any, Option[Long]] = Serdes.longOption
 

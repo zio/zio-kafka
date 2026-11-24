@@ -11,12 +11,14 @@ import org.apache.kafka.common.resource.{ ResourcePattern => JResourcePattern }
  * throws a `java.lang.NullPointerException` or a `java.lang.IllegalArgumentException` otherwise.
  */
 final case class ResourcePattern(resourceType: ResourceType, name: String, patternType: PatternType) {
+
   /** Converts to the Java `ResourcePattern`. */
   def asJava: JResourcePattern = new JResourcePattern(resourceType.asJava, name, patternType.asJava)
 }
 
 /** Conversion from the Java `ResourcePattern`. */
 object ResourcePattern {
+
   /** Converts a Java `ResourcePattern`. */
   def apply(jResourcePattern: JResourcePattern): ResourcePattern =
     ResourcePattern(

@@ -47,8 +47,8 @@ trait Transaction {
    * Produces a record to `topic` and waits for the broker's acknowledgement.
    *
    * @param offset
-   *   the offset of the consumed record that this record is produced for. It is committed when the transaction
-   *   commits. Use `None` when there is no such offset.
+   *   the offset of the consumed record that this record is produced for. It is committed when the transaction commits.
+   *   Use `None` when there is no such offset.
    */
   def produce[R, K, V](
     topic: String,
@@ -63,8 +63,8 @@ trait Transaction {
    * Produces a record and waits for the broker's acknowledgement.
    *
    * @param offset
-   *   the offset of the consumed record that this record is produced for. It is committed when the transaction
-   *   commits. Use `None` when there is no such offset.
+   *   the offset of the consumed record that this record is produced for. It is committed when the transaction commits.
+   *   Use `None` when there is no such offset.
    */
   def produce[R, K, V](
     producerRecord: ProducerRecord[K, V],
@@ -93,8 +93,8 @@ trait Transaction {
    * the effect fails, like `Producer#produceChunk`.
    *
    * @param offsets
-   *   the offsets of the consumed records that the produced records are for. They are merged with the offsets that
-   *   this transaction already has, and are committed when the transaction commits.
+   *   the offsets of the consumed records that the produced records are for. They are merged with the offsets that this
+   *   transaction already has, and are committed when the transaction commits.
    */
   def produceChunkBatch[R, K, V](
     records: Chunk[ProducerRecord[K, V]],

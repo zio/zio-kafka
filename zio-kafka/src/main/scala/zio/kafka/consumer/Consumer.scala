@@ -70,8 +70,8 @@ trait Consumer {
   val consumerSettings: ConsumerSettings
 
   /**
-   * Returns, for each of the given topic-partitions, the offset after the last available record. For a partition with
-   * 3 records, starting at offset 0, this is 3.
+   * Returns, for each of the given topic-partitions, the offset after the last available record. For a partition with 3
+   * records, starting at offset 0, this is 3.
    */
   def endOffsets(
     partitions: Set[TopicPartition],
@@ -304,7 +304,7 @@ object Consumer {
   /**
    * The failure of a commit that did not complete within the commit timeout, see
    * [[ConsumerSettings.withCommitTimeout]]. The commit is not cancelled, so the offsets may still be committed later.
-   * [[Offset.commitOrRetry]] retries a commit that fails with it.
+   * [[OffsetBatch.commitOrRetry]] retries a commit that fails with it.
    */
   case object CommitTimeout extends RuntimeException("Commit timeout") with NoStackTrace
 

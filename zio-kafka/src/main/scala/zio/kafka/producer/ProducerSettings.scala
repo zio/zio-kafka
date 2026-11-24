@@ -35,6 +35,7 @@ final case class ProducerSettings(
   metricLabels: Set[MetricLabel] = Set.empty,
   metricsObserver: Option[ProducerMetricsObserver] = None
 ) {
+
   /** The properties that are passed to the Kafka producer. Returns the same map as `properties`. */
   def driverSettings: Map[String, AnyRef] = properties
 
@@ -97,8 +98,8 @@ final case class ProducerSettings(
    *   when `true` the producer writes idempotently: each record is assigned a sequence number so the broker can
    *   deduplicate retries. When this method is not called, the default of the Kafka producer client applies, which is
    *   `true`. Set to `false` to disable sequence tracking (e.g. for tests, or high-throughput producing where
-   *   occasional duplicates on retry are acceptable). Creating a transactional producer with idempotence disabled
-   *   fails with a Kafka `ConfigException`.
+   *   occasional duplicates on retry are acceptable). Creating a transactional producer with idempotence disabled fails
+   *   with a Kafka `ConfigException`.
    */
   def withIdempotence(idempotence: Boolean): ProducerSettings =
     withProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, idempotence.toString)

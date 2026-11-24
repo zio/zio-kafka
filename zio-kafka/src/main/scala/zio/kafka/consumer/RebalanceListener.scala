@@ -16,8 +16,8 @@ final case class RebalanceListener(
 ) {
 
   /**
-   * Combine with another [[RebalanceListener]] and execute their actions sequentially. The actions of this listener
-   * run first; when one fails, the matching action of `that` does not run.
+   * Combine with another [[RebalanceListener]] and execute their actions sequentially. The actions of this listener run
+   * first; when one fails, the matching action of `that` does not run.
    */
   def ++(that: RebalanceListener): RebalanceListener =
     if (that eq RebalanceListener.noop) this

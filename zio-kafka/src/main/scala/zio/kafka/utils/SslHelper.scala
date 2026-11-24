@@ -152,12 +152,10 @@ object SslHelper {
    * Why does interrupting the thread running the networking exchange closes the socket? Because the `SocketChannel`
    * class implements the `InterruptibleChannel` interface, and that's a property of this interface.
    *
-   * From the documentation of `InterruptibleChannel`, we can read:
-   * {{{
-   * > A channel that implements this interface is also interruptible:
-   * > If a thread is blocked in an I/O operation on an interruptible channel then another thread may invoke the blocked thread's interrupt method.
-   * > This will cause the channel to be closed, the blocked thread to receive a ClosedByInterruptException, and the blocked thread's interrupt status to be set.
-   * }}}
+   * From the documentation of `InterruptibleChannel`, we can read: > A channel that implements this interface is also
+   * interruptible: > If a thread is blocked in an I/O operation on an interruptible channel then another thread may
+   * invoke the blocked thread's interrupt method. > This will cause the channel to be closed, the blocked thread to
+   * receive a ClosedByInterruptException, and the blocked thread's interrupt status to be set.
    *
    * See: https://docs.oracle.com/javase/8/docs/api/java/nio/channels/InterruptibleChannel.html
    *

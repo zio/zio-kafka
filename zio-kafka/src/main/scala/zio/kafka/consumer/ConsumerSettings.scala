@@ -280,8 +280,8 @@ final case class ConsumerSettings(
    * In this time zio-kafka awaits processing of records and the completion of commits.
    *
    * By default, this value is set to 3/5 of `maxPollInterval` which by default calculates to 3 minutes. Only values
-   * between `commitTimeout` and `maxPollInterval` are useful. Lower values make zio-kafka stop waiting for
-   * commits right away, higher values lead to lost partitions.
+   * between `commitTimeout` and `maxPollInterval` are useful. Lower values make zio-kafka stop waiting for commits
+   * right away, higher values lead to lost partitions.
    *
    * See [[#withRebalanceSafeCommits]] for more information.
    */

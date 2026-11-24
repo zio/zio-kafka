@@ -9,6 +9,7 @@ import zio._
  * milliseconds (about 24.8 days) overflows.
  */
 final case class DescribeAclOptions(timeout: Option[Duration]) {
+
   /** Converts to the Java `DescribeAclsOptions`. */
   def asJava: JDescribeAclsOptions = {
     val jopts = new JDescribeAclsOptions()

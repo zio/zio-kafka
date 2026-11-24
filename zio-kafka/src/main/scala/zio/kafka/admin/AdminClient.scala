@@ -348,8 +348,8 @@ trait AdminClient {
    *
    * When `configs` contains an `AlterConfigOpType.Append` or an `AlterConfigOpType.Subtract`, `visibilitySleep` is
    * used. Otherwise, polling is used to wait until the operation completes. When `options` has `validateOnly` set, the
-   * inner tasks do not wait. This method still returns immediately with the outer task, sleeping/polling happens in
-   * the inner task.
+   * inner tasks do not wait. This method still returns immediately with the outer task, sleeping/polling happens in the
+   * inner task.
    *
    * @param visibilitySleep
    *   time to wait (in the inner task) after getting a confirmation that the command was accepted by the kafka broker.
@@ -1067,12 +1067,14 @@ object AdminClient {
 
   /** Names a resource that has a configuration: its type, and its name (for a topic, the topic name). */
   final case class ConfigResource(`type`: ConfigResourceType, name: String) {
+
     /** Converts to the Java `ConfigResource`. */
     lazy val asJava: JConfigResource = new JConfigResource(`type`.asJava, name)
   }
 
   /** Conversion from the Java `ConfigResource`. */
   object ConfigResource {
+
     /** Converts a Java `ConfigResource`. */
     def fromJava(jcr: JConfigResource): ConfigResource =
       ConfigResource(`type` = ConfigResourceType.fromJava(jcrt = jcr.`type`()), name = jcr.name())
@@ -1080,12 +1082,14 @@ object AdminClient {
 
   /** The type of a [[ConfigResource]]. Each case object in the companion maps to a Java `ConfigResource.Type`. */
   trait ConfigResourceType {
+
     /** Converts to the Java `ConfigResource.Type`. */
     def asJava: JConfigResource.Type
   }
 
   /** The types of a [[ConfigResource]], and the conversion from the Java `ConfigResource.Type`. */
   object ConfigResourceType {
+
     /** Broker logger configuration (Java `BROKER_LOGGER`). */
     case object BrokerLogger extends ConfigResourceType {
       override def asJava = JConfigResource.Type.BROKER_LOGGER
@@ -1130,12 +1134,14 @@ object AdminClient {
 
   /** The state of a group. Each case object in the companion maps to a Java `GroupState`. */
   sealed trait GroupState {
+
     /** Converts to the Java `GroupState`. */
     def asJava: JGroupState
   }
 
   /** The states of a group, and the conversion from the Java `GroupState`. */
   object GroupState {
+
     /** A state that is not known. */
     case object Unknown extends GroupState {
       override def asJava: JGroupState = JGroupState.UNKNOWN
@@ -1200,28 +1206,34 @@ object AdminClient {
 
   /** The type of a group. Each case object in the companion maps to a Java `GroupType`. */
   sealed trait GroupType {
+
     /** Converts to the Java `GroupType`. */
     def asJava: JGroupType
   }
 
   /** The types of a group, and the conversion from the Java `GroupType`. */
   object GroupType {
+
     /** A group type that is not known. */
     case object Unknown extends GroupType {
       override def asJava = JGroupType.UNKNOWN
     }
+
     /** A group that uses the consumer group protocol. */
     case object Consumer extends GroupType {
       override def asJava = JGroupType.CONSUMER
     }
+
     /** A group that uses the classic group protocol. */
     case object Classic extends GroupType {
       override def asJava = JGroupType.CLASSIC
     }
+
     /** A share group. */
     case object Share extends GroupType {
       override def asJava = JGroupType.SHARE
     }
+
     /** A Kafka Streams group. */
     case object Streams extends GroupType {
       override def asJava = JGroupType.STREAMS
@@ -1252,6 +1264,7 @@ object AdminClient {
 
   /** Conversion from the Java `MemberDescription`. */
   object MemberDescription {
+
     /** Converts a Java `MemberDescription`. */
     def fromJava(desc: JMemberDescription): MemberDescription =
       MemberDescription(
@@ -1304,6 +1317,7 @@ object AdminClient {
     retryOnQuotaViolation: Boolean = true,
     timeout: Option[Duration]
   ) {
+
     /** Converts to the Java `CreatePartitionsOptions`. */
     def asJava: JCreatePartitionsOptions = {
       val opts = new JCreatePartitionsOptions()
@@ -1320,6 +1334,7 @@ object AdminClient {
    * does not wait.
    */
   final case class CreateTopicsOptions(validateOnly: Boolean, timeout: Option[Duration]) {
+
     /** Converts to the Java `CreateTopicsOptions`. */
     def asJava: JCreateTopicsOptions = {
       val opts = new JCreateTopicsOptions().validateOnly(validateOnly)
@@ -1332,6 +1347,7 @@ object AdminClient {
    * API timeout applies.
    */
   final case class DeleteConsumerGroupOptions(timeout: Option[Duration]) {
+
     /** Converts to the Java `DeleteConsumerGroupsOptions`. */
     def asJava: JDeleteConsumerGroupsOptions = {
       val opts = new JDeleteConsumerGroupsOptions()
@@ -1344,6 +1360,7 @@ object AdminClient {
    * timeout applies. With `retryOnQuotaViolation`, the Java client retries when a quota is violated.
    */
   final case class DeleteTopicsOptions(retryOnQuotaViolation: Boolean = true, timeout: Option[Duration]) {
+
     /** Converts to the Java `DeleteTopicsOptions`. */
     def asJava: JDeleteTopicsOptions = {
       val opts = new JDeleteTopicsOptions().retryOnQuotaViolation(retryOnQuotaViolation)
@@ -1356,6 +1373,7 @@ object AdminClient {
    * timeout applies. With `listInternal`, internal topics are listed too.
    */
   final case class ListTopicsOptions(listInternal: Boolean = false, timeout: Option[Duration]) {
+
     /** Converts to the Java `ListTopicsOptions`. */
     def asJava: JListTopicsOptions = {
       val opts = new JListTopicsOptions().listInternal(listInternal)
@@ -1369,6 +1387,7 @@ object AdminClient {
    * authorized to do on each topic.
    */
   final case class DescribeTopicsOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
+
     /** Converts to the Java `DescribeTopicsOptions`. */
     def asJava: JDescribeTopicsOptions = {
       val opts = new JDescribeTopicsOptions().includeAuthorizedOperations(includeAuthorizedOperations)
@@ -1386,6 +1405,7 @@ object AdminClient {
     includeDocumentation: Boolean = false,
     timeout: Option[Duration]
   ) {
+
     /** Converts to the Java `DescribeConfigsOptions`. */
     def asJava: JDescribeConfigsOptions = {
       val opts = new JDescribeConfigsOptions()
@@ -1402,6 +1422,7 @@ object AdminClient {
    * also returns the operations that the client is authorized to do on the cluster.
    */
   final case class DescribeClusterOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
+
     /** Converts to the Java `DescribeClusterOptions`. */
     lazy val asJava: JDescribeClusterOptions = {
       val opts = new JDescribeClusterOptions().includeAuthorizedOperations(includeAuthorizedOperations)
@@ -1415,6 +1436,7 @@ object AdminClient {
    * client is authorized to do on each group.
    */
   final case class DescribeConsumerGroupsOptions(includeAuthorizedOperations: Boolean, timeout: Option[Duration]) {
+
     /** Converts to the Java `DescribeConsumerGroupsOptions`. */
     lazy val asJava: JDescribeConsumerGroupsOptions = {
       val jOpts = new JDescribeConsumerGroupsOptions()
@@ -1429,6 +1451,7 @@ object AdminClient {
    * operation does not wait.
    */
   final case class AlterConfigsOptions(validateOnly: Boolean = false, timeout: Option[Duration] = None) {
+
     /** Converts to the Java `AlterConfigsOptions`. */
     lazy val asJava: JAlterConfigsOptions = {
       val jOpts = new JAlterConfigsOptions().validateOnly(validateOnly)
@@ -1438,6 +1461,7 @@ object AdminClient {
 
   /** A change to one configuration entry: applies `opType` to the Java `ConfigEntry` `configEntry`. */
   final case class AlterConfigOp(configEntry: ConfigEntry, opType: AlterConfigOpType) {
+
     /** Converts to the Java `AlterConfigOp`. */
     lazy val asJava: JAlterConfigOp = new JAlterConfigOp(configEntry, opType.asJava)
   }
@@ -1447,12 +1471,14 @@ object AdminClient {
    * `AlterConfigOp.OpType`.
    */
   sealed trait AlterConfigOpType {
+
     /** Converts to the Java `AlterConfigOp.OpType`. */
     def asJava: JAlterConfigOp.OpType
   }
 
   /** The kinds of change of an [[AlterConfigOp]]. */
   object AlterConfigOpType {
+
     /** Sets the value of the entry. */
     case object Set extends AlterConfigOpType {
       override def asJava = JAlterConfigOp.OpType.SET
@@ -1486,8 +1512,10 @@ object AdminClient {
 
   /** The name of a metric of the Java admin client, with its group, description and tags. */
   final case class MetricName(name: String, group: String, description: String, tags: Map[String, String])
+
   /** Conversion from the Java `MetricName`. */
   object MetricName {
+
     /** Converts a Java `MetricName`. */
     def fromJava(jmn: JMetricName): MetricName =
       MetricName(
@@ -1500,8 +1528,10 @@ object AdminClient {
 
   /** A metric of the Java admin client. `metricValue` is the value as the Java client reports it. */
   final case class Metric(name: MetricName, metricValue: AnyRef)
+
   /** Conversion from the Java `Metric`. */
   object Metric {
+
     /** Converts a Java `Metric`. */
     def fromJava(jm: JMetric): Metric =
       Metric(name = MetricName.fromJava(jmn = jm.metricName()), metricValue = jm.metricValue())
@@ -1514,6 +1544,7 @@ object AdminClient {
     replicationFactor: Short,
     configs: Map[String, String] = Map.empty
   ) {
+
     /** Converts to the Java `NewTopic`. The topic configuration is set only when `configs` is not empty. */
     def asJava: JNewTopic = {
       val jn = new JNewTopic(name, numPartitions, replicationFactor)
@@ -1534,6 +1565,7 @@ object AdminClient {
     totalCount: Int,
     newAssignments: List[List[Int]] = List.empty
   ) {
+
     /** Converts to the Java `NewPartitions`. */
     def asJava: JNewPartitions =
       if (newAssignments.nonEmpty)
@@ -1548,11 +1580,14 @@ object AdminClient {
    * returns `None` for the host when it is empty and for the port when it is negative.
    */
   final case class Node(id: Int, host: Option[String], port: Option[Int], rack: Option[String] = None) {
+
     /** The conversion to the Java `Node`: a missing host becomes an empty string, a missing port becomes `-1`. */
     lazy val asJava: JNode = new JNode(id, host.getOrElse(""), port.getOrElse(-1), rack.orNull)
   }
+
   /** Conversion from the Java `Node`. */
   object Node {
+
     /**
      * Converts a Java `Node`. The result is `None` for `null` and for a node with a negative id (the Java "no node"
      * placeholder). An empty host and a negative port become `None`.
@@ -1582,6 +1617,7 @@ object AdminClient {
 
   /** Conversion from the Java `TopicDescription`. */
   object TopicDescription {
+
     /**
      * Converts a Java `TopicDescription`. Fails when one of the partitions fails to convert, see
      * `TopicPartitionInfo.fromJava`.
@@ -1605,6 +1641,7 @@ object AdminClient {
    * replicas.
    */
   final case class TopicPartitionInfo(partition: Int, leader: Option[Node], replicas: List[Node], isr: List[Node]) {
+
     /** Converts to the Java `TopicPartitionInfo`. */
     lazy val asJava: JTopicPartitionInfo =
       new JTopicPartitionInfo(
@@ -1617,6 +1654,7 @@ object AdminClient {
 
   /** Conversion from the Java `TopicPartitionInfo`. */
   object TopicPartitionInfo {
+
     /**
      * Converts a Java `TopicPartitionInfo`. Fails with a `RuntimeException` when a replica or an in-sync replica is the
      * Java "no node" placeholder.
@@ -1660,12 +1698,14 @@ object AdminClient {
 
   /** A topic in the output of `listTopics`: its name, its id and whether it is internal. */
   final case class TopicListing(name: String, topicId: Uuid, isInternal: Boolean) {
+
     /** Converts to the Java `TopicListing`. */
     def asJava: JTopicListing = new JTopicListing(name, topicId, isInternal)
   }
 
   /** Conversion from the Java `TopicListing`. */
   object TopicListing {
+
     /** Converts a Java `TopicListing`. */
     def fromJava(jtl: JTopicListing): TopicListing = TopicListing(jtl.name(), jtl.topicId(), jtl.isInternal)
   }
@@ -1675,12 +1715,14 @@ object AdminClient {
     name: String,
     partition: Int
   ) {
+
     /** Converts to the Java `TopicPartition`. */
     def asJava: JTopicPartition = new JTopicPartition(name, partition)
   }
 
   /** Conversion from the Java `TopicPartition`. */
   object TopicPartition {
+
     /** Converts a Java `TopicPartition`. */
     def fromJava(tp: JTopicPartition): TopicPartition =
       new TopicPartition(name = tp.topic(), partition = tp.partition())
@@ -1690,12 +1732,14 @@ object AdminClient {
    * Selects which offset of a partition `listOffsets` returns: the earliest, the latest, or the one for a timestamp.
    */
   sealed abstract class OffsetSpec {
+
     /** Converts to the Java `OffsetSpec`. */
     def asJava: JOffsetSpec
   }
 
   /** The choices of an [[OffsetSpec]]. */
   object OffsetSpec {
+
     /** The earliest offset of the partition. */
     case object EarliestSpec extends OffsetSpec {
       override def asJava: JOffsetSpec = JOffsetSpec.earliest()
@@ -1714,12 +1758,14 @@ object AdminClient {
 
   /** The isolation level of `listOffsets`. */
   sealed abstract class IsolationLevel {
+
     /** Converts to the Java `IsolationLevel`. */
     def asJava: JIsolationLevel
   }
 
   /** The isolation levels of `listOffsets`. */
   object IsolationLevel {
+
     /** Java `READ_UNCOMMITTED`. This is the default of [[ListOffsetsOptions]]. */
     case object ReadUncommitted extends IsolationLevel {
       override def asJava: JIsolationLevel = JIsolationLevel.READ_UNCOMMITTED
@@ -1736,6 +1782,7 @@ object AdminClient {
    * timeout applies.
    */
   final case class DeleteRecordsOptions(timeout: Option[Duration]) {
+
     /** Converts to the Java `DeleteRecordsOptions`. */
     def asJava: JDeleteRecordsOptions = {
       val deleteRecordsOpt = new JDeleteRecordsOptions()
@@ -1751,6 +1798,7 @@ object AdminClient {
     isolationLevel: IsolationLevel = IsolationLevel.ReadUncommitted,
     timeout: Option[Duration]
   ) {
+
     /** Converts to the Java `ListOffsetsOptions`. */
     def asJava: JListOffsetsOptions = {
       val offsetOpt = new JListOffsetsOptions(isolationLevel.asJava)
@@ -1764,8 +1812,10 @@ object AdminClient {
     timestamp: Long,
     leaderEpoch: Option[Int]
   )
+
   /** Conversion from the Java `ListOffsetsResult.ListOffsetsResultInfo`. */
   object ListOffsetsResultInfo {
+
     /** Converts a Java `ListOffsetsResult.ListOffsetsResultInfo`. */
     def fromJava(lo: JListOffsetsResultInfo): ListOffsetsResultInfo =
       ListOffsetsResultInfo(lo.offset(), lo.timestamp(), lo.leaderEpoch().toScala.map(_.toInt))
@@ -1773,6 +1823,7 @@ object AdminClient {
 
   /** Options for `listConsumerGroupOffsets`. `requireStable` sets the `requireStable` flag of the Java options. */
   final case class ListConsumerGroupOffsetsOptions(requireStable: Boolean) {
+
     /** Converts to the Java `ListConsumerGroupOffsetsOptions`. */
     def asJava: JListConsumerGroupOffsetsOptions = {
       val opts = new JListConsumerGroupOffsetsOptions()
@@ -1782,6 +1833,7 @@ object AdminClient {
 
   /** Constructor of [[ListConsumerGroupOffsetsOptions]]. */
   object ListConsumerGroupOffsetsOptions {
+
     /** Creates the options with the given `requireStable` flag. */
     def apply(requireStable: Boolean): ListConsumerGroupOffsetsOptions =
       new ListConsumerGroupOffsetsOptions(requireStable)
@@ -1789,6 +1841,7 @@ object AdminClient {
 
   /** The partitions of one group to look up in `listConsumerGroupOffsets`. */
   final case class ListConsumerGroupOffsetsSpec(partitions: Chunk[TopicPartition]) {
+
     /** Converts to the Java `ListConsumerGroupOffsetsSpec`. */
     def asJava: JListConsumerGroupOffsetsSpec = {
       val opts = new JListConsumerGroupOffsetsSpec
@@ -1807,11 +1860,14 @@ object AdminClient {
     leaderEpoch: Option[Int] = None,
     metadata: Option[String] = None
   ) {
+
     /** Converts to the Java `OffsetAndMetadata`. */
     def asJava: JOffsetAndMetadata = new JOffsetAndMetadata(offset, leaderEpoch.map(Int.box).toJava, metadata.orNull)
   }
+
   /** Conversion from the Java `OffsetAndMetadata`. */
   object OffsetAndMetadata {
+
     /** Converts a Java `OffsetAndMetadata`. */
     def fromJava(om: JOffsetAndMetadata): OffsetAndMetadata =
       OffsetAndMetadata(
@@ -1826,6 +1882,7 @@ object AdminClient {
    * default API timeout applies.
    */
   final case class AlterConsumerGroupOffsetsOptions(timeout: Option[Duration]) {
+
     /** Converts to the Java `AlterConsumerGroupOffsetsOptions`. */
     def asJava: JAlterConsumerGroupOffsetsOptions = {
       val options = new JAlterConsumerGroupOffsetsOptions()
@@ -1838,6 +1895,7 @@ object AdminClient {
    * state.
    */
   final case class ListConsumerGroupsOptions(states: Set[GroupState]) {
+
     /** Converts to the Java `ListGroupsOptions` for consumer groups, filtered by `states`. */
     def asJListGroupsOptions: JListGroupsOptions =
       JListGroupsOptions.forConsumerGroups().inGroupStates(states.map(_.asJava).asJava)
@@ -1851,6 +1909,7 @@ object AdminClient {
 
   /** Conversion from the Java `GroupListing`. */
   object ConsumerGroupListing {
+
     /** Converts a Java `GroupListing`. */
     def fromJava(cg: JGroupListing): ConsumerGroupListing =
       ConsumerGroupListing(
@@ -1867,6 +1926,7 @@ object AdminClient {
     protocol: String,
     groupState: Option[GroupState]
   ) {
+
     /** Converts to the Java `GroupListing`. */
     def asJava: JGroupListing =
       new JGroupListing(
@@ -1879,6 +1939,7 @@ object AdminClient {
 
   /** Conversion from the Java `GroupListing`. */
   object GroupListing {
+
     /** Converts a Java `GroupListing`. */
     def fromJava(jgl: JGroupListing): GroupListing =
       GroupListing(
@@ -1898,6 +1959,7 @@ object AdminClient {
     groupTypes: Set[GroupType] = Set.empty,
     protocolTypes: Set[String] = Set.empty
   ) {
+
     /** Converts to the Java `ListGroupsOptions`. */
     def asJava: JListGroupsOptions =
       new JListGroupsOptions()
@@ -1908,6 +1970,7 @@ object AdminClient {
 
   /** Conversion from the Java `ListGroupsOptions`. */
   object ListGroupsOptions {
+
     /** Converts a Java `ListGroupsOptions`. */
     def fromJava(lgo: JListGroupsOptions): ListGroupsOptions =
       ListGroupsOptions(
@@ -1919,11 +1982,14 @@ object AdminClient {
 
   /** The configuration of a resource: its entries by name. Each entry is a Java `ConfigEntry`. */
   final case class KafkaConfig(entries: Map[String, ConfigEntry]) {
+
     /** Converts to the Java `Config`. */
     def asJava: JConfig = new JConfig(entries.values.asJavaCollection)
   }
+
   /** Conversion from the Java `Config`. */
   object KafkaConfig {
+
     /** Converts a Java `Config`. */
     def fromJava(jConfig: JConfig): KafkaConfig =
       KafkaConfig(entries = jConfig.entries().asScala.map(e => e.name() -> e).toMap)
@@ -1934,8 +2000,10 @@ object AdminClient {
    * directory, and `null` when it has none.
    */
   final case class LogDirDescription(error: ApiException, replicaInfos: Map[TopicPartition, ReplicaInfo])
+
   /** Conversion from the Java `LogDirDescription`. */
   object LogDirDescription {
+
     /** Converts a Java `LogDirDescription`. */
     def fromJava(ld: JLogDirDescription): LogDirDescription =
       LogDirDescription(
@@ -1949,8 +2017,10 @@ object AdminClient {
    * (`isFuture`): created by a request to move it to another log directory, and not yet replacing the current replica.
    */
   final case class ReplicaInfo(size: Long, offsetLag: Long, isFuture: Boolean)
+
   /** Conversion from the Java `ReplicaInfo`. */
   object ReplicaInfo {
+
     /** Converts a Java `ReplicaInfo`. */
     def fromJava(ri: JReplicaInfo): ReplicaInfo =
       ReplicaInfo(size = ri.size(), offsetLag = ri.offsetLag(), isFuture = ri.isFuture)
@@ -1998,30 +2068,35 @@ object AdminClient {
 
   /** Adds `bimap` to a `Map`. */
   implicit final class MapOps[K1, V1](private val v: Map[K1, V1]) extends AnyVal {
+
     /** Maps the keys with `fk` and the values with `fv`. */
     def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): Map[K2, V2] = v.map { case (k, v) => fk(k) -> fv(v) }
   }
 
   /** Adds `bimap` to a mutable `Map`. */
   implicit final class MutableMapOps[K1, V1](private val v: mutable.Map[K1, V1]) extends AnyVal {
+
     /** Maps the keys with `fk` and the values with `fv`. */
     def bimap[K2, V2](fk: K1 => K2, fv: V1 => V2): mutable.Map[K2, V2] = v.map { case (k, v) => fk(k) -> fv(v) }
   }
 
   /** Adds `toScala` to a Java `Optional`. */
   implicit final class OptionalOps[T](private val v: Optional[T]) extends AnyVal {
+
     /** Returns the value as a `Some`, or `None` when the `Optional` is empty. */
     def toScala: Option[T] = if (v.isPresent) Some(v.get()) else None
   }
 
   /** Adds `toJava` to an `Option`. */
   implicit final class OptionOps[T](private val v: Option[T]) extends AnyVal {
+
     /** Returns an `Optional` with the value, or an empty `Optional` for `None`. */
     def toJava: Optional[T] = v.fold(Optional.empty[T])(Optional.of)
   }
 
   /** Adds `forEach` to a `List`. */
   implicit final class ListOps[A](private val list: List[A]) extends AnyVal {
+
     /**
      * Applies `f` to the elements in order and collects the results. Stops at the first `Failure`, and returns it; the
      * remaining elements are not visited.

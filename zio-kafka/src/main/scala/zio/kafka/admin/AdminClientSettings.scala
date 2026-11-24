@@ -9,6 +9,7 @@ import zio.kafka.security.KafkaCredentialStore
  *
  * To stay source compatible with future releases, you are recommended to construct the settings as follows:
  * {{{
+ * // no-check: placeholder arguments that show the builder shape only
  *   AdminClientSettings(bootstrapServers)
  *     .withCredentials(...)
  *     .withProperty(...)
@@ -19,6 +20,7 @@ final case class AdminClientSettings(
   closeTimeout: Duration,
   properties: Map[String, AnyRef]
 ) {
+
   /**
    * The properties that are passed to the Java admin client. The same as `properties`.
    */

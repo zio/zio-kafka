@@ -9,6 +9,7 @@ import org.apache.kafka.clients.admin.{ CreateAclsOptions => JCreateAclOptions }
  * milliseconds (about 24.8 days) overflows.
  */
 final case class CreateAclOptions(timeout: Option[Duration]) {
+
   /** Converts to the Java `CreateAclsOptions`. */
   def asJava: JCreateAclOptions = {
     val jopts = new JCreateAclOptions()

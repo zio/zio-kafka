@@ -15,12 +15,14 @@ final case class AccessControlEntry(
   operation: AclOperation,
   permissionType: AclPermissionType
 ) {
+
   /** Converts to the Java `AccessControlEntry`. */
   def asJava: JAccessControlEntry = new JAccessControlEntry(principal, host, operation.asJava, permissionType.asJava)
 }
 
 /** Conversion from the Java `AccessControlEntry`. */
 object AccessControlEntry {
+
   /** Converts a Java `AccessControlEntry`. */
   def apply(jAccessControlEntry: JAccessControlEntry): AccessControlEntry = AccessControlEntry(
     principal = jAccessControlEntry.principal(),

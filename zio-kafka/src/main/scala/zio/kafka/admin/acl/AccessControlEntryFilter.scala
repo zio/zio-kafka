@@ -13,6 +13,7 @@ final case class AccessControlEntryFilter(
   operation: AclOperation,
   permissionType: AclPermissionType
 ) {
+
   /** Converts to the Java `AccessControlEntryFilter`. */
   def asJava: JAccessControlEntryFilter =
     new JAccessControlEntryFilter(principal, host, operation.asJava, permissionType.asJava)
@@ -20,6 +21,7 @@ final case class AccessControlEntryFilter(
 
 /** Predefined filters, and the conversion from the Java `AccessControlEntryFilter`. */
 object AccessControlEntryFilter {
+
   /**
    * A filter that matches any access control entry: `null` principal and host, and `Any` for the operation and the
    * permission type.
