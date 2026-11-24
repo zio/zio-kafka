@@ -15,8 +15,9 @@ trait StreamControl[-R, +E, +A] {
   /**
    * The stream associated with this subscription
    *
-   * The stream should be run at most once. Running it more than once will result in chunks of records being divided
-   * over the streams. After ending, running the stream another time will not produce records
+   * The stream should be run at most once. Runs that overlap take from one shared queue, so the partition streams are
+   * divided over them, and the first run to end shuts that queue down for the others. A run that starts after an
+   * earlier run ended, or after `end` was called, produces no records.
    */
   def stream: ZStream[R, E, A]
 

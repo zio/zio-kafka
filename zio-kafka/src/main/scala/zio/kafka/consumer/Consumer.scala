@@ -262,14 +262,15 @@ trait Consumer {
   def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): Task[List[PartitionInfo]]
 
   /**
-   * Returns the offset of the next record that this consumer is given for the partition. The effect fails with an
+   * Returns the offset of the next record that this consumer is given for the partition. The effect fails with a
    * `java.lang.IllegalStateException` when the partition is not assigned to this consumer.
    */
   def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): Task[Long]
 
   /**
-   * Returns the topics that the Kafka consumer is subscribed to. The set is empty when no stream of this consumer is
-   * running.
+   * Returns the topics of the Kafka consumer's current topic or pattern subscription. The set is empty when the
+   * consumer has no such subscription, for example before the first stream starts, after the scopes of all its
+   * subscriptions have closed, or with a manual subscription.
    */
   def subscription: Task[Set[String]]
 
@@ -437,7 +438,8 @@ object Consumer {
    * @param valueDeserializer
    *   Deserializer for the value of the messages
    * @param commitRetryPolicy
-   *   Retry commits that failed due to a RetriableCommitFailedException according to this schedule
+   *   Retry commits that failed due to a RetriableCommitFailedException or a [[Consumer.CommitTimeout]] according to
+   *   this schedule
    * @param f
    *   Function that returns the effect to execute for each message. It is passed the
    *   [[org.apache.kafka.clients.consumer.ConsumerRecord]].

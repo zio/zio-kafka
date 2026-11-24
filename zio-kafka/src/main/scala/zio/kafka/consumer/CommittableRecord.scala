@@ -28,7 +28,7 @@ import zio.{ RIO, Task }
  *   the consumed Kafka record
  * @param nextOffset
  *   the offset to commit for this record. Normally this is the offset of the record plus 1. For the last record that a
- *   poll returned for a partition it can be higher, when the broker has control records after that record.
+ *   poll returned for a partition it can be higher, for example when control records follow that record.
  * @see
  *   [[https://zio.dev/zio-kafka/consumer/ Consumer]]
  */

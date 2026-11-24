@@ -35,8 +35,9 @@ trait Offset {
   /**
    * The metadata of the consumer group that consumed the record.
    *
-   * It is read from the Kafka consumer after a rebalance, and is `None` when the consumer has no `group.id`. A
-   * [[zio.kafka.producer.TransactionalProducer]] needs it to commit offsets in a transaction.
+   * It is read from the Kafka consumer after each rebalance. It is `None` when the consumer has no `group.id`. It is
+   * also `None` for a consumer that has only used [[Subscription.Manual]] subscriptions, because no rebalance happens
+   * for them. A [[zio.kafka.producer.TransactionalProducer]] needs it to commit offsets in a transaction.
    */
   def consumerGroupMetadata: Option[ConsumerGroupMetadata]
 
