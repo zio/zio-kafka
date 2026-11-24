@@ -2,6 +2,14 @@ package zio.kafka.consumer
 import zio.UIO
 import zio.stream.ZStream
 
+/**
+ * Gives access to a stream and lets you end it gracefully.
+ *
+ * It is returned by the `*WithControl` methods of [[Consumer]], for example [[Consumer#plainStreamWithControl]].
+ *
+ * @see
+ *   [[https://zio.dev/zio-kafka/consumer/ Consumer]]
+ */
 trait StreamControl[-R, +E, +A] {
 
   /**
@@ -17,13 +25,22 @@ trait StreamControl[-R, +E, +A] {
    * running the stream will eventually complete.
    *
    * @return
-   *   Effect that will complete immediately.
+   *   Effect that completes when the consumer has processed the request to end the streams. It does not wait for the
+   *   stream to finish.
    */
   def end: UIO[Unit]
 }
 
+/** Operations on [[StreamControl]]. */
 object StreamControl {
+
+  /** Adds `map` to [[StreamControl]]. */
   implicit class StreamControlOps[-R, +E, +A](streamControl: StreamControl[R, E, A]) {
+
+    /**
+     * Returns a control whose `stream` is the result of applying `f` to the stream of this control. Its `end` is the
+     * `end` of this control.
+     */
     def map[R1 <: R, E1 >: E, B](f: ZStream[R, E, A] => ZStream[R1, E1, B]): StreamControl[R1, E1, B] =
       new StreamControl[R1, E1, B] {
         def stream = f(streamControl.stream)

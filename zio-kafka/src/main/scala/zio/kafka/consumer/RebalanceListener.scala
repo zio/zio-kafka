@@ -16,7 +16,8 @@ final case class RebalanceListener(
 ) {
 
   /**
-   * Combine with another [[RebalanceListener]] and execute their actions sequentially
+   * Combine with another [[RebalanceListener]] and execute their actions sequentially. The actions of this listener
+   * run first; when one fails, the matching action of `that` does not run.
    */
   def ++(that: RebalanceListener): RebalanceListener =
     if (that eq RebalanceListener.noop) this
@@ -28,6 +29,7 @@ final case class RebalanceListener(
         lost => onLost(lost) *> that.onLost(lost)
       )
 
+  /** Returns a listener that runs each action of this listener on the given executor. */
   def runOnExecutor(executor: Executor): RebalanceListener = RebalanceListener(
     assigned => onAssigned(assigned).onExecutor(executor),
     revoked => onRevoked(revoked).onExecutor(executor),
@@ -36,13 +38,17 @@ final case class RebalanceListener(
 
 }
 
+/** Constructors for [[RebalanceListener]]. */
 object RebalanceListener {
+
+  /** A listener that uses `onRevoked` for lost partitions too. */
   def apply(
     onAssigned: Set[TopicPartition] => Task[Unit],
     onRevoked: Set[TopicPartition] => Task[Unit]
   ): RebalanceListener =
     RebalanceListener(onAssigned, onRevoked, onRevoked)
 
+  /** A listener that does nothing. Combining it with another listener using `++` returns the other listener. */
   val noop: RebalanceListener = RebalanceListener(
     _ => ZIO.unit,
     _ => ZIO.unit,

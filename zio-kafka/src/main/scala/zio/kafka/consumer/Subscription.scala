@@ -6,10 +6,34 @@ import scala.util.matching.Regex
 import java.util.regex.{ Pattern => JPattern }
 import org.apache.kafka.common.TopicPartition
 
+/**
+ * Describes what a [[Consumer]] reads: the records of named topics, of the topics that match a pattern, or of a fixed
+ * set of topic-partitions.
+ *
+ * {{{
+ * val byName: Subscription    = Subscription.topics("orders", "payments")
+ * val byPattern: Subscription = Subscription.pattern("orders-.*".r)
+ * val fixed: Subscription     = Subscription.manual("orders" -> 0, "orders" -> 1)
+ * }}}
+ *
+ * @see
+ *   [[https://zio.dev/zio-kafka/consumer/ Consumer]]
+ */
 sealed trait Subscription
+
+/** Constructors for [[Subscription]]. */
 object Subscription {
-  final case class Topics(topics: Set[String])                  extends Subscription
-  final case class Pattern(pattern: Regex)                      extends Subscription
+
+  /** A subscription to the given topics. */
+  final case class Topics(topics: Set[String]) extends Subscription
+
+  /** A subscription to the topics whose names match the given pattern. */
+  final case class Pattern(pattern: Regex) extends Subscription
+
+  /**
+   * A subscription to a fixed set of topic-partitions. A consumer with this type of subscription does not perform
+   * consumer rebalancing.
+   */
   final case class Manual(topicPartitions: Set[TopicPartition]) extends Subscription
 
   /**
