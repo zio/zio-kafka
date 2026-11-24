@@ -7,15 +7,24 @@ import zio.kafka.security.KafkaCredentialStore
 import zio.metrics.MetricLabel
 
 /**
- * Settings for the Producer.
+ * Settings for the [[Producer]].
  *
  * To stay source compatible with future releases, you are recommended to construct the settings as follows:
  * {{{
- *   ProducerSettings(bootstrapServers)
+ * import zio._
+ *
+ * val settings: ProducerSettings =
+ *   ProducerSettings(List("localhost:9092"))
  *     .withLinger(500.millis)
  *     .withCompression(ProducerCompression.Zstd(3))
- *     .... etc.
  * }}}
+ *
+ * `ProducerSettings()` has these defaults: a `closeTimeout` of 30 seconds, a `sendBufferSize` of 4096, an
+ * `authErrorRetrySchedule` of `Schedule.stop`, no Kafka properties, no diagnostics, no metric labels and no custom
+ * metrics observer.
+ *
+ * @see
+ *   [[https://zio.dev/zio-kafka/producer/ Producer]]
  */
 final case class ProducerSettings(
   closeTimeout: Duration = 30.seconds,
@@ -26,26 +35,40 @@ final case class ProducerSettings(
   metricLabels: Set[MetricLabel] = Set.empty,
   metricsObserver: Option[ProducerMetricsObserver] = None
 ) {
+  /** The properties that are passed to the Kafka producer. Returns the same map as `properties`. */
   def driverSettings: Map[String, AnyRef] = properties
 
+  /** Sets the Kafka property `bootstrap.servers` to the given servers, joined with a comma. */
   def withBootstrapServers(servers: List[String]): ProducerSettings =
     withProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, servers.mkString(","))
 
+  /** Sets the Kafka property `client.id`. */
   def withClientId(clientId: String): ProducerSettings =
     withProperty(ProducerConfig.CLIENT_ID_CONFIG, clientId)
 
+  /**
+   * Sets the maximum time to wait for the Kafka producer to close when the producer's scope is closed. The default is
+   * 30 seconds.
+   */
   def withCloseTimeout(duration: Duration): ProducerSettings =
     copy(closeTimeout = duration)
 
+  /** Sets one Kafka property. A property that was already set with the same key is replaced. */
   def withProperty(key: String, value: AnyRef): ProducerSettings =
     copy(properties = properties + (key -> value))
 
+  /** Sets the given Kafka properties. Properties that were already set with the same key are replaced. */
   def withProperties(kvs: (String, AnyRef)*): ProducerSettings =
     withProperties(kvs.toMap)
 
+  /** Sets the given Kafka properties. Properties that were already set with the same key are replaced. */
   def withProperties(kvs: Map[String, AnyRef]): ProducerSettings =
     copy(properties = properties ++ kvs)
 
+  /**
+   * Sets the Kafka properties of the given credential store, for example the properties for SASL or SSL. Properties
+   * that were already set with the same key are replaced.
+   */
   def withCredentials(credentialsStore: KafkaCredentialStore): ProducerSettings =
     withProperties(credentialsStore.properties)
 
@@ -68,11 +91,14 @@ final case class ProducerSettings(
     withProperties(compression.properties)
 
   /**
+   * Sets the Kafka property `enable.idempotence`.
+   *
    * @param idempotence
-   *   when `true` (the default) the producer writes idempotently: each record is assigned a sequence number so the
-   *   broker can deduplicate retries, guaranteeing exactly-once, in-order delivery per partition. Set to `false` to
-   *   disable sequence tracking (e.g. for tests, or high-throughput producing where occasional duplicates on retry are
-   *   acceptable).
+   *   when `true` the producer writes idempotently: each record is assigned a sequence number so the broker can
+   *   deduplicate retries. When this method is not called, the default of the Kafka producer client applies, which is
+   *   `true`. Set to `false` to disable sequence tracking (e.g. for tests, or high-throughput producing where
+   *   occasional duplicates on retry are acceptable). Creating a transactional producer with idempotence disabled
+   *   fails with a Kafka `ConfigException`.
    */
   def withIdempotence(idempotence: Boolean): ProducerSettings =
     withProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, idempotence.toString)
@@ -126,7 +152,12 @@ final case class ProducerSettings(
    * a producer-id that can be used as a label:
    *
    * {{{
-   *   producerSettings.withMetricsLabels(Set(MetricLabel("producer-id", producerId)))
+   * import zio.metrics.MetricLabel
+   *
+   * val producerId = "orders-producer"
+   *
+   * val settings: ProducerSettings =
+   *   ProducerSettings(List("localhost:9092")).withMetricsLabels(Set(MetricLabel("producer-id", producerId)))
    * }}}
    *
    * This setting is ignored when an alternative [[ProducerSettings.withMetricsObserver metrics observer]] is set.
@@ -149,7 +180,12 @@ final case class ProducerSettings(
 
 }
 
+/**
+ * Creates [[ProducerSettings]].
+ */
 object ProducerSettings {
+
+  /** Creates producer settings with the given bootstrap servers and the defaults for all other settings. */
   def apply(
     bootstrapServers: List[String]
   ): ProducerSettings =
