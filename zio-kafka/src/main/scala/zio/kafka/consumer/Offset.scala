@@ -11,7 +11,10 @@ import java.util.{ Optional => JOption }
  */
 trait Offset {
 
+  /** The topic of the consumed record. */
   def topic: String
+
+  /** The partition of the consumed record. */
   def partition: Int
 
   /** The leader-epoch in which the record was consumed. */
@@ -26,7 +29,15 @@ trait Offset {
   /** Commit the next offset. */
   def commit: Task[Unit]
 
+  /** An [[OffsetBatch]] that contains only this offset. */
   def batch: OffsetBatch
+
+  /**
+   * The metadata of the consumer group that consumed the record.
+   *
+   * It is read from the Kafka consumer after a rebalance, and is `None` when the consumer has no `group.id`. A
+   * [[zio.kafka.producer.TransactionalProducer]] needs it to commit offsets in a transaction.
+   */
   def consumerGroupMetadata: Option[ConsumerGroupMetadata]
 
   /** Add metadata to the commit. */
@@ -39,9 +50,11 @@ trait Offset {
   final def commitOrRetry[R](policy: Schedule[R, Throwable, Any]): RIO[R, Unit] =
     Offset.commitOrRetry(commit, policy)
 
+  /** The topic and the partition of the consumed record as a `TopicPartition`. */
   final lazy val topicPartition: TopicPartition = new TopicPartition(topic, partition)
 }
 
+/** Companion of [[Offset]]. */
 object Offset {
   private[consumer] def commitOrRetry[R, B](
     commit: Task[Unit],
