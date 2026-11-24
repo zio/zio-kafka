@@ -6,7 +6,10 @@ import zio._
  * Implementations of this trait are responsible for observing consumer metrics and collect the measurements. The
  * different methods are invoked from different places in the consumer.
  *
- * These methods hold up the consumer; they should return quickly or else throughput of the consumer will be affected.
+ * `observePoll`, `observeAggregatedCommit`, `observeRebalance` and `observePollAuthError` are called from the
+ * consumer's poll loop and hold it up. `observeCommit` is called in the fiber that committed and holds up that commit.
+ * `observeRunloopMetrics` is called from a separate fiber. All methods should return quickly or else throughput of the
+ * consumer will be affected.
  *
  * Users can provide a custom implementation via [[zio.kafka.consumer.ConsumerSettings.withMetricsObserver]].
  *
@@ -50,7 +53,8 @@ trait ConsumerMetricsObserver {
   def observeAggregatedCommit(latency: Duration, commitSize: Long): UIO[Unit]
 
   /**
-   * Called when a poll changed the partition assignment.
+   * Called after a poll during which Kafka called the consumer's rebalance listener. This also happens when the
+   * assignment of this consumer did not change; `assignedCount`, `revokedCount` and `lostCount` are then 0.
    *
    * @param currentlyAssignedCount
    *   the number of partitions assigned to the consumer after the change

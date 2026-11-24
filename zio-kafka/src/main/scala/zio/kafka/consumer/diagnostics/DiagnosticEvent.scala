@@ -65,12 +65,16 @@ object DiagnosticEvent {
      */
     final case class Success(offsets: Map[TopicPartition, OffsetAndMetadata]) extends Commit
 
-    /** Emitted when a commit to the Kafka broker failed with `cause`. `offsets` holds the combined offsets. */
+    /**
+     * Emitted when a commit to the Kafka broker failed with `cause`. `offsets` holds the combined offsets. A commit
+     * that fails with a `RebalanceInProgressException` is retried and does not emit this event.
+     */
     final case class Failure(offsets: Map[TopicPartition, OffsetAndMetadata], cause: Throwable) extends Commit
   }
 
   /**
-   * Emitted after the consumer handled a poll during which Kafka changed the partition assignment.
+   * Emitted after the consumer handled a poll during which Kafka called the consumer's rebalance listener. The sets can
+   * all be empty when the assignment of this consumer did not change.
    *
    * @param revoked
    *   the partitions that were revoked
