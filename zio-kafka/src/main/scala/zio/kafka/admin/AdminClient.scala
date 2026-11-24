@@ -210,8 +210,8 @@ trait AdminClient {
   ): Task[Map[TopicPartition, ListOffsetsResultInfo]]
 
   /**
-   * List offset for the specified partitions async: the outer task returns once the request is sent, the inner task of
-   * a partition completes with its offset.
+   * List offset for the specified partitions async: the outer task completes once the request is handed to the Java
+   * admin client, and the inner task of a partition completes with its `ListOffsetsResultInfo`.
    */
   def listOffsetsAsync(
     topicPartitionOffsets: Map[TopicPartition, OffsetSpec],
