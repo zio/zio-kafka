@@ -6,25 +6,65 @@ import zio._
 import java.io.IOException
 import java.net.ServerSocket
 
+/**
+ * A Kafka broker that tests can connect to. Get one from the layers in the companion object: [[Kafka.embedded]] starts
+ * an embedded broker, and [[Kafka.local]] uses a broker that is already running on `localhost:9092`.
+ *
+ * {{{
+ * import zio._
+ * import zio.kafka.testkit.{ Kafka, KafkaTestUtils }
+ *
+ * val producedOffset: Task[Long] =
+ *   ZIO
+ *     .scoped {
+ *       for {
+ *         producer <- KafkaTestUtils.makeProducer
+ *         metadata <- KafkaTestUtils.produceOne(producer, "my-topic", "key", "value")
+ *       } yield metadata.offset()
+ *     }
+ *     .provide(Kafka.embedded)
+ * }}}
+ *
+ * @see
+ *   [[https://zio.dev/zio-kafka/writing-tests/ Test Producers and Consumers with the Test Kit]]
+ */
 trait Kafka {
+
+  /** The bootstrap servers of this Kafka broker, to put in the settings of a producer, consumer or admin client. */
   def bootstrapServers: List[String]
 
+  /** Stops this Kafka broker. */
   def stop(): UIO[Unit]
 }
 
+/**
+ * The failure of the layers that start an embedded Kafka broker, when starting the broker fails.
+ *
+ * @param msg
+ *   the message of the exception
+ * @param cause
+ *   the exception that made starting the broker fail
+ */
 final case class EmbeddedKafkaStartException(msg: String, cause: Throwable = null) extends RuntimeException(msg, cause)
 
+/**
+ * Layers that provide a [[Kafka]] broker for tests.
+ */
 object Kafka {
 
   /**
-   * Creates an in-memory Kafka instance with a random port.
+   * Starts an embedded Kafka broker in the current JVM, on a random port. The broker is stopped when the layer's scope
+   * closes.
    */
   val embedded: ZLayer[Any, Throwable, Kafka] = embeddedWith(_ => Map.empty)
 
   /**
-   * Creates an in-memory Kafka instance with a random port.
+   * Starts an embedded Kafka broker in the current JVM, on a random port. The broker is stopped when the layer's scope
+   * closes.
+   *
    * @param customBrokerProps
-   *   add/update broker properties
+   *   add/update broker properties. The function gets the ports of the broker, and its properties replace the
+   *   properties of the same name that the layer sets itself.
    */
   def embeddedWith(customBrokerProps: Ports => Map[String, String]): ZLayer[Any, Throwable, Kafka] =
     embeddedWithBrokerProps(
@@ -39,14 +79,18 @@ object Kafka {
     )
 
   /**
-   * Creates an in-memory Kafka instance with a random port and SASL authentication configured.
+   * Starts an embedded Kafka broker in the current JVM, on a random port, with SASL authentication configured. The
+   * broker is stopped when the layer's scope closes.
    */
   val saslEmbedded: ZLayer[Any, Throwable, Kafka.Sasl] = saslEmbeddedWith(_ => Map.empty)
 
   /**
-   * Creates an in-memory Kafka instance with a random port and SASL authentication configured.
+   * Starts an embedded Kafka broker in the current JVM, on a random port, with SASL authentication configured. The
+   * broker is stopped when the layer's scope closes.
+   *
    * @param customBrokerProps
-   *   add/update broker properties
+   *   add/update broker properties. The function gets the ports of the broker, and its properties replace the
+   *   properties of the same name that the layer sets itself.
    */
   def saslEmbeddedWith(customBrokerProps: Ports => Map[String, String]): ZLayer[Any, Throwable, Kafka.Sasl] =
     embeddedWithBrokerProps(
@@ -82,18 +126,21 @@ object Kafka {
     ).project(Sasl(_))
 
   /**
-   * Creates an in-memory Kafka instance with a random port and SSL authentication configured.
+   * Starts an embedded Kafka broker in the current JVM, on a random port, with SSL configured. The broker is stopped
+   * when the layer's scope closes. See [[sslEmbeddedWith]] for what the broker can be used for.
    */
   val sslEmbedded: ZLayer[Any, Throwable, Kafka] = sslEmbeddedWith(_ => Map.empty)
 
   /**
-   * Creates an in-memory Kafka instance with a random port and SSL authentication configured.
+   * Starts an embedded Kafka broker in the current JVM, on a random port, with SSL configured. The broker is stopped
+   * when the layer's scope closes.
    *
    * ⚠️ This does not create an actually working broker since authentication is not configured correctly. It is however
    * sufficient to test the SSL check that zio-kafka does before connecting to a broker with plain-text settings.
    *
    * @param customBrokerProps
-   *   add/update broker properties
+   *   add/update broker properties. The function gets the ports of the broker, and its properties replace the
+   *   properties of the same name that the layer sets itself.
    */
   def sslEmbeddedWith(customBrokerProps: Ports => Map[String, String]): ZLayer[Any, Throwable, Kafka] =
     embeddedWithBrokerProps(
@@ -129,6 +176,13 @@ object Kafka {
    */
   val local: ULayer[Kafka] = ZLayer.succeed(DefaultLocal)
 
+  /**
+   * A [[Kafka]] broker that has SASL authentication configured. It is a separate type so that tests can ask for it in
+   * the environment, next to a plain [[Kafka]].
+   *
+   * @param value
+   *   the Kafka broker
+   */
   final case class Sasl(value: Kafka) extends AnyVal
 
   private def embeddedWithBrokerProps(
@@ -154,16 +208,33 @@ object Kafka {
       } yield kafka
     }
 
+  /**
+   * A [[Kafka]] that wraps an embedded Kafka broker. Its bootstrap server is `localhost` on the broker's port.
+   *
+   * @param embeddedK
+   *   the embedded broker
+   */
   final case class EmbeddedKafkaService(embeddedK: EmbeddedK) extends Kafka {
     override def bootstrapServers: List[String] = List(s"localhost:${embeddedK.config.kafkaPort}")
     override def stop(): UIO[Unit]              = ZIO.succeed(embeddedK.stop(true))
   }
 
+  /**
+   * A [[Kafka]] for a broker that runs on `localhost:9092`. Its `stop` does nothing.
+   */
   case object DefaultLocal extends Kafka {
     override def bootstrapServers: List[String] = List(s"localhost:9092")
     override def stop(): UIO[Unit]              = ZIO.unit
   }
 
+  /**
+   * The ports of an embedded Kafka broker.
+   *
+   * @param kafkaPort
+   *   the port that clients connect to
+   * @param controllerPort
+   *   the port of the broker's controller
+   */
   final case class Ports(kafkaPort: Int, controllerPort: Int)
 
   private val ref = {

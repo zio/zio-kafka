@@ -4,6 +4,7 @@ import zio._
 import zio.kafka.metrics.internal.MetricInfoToZioMetric._
 import zio.metrics._
 
+//noinspection ScalaWeakerAccess
 /**
  * A [[ProducerMetricsObserver]] implementation that uses zio-metrics to collect observations.
  *
@@ -12,7 +13,6 @@ import zio.metrics._
  * @param metricLabels
  *   the metric labels that are added to each metric
  */
-//noinspection ScalaWeakerAccess
 final class ZioMetricsProducerMetricsObserver(
   producerMetrics: ProducerMetrics,
   metricLabels: Set[MetricLabel]

@@ -11,9 +11,12 @@ import scala.util.Try
  * A serializer and deserializer for values of type A.
  *
  * @tparam R
- *   Environment available to the deserializer
+ *   Environment available to the serializer and the deserializer
  * @tparam A
  *   Value type
+ *
+ * @see
+ *   [[https://zio.dev/zio-kafka/serialization-and-deserialization/ Serialization and Deserialization]]
  */
 trait Serde[-R, A] extends Deserializer[R, A] with Serializer[R, A] {
 
@@ -42,6 +45,18 @@ trait Serde[-R, A] extends Deserializer[R, A] with Serializer[R, A] {
     Serde(mapZIO(f))(contramapZIO(g))
 }
 
+/**
+ * Creates serdes, and has the predefined serdes for primitive types, strings, byte arrays and `UUID`s (such as
+ * `Serde.string` and `Serde.long`).
+ *
+ * {{{
+ * import zio.kafka.serde.Serde
+ *
+ * final case class OrderId(value: Long)
+ *
+ * val orderIdSerde: Serde[Any, OrderId] = Serde.long.inmap(OrderId(_))(_.value)
+ * }}}
+ */
 object Serde extends Serdes {
 
   /**
@@ -60,7 +75,7 @@ object Serde extends Serdes {
     }
 
   /**
-   * Create a Serde from a deserializer and serializer function.
+   * Create a Serde from a deserializer and a serializer.
    */
   def apply[R, A](deser: Deserializer[R, A])(ser: Serializer[R, A]): Serde[R, A] =
     new Serde[R, A] {
@@ -91,6 +106,10 @@ object Serde extends Serdes {
         }
       )
 
+  /**
+   * An implicit deserializer that returns a `Try`, derived from the implicit deserializer for `A`: a deserialization
+   * failure is returned as a `Failure`. See [[Deserializer.asTry]].
+   */
   implicit def deserializerWithError[R, A](implicit deser: Deserializer[R, A]): Deserializer[R, Try[A]] =
     deser.asTry
 }

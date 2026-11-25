@@ -14,8 +14,16 @@ import scala.util.{ Failure, Success, Try }
  *   Environment available to the deserializer
  * @tparam A
  *   Value type
+ *
+ * @see
+ *   [[https://zio.dev/zio-kafka/serialization-and-deserialization/ Serialization and Deserialization]]
  */
 trait Deserializer[-R, +A] {
+
+  /**
+   * Deserializes the data of a record's key or value. The topic and headers of the record are passed along. `data` is
+   * `null` when the key or value of the record is `null`.
+   */
   def deserialize(topic: String, headers: Headers, data: Array[Byte]): RIO[R, A]
 
   /**
@@ -35,7 +43,7 @@ trait Deserializer[-R, +A] {
   def mapZIO[R1 <: R, B](f: A => RIO[R1, B]): Deserializer[R1, B] = Deserializer(deserialize(_, _, _).flatMap(f))
 
   /**
-   * When this serializer fails, attempt to deserialize with the alternative.
+   * When this deserializer fails, attempt to deserialize with the alternative.
    *
    * If both deserializers fail, the error will be the last deserializer's exception.
    */
@@ -45,7 +53,8 @@ trait Deserializer[-R, +A] {
     }
 
   /**
-   * Serde that handles deserialization failures by returning a Task.
+   * Returns a new deserializer that returns a `Try`: a `Success` with the deserialized value, or a `Failure` with the
+   * exception when deserialization fails.
    *
    * This is useful for explicitly handling deserialization failures.
    */
@@ -59,6 +68,10 @@ trait Deserializer[-R, +A] {
     Deserializer((topic, headers, data) => ZIO.foreach(Option(data))(deserialize(topic, headers, _)))
 }
 
+/**
+ * Creates deserializers. It also has the predefined serdes of `Serdes`, such as `Deserializer.string` and
+ * `Deserializer.long`.
+ */
 object Deserializer extends Serdes {
 
   /**

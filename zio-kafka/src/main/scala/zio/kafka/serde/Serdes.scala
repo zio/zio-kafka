@@ -18,10 +18,20 @@ import java.util.UUID
  */
 
 private[zio] trait Serdes {
-  def longOption: Serde[Any, Option[Long]]     = Serdes.longOption
-  def intOption: Serde[Any, Option[Int]]       = Serdes.intOption
-  def shortOption: Serde[Any, Option[Short]]   = Serdes.shortOption
-  def floatOption: Serde[Any, Option[Float]]   = Serdes.floatOption
+
+  /** A serde for `Long` values that deserializes `null` data as `None`, and serializes `None` as `null`. */
+  def longOption: Serde[Any, Option[Long]] = Serdes.longOption
+
+  /** A serde for `Int` values that deserializes `null` data as `None`, and serializes `None` as `null`. */
+  def intOption: Serde[Any, Option[Int]] = Serdes.intOption
+
+  /** A serde for `Short` values that deserializes `null` data as `None`, and serializes `None` as `null`. */
+  def shortOption: Serde[Any, Option[Short]] = Serdes.shortOption
+
+  /** A serde for `Float` values that deserializes `null` data as `None`, and serializes `None` as `null`. */
+  def floatOption: Serde[Any, Option[Float]] = Serdes.floatOption
+
+  /** A serde for `Double` values that deserializes `null` data as `None`, and serializes `None` as `null`. */
   def doubleOption: Serde[Any, Option[Double]] = Serdes.doubleOption
 
   /** $simplePrimitiveDeserialization */

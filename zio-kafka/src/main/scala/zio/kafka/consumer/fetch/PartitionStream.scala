@@ -11,6 +11,10 @@ import zio.UIO
  * See also section 'Using metrics to tune the consumer' in the 'Consumer Tuning' documentation.
  */
 abstract class PartitionStream {
+
+  /** The topic and the partition of this stream. */
   def tp: TopicPartition
+
+  /** The number of records in the queue of this stream, not yet pulled by the user's program. */
   def queueSize: UIO[Int]
 }

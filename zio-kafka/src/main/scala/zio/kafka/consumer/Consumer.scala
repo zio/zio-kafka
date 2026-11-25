@@ -19,6 +19,33 @@ import zio.stream._
 import scala.jdk.CollectionConverters._
 import scala.util.control.NoStackTrace
 
+/**
+ * A Kafka consumer. It reads the records of Kafka topics as ZIO streams of [[CommittableRecord]]s, and offers the
+ * metadata queries of the Kafka consumer as effects.
+ *
+ * Create a consumer with [[Consumer.make]], or with the layer [[Consumer.live]]. The consumer closes its connection to
+ * the Kafka cluster when the `Scope` that it was made in closes.
+ *
+ * {{{
+ * import zio._
+ * import zio.kafka.serde.Serde
+ *
+ * def consume(settings: ConsumerSettings): Task[Unit] =
+ *   ZIO.scoped {
+ *     Consumer.make(settings).flatMap { consumer =>
+ *       consumer
+ *         .plainStream(Subscription.topics("orders"), Serde.string, Serde.string)
+ *         .mapZIOChunked(record => ZIO.logInfo(record.value).as(record.offset))
+ *         .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis))
+ *         .mapZIO(_.commit)
+ *         .runDrain
+ *     }
+ *   }
+ * }}}
+ *
+ * @see
+ *   [[https://zio.dev/zio-kafka/consumer/ Consumer]]
+ */
 trait Consumer {
 
   /**
@@ -28,6 +55,10 @@ trait Consumer {
    */
   def assignment: Task[Set[TopicPartition]]
 
+  /**
+   * Returns, for each of the given topic-partitions, the earliest offset that is available. For a partition that was
+   * never trimmed this is 0.
+   */
   def beginningOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
@@ -38,6 +69,10 @@ trait Consumer {
    */
   val consumerSettings: ConsumerSettings
 
+  /**
+   * Returns, for each of the given topic-partitions, the offset after the last available record. For a partition with 3
+   * records, starting at offset 0, this is 3.
+   */
   def endOffsets(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
@@ -45,12 +80,15 @@ trait Consumer {
 
   /**
    * Retrieve the last committed offset for the given topic-partitions
+   *
+   * A partition without a committed offset maps to `None`.
    */
   def committed(
     partitions: Set[TopicPartition],
     timeout: Duration = Duration.Infinity
   ): Task[Map[TopicPartition, Option[OffsetAndMetadata]]]
 
+  /** Returns the partitions of the topics that the consumer is allowed to see, by topic name. */
   def listTopics(timeout: Duration = Duration.Infinity): Task[Map[String, List[PartitionInfo]]]
 
   /**
@@ -193,7 +231,8 @@ trait Consumer {
   def stopConsumption: UIO[Unit]
 
   /**
-   * See [[Consumer.consumeWith]].
+   * Like [[Consumer.consumeWith]] but uses this consumer. The effect also completes after [[stopConsumption]] is
+   * called.
    */
   def consumeWith[R: EnvironmentTag, R1: EnvironmentTag, K, V](
     subscription: Subscription,
@@ -208,18 +247,31 @@ trait Consumer {
    * Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the earliest
    * offset whose timestamp is greater than or equal to the given timestamp in the corresponding partition.
    *
-   * The consumer does not have to be assigned the partitions. If no messages exist yet for a partition, it will not
-   * exist in the returned map.
+   * The consumer does not have to be assigned the partitions. A partition is left out of the returned map when it has
+   * no record with a timestamp greater than or equal to the given timestamp.
    */
   def offsetsForTimes(
     timestamps: Map[TopicPartition, Long],
     timeout: Duration = Duration.Infinity
   ): Task[Map[TopicPartition, OffsetAndTimestamp]]
 
+  /**
+   * Returns the partitions of the given topic. The list is empty when the topic does not exist and the broker does not
+   * create topics automatically.
+   */
   def partitionsFor(topic: String, timeout: Duration = Duration.Infinity): Task[List[PartitionInfo]]
 
+  /**
+   * Returns the offset of the next record that this consumer is given for the partition. The effect fails with a
+   * `java.lang.IllegalStateException` when the partition is not assigned to this consumer.
+   */
   def position(partition: TopicPartition, timeout: Duration = Duration.Infinity): Task[Long]
 
+  /**
+   * Returns the topics of the Kafka consumer's current topic or pattern subscription. The set is empty when the
+   * consumer has no such subscription, for example before the first stream starts, after the scopes of all its
+   * subscriptions have closed, or with a manual subscription.
+   */
   def subscription: Task[Set[String]]
 
   /**
@@ -241,6 +293,7 @@ trait Consumer {
   def registerExternalCommits(offsetBatch: OffsetBatch): Task[Unit]
 }
 
+/** Constructors and helpers for [[Consumer]]. */
 object Consumer {
 
   /** A callback for consumer diagnostic events. */
@@ -249,6 +302,11 @@ object Consumer {
   /** A diagnostics implementation that does nothing. */
   val NoDiagnostics: ConsumerDiagnostics = zio.kafka.diagnostics.Diagnostics.NoOp
 
+  /**
+   * The failure of a commit that did not complete within the commit timeout, see
+   * [[ConsumerSettings.withCommitTimeout]]. The commit is not cancelled, so the offsets may still be committed later.
+   * [[OffsetBatch.commitOrRetry]] retries a commit that fails with it.
+   */
   case object CommitTimeout extends RuntimeException("Commit timeout") with NoStackTrace
 
   /** A [[zio.stream.ZSink]] that collects [[zio.kafka.consumer.Offset]]s into an [[zio.kafka.consumer.OffsetBatch]]. */
@@ -265,6 +323,19 @@ object Consumer {
   val collectOffsetBatches: ZSink[Any, Nothing, OffsetBatch, Nothing, OffsetBatch] =
     ZSink.foldLeft[OffsetBatch, OffsetBatch](OffsetBatch.empty)(_ merge _)
 
+  /**
+   * A layer that creates a [[Consumer]] from the [[ConsumerSettings]] in the environment. The consumer is closed when
+   * the scope of the layer closes.
+   *
+   * {{{
+   * import zio._
+   *
+   * val settings: ULayer[ConsumerSettings] =
+   *   ZLayer.succeed(ConsumerSettings(List("localhost:9092")).withGroupId("group"))
+   *
+   * val consumer: ZLayer[Any, Throwable, Consumer] = settings >>> Consumer.live
+   * }}}
+   */
   def live: RLayer[ConsumerSettings, Consumer] =
     ZLayer.scoped {
       for {
@@ -275,6 +346,9 @@ object Consumer {
 
   /**
    * A new consumer.
+   *
+   * The settings are validated first: invalid settings fail the effect with a `java.lang.IllegalArgumentException`. The
+   * consumer is closed when the `Scope` closes.
    */
   def make(settings: ConsumerSettings): ZIO[Scope, Throwable, Consumer] =
     for {
@@ -331,7 +405,8 @@ object Consumer {
    *
    * Offsets are committed after execution of the effect. They are batched when a commit action is in progress to avoid
    * backpressuring the stream. When commits fail due to an
-   * org.apache.kafka.clients.consumer.RetriableCommitFailedException they are retried according to commitRetryPolicy
+   * org.apache.kafka.clients.consumer.RetriableCommitFailedException or a [[Consumer.CommitTimeout]] they are retried
+   * according to commitRetryPolicy
    *
    * The effect should absorb any failures. Failures should be handled by retries or ignoring the error, which will
    * result in the Kafka message being skipped.
@@ -342,12 +417,15 @@ object Consumer {
    * Usage example:
    *
    * {{{
+   * import zio._
+   * import zio.kafka.serde.Serde
+   *
    * val settings: ConsumerSettings = ???
    * val subscription = Subscription.Topics(Set("my-kafka-topic"))
    *
    * val consumerIO = Consumer.consumeWith(settings, subscription, Serde.string, Serde.string) { record =>
    *   // Process the received record here
-   *   Console.printLine(s"Received record: \${record.key()}: \${record.value()}")
+   *   Console.printLine(s"Received record: \${record.key()}: \${record.value()}").orDie
    * }
    * }}}
    *
@@ -360,7 +438,8 @@ object Consumer {
    * @param valueDeserializer
    *   Deserializer for the value of the messages
    * @param commitRetryPolicy
-   *   Retry commits that failed due to a RetriableCommitFailedException according to this schedule
+   *   Retry commits that failed due to a RetriableCommitFailedException or a [[Consumer.CommitTimeout]] according to
+   *   this schedule
    * @param f
    *   Function that returns the effect to execute for each message. It is passed the
    *   [[org.apache.kafka.clients.consumer.ConsumerRecord]].
@@ -402,6 +481,8 @@ object Consumer {
 
   /** See ConsumerSettings.withOffsetRetrieval. */
   sealed trait OffsetRetrieval
+
+  /** The ways to choose where to start consuming new partitions. See [[ConsumerSettings.withOffsetRetrieval]]. */
   object OffsetRetrieval {
 
     /** Automatic offset retrieval. See ConsumerSettings.withOffsetRetrieval. */
@@ -428,7 +509,13 @@ object Consumer {
     }
   }
 
+  /**
+   * What to do for a partition without a committed offset: start at the earliest or the latest offset, or fail. See
+   * [[ConsumerSettings.withOffsetRetrieval]].
+   */
   sealed trait AutoOffsetStrategy { self =>
+
+    /** The value of Kafka's `auto.offset.reset` setting for this strategy: `earliest`, `latest` or `none`. */
     final def toConfig: String = self match {
       case AutoOffsetStrategy.Earliest => "earliest"
       case AutoOffsetStrategy.Latest   => "latest"
@@ -438,9 +525,15 @@ object Consumer {
 
   /** See ConsumerSettings.withOffsetRetrieval. */
   object AutoOffsetStrategy {
+
+    /** Start from the earliest offset. */
     case object Earliest extends AutoOffsetStrategy
-    case object Latest   extends AutoOffsetStrategy
-    case object None     extends AutoOffsetStrategy
+
+    /** Start from the latest offset. This is the default. */
+    case object Latest extends AutoOffsetStrategy
+
+    /** Fail with an error. */
+    case object None extends AutoOffsetStrategy
   }
 
   /**
@@ -449,6 +542,29 @@ object Consumer {
    *
    * This is useful for running streams from within your application's Main class, such that streams are cleanly stopped
    * when the application is shutdown (for example by your container runtime).
+   *
+   * {{{
+   * import zio._
+   * import zio.kafka.serde.Serde
+   *
+   * def run(consumer: Consumer): Task[Unit] =
+   *   ZIO.scoped {
+   *     consumer.partitionedStreamWithControl(Subscription.topics("orders"), Serde.string, Serde.string).flatMap {
+   *       control =>
+   *         Consumer
+   *           .runWithGracefulShutdown(control, shutdownTimeout = 30.seconds) { stream =>
+   *             stream
+   *               .flatMapPar(Int.MaxValue) { case (_, partitionStream) =>
+   *                 partitionStream.mapZIOChunked(record => ZIO.logInfo(record.value).as(record.offset))
+   *               }
+   *               .aggregateAsyncWithin(Consumer.collectOffsets, Schedule.fixed(100.millis))
+   *               .mapZIO(_.commit)
+   *               .runDrain
+   *           }
+   *           .unit
+   *     }
+   *   }
+   * }}}
    *
    * WARNING: this is an EXPERIMENTAL API and may disappear or change in an incompatible way without notice in any
    * zio-kafka version.
@@ -462,6 +578,7 @@ object Consumer {
    *   workflow runs until an external interruption, the result value (Any type) is meaningless. `withStream` is
    *   typically something like:
    *   {{{
+   *     // no-check: lambda fragment that needs the stream of a StreamControl
    *     stream => stream.mapZIO(record => ZIO.debug(record))
    *                     .mapZIO(record => record.offset.commit)
    *   }}}

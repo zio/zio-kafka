@@ -12,8 +12,16 @@ import scala.jdk.CollectionConverters._
  * @tparam R
  *   Environment available to the serializer
  * @tparam A
+ *   Value type
+ *
+ * @see
+ *   [[https://zio.dev/zio-kafka/serialization-and-deserialization/ Serialization and Deserialization]]
  */
 trait Serializer[-R, -A] {
+
+  /**
+   * Serializes the value of a record to a byte array. The topic and headers of the record are passed along.
+   */
   def serialize(topic: String, headers: Headers, value: A): RIO[R, Array[Byte]]
 
   /**
@@ -46,6 +54,10 @@ trait Serializer[-R, -A] {
     }
 }
 
+/**
+ * Creates serializers. It also has the predefined serdes of `Serdes`, such as `Serializer.string` and
+ * `Serializer.long`.
+ */
 object Serializer extends Serdes {
 
   /**

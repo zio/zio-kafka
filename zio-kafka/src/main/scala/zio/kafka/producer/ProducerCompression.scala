@@ -4,7 +4,21 @@ import org.apache.kafka.clients.producer.ProducerConfig
 
 import java.util.zip.Deflater
 
+/**
+ * A compression codec for a [[Producer]]. Use one of the cases in the companion object with
+ * [[ProducerSettings.withCompression]].
+ *
+ * {{{
+ * val settings: ProducerSettings =
+ *   ProducerSettings(List("localhost:9092")).withCompression(ProducerCompression.Zstd(3))
+ * }}}
+ */
 abstract sealed class ProducerCompression(name: String, extra: Option[(String, AnyRef)] = None) {
+
+  /**
+   * The Kafka properties that select this codec: `compression.type` and, for a codec with a compression level, the
+   * property that holds the level (for example `compression.zstd.level`).
+   */
   def properties: Map[String, AnyRef] =
     Map(ProducerConfig.COMPRESSION_TYPE_CONFIG -> name) ++ extra
 }

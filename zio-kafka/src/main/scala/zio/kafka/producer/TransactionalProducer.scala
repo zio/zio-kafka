@@ -17,13 +17,44 @@ import scala.jdk.CollectionConverters._
 
 /**
  * A producer that produces records transactionally.
+ *
+ * It is used together with a [[zio.kafka.consumer.Consumer]]: a transaction commits the offsets of the consumed records
+ * together with the produced records.
+ *
+ * @see
+ *   [[https://zio.dev/zio-kafka/transactions/ Transactions Tutorial]]
  */
 trait TransactionalProducer {
+
+  /**
+   * Begins a transaction. The transaction lives in the given `Scope`: when the scope closes successfully, the offsets
+   * that were given to the transaction's produce methods are sent to the transaction, the transaction is committed and
+   * the consumer is told about the committed offsets. When the scope closes with a failure or an interruption, the
+   * transaction is aborted. Committing and aborting are each retried up to 5 times, after which the effect that closes
+   * the scope dies.
+   *
+   * A transactional producer runs one transaction at a time: this effect waits until the scope of the previous
+   * transaction has closed.
+   */
   def createTransaction: ZIO[Scope, Throwable, Transaction]
 }
 
+/**
+ * Creates a [[TransactionalProducer]], and has the failures of its transactions.
+ */
 object TransactionalProducer {
+
+  /**
+   * The failure of [[Transaction.abort]]. It is not a `Throwable`.
+   */
   case object UserInitiatedAbort
+
+  /**
+   * The failure of the produce methods of a [[Transaction]] that is used after its scope has closed.
+   *
+   * @param offsetBatch
+   *   the offsets that the transaction had collected when it was closed
+   */
   final case class TransactionLeaked(offsetBatch: OffsetBatch) extends RuntimeException
 
   private final class LiveTransactionalProducer(
@@ -76,6 +107,10 @@ object TransactionalProducer {
         } { case (transaction: TransactionImpl, exit) => transaction.markAsClosed *> commitOrAbort(transaction, exit) }
   }
 
+  /**
+   * A layer that creates a [[TransactionalProducer]] with [[make]], using the `TransactionalProducerSettings` and the
+   * `Consumer` from the environment.
+   */
   val live: RLayer[TransactionalProducerSettings with Consumer, TransactionalProducer] =
     ZLayer.scoped {
       for {
@@ -85,6 +120,15 @@ object TransactionalProducer {
       } yield producer
     }
 
+  /**
+   * Creates a [[TransactionalProducer]] that works together with the given consumer.
+   *
+   * It first runs [[zio.kafka.utils.SslHelper.validateEndpoint]] on the producer's properties, and checks that the
+   * consumer's settings are valid for use with a transactional producer. Rebalance-safe commits must be enabled, and
+   * the `CooperativeStickyAssignor` is not supported; otherwise the effect fails with an `IllegalArgumentException`. It
+   * then creates the Kafka producer and initializes its transactions. The Kafka producer is closed when the scope
+   * closes, waiting at most `closeTimeout` of the producer settings.
+   */
   def make(settings: TransactionalProducerSettings, consumer: Consumer): ZIO[Scope, Throwable, TransactionalProducer] =
     for {
       _                  <- SslHelper.validateEndpoint(settings.producerSettings.driverSettings)
