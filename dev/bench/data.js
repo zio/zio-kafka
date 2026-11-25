@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795532683438,
+  "lastUpdate": 1795589186387,
   "repoUrl": "https://github.com/zio/zio-kafka",
   "entries": {
     "JMH Benchmark": [
@@ -6666,6 +6666,102 @@ window.BENCHMARK_DATA = {
           {
             "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
             "value": 569.70273912,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "khajavi@gmail.com",
+            "name": "Milad Khajavi",
+            "username": "khajavi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a20d3663bfb1723ad8a6ca1d1baeaf74819b7cac",
+          "message": "docs(scaladoc): the zio-kafka public API (survey: 257/766 documented, about 2,000 lines; maintainer pushback ZIO-127) (#1844)\n\nThis PR adds Scaladoc to the zio-kafka public API and fixes the comments\nthat were wrong. It changes comments only: no code, imports,\nannotations, directives, files added, removed or renamed.\n\n## What changed\n\n- Every public member that had no Scaladoc now has one: admin client and\nits options, ACL and resource types, consumer, consumer settings,\noffsets, committable records, subscriptions, rebalance listeners,\nconsumer and producer metrics, diagnostics events, producer,\ntransactions, serdes, credential store, and the testkit.\n- Existing comments were fact-checked against the source. Several were\nfalse or imprecise and are fixed. Examples that did not compile are\nfixed or marked `// no-check` with a reason.\n- Surprising behaviour is stated as a plain fact in the comment.\n\n## Coverage\n\n- Public members with Scaladoc: 257 of 766 before, 733 of 766 after\n(tier-2 public API: 100%). The 33 members still undocumented are\ninternal packages (`consumer.internal`, `metrics.internal`,\n`diagnostics.internal`) and are not part of this PR.\n- zio-kafka-testkit: 53 of 53.\n\n## Two library behaviours found while checking\n\nThese are described in the comments as plain facts. No code is changed\nhere.\n\n1. `CreateAclOptions`, `DeleteAclsOptions` and `DescribeAclOptions`\nconvert the timeout with `toMillis.toInt`. A timeout over `Int.MaxValue`\nmilliseconds (about 24.8 days) overflows; for example `30.days` becomes\na negative number of milliseconds. The eleven other admin options\nclasses use the same conversion. Their comments do not mention it yet.\n2. `OffsetAndMetadata.fromJava` turns \"no metadata\" into `Some(\"\")`, so\nthe round trip does not return `None`.\n\n## How it was verified\n\n- Probes with `scala-cli` against zio-kafka 4.2.0 on Scala 2.13.18 and\n3.9.0 for conversions, defaults, serdes, settings and endpoint checks.\nOne probe ran against a real Kafka broker (consumer commit retries and\n`offsetsForTimes`).\n- Behaviour that needs a running broker and was not probed (transaction\ncommit and abort, real rebalances, commit timeouts) is described from\nthe code only.\n- Examples: all 22 examples compile on Scala 2.13.18 and 3.9.0. The\nothers carry a `// no-check` marker and a reason.\n- Independent fact-check review of the full diff, with its findings\napplied before this PR. The review also rechecked 24 unchanged comments\nand all `@param` names.\n- Gates: comments-only check passes (52 files, no code changes); drift\ncheck 0; `sbt fmt`, `sbt check`, and `doc` on 2.13.18 and 3.9.0 pass.\n- Links: all zio.dev `@see` links return HTTP 200. zio.dev returns 200\nfor any path, so this does not prove a page exists; the page titles were\nchecked by hand.\n\n## Known gaps\n\n- The overflow sentence is on the three ACL options classes only (see\nitem 1 above).\n\nRESULT: PASS (comments-only check, 52 files, 0 code changes; drift 0;\nsnippets 22/22 on 2.13.18 and 3.9.0; doc 2.13.18 and 3.9.0 pass)\n\n— Written by an LLM, posted at `@khajavi`'s request.\n\nNote: `AdminClient.scala` and `AdminClientSettings.scala` were merged\nfrom master (#1843), which had already documented them; this PR keeps\nmaster's text for those two files.",
+          "timestamp": "2026-11-25T09:57:44+03:30",
+          "tree_id": "6c01f078610d52134a7c3afe8fcb08f16a786615",
+          "url": "https://github.com/zio/zio-kafka/commit/a20d3663bfb1723ad8a6ca1d1baeaf74819b7cac"
+        },
+        "date": 1795589185581,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughput",
+            "value": 585.7963970599999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaConsumerBenchmark.throughputWithCommits",
+            "value": 597.5044589,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkPar",
+            "value": 88.37044749811656,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeq",
+            "value": 279.77715732600007,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceChunkSeqAsync",
+            "value": 20.177706783554076,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaProducerBenchmark.produceSingleRecordSeqAsync",
+            "value": 8.432271181676228,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordPar",
+            "value": 62.85744058335708,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.ZioKafkaSeqProducerBenchmark.produceSingleRecordSeq",
+            "value": 99.70236988130736,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.kafkaClients",
+            "value": 535.14797752,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.KafkaClientBenchmarks.manualKafkaClients",
+            "value": 529.8883551400002,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.manualZioKafka",
+            "value": 552.9795428599999,
+            "unit": "ms/op",
+            "extra": "iterations: 5\nforks: 5\nthreads: 1"
+          },
+          {
+            "name": "zio.kafka.bench.comparison.ZioKafkaBenchmarks.zioKafka",
+            "value": 562.3248062999999,
             "unit": "ms/op",
             "extra": "iterations: 5\nforks: 5\nthreads: 1"
           }
