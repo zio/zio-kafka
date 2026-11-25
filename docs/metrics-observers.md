@@ -132,7 +132,7 @@ val producerSettings: ProducerSettings =
     .withMetricsObserver(ProducerMetricsObserver.NoOp)
 ```
 
-`NoOp` only silences the zio-kafka metrics. The Java client metrics stay available through `Consumer#metrics` and `Producer#metrics`. With the consumer `NoOp`, the runloop still runs its sampling fiber on `ConsumerSettings#runloopMetricsSchedule`, but every snapshot is discarded.
+`NoOp` only silences the zio-kafka metrics. The Java client metrics stay available through `Consumer#metrics` and `Producer#metrics`. With the consumer `NoOp`, the runloop no longer runs its sampling fiber.
 
 ## ConsumerMetricsObserver
 

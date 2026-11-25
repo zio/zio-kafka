@@ -43,7 +43,8 @@ import zio.kafka.consumer.{ Consumer, ConsumerSettings }
 
 val consumerLayer: ZLayer[Any, Throwable, Consumer] =
   ZLayer.scoped {
-    Consumer.make(ConsumerSettings(List("localhost:9092")).withGroupId("group"))
+    val consumerSettings = ConsumerSettings(List("localhost:9092")).withGroupId("group")
+    Consumer.make(consumerSettings)
   }
 ```
 
