@@ -39,7 +39,7 @@ For low-volume topics that are quiet for long periods, choose a higher threshold
 
 ## Decide How Polls Retry Authorization Errors
 
-Some authorization problems are not silent: a poll fails with an `AuthorizationException` or an `AuthenticationException`, for example while a broker is still authorizing a new connection. The consumer retries such polls according to `ConsumerSettings#withAuthErrorRetrySchedule`, by default `Schedule.recurs(5) && Schedule.spaced(500.millis)`: 5 retries, 500 ms apart. When the schedule is exhausted, the consumer fails. Each failed poll increments the metric `ziokafka_consumer_poll_auth_errors`.
+Some authorization problems are not silent: a poll fails with an `AuthorizationException` or an `AuthenticationException`, for example when a broker can't reach the identity server quickly enough. The consumer retries such polls according to `ConsumerSettings#withAuthErrorRetrySchedule`, by default `Schedule.recurs(5) && Schedule.spaced(500.millis)`: 5 retries, 500 ms apart. When the schedule is exhausted, the consumer fails. Each failed poll increments the metric `ziokafka_consumer_poll_auth_errors`.
 
 To fail on the first error instead, use `Schedule.stop`. To ride out slower authorization, allow more retries:
 
