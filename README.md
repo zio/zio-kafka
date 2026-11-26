@@ -54,16 +54,33 @@ Kafka has a mature Java client for producing and consuming events, but it has a 
 - Community support via [Discord](https://discord.com/channels/629491597070827530/629497941719121960)
 - Commercial support via [Ziverge](https://www.ziverge.com)
 
+## AI statement
+
+AI is used to complete and validate all documentation and scaladocs of the public APIs. The code is 100% architected and 99%+ written by humans; AI contributions are limited to a few lines at a time.
+
 ## Installation
 
-To use zio-kafka, add the following lines to your `build.sbt` file:
+Zio-kafka is published for Scala 2.13 and Scala 3, on the JVM only. To use it, add the following to your `build.sbt` file:
 
 ```scala
-libraryDependencies += "dev.zio" %% "zio-kafka"         % "4.2.0"
+// ZIO Kafka client (JVM)
+libraryDependencies += "dev.zio" %% "zio-kafka" % "4.2.0"
+```
+
+The `zio-kafka` artifact brings in ZIO, zio-streams and the Apache Kafka Java client, so you don't need to add them separately.
+
+The [Getting Started](docs/getting-started.md) page walks through running a local Kafka broker and writing a first producer and consumer. For a longer tour of the different ways you can use zio-kafka, read the [zio-kafka tutorial](docs/tutorial.md).
+
+## Modules
+
+### Testing
+
+```scala
+// Testkit for running tests against an embedded Kafka broker (JVM)
 libraryDependencies += "dev.zio" %% "zio-kafka-testkit" % "4.2.0" % Test
 ```
 
-The [Getting Started](docs/getting-started.md) page walks through running a local Kafka broker and writing a first producer and consumer. For a longer tour of the different ways you can use zio-kafka, read the [zio-kafka tutorial](docs/tutorial.md).
+On Scala 3 the test kit needs one extra build setting, see [Using the Test Kit With Scala 3](getting-started.md#using-the-test-kit-with-scala-3). See [Test Kit](docs/testkit.md) for its API and [Test Producers and Consumers with the Test Kit](docs/writing-tests.md) for how to use it.
 
 ## Documentation
 

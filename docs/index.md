@@ -51,6 +51,10 @@ Kafka has a mature Java client for producing and consuming events, but it has a 
 - Community support via [Discord](https://discord.com/channels/629491597070827530/629497941719121960)
 - Commercial support via [Ziverge](https://www.ziverge.com)
 
+## AI statement
+
+AI is used to complete and validate all documentation and scaladocs of the public APIs. The code is 100% architected and 99%+ written by humans; AI contributions are limited to a few lines at a time.
+
 ## Installation
 
 Zio-kafka is published for Scala 2.13 and Scala 3, on the JVM only. To use it, add the following to your `build.sbt` file:
