@@ -246,7 +246,7 @@ lazy val docs = project
         "written as Reactive Kafka by SoftwareMill.",
     readmeLicense += s"\n\nCopyright 2021-${java.time.Year.now()} Itamar Ravid and the zio-kafka contributors.",
     libraryDependencies += "dev.zio" %% "zio-json"       % "1.1.3",
-    libraryDependencies += "dev.zio" %% "zio-sbt-source" % "0.8.12" // mdoc:embed for example files
+    libraryDependencies += "dev.zio" %% "zio-sbt-source" % "0.8.13" // mdoc:embed for example files
   )
   .enablePlugins(WebsitePlugin)
   .dependsOn(zioKafka, zioKafkaTestkit)
